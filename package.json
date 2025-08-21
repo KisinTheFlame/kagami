@@ -1,0 +1,42 @@
+{
+    "name": "kagami",
+    "version": "1.0.0",
+    "description": "一个 QQ 群聊机器人",
+    "keywords": [
+        "LLM"
+    ],
+    "homepage": "https://github.com/KisinTheFlame/kagami#readme",
+    "bugs": {
+        "url": "https://github.com/KisinTheFlame/kagami/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/KisinTheFlame/kagami.git"
+    },
+    "author": "Kisin Wen",
+    "type": "module",
+    "main": "src/main.ts",
+    "scripts": {
+        "dev": "npm run build && node dist/main.js --config env.dev.yaml",
+        "build": "tsc",
+        "start": "npm run build && node dist/main.js --config env.prod.yaml",
+        "lint": "eslint src",
+        "lint:fix": "eslint src --fix"
+    },
+    "license": "ISC",
+    "devDependencies": {
+        "@eslint/js": "^9.32.0",
+        "@stylistic/eslint-plugin": "^5.2.3",
+        "@types/node": "^24.2.0",
+        "eslint": "^9.32.0",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.20.3",
+        "typescript": "^5.9.2",
+        "typescript-eslint": "^8.39.0"
+    },
+    "dependencies": {
+        "node-napcat-ts": "^0.4.15",
+        "openai": "^5.12.2",
+        "yaml": "^2.8.1"
+    }
+}
