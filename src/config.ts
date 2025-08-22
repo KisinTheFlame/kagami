@@ -7,8 +7,22 @@ export interface LlmConfig {
     model: string;
 }
 
+export interface NapcatReconnectionConfig {
+    enable: boolean;
+    attempts: number;
+    delay: number;
+}
+
+export interface NapcatConfig {
+    base_url: string;
+    access_token: string;
+    reconnection: NapcatReconnectionConfig;
+    groups: number[];
+}
+
 export interface Config {
     llm: LlmConfig;
+    napcat: NapcatConfig;
 }
 
 export function loadConfig(): Config {
@@ -24,6 +38,10 @@ export function loadConfig(): Config {
   
     if (!config.llm.api_key || !config.llm.base_url || !config.llm.model) {
         throw new Error("配置文件缺少必要的 LLM 配置项");
+    }
+  
+    if (!config.napcat.base_url || !config.napcat.access_token || !config.napcat.groups.length) {
+        throw new Error("配置文件缺少必要的 napcat 配置项");
     }
   
     return config;

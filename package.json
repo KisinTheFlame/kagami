@@ -20,6 +20,8 @@
         "dev": "npm run build && node dist/main.js --config env.dev.yaml",
         "build": "tsc",
         "start": "npm run build && node dist/main.js --config env.prod.yaml",
+        "deploy": "npm run build && nohup node dist/main.js --config env.prod.yaml > app.log 2>&1 & echo $! > app.pid",
+        "terminate": "kill $(cat app.pid) && rm app.pid",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix"
     },
