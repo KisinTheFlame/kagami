@@ -43,6 +43,8 @@ env.prod.yaml
 *.temp
 /screenshots
 /docs/requirements
+app.pid
+app.log
 
 # Claude Code
 /.claude
