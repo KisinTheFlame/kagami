@@ -1,13 +1,21 @@
-import { Session, MessageHandler } from "./session.js";
-import { NapcatConfig } from "./config.js";
+import { Session } from "./session.js";
+import { NapcatConfig, AgentConfig } from "./config.js";
+import { LlmClient } from "./llm.js";
+import { PassiveMessageHandler } from "./passive_message_handler.js";
 
 export class SessionManager {
     private sessions: Map<number, Session>;
     private napcatConfig: NapcatConfig;
+    private llmClient: LlmClient;
+    private botQQ: number;
+    private agentConfig?: AgentConfig;
 
-    constructor(napcatConfig: NapcatConfig) {
+    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, agentConfig?: AgentConfig) {
         this.sessions = new Map();
         this.napcatConfig = napcatConfig;
+        this.llmClient = llmClient;
+        this.botQQ = botQQ;
+        this.agentConfig = agentConfig;
     }
 
     async initializeSessions(): Promise<void> {
@@ -17,10 +25,22 @@ export class SessionManager {
             try {
                 const session = new Session(groupId, this.napcatConfig);
                 await session.connect();
+                
+                // 为每个 Session 创建对应的 PassiveMessageHandler
+                const handler = new PassiveMessageHandler(
+                    this.llmClient,
+                    this.botQQ,
+                    groupId,
+                    session,
+                    this.agentConfig?.history_turns ?? 40,
+                );
+                
+                session.setMessageHandler(handler);
                 this.sessions.set(groupId, session);
-                console.log(`群 ${String(groupId)} 会话初始化成功`);
+                
+                console.log(`群 ${String(groupId)} 会话和处理器初始化成功`);
             } catch (error) {
-                console.error(`群 ${String(groupId)} 会话初始化失败:`, error);
+                console.error(`群 ${String(groupId)} 初始化失败:`, error);
             }
         });
 
@@ -103,21 +123,4 @@ export class SessionManager {
         console.log(`广播消息发送完成: ${String(successCount)}/${String(this.sessions.size)} 个会话`);
         return successCount;
     }
-
-    setMessageHandlerForAllSessions(handler: MessageHandler): void {
-        for (const session of this.sessions.values()) {
-            session.setMessageHandler(handler);
-        }
-        console.log("已为所有会话设置消息处理器");
-    }
-
-    setMessageHandlerForGroup(groupId: number, handler: MessageHandler): boolean {
-        const session = this.sessions.get(groupId);
-        if (session) {
-            session.setMessageHandler(handler);
-            return true;
-        }
-        return false;
-    }
-
 }

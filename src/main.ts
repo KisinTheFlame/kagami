@@ -1,24 +1,23 @@
-import { loadConfig } from "./config.js";
+import { loadConfig, Config } from "./config.js";
 import { LlmClient } from "./llm.js";
 import { SessionManager } from "./session_manager.js";
-import { Message } from "./session.js";
 
 class KagamiBot {
-    private sessionManager: SessionManager;
+    private sessionManager?: SessionManager;
     private llmClient: LlmClient;
-    private botQQ?: number;
+    private config: Config;
 
     constructor() {
         console.log("正在初始化 Kagami 机器人...");
         
         try {
-            const config = loadConfig();
+            this.config = loadConfig();
             console.log("配置加载成功");
             
-            this.sessionManager = new SessionManager(config.napcat);
-            this.llmClient = new LlmClient(config.llm);
+            this.llmClient = new LlmClient(this.config.llm);
             
-            console.log(`已配置 ${String(config.napcat.groups.length)} 个群组:`, config.napcat.groups);
+            console.log(`机器人 QQ 号码: ${String(this.config.napcat.bot_qq)}`);
+            console.log(`已配置 ${String(this.config.napcat.groups.length)} 个群组:`, this.config.napcat.groups);
         } catch (error) {
             console.error("机器人初始化失败:", error);
             process.exit(1);
@@ -30,22 +29,13 @@ class KagamiBot {
         try {
             console.log("正在启动 Kagami 机器人...");
             
+            this.sessionManager = new SessionManager(
+                this.config.napcat, 
+                this.llmClient, 
+                this.config.napcat.bot_qq, 
+                this.config.agent,
+            );
             await this.sessionManager.initializeSessions();
-            
-            await this.initializeBotInfo();
-            
-            this.sessionManager.setMessageHandlerForAllSessions({
-                handleMessage: async (message: Message) => {
-                    try {
-                        if (message.mentions && this.botQQ && message.mentions.includes(this.botQQ)) {
-                            console.log(`[群 ${String(message.groupId)}] 机器人被 @，正在复读消息`);
-                            await this.sessionManager.sendMessageToGroup(message.groupId, message.content);
-                        }
-                    } catch (error) {
-                        console.error("处理消息失败:", error);
-                    }
-                },
-            });
             
             const connectionStatus = this.sessionManager.getConnectionStatus();
             console.log("连接状态:", connectionStatus);
@@ -65,30 +55,15 @@ class KagamiBot {
         console.log("正在停止 Kagami 机器人...");
         
         try {
-            this.sessionManager.shutdownAllSessions();
+            if (this.sessionManager) {
+                this.sessionManager.shutdownAllSessions();
+            }
             console.log("Kagami 机器人停止成功");
         } catch (error) {
             console.error("关闭过程中发生错误:", error);
         }
     }
 
-    private async initializeBotInfo(): Promise<void> {
-        try {
-            const sessions = this.sessionManager.getAllSessions();
-            const firstSession = sessions[0];
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            if (firstSession) {
-                this.botQQ = await firstSession.getBotQQ();
-                if (this.botQQ !== undefined) {
-                    console.log(`机器人 QQ 号码: ${String(this.botQQ)}`);
-                } else {
-                    console.warn("无法获取机器人 QQ 号码");
-                }
-            }
-        } catch (error) {
-            console.error("获取机器人 QQ 号码失败:", error);
-        }
-    }
 
     private setupGracefulShutdown(): void {
         const shutdown = (signal: string) => {

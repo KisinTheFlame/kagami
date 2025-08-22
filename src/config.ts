@@ -18,11 +18,17 @@ export interface NapcatConfig {
     access_token: string;
     reconnection: NapcatReconnectionConfig;
     groups: number[];
+    bot_qq: number;
+}
+
+export interface AgentConfig {
+    history_turns: number;
 }
 
 export interface Config {
     llm: LlmConfig;
     napcat: NapcatConfig;
+    agent?: AgentConfig;
 }
 
 export function loadConfig(): Config {
@@ -40,7 +46,7 @@ export function loadConfig(): Config {
         throw new Error("配置文件缺少必要的 LLM 配置项");
     }
   
-    if (!config.napcat.base_url || !config.napcat.access_token || !config.napcat.groups.length) {
+    if (!config.napcat.base_url || !config.napcat.access_token || !config.napcat.groups.length || !config.napcat.bot_qq) {
         throw new Error("配置文件缺少必要的 napcat 配置项");
     }
   
