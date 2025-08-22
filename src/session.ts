@@ -17,12 +17,14 @@ export interface MessageHandler {
 }
 
 export class Session {
+    private session_id: number;
     private napcat: NCWebsocket;
     private groupId: number;
     private isConnected: boolean;
     private messageHandler?: MessageHandler;
 
     constructor(groupId: number, napcatConfig: NapcatConfig) {
+        this.session_id = Math.random();
         this.groupId = groupId;
         this.isConnected = false;
         
@@ -61,9 +63,6 @@ export class Session {
                 void this.handleMessage(context);
             }
         });
-
-        // 注意：这里暂时不监听原生的连接事件，因为 node-napcat-ts 可能不直接提供这些事件
-        // 连接状态通过其他方式管理
     }
 
     private async handleMessage(context: unknown): Promise<void> {
@@ -91,9 +90,6 @@ export class Session {
 
             const displayContent = this.formatMessageForDisplay(ctx.message);
             console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(ctx.user_id)}) 发送消息: ${displayContent}`);
-            if (mentions && mentions.length > 0) {
-                console.log(`消息提及用户: ${mentions.join(", ")}`);
-            }
 
             if (this.messageHandler) {
                 await this.messageHandler.handleMessage(message);
@@ -143,13 +139,11 @@ export class Session {
             if (!this.isConnected) {
                 return undefined;
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            const memberInfo = await (this.napcat as any).get_group_member_info({
+            const memberInfo = await this.napcat.get_group_member_info({
                 group_id: this.groupId,
                 user_id: userId,
             });
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
-            return memberInfo.nickname ?? memberInfo.card ?? undefined;
+            return memberInfo.nickname || memberInfo.card || undefined;
         } catch (error) {
             console.error(`获取用户 ${String(userId)} 的昵称失败:`, error);
             return undefined;
@@ -166,8 +160,6 @@ export class Session {
                 group_id: this.groupId,
                 message: [{ type: "text", data: { text: content } }],
             });
-
-            console.log(`[群 ${String(this.groupId)}] 消息发送成功: ${content}`);
         } catch (error) {
             console.error(`群 ${String(this.groupId)} 消息发送失败:`, error);
             throw error;
@@ -191,10 +183,8 @@ export class Session {
             if (!this.isConnected) {
                 return undefined;
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            const loginInfo = await (this.napcat as any).get_login_info();
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            return loginInfo.user_id as number;
+            const loginInfo = await this.napcat.get_login_info();
+            return loginInfo.user_id;
         } catch (error) {
             console.error(`获取 群 ${String(this.groupId)} bot QQ号失败:`, error);
             return undefined;
