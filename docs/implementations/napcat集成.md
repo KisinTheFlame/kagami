@@ -4,7 +4,7 @@
 
 ### 实现概述
 
-实现了与 napcat 的完整集成，支持接收和发送 QQ 群消息。采用 Session 封装模式，每个群组拥有独立的会话管理。
+实现了与 napcat 的完整集成，支持接收和发送 QQ 群消息，包含 @ 消息解析和实时事件回调处理。采用 Session 封装模式，每个群组拥有独立的会话管理，支持基于 @ 提及的智能回复。
 
 ### 架构设计
 
@@ -13,14 +13,15 @@
 1. **Session 类** (`src/session.ts`)
    - 封装单个群组的完整生命周期
    - 管理独立的 napcat WebSocket 连接
-   - 维护群组专属的消息队列
+   - 基于回调的实时消息处理机制
+   - 支持解析 QQ @ 消息和获取用户昵称
    - 处理消息接收、发送和错误处理
 
 2. **SessionManager 类** (`src/session_manager.ts`)
    - 统一管理所有 Session 实例
    - 提供批量初始化和关闭功能
    - 支持消息发送和广播
-   - 提供连接状态监控和消息队列管理
+   - 提供连接状态监控和消息处理器管理
 
 3. **配置系统扩展** (`src/config.ts`)
    - 扩展了原有配置结构
@@ -29,8 +30,9 @@
 
 4. **主应用** (`src/main.ts`)
    - KagamiBot 类集成所有组件
-   - 实现启动、运行和优雅关闭流程
-   - 提供完整的错误处理和日志记录
+   - 实现基于 @ 提及的复读机制
+   - 自动获取 bot QQ 号码用于 @ 检测
+   - 提供完整的错误处理和中文日志记录
 
 ### 关键特性
 
@@ -41,8 +43,10 @@
 
 #### 消息处理
 - 群组消息自动过滤，只处理配置中的指定群组
-- 消息队列缓存，支持获取和清空操作
-- 提取文本内容，暂时忽略其他类型消息
+- 实时事件回调处理，无消息队列缓存
+- 完整解析消息内容，包括文本和 @ 提及信息
+- 支持获取发送人昵称和 QQ 号码
+- 基于 @ 提及的智能回复触发机制
 
 #### 连接管理
 - 基于 node-napcat-ts 的 WebSocket 连接
@@ -92,13 +96,17 @@ await sessionManager.sendMessageToGroup(groupId, "消息内容");
 await sessionManager.broadcastMessage("广播内容");
 ```
 
-#### 获取消息
+#### 设置消息处理器
 ```typescript
-// 获取指定群组的消息
-const messages = sessionManager.getMessagesFromGroup(groupId);
-
-// 获取所有群组的消息
-const allMessages = sessionManager.getAllMessages();
+// 为所有会话设置统一的消息处理器
+sessionManager.setMessageHandlerForAllSessions({
+    handleMessage: async (message) => {
+        if (message.mentions?.includes(botQQ)) {
+            // 处理 @ 机器人的消息
+            await sessionManager.sendMessageToGroup(message.groupId, message.content);
+        }
+    }
+});
 ```
 
 ### 技术细节
@@ -109,36 +117,50 @@ interface Message {
     id: string;
     groupId: number;
     userId: number;
+    userNickname?: string;      // 发送人昵称
     content: string;
     timestamp: Date;
+    mentions?: number[];        // 被 @ 的用户 QQ 号列表
+    rawMessage?: { type: string; data: any }[];  // 原始消息结构
+}
+
+interface MessageHandler {
+    handleMessage(message: Message): Promise<void>;
 }
 ```
 
 #### 事件处理
 - 监听 `message.group` 事件接收群组消息
 - 自动过滤非目标群组的消息
-- 提取并处理文本消息内容
+- 解析完整消息结构，支持文本和 @ 类型
+- 异步获取发送人昵称信息
+- 实时回调处理，无延迟响应
 
 #### 生命周期管理
 1. 应用启动时初始化所有 Session
 2. 建立 WebSocket 连接
-3. 开始监听和处理消息
-4. 信号处理器支持优雅关闭
+3. 获取 bot 自身 QQ 号码
+4. 设置消息处理回调函数
+5. 开始监听和处理消息
+6. 信号处理器支持优雅关闭
 
 ### 扩展性
 
 #### 未来可扩展功能
 1. **富媒体消息支持**：图片、文件等消息类型
-2. **消息持久化**：替换内存队列为数据库存储
+2. **LLM 智能回复**：替换简单复读为智能对话
 3. **群组特定配置**：不同群组使用不同设置
 4. **消息过滤器**：基于内容或用户的消息过滤
 5. **统计功能**：消息数量、用户活跃度等统计
+6. **上下文记忆**：维护对话历史和用户画像
 
 #### 架构优势
 - 模块化设计，易于单独测试和维护
 - Session 模式支持动态添加/移除群组
+- 事件回调机制提供实时响应能力
 - 统一的管理接口简化上层逻辑
 - 良好的错误隔离和恢复机制
+- 完整的 @ 消息解析和用户信息获取
 
 ### 部署要求
 
