@@ -21,17 +21,25 @@
    - 统一管理所有 Session 实例
    - 提供批量初始化和关闭功能
    - 支持消息发送和广播
-   - 提供连接状态监控和消息处理器管理
+   - 自动为每个 Session 创建 PassiveMessageHandler
+   - 管理 LLM 客户端和机器人 QQ 号的传递
 
-3. **配置系统扩展** (`src/config.ts`)
+3. **PassiveMessageHandler 类** (`src/passive_message_handler.ts`)
+   - 实现被动的 LLM 对话功能
+   - 维护群组聊天历史记录
+   - 基于 @ 提及触发智能回复
+   - 支持自定义 system prompt 和历史记录长度
+
+4. **配置系统扩展** (`src/config.ts`)
    - 扩展了原有配置结构
-   - 支持 napcat 连接配置和群组列表
-   - 包含重连机制配置
+   - 支持 napcat 连接配置、群组列表和机器人QQ号
+   - 包含重连机制配置和可选的 agent 配置
+   - 新增 bot_qq 配置项，消除动态获取QQ号的复杂性
 
-4. **主应用** (`src/main.ts`)
+5. **主应用** (`src/main.ts`)
    - KagamiBot 类集成所有组件
-   - 实现基于 @ 提及的复读机制
-   - 自动获取 bot QQ 号码用于 @ 检测
+   - 从配置文件读取机器人QQ号
+   - 自动为每个群组创建独立的 PassiveMessageHandler
    - 提供完整的错误处理和中文日志记录
 
 ### 关键特性
@@ -73,10 +81,11 @@ napcat:
     enable: true
     attempts: 10
     delay: 5000
+  bot_qq: 123456789                    # 机器人的QQ号码
   groups: [123456789, 987654321]
 
-agent:
-  history_turns: 5
+agent:                                 # 可选的对话配置
+  history_turns: 40                    # 保留的历史消息条数，默认40
 ```
 
 ### 使用方式
@@ -96,17 +105,16 @@ await sessionManager.sendMessageToGroup(groupId, "消息内容");
 await sessionManager.broadcastMessage("广播内容");
 ```
 
-#### 设置消息处理器
+#### SessionManager 初始化
 ```typescript
-// 为所有会话设置统一的消息处理器
-sessionManager.setMessageHandlerForAllSessions({
-    handleMessage: async (message) => {
-        if (message.mentions?.includes(botQQ)) {
-            // 处理 @ 机器人的消息
-            await sessionManager.sendMessageToGroup(message.groupId, message.content);
-        }
-    }
-});
+// SessionManager 自动为每个群组创建对应的 PassiveMessageHandler
+const sessionManager = new SessionManager(
+    napcatConfig, 
+    llmClient, 
+    botQQ, 
+    agentConfig
+);
+await sessionManager.initializeSessions();
 ```
 
 ### 技术细节
@@ -148,11 +156,11 @@ interface MessageHandler {
 
 #### 未来可扩展功能
 1. **富媒体消息支持**：图片、文件等消息类型
-2. **LLM 智能回复**：替换简单复读为智能对话
-3. **群组特定配置**：不同群组使用不同设置
-4. **消息过滤器**：基于内容或用户的消息过滤
-5. **统计功能**：消息数量、用户活跃度等统计
-6. **上下文记忆**：维护对话历史和用户画像
+2. **群组特定配置**：不同群组使用不同设置
+3. **消息过滤器**：基于内容或用户的消息过滤
+4. **统计功能**：消息数量、用户活跃度等统计
+5. **主动对话模式**：基于时间或事件触发的主动发言
+6. **多轮对话增强**：更复杂的上下文记忆和对话管理
 
 #### 架构优势
 - 模块化设计，易于单独测试和维护
