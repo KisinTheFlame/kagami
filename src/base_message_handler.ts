@@ -1,10 +1,11 @@
 import fs from "fs";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler, Session } from "./session.js";
 
 interface LlmResponse {
-    reply: string;
+    reply?: SendMessageSegment[];
 }
 
 export abstract class BaseMessageHandler implements MessageHandler {
@@ -38,22 +39,24 @@ export abstract class BaseMessageHandler implements MessageHandler {
             // 构建 LLM 请求并生成回复
             const chatMessages = this.buildChatMessages();
             const llmResponse = await this.llmClient.oneTurnChat(chatMessages);
-            const reply = this.parseResponse(llmResponse);
+            const replyContent = this.parseResponse(llmResponse);
 
             // 发送回复
-            await this.session.sendMessage(reply);
+            await this.session.sendMessage(replyContent);
 
             // 将 bot 回复消息也加入历史记录
             const botMessage: Message = {
                 id: `bot_${String(Date.now())}`,
                 groupId: this.groupId,
                 userId: this.botQQ,
-                content: reply,
+                content: replyContent,
                 timestamp: new Date(),
             };
             this.addMessageToHistory(botMessage);
 
-            console.log(`[群 ${String(this.groupId)}] LLM 回复成功: ${reply}`);
+            // 格式化显示消息
+            const displayText = this.formatContentForDisplay(replyContent);
+            console.log(`[群 ${String(this.groupId)}] LLM 回复成功: ${displayText}`);
         } catch (error) {
             console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
             throw error;
@@ -76,16 +79,16 @@ export abstract class BaseMessageHandler implements MessageHandler {
 
         this.messageHistory.forEach(msg => {
             if (msg.userId === this.botQQ) {
-                // Bot 的消息作为 assistant
+                // Bot 的消息作为 assistant - bot 消息的 content 现在是结构化数组
                 messages.push({
                     role: "assistant",
-                    content: msg.content,
+                    content: JSON.stringify({ reply: msg.content }),
                 });
             } else {
-                // 用户消息作为 user
+                // 用户消息作为 user - 传递完整的 Message JSON
                 messages.push({
                     role: "user",
-                    content: `${msg.userNickname ?? String(msg.userId)}: ${msg.content}`,
+                    content: JSON.stringify(msg),
                 });
             }
         });
@@ -93,14 +96,28 @@ export abstract class BaseMessageHandler implements MessageHandler {
         return messages;
     }
 
-    protected parseResponse(content: string): string {
+    protected parseResponse(content: string): SendMessageSegment[] {
         try {
             const parsed = JSON.parse(content) as LlmResponse;
-            return parsed.reply || "抱歉，我暂时无法回复。";
+            return parsed.reply ?? [{ type: "text", data: { text: "抱歉，我暂时无法回复。" } }];
         } catch (error) {
             console.error("解析 LLM 响应失败:", error);
-            return "抱歉，我暂时无法回复。";
+            return [{ type: "text", data: { text: "抱歉，我暂时无法回复。" } }];
         }
+    }
+
+    protected formatContentForDisplay(content: SendMessageSegment[]): string {
+        const parts: string[] = [];
+        
+        for (const item of content) {
+            if (item.type === "text" && item.data.text) {
+                parts.push(item.data.text);
+            } else if (item.type === "at" && item.data.qq) {
+                parts.push(`@${item.data.qq}`);
+            }
+        }
+        
+        return parts.join("");
     }
 
     private loadSystemPrompt(): string {

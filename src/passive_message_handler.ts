@@ -18,8 +18,14 @@ export class PassiveMessageHandler extends BaseMessageHandler {
         this.addMessageToHistory(message);
 
         // 2. 检查是否被 @
-        if (message.mentions?.includes(this.botQQ)) {
+        if (this.isBotMentioned(message)) {
             await this.processAndReply(message);
         }
+    }
+
+    private isBotMentioned(message: Message): boolean {
+        return message.content.some(item => 
+            item.type === "at" && item.data.qq === this.botQQ.toString(),
+        );
     }
 }
