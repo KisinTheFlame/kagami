@@ -25,10 +25,20 @@ export interface AgentConfig {
     history_turns: number;
 }
 
+export interface BehaviorConfig {
+    min_reply_interval: number;      // 最小回复间隔（秒）
+    energy_max: number;              // 体力值上限
+    energy_cost: number;             // 每次回复消耗体力
+    energy_recovery_rate: number;    // 体力恢复速度（每60秒）
+    energy_recovery_interval: number; // 体力恢复间隔（秒）
+    message_handler_type: "active" | "passive"; // 消息处理策略
+}
+
 export interface Config {
     llm: LlmConfig;
     napcat: NapcatConfig;
     agent?: AgentConfig;
+    behavior?: BehaviorConfig;
 }
 
 export function loadConfig(): Config {
@@ -49,6 +59,20 @@ export function loadConfig(): Config {
     if (!config.napcat.base_url || !config.napcat.access_token || !config.napcat.groups.length || !config.napcat.bot_qq) {
         throw new Error("配置文件缺少必要的 napcat 配置项");
     }
+
+    config.behavior ??= {} as BehaviorConfig;
+
+    // 设置 behavior 默认值
+    const defaultBehavior: BehaviorConfig = {
+        min_reply_interval: 5,
+        energy_max: 100,
+        energy_cost: 1,
+        energy_recovery_rate: 5,
+        energy_recovery_interval: 60,
+        message_handler_type: "active",
+    };
+
+    config.behavior = { ...defaultBehavior, ...(config.behavior ?? {}) };
   
     return config;
 }
