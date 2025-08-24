@@ -2,29 +2,34 @@ import { Session } from "./session.js";
 import { NapcatConfig, AgentConfig } from "./config.js";
 import { LlmClient } from "./llm.js";
 import { PassiveMessageHandler } from "./passive_message_handler.js";
+import { ConnectionManager } from "./connection_manager.js";
 
 export class SessionManager {
     private sessions: Map<number, Session>;
-    private napcatConfig: NapcatConfig;
+    private connectionManager: ConnectionManager;
     private llmClient: LlmClient;
     private botQQ: number;
     private agentConfig?: AgentConfig;
 
     constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, agentConfig?: AgentConfig) {
         this.sessions = new Map();
-        this.napcatConfig = napcatConfig;
+        this.connectionManager = new ConnectionManager(napcatConfig);
+        this.connectionManager.setMessageDispatcher(this.handleIncomingMessage.bind(this));
         this.llmClient = llmClient;
         this.botQQ = botQQ;
         this.agentConfig = agentConfig;
     }
 
     async initializeSessions(): Promise<void> {
-        console.log("正在为群组初始化会话:", this.napcatConfig.groups);
+        console.log("正在为群组初始化会话:", this.connectionManager.getGroupIds());
         
-        const initPromises = this.napcatConfig.groups.map(async groupId => {
+        // 先连接 ConnectionManager
+        await this.connectionManager.connect();
+        
+        // 为每个群组创建 Session（不再需要独立连接）
+        for (const groupId of this.connectionManager.getGroupIds()) {
             try {
-                const session = new Session(groupId, this.napcatConfig);
-                await session.connect();
+                const session = new Session(groupId, this.connectionManager);
                 
                 // 为每个 Session 创建对应的 PassiveMessageHandler
                 const handler = new PassiveMessageHandler(
@@ -42,22 +47,38 @@ export class SessionManager {
             } catch (error) {
                 console.error(`群 ${String(groupId)} 初始化失败:`, error);
             }
-        });
-
-        await Promise.allSettled(initPromises);
+        }
+        
         console.log(`会话管理器初始化完成，共 ${String(this.sessions.size)} 个活跃会话`);
+    }
+
+    private handleIncomingMessage(context: unknown): void {
+        try {
+            const ctx = context as {
+                group_id: number;
+                [key: string]: unknown;
+            };
+
+            const groupId = ctx.group_id;
+            const session = this.sessions.get(groupId);
+            if (session) {
+                void session.handleMessage(context);
+            } else {
+                console.warn(`收到群 ${String(groupId)} 的消息，但未找到对应的会话`);
+            }
+        } catch (error) {
+            console.error("消息分发失败:", error);
+        }
     }
 
     shutdownAllSessions(): void {
         console.log("正在关闭所有会话...");
         
-        for (const [groupId, session] of this.sessions) {
-            try {
-                session.disconnect();
-                console.log(`群 ${String(groupId)} 会话已关闭`);
-            } catch (error) {
-                console.error(`关闭群 ${String(groupId)} 会话失败:`, error);
-            }
+        try {
+            this.connectionManager.disconnect();
+            console.log("连接管理器已关闭");
+        } catch (error) {
+            console.error("关闭连接管理器失败:", error);
         }
 
         this.sessions.clear();
@@ -82,8 +103,9 @@ export class SessionManager {
 
     getConnectionStatus(): Map<number, boolean> {
         const status = new Map<number, boolean>();
-        for (const [groupId, session] of this.sessions) {
-            status.set(groupId, session.isSessionConnected());
+        const isConnected = this.connectionManager.isConnectionActive();
+        for (const [groupId] of this.sessions) {
+            status.set(groupId, isConnected);
         }
         return status;
     }
