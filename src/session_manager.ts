@@ -1,22 +1,26 @@
 import { Session } from "./session.js";
-import { NapcatConfig, AgentConfig } from "./config.js";
+import { NapcatConfig, AgentConfig, BehaviorConfig } from "./config.js";
 import { LlmClient } from "./llm.js";
 import { PassiveMessageHandler } from "./passive_message_handler.js";
+import { ActiveMessageHandler } from "./active_message_handler.js";
 import { ConnectionManager } from "./connection_manager.js";
 
 export class SessionManager {
     private sessions: Map<number, Session>;
+    private activeHandlers = new Map<number, ActiveMessageHandler>();
     private connectionManager: ConnectionManager;
     private llmClient: LlmClient;
     private botQQ: number;
     private agentConfig?: AgentConfig;
+    private behaviorConfig: BehaviorConfig;
 
-    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, agentConfig?: AgentConfig) {
+    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, behaviorConfig: BehaviorConfig, agentConfig?: AgentConfig) {
         this.sessions = new Map();
         this.connectionManager = new ConnectionManager(napcatConfig);
         this.connectionManager.setMessageDispatcher(this.handleIncomingMessage.bind(this));
         this.llmClient = llmClient;
         this.botQQ = botQQ;
+        this.behaviorConfig = behaviorConfig;
         this.agentConfig = agentConfig;
     }
 
@@ -30,15 +34,31 @@ export class SessionManager {
         for (const groupId of this.connectionManager.getGroupIds()) {
             try {
                 const session = new Session(groupId, this.connectionManager);
+                const maxHistory = this.agentConfig?.history_turns ?? 40;
                 
-                // 为每个 Session 创建对应的 PassiveMessageHandler
-                const handler = new PassiveMessageHandler(
-                    this.llmClient,
-                    this.botQQ,
-                    groupId,
-                    session,
-                    this.agentConfig?.history_turns ?? 40,
-                );
+                // 根据配置选择消息处理策略
+                let handler;
+                if (this.behaviorConfig.message_handler_type === "active") {
+                    handler = new ActiveMessageHandler(
+                        this.llmClient,
+                        this.botQQ,
+                        groupId,
+                        session,
+                        this.behaviorConfig,
+                        maxHistory,
+                    );
+                    this.activeHandlers.set(groupId, handler);
+                    console.log(`群 ${String(groupId)} 使用主动回复策略`);
+                } else {
+                    handler = new PassiveMessageHandler(
+                        this.llmClient,
+                        this.botQQ,
+                        groupId,
+                        session,
+                        maxHistory,
+                    );
+                    console.log(`群 ${String(groupId)} 使用被动回复策略`);
+                }
                 
                 session.setMessageHandler(handler);
                 this.sessions.set(groupId, session);
@@ -75,6 +95,12 @@ export class SessionManager {
         console.log("正在关闭所有会话...");
         
         try {
+            // 清理 ActiveMessageHandler 中的定时器
+            for (const handler of this.activeHandlers.values()) {
+                handler.destroy();
+            }
+            this.activeHandlers.clear();
+            
             this.connectionManager.disconnect();
             console.log("连接管理器已关闭");
         } catch (error) {

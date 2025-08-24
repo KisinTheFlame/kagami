@@ -18,6 +18,7 @@ class KagamiBot {
             
             console.log(`机器人 QQ 号码: ${String(this.config.napcat.bot_qq)}`);
             console.log(`已配置 ${String(this.config.napcat.groups.length)} 个群组:`, this.config.napcat.groups);
+            console.log(`消息处理策略: ${this.config.behavior?.message_handler_type ?? "active"}`);
         } catch (error) {
             console.error("机器人初始化失败:", error);
             process.exit(1);
@@ -33,6 +34,14 @@ class KagamiBot {
                 this.config.napcat, 
                 this.llmClient, 
                 this.config.napcat.bot_qq, 
+                this.config.behavior ?? {
+                    min_reply_interval: 5,
+                    energy_max: 100,
+                    energy_cost: 1,
+                    energy_recovery_rate: 5,
+                    energy_recovery_interval: 60,
+                    message_handler_type: "active",
+                },
                 this.config.agent,
             );
             await this.sessionManager.initializeSessions();
