@@ -1,4 +1,4 @@
-import { NCWebsocket } from "node-napcat-ts";
+import { NCWebsocket, SendMessageSegment } from "node-napcat-ts";
 import { NapcatConfig } from "./config.js";
 
 export type MessageDispatcher = (context: unknown) => void;
@@ -56,7 +56,7 @@ export class ConnectionManager {
         });
     }
 
-    async sendGroupMessage(groupId: number, content: string): Promise<void> {
+    async sendGroupMessage(groupId: number, content: SendMessageSegment[]): Promise<void> {
         try {
             if (!this.isConnected) {
                 throw new Error("连接管理器未连接");
@@ -64,7 +64,7 @@ export class ConnectionManager {
 
             await this.napcat.send_group_msg({
                 group_id: groupId,
-                message: [{ type: "text", data: { text: content } }],
+                message: content,
             });
         } catch (error) {
             console.error(`群 ${String(groupId)} 消息发送失败:`, error);

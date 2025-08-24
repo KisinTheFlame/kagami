@@ -1,3 +1,4 @@
+import { SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
 
 export interface Message {
@@ -5,10 +6,8 @@ export interface Message {
     groupId: number;
     userId: number;
     userNickname?: string;
-    content: string;
+    content: SendMessageSegment[];
     timestamp: Date;
-    mentions?: number[];
-    rawMessage?: { type: string; data: { text?: string; qq?: string } }[];
 }
 
 export interface MessageHandler {
@@ -33,10 +32,9 @@ export class Session {
                 message_id: number;
                 group_id: number;
                 user_id: number;
-                message: { type: string; data: { text?: string; qq?: string } }[];
+                message: SendMessageSegment[];
             };
 
-            const { content, mentions } = this.extractMessageContent(ctx.message);
             const userNickname = await this.connectionManager.getUserNickname(this.groupId, ctx.user_id);
 
             const message: Message = {
@@ -44,13 +42,11 @@ export class Session {
                 groupId: ctx.group_id,
                 userId: ctx.user_id,
                 userNickname,
-                content,
+                content: ctx.message,
                 timestamp: new Date(),
-                mentions,
-                rawMessage: ctx.message,
             };
 
-            const displayContent = this.formatMessageForDisplay(ctx.message);
+            const displayContent = this.formatMessageForDisplay(message.content);
             console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(ctx.user_id)}) 发送消息: ${displayContent}`);
 
             if (this.messageHandler) {
@@ -61,34 +57,14 @@ export class Session {
         }
     }
 
-    private extractMessageContent(messageArray: { type: string; data: { text?: string; qq?: string } }[]): { content: string; mentions?: number[] } {
-        const textParts: string[] = [];
-        const mentions: number[] = [];
 
-        for (const msg of messageArray) {
-            if (msg.type === "text" && msg.data.text) {
-                textParts.push(msg.data.text);
-            } else if (msg.type === "at" && msg.data.qq) {
-                const qq = Number(msg.data.qq);
-                if (!isNaN(qq)) {
-                    mentions.push(qq);
-                }
-            }
-        }
-
-        return {
-            content: textParts.join(""),
-            mentions: mentions.length > 0 ? mentions : undefined,
-        };
-    }
-
-    private formatMessageForDisplay(messageArray: { type: string; data: { text?: string; qq?: string } }[]): string {
+    private formatMessageForDisplay(messageArray: SendMessageSegment[]): string {
         const parts: string[] = [];
 
         for (const msg of messageArray) {
-            if (msg.type === "text" && msg.data.text) {
+            if (msg.type === "text" && "text" in msg.data && msg.data.text) {
                 parts.push(msg.data.text);
-            } else if (msg.type === "at" && msg.data.qq) {
+            } else if (msg.type === "at" && "qq" in msg.data && msg.data.qq) {
                 parts.push(`@${msg.data.qq}`);
             }
         }
@@ -97,7 +73,7 @@ export class Session {
     }
 
 
-    async sendMessage(content: string): Promise<void> {
+    async sendMessage(content: SendMessageSegment[]): Promise<void> {
         return this.connectionManager.sendGroupMessage(this.groupId, content);
     }
 

@@ -3,6 +3,7 @@ import { NapcatConfig, AgentConfig, BehaviorConfig } from "./config.js";
 import { LlmClient } from "./llm.js";
 import { PassiveMessageHandler } from "./passive_message_handler.js";
 import { ActiveMessageHandler } from "./active_message_handler.js";
+import { SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
 
 export class SessionManager {
@@ -136,7 +137,7 @@ export class SessionManager {
         return status;
     }
 
-    async sendMessageToGroup(groupId: number, content: string): Promise<boolean> {
+    async sendMessageToGroup(groupId: number, content: SendMessageSegment[]): Promise<boolean> {
         const session = this.sessions.get(groupId);
         if (!session) {
             console.error(`未找到群 ${String(groupId)} 的会话`);
@@ -152,7 +153,7 @@ export class SessionManager {
         }
     }
 
-    async broadcastMessage(content: string): Promise<number> {
+    async broadcastMessage(content: SendMessageSegment[]): Promise<number> {
         const sendPromises = Array.from(this.sessions.entries()).map(async ([groupId, session]) => {
             try {
                 await session.sendMessage(content);

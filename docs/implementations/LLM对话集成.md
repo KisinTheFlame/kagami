@@ -4,6 +4,8 @@
 
 实现了基于 LLM 的智能群聊对话功能，支持被动触发的自然语言交互。当机器人被 @ 提及时，会根据群聊历史记录生成符合语境的智能回复。
 
+**2024年重大架构升级**：系统已重构为完全结构化的消息处理架构，LLM 可以完整理解和生成包含 @ 提及等复杂格式的消息。
+
 ## 架构设计
 
 ### 核心组件
@@ -13,71 +15,91 @@
 负责处理群组消息并提供 LLM 对话功能：
 
 - **消息历史管理**：使用 LRU 策略维护每个群组的聊天历史
-- **@ 触发机制**：仅在机器人被明确 @ 时才触发 LLM 回复
-- **上下文构建**：将群聊历史转换为 LLM 可理解的对话格式
-- **响应解析**：解析 LLM 的 JSON 格式回复并处理错误
+- **@ 触发机制**：通过遍历消息结构检测机器人是否被 @ 
+- **上下文构建**：将完整的 Message 对象序列化为 JSON 传递给 LLM
+- **响应解析**：解析 LLM 的结构化回复并发送到群组
 
 #### 系统提示词 (`static/prompt.txt`)
 
-定义了机器人的行为规范和回复格式：
+定义了机器人的行为规范和新的结构化消息处理：
 
 ```
-你是一个友好的 QQ 群聊机器人，名字是 Kagami。
+你是一个友好的 QQ 群聊参与者，名字是小镜。
 请根据群聊历史消息，生成简洁、自然的回复。
 
-要求：
-- 回复要符合群聊氛围，语调轻松友好
-- 长度控制在 1-2 句话
-- 不要重复历史消息中的内容
-- 如果没有足够信息回复，可以问问题或表达困惑
+## 消息格式说明
 
-请以 JSON 格式回复：
+你将接收到 JSON 格式的用户消息，包含以下字段：
+- id: 消息唯一标识
+- groupId: 群组 ID
+- userId: 用户 QQ 号
+- userNickname: 用户昵称
+- content: 消息内容数组，每个元素包含：
+  - type: 消息类型（"text" 文本、"at" @提及等）
+  - data: 具体数据
+    - text: 文本内容
+    - qq: 被@的QQ号
+- timestamp: 发送时间
+
+## 回复要求
+
+请以 JSON 格式回复，使用 reply 字段包含消息内容数组：
+
 {
-  "reply": "你的回复内容"
+  "reply": [
+    {"type": "text", "data": {"text": "你的回复内容"}}
+  ]
+}
+
+如果需要@某人，可以这样回复：
+{
+  "reply": [
+    {"type": "at", "data": {"qq": "123456"}},
+    {"type": "text", "data": {"text": " 你好！"}}
+  ]
 }
 ```
 
 ### 技术特性
 
-#### 消息历史管理
+#### 消息数据结构
 
 ```typescript
-interface Message {
+export interface Message {
     id: string;
     groupId: number;
     userId: number;
     userNickname?: string;
-    content: string;
+    content: SendMessageSegment[];  // 结构化消息内容
     timestamp: Date;
-    mentions?: number[];
-    rawMessage?: { type: string; data: any }[];
 }
 ```
 
-- 每个群组维护独立的消息历史记录
-- 使用 LRU 策略限制历史记录长度（默认 40 条）
-- 同时记录用户消息和机器人回复
+**重大架构改进**：
+- **移除了冗余字段**：不再有 `mentions` 数组和纯文本 `content` 字段
+- **统一结构化格式**：接收和发送都使用相同的 `SendMessageSegment[]` 格式
+- **完整语义保留**：@ 提及、文本等所有信息都保持在结构化格式中
 
 #### 对话上下文构建
 
 ```typescript
-private buildChatMessages(): ChatCompletionMessageParam[] {
+protected buildChatMessages(): ChatCompletionMessageParam[] {
     const messages: ChatCompletionMessageParam[] = [
         { role: "system", content: this.systemPrompt },
     ];
 
     this.messageHistory.forEach(msg => {
         if (msg.userId === this.botQQ) {
-            // Bot 的消息作为 assistant
+            // Bot 的消息作为 assistant - 传递结构化格式
             messages.push({
-                role: "assistant",
-                content: msg.content,
+                role: "assistant", 
+                content: JSON.stringify({ reply: msg.content }),
             });
         } else {
-            // 用户消息作为 user，包含昵称信息
+            // 用户消息作为 user - 传递完整的 Message JSON
             messages.push({
                 role: "user",
-                content: `${msg.userNickname ?? String(msg.userId)}: ${msg.content}`,
+                content: JSON.stringify(msg),
             });
         }
     });
@@ -86,11 +108,67 @@ private buildChatMessages(): ChatCompletionMessageParam[] {
 }
 ```
 
-#### 触发条件
+**架构升级优势**：
+- **完整上下文**：LLM 能看到用户昵称、@ 信息、时间戳等所有上下文
+- **结构化理解**：LLM 能准确理解消息的各个组成部分
+- **智能回复**：LLM 可以生成包含 @ 提及的复杂回复
 
-- **被动触发**：仅在机器人被 @ 时才响应
-- **群组隔离**：每个群组的对话上下文完全独立
-- **错误容错**：LLM 请求失败时不影响其他功能
+#### 触发检测机制
+
+```typescript
+private isBotMentioned(message: Message): boolean {
+    return message.content.some(item => 
+        item.type === "at" && item.data.qq === this.botQQ.toString(),
+    );
+}
+```
+
+- **精确检测**：直接从消息结构中检测 @ 提及
+- **类型安全**：使用 TypeScript 强类型确保数据正确性
+- **扩展性强**：可轻松支持更多触发条件
+
+## 消息处理流程
+
+### 完整工作流程
+
+1. **接收消息**：Session 接收群组消息，保持完整的结构化格式
+2. **保存历史**：PassiveMessageHandler 将完整 Message 对象添加到历史记录
+3. **检查触发**：遍历 `content` 数组检查是否包含对机器人的 @ 
+4. **构建上下文**：将完整 Message 对象序列化为 JSON 传递给 LLM
+5. **LLM 处理**：LLM 接收完整上下文，生成结构化回复
+6. **解析响应**：从 LLM 的 `reply` 数组中提取结构化消息
+7. **发送消息**：将结构化消息直接发送到群组
+8. **记录回复**：将机器人的结构化回复添加到历史记录
+
+### 消息格式示例
+
+**用户发送**："@小镜 今天天气怎么样？"
+
+**LLM 接收的 JSON**：
+```json
+{
+  "id": "123456",
+  "userId": 789012,
+  "userNickname": "张三",
+  "content": [
+    {"type": "at", "data": {"qq": "987654321"}},
+    {"type": "text", "data": {"text": " 今天天气怎么样？"}}
+  ],
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+**LLM 生成的回复**：
+```json
+{
+  "reply": [
+    {"type": "at", "data": {"qq": "789012"}},
+    {"type": "text", "data": {"text": " 今天天气不错，适合出门散步！"}}
+  ]
+}
+```
+
+**群组中显示**："@张三 今天天气不错，适合出门散步！"
 
 ## 配置参数
 
@@ -108,32 +186,25 @@ napcat:
   bot_qq: 123456789    # 机器人的 QQ 号码，用于 @ 检测
 ```
 
-## 工作流程
+## 架构优势
 
-### 消息处理流程
+### 语义完整性
 
-1. **接收消息**：Session 接收到群组消息
-2. **保存历史**：PassiveMessageHandler 将消息添加到历史记录
-3. **检查触发**：检查消息是否 @ 了机器人
-4. **构建上下文**：将历史记录转换为 LLM 对话格式
-5. **LLM 请求**：调用 LlmClient 生成回复
-6. **解析响应**：从 JSON 格式中提取回复内容
-7. **发送回复**：通过 Session 发送消息到群组
-8. **记录回复**：将机器人回复也添加到历史记录
+- **完整上下文**：LLM 能看到谁发送消息、何时发送、@ 了谁等完整信息
+- **精准理解**：能准确理解复杂的群聊对话场景
+- **智能回应**：可以针对 @ 提及做出恰当的回应
 
-### 错误处理
+### 扩展性
 
-```typescript
-try {
-    const chatMessages = this.buildChatMessages();
-    const llmResponse = await this.llmClient.oneTurnChat(chatMessages);
-    const reply = this.parseResponse(llmResponse);
-    await this.session.sendMessage(reply);
-} catch (error) {
-    console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
-    // 静默失败，不影响其他功能
-}
-```
+- **多媒体支持**：架构已为图片、文件等消息类型做好准备
+- **富文本回复**：LLM 可以生成包含 @ 、表情等复杂格式的回复
+- **类型安全**：使用 TypeScript 强类型系统确保数据结构正确
+
+### 性能优化
+
+- **消除冗余**：移除了重复的数据字段，减少内存占用
+- **统一格式**：接收和发送使用相同数据结构，减少转换开销
+- **精确触发**：避免不必要的 LLM 调用
 
 ## 集成方式
 
@@ -158,27 +229,26 @@ session.setMessageHandler(handler);
 - 消息历史记录完全隔离
 - LLM 对话上下文不会跨群组混淆
 
-## 扩展性
+## 未来扩展能力
 
-### 未来可扩展功能
+### 即将支持的功能
 
-1. **多轮对话记忆**：维护更长期的对话上下文
-2. **个性化回复**：基于用户历史行为调整回复风格
-3. **情感分析**：根据群聊氛围调整回复语调
-4. **主题检测**：识别讨论话题并提供相关信息
-5. **多模态支持**：处理图片、链接等富媒体内容
-6. **定时主动发言**：在特定条件下主动参与讨论
+1. **多媒体消息**：图片、文件、语音等消息类型
+2. **表情回复**：LLM 可以使用 QQ 表情增强回复效果
+3. **回复引用**：支持回复特定消息的功能
+4. **群组个性化**：不同群组可以有不同的机器人人设
 
 ### 配置灵活性
 
 - System prompt 可通过文件轻松修改
 - 历史记录长度可配置
-- 支持不同群组使用不同配置（未来扩展）
+- 消息格式完全基于 node-napcat-ts 标准
 
 ## 部署注意事项
 
 1. **LLM 服务**：确保 LLM API 服务可用且配置正确
-2. **提示词文件**：确保 `static/prompt.txt` 文件存在且可读
+2. **提示词文件**：确保 `static/prompt.txt` 文件存在且格式正确
 3. **网络延迟**：LLM 请求可能有一定延迟，不影响其他功能
 4. **API 限制**：注意 LLM API 的频率限制和配额管理
 5. **内容审核**：建议添加内容过滤以确保回复内容安全合规
+6. **类型兼容**：确保所有依赖的 node-napcat-ts 版本兼容

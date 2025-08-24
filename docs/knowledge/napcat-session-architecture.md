@@ -83,18 +83,18 @@ class ConnectionManager {
 1. **连接层接收**：ConnectionManager 监听 `message.group` 事件
 2. **消息分发**：通过注册的 MessageDispatcher 将原始消息发送给 SessionManager
 3. **路由分发**：SessionManager 根据 groupId 将消息路由到对应 Session
-4. **内容解析**：Session 解析消息结构，提取文本内容和 @ 提及信息
+4. **结构化存储**：Session 直接保存完整的结构化消息格式，无需额外解析
 5. **用户信息获取**：Session 通过 ConnectionManager 异步获取发送人的昵称信息
-6. **业务处理**：调用 MessageHandler 进行具体的业务逻辑处理
+6. **业务处理**：MessageHandler 直接处理结构化消息，获得完整的语义信息
 7. **日志记录**：各层记录相应的处理日志
 
 ### 发送流程
 
-1. **业务调用**：Session 通过 sendMessage() 接口发起发送请求
-2. **委托转发**：Session 将请求委托给 ConnectionManager.sendGroupMessage()
+1. **结构化调用**：Session 通过 sendMessage() 接受 SendMessageSegment[] 格式消息
+2. **委托转发**：Session 将结构化消息直接委托给 ConnectionManager.sendGroupMessage()
 3. **连接检查**：ConnectionManager 确认 WebSocket 连接状态
-4. **消息构造**：构造符合 napcat API 格式的群消息
-5. **发送请求**：调用 napcat 的 send_group_msg API
+4. **直接发送**：结构化消息直接符合 napcat API 格式，无需额外构造
+5. **发送请求**：调用 napcat 的 send_group_msg API，支持 @ 等复杂格式
 6. **结果处理**：处理发送结果和可能的错误
 7. **日志记录**：记录消息发送成功或失败日志
 
@@ -103,15 +103,15 @@ class ConnectionManager {
 ### 数据结构
 
 ```typescript
+import { SendMessageSegment } from "node-napcat-ts";
+
 interface Message {
-    id: string;                                          // 消息ID
-    groupId: number;                                     // 群组ID
-    userId: number;                                      // 发送者ID
-    userNickname?: string;                               // 发送者昵称
-    content: string;                                     // 文本内容
-    timestamp: Date;                                     // 接收时间
-    mentions?: number[];                                 // 被 @ 的用户列表
-    rawMessage?: { type: string; data: any }[];          // 原始消息结构
+    id: string;                      // 消息ID
+    groupId: number;                 // 群组ID
+    userId: number;                  // 发送者ID
+    userNickname?: string;           // 发送者昵称
+    content: SendMessageSegment[];   // 结构化消息内容（统一格式）
+    timestamp: Date;                 // 接收时间
 }
 
 interface MessageHandler {
@@ -120,6 +120,12 @@ interface MessageHandler {
 
 type MessageDispatcher = (context: unknown) => void;  // 消息分发器类型
 ```
+
+**重大架构升级（2024年）**：
+- **统一数据结构**：移除了冗余的 `mentions` 和纯文本 `content` 字段
+- **结构化消息**：使用 `SendMessageSegment[]` 统一处理接收和发送的消息
+- **完整语义保留**：@ 提及、文本等所有信息都在 `content` 数组中结构化存储
+- **类型安全**：与 node-napcat-ts 库的类型系统完全兼容
 
 ### 回调机制
 
@@ -131,9 +137,18 @@ type MessageDispatcher = (context: unknown) => void;  // 消息分发器类型
 
 ### @ 消息处理
 
-- 解析 `at` 类型消息段，提取被 @ 的用户 QQ 号
-- 支持检测机器人是否被 @
-- 在日志中正确显示 @ 信息
+- **结构化检测**：直接从 `content` 数组中检测 `at` 类型消息段
+- **精确匹配**：通过遍历消息结构检测机器人是否被 @ 提及
+- **统一显示**：控制台和 LLM 都能正确理解 @ 信息的完整语义
+
+```typescript
+// 新的 @ 检测机制
+private isBotMentioned(message: Message): boolean {
+    return message.content.some(item => 
+        item.type === "at" && item.data.qq === this.botQQ.toString(),
+    );
+}
+```
 
 ## 配置管理
 
@@ -190,12 +205,14 @@ agent:                             # 对话配置（可选）
 
 ### 消息处理扩展
 
-- 支持图片、文件等富媒体消息
+- ✅ 已实现：完全结构化的消息处理架构
 - ✅ 已实现：LLM 智能回复和被动对话功能
 - ✅ 已实现：基于上下文的对话记忆和历史管理
-- 消息内容的预处理和过滤
-- 自定义消息格式转换
-- 主动对话模式和定时发言
+- ✅ 已实现：@ 提及的完整语义理解和生成
+- 🔄 待扩展：图片、文件等富媒体消息（架构已就绪）
+- 🔄 待扩展：表情、回复引用等高级消息功能
+- 🔄 待扩展：消息内容的预处理和过滤
+- 🔄 待扩展：主动对话模式和定时发言
 
 ### 存储扩展
 
