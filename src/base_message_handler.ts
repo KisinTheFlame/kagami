@@ -49,7 +49,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
 
     abstract handleMessage(message: Message): Promise<void>;
 
-    protected async processAndReply(_message: Message): Promise<boolean> {
+    protected async processAndReply(_originalMessage: Message): Promise<boolean> {
         try {
             // 构建 LLM 请求并生成回复
             const chatMessages = this.buildChatMessages();
@@ -78,7 +78,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
 
             // 如果有回复内容，则发送
             if (reply && reply.length > 0) {
-                await this.session.sendMessage(reply);
+                await this.session.sendMessage(reply); // 直接发送LLM生成的内容，让LLM自己决定是否包含reply段
                 const displayText = this.formatContentForDisplay(reply);
                 console.log(`[群 ${String(this.groupId)}] LLM 回复成功: ${displayText}`);
                 return true;
@@ -102,8 +102,15 @@ export abstract class BaseMessageHandler implements MessageHandler {
     }
 
     protected buildChatMessages(): ChatCompletionMessageParam[] {
+        // 构建包含机器人QQ号的系统提示
+        const systemPromptWithContext = `${this.systemPrompt}
+
+<bot_context>
+你的QQ号是: ${String(this.botQQ)}
+</bot_context>`;
+
         const messages: ChatCompletionMessageParam[] = [
-            { role: "system", content: this.systemPrompt },
+            { role: "system", content: systemPromptWithContext },
         ];
 
         this.messageHistory.forEach(msg => {
@@ -190,6 +197,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
         return { thoughts, reply };
     }
 
+
     protected formatContentForDisplay(content: SendMessageSegment[]): string {
         const parts: string[] = [];
         
@@ -198,6 +206,8 @@ export abstract class BaseMessageHandler implements MessageHandler {
                 parts.push(item.data.text);
             } else if (item.type === "at" && item.data.qq) {
                 parts.push(`@${item.data.qq}`);
+            } else if (item.type === "reply" && item.data.id) {
+                parts.push(`[回复:${item.data.id}]`);
             }
         }
         
