@@ -49,6 +49,16 @@ export class EnergyManager {
         return `${String(this.currentEnergy)}/${String(this.maxEnergy)}`;
     }
 
+    refundEnergy(): void {
+        const newEnergy = Math.min(this.currentEnergy + this.costPerMessage, this.maxEnergy);
+        const refunded = newEnergy - this.currentEnergy;
+        
+        if (refunded > 0) {
+            this.currentEnergy = newEnergy;
+            console.log(`[体力系统] 退还体力 ${String(refunded)}，当前体力: ${String(this.currentEnergy)}/${String(this.maxEnergy)}`);
+        }
+    }
+
     private startRecoveryTimer(): void {
         this.recoveryTimer = setInterval(() => {
             this.recoverEnergy();

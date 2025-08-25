@@ -40,8 +40,14 @@ export class ActiveMessageHandler extends BaseMessageHandler {
             return;
         }
 
-        // 4. 处理消息并回复
-        await this.processAndReply(message);
+        // 4. 处理消息并尝试回复
+        const didReply = await this.processAndReply(message);
+        
+        // 5. 如果LLM选择不回复，退还体力值
+        if (!didReply) {
+            this.energyManager.refundEnergy();
+            console.log(`[群 ${String(this.groupId)}] LLM 选择不回复，已退还体力`);
+        }
     }
 
     private canReply(): boolean {
