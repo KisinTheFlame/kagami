@@ -8,6 +8,10 @@ export interface Message {
     userNickname?: string;
     content: SendMessageSegment[];
     timestamp: Date;
+    metadata?: {
+        thoughts?: string[];
+        hasReply?: boolean;
+    };
 }
 
 export interface MessageHandler {
