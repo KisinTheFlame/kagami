@@ -19,7 +19,7 @@ export class PassiveMessageHandler extends BaseMessageHandler {
 
         // 2. 检查是否被 @
         if (this.isBotMentioned(message)) {
-            await this.processAndReply(message);
+            await this.processAndReply();
         }
     }
 
