@@ -6,8 +6,6 @@ import { BehaviorConfig } from "./config.js";
 
 export class ActiveMessageHandler extends BaseMessageHandler {
     private energyManager: EnergyManager;
-    private lastReplyTime = 0;
-    private minReplyInterval: number;
 
     constructor(
         llmClient: LlmClient,
@@ -25,8 +23,6 @@ export class ActiveMessageHandler extends BaseMessageHandler {
             behaviorConfig.energy_recovery_rate,
             behaviorConfig.energy_recovery_interval,
         );
-        
-        this.minReplyInterval = behaviorConfig.min_reply_interval * 1000; // 转换为毫秒
     }
 
     async handleMessage(message: Message): Promise<void> {
@@ -44,24 +40,11 @@ export class ActiveMessageHandler extends BaseMessageHandler {
             return;
         }
 
-        // 4. 更新最后回复时间
-        this.lastReplyTime = Date.now();
-
-        // 5. 处理消息并回复
+        // 4. 处理消息并回复
         await this.processAndReply(message);
     }
 
     private canReply(): boolean {
-        const now = Date.now();
-        const timeSinceLastReply = now - this.lastReplyTime;
-        
-        // 检查时间间隔
-        if (timeSinceLastReply < this.minReplyInterval) {
-            const remainingTime = (this.minReplyInterval - timeSinceLastReply) / 1000;
-            console.log(`[群 ${String(this.groupId)}] 回复间隔未满足，还需等待 ${remainingTime.toFixed(1)} 秒`);
-            return false;
-        }
-
         // 检查体力值
         if (!this.energyManager.canSendMessage()) {
             console.log(`[群 ${String(this.groupId)}] 体力不足 (${this.energyManager.getEnergyStatus()})`);

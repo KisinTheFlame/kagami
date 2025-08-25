@@ -26,7 +26,6 @@ export interface AgentConfig {
 }
 
 export interface BehaviorConfig {
-    min_reply_interval: number;      // 最小回复间隔（秒）
     energy_max: number;              // 体力值上限
     energy_cost: number;             // 每次回复消耗体力
     energy_recovery_rate: number;    // 体力恢复速度（每60秒）
@@ -64,7 +63,6 @@ export function loadConfig(): Config {
 
     // 设置 behavior 默认值
     const defaultBehavior: BehaviorConfig = {
-        min_reply_interval: 5,
         energy_max: 100,
         energy_cost: 1,
         energy_recovery_rate: 5,
