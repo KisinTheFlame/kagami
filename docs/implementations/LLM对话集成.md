@@ -8,6 +8,8 @@
 - **完全结构化的消息处理架构**：LLM 可以完整理解和生成包含 @ 提及等复杂格式的消息
 - **思考链集成**：LLM 会先思考再决定如何回复，提供可观测的推理过程
 - **智能选择回复**：主动模式下 LLM 可以模拟真人行为，选择不参与不适合的对话
+- **智能回复引用功能**：LLM 可以自主决定是否回复特定消息，区分自然对话和问答场景
+- **对话对象理解优化**：通过 few shot 示例教会 LLM 准确识别对话目标
 
 ## 架构设计
 
@@ -110,6 +112,7 @@ export interface Message {
     metadata?: {                    // 新增：扩展信息
         thoughts?: string[];        // LLM的思考过程
         hasReply?: boolean;         // 是否包含回复
+        replyToMessageId?: string;  // 如果这条消息是回复某条消息
     };
 }
 ```
@@ -141,8 +144,15 @@ type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
 ```typescript
 protected buildChatMessages(): ChatCompletionMessageParam[] {
+    // 构建包含机器人QQ号的系统提示
+    const systemPromptWithContext = `${this.systemPrompt}
+
+<bot_context>
+你的QQ号是: ${String(this.botQQ)}
+</bot_context>`;
+
     const messages: ChatCompletionMessageParam[] = [
-        { role: "system", content: this.systemPrompt },
+        { role: "system", content: systemPromptWithContext },
     ];
 
     this.messageHistory.forEach(msg => {
@@ -393,7 +403,7 @@ session.setMessageHandler(handler);
 
 3. **多媒体消息**：图片、文件、语音等消息类型的思考和处理
 4. **表情回复**：LLM 可以使用 QQ 表情增强回复效果
-5. **回复引用**：支持回复特定消息的功能
+5. **回复引用**：✅ 已支持，LLM 可智能决定是否回复特定消息
 6. **群组个性化**：不同群组可以有不同的机器人人设和思考风格
 
 ### 配置灵活性
