@@ -11,6 +11,7 @@ export interface Message {
     metadata?: {
         thoughts?: string[];
         hasReply?: boolean;
+        replyToMessageId?: string; // 如果这条消息是回复某条消息
     };
 }
 
@@ -41,6 +42,10 @@ export class Session {
 
             const userNickname = await this.connectionManager.getUserNickname(this.groupId, ctx.user_id);
 
+            // 检查消息中是否包含回复
+            const replySegment = ctx.message.find(segment => segment.type === "reply");
+            const replyToMessageId = replySegment?.data.id;
+
             const message: Message = {
                 id: String(ctx.message_id),
                 groupId: ctx.group_id,
@@ -48,10 +53,12 @@ export class Session {
                 userNickname,
                 content: ctx.message,
                 timestamp: new Date(),
+                metadata: replyToMessageId ? { replyToMessageId } : undefined,
             };
 
             const displayContent = this.formatMessageForDisplay(message.content);
-            console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(ctx.user_id)}) 发送消息: ${displayContent}`);
+            const replyInfo = replyToMessageId ? ` (回复消息:${replyToMessageId})` : "";
+            console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(ctx.user_id)}) 发送消息: ${displayContent}${replyInfo}`);
 
             if (this.messageHandler) {
                 await this.messageHandler.handleMessage(message);
@@ -70,6 +77,8 @@ export class Session {
                 parts.push(msg.data.text);
             } else if (msg.type === "at" && "qq" in msg.data && msg.data.qq) {
                 parts.push(`@${msg.data.qq}`);
+            } else if (msg.type === "reply" && "id" in msg.data) {
+                parts.push(`[回复:${msg.data.id}]`);
             }
         }
 

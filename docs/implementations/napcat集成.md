@@ -28,7 +28,8 @@
    - 封装单个群组的消息处理逻辑
    - 通过 ConnectionManager 委托发送消息
    - 基于回调的实时消息处理机制
-   - 支持解析 QQ @ 消息内容
+   - 支持解析 QQ @ 消息内容和回复消息关系
+   - 自动检测和标记回复消息的关联关系
    - 保持向后兼容的公共接口
 
 4. **PassiveMessageHandler 类** (`src/passive_message_handler.ts`)
@@ -65,8 +66,9 @@
 #### 消息处理
 - 群组消息自动过滤，只处理配置中的指定群组
 - 实时事件回调处理，无消息队列缓存
-- 完整解析消息内容，包括文本和 @ 提及信息
+- 完整解析消息内容，包括文本、@ 提及和回复消息信息
 - 支持获取发送人昵称和 QQ 号码
+- 自动识别和标记消息间的回复关系
 - 基于 @ 提及的智能回复触发机制
 
 #### 连接管理
@@ -141,11 +143,14 @@ interface Message {
     id: string;
     groupId: number;
     userId: number;
-    userNickname?: string;      // 发送人昵称
-    content: string;
+    userNickname?: string;
+    content: SendMessageSegment[];   // 结构化消息内容数组
     timestamp: Date;
-    mentions?: number[];        // 被 @ 的用户 QQ 号列表
-    rawMessage?: { type: string; data: any }[];  // 原始消息结构
+    metadata?: {
+        thoughts?: string[];         // LLM 思考过程记录
+        hasReply?: boolean;         // 是否包含回复内容
+        replyToMessageId?: string;  // 回复的目标消息ID
+    };
 }
 
 interface MessageHandler {
@@ -159,7 +164,8 @@ type MessageDispatcher = (context: unknown) => void;  // 消息分发器类型
 - ConnectionManager 监听 `message.group` 事件接收群组消息
 - 通过消息分发器将消息路由到 SessionManager
 - SessionManager 根据 groupId 分发消息到对应 Session
-- Session 解析完整消息结构，支持文本和 @ 类型
+- Session 解析完整消息结构，支持文本、@ 提及和回复消息类型
+- 自动检测回复消息的关联关系，存储到 metadata 中
 - 通过 ConnectionManager 异步获取发送人昵称信息
 - 实时回调处理，无延迟响应
 
