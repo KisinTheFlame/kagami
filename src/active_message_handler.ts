@@ -64,13 +64,14 @@ export class ActiveMessageHandler extends BaseMessageHandler {
 
         try {
             while (this.messageQueue.length > 0) {
-                const message = this.messageQueue.shift();
-                if (!message) {
-                    break;
-                }
+                // 1. 一次性取出所有消息并加入历史记录
+                const messages = [...this.messageQueue];
+                this.messageQueue.length = 0; // 清空队列
                 
-                // 1. 保存用户消息到历史记录
-                this.addMessageToHistory(message);
+                // 将所有消息加入历史
+                messages.forEach(message => {
+                    this.addMessageToHistory(message);
+                });
 
                 // 2. 检查是否可以回复
                 if (!this.canReply()) {
@@ -79,11 +80,11 @@ export class ActiveMessageHandler extends BaseMessageHandler {
 
                 // 3. 消耗体力值
                 if (!this.energyManager.consumeEnergy()) {
-                    console.log(`[群 ${String(this.groupId)}] 体力不足，跳过消息处理 (${this.energyManager.getEnergyStatus()})`);
+                    console.log(`[群 ${String(this.groupId)}] 体力不足，无法回复 (${this.energyManager.getEnergyStatus()})`);
                     continue;
                 }
 
-                // 4. 处理消息并尝试回复
+                // 4. 基于完整历史进行LLM对话
                 const didReply = await this.processAndReply();
                 
                 // 5. 如果LLM选择不回复，退还体力值
