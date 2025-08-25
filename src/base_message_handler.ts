@@ -18,10 +18,6 @@ interface ReplyItem {
 type LlmResponseItem = ThoughtItem | ReplyItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
-// 旧格式接口，用于向后兼容
-interface LegacyLlmResponse {
-    reply?: SendMessageSegment[];
-}
 
 export abstract class BaseMessageHandler implements MessageHandler {
     protected llmClient: LlmClient;
@@ -49,7 +45,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
 
     abstract handleMessage(message: Message): Promise<void>;
 
-    protected async processAndReply(_originalMessage: Message): Promise<boolean> {
+    protected async processAndReply(): Promise<boolean> {
         try {
             // 构建 LLM 请求并生成回复
             const chatMessages = this.buildChatMessages();
@@ -135,11 +131,8 @@ export abstract class BaseMessageHandler implements MessageHandler {
                         content: JSON.stringify(responseArray),
                     });
                 } else {
-                    // 旧格式兼容
-                    messages.push({
-                        role: "assistant",
-                        content: JSON.stringify({ reply: msg.content }),
-                    });
+                    // 没有metadata的历史消息，跳过（可能是旧数据）
+                    console.warn(`[群 ${String(this.groupId)}] 发现没有metadata的bot消息，跳过`);
                 }
             } else {
                 // 用户消息作为 user - 传递完整的 Message JSON
@@ -157,22 +150,22 @@ export abstract class BaseMessageHandler implements MessageHandler {
         try {
             const parsed = JSON.parse(content) as unknown;
             
-            // 检查是否为新的数组格式
+            // 现在只支持数组格式
             if (Array.isArray(parsed)) {
                 return this.parseArrayResponse(parsed as LlmResponse);
             }
             
-            // 处理旧格式
-            const legacyResponse = parsed as LegacyLlmResponse;
+            // 非数组格式不支持
+            console.error("不支持的LLM响应格式，期望数组格式");
             return {
-                thoughts: [], // 旧格式没有thought，提供空数组
-                reply: legacyResponse.reply,
+                thoughts: [],
+                reply: undefined,
             };
         } catch (error) {
             console.error("解析 LLM 响应失败:", error);
             return {
                 thoughts: [],
-                reply: [{ type: "text", data: { text: "抱歉，我暂时无法回复。" } }],
+                reply: undefined,
             };
         }
     }
