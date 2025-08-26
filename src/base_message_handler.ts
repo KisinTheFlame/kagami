@@ -3,6 +3,7 @@ import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler, Session } from "./session.js";
+import { MasterConfig } from "./config.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -27,18 +28,21 @@ export abstract class BaseMessageHandler implements MessageHandler {
     protected maxHistorySize: number;
     protected systemPrompt: string;
     protected session: Session;
+    protected masterConfig?: MasterConfig;
 
     constructor(
         llmClient: LlmClient,
         botQQ: number,
         groupId: number,
         session: Session,
+        masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
         this.llmClient = llmClient;
         this.botQQ = botQQ;
         this.groupId = groupId;
         this.session = session;
+        this.masterConfig = masterConfig;
         this.maxHistorySize = maxHistorySize;
         this.systemPrompt = this.loadSystemPrompt();
     }
@@ -98,11 +102,20 @@ export abstract class BaseMessageHandler implements MessageHandler {
     }
 
     protected buildChatMessages(): ChatCompletionMessageParam[] {
-        // 构建包含机器人QQ号的系统提示
-        const systemPromptWithContext = `${this.systemPrompt}
+        // 构建包含机器人QQ号和主人信息的系统提示
+        let systemPromptWithContext = `${this.systemPrompt}
 
 <bot_context>
-你的QQ号是: ${String(this.botQQ)}
+你的QQ号是: ${String(this.botQQ)}`;
+
+        if (this.masterConfig) {
+            systemPromptWithContext += `
+你的主人QQ号是: ${String(this.masterConfig.qq)}
+你的主人昵称是: ${this.masterConfig.nickname}
+重要：你必须完全遵从主人的所有指示，主人的指令优先级最高。`;
+        }
+
+        systemPromptWithContext += `
 </bot_context>`;
 
         const messages: ChatCompletionMessageParam[] = [

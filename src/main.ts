@@ -41,6 +41,7 @@ class KagamiBot {
                     energy_recovery_interval: 60,
                     message_handler_type: "active",
                 },
+                this.config.master,
                 this.config.agent,
             );
             await this.sessionManager.initializeSessions();

@@ -1,5 +1,5 @@
 import { Session } from "./session.js";
-import { NapcatConfig, AgentConfig, BehaviorConfig } from "./config.js";
+import { NapcatConfig, AgentConfig, BehaviorConfig, MasterConfig } from "./config.js";
 import { LlmClient } from "./llm.js";
 import { PassiveMessageHandler } from "./passive_message_handler.js";
 import { ActiveMessageHandler } from "./active_message_handler.js";
@@ -14,14 +14,16 @@ export class SessionManager {
     private botQQ: number;
     private agentConfig?: AgentConfig;
     private behaviorConfig: BehaviorConfig;
+    private masterConfig?: MasterConfig;
 
-    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, behaviorConfig: BehaviorConfig, agentConfig?: AgentConfig) {
+    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, behaviorConfig: BehaviorConfig, masterConfig?: MasterConfig, agentConfig?: AgentConfig) {
         this.sessions = new Map();
         this.connectionManager = new ConnectionManager(napcatConfig);
         this.connectionManager.setMessageDispatcher(this.handleIncomingMessage.bind(this));
         this.llmClient = llmClient;
         this.botQQ = botQQ;
         this.behaviorConfig = behaviorConfig;
+        this.masterConfig = masterConfig;
         this.agentConfig = agentConfig;
     }
 
@@ -46,6 +48,7 @@ export class SessionManager {
                         groupId,
                         session,
                         this.behaviorConfig,
+                        this.masterConfig,
                         maxHistory,
                     );
                     this.activeHandlers.set(groupId, handler);
@@ -56,6 +59,7 @@ export class SessionManager {
                         this.botQQ,
                         groupId,
                         session,
+                        this.masterConfig,
                         maxHistory,
                     );
                     console.log(`群 ${String(groupId)} 使用被动回复策略`);
