@@ -2,7 +2,7 @@ import { BaseMessageHandler } from "./base_message_handler.js";
 import { EnergyManager } from "./energy_manager.js";
 import { LlmClient } from "./llm.js";
 import { Message, Session } from "./session.js";
-import { BehaviorConfig } from "./config.js";
+import { BehaviorConfig, MasterConfig } from "./config.js";
 
 export class ActiveMessageHandler extends BaseMessageHandler {
     private energyManager: EnergyManager;
@@ -15,9 +15,10 @@ export class ActiveMessageHandler extends BaseMessageHandler {
         groupId: number,
         session: Session,
         behaviorConfig: BehaviorConfig,
+        masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
-        super(llmClient, botQQ, groupId, session, maxHistorySize);
+        super(llmClient, botQQ, groupId, session, masterConfig, maxHistorySize);
         
         this.energyManager = new EnergyManager(
             behaviorConfig.energy_max,

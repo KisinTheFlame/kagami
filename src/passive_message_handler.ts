@@ -1,6 +1,7 @@
 import { BaseMessageHandler } from "./base_message_handler.js";
 import { LlmClient } from "./llm.js";
 import { Message, Session } from "./session.js";
+import { MasterConfig } from "./config.js";
 
 export class PassiveMessageHandler extends BaseMessageHandler {
     constructor(
@@ -8,9 +9,10 @@ export class PassiveMessageHandler extends BaseMessageHandler {
         botQQ: number,
         groupId: number,
         session: Session,
+        masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
-        super(llmClient, botQQ, groupId, session, maxHistorySize);
+        super(llmClient, botQQ, groupId, session, masterConfig, maxHistorySize);
     }
 
     async handleMessage(message: Message): Promise<void> {

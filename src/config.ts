@@ -33,9 +33,15 @@ export interface BehaviorConfig {
     message_handler_type: "active" | "passive"; // 消息处理策略
 }
 
+export interface MasterConfig {
+    qq: number;
+    nickname: string;
+}
+
 export interface Config {
     llm: LlmConfig;
     napcat: NapcatConfig;
+    master?: MasterConfig;
     agent?: AgentConfig;
     behavior?: BehaviorConfig;
 }
