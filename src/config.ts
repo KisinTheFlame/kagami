@@ -3,7 +3,7 @@ import * as yaml from "yaml";
 
 export interface LlmConfig {
     base_url: string;
-    api_key: string;
+    api_keys: string[];
     model: string;
 }
 
@@ -57,7 +57,7 @@ export function loadConfig(): Config {
     const configContent = fs.readFileSync(configFile, "utf8");
     const config = yaml.parse(configContent) as Config;
   
-    if (!config.llm.api_key || !config.llm.base_url || !config.llm.model) {
+    if (!Array.isArray(config.llm.api_keys) || config.llm.api_keys.length === 0 || !config.llm.base_url || !config.llm.model) {
         throw new Error("配置文件缺少必要的 LLM 配置项");
     }
   
