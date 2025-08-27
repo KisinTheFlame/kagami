@@ -1,22 +1,28 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { LlmConfig } from "./config.js";
+import { ApiKeyManager } from "./api-key-manager.js";
 
 export class LlmClient {
-    private openai: OpenAI;
+    private baseURL: string;
+    private apiKeyManager: ApiKeyManager;
     private model: string;
 
     constructor(config: LlmConfig) {
-        this.openai = new OpenAI({
-            baseURL: config.base_url,
-            apiKey: config.api_key,
-        });
+        this.baseURL = config.base_url;
+        this.apiKeyManager = new ApiKeyManager(config.api_keys);
         this.model = config.model;
     }
 
     async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
         try {
-            const response = await this.openai.chat.completions.create({
+            const apiKey = this.apiKeyManager.getRandomApiKey();
+            const openai = new OpenAI({
+                baseURL: this.baseURL,
+                apiKey: apiKey,
+            });
+
+            const response = await openai.chat.completions.create({
                 model: this.model,
                 messages: messages,
                 response_format: {
