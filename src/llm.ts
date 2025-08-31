@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { LlmConfig } from "./config.js";
-import { ApiKeyManager } from "./api-key-manager.js";
+import { ApiKeyManager } from "./api_key_manager.js";
 
 export class LlmClient {
     private baseURL: string;
