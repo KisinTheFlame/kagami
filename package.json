@@ -22,6 +22,7 @@
         "start": "npm run build && node dist/main.js --config env.prod.yaml",
         "deploy": "scripts/deploy.sh",
         "terminate": "kill $(cat app.pid) && rm app.pid",
+        "restart": "npm run terminate && npm run deploy",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix"
     },

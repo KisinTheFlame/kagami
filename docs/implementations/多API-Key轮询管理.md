@@ -8,7 +8,7 @@
 
 ### 核心组件
 
-#### ApiKeyManager 类 (`src/api-key-manager.ts`)
+#### ApiKeyManager 类 (`src/api_key_manager.ts`)
 
 负责管理和选择 API Key 的核心类：
 
