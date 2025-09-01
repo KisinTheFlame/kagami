@@ -41,8 +41,6 @@ env.prod.yaml
 # Temporary files
 *.tmp
 *.temp
-/screenshots
-/docs/requirements
 app.pid
 app.log
 
