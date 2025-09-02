@@ -14,7 +14,7 @@ export interface Message {
     userId: number;               // 发送者 QQ 号
     userNickname?: string;        // 发送者昵称（可选）
     content: SendMessageSegment[]; // 结构化消息内容
-    timestamp: Date;              // 发送时间
+    timestamp: string;            // 发送时间 (Asia/Shanghai时区，格式: YYYY-MM-DD HH:mm:ss)
     metadata?: {                  // 扩展元数据（可选）
         thoughts?: string[];       // LLM 思考过程
         hasReply?: boolean;       // 是否包含回复内容
@@ -65,7 +65,7 @@ const message: Message = {
     userId: ctx.user_id,
     userNickname,                    // 异步获取的用户昵称
     content: ctx.message,            // 原始的 SendMessageSegment[]
-    timestamp: new Date(),
+    timestamp: getShanghaiTimestamp(), // 使用上海时区
     metadata: replyToMessageId ? { replyToMessageId } : undefined,
 };
 ```
@@ -78,7 +78,7 @@ const botMessage: Message = {
     groupId: this.groupId,
     userId: this.botQQ,
     content: reply ?? [],
-    timestamp: new Date(),
+    timestamp: getShanghaiTimestamp(), // 使用上海时区
     metadata: { 
         thoughts,      // LLM 的思考过程
         hasReply: !!reply // 是否包含实际回复
@@ -124,7 +124,7 @@ messages.push({
   "content": [
     {"type": "text", "data": {"text": "今天天气真好"}}
   ],
-  "timestamp": "2024-01-01T12:00:00Z"
+  "timestamp": "2024-01-01 20:00:00"
 }
 ```
 
@@ -139,7 +139,7 @@ messages.push({
     {"type": "at", "data": {"qq": "987654321"}},
     {"type": "text", "data": {"text": " 你好吗？"}}
   ],
-  "timestamp": "2024-01-01T12:01:00Z"
+  "timestamp": "2024-01-01 20:01:00"
 }
 ```
 
@@ -154,7 +154,7 @@ messages.push({
     {"type": "reply", "data": {"id": "123456"}},
     {"type": "text", "data": {"text": "确实是呢"}}
   ],
-  "timestamp": "2024-01-01T12:02:00Z",
+  "timestamp": "2024-01-01 20:02:00",
   "metadata": {
     "replyToMessageId": "123456"
   }
@@ -168,7 +168,7 @@ messages.push({
   "groupId": 789012,
   "userId": 987654321,
   "content": [],
-  "timestamp": "2024-01-01T12:03:00Z",
+  "timestamp": "2024-01-01 20:03:00",
   "metadata": {
     "thoughts": [
       "用户们在讨论天气，这是很自然的闲聊",
@@ -188,7 +188,7 @@ messages.push({
   "content": [
     {"type": "text", "data": {"text": "是的，阳光明媚的日子总是让人心情愉快"}}
   ],
-  "timestamp": "2024-01-01T12:04:00Z",
+  "timestamp": "2024-01-01 20:04:00",
   "metadata": {
     "thoughts": [
       "张三在分享天气很好的感受",
@@ -203,7 +203,7 @@ messages.push({
 
 ### 类型依赖
 - **SendMessageSegment**：来自 `node-napcat-ts` 库的标准消息段类型
-- **Date**：JavaScript 标准 Date 对象
+- **string**：时间戳使用字符串格式，由 [[timezone_utils]] 生成
 
 ### 使用者
 - [[session]] - 创建和传递 Message 对象
