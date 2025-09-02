@@ -35,6 +35,7 @@ Kagami 是一个基于 TypeScript 的 QQ 群聊机器人，集成 LLM 功能实�
 - [[api_key_manager]] - 多 API Key 轮询管理
 - [[energy_manager]] - 体力值系统管理
 - [[message_data_model]] - 消息数据结构定义
+- [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
 ## 关系图谱
 

@@ -1,5 +1,6 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
+import { getShanghaiTimestamp } from "./utils/timezone.js";
 
 export interface Message {
     id: string;
@@ -7,7 +8,7 @@ export interface Message {
     userId: number;
     userNickname?: string;
     content: SendMessageSegment[];
-    timestamp: Date;
+    timestamp: string;
     metadata?: {
         thoughts?: string[];
         hasReply?: boolean;
@@ -52,7 +53,7 @@ export class Session {
                 userId: ctx.user_id,
                 userNickname,
                 content: ctx.message,
-                timestamp: new Date(),
+                timestamp: getShanghaiTimestamp(),
                 metadata: replyToMessageId ? { replyToMessageId } : undefined,
             };
 

@@ -4,6 +4,7 @@ import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler, Session } from "./session.js";
 import { MasterConfig } from "./config.js";
+import { getShanghaiTimestamp } from "./utils/timezone.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -70,7 +71,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
                 groupId: this.groupId,
                 userId: this.botQQ,
                 content: reply ?? [], // 存储实际的回复内容
-                timestamp: new Date(),
+                timestamp: getShanghaiTimestamp(),
                 // 可以考虑在这里存储完整的响应，包括thoughts
                 metadata: { thoughts, hasReply: !!reply },
             };

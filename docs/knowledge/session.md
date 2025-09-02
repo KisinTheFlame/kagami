@@ -30,7 +30,7 @@ async handleMessage(context: unknown): Promise<void> {
         userId: ctx.user_id,
         userNickname,
         content: ctx.message,
-        timestamp: new Date(),
+        timestamp: getShanghaiTimestamp(), // Asia/Shanghai时区
         metadata: replyToMessageId ? { replyToMessageId } : undefined,
     };
 
@@ -76,7 +76,7 @@ const message: Message = {
     userId: ctx.user_id,
     userNickname,
     content: ctx.message,      // 保持原始的 SendMessageSegment[] 格式
-    timestamp: new Date(),
+    timestamp: getShanghaiTimestamp(), // Asia/Shanghai时区
     metadata: replyToMessageId ? { replyToMessageId } : undefined,
 };
 ```
