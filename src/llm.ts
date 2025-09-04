@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { LlmConfig } from "./config.js";
 import { ApiKeyManager } from "./api_key_manager.js";
+import { logger } from "./middleware/logger.js";
 
 export class LlmClient {
     private baseURL: string;
@@ -15,6 +16,10 @@ export class LlmClient {
     }
 
     async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
+        const input = { model: this.model, messages };
+        let output = "";
+        let status: "success" | "fail" = "fail";
+
         try {
             const apiKey = this.apiKeyManager.getRandomApiKey();
             const openai = new OpenAI({
@@ -32,12 +37,19 @@ export class LlmClient {
 
             const content = response.choices[0]?.message?.content;
             if (!content) {
-                throw new Error("OpenAI API 返回空内容");
+                output = "OpenAI API 返回空内容";
+                throw new Error(output);
             }
 
+            output = content;
+            status = "success";
             return content;
         } catch (error) {
-            throw new Error(`LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`);
+            const errorMessage = `LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`;
+            output = errorMessage;
+            throw new Error(errorMessage);
+        } finally {
+            void logger.logLLMCall(status, input, output);
         }
     }
 }
