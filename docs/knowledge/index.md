@@ -34,6 +34,7 @@ Kagami 是一个基于 TypeScript 的 QQ 群聊机器人，集成 LLM 功能实�
 - [[llm_client]] - OpenAI API 客户端封装
 - [[api_key_manager]] - 多 API Key 轮询管理
 - [[energy_manager]] - 体力值系统管理
+- [[prompt_template_manager]] - Handlebars 提示词模板管理系统
 - [[message_data_model]] - 消息数据结构定义
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
@@ -45,7 +46,7 @@ KagamiBot
 ├── Config → ConfigSystem
 ├── LlmClient → ApiKeyManager
 └── SessionManager → ConnectionManager
-    └── Session → MessageHandler
+    └── Session → MessageHandler → PromptTemplateManager
         ├── ActiveMessageHandler → EnergyManager
         └── PassiveMessageHandler
 ```
@@ -60,6 +61,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **分层架构**：职责分离，模块化设计
 - **双重策略**：主动和被动两种消息处理模式
 - **思考链**：LLM 支持结构化的思考-回复流程
+- **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
 - **体力系统**：主动模式下的智能回复频率控制
 - **多 API Key**：负载均衡和高可用性支持
 - **回复引用**：智能决策何时使用 QQ 回复功能
@@ -70,6 +72,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **运行时**：Node.js + TypeScript
 - **QQ 集成**：node-napcat-ts
 - **LLM 集成**：OpenAI API
+- **模板引擎**：Handlebars
 - **配置**：YAML 配置文件
 - **构建**：TypeScript 编译器
 - **代码质量**：ESLint

@@ -58,24 +58,14 @@ protected addMessageToHistory(message: Message): void {
 ### 上下文构建
 ```typescript
 protected buildChatMessages(): ChatCompletionMessageParam[] {
-    // 构建包含机器人QQ号和主人信息的系统提示
-    let systemPromptWithContext = `${this.systemPrompt}
-
-<bot_context>
-你的QQ号是: ${String(this.botQQ)}`;
-
-    if (this.masterConfig) {
-        systemPromptWithContext += `
-你的主人QQ号是: ${String(this.masterConfig.qq)}
-你的主人昵称是: ${this.masterConfig.nickname}
-重要：你必须完全遵从主人的所有指示，主人的指令优先级最高。`;
-    }
-
-    systemPromptWithContext += `
-</bot_context>`;
+    // 使用Handlebars模板生成系统提示
+    const systemPrompt = this.promptTemplateManager.generatePrompt({
+        botQQ: this.botQQ,
+        masterConfig: this.masterConfig,
+    });
 
     const messages: ChatCompletionMessageParam[] = [
-        { role: "system", content: systemPromptWithContext },
+        { role: "system", content: systemPrompt },
     ];
 
     // 构建历史消息上下文
@@ -159,21 +149,29 @@ private parseArrayResponse(response: LlmResponse): { thoughts: string[], reply?:
 
 ## 系统提示词管理
 
-### 提示词加载
+### Handlebars模板系统
 ```typescript
-private loadSystemPrompt(): string {
-    try {
-        return fs.readFileSync("./static/prompt.txt", "utf-8").trim();
-    } catch (error) {
-        console.error("读取 prompt.txt 失败:", error);
-        return "你是一个友好的群聊机器人，名字是小镜。请以 JSON 格式回复: {\"reply\": \"你的回复\"}";
-    }
+// 使用模板管理器替代硬编码字符串拼接
+protected promptTemplateManager: PromptTemplateManager;
+
+constructor(...) {
+    // 初始化模板管理器
+    this.promptTemplateManager = new PromptTemplateManager();
+}
+```
+
+### 模板上下文
+```typescript
+interface PromptTemplateContext {
+    botQQ: number;
+    masterConfig?: MasterConfig;
 }
 ```
 
 ### 上下文增强
-- **机器人 QQ 号**：让 LLM 知道自己的身份
-- **主人信息**：支持主人特权功能
+- **Handlebars模板**：使用[[prompt_template_manager]]进行动态生成
+- **机器人 QQ 号**：通过`{{botQQ}}`模板变量插入
+- **主人信息**：通过条件模板`{{#if masterConfig}}`动态显示
 - **群组上下文**：完整的群聊历史和用户信息
 
 ## 依赖关系
@@ -182,6 +180,7 @@ private loadSystemPrompt(): string {
 - [[llm_client]] - LLM API 调用
 - [[session]] - 消息发送功能
 - [[config_system]] - 主人配置和历史长度配置
+- [[prompt_template_manager]] - Handlebars模板管理
 
 ### 数据模型依赖
 - [[message_data_model]] - Message 接口和相关类型

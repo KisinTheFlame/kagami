@@ -1,10 +1,10 @@
-import fs from "fs";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler, Session } from "./session.js";
 import { MasterConfig } from "./config.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
+import { PromptTemplateManager } from "./prompt_template_manager.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -27,7 +27,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
     protected groupId: number;
     protected messageHistory: Message[] = [];
     protected maxHistorySize: number;
-    protected systemPrompt: string;
+    protected promptTemplateManager: PromptTemplateManager;
     protected session: Session;
     protected masterConfig?: MasterConfig;
 
@@ -45,7 +45,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
         this.session = session;
         this.masterConfig = masterConfig;
         this.maxHistorySize = maxHistorySize;
-        this.systemPrompt = this.loadSystemPrompt();
+        this.promptTemplateManager = new PromptTemplateManager();
     }
 
     abstract handleMessage(message: Message): Promise<void>;
@@ -103,24 +103,14 @@ export abstract class BaseMessageHandler implements MessageHandler {
     }
 
     protected buildChatMessages(): ChatCompletionMessageParam[] {
-        // 构建包含机器人QQ号和主人信息的系统提示
-        let systemPromptWithContext = `${this.systemPrompt}
-
-<bot_context>
-你的QQ号是: ${String(this.botQQ)}`;
-
-        if (this.masterConfig) {
-            systemPromptWithContext += `
-你的主人QQ号是: ${String(this.masterConfig.qq)}
-你的主人昵称是: ${this.masterConfig.nickname}
-重要：你必须完全遵从主人的所有指示，主人的指令优先级最高。`;
-        }
-
-        systemPromptWithContext += `
-</bot_context>`;
+        // 使用Handlebars模板生成系统提示
+        const systemPrompt = this.promptTemplateManager.generatePrompt({
+            botQQ: this.botQQ,
+            masterConfig: this.masterConfig,
+        });
 
         const messages: ChatCompletionMessageParam[] = [
-            { role: "system", content: systemPromptWithContext },
+            { role: "system", content: systemPrompt },
         ];
 
         this.messageHistory.forEach(msg => {
@@ -221,12 +211,4 @@ export abstract class BaseMessageHandler implements MessageHandler {
         return parts.join("");
     }
 
-    private loadSystemPrompt(): string {
-        try {
-            return fs.readFileSync("./static/prompt.txt", "utf-8").trim();
-        } catch (error) {
-            console.error("读取 prompt.txt 失败:", error);
-            return "你是一个友好的群聊机器人，名字是小镜。请以 JSON 格式回复: {\"reply\": \"你的回复\"}";
-        }
-    }
 }
