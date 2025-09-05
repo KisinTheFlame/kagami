@@ -7,15 +7,15 @@
 ## 核心组件
 
 ### Database 类
-位置：`src/database/Database.ts`
+位置：`src/infra/db.ts`
 
-负责管理 SQLite 数据库连接，提供基础的 CRUD 操作接口。
+负责管理 SQLite 数据库连接，提供基础的数据库操作接口。
 
 **主要功能：**
 - 自动初始化数据库连接
 - 执行数据库初始化脚本
-- 提供 run、get、all 等操作方法
-- 管理连接生命周期
+- 提供 run 等数据库操作方法
+- 管理数据库连接
 
 **初始化过程：**
 1. 确保 `data/` 目录存在
@@ -63,36 +63,22 @@ class Database {
     
     // 执行 SQL 语句（INSERT、UPDATE、DELETE）
     async run(sql: string, params?: unknown[]): Promise<void>
-    
-    // 查询单行数据
-    async get(sql: string, params?: unknown[]): Promise<unknown>
-    
-    // 查询多行数据
-    async all(sql: string, params?: unknown[]): Promise<unknown[]>
-    
-    // 关闭数据库连接
-    async close(): Promise<void>
 }
+
+// 导出单例实例
+export const db = new Database();
 ```
 
 ## 使用示例
 
 ```typescript
-import { Database } from './database/Database';
-
-const db = new Database();
+import { db } from '../infra/db';
 
 // 插入数据
 await db.run(
     'INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES (?, ?, ?, ?)',
     ['2025-01-01T00:00:00.000Z', 'success', 'input', 'output']
 );
-
-// 查询数据
-const logs = await db.all('SELECT * FROM llm_call_logs ORDER BY timestamp DESC');
-
-// 关闭连接
-await db.close();
 ```
 
 ## 关联组件
@@ -106,11 +92,12 @@ await db.close();
 - **异步操作**：所有数据库操作均为异步，避免阻塞
 - **自动初始化**：首次使用时自动创建数据库和表结构
 - **错误处理**：完善的错误捕获和处理机制
-- **连接管理**：支持连接复用和优雅关闭
+- **连接管理**：通过单例模式管理数据库连接
 
 ## 扩展性
 
 数据库层设计为通用的 SQLite 操作封装，支持：
-- 添加新的表结构到 `init.sql`
+- 添加新的表结构到 `init.sql`  
 - 创建新的服务层基于此数据库层
+- 通过单例模式确保数据库连接的一致性
 - 支持数据库迁移和版本管理（未来扩展）

@@ -1,4 +1,4 @@
-# 日志服务（LogService）
+# 日志服务（logger）
 
 ## 概述
 
@@ -7,11 +7,10 @@
 ## 核心功能
 
 ### LLM 调用日志记录
-位置：`src/services/LogService.ts`
+位置：`src/middleware/logger.ts`
 
 **主要职责：**
 - 异步记录 LLM 调用的完整信息
-- 提供日志查询和统计功能  
 - 处理各种数据类型的输入输出
 - 确保记录失败不影响主业务流程
 
@@ -30,34 +29,20 @@ interface LLMCallLog {
 
 ## API 接口
 
-### LogService 类方法
+### Logger 类方法
 
 ```typescript
-class LogService {
+class Logger {
     // 记录 LLM 调用日志
     async logLLMCall(
         status: "success" | "fail",
         input: unknown,
         output: unknown
     ): Promise<void>
-    
-    // 获取日志列表（分页）
-    async getLLMCallLogs(
-        limit?: number,
-        offset?: number
-    ): Promise<LLMCallLog[]>
-    
-    // 按状态查询日志
-    async getLLMCallLogsByStatus(
-        status: "success" | "fail"
-    ): Promise<LLMCallLog[]>
-    
-    // 获取日志总数
-    async getLLMCallLogsCount(): Promise<number>
-    
-    // 关闭服务
-    async close(): Promise<void>
 }
+
+// 导出单例实例
+export const logger = new Logger();
 ```
 
 ## 使用场景
@@ -66,11 +51,9 @@ class LogService {
 
 ```typescript
 // src/llm.ts
-import { LogService } from './services/LogService';
+import { logger } from './middleware/logger.js';
 
-class LlmClient {
-    private logService: LogService;
-    
+export class LlmClient {
     async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
         const input = { model: this.model, messages };
         let output = '';
@@ -82,11 +65,12 @@ class LlmClient {
             status = 'success';
             return content;
         } catch (error) {
+            const errorMessage = `LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`;
             output = errorMessage;
             throw new Error(errorMessage);
         } finally {
             // 异步记录日志，不阻塞主流程
-            void this.logService.logLLMCall(status, input, output);
+            void logger.logLLMCall(status, input, output);
         }
     }
 }
@@ -107,10 +91,10 @@ class LlmClient {
 - 日志记录过程中的错误不会中断 LLM 调用
 - 提供详细的错误日志用于问题诊断
 
-### 灵活查询
-- 支持按状态、时间范围查询
-- 提供分页功能处理大量日志数据
-- 包含统计功能了解调用情况
+### 数据持久化
+- 基于SQLite数据库存储日志记录
+- 自动生成时间戳和自增ID
+- 支持复杂数据类型的JSON序列化
 
 ## 关联组件
 
@@ -142,7 +126,8 @@ try {
 
 ## 扩展可能性
 
-未来可以基于此服务扩展：
+当前实现提供了基础的日志记录功能，未来可以扩展：
+- 增加日志查询和统计方法
 - LLM 调用性能分析
 - 成功率统计和监控
 - 异常模式识别

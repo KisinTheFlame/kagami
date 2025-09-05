@@ -42,7 +42,7 @@ async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
         output = errorMessage;
         throw new Error(errorMessage);
     } finally {
-        void this.logService.logLLMCall(status, input, output);
+        void logger.logLLMCall(status, input, output);
     }
 }
 ```
