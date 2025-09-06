@@ -77,6 +77,8 @@ export function loadConfig(): Config {
     };
 
     config.behavior = { ...defaultBehavior, ...(config.behavior ?? {}) };
-  
+
+    console.log(`config: ${JSON.stringify(config, null, 4)}`);
+
     return config;
 }

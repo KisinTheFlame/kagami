@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"path/filepath"
 
 	"kagami-console/internal/database"
 	"kagami-console/internal/handlers"
@@ -13,8 +12,7 @@ import (
 
 func main() {
 	// 初始化数据库
-	dbPath := filepath.Join("../kagami-bot/data/kagami.db")
-	if err := database.InitDB(dbPath); err != nil {
+	if err := database.InitDB(); err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
 

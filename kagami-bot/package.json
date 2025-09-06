@@ -17,12 +17,7 @@
     "type": "module",
     "main": "src/main.ts",
     "scripts": {
-        "dev": "npm run build && node dist/main.js --config env.dev.yaml",
         "build": "tsc",
-        "start": "npm run build && node dist/main.js --config env.prod.yaml",
-        "deploy": "scripts/deploy.sh",
-        "terminate": "kill $(cat app.pid) && rm app.pid",
-        "restart": "npm run terminate && npm run deploy",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix"
     },
@@ -32,7 +27,7 @@
         "@stylistic/eslint-plugin": "^5.2.3",
         "@types/handlebars": "^4.0.40",
         "@types/node": "^24.2.0",
-        "@types/sqlite3": "^3.1.11",
+        "@types/pg": "^8.11.10",
         "eslint": "^9.32.0",
         "ts-node": "^10.9.2",
         "tsx": "^4.20.3",
@@ -43,7 +38,7 @@
         "handlebars": "^4.7.8",
         "node-napcat-ts": "^0.4.15",
         "openai": "^5.12.2",
-        "sqlite3": "^5.1.7",
+        "pg": "^8.13.0",
         "yaml": "^2.8.1"
     }
 }

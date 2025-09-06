@@ -1,79 +1,60 @@
-import sqlite3 from "sqlite3";
-import { promises as fs } from "fs";
-import path from "path";
+import { Client, ClientConfig } from "pg";
 
 class Database {
-    private db: sqlite3.Database | null = null;
-    private readonly dbPath: string;
-    private readonly initScriptPath: string;
+    private db: Client | null = null;
+    private isConnected = false;
+    private readonly connectionConfig: ClientConfig;
 
     constructor() {
-        this.dbPath = path.join(process.cwd(), "data", "kagami.db");
-        this.initScriptPath = path.join(process.cwd(), "scripts", "init.sql");
+        this.connectionConfig = {
+            host: process.env.DB_HOST ?? "localhost",
+            port: 5432,
+            database: process.env.DB_NAME ?? "kagami",
+            user: process.env.DB_USER ?? "kagami",
+            password: process.env.DB_PASSWORD ?? "kagami123",
+        };
     }
 
     async initialize(): Promise<void> {
-        if (this.db) {
+        if (this.db && this.isConnected) {
             return;
         }
 
-        const dataDir = path.dirname(this.dbPath);
-        await fs.mkdir(dataDir, { recursive: true });
+        this.db = new Client(this.connectionConfig);
 
-        return new Promise((resolve, reject) => {
-            this.db = new sqlite3.Database(this.dbPath, err => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-
-                this.runInitScript()
-                    .then(() => { resolve(); })
-                    .catch((initErr: unknown) => { reject(new Error(String(initErr))); });
-            });
-        });
-    }
-
-    private async runInitScript(): Promise<void> {
-        if (!this.db) {
-            throw new Error("Database not initialized");
+        try {
+            await this.db.connect();
+            this.isConnected = true;
+        } catch (error) {
+            await this.db.end();
+            this.db = null;
+            this.isConnected = false;
+            throw error;
         }
-
-        const initSQL = await fs.readFile(this.initScriptPath, "utf-8");
-        
-        return new Promise((resolve, reject) => {
-            if (!this.db) {
-                throw new Error("Database not initialized");
-            }
-            
-            this.db.exec(initSQL, err => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
     }
 
     async run(sql: string, params: unknown[] = []): Promise<void> {
-        if (!this.db) {
+        if (!this.db || !this.isConnected) {
             await this.initialize();
         }
 
-        return new Promise((resolve, reject) => {
-            if (!this.db) {
-                throw new Error("Database not initialized");
-            }
-            
-            this.db.run(sql, params, err => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
+        if (!this.db) {
+            throw new Error("Database connection not available");
+        }
+
+        try {
+            await this.db.query(sql, params);
+        } catch (error) {
+            throw new Error(`Failed to execute query: ${String(error)}`);
+        }
+    }
+
+    async close(): Promise<void> {
+        if (this.db && this.isConnected) {
+            await this.db.end();
+            this.db = null;
+            this.isConnected = false;
+        }
     }
 }
 

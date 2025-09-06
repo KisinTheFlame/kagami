@@ -37,6 +37,7 @@ logs
 # Configuration files with API keys
 env.dev.yaml
 env.prod.yaml
+config.yaml
 
 # Temporary files
 *.tmp
@@ -45,7 +46,6 @@ env.prod.yaml
 # Runtime data
 app.pid
 app.log
-/data/kagami.db
 
 # Claude Code
 /.claude

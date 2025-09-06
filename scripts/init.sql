@@ -3,9 +3,9 @@
 
 -- LLM 调用日志表
 CREATE TABLE IF NOT EXISTS llm_call_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('success', 'fail')),
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL CHECK(status IN ('success', 'fail')),
     input TEXT NOT NULL,
     output TEXT NOT NULL
 );

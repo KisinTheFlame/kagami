@@ -1,6 +1,6 @@
 # kagami-bot Makefile
 
-.PHONY: all build clean
+.PHONY: all build clean lint
 
 # 默认目标
 all: build
@@ -14,3 +14,8 @@ build:
 clean:
 	@echo "清理 kagami-bot..."
 	rm -rf dist/
+
+# Lint 项目
+lint:
+	@echo "Linting kagami-bot..."
+	npm run lint

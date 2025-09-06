@@ -5,7 +5,7 @@ BINARY_NAME = kagami-console
 OUTPUT_DIR = bin
 CMD_DIR = cmd/api
 
-.PHONY: all build clean
+.PHONY: all build clean lint
 
 # 默认目标
 all: build
@@ -20,3 +20,9 @@ build:
 clean:
 	@echo "清理 kagami-console..."
 	rm -rf $(OUTPUT_DIR)/
+
+# Lint 项目
+lint:
+	@echo "Linting kagami-console..."
+	go vet ./...
+	golangci-lint run
