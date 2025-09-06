@@ -41,8 +41,11 @@ env.prod.yaml
 # Temporary files
 *.tmp
 *.temp
+
+# Runtime data
 app.pid
 app.log
+/data/kagami.db
 
 # Claude Code
 /.claude
