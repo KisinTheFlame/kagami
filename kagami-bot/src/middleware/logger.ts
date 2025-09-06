@@ -21,7 +21,7 @@ class Logger {
             const outputStr = typeof output === "string" ? output : JSON.stringify(output);
 
             await db.run(
-                "INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES (?, ?, ?, ?)",
+                "INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES ($1, $2, $3, $4)",
                 [timestamp, status, inputStr, outputStr],
             );
         } catch (error) {

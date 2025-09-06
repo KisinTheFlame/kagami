@@ -1,0 +1,95 @@
+services:
+  # NapCat QQ 协议服务
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    ports:
+      - "6099:6099"
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID}
+      - NAPCAT_GID=${NAPCAT_GID}
+    volumes:
+      - napcat-config:/app/napcat/config
+      - napcat-qq:/app/.config/QQ
+    restart: unless-stopped
+
+  # PostgreSQL 数据库服务
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Kagami Bot 服务
+  bot:
+    build:
+      context: ./kagami-bot
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Kagami Console 后端服务
+  console:
+    build:
+      context: ./kagami-console
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GIN_MODE=release
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Kagami Console Web 前端（通过 nginx 托管）
+  console-web:
+    build:
+      context: ./kagami-console-web
+      dockerfile: Dockerfile
+    ports:
+      - "10000:10000"
+    depends_on:
+      console:
+        condition: service_healthy
+    restart: unless-stopped
+
+# 创建必要的目录
+volumes:
+  postgres-data:
+
+  napcat-config:
+
+  napcat-qq:
