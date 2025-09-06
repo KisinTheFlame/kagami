@@ -11,12 +11,12 @@ const api = axios.create({
 export const llmLogsApi = {
     // 获取 LLM 日志列表
     getLogs: (params: LogQueryParams): Promise<LogQueryResponse> => {
-        return api.get("/llm-logs", { params }).then(res => res.data);
+        return api.get("/llm-logs", { params }).then(res => res.data as LogQueryResponse);
     },
 
     // 获取单个 LLM 日志详情
     getLog: (id: number): Promise<LLMCallLog> => {
-        return api.get(`/llm-logs/${id}`).then(res => res.data);
+        return api.get(`/llm-logs/${String(id)}`).then(res => res.data as LLMCallLog);
     },
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
     Table, 
     Tag, 
@@ -39,7 +39,7 @@ const LLMLogsTable: React.FC = () => {
     const [detailVisible, setDetailVisible] = useState(false);
     const [selectedLog, setSelectedLog] = useState<LLMCallLog | null>(null);
 
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
             const params: LogQueryParams = {
@@ -67,11 +67,11 @@ const LLMLogsTable: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [current, pageSize, statusFilter, dateRange, orderDirection]);
 
     useEffect(() => {
-        fetchLogs();
-    }, [current, pageSize, statusFilter, dateRange, orderDirection]);
+        void fetchLogs();
+    }, [fetchLogs]);
 
     const handleViewDetail = (record: LLMCallLog) => {
         setSelectedLog(record);
@@ -136,7 +136,7 @@ const LLMLogsTable: React.FC = () => {
             title: "操作",
             key: "action",
             width: 120,
-            render: (_: any, record: LLMCallLog) => (
+            render: (_: unknown, record: LLMCallLog) => (
                 <Space size="middle">
                     <Button 
                         type="link" 
@@ -188,7 +188,7 @@ const LLMLogsTable: React.FC = () => {
                 </Col>
                 <Col span={6}>
                     <Space>
-                        <Button onClick={fetchLogs} icon={<ReloadOutlined />}>
+                        <Button onClick={() => { void fetchLogs(); }} icon={<ReloadOutlined />}>
                             刷新
                         </Button>
                         <Button onClick={handleReset}>
@@ -216,7 +216,7 @@ const LLMLogsTable: React.FC = () => {
                     total={total}
                     showSizeChanger
                     showQuickJumper
-                    showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`}
+                    showTotal={(total, range) => `第 ${String(range[0])}-${String(range[1])} 条，共 ${String(total)} 条`}
                     onChange={setCurrent}
                     onShowSizeChange={(current, size) => {
                         setCurrent(current);
@@ -227,7 +227,7 @@ const LLMLogsTable: React.FC = () => {
 
             {/* 详情模态框 */}
             <Modal
-                title={`调用详情 - ID: ${selectedLog?.id}`}
+                title={`调用详情 - ID: ${String(selectedLog?.id ?? "")}`}
                 open={detailVisible}
                 onCancel={() => { setDetailVisible(false); }}
                 footer={[
