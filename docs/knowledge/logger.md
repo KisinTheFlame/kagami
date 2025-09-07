@@ -33,11 +33,11 @@ interface LLMCallLog {
 
 ```typescript
 class Logger {
-    // 记录 LLM 调用日志
+    // 记录 LLM 调用日志（接收已格式化的字符串）
     async logLLMCall(
         status: "success" | "fail",
-        input: unknown,
-        output: unknown
+        input: string,
+        output: string
     ): Promise<void>
 }
 
@@ -47,30 +47,45 @@ export const logger = new Logger();
 
 ## 使用场景
 
-### 在 LLM 客户端中集成
+### 在消息处理器中集成
 
 ```typescript
-// src/llm.ts
+// src/base_message_handler.ts
 import { logger } from './middleware/logger.js';
 
-export class LlmClient {
-    async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
-        const input = { model: this.model, messages };
-        let output = '';
-        let status: 'success' | 'fail' = 'fail';
-
+export class BaseMessageHandler {
+    protected async processAndReply(): Promise<boolean> {
+        let inputForLog = "";
+        let status: "success" | "fail" = "fail";
+        let llmResponse = "";
+        
         try {
-            // ... LLM API 调用
-            output = content;
-            status = 'success';
-            return content;
+            // 构建数据结构和LLM请求
+            const chatMessageData = this.buildChatMessageData();
+            const chatMessages = this.buildChatMessages();
+            
+            // 生成美观的输入字符串用于记录
+            inputForLog = JSON.stringify(chatMessageData, null, 2);
+            
+            llmResponse = await this.llmClient.oneTurnChat(chatMessages);
+            
+            if (llmResponse === "") {
+                status = "fail";
+                void logger.logLLMCall(status, inputForLog, "LLM调用失败");
+                throw new Error("LLM调用失败");
+            }
+            
+            status = "success";
+            // 记录成功的LLM调用
+            void logger.logLLMCall(status, inputForLog, llmResponse);
+            
+            // ... 处理响应
         } catch (error) {
-            const errorMessage = `LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`;
-            output = errorMessage;
-            throw new Error(errorMessage);
-        } finally {
-            // 异步记录日志，不阻塞主流程
-            void logger.logLLMCall(status, input, output);
+            // 记录失败的LLM调用
+            if (inputForLog) {
+                void logger.logLLMCall("fail", inputForLog, error.message);
+            }
+            throw error;
         }
     }
 }
@@ -99,7 +114,7 @@ export class LlmClient {
 ## 关联组件
 
 - [[database_layer]] - 底层数据库操作支持
-- [[llm_client]] - 主要使用场景，记录每次 API 调用
+- [[base_message_handler]] - 主要使用场景，在消息处理层进行日志记录
 
 ## 技术实现
 
@@ -108,10 +123,13 @@ export class LlmClient {
 const timestamp = new Date().toISOString();  // 生成标准 ISO 8601 格式
 ```
 
-### 数据序列化
+### 数据存储
 ```typescript
-const inputStr = typeof input === "string" ? input : JSON.stringify(input);
-const outputStr = typeof output === "string" ? output : JSON.stringify(output);
+// input和output都已经是格式化好的字符串，直接存储
+await db.run(
+    "INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES ($1, $2, $3, $4)",
+    [timestamp, status, input, output],
+);
 ```
 
 ### 错误处理

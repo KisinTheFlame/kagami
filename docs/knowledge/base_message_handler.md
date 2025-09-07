@@ -13,33 +13,58 @@ export abstract class BaseMessageHandler implements MessageHandler {
 }
 ```
 
-### LLM 集成
+### LLM 集成与日志记录
 ```typescript
 protected async processAndReply(): Promise<boolean> {
-    // 1. 构建 LLM 请求上下文
-    const chatMessages = this.buildChatMessages();
+    let inputForLog = "";
+    let status: "success" | "fail" = "fail";
+    let llmResponse = "";
     
-    // 2. 调用 LLM API
-    const llmResponse = await this.llmClient.oneTurnChat(chatMessages);
-    
-    // 3. 解析响应
-    const { thoughts, reply } = this.parseResponse(llmResponse);
-    
-    // 4. 记录思考过程
-    if (thoughts.length > 0) {
-        console.log(`[群 ${String(this.groupId)}] LLM 思考:`);
-        thoughts.forEach((thought, index) => {
-            console.log(`  ${String(index + 1)}. ${thought}`);
-        });
+    try {
+        // 1. 构建数据结构和LLM请求
+        const chatMessageData = this.buildChatMessageData();
+        const chatMessages = this.buildChatMessages();
+        
+        // 2. 生成美观的输入字符串用于记录
+        inputForLog = JSON.stringify(chatMessageData, null, 2);
+        
+        // 3. 调用 LLM API
+        llmResponse = await this.llmClient.oneTurnChat(chatMessages);
+        
+        // 4. 检查调用结果
+        if (llmResponse === "") {
+            status = "fail";
+            void logger.logLLMCall(status, inputForLog, "LLM调用失败");
+            throw new Error("LLM调用失败");
+        }
+        
+        status = "success";
+        const { thoughts, reply } = this.parseResponse(llmResponse);
+
+        // 5. 记录成功的LLM调用
+        void logger.logLLMCall(status, inputForLog, llmResponse);
+
+        // 6. 记录思考过程并发送回复
+        if (thoughts.length > 0) {
+            console.log(`[群 ${String(this.groupId)}] LLM 思考:`);
+            thoughts.forEach((thought, index) => {
+                console.log(`  ${String(index + 1)}. ${thought}`);
+            });
+        }
+        
+        if (reply && reply.length > 0) {
+            await this.session.sendMessage(reply);
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        // 7. 记录失败的LLM调用
+        if (inputForLog) {
+            void logger.logLLMCall("fail", inputForLog, error.message);
+        }
+        throw error;
     }
-    
-    // 5. 发送回复并记录历史
-    if (reply && reply.length > 0) {
-        await this.session.sendMessage(reply);
-        return true;
-    }
-    
-    return false;
 }
 ```
 
@@ -55,23 +80,31 @@ protected addMessageToHistory(message: Message): void {
 }
 ```
 
-### 上下文构建
+### 数据结构分离与上下文构建
+
+#### 原始数据结构生成
 ```typescript
-protected buildChatMessages(): ChatCompletionMessageParam[] {
+// 用于日志记录的数据结构
+interface ChatMessageData {
+    role: string;
+    content: string | Message | LlmResponseItem[];
+}
+
+private buildChatMessageData(): ChatMessageData[] {
     // 使用Handlebars模板生成系统提示
     const systemPrompt = this.promptTemplateManager.generatePrompt({
         botQQ: this.botQQ,
         masterConfig: this.masterConfig,
     });
 
-    const messages: ChatCompletionMessageParam[] = [
+    const messages: ChatMessageData[] = [
         { role: "system", content: systemPrompt },
     ];
 
-    // 构建历史消息上下文
+    // 构建历史消息上下文，保持原始对象结构
     this.messageHistory.forEach(msg => {
         if (msg.userId === this.botQQ) {
-            // 机器人消息：构建思考链格式
+            // 机器人消息：构建思考链格式但不序列化
             if (msg.metadata?.thoughts) {
                 const responseArray: LlmResponseItem[] = [];
                 msg.metadata.thoughts.forEach(thought => {
@@ -82,19 +115,30 @@ protected buildChatMessages(): ChatCompletionMessageParam[] {
                 }
                 messages.push({
                     role: "assistant",
-                    content: JSON.stringify(responseArray),
+                    content: responseArray,  // 保持对象结构
                 });
             }
         } else {
-            // 用户消息：完整的 Message JSON
+            // 用户消息：保持Message对象结构
             messages.push({
                 role: "user",
-                content: JSON.stringify(msg),
+                content: msg,  // 保持Message对象结构
             });
         }
     });
 
     return messages;
+}
+```
+
+#### API调用格式转换
+```typescript
+protected buildChatMessages(): ChatCompletionMessageParam[] {
+    const messageData = this.buildChatMessageData();
+    return messageData.map(msg => ({
+        role: msg.role as "system" | "user" | "assistant",
+        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+    }));
 }
 ```
 
@@ -181,6 +225,7 @@ interface PromptTemplateContext {
 - [[session]] - 消息发送功能
 - [[config_system]] - 主人配置和历史长度配置
 - [[prompt_template_manager]] - Handlebars模板管理
+- [[logger]] - LLM调用日志记录
 
 ### 数据模型依赖
 - [[message_data_model]] - Message 接口和相关类型

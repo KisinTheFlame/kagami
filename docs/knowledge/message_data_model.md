@@ -10,7 +10,6 @@ Message 接口定义了标准化的消息数据结构，用于在系统各组件
 ```typescript
 export interface Message {
     id: string;                    // 消息唯一标识
-    groupId: number;              // 群组 ID
     userId: number;               // 发送者 QQ 号
     userNickname?: string;        // 发送者昵称（可选）
     content: SendMessageSegment[]; // 结构化消息内容
@@ -47,8 +46,8 @@ export interface Message {
 ### 完整上下文
 - **用户信息**：包含 QQ 号和昵称
 - **时间信息**：精确的消息发送时间
-- **群组信息**：明确的群组归属
 - **关系信息**：通过 metadata 记录消息间关系
+- **简化设计**：移除了 groupId 字段，减少冗余信息
 
 ### 双向兼容
 - **用户消息**：从 napcat 原始事件转换而来
@@ -61,7 +60,6 @@ export interface Message {
 // 在 Session 中转换 napcat 原始事件
 const message: Message = {
     id: String(ctx.message_id),
-    groupId: ctx.group_id,
     userId: ctx.user_id,
     userNickname,                    // 异步获取的用户昵称
     content: ctx.message,            // 原始的 SendMessageSegment[]
@@ -75,7 +73,6 @@ const message: Message = {
 // 在 BaseMessageHandler 中创建机器人消息
 const botMessage: Message = {
     id: `bot_${String(Date.now())}`,
-    groupId: this.groupId,
     userId: this.botQQ,
     content: reply ?? [],
     timestamp: getShanghaiTimestamp(), // 使用上海时区
@@ -118,7 +115,6 @@ messages.push({
 ```json
 {
   "id": "123456",
-  "groupId": 789012,
   "userId": 345678,
   "userNickname": "张三",
   "content": [
@@ -132,7 +128,6 @@ messages.push({
 ```json
 {
   "id": "123457",
-  "groupId": 789012,
   "userId": 345678,
   "userNickname": "张三",
   "content": [
@@ -147,7 +142,6 @@ messages.push({
 ```json
 {
   "id": "123458",
-  "groupId": 789012,
   "userId": 345678,
   "userNickname": "张三",
   "content": [
@@ -165,7 +159,6 @@ messages.push({
 ```json
 {
   "id": "bot_1704110400000",
-  "groupId": 789012,
   "userId": 987654321,
   "content": [],
   "timestamp": "2024-01-01 20:03:00",
@@ -183,7 +176,6 @@ messages.push({
 ```json
 {
   "id": "bot_1704110460000",
-  "groupId": 789012,
   "userId": 987654321,
   "content": [
     {"type": "text", "data": {"text": "是的，阳光明媚的日子总是让人心情愉快"}}

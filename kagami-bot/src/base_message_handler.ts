@@ -5,6 +5,7 @@ import { Message, MessageHandler, Session } from "./session.js";
 import { MasterConfig } from "./config.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
+import { logger } from "./middleware/logger.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -19,6 +20,12 @@ interface ReplyItem {
 
 type LlmResponseItem = ThoughtItem | ReplyItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
+
+// 用于日志记录的消息数据结构
+interface ChatMessageData {
+    role: string;
+    content: string | Message | LlmResponseItem[];
+}
 
 
 export abstract class BaseMessageHandler implements MessageHandler {
@@ -51,11 +58,32 @@ export abstract class BaseMessageHandler implements MessageHandler {
     abstract handleMessage(message: Message): Promise<void>;
 
     protected async processAndReply(): Promise<boolean> {
+        let inputForLog = "";
+        let status: "success" | "fail" = "fail";
+        let llmResponse = "";
+        
         try {
-            // 构建 LLM 请求并生成回复
+            // 构建数据结构和LLM请求
+            const chatMessageData = this.buildChatMessageData();
             const chatMessages = this.buildChatMessages();
-            const llmResponse = await this.llmClient.oneTurnChat(chatMessages);
+            
+            // 生成美观的输入字符串用于记录
+            inputForLog = JSON.stringify(chatMessageData, null, 2);
+            
+            llmResponse = await this.llmClient.oneTurnChat(chatMessages);
+            
+            // 如果LLM返回空字符串，说明调用失败
+            if (llmResponse === "") {
+                status = "fail";
+                void logger.logLLMCall(status, inputForLog, "LLM调用失败");
+                throw new Error("LLM调用失败");
+            }
+            
+            status = "success";
             const { thoughts, reply } = this.parseResponse(llmResponse);
+
+            // 记录成功的LLM调用
+            void logger.logLLMCall(status, inputForLog, llmResponse);
 
             // 记录LLM的思考过程
             if (thoughts.length > 0) {
@@ -68,7 +96,6 @@ export abstract class BaseMessageHandler implements MessageHandler {
             // 将完整的LLM响应存储到历史记录（包括思考和回复）
             const botMessage: Message = {
                 id: `bot_${String(Date.now())}`,
-                groupId: this.groupId,
                 userId: this.botQQ,
                 content: reply ?? [], // 存储实际的回复内容
                 timestamp: getShanghaiTimestamp(),
@@ -89,6 +116,13 @@ export abstract class BaseMessageHandler implements MessageHandler {
             }
         } catch (error) {
             console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            
+            // 记录失败的LLM调用
+            if (inputForLog) {
+                void logger.logLLMCall("fail", inputForLog, errorMessage);
+            }
+            
             throw error;
         }
     }
@@ -102,14 +136,14 @@ export abstract class BaseMessageHandler implements MessageHandler {
         }
     }
 
-    protected buildChatMessages(): ChatCompletionMessageParam[] {
+    private buildChatMessageData(): ChatMessageData[] {
         // 使用Handlebars模板生成系统提示
         const systemPrompt = this.promptTemplateManager.generatePrompt({
             botQQ: this.botQQ,
             masterConfig: this.masterConfig,
         });
 
-        const messages: ChatCompletionMessageParam[] = [
+        const messages: ChatMessageData[] = [
             { role: "system", content: systemPrompt },
         ];
 
@@ -132,22 +166,30 @@ export abstract class BaseMessageHandler implements MessageHandler {
                     
                     messages.push({
                         role: "assistant",
-                        content: JSON.stringify(responseArray),
+                        content: responseArray,  // 保持对象结构，不进行JSON.stringify
                     });
                 } else {
                     // 没有metadata的历史消息，跳过（可能是旧数据）
                     console.warn(`[群 ${String(this.groupId)}] 发现没有metadata的bot消息，跳过`);
                 }
             } else {
-                // 用户消息作为 user - 传递完整的 Message JSON
+                // 用户消息作为 user - 保持Message对象结构
                 messages.push({
                     role: "user",
-                    content: JSON.stringify(msg),
+                    content: msg,  // 保持Message对象结构，不进行JSON.stringify
                 });
             }
         });
 
         return messages;
+    }
+
+    protected buildChatMessages(): ChatCompletionMessageParam[] {
+        const messageData = this.buildChatMessageData();
+        return messageData.map(msg => ({
+            role: msg.role as "system" | "user" | "assistant",
+            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+        }));
     }
 
     protected parseResponse(content: string): { thoughts: string[], reply?: SendMessageSegment[] } {

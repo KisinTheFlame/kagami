@@ -12,17 +12,15 @@ class Logger {
 
     async logLLMCall(
         status: "success" | "fail",
-        input: unknown,
-        output: unknown,
+        input: string,
+        output: string,
     ): Promise<void> {
         try {
             const timestamp = new Date().toISOString();
-            const inputStr = typeof input === "string" ? input : JSON.stringify(input);
-            const outputStr = typeof output === "string" ? output : JSON.stringify(output);
-
+            // input和output都已经是格式化好的字符串，直接存储
             await db.run(
                 "INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES ($1, $2, $3, $4)",
-                [timestamp, status, inputStr, outputStr],
+                [timestamp, status, input, output],
             );
         } catch (error) {
             console.error("Failed to log LLM call:", error);
