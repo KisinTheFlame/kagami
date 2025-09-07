@@ -51,6 +51,9 @@ Kagami System
 - [[database_layer]] - SQLite 数据库封装，提供基础数据操作
 - [[logger]] - LLM 调用日志记录服务
 
+### 开发工具
+- [[ci_cd_system]] - GitHub Actions 持续集成系统，提供自动化构建和代码质量检查
+
 ## 关系图谱
 
 ### 依赖关系
@@ -81,6 +84,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **回复引用**：智能决策何时使用 QQ 回复功能
 - **配置驱动**：通过 YAML 文件灵活配置所有参数
 - **调用日志**：完整记录 LLM 调用历史，支持问题排查和分析
+- **持续集成**：GitHub Actions 自动化构建和代码质量检查
 
 ## 技术栈
 
@@ -93,6 +97,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **配置**：YAML 配置文件
 - **构建**：TypeScript 编译器
 - **代码质量**：ESLint
+- **持续集成**：GitHub Actions
 
 ### 控制台系统技术栈
 - **后端**：Go + Gin 框架 + GORM
