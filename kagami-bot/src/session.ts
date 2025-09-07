@@ -4,7 +4,6 @@ import { getShanghaiTimestamp } from "./utils/timezone.js";
 
 export interface Message {
     id: string;
-    groupId: number;
     userId: number;
     userNickname?: string;
     content: SendMessageSegment[];
@@ -49,7 +48,6 @@ export class Session {
 
             const message: Message = {
                 id: String(ctx.message_id),
-                groupId: ctx.group_id,
                 userId: ctx.user_id,
                 userNickname,
                 content: ctx.message,
