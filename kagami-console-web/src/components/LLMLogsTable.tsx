@@ -13,11 +13,13 @@ import {
     Row,
     Col,
     Pagination,
+    Alert,
 } from "antd";
 import { ReloadOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import type { LLMCallLog, LogQueryParams } from "../types/api";
 import { llmLogsApi } from "../services/api";
+import MessageCard from "./MessageCard";
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -255,14 +257,51 @@ const LLMLogsTable: React.FC = () => {
                         </Row>
                         <div style={{ marginBottom: 16 }}>
                             <Text strong>输入：</Text>
-                            <Card style={{
-                                padding: 12, 
-                                borderRadius: 6, 
-                                marginTop: 8,
-                                whiteSpace: "pre-wrap",
-                            }}>
-                                {selectedLog.input}
-                            </Card>
+                            <div style={{ marginTop: 8 }}>
+                                {(() => {
+                                    try {
+                                        const messages = JSON.parse(selectedLog.input) as unknown[];
+                                        if (Array.isArray(messages)) {
+                                            return messages.map((message: unknown, index) => (
+                                                <MessageCard 
+                                                    key={index} 
+                                                    message={message as { role: "user" | "assistant" | "system"; content: string | object }} 
+                                                    index={index}
+                                                />
+                                            ));
+                                        } else {
+                                            return (
+                                                <Alert
+                                                    message="数据格式错误"
+                                                    description="输入数据不是预期的数组格式"
+                                                    type="warning"
+                                                    showIcon
+                                                    style={{ marginBottom: 12 }}
+                                                />
+                                            );
+                                        }
+                                    } catch {
+                                        return (
+                                            <>
+                                                <Alert
+                                                    message="JSON解析失败"
+                                                    description="无法解析输入数据，显示原始内容"
+                                                    type="warning"
+                                                    showIcon
+                                                    style={{ marginBottom: 12 }}
+                                                />
+                                                <Card style={{
+                                                    padding: 12, 
+                                                    borderRadius: 6,
+                                                    whiteSpace: "pre-wrap",
+                                                }}>
+                                                    {selectedLog.input}
+                                                </Card>
+                                            </>
+                                        );
+                                    }
+                                })()}
+                            </div>
                         </div>
                         <div>
                             <Text strong>输出：</Text>

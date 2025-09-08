@@ -33,6 +33,7 @@ Kagami System
 
 ### 控制台系统
 - [[console_system]] - Web 控制台整体架构和功能
+- [[message_card_component]] - LLM消息卡片展示组件
 
 ### 消息处理
 - [[base_message_handler]] - 消息处理抽象基类，提供 LLM 集成
