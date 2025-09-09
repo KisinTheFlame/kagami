@@ -59,9 +59,10 @@ protected async processAndReply(): Promise<boolean> {
         
         return false;
     } catch (error) {
-        // 7. 记录失败的LLM调用
+        // 7. 记录失败的LLM调用 - 使用JSON序列化确保复杂错误对象能被完整记录
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
         if (inputForLog) {
-            void logger.logLLMCall("fail", inputForLog, error.message);
+            void logger.logLLMCall("fail", inputForLog, errorMessage);
         }
         throw error;
     }
@@ -248,9 +249,9 @@ interface PromptTemplateContext {
 ## 错误处理
 
 ### LLM 调用错误
-- **API 错误**：记录错误并重新抛出
+- **API 错误**：使用JSON序列化记录完整错误信息（避免"[object Object]"问题），记录后重新抛出
 - **解析错误**：返回空响应，不发送消息
-- **网络错误**：由 [[llm_client]] 处理
+- **网络错误**：由 [[llm_client]] 处理，同样使用JSON序列化记录详细信息
 
 ### 消息发送错误
 - **发送失败**：记录错误并重新抛出

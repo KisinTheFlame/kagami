@@ -116,7 +116,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
             }
         } catch (error) {
             console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
             
             // 记录失败的LLM调用
             if (inputForLog) {

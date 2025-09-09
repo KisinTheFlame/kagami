@@ -81,9 +81,10 @@ export class BaseMessageHandler {
             
             // ... 处理响应
         } catch (error) {
-            // 记录失败的LLM调用
+            // 记录失败的LLM调用 - 使用JSON序列化确保复杂错误对象能被完整记录
+            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
             if (inputForLog) {
-                void logger.logLLMCall("fail", inputForLog, error.message);
+                void logger.logLLMCall("fail", inputForLog, errorMessage);
             }
             throw error;
         }
@@ -101,6 +102,7 @@ export class BaseMessageHandler {
 - 记录完整的输入参数（model、messages 等）
 - 保存原始输出内容，包括无效 JSON
 - 自动序列化非字符串类型的数据
+- **增强错误记录**：对于复杂错误对象，使用JSON序列化记录完整信息，避免"[object Object]"问题
 
 ### 错误容忍
 - 日志记录过程中的错误不会中断 LLM 调用
