@@ -31,13 +31,7 @@ protected async processAndReply(): Promise<boolean> {
         // 3. 调用 LLM API
         llmResponse = await this.llmClient.oneTurnChat(chatMessages);
         
-        // 4. 检查调用结果
-        if (llmResponse === "") {
-            status = "fail";
-            void logger.logLLMCall(status, inputForLog, "LLM调用失败");
-            throw new Error("LLM调用失败");
-        }
-        
+        // 4. LLM 调用成功
         status = "success";
         const { thoughts, reply } = this.parseResponse(llmResponse);
 
@@ -59,7 +53,7 @@ protected async processAndReply(): Promise<boolean> {
         
         return false;
     } catch (error) {
-        // 7. 记录失败的LLM调用 - 使用JSON序列化确保复杂错误对象能被完整记录
+        // 7. 记录失败的LLM调用 - 接收来自 LlmClient 的具体异常信息（网络错误、API错误等）
         const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
         if (inputForLog) {
             void logger.logLLMCall("fail", inputForLog, errorMessage);
@@ -249,9 +243,9 @@ interface PromptTemplateContext {
 ## 错误处理
 
 ### LLM 调用错误
-- **API 错误**：使用JSON序列化记录完整错误信息（避免"[object Object]"问题），记录后重新抛出
+- **API 错误**：从 [[llm_client]] 接收具体异常信息，记录完整错误详情到数据库后重新抛出
 - **解析错误**：返回空响应，不发送消息
-- **网络错误**：由 [[llm_client]] 处理，同样使用JSON序列化记录详细信息
+- **网络错误**：直接从 [[llm_client]] 传递过来，包含具体网络错误信息
 
 ### 消息发送错误
 - **发送失败**：记录错误并重新抛出

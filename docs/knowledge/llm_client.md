@@ -9,32 +9,26 @@ LlmClient 封装 OpenAI API 调用，集成 [[api_key_manager]] 实现多 API Ke
 ### API 调用封装
 ```typescript
 async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
-    try {
-        const apiKey = this.apiKeyManager.getRandomApiKey();
-        const openai = new OpenAI({
-            baseURL: this.baseURL,
-            apiKey: apiKey,
-        });
+    const apiKey = this.apiKeyManager.getRandomApiKey();
+    const openai = new OpenAI({
+        baseURL: this.baseURL,
+        apiKey: apiKey,
+    });
 
-        const response = await openai.chat.completions.create({
-            model: this.model,
-            messages: messages,
-            response_format: {
-                type: "json_object",
-            },
-        });
+    const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: messages,
+        response_format: {
+            type: "json_object",
+        },
+    });
 
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-            console.error("OpenAI API 返回空内容");
-            return "";  // 返回空字符串而不是抛异常
-        }
-
-        return content;
-    } catch (error) {
-        console.error(`LLM 请求失败: ${error instanceof Error ? error.message : JSON.stringify(error, null, 2)}`);
-        return "";  // 返回空字符串而不是抛异常，让上层处理日志记录
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+        throw new Error("OpenAI API 返回空内容");
     }
+
+    return content;
 }
 ```
 
@@ -61,10 +55,10 @@ response_format: {
 - **思考链支持**：配合系统提示词实现结构化思考
 
 ### 错误处理
-- **静默错误处理**：返回空字符串而不抛异常，让上层决定如何处理
-- **空响应检查**：验证 API 返回内容的有效性
-- **详细错误日志**：使用JSON序列化记录完整错误信息到控制台，避免"[object Object]"问题
-- **上层职责分离**：日志记录由调用方（[[base_message_handler]]）负责
+- **异常透明传递**：所有错误（网络错误、API错误等）直接抛出给上层处理
+- **空响应检查**：验证 API 返回内容的有效性，空内容时抛出异常
+- **详细错误信息**：原始异常信息完整传递给调用方进行日志记录
+- **职责分离**：LlmClient 专注 API 调用，错误处理和日志记录由调用方（[[base_message_handler]]）负责
 
 ## 依赖关系
 
