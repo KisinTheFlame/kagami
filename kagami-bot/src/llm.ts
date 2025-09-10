@@ -15,31 +15,25 @@ export class LlmClient {
     }
 
     async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
-        try {
-            const apiKey = this.apiKeyManager.getRandomApiKey();
-            const openai = new OpenAI({
-                baseURL: this.baseURL,
-                apiKey: apiKey,
-            });
+        const apiKey = this.apiKeyManager.getRandomApiKey();
+        const openai = new OpenAI({
+            baseURL: this.baseURL,
+            apiKey: apiKey,
+        });
 
-            const response = await openai.chat.completions.create({
-                model: this.model,
-                messages: messages,
-                response_format: {
-                    type: "json_object",
-                },
-            });
+        const response = await openai.chat.completions.create({
+            model: this.model,
+            messages: messages,
+            response_format: {
+                type: "json_object",
+            },
+        });
 
-            const content = response.choices[0]?.message?.content;
-            if (!content) {
-                console.error("OpenAI API 返回空内容");
-                return "";  // 返回空字符串而不是抛异常
-            }
-
-            return content;
-        } catch (error) {
-            console.error(`LLM 请求失败: ${error instanceof Error ? error.message : JSON.stringify(error, null, 2)}`);
-            return "";  // 返回空字符串而不是抛异常，让上层处理日志记录
+        const content = response.choices[0]?.message?.content;
+        if (!content) {
+            throw new Error("OpenAI API 返回空内容");
         }
+
+        return content;
     }
 }
