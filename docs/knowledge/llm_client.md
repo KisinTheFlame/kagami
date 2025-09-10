@@ -32,7 +32,7 @@ async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
 
         return content;
     } catch (error) {
-        console.error(`LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`LLM 请求失败: ${error instanceof Error ? error.message : JSON.stringify(error, null, 2)}`);
         return "";  // 返回空字符串而不是抛异常，让上层处理日志记录
     }
 }
@@ -63,7 +63,7 @@ response_format: {
 ### 错误处理
 - **静默错误处理**：返回空字符串而不抛异常，让上层决定如何处理
 - **空响应检查**：验证 API 返回内容的有效性
-- **详细错误日志**：记录错误信息到控制台便于调试
+- **详细错误日志**：使用JSON序列化记录完整错误信息到控制台，避免"[object Object]"问题
 - **上层职责分离**：日志记录由调用方（[[base_message_handler]]）负责
 
 ## 依赖关系

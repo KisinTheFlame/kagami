@@ -38,7 +38,7 @@ export class LlmClient {
 
             return content;
         } catch (error) {
-            console.error(`LLM 请求失败: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(`LLM 请求失败: ${error instanceof Error ? error.message : JSON.stringify(error, null, 2)}`);
             return "";  // 返回空字符串而不是抛异常，让上层处理日志记录
         }
     }
