@@ -26,8 +26,10 @@ export class PassiveMessageHandler extends BaseMessageHandler {
     }
 
     private isBotMentioned(message: Message): boolean {
-        return message.content.some(item => 
-            item.type === "at" && item.data.qq === this.botQQ.toString(),
-        );
+        if (message.type === "group_msg") {
+            // 检查转换后的chat内容中是否包含机器人的@信息
+            return message.value.chat.includes("@") && message.value.chat.includes(`(${String(this.botQQ)})`);
+        }
+        return false;
     }
 }

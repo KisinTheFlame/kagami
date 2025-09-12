@@ -5,6 +5,7 @@ import { MasterConfig } from "./config.js";
 export interface PromptTemplateContext {
     botQQ: number;
     masterConfig?: MasterConfig;
+    currentTime: string;
 }
 
 export class PromptTemplateManager {

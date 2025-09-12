@@ -1,11 +1,11 @@
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
-import { Message, MessageHandler, Session } from "./session.js";
+import { Message, MessageHandler, Session, BotMessage } from "./session.js";
 import { MasterConfig } from "./config.js";
-import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { logger } from "./middleware/logger.js";
+import { getShanghaiTimestamp } from "./utils/timezone.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -13,18 +13,18 @@ interface ThoughtItem {
     content: string;
 }
 
-interface ReplyItem {
-    type: "reply";
+interface ChatItem {
+    type: "chat";
     content: SendMessageSegment[];
 }
 
-type LlmResponseItem = ThoughtItem | ReplyItem;
+type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
 // 用于日志记录的消息数据结构
 interface ChatMessageData {
     role: string;
-    content: string | Message | LlmResponseItem[];
+    content: string | LlmResponseItem[];
 }
 
 
@@ -93,14 +93,15 @@ export abstract class BaseMessageHandler implements MessageHandler {
                 });
             }
 
-            // 将完整的LLM响应存储到历史记录（包括思考和回复）
+            // 将LLM响应存储为新的BotMessage类型
+            const botMessageValue: BotMessage = {
+                thoughts,
+                chat: reply,
+            };
+
             const botMessage: Message = {
-                id: `bot_${String(Date.now())}`,
-                userId: this.botQQ,
-                content: reply ?? [], // 存储实际的回复内容
-                timestamp: getShanghaiTimestamp(),
-                // 可以考虑在这里存储完整的响应，包括thoughts
-                metadata: { thoughts, hasReply: !!reply },
+                type: "bot_msg",
+                value: botMessageValue,
             };
             this.addMessageToHistory(botMessage);
 
@@ -141,6 +142,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
         const systemPrompt = this.promptTemplateManager.generatePrompt({
             botQQ: this.botQQ,
             masterConfig: this.masterConfig,
+            currentTime: getShanghaiTimestamp(),
         });
 
         const messages: ChatMessageData[] = [
@@ -148,36 +150,35 @@ export abstract class BaseMessageHandler implements MessageHandler {
         ];
 
         this.messageHistory.forEach(msg => {
-            if (msg.userId === this.botQQ) {
-                // Bot 的消息作为 assistant
-                if (msg.metadata?.thoughts) {
-                    // 新格式：构建包含thoughts和reply的数组
+            switch (msg.type) {
+                case "bot_msg": {
+                    // Bot 的消息作为 assistant
                     const responseArray: LlmResponseItem[] = [];
                     
                     // 添加所有thoughts
-                    msg.metadata.thoughts.forEach(thought => {
+                    msg.value.thoughts.forEach(thought => {
                         responseArray.push({ type: "thought", content: thought });
                     });
                     
-                    // 添加reply（如果有）
-                    if (msg.metadata.hasReply && msg.content.length > 0) {
-                        responseArray.push({ type: "reply", content: msg.content });
+                    // 添加chat（如果有）
+                    if (msg.value.chat && msg.value.chat.length > 0) {
+                        responseArray.push({ type: "chat", content: msg.value.chat });
                     }
                     
                     messages.push({
                         role: "assistant",
                         content: responseArray,  // 保持对象结构，不进行JSON.stringify
                     });
-                } else {
-                    // 没有metadata的历史消息，跳过（可能是旧数据）
-                    console.warn(`[群 ${String(this.groupId)}] 发现没有metadata的bot消息，跳过`);
+                    break;
                 }
-            } else {
-                // 用户消息作为 user - 保持Message对象结构
-                messages.push({
-                    role: "user",
-                    content: msg,  // 保持Message对象结构，不进行JSON.stringify
-                });
+                case "group_msg": {
+                    // 用户消息作为 user - 使用自然语言格式的chat字段
+                    messages.push({
+                        role: "user",
+                        content: msg.value.chat,  // 直接使用自然语言格式
+                    });
+                    break;
+                }
             }
         });
 
@@ -224,7 +225,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
             if (item.type === "thought") {
                 thoughts.push(item.content);
             } else {
-                // item.type === "reply"
+                // item.type === "chat"
                 if (reply) {
                     console.warn("发现多个reply项，只使用第一个");
                 } else {

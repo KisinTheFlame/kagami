@@ -1,7 +1,7 @@
-import { NCWebsocket, SendMessageSegment } from "node-napcat-ts";
+import { GroupMessage, NCWebsocket, SendMessageSegment, Receive } from "node-napcat-ts";
 import { NapcatConfig } from "./config.js";
 
-export type MessageDispatcher = (context: unknown) => void;
+export type MessageDispatcher = (context: GroupMessage) => void;
 
 export class ConnectionManager {
     private napcat: NCWebsocket;
@@ -97,6 +97,27 @@ export class ConnectionManager {
             return loginInfo.user_id;
         } catch (error) {
             console.error("获取机器人QQ号失败:", error);
+            return undefined;
+        }
+    }
+
+    async getMessageDetail(messageId: number): Promise<{ sender: { nickname: string; user_id: number }; message: Receive[keyof Receive][] } | undefined> {
+        try {
+            if (!this.isConnected) {
+                return undefined;
+            }
+            const messageDetail = await this.napcat.get_msg({
+                message_id: messageId,
+            });
+            return {
+                sender: {
+                    nickname: messageDetail.sender.nickname,
+                    user_id: messageDetail.sender.user_id,
+                },
+                message: messageDetail.message,
+            };
+        } catch (error) {
+            console.error(`获取消息 ${String(messageId)} 详情失败:`, error);
             return undefined;
         }
     }

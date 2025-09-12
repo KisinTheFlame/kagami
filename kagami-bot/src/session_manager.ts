@@ -3,7 +3,7 @@ import { NapcatConfig, AgentConfig, BehaviorConfig, MasterConfig } from "./confi
 import { LlmClient } from "./llm.js";
 import { PassiveMessageHandler } from "./passive_message_handler.js";
 import { ActiveMessageHandler } from "./active_message_handler.js";
-import { SendMessageSegment } from "node-napcat-ts";
+import { GroupMessage, SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
 
 export class SessionManager {
@@ -77,14 +77,9 @@ export class SessionManager {
         console.log(`会话管理器初始化完成，共 ${String(this.sessions.size)} 个活跃会话`);
     }
 
-    private handleIncomingMessage(context: unknown): void {
+    private handleIncomingMessage(context: GroupMessage): void {
         try {
-            const ctx = context as {
-                group_id: number;
-                [key: string]: unknown;
-            };
-
-            const groupId = ctx.group_id;
+            const groupId = context.group_id;
             const session = this.sessions.get(groupId);
             if (session) {
                 void session.handleMessage(context);
