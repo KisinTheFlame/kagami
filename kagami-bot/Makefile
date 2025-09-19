@@ -1,6 +1,6 @@
 # kagami-bot Makefile
 
-.PHONY: all build clean lint
+.PHONY: all build clean lint install
 
 # 默认目标
 all: build
@@ -9,6 +9,11 @@ all: build
 build:
 	@echo "构建 kagami-bot..."
 	npm run build
+
+# 安装依赖
+install:
+	@echo "安装 kagami-bot 依赖..."
+	npm install
 
 # 清理项目
 clean:

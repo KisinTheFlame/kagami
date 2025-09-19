@@ -31,15 +31,19 @@ const LLMLogsTable: React.FC = () => {
     const [total, setTotal] = useState(0);
     const [current, setCurrent] = useState(1);
     const [pageSize, setPageSize] = useState(20);
-  
+
     // 筛选参数
     const [statusFilter, setStatusFilter] = useState<"success" | "fail" | undefined>();
     const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
     const [orderDirection, setOrderDirection] = useState<"asc" | "desc">("desc");
-  
+
     // 详情模态框
     const [detailVisible, setDetailVisible] = useState(false);
     const [selectedLog, setSelectedLog] = useState<LLMCallLog | null>(null);
+
+    // 响应式屏幕宽度检测
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const isMobile = windowWidth < 768;
 
     const fetchLogs = useCallback(async () => {
         setLoading(true);
@@ -75,6 +79,18 @@ const LLMLogsTable: React.FC = () => {
         void fetchLogs();
     }, [fetchLogs]);
 
+    // 监听窗口大小变化
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth);
+        };
+
+        window.addEventListener("resize", handleResize);
+        return () => {
+            window.removeEventListener("resize", handleResize);
+        };
+    }, []);
+
     const handleViewDetail = (record: LLMCallLog) => {
         setSelectedLog(record);
         setDetailVisible(true);
@@ -87,7 +103,7 @@ const LLMLogsTable: React.FC = () => {
         setCurrent(1);
     };
 
-    const columns = [
+    const allColumns = [
         {
             title: "ID",
             dataIndex: "id",
@@ -98,14 +114,16 @@ const LLMLogsTable: React.FC = () => {
             title: "时间",
             dataIndex: "timestamp",
             key: "timestamp",
-            width: 180,
-            render: (timestamp: string) => dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss"),
+            width: isMobile ? 120 : 180,
+            sorter: true,
+            sortOrder: orderDirection === "desc" ? ("descend" as const) : ("ascend" as const),
+            render: (timestamp: string) => dayjs(timestamp).format(isMobile ? "MM-DD HH:mm" : "YYYY-MM-DD HH:mm:ss"),
         },
         {
             title: "状态",
             dataIndex: "status",
             key: "status",
-            width: 100,
+            width: isMobile ? 80 : 100,
             render: (status: string) => (
                 <Tag color={status === "success" ? "green" : "red"}>
                     {status === "success" ? "成功" : "失败"}
@@ -137,26 +155,32 @@ const LLMLogsTable: React.FC = () => {
         {
             title: "操作",
             key: "action",
-            width: 120,
+            width: isMobile ? 80 : 120,
             render: (_: unknown, record: LLMCallLog) => (
                 <Space size="middle">
-                    <Button 
-                        type="link" 
-                        icon={<EyeOutlined />} 
+                    <Button
+                        type="link"
+                        icon={<EyeOutlined />}
                         onClick={() => { handleViewDetail(record); }}
+                        size={isMobile ? "small" : "middle"}
                     >
-                        详情
+                        {isMobile ? "" : "详情"}
                     </Button>
                 </Space>
             ),
         },
     ];
 
+    // 移动端只显示时间、状态、操作三列
+    const columns = isMobile
+        ? allColumns.filter(col => ["timestamp", "status", "action"].includes(col.key))
+        : allColumns;
+
     return (
         <Card title="LLM 调用历史">
             {/* 筛选条件 */}
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-                <Col span={6}>
+            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+                <Col xs={24} sm={12} md={6}>
                     <Select
                         placeholder="筛选状态"
                         allowClear
@@ -168,7 +192,7 @@ const LLMLogsTable: React.FC = () => {
                         <Option value="fail">失败</Option>
                     </Select>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                     <RangePicker
                         showTime
                         format="YYYY-MM-DD HH:mm:ss"
@@ -178,18 +202,8 @@ const LLMLogsTable: React.FC = () => {
                         style={{ width: "100%" }}
                     />
                 </Col>
-                <Col span={4}>
-                    <Select
-                        value={orderDirection}
-                        onChange={setOrderDirection}
-                        style={{ width: "100%" }}
-                    >
-                        <Option value="desc">时间降序</Option>
-                        <Option value="asc">时间升序</Option>
-                    </Select>
-                </Col>
-                <Col span={6}>
-                    <Space>
+                <Col xs={24} sm={24} md={12}>
+                    <Space style={{ width: "100%" }}>
                         <Button onClick={() => { void fetchLogs(); }} icon={<ReloadOutlined />}>
                             刷新
                         </Button>
@@ -208,19 +222,27 @@ const LLMLogsTable: React.FC = () => {
                 loading={loading}
                 pagination={false}
                 size="small"
+                scroll={{ x: "max-content" }}
+                onChange={(_pagination, _filters, sorter) => {
+                    if (!Array.isArray(sorter) && sorter.columnKey === "timestamp" && sorter.order) {
+                        const newDirection = sorter.order === "descend" ? "desc" : "asc";
+                        setOrderDirection(newDirection);
+                    }
+                }}
             />
 
             {/* 分页 */}
-            <div style={{ marginTop: 16, textAlign: "right" }}>
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
                 <Pagination
                     current={current}
                     pageSize={pageSize}
                     total={total}
-                    showSizeChanger
-                    showQuickJumper
-                    showTotal={(total, range) => `第 ${String(range[0])}-${String(range[1])} 条，共 ${String(total)} 条`}
+                    simple={isMobile}
+                    showSizeChanger={!isMobile}
+                    showQuickJumper={!isMobile}
+                    showTotal={isMobile ? undefined : (total, range) => `第 ${String(range[0])}-${String(range[1])} 条，共 ${String(total)} 条`}
                     onChange={setCurrent}
-                    onShowSizeChange={(current, size) => {
+                    onShowSizeChange={isMobile ? undefined : (current, size) => {
                         setCurrent(current);
                         setPageSize(size);
                     }}

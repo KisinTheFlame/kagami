@@ -24,7 +24,7 @@ function App() {
                         Kagami Console
                     </Title>
                 </Header>
-                <Content style={{ padding: "24px" }}>
+                <Content style={{ padding: "16px" }}>
                     <LLMLogsTable />
                 </Content>
             </Layout>
