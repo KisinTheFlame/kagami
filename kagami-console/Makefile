@@ -5,7 +5,7 @@ BINARY_NAME = kagami-console
 OUTPUT_DIR = bin
 CMD_DIR = cmd/api
 
-.PHONY: all build clean lint
+.PHONY: all build clean lint install
 
 # 默认目标
 all: build
@@ -15,6 +15,11 @@ build:
 	@echo "构建 kagami-console..."
 	@mkdir -p $(OUTPUT_DIR)
 	go build -o $(OUTPUT_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+
+# 安装依赖（Go 模块）
+install:
+	@echo "安装 kagami-console 依赖..."
+	go mod download
 
 # 清理项目
 clean:

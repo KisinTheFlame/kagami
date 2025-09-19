@@ -16,8 +16,8 @@ export DB_PASSWORD := $(shell yq '.postgres.password' config.yaml)
 export NAPCAT_UID := $(CURRENT_UID)
 export NAPCAT_GID := $(CURRENT_GID)
 
-.PHONY: all build clean lint up down status \
-        $(SUBPROJECTS) $(addsuffix -build,$(SUBPROJECTS)) $(addsuffix -clean,$(SUBPROJECTS)) $(addsuffix -lint,$(SUBPROJECTS))
+.PHONY: all build clean lint up down status install \
+        $(SUBPROJECTS) $(addsuffix -build,$(SUBPROJECTS)) $(addsuffix -clean,$(SUBPROJECTS)) $(addsuffix -lint,$(SUBPROJECTS)) $(addsuffix -install,$(SUBPROJECTS))
 
 # 默认目标：构建所有项目
 all: build
@@ -32,9 +32,21 @@ clean: $(addsuffix -clean,$(SUBPROJECTS))
 lint: $(addsuffix -lint,$(SUBPROJECTS))
 
 # Docker 管理命令
+# 支持指定单个服务：make up SERVICE=bot 或使用 make up-bot
 up: build
 	@echo "启动 Docker 服务"
-	docker compose up -d --build
+	@if [ -n "$(SERVICE)" ]; then \
+		echo "仅启动指定服务: $(SERVICE)"; \
+		docker compose up -d --build $(SERVICE); \
+	else \
+		echo "启动所有服务"; \
+		docker compose up -d --build; \
+	fi
+
+# 便捷：make up-<service>
+up-%: build
+	@echo "启动指定 Docker 服务: $*"
+	docker compose up -d --build $*
 
 down:
 	@echo "停止 Docker 服务"
@@ -43,6 +55,9 @@ down:
 status:
 	@echo "查看 Docker 服务状态"
 	docker compose ps
+
+# 安装所有子项目依赖
+install: $(addsuffix -install,$(SUBPROJECTS))
 
 # 子项目构建规则
 $(addsuffix -build,$(SUBPROJECTS)):
@@ -55,6 +70,10 @@ $(addsuffix -clean,$(SUBPROJECTS)):
 # 子项目 lint 规则
 $(addsuffix -lint,$(SUBPROJECTS)):
 	$(MAKE) -C $(patsubst %-lint,%,$@) lint
+
+# 子项目依赖安装规则
+$(addsuffix -install,$(SUBPROJECTS)):
+	$(MAKE) -C $(patsubst %-install,%,$@) install
 
 # 单独构建子项目的快捷方式
 $(SUBPROJECTS): %: %-build
