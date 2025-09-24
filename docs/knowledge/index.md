@@ -41,7 +41,8 @@ Kagami System
 - [[passive_message_handler]] - 被动回复策略，基于 @ 触发
 
 ### 支持组件
-- [[llm_client]] - OpenAI API 客户端封装
+- [[llm_client]] - OpenAI API 客户端封装，支持多 LLM 提供商
+- [[multi_provider_config]] - 多提供商配置系统，支持灵活的模型选择
 - [[api_key_manager]] - 多 API Key 轮询管理
 - [[energy_manager]] - 体力值系统管理
 - [[prompt_template_manager]] - Handlebars 提示词模板管理系统
@@ -78,6 +79,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **思考链**：LLM 支持结构化的思考-回复流程
 - **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
 - **体力系统**：主动模式下的智能回复频率控制
+- **多提供商支持**：支持 OpenAI、Gemini 等多个 LLM 提供商，自动模型选择
 - **多 API Key**：负载均衡和高可用性支持
 - **回复引用**：智能决策何时使用 QQ 回复功能
 - **配置驱动**：通过 YAML 文件灵活配置所有参数
