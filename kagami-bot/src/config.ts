@@ -70,7 +70,7 @@ export interface Config {
 
 export function loadConfig(): Config {
     const configIndex = process.argv.indexOf("--config");
-    const configFile = configIndex !== -1 ? process.argv[configIndex + 1] : "env.dev.yaml";
+    const configFile = configIndex !== -1 ? process.argv[configIndex + 1] : "env.yaml";
   
     if (!fs.existsSync(configFile)) {
         throw new Error(`配置文件不存在: ${configFile}`);

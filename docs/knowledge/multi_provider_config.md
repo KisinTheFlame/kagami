@@ -109,5 +109,5 @@ llm:
 
 ## 相关文件
 - `src/config.ts` - 配置接口和验证逻辑
-- `kagami-bot/env.prod.yaml` - 生产环境配置
-- `kagami-bot/env.prod.yaml.example` - 配置模板
+- `kagami-bot/env.yaml` - 配置文件
+- `kagami-bot/env.yaml.example` - 配置模板

@@ -105,5 +105,4 @@ process.on('SIGINT', () => bot.stop());
 
 ## 相关文件
 - `src/main.ts` - 主要实现
-- `env.dev.yaml.example` - 开发环境配置模板
-- `env.prod.yaml.example` - 生产环境配置模板
+- `env.yaml.example` - 配置模板
