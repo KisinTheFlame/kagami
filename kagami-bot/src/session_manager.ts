@@ -1,14 +1,13 @@
 import { Session } from "./session.js";
 import { NapcatConfig, AgentConfig, BehaviorConfig, MasterConfig } from "./config.js";
 import { LlmClient } from "./llm.js";
-import { PassiveMessageHandler } from "./passive_message_handler.js";
-import { ActiveMessageHandler } from "./active_message_handler.js";
+import { MessageHandler } from "./message_handler.js";
 import { GroupMessage, SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
 
 export class SessionManager {
     private sessions: Map<number, Session>;
-    private activeHandlers = new Map<number, ActiveMessageHandler>();
+    private messageHandlers = new Map<number, MessageHandler>();
     private connectionManager: ConnectionManager;
     private llmClient: LlmClient;
     private botQQ: number;
@@ -38,32 +37,18 @@ export class SessionManager {
             try {
                 const session = new Session(groupId, this.connectionManager);
                 const maxHistory = this.agentConfig?.history_turns ?? 40;
-                
-                // 根据配置选择消息处理策略
-                let handler;
-                if (this.behaviorConfig.message_handler_type === "active") {
-                    handler = new ActiveMessageHandler(
-                        this.llmClient,
-                        this.botQQ,
-                        groupId,
-                        session,
-                        this.behaviorConfig,
-                        this.masterConfig,
-                        maxHistory,
-                    );
-                    this.activeHandlers.set(groupId, handler);
-                    console.log(`群 ${String(groupId)} 使用主动回复策略`);
-                } else {
-                    handler = new PassiveMessageHandler(
-                        this.llmClient,
-                        this.botQQ,
-                        groupId,
-                        session,
-                        this.masterConfig,
-                        maxHistory,
-                    );
-                    console.log(`群 ${String(groupId)} 使用被动回复策略`);
-                }
+
+                // 创建统一的消息处理器
+                const handler = new MessageHandler(
+                    this.llmClient,
+                    this.botQQ,
+                    groupId,
+                    session,
+                    this.behaviorConfig,
+                    this.masterConfig,
+                    maxHistory,
+                );
+                this.messageHandlers.set(groupId, handler);
                 
                 session.setMessageHandler(handler);
                 this.sessions.set(groupId, session);
@@ -93,13 +78,13 @@ export class SessionManager {
 
     shutdownAllSessions(): void {
         console.log("正在关闭所有会话...");
-        
+
         try {
-            // 清理 ActiveMessageHandler 中的定时器
-            for (const handler of this.activeHandlers.values()) {
+            // 清理 MessageHandler 中的定时器
+            for (const handler of this.messageHandlers.values()) {
                 handler.destroy();
             }
-            this.activeHandlers.clear();
+            this.messageHandlers.clear();
             
             this.connectionManager.disconnect();
             console.log("连接管理器已关闭");

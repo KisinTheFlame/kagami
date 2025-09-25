@@ -1,11 +1,12 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
-import { Message, MessageHandler, Session, BotMessage } from "./session.js";
-import { MasterConfig } from "./config.js";
+import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
+import { BehaviorConfig, MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { logger } from "./middleware/logger.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { ChatMessages } from "./llm_providers/types.js";
+import { EnergyManager } from "./energy_manager.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -21,9 +22,7 @@ interface ChatItem {
 type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
-
-
-export abstract class BaseMessageHandler implements MessageHandler {
+export class MessageHandler implements IMessageHandler {
     protected llmClient: LlmClient;
     protected botQQ: number;
     protected groupId: number;
@@ -33,11 +32,17 @@ export abstract class BaseMessageHandler implements MessageHandler {
     protected session: Session;
     protected masterConfig?: MasterConfig;
 
+    // 来自ActiveMessageHandler的属性
+    private energyManager: EnergyManager;
+    private isLlmProcessing = false;
+    private hasPendingMessages = false;
+
     constructor(
         llmClient: LlmClient,
         botQQ: number,
         groupId: number,
         session: Session,
+        behaviorConfig: BehaviorConfig,
         masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
@@ -48,31 +53,107 @@ export abstract class BaseMessageHandler implements MessageHandler {
         this.masterConfig = masterConfig;
         this.maxHistorySize = maxHistorySize;
         this.promptTemplateManager = new PromptTemplateManager();
+
+        // 初始化体力管理器
+        this.energyManager = new EnergyManager(
+            behaviorConfig.energy_max,
+            behaviorConfig.energy_cost,
+            behaviorConfig.energy_recovery_rate,
+            behaviorConfig.energy_recovery_interval,
+        );
     }
 
-    abstract handleMessage(message: Message): Promise<void>;
+    async handleMessage(message: Message): Promise<void> {
+        // 1. 立即加入历史数组
+        this.addMessageToHistory(message);
+
+        // 2. 标记有新消息（每次都设置）
+        this.hasPendingMessages = true;
+
+        // 3. 尝试启动处理（如果已在处理则直接返回）
+        await this.tryProcessAndReply();
+    }
+
+    private canReply(): boolean {
+        // 检查体力值
+        if (!this.energyManager.canSendMessage()) {
+            console.log(`[群 ${String(this.groupId)}] 体力不足 (${this.energyManager.getEnergyStatus()})`);
+            return false;
+        }
+
+        return true;
+    }
+
+    getEnergyStatus(): string {
+        return this.energyManager.getEnergyStatus();
+    }
+
+    destroy(): void {
+        this.energyManager.destroy();
+    }
+
+    private async tryProcessAndReply(): Promise<void> {
+        // 如果已经在处理中，直接返回（关键：避免并发）
+        if (this.isLlmProcessing) {
+            return;
+        }
+
+        // 开始处理循环
+        this.isLlmProcessing = true;
+
+        try {
+            // 持续处理直到没有新消息
+            while (this.hasPendingMessages) {
+                // 重置标志（开始处理这一轮的消息）
+                this.hasPendingMessages = false;
+
+                // 检查条件
+                if (!this.canReply()) {
+                    break;
+                }
+
+                if (!this.energyManager.consumeEnergy()) {
+                    console.log(`[群 ${String(this.groupId)}] 体力不足，无法回复 (${this.energyManager.getEnergyStatus()})`);
+                    break;
+                }
+
+                // LLM处理（基于当前完整历史）
+                const didReply = await this.processAndReply();
+
+                if (!didReply) {
+                    this.energyManager.refundEnergy();
+                    console.log(`[群 ${String(this.groupId)}] LLM 选择不回复，已退还体力`);
+                }
+
+                // 循环会自动检查 hasPendingMessages
+                // 如果处理期间有新消息，hasPendingMessages 会被设置为 true
+            }
+        } finally {
+            this.isLlmProcessing = false;
+        }
+    }
 
     protected async processAndReply(): Promise<boolean> {
         let inputForLog = "";
         let status: "success" | "fail" = "fail";
         let llmResponse = "";
-        
+
         try {
             // 构建数据结构和LLM请求
             const chatMessages = this.buildChatMessages();
 
             // 生成美观的输入字符串用于记录
             inputForLog = JSON.stringify(chatMessages, null, 2);
-            
+
             llmResponse = await this.llmClient.oneTurnChat(chatMessages);
-            
+
             // 如果LLM返回空字符串，说明调用失败
             if (llmResponse === "") {
                 status = "fail";
                 void logger.logLLMCall(status, inputForLog, "LLM调用失败");
                 throw new Error("LLM调用失败");
             }
-            
+
             status = "success";
             const { thoughts, reply } = this.parseResponse(llmResponse);
 
@@ -112,19 +193,19 @@ export abstract class BaseMessageHandler implements MessageHandler {
         } catch (error) {
             console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
             const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
-            
+
             // 记录失败的LLM调用
             if (inputForLog) {
                 void logger.logLLMCall("fail", inputForLog, errorMessage);
             }
-            
+
             throw error;
         }
     }
 
     protected addMessageToHistory(message: Message): void {
         this.messageHistory.push(message);
-        
+
         // 使用 LRU 策略，保持最近 N 条消息
         if (this.messageHistory.length > this.maxHistorySize) {
             this.messageHistory.shift();
@@ -151,17 +232,17 @@ export abstract class BaseMessageHandler implements MessageHandler {
                 case "bot_msg": {
                     // Bot 的消息作为 assistant
                     const responseArray: LlmResponseItem[] = [];
-                    
+
                     // 添加所有thoughts
                     msg.value.thoughts.forEach(thought => {
                         responseArray.push({ type: "thought", content: thought });
                     });
-                    
+
                     // 添加chat（如果有）
                     if (msg.value.chat && msg.value.chat.length > 0) {
                         responseArray.push({ type: "chat", content: msg.value.chat });
                     }
-                    
+
                     messages.push({
                         role: "assistant",
                         content: [{ type: "text", value: JSON.stringify(responseArray) }],
@@ -185,12 +266,12 @@ export abstract class BaseMessageHandler implements MessageHandler {
     protected parseResponse(content: string): { thoughts: string[], reply?: SendMessageSegment[] } {
         try {
             const parsed = JSON.parse(content) as unknown;
-            
+
             // 现在只支持数组格式
             if (Array.isArray(parsed)) {
                 return this.parseArrayResponse(parsed as LlmResponse);
             }
-            
+
             // 非数组格式不支持
             console.error("不支持的LLM响应格式，期望数组格式");
             return {
@@ -229,7 +310,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
 
     protected formatContentForDisplay(content: SendMessageSegment[]): string {
         const parts: string[] = [];
-        
+
         for (const item of content) {
             if (item.type === "text" && item.data.text) {
                 parts.push(item.data.text);
@@ -239,7 +320,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
                 parts.push(`[回复:${item.data.id}]`);
             }
         }
-        
+
         return parts.join("");
     }
 
