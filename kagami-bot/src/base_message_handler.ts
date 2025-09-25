@@ -1,4 +1,3 @@
-import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler, Session, BotMessage } from "./session.js";
@@ -6,6 +5,7 @@ import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { logger } from "./middleware/logger.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
+import { ChatMessages } from "./llm_providers/types.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -21,11 +21,6 @@ interface ChatItem {
 type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
-// 用于日志记录的消息数据结构
-interface ChatMessageData {
-    role: string;
-    content: string | LlmResponseItem[];
-}
 
 
 export abstract class BaseMessageHandler implements MessageHandler {
@@ -64,11 +59,10 @@ export abstract class BaseMessageHandler implements MessageHandler {
         
         try {
             // 构建数据结构和LLM请求
-            const chatMessageData = this.buildChatMessageData();
             const chatMessages = this.buildChatMessages();
-            
+
             // 生成美观的输入字符串用于记录
-            inputForLog = JSON.stringify(chatMessageData, null, 2);
+            inputForLog = JSON.stringify(chatMessages, null, 2);
             
             llmResponse = await this.llmClient.oneTurnChat(chatMessages);
             
@@ -137,7 +131,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
         }
     }
 
-    private buildChatMessageData(): ChatMessageData[] {
+    private buildChatMessages(): ChatMessages[] {
         // 使用Handlebars模板生成系统提示
         const systemPrompt = this.promptTemplateManager.generatePrompt({
             botQQ: this.botQQ,
@@ -145,8 +139,11 @@ export abstract class BaseMessageHandler implements MessageHandler {
             currentTime: getShanghaiTimestamp(),
         });
 
-        const messages: ChatMessageData[] = [
-            { role: "system", content: systemPrompt },
+        const messages: ChatMessages[] = [
+            {
+                role: "system",
+                content: [{ type: "text", value: systemPrompt }],
+            },
         ];
 
         this.messageHistory.forEach(msg => {
@@ -167,7 +164,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
                     
                     messages.push({
                         role: "assistant",
-                        content: responseArray,  // 保持对象结构，不进行JSON.stringify
+                        content: [{ type: "text", value: JSON.stringify(responseArray) }],
                     });
                     break;
                 }
@@ -175,7 +172,7 @@ export abstract class BaseMessageHandler implements MessageHandler {
                     // 用户消息作为 user - 使用自然语言格式的chat字段
                     messages.push({
                         role: "user",
-                        content: msg.value.chat,  // 直接使用自然语言格式
+                        content: [{ type: "text", value: msg.value.chat }],
                     });
                     break;
                 }
@@ -183,14 +180,6 @@ export abstract class BaseMessageHandler implements MessageHandler {
         });
 
         return messages;
-    }
-
-    protected buildChatMessages(): ChatCompletionMessageParam[] {
-        const messageData = this.buildChatMessageData();
-        return messageData.map(msg => ({
-            role: msg.role as "system" | "user" | "assistant",
-            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-        }));
     }
 
     protected parseResponse(content: string): { thoughts: string[], reply?: SendMessageSegment[] } {

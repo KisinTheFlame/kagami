@@ -2,68 +2,43 @@
 
 ## 定义
 
-LlmClient 封装 OpenAI API 调用，支持多 LLM 提供商配置，集成 [[api_key_manager]] 实现多 API Key 轮询和负载均衡。位于 `src/llm.ts`。
+LlmClient 是统一的 LLM 调用入口，通过 [[llm_provider_abstraction]] 抽象层支持多种 LLM 提供商和原生 SDK。位于 `src/llm.ts`。
 
 ## 核心功能
 
-### API 调用封装
+### 统一调用接口
 ```typescript
 async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
-    const apiKey = this.apiKeyManager.getRandomApiKey();
-    const openai = new OpenAI({
-        baseURL: this.baseURL,
-        apiKey: apiKey,
-    });
-
-    const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: messages,
-        response_format: {
-            type: "json_object",
-        },
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-        throw new Error("OpenAI API 返回空内容");
-    }
-
-    return content;
+    return await this.provider.oneTurnChat(this.model, messages);
 }
 ```
 
-### 多提供商架构
-- **自动提供商选择**：根据指定模型自动选择对应的 LLM 提供商
-- **统一接口**：所有提供商使用相同的 OpenAI API 格式
-- **运维友好**：配置文件中灵活定义提供商与模型的关系
+### 抽象层架构
+- **提供商抽象**：通过 [[llm_provider_factory]] 创建具体的 LLM 提供商实例
+- **Interface 支持**：支持 `openai` 和 `genai` 两种 interface 类型
+- **自动选择**：根据配置的模型自动选择对应的提供商
 
-### 动态客户端创建
-- **每次请求创建**：每次调用时创建新的 OpenAI 实例
-- **随机 API Key**：通过 [[api_key_manager]] 获取随机 API Key
-- **无状态设计**：不保持固定的客户端连接
+### 简化设计
+- **委托模式**：LlmClient 将实际调用委托给具体的 LlmProvider
+- **配置驱动**：通过 ProviderConfig 决定使用哪种提供商实现
+- **无状态**：不保存 API 调用状态，每次调用都是独立的
 
 ## 设计特点
 
-### 多 API Key 支持
-- **负载均衡**：随机选择 API Key 分散请求压力
-- **高可用性**：单个 API Key 失效不影响整体服务
-- **透明切换**：上层无需关心具体使用哪个 API Key
+### 抽象层集成
+- **统一接口**：所有提供商都实现相同的 LlmProvider 接口
+- **多 SDK 支持**：支持原生 OpenAI SDK、Google GenAI SDK 等
+- **透明切换**：上层调用代码无需关心具体使用哪种 SDK
 
-### JSON 模式强制
-```typescript
-response_format: {
-    type: "json_object",
-}
-```
-- **结构化输出**：确保 LLM 返回有效的 JSON 格式
-- **解析保证**：避免非结构化文本导致的解析错误
-- **思考链支持**：配合系统提示词实现结构化思考
+### 配置驱动
+- **Interface 字段**：通过 `interface` 字段指定使用的 SDK 类型
+- **自动实例化**：根据配置自动创建对应的提供商实例
+- **模型匹配**：根据模型名称自动选择支持该模型的提供商
 
 ### 错误处理
-- **异常透明传递**：所有错误（网络错误、API错误等）直接抛出给上层处理
-- **空响应检查**：验证 API 返回内容的有效性，空内容时抛出异常
-- **详细错误信息**：原始异常信息完整传递给调用方进行日志记录
-- **职责分离**：LlmClient 专注 API 调用，错误处理和日志记录由调用方（[[base_message_handler]]）负责
+- **异常透明传递**：所有错误直接从具体提供商传递到上层
+- **统一错误格式**：不同提供商的错误都转换为统一格式
+- **职责分离**：LlmClient 专注调用协调，具体实现由提供商负责
 
 ## 依赖关系
 
