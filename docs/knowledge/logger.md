@@ -50,10 +50,10 @@ export const logger = new Logger();
 ### 在消息处理器中集成
 
 ```typescript
-// src/base_message_handler.ts
+// src/message_handler.ts
 import { logger } from './middleware/logger.js';
 
-export class BaseMessageHandler {
+export class MessageHandler {
     protected async processAndReply(): Promise<boolean> {
         let inputForLog = "";
         let status: "success" | "fail" = "fail";
@@ -116,7 +116,7 @@ export class BaseMessageHandler {
 ## 关联组件
 
 - [[database_layer]] - 底层数据库操作支持
-- [[base_message_handler]] - 主要使用场景，在消息处理层进行日志记录
+- [[message_handler]] - 主要使用场景，在消息处理层进行日志记录
 
 ## 技术实现
 

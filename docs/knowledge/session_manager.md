@@ -9,25 +9,28 @@ SessionManager 负责管理多个群组会话，协调连接管理器和消息�
 ### 会话管理
 - **会话创建**：为每个配置的群组创建独立的 [[session]]
 - **消息分发**：根据 `group_id` 将消息路由到对应会话
-- **策略选择**：根据配置创建对应的消息处理器
+- **消息处理器创建**：为每个群组创建统一的MessageHandler
 - **生命周期管理**：统一管理所有会话的初始化和关闭
 
-### 消息处理器工厂
+### 统一消息处理器创建
 ```typescript
 async initializeSessions(): Promise<void> {
     for (const groupId of this.connectionManager.getGroupIds()) {
         const session = new Session(groupId, this.connectionManager);
         const maxHistory = this.agentConfig?.history_turns ?? 40;
-        
-        // 根据配置选择消息处理策略
-        let handler;
-        if (this.behaviorConfig.message_handler_type === "active") {
-            handler = new ActiveMessageHandler(/*参数*/);
-            this.activeHandlers.set(groupId, handler);
-        } else {
-            handler = new PassiveMessageHandler(/*参数*/);
-        }
-        
+
+        // 创建统一的消息处理器
+        const handler = new MessageHandler(
+            this.llmClient,
+            this.botQQ,
+            groupId,
+            session,
+            this.behaviorConfig,
+            this.masterConfig,
+            maxHistory,
+        );
+        this.messageHandlers.set(groupId, handler);
+
         session.setMessageHandler(handler);
         this.sessions.set(groupId, session);
     }
@@ -55,7 +58,7 @@ private handleIncomingMessage(context: unknown): void {
 ```typescript
 export class SessionManager {
     private sessions: Map<number, Session>;           // 群组会话映射
-    private activeHandlers = new Map<number, ActiveMessageHandler>(); // 主动处理器映射
+    private messageHandlers = new Map<number, MessageHandler>(); // 消息处理器映射
     private connectionManager: ConnectionManager;     // 连接管理器
     private llmClient: LlmClient;                    // LLM 客户端
 }
@@ -66,35 +69,26 @@ export class SessionManager {
 - **LlmClient**：LLM 功能支持
 - **配置对象**：各种配置参数的传递
 
-## 消息处理策略
+## 统一消息处理
 
-### 策略模式实现
+### 简化架构
 ```typescript
-if (this.behaviorConfig.message_handler_type === "active") {
-    handler = new ActiveMessageHandler(
-        this.llmClient,
-        this.botQQ,
-        groupId,
-        session,
-        this.behaviorConfig,
-        this.masterConfig,
-        maxHistory,
-    );
-} else {
-    handler = new PassiveMessageHandler(
-        this.llmClient,
-        this.botQQ,
-        groupId,
-        session,
-        this.masterConfig,
-        maxHistory,
-    );
-}
+// 统一使用MessageHandler，包含所有功能
+const handler = new MessageHandler(
+    this.llmClient,
+    this.botQQ,
+    groupId,
+    session,
+    this.behaviorConfig, // 包含体力系统配置
+    this.masterConfig,
+    maxHistory,
+);
 ```
 
-### 策略差异
-- **主动策略**：[[active_message_handler]] + [[energy_manager]]
-- **被动策略**：[[passive_message_handler]]，仅 @ 触发
+### 架构简化收益
+- **统一处理器**：[[message_handler]] 整合了所有消息处理功能
+- **移除策略选择**：不再需要 `message_handler_type` 配置
+- **完整功能**：包含 LLM集成 + 体力系统 + 并发控制 + 消息历史管理
 
 ## 消息发送功能
 
@@ -137,15 +131,15 @@ async broadcastMessage(content: SendMessageSegment[]): Promise<number> {
 ### 关闭流程
 ```typescript
 shutdownAllSessions(): void {
-    // 清理 ActiveMessageHandler 中的定时器
-    for (const handler of this.activeHandlers.values()) {
+    // 清理 MessageHandler 中的定时器（体力恢复等）
+    for (const handler of this.messageHandlers.values()) {
         handler.destroy();
     }
-    this.activeHandlers.clear();
-    
+    this.messageHandlers.clear();
+
     // 断开连接管理器
     this.connectionManager.disconnect();
-    
+
     // 清空会话映射
     this.sessions.clear();
 }
@@ -176,7 +170,7 @@ getConnectionStatus(): Map<number, boolean> {
 - [[connection_manager]] - 连接管理
 - [[session]] - 单个群组会话
 - [[llm_client]] - LLM 功能
-- [[active_message_handler]] / [[passive_message_handler]] - 消息处理策略
+- [[message_handler]] - 统一的消息处理器
 
 ### 配置依赖
 - [[config_system]] - 所有配置参数的来源
