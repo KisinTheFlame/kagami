@@ -35,7 +35,7 @@ RUN npm ci --only=production && npm cache clean --force
 # 从构建阶段复制编译后的文件
 COPY --from=builder --chown=kagami:nodejs /app/dist ./dist
 COPY --from=builder --chown=kagami:nodejs /app/static ./static
-COPY --from=builder --chown=kagami:nodejs /app/env.prod.yaml ./env.prod.yaml
+COPY --from=builder --chown=kagami:nodejs /app/env.yaml ./env.yaml
 
 # 切换到非 root 用户
 USER kagami
@@ -48,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "console.log('Health check passed')" || exit 1
 
 # 启动应用
-CMD ["node", "dist/main.js", "--config", "env.prod.yaml"]
+CMD ["node", "dist/main.js", "--config", "env.yaml"]

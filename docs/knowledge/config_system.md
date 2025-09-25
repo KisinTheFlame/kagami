@@ -19,7 +19,7 @@ export interface Config {
 
 ### 配置加载流程
 1. **命令行解析**：读取 `--config` 参数指定的配置文件
-2. **默认文件**：未指定时使用 `env.dev.yaml`
+2. **默认文件**：未指定时使用 `env.yaml`
 3. **文件读取**：使用 `fs.readFileSync()` 读取 YAML 文件
 4. **YAML 解析**：使用 `yaml.parse()` 解析配置内容
 5. **配置验证**：检查必需字段的完整性
@@ -145,8 +145,7 @@ agent:
 ```
 
 ### 环境配置
-- **开发环境**：`env.dev.yaml`
-- **生产环境**：`env.prod.yaml`
+- **默认配置**：`env.yaml`
 - **命令行指定**：`--config custom.yaml`
 
 ## 使用方式
@@ -199,5 +198,4 @@ const sessionManager = new SessionManager(
 
 ## 相关文件
 - `src/config.ts` - 配置系统实现
-- `env.dev.yaml.example` - 开发环境配置模板
-- `env.prod.yaml.example` - 生产环境配置模板
+- `env.yaml.example` - 配置模板

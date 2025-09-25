@@ -35,8 +35,7 @@ logs
 .env.test
 
 # Configuration files with API keys
-env.dev.yaml
-env.prod.yaml
+env.yaml
 config.yaml
 
 # Temporary files
