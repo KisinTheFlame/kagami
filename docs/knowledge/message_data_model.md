@@ -70,7 +70,7 @@ const message: Message = {
 
 ### 机器人消息创建
 ```typescript
-// 在 BaseMessageHandler 中创建机器人消息
+// 在 MessageHandler 中创建机器人消息
 const botMessage: Message = {
     id: `bot_${String(Date.now())}`,
     userId: this.botQQ,
@@ -232,7 +232,7 @@ metadata?: {
 3. **传递给处理器** → MessageHandler.handleMessage()
 
 ### 存储路径
-1. **加入历史** → BaseMessageHandler.addMessageToHistory()
+1. **加入历史** → MessageHandler.addMessageToHistory()
 2. **LRU 管理** → 保持最近 N 条消息
 3. **上下文构建** → 转换为 LLM 请求格式
 
