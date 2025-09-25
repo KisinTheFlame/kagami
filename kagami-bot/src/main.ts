@@ -14,7 +14,10 @@ class KagamiBot {
             this.config = loadConfig();
             console.log("配置加载成功");
             
-            this.llmClient = new LlmClient(this.config.llm);
+            if (!this.config.llm_providers) {
+                throw new Error("配置文件缺少 llm_providers 配置项");
+            }
+            this.llmClient = new LlmClient(this.config.llm_providers, this.config.llm.model);
             
             console.log(`机器人 QQ 号码: ${String(this.config.napcat.bot_qq)}`);
             console.log(`已配置 ${String(this.config.napcat.groups.length)} 个群组:`, this.config.napcat.groups);

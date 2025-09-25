@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { LlmConfig } from "./config.js";
+import { ProviderConfig, getProviderForModel } from "./config.js";
 import { ApiKeyManager } from "./api_key_manager.js";
 
 export class LlmClient {
@@ -8,10 +8,11 @@ export class LlmClient {
     private apiKeyManager: ApiKeyManager;
     private model: string;
 
-    constructor(config: LlmConfig) {
-        this.baseURL = config.base_url;
-        this.apiKeyManager = new ApiKeyManager(config.api_keys);
-        this.model = config.model;
+    constructor(providers: Record<string, ProviderConfig>, model: string) {
+        const providerConfig = getProviderForModel(providers, model);
+        this.baseURL = providerConfig.base_url;
+        this.apiKeyManager = new ApiKeyManager(providerConfig.api_keys);
+        this.model = model;
     }
 
     async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {

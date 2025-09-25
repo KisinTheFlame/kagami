@@ -2,7 +2,7 @@
 
 ## 定义
 
-LlmClient 封装 OpenAI API 调用，集成 [[api_key_manager]] 实现多 API Key 轮询和负载均衡。位于 `src/llm.ts`。
+LlmClient 封装 OpenAI API 调用，支持多 LLM 提供商配置，集成 [[api_key_manager]] 实现多 API Key 轮询和负载均衡。位于 `src/llm.ts`。
 
 ## 核心功能
 
@@ -31,6 +31,11 @@ async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
     return content;
 }
 ```
+
+### 多提供商架构
+- **自动提供商选择**：根据指定模型自动选择对应的 LLM 提供商
+- **统一接口**：所有提供商使用相同的 OpenAI API 格式
+- **运维友好**：配置文件中灵活定义提供商与模型的关系
 
 ### 动态客户端创建
 - **每次请求创建**：每次调用时创建新的 OpenAI 实例
@@ -73,24 +78,45 @@ response_format: {
 
 ## 配置要求
 
-### LlmConfig 参数
+### 构造函数参数
 ```typescript
-export interface LlmConfig {
+constructor(providers: Record<string, ProviderConfig>, model: string)
+```
+
+- `providers`: 包含所有 LLM 提供商配置的对象
+- `model`: 要使用的模型名称（必须被某个提供商支持）
+
+### ProviderConfig 接口
+```typescript
+export interface ProviderConfig {
     base_url: string;    // API 基础 URL
     api_keys: string[];  // API Key 数组（必须至少一个）
-    model: string;       // 模型名称
+    models: string[];    // 该提供商支持的模型列表
 }
 ```
 
 ### 配置示例
 ```yaml
+llm_providers:
+  openai:
+    base_url: "https://api.openai.com/v1"
+    api_keys:
+      - "sk-proj-xxx1"
+      - "sk-proj-xxx2"
+    models:
+      - "gpt-4"
+      - "gpt-3.5-turbo"
+  gemini:
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_keys:
+      - "AIzaSy-xxx1"
+      - "AIzaSy-xxx2"
+    models:
+      - "gemini-2.5-flash"
+      - "gemini-1.5-pro"
+
 llm:
-  base_url: "https://api.openai.com/v1"
-  api_keys:
-    - "sk-proj-xxx1"
-    - "sk-proj-xxx2"
-    - "sk-proj-xxx3"
-  model: "gpt-4"
+  model: "gemini-2.5-flash"  # 选择上面某个提供商支持的模型
 ```
 
 ## 性能特性
