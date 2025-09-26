@@ -2,14 +2,36 @@
 
 ## 定义
 
-LlmClient 是统一的 LLM 调用入口，通过 [[llm_provider_abstraction]] 抽象层支持多种 LLM 提供商和原生 SDK。位于 `src/llm.ts`。
+LlmClient 是单个 LLM 模型的调用客户端，通过 [[llm_provider_abstraction]] 抽象层支持多种 LLM 提供商。现在由 [[llm_client_manager]] 统一管理。位于 `src/llm.ts`。
 
 ## 核心功能
 
-### 统一调用接口
+### 带日志记录的调用接口
 ```typescript
-async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
-    return await this.provider.oneTurnChat(this.model, messages);
+async oneTurnChat(messages: ChatMessages[]): Promise<string> {
+    let status: "success" | "fail" = "fail";
+    let llmResponse = "";
+
+    // 生成输入字符串用于记录（保持原有格式）
+    const inputForLog = JSON.stringify(messages, null, 2);
+
+    try {
+        llmResponse = await this.provider.oneTurnChat(this.model, messages);
+
+        if (llmResponse === "") {
+            status = "fail";
+            void logger.logLLMCall(status, inputForLog, "LLM调用失败");
+            throw new Error("LLM调用失败");
+        }
+
+        status = "success";
+        void logger.logLLMCall(status, inputForLog, llmResponse);
+        return llmResponse;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
+        void logger.logLLMCall("fail", inputForLog, `模型 ${this.model} 调用失败: ${errorMessage}`);
+        throw error;
+    }
 }
 ```
 
@@ -19,9 +41,9 @@ async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
 - **自动选择**：根据配置的模型自动选择对应的提供商
 
 ### 简化设计
-- **委托模式**：LlmClient 将实际调用委托给具体的 LlmProvider
-- **配置驱动**：通过 ProviderConfig 决定使用哪种提供商实现
-- **无状态**：不保存 API 调用状态，每次调用都是独立的
+- **单一职责**：一个 LlmClient 实例只负责一个模型
+- **日志集成**：内置日志记录功能，自动记录每次调用
+- **统一管理**：由 [[llm_client_manager]] 统一创建和管理
 
 ## 设计特点
 
@@ -43,23 +65,23 @@ async oneTurnChat(messages: ChatCompletionMessageParam[]): Promise<string> {
 ## 依赖关系
 
 ### 直接依赖
-- [[api_key_manager]] - API Key 管理和选择
-- **OpenAI SDK** - 官方 OpenAI 客户端
-- [[config_system]] - LLM 配置参数
+- [[api_key_manager]] - API Key 管理和选择（通过 provider 层）
+- **LLM Provider** - 具体的 LLM SDK 实现
+- [[logger]] - LLM 调用日志记录
 
 ### 被依赖关系
-- [[base_message_handler]] - 所有消息处理器都使用 LlmClient
-- [[kagami_bot]] - 主应用创建和管理 LlmClient 实例
+- [[llm_client_manager]] - 统一管理多个 LlmClient 实例
+- [[message_handler]] - 通过 LlmClientManager 间接使用
 
 ## 配置要求
 
-### 构造函数参数
+### 构造函数参数（简化后）
 ```typescript
-constructor(providers: Record<string, ProviderConfig>, model: string)
+constructor(providerConfig: ProviderConfig, model: string)
 ```
 
-- `providers`: 包含所有 LLM 提供商配置的对象
-- `model`: 要使用的模型名称（必须被某个提供商支持）
+- `providerConfig`: 单个提供商的配置对象
+- `model`: 要使用的模型名称（必须被该提供商支持）
 
 ### ProviderConfig 接口
 ```typescript
@@ -70,28 +92,29 @@ export interface ProviderConfig {
 }
 ```
 
-### 配置示例
+### 配置示例（通过 LlmClientManager 管理）
 ```yaml
 llm_providers:
   openai:
+    interface: "openai"
     base_url: "https://api.openai.com/v1"
     api_keys:
       - "sk-proj-xxx1"
       - "sk-proj-xxx2"
     models:
+      - "gpt-4o"
       - "gpt-4"
-      - "gpt-3.5-turbo"
   gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    interface: "genai"
     api_keys:
       - "AIzaSy-xxx1"
       - "AIzaSy-xxx2"
     models:
-      - "gemini-2.5-flash"
+      - "gemini-2.0-flash-001"
       - "gemini-1.5-pro"
 
 llm:
-  model: "gemini-2.5-flash"  # 选择上面某个提供商支持的模型
+  models: ["gpt-4o", "gpt-4", "gemini-2.0-flash-001"]  # 支持降级
 ```
 
 ## 性能特性
@@ -128,8 +151,9 @@ llm:
 ### 功能扩展
 - 可以添加重试机制
 - 可以支持流式响应
-- ✅ **日志记录分离** - 日志记录由上层（[[base_message_handler]]）负责，职责更清晰
+- ✅ **内置日志记录** - 每次 API 调用都自动记录到数据库
 - 可以集成 API Key 健康检查
+- 可以添加性能指标统计
 
 ## 相关文件
 - `src/llm.ts` - 主要实现

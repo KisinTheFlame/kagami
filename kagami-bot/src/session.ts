@@ -48,7 +48,7 @@ export class Session {
 
             // 转换为自然语言格式
             const chatContent = await this.convertToNaturalLanguage(context.message);
-            
+
             // 在消息前添加发送者信息（单独一行）
             const senderInfo = `${userNickname ?? "未知用户"}(${String(context.user_id)}):\n`;
             const fullChatContent = senderInfo + chatContent;

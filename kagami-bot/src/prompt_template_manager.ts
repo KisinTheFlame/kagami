@@ -26,7 +26,7 @@ export class PromptTemplateManager {
             const templateContent = fs.readFileSync(this.templatePath, "utf-8");
             this.template = Handlebars.compile(templateContent);
             console.log(`Handlebars模板加载成功: ${this.templatePath}`);
-            
+
         } catch (error) {
             console.error("加载Handlebars模板失败:", error);
             throw error;

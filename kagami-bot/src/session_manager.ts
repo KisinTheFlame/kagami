@@ -1,6 +1,5 @@
 import { Session } from "./session.js";
 import { NapcatConfig, AgentConfig, MasterConfig } from "./config.js";
-import { LlmClient } from "./llm.js";
 import { MessageHandler } from "./message_handler.js";
 import { GroupMessage, SendMessageSegment } from "node-napcat-ts";
 import { ConnectionManager } from "./connection_manager.js";
@@ -9,16 +8,14 @@ export class SessionManager {
     private sessions: Map<number, Session>;
     private messageHandlers = new Map<number, MessageHandler>();
     private connectionManager: ConnectionManager;
-    private llmClient: LlmClient;
     private botQQ: number;
     private agentConfig?: AgentConfig;
     private masterConfig?: MasterConfig;
 
-    constructor(napcatConfig: NapcatConfig, llmClient: LlmClient, botQQ: number, masterConfig?: MasterConfig, agentConfig?: AgentConfig) {
+    constructor(napcatConfig: NapcatConfig, botQQ: number, masterConfig?: MasterConfig, agentConfig?: AgentConfig) {
         this.sessions = new Map();
         this.connectionManager = new ConnectionManager(napcatConfig);
         this.connectionManager.setMessageDispatcher(this.handleIncomingMessage.bind(this));
-        this.llmClient = llmClient;
         this.botQQ = botQQ;
         this.masterConfig = masterConfig;
         this.agentConfig = agentConfig;
@@ -26,10 +23,10 @@ export class SessionManager {
 
     async initializeSessions(): Promise<void> {
         console.log("正在为群组初始化会话:", this.connectionManager.getGroupIds());
-        
+
         // 先连接 ConnectionManager
         await this.connectionManager.connect();
-        
+
         // 为每个群组创建 Session（不再需要独立连接）
         for (const groupId of this.connectionManager.getGroupIds()) {
             try {
@@ -38,7 +35,6 @@ export class SessionManager {
 
                 // 创建统一的消息处理器
                 const handler = new MessageHandler(
-                    this.llmClient,
                     this.botQQ,
                     groupId,
                     session,
@@ -46,16 +42,16 @@ export class SessionManager {
                     maxHistory,
                 );
                 this.messageHandlers.set(groupId, handler);
-                
+
                 session.setMessageHandler(handler);
                 this.sessions.set(groupId, session);
-                
+
                 console.log(`群 ${String(groupId)} 会话和处理器初始化成功`);
             } catch (error) {
                 console.error(`群 ${String(groupId)} 初始化失败:`, error);
             }
         }
-        
+
         console.log(`会话管理器初始化完成，共 ${String(this.sessions.size)} 个活跃会话`);
     }
 
@@ -82,7 +78,7 @@ export class SessionManager {
                 handler.destroy();
             }
             this.messageHandlers.clear();
-            
+
             this.connectionManager.disconnect();
             console.log("连接管理器已关闭");
         } catch (error) {
@@ -91,18 +87,6 @@ export class SessionManager {
 
         this.sessions.clear();
         console.log("所有会话已关闭");
-    }
-
-    getSession(groupId: number): Session | undefined {
-        return this.sessions.get(groupId);
-    }
-
-    getAllSessions(): Session[] {
-        return Array.from(this.sessions.values());
-    }
-
-    getActiveGroupIds(): number[] {
-        return Array.from(this.sessions.keys());
     }
 
     getSessionCount(): number {
@@ -132,25 +116,5 @@ export class SessionManager {
             console.error(`向群 ${String(groupId)} 发送消息失败:`, error);
             return false;
         }
-    }
-
-    async broadcastMessage(content: SendMessageSegment[]): Promise<number> {
-        const sendPromises = Array.from(this.sessions.entries()).map(async ([groupId, session]) => {
-            try {
-                await session.sendMessage(content);
-                return true;
-            } catch (error) {
-                console.error(`向群 ${String(groupId)} 广播消息失败:`, error);
-                return false;
-            }
-        });
-
-        const results = await Promise.allSettled(sendPromises);
-        const successCount = results.filter(result => 
-            result.status === "fulfilled" && result.value,
-        ).length;
-
-        console.log(`广播消息发送完成: ${String(successCount)}/${String(this.sessions.size)} 个会话`);
-        return successCount;
     }
 }
