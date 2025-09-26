@@ -2,7 +2,7 @@
 
 ## 项目概览
 
-Kagami 是一个多子项目架构的 QQ 群聊机器人系统，包含 QQ 机器人、管理控制台前后端。采用分层架构设计，集成了 LLM 能力、体力系统和并发控制的统一消息处理器，并提供 Web 控制台进行监控和管理。
+Kagami 是一个多子项目架构的 QQ 群聊机器人系统，包含 QQ 机器人、管理控制台前后端。采用分层架构设计，集成了 LLM 能力和并发控制的统一消息处理器，并提供 Web 控制台进行监控和管理。
 
 ## 系统架构
 
@@ -36,13 +36,12 @@ Kagami System
 - [[message_card_component]] - LLM消息卡片展示组件
 
 ### 消息处理
-- [[message_handler]] - 统一消息处理器，集成 LLM 、体力系统和并发控制
+- [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制
 
 ### 支持组件
 - [[llm_client]] - OpenAI API 客户端封装，支持多 LLM 提供商
 - [[multi_provider_config]] - 多提供商配置系统，支持灵活的模型选择
 - [[api_key_manager]] - 多 API Key 轮询管理
-- [[energy_manager]] - 体力值系统管理
 - [[prompt_template_manager]] - Handlebars 提示词模板管理系统
 - [[message_data_model]] - 消息数据结构定义
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
@@ -61,7 +60,6 @@ KagamiBot
 │            → logger → DatabaseLayer
 └── SessionManager → ConnectionManager
     └── Session → MessageHandler → PromptTemplateManager
-                              └── EnergyManager
 ```
 
 ### 消息流
@@ -75,7 +73,6 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **统一处理**：简化的消息处理架构，集成所有功能
 - **思考链**：LLM 支持结构化的思考-回复流程
 - **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
-- **体力系统**：智能回复频率控制和资源管理
 - **多提供商支持**：支持 OpenAI、Gemini 等多个 LLM 提供商，自动模型选择
 - **多 API Key**：负载均衡和高可用性支持
 - **回复引用**：智能决策何时使用 QQ 回复功能

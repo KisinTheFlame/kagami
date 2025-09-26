@@ -2,7 +2,7 @@
 
 ## 定义
 
-MessageHandler 是统一的消息处理器类，整合了原有的 BaseMessageHandler、ActiveMessageHandler 功能，提供完整的 LLM 集成、消息历史管理、体力系统和并发控制。位于 `src/message_handler.ts`。
+MessageHandler 是统一的消息处理器类，整合了原有的 BaseMessageHandler、ActiveMessageHandler 功能，提供完整的 LLM 集成、消息历史管理和并发控制。位于 `src/message_handler.ts`。
 
 ## 核心功能
 
@@ -74,51 +74,6 @@ protected async processAndReply(): Promise<boolean> {
 }
 ```
 
-## 体力系统集成
-
-### 体力管理
-```typescript
-constructor(
-    llmClient: LlmClient,
-    botQQ: number,
-    groupId: number,
-    session: Session,
-    behaviorConfig: BehaviorConfig,
-    masterConfig?: MasterConfig,
-    maxHistorySize = 40,
-) {
-    // ... 其他初始化
-    this.energyManager = new EnergyManager(
-        behaviorConfig.energy_max,
-        behaviorConfig.energy_cost,
-        behaviorConfig.energy_recovery_rate,
-        behaviorConfig.energy_recovery_interval,
-    );
-}
-```
-
-### 体力检查与消耗
-```typescript
-private canReply(): boolean {
-    if (!this.energyManager.canSendMessage()) {
-        console.log(`[群 ${String(this.groupId)}] 体力不足 (${this.energyManager.getEnergyStatus()})`);
-        return false;
-    }
-    return true;
-}
-
-// 在tryProcessAndReply中的使用
-if (!this.energyManager.consumeEnergy()) {
-    console.log(`[群 ${String(this.groupId)}] 体力不足，无法回复`);
-    break;
-}
-
-// LLM选择不回复时退还体力
-if (!didReply) {
-    this.energyManager.refundEnergy();
-    console.log(`[群 ${String(this.groupId)}] LLM 选择不回复，已退还体力`);
-}
-```
 
 ## 并发控制机制
 
@@ -136,18 +91,9 @@ private async tryProcessAndReply(): Promise<void> {
         while (this.hasPendingMessages) {
             this.hasPendingMessages = false;
 
-            // 检查条件和消耗体力
-            if (!this.canReply()) break;
-            if (!this.energyManager.consumeEnergy()) {
-                console.log(`[群 ${String(this.groupId)}] 体力不足，无法回复`);
-                break;
-            }
 
             // LLM处理
-            const didReply = await this.processAndReply();
-            if (!didReply) {
-                this.energyManager.refundEnergy();
-            }
+            await this.processAndReply();
         }
     } finally {
         this.isLlmProcessing = false;
@@ -308,14 +254,7 @@ constructor(...) {
 ### 资源清理
 ```typescript
 destroy(): void {
-    this.energyManager.destroy(); // 清理体力恢复定时器
-}
-```
-
-### 状态查询
-```typescript
-getEnergyStatus(): string {
-    return this.energyManager.getEnergyStatus(); // 返回 "当前/最大" 格式
+    // 清理资源
 }
 ```
 
@@ -324,7 +263,6 @@ getEnergyStatus(): string {
 ### 核心依赖
 - [[llm_client]] - LLM API 调用
 - [[session]] - 消息发送功能
-- [[energy_manager]] - 体力值管理系统
 - [[prompt_template_manager]] - Handlebars模板管理
 - [[logger]] - LLM调用日志记录
 
@@ -332,7 +270,7 @@ getEnergyStatus(): string {
 - [[message_data_model]] - Message 接口和相关类型
 
 ### 配置依赖
-- **BehaviorConfig**：体力值相关配置参数
+- **BehaviorConfig**：消息处理行为配置参数
 - **MasterConfig**：主人特权配置（可选）
 - **maxHistorySize**：历史消息长度配置
 
@@ -341,11 +279,8 @@ getEnergyStatus(): string {
 ### BehaviorConfig 集成
 ```typescript
 interface BehaviorConfig {
-    energy_max: number;
-    energy_cost: number;
-    energy_recovery_rate: number;
-    energy_recovery_interval: number;
-    // 注：移除了 message_handler_type 配置
+    message_handler_type: "active" | "passive";
+    // 注：已移除体力系统相关配置
 }
 ```
 
@@ -356,9 +291,6 @@ interface BehaviorConfig {
 - **解析错误**：返回空响应，不发送消息
 - **网络错误**：从 [[llm_client]] 传递具体网络错误信息
 
-### 体力系统错误
-- **计算错误**：由 [[energy_manager]] 内部处理
-- **定时器错误**：在 destroy() 中安全清理
 
 ### 消息发送错误
 - **发送失败**：记录错误并重新抛出

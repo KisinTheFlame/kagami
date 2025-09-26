@@ -1,12 +1,11 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
-import { BehaviorConfig, MasterConfig } from "./config.js";
+import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { logger } from "./middleware/logger.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { ChatMessages } from "./llm_providers/types.js";
-import { EnergyManager } from "./energy_manager.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -33,7 +32,6 @@ export class MessageHandler implements IMessageHandler {
     protected masterConfig?: MasterConfig;
 
     // 来自ActiveMessageHandler的属性
-    private energyManager: EnergyManager;
     private isLlmProcessing = false;
     private hasPendingMessages = false;
 
@@ -42,7 +40,6 @@ export class MessageHandler implements IMessageHandler {
         botQQ: number,
         groupId: number,
         session: Session,
-        behaviorConfig: BehaviorConfig,
         masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
@@ -54,13 +51,6 @@ export class MessageHandler implements IMessageHandler {
         this.maxHistorySize = maxHistorySize;
         this.promptTemplateManager = new PromptTemplateManager();
 
-        // 初始化体力管理器
-        this.energyManager = new EnergyManager(
-            behaviorConfig.energy_max,
-            behaviorConfig.energy_cost,
-            behaviorConfig.energy_recovery_rate,
-            behaviorConfig.energy_recovery_interval,
-        );
     }
 
     async handleMessage(message: Message): Promise<void> {
@@ -74,22 +64,10 @@ export class MessageHandler implements IMessageHandler {
         await this.tryProcessAndReply();
     }
 
-    private canReply(): boolean {
-        // 检查体力值
-        if (!this.energyManager.canSendMessage()) {
-            console.log(`[群 ${String(this.groupId)}] 体力不足 (${this.energyManager.getEnergyStatus()})`);
-            return false;
-        }
 
-        return true;
-    }
-
-    getEnergyStatus(): string {
-        return this.energyManager.getEnergyStatus();
-    }
 
     destroy(): void {
-        this.energyManager.destroy();
+        // 清理资源
     }
 
     private async tryProcessAndReply(): Promise<void> {
@@ -107,22 +85,12 @@ export class MessageHandler implements IMessageHandler {
                 // 重置标志（开始处理这一轮的消息）
                 this.hasPendingMessages = false;
 
-                // 检查条件
-                if (!this.canReply()) {
-                    break;
-                }
-
-                if (!this.energyManager.consumeEnergy()) {
-                    console.log(`[群 ${String(this.groupId)}] 体力不足，无法回复 (${this.energyManager.getEnergyStatus()})`);
-                    break;
-                }
 
                 // LLM处理（基于当前完整历史）
                 const didReply = await this.processAndReply();
 
                 if (!didReply) {
-                    this.energyManager.refundEnergy();
-                    console.log(`[群 ${String(this.groupId)}] LLM 选择不回复，已退还体力`);
+                    console.log(`[群 ${String(this.groupId)}] LLM 选择不回复`);
                 }
 
                 // 循环会自动检查 hasPendingMessages
