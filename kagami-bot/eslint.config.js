@@ -39,6 +39,7 @@ export default tseslint.config(
             "@typescript-eslint/no-non-null-assertion": "error",
 
             // Stylistic rules
+            "@stylistic/no-trailing-spaces": "error",
             "@stylistic/indent": ["error", 4],
             "@stylistic/quotes": ["error", "double"],
             "@stylistic/semi": ["error", "always"],

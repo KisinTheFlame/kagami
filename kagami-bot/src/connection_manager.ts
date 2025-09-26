@@ -12,7 +12,7 @@ export class ConnectionManager {
     constructor(napcatConfig: NapcatConfig) {
         this.napcatConfig = napcatConfig;
         this.isConnected = false;
-        
+
         this.napcat = new NCWebsocket({
             baseUrl: napcatConfig.base_url,
             accessToken: napcatConfig.access_token,

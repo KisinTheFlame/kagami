@@ -1,11 +1,10 @@
 import { SendMessageSegment } from "node-napcat-ts";
-import { LlmClient } from "./llm.js";
 import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
 import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
-import { logger } from "./middleware/logger.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { ChatMessages } from "./llm_providers/types.js";
+import { llmClientManager } from "./llm_client_manager.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -22,7 +21,6 @@ type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
 export class MessageHandler implements IMessageHandler {
-    protected llmClient: LlmClient;
     protected botQQ: number;
     protected groupId: number;
     protected messageHistory: Message[] = [];
@@ -36,14 +34,12 @@ export class MessageHandler implements IMessageHandler {
     private hasPendingMessages = false;
 
     constructor(
-        llmClient: LlmClient,
         botQQ: number,
         groupId: number,
         session: Session,
         masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
-        this.llmClient = llmClient;
         this.botQQ = botQQ;
         this.groupId = groupId;
         this.session = session;
@@ -85,13 +81,8 @@ export class MessageHandler implements IMessageHandler {
                 // 重置标志（开始处理这一轮的消息）
                 this.hasPendingMessages = false;
 
-
                 // LLM处理（基于当前完整历史）
-                const didReply = await this.processAndReply();
-
-                if (!didReply) {
-                    console.log(`[群 ${String(this.groupId)}] LLM 选择不回复`);
-                }
+                await this.processAndReply();
 
                 // 循环会自动检查 hasPendingMessages
                 // 如果处理期间有新消息，hasPendingMessages 会被设置为 true
@@ -101,32 +92,14 @@ export class MessageHandler implements IMessageHandler {
         }
     }
 
-    protected async processAndReply(): Promise<boolean> {
-        let inputForLog = "";
-        let status: "success" | "fail" = "fail";
-        let llmResponse = "";
-
+    protected async processAndReply(): Promise<void> {
         try {
             // 构建数据结构和LLM请求
             const chatMessages = this.buildChatMessages();
 
-            // 生成美观的输入字符串用于记录
-            inputForLog = JSON.stringify(chatMessages, null, 2);
+            const llmResponse = await llmClientManager.callWithFallback(chatMessages);
 
-            llmResponse = await this.llmClient.oneTurnChat(chatMessages);
-
-            // 如果LLM返回空字符串，说明调用失败
-            if (llmResponse === "") {
-                status = "fail";
-                void logger.logLLMCall(status, inputForLog, "LLM调用失败");
-                throw new Error("LLM调用失败");
-            }
-
-            status = "success";
             const { thoughts, reply } = this.parseResponse(llmResponse);
-
-            // 记录成功的LLM调用
-            void logger.logLLMCall(status, inputForLog, llmResponse);
 
             // 记录LLM的思考过程
             if (thoughts.length > 0) {
@@ -153,20 +126,11 @@ export class MessageHandler implements IMessageHandler {
                 await this.session.sendMessage(reply); // 直接发送LLM生成的内容，让LLM自己决定是否包含reply段
                 const displayText = this.formatContentForDisplay(reply);
                 console.log(`[群 ${String(this.groupId)}] LLM 回复成功: ${displayText}`);
-                return true;
             } else {
                 console.log(`[群 ${String(this.groupId)}] LLM 选择不回复`);
-                return false;
             }
         } catch (error) {
             console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
-            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
-
-            // 记录失败的LLM调用
-            if (inputForLog) {
-                void logger.logLLMCall("fail", inputForLog, errorMessage);
-            }
-
             throw error;
         }
     }

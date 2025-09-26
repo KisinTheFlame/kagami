@@ -24,7 +24,7 @@ export function getProviderForModel(providers: Record<string, ProviderConfig>, m
 
 
 export interface LlmConfig {
-    model: string;
+    models: string[];
 }
 
 export interface NapcatReconnectionConfig {
@@ -51,7 +51,7 @@ export interface MasterConfig {
 }
 
 export interface Config {
-    llm_providers?: Record<string, ProviderConfig>;
+    llm_providers: Record<string, ProviderConfig>;
     llm: LlmConfig;
     napcat: NapcatConfig;
     master?: MasterConfig;
@@ -61,17 +61,25 @@ export interface Config {
 export function loadConfig(): Config {
     const configIndex = process.argv.indexOf("--config");
     const configFile = configIndex !== -1 ? process.argv[configIndex + 1] : "env.yaml";
-  
+
     if (!fs.existsSync(configFile)) {
         throw new Error(`配置文件不存在: ${configFile}`);
     }
-  
+
     const configContent = fs.readFileSync(configFile, "utf8");
     const config = yaml.parse(configContent) as Config;
-  
+
 
 
     console.log(`config: ${JSON.stringify(config, null, 4)}`);
+
+    // 验证所有配置的模型都有对应的提供商
+    for (const model of config.llm.models) {
+        const providerName = findProviderByModel(config.llm_providers, model);
+        if (!providerName) {
+            throw new Error(`未找到支持模型 "${model}" 的提供商`);
+        }
+    }
 
     return config;
 }
