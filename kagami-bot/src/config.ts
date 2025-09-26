@@ -46,10 +46,6 @@ export interface AgentConfig {
 }
 
 export interface BehaviorConfig {
-    energy_max: number;              // 体力值上限
-    energy_cost: number;             // 每次回复消耗体力
-    energy_recovery_rate: number;    // 体力恢复速度（每60秒）
-    energy_recovery_interval: number; // 体力恢复间隔（秒）
     message_handler_type: "active" | "passive"; // 消息处理策略
 }
 
@@ -83,10 +79,6 @@ export function loadConfig(): Config {
 
     // 设置 behavior 默认值
     const defaultBehavior: BehaviorConfig = {
-        energy_max: 100,
-        energy_cost: 1,
-        energy_recovery_rate: 5,
-        energy_recovery_interval: 60,
         message_handler_type: "active",
     };
 

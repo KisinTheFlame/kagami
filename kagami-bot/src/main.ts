@@ -38,10 +38,6 @@ class KagamiBot {
                 this.llmClient, 
                 this.config.napcat.bot_qq, 
                 this.config.behavior ?? {
-                    energy_max: 100,
-                    energy_cost: 1,
-                    energy_recovery_rate: 5,
-                    energy_recovery_interval: 60,
                     message_handler_type: "active",
                 },
                 this.config.master,

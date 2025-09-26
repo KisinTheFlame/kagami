@@ -52,14 +52,10 @@ export interface NapcatConfig {
 ### BehaviorConfig - 行为配置
 ```typescript
 export interface BehaviorConfig {
-    energy_max: number;              // 体力值上限
-    energy_cost: number;             // 每次回复消耗体力
-    energy_recovery_rate: number;    // 体力恢复速度
-    energy_recovery_interval: number; // 体力恢复间隔（秒）
     message_handler_type: "active" | "passive"; // 消息处理策略
 }
 ```
-**关联组件**：[[active_message_handler]]、[[energy_manager]]
+**关联组件**：[[message_handler]]
 
 ### MasterConfig - 主人特权配置
 ```typescript
@@ -98,10 +94,6 @@ if (!config.napcat.base_url || !config.napcat.access_token ||
 ### 默认值处理
 ```typescript
 const defaultBehavior: BehaviorConfig = {
-    energy_max: 100,
-    energy_cost: 1,
-    energy_recovery_rate: 5,
-    energy_recovery_interval: 60,
     message_handler_type: "active",
 };
 
@@ -130,10 +122,6 @@ napcat:
   groups: [123456789, 987654321]
 
 behavior:
-  energy_max: 100
-  energy_cost: 1
-  energy_recovery_rate: 5
-  energy_recovery_interval: 60
   message_handler_type: "active"
 
 master:
