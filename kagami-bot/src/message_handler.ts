@@ -1,7 +1,7 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { LlmClient } from "./llm.js";
 import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
-import { BehaviorConfig, MasterConfig } from "./config.js";
+import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { logger } from "./middleware/logger.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
@@ -40,7 +40,6 @@ export class MessageHandler implements IMessageHandler {
         botQQ: number,
         groupId: number,
         session: Session,
-        behaviorConfig: BehaviorConfig,
         masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {

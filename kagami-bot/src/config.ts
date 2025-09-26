@@ -45,10 +45,6 @@ export interface AgentConfig {
     history_turns: number;
 }
 
-export interface BehaviorConfig {
-    message_handler_type: "active" | "passive"; // 消息处理策略
-}
-
 export interface MasterConfig {
     qq: number;
     nickname: string;
@@ -60,7 +56,6 @@ export interface Config {
     napcat: NapcatConfig;
     master?: MasterConfig;
     agent?: AgentConfig;
-    behavior?: BehaviorConfig;
 }
 
 export function loadConfig(): Config {
@@ -75,14 +70,6 @@ export function loadConfig(): Config {
     const config = yaml.parse(configContent) as Config;
   
 
-    config.behavior ??= {} as BehaviorConfig;
-
-    // 设置 behavior 默认值
-    const defaultBehavior: BehaviorConfig = {
-        message_handler_type: "active",
-    };
-
-    config.behavior = { ...defaultBehavior, ...(config.behavior ?? {}) };
 
     console.log(`config: ${JSON.stringify(config, null, 4)}`);
 

@@ -49,15 +49,7 @@ export interface NapcatConfig {
 ```
 **关联组件**：[[connection_manager]]、[[session_manager]]
 
-### BehaviorConfig - 行为配置
-```typescript
-export interface BehaviorConfig {
-    message_handler_type: "active" | "passive"; // 消息处理策略
-}
-```
-**关联组件**：[[message_handler]]
-
-### MasterConfig - 主人特权配置
+## MasterConfig - 主人特权配置
 ```typescript
 export interface MasterConfig {
     qq: number;          // 主人 QQ 号
@@ -91,15 +83,6 @@ if (!config.napcat.base_url || !config.napcat.access_token ||
 }
 ```
 
-### 默认值处理
-```typescript
-const defaultBehavior: BehaviorConfig = {
-    message_handler_type: "active",
-};
-
-config.behavior = { ...defaultBehavior, ...(config.behavior ?? {}) };
-```
-
 ## 配置文件格式
 
 ### 完整配置示例
@@ -120,9 +103,6 @@ napcat:
     delay: 5000
   bot_qq: 123456789
   groups: [123456789, 987654321]
-
-behavior:
-  message_handler_type: "active"
 
 master:
   qq: 987654321
