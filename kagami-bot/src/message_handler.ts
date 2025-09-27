@@ -1,9 +1,7 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
 import { MasterConfig } from "./config.js";
-import { PromptTemplateManager } from "./prompt_template_manager.js";
-import { getShanghaiTimestamp } from "./utils/timezone.js";
-import { ChatMessages } from "./llm_providers/types.js";
+import { ContextManager } from "./context_manager.js";
 import { llmClientManager } from "./llm_client_manager.js";
 
 // 新的JSON数组结构化输出接口
@@ -21,13 +19,8 @@ type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];
 
 export class MessageHandler implements IMessageHandler {
-    protected botQQ: number;
-    protected groupId: number;
-    protected messageHistory: Message[] = [];
-    protected maxHistorySize: number;
-    protected promptTemplateManager: PromptTemplateManager;
+    private contextManager: ContextManager;
     protected session: Session;
-    protected masterConfig?: MasterConfig;
 
     // 来自ActiveMessageHandler的属性
     private isLlmProcessing = false;
@@ -40,18 +33,13 @@ export class MessageHandler implements IMessageHandler {
         masterConfig?: MasterConfig,
         maxHistorySize = 40,
     ) {
-        this.botQQ = botQQ;
-        this.groupId = groupId;
         this.session = session;
-        this.masterConfig = masterConfig;
-        this.maxHistorySize = maxHistorySize;
-        this.promptTemplateManager = new PromptTemplateManager();
-
+        this.contextManager = new ContextManager(botQQ, groupId, masterConfig, maxHistorySize);
     }
 
     async handleMessage(message: Message): Promise<void> {
         // 1. 立即加入历史数组
-        this.addMessageToHistory(message);
+        this.contextManager.addMessageToHistory(message);
 
         // 2. 标记有新消息（每次都设置）
         this.hasPendingMessages = true;
@@ -95,7 +83,7 @@ export class MessageHandler implements IMessageHandler {
     protected async processAndReply(): Promise<void> {
         try {
             // 构建数据结构和LLM请求
-            const chatMessages = this.buildChatMessages();
+            const chatMessages = this.contextManager.buildChatMessages();
 
             const llmResponse = await llmClientManager.callWithFallback(chatMessages);
 
@@ -103,7 +91,7 @@ export class MessageHandler implements IMessageHandler {
 
             // 记录LLM的思考过程
             if (thoughts.length > 0) {
-                console.log(`[群 ${String(this.groupId)}] LLM 思考:`);
+                console.log(`[群 ${String(this.session.getGroupId())}] LLM 思考:`);
                 thoughts.forEach((thought, index) => {
                     console.log(`  ${String(index + 1)}. ${thought}`);
                 });
@@ -119,80 +107,20 @@ export class MessageHandler implements IMessageHandler {
                 type: "bot_msg",
                 value: botMessageValue,
             };
-            this.addMessageToHistory(botMessage);
+            this.contextManager.addMessageToHistory(botMessage);
 
             // 如果有回复内容，则发送
             if (reply && reply.length > 0) {
                 await this.session.sendMessage(reply); // 直接发送LLM生成的内容，让LLM自己决定是否包含reply段
                 const displayText = this.formatContentForDisplay(reply);
-                console.log(`[群 ${String(this.groupId)}] LLM 回复成功: ${displayText}`);
+                console.log(`[群 ${String(this.session.getGroupId())}] LLM 回复成功: ${displayText}`);
             } else {
-                console.log(`[群 ${String(this.groupId)}] LLM 选择不回复`);
+                console.log(`[群 ${String(this.session.getGroupId())}] LLM 选择不回复`);
             }
         } catch (error) {
-            console.error(`[群 ${String(this.groupId)}] LLM 回复失败:`, error);
+            console.error(`[群 ${String(this.session.getGroupId())}] LLM 回复失败:`, error);
             throw error;
         }
-    }
-
-    protected addMessageToHistory(message: Message): void {
-        this.messageHistory.push(message);
-
-        // 使用 LRU 策略，保持最近 N 条消息
-        if (this.messageHistory.length > this.maxHistorySize) {
-            this.messageHistory.shift();
-        }
-    }
-
-    private buildChatMessages(): ChatMessages[] {
-        // 使用Handlebars模板生成系统提示
-        const systemPrompt = this.promptTemplateManager.generatePrompt({
-            botQQ: this.botQQ,
-            masterConfig: this.masterConfig,
-            currentTime: getShanghaiTimestamp(),
-        });
-
-        const messages: ChatMessages[] = [
-            {
-                role: "system",
-                content: [{ type: "text", value: systemPrompt }],
-            },
-        ];
-
-        this.messageHistory.forEach(msg => {
-            switch (msg.type) {
-                case "bot_msg": {
-                    // Bot 的消息作为 assistant
-                    const responseArray: LlmResponseItem[] = [];
-
-                    // 添加所有thoughts
-                    msg.value.thoughts.forEach(thought => {
-                        responseArray.push({ type: "thought", content: thought });
-                    });
-
-                    // 添加chat（如果有）
-                    if (msg.value.chat && msg.value.chat.length > 0) {
-                        responseArray.push({ type: "chat", content: msg.value.chat });
-                    }
-
-                    messages.push({
-                        role: "assistant",
-                        content: [{ type: "text", value: JSON.stringify(responseArray) }],
-                    });
-                    break;
-                }
-                case "group_msg": {
-                    // 用户消息作为 user - 使用自然语言格式的chat字段
-                    messages.push({
-                        role: "user",
-                        content: [{ type: "text", value: msg.value.chat }],
-                    });
-                    break;
-                }
-            }
-        });
-
-        return messages;
     }
 
     protected parseResponse(content: string): { thoughts: string[], reply?: SendMessageSegment[] } {

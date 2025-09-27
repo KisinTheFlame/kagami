@@ -37,6 +37,7 @@ Kagami System
 
 ### 消息处理
 - [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制
+- [[context_manager]] - 上下文管理器，负责消息历史管理和LLM数据准备
 
 ### 支持组件
 - [[llm_client_manager]] - LLM 客户端管理器，负责模型降级和统一调用
@@ -61,18 +62,23 @@ KagamiBot
 │                   → logger → DatabaseLayer
 └── SessionManager → ConnectionManager
     └── Session → MessageHandler → LlmClientManager
-                                → PromptTemplateManager
+                                 → ContextManager → PromptTemplateManager
 ```
 
 ### 消息流
 ```
-napcat群消息 → ConnectionManager → SessionManager → Session → MessageHandler → LlmClientManager → LlmClient[] → 回复
+napcat群消息 → ConnectionManager → SessionManager → Session → MessageHandler
+                                                             ↓
+                                              ContextManager → LlmClientManager → LlmClient[] → 回复
+                                                             ↓
+                                                    PromptTemplateManager
 ```
 
 ## 核心特性
 
 - **分层架构**：职责分离，模块化设计
-- **统一处理**：简化的消息处理架构，集成所有功能
+- **统一处理**：简化的消息处理架构，专注流程控制
+- **上下文管理**：独立的消息历史管理和LLM数据准备模块
 - **模型降级**：支持多模型按优先级降级，提高可用性
 - **思考链**：LLM 支持结构化的思考-回复流程
 - **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
