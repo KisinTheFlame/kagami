@@ -2,9 +2,6 @@ import * as fs from "fs";
 import * as yaml from "yaml";
 import { ProviderConfig } from "./llm_providers/types.js";
 
-// 重新导出类型
-export { ProviderConfig } from "./llm_providers/types.js";
-
 export function findProviderByModel(providers: Record<string, ProviderConfig>, model: string): string | null {
     for (const [providerName, config] of Object.entries(providers)) {
         if (config.models.includes(model)) {

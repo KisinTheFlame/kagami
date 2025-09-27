@@ -154,4 +154,8 @@ export class Session {
     setMessageHandler(handler: MessageHandler): void {
         this.messageHandler = handler;
     }
+
+    getGroupId(): number {
+        return this.groupId;
+    }
 }

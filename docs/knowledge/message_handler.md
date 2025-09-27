@@ -2,15 +2,15 @@
 
 ## 定义
 
-MessageHandler 是统一的消息处理器类，整合了原有的 BaseMessageHandler、ActiveMessageHandler 功能，提供完整的 LLM 集成、消息历史管理和并发控制。位于 `src/message_handler.ts`。
+MessageHandler 是统一的消息处理器类，整合了原有的 BaseMessageHandler、ActiveMessageHandler 功能，提供完整的 LLM 集成和并发控制。经过重构后，消息历史管理职责已分离到 [[context_manager]]，实现了更好的职责分离。位于 `src/message_handler.ts`。
 
 ## 核心功能
 
 ### 完整的消息处理流程
 ```typescript
 async handleMessage(message: Message): Promise<void> {
-    // 1. 立即加入历史数组
-    this.addMessageToHistory(message);
+    // 1. 立即加入历史数组（委托给ContextManager）
+    this.contextManager.addMessageToHistory(message);
 
     // 2. 标记有新消息（每次都设置）
     this.hasPendingMessages = true;
@@ -22,15 +22,12 @@ async handleMessage(message: Message): Promise<void> {
 
 ### LLM 集成与日志记录
 ```typescript
-protected async processAndReply(): Promise<boolean> {
-    let inputForLog = "";
-    let status: "success" | "fail" = "fail";
-    let llmResponse = "";
-
+protected async processAndReply(): Promise<void> {
     try {
-        const chatMessages = this.buildChatMessages();
-        inputForLog = JSON.stringify(chatMessages, null, 2);
-        llmResponse = await this.llmClient.oneTurnChat(chatMessages);
+        // 构建数据结构和LLM请求（委托给ContextManager）
+        const chatMessages = this.contextManager.buildChatMessages();
+
+        const llmResponse = await llmClientManager.callWithFallback(chatMessages);
 
         if (llmResponse === "") {
             status = "fail";
@@ -50,12 +47,12 @@ protected async processAndReply(): Promise<boolean> {
             });
         }
 
-        // 存储bot消息到历史
+        // 存储bot消息到历史（委托给ContextManager）
         const botMessage: Message = {
             type: "bot_msg",
             value: { thoughts, chat: reply }
         };
-        this.addMessageToHistory(botMessage);
+        this.contextManager.addMessageToHistory(botMessage);
 
         // 发送回复
         if (reply && reply.length > 0) {
@@ -107,62 +104,35 @@ private async tryProcessAndReply(): Promise<void> {
 - **通知机制**：每条消息只是"通知"有新消息，不创建新的处理流程
 - **批量感知**：while循环能处理期间累积的所有新消息
 
-## 消息历史管理
+## 架构重构
 
-### LRU策略
+### 职责分离
+经过重构，MessageHandler 的职责更加聚焦：
+- **消息处理流程控制**: 并发控制、处理循环
+- **LLM 集成**: 调用LLM并处理响应
+- **错误处理**: 异常处理和日志记录
+
+上下文管理职责已完全委托给 [[context_manager]]：
+- **消息历史管理**: LRU策略和历史记录
+- **上下文构建**: buildChatMessages() 方法
+- **数据封装**: 只读访问和数据安全
+
+### 组合模式
 ```typescript
-protected addMessageToHistory(message: Message): void {
-    this.messageHistory.push(message);
+export class MessageHandler implements IMessageHandler {
+    private contextManager: ContextManager;
+    protected session: Session;
 
-    // 使用 LRU 策略，保持最近 N 条消息
-    if (this.messageHistory.length > this.maxHistorySize) {
-        this.messageHistory.shift();
+    constructor(
+        botQQ: number,
+        groupId: number,
+        session: Session,
+        masterConfig?: MasterConfig,
+        maxHistorySize = 40,
+    ) {
+        this.session = session;
+        this.contextManager = new ContextManager(botQQ, groupId, masterConfig, maxHistorySize);
     }
-}
-```
-
-### 上下文构建
-```typescript
-private buildChatMessages(): ChatMessages[] {
-    // 使用Handlebars模板生成系统提示
-    const systemPrompt = this.promptTemplateManager.generatePrompt({
-        botQQ: this.botQQ,
-        masterConfig: this.masterConfig,
-        currentTime: getShanghaiTimestamp(),
-    });
-
-    const messages: ChatMessages[] = [
-        { role: "system", content: [{ type: "text", value: systemPrompt }] }
-    ];
-
-    this.messageHistory.forEach(msg => {
-        switch (msg.type) {
-            case "bot_msg": {
-                // 构建思考链格式
-                const responseArray: LlmResponseItem[] = [];
-                msg.value.thoughts.forEach(thought => {
-                    responseArray.push({ type: "thought", content: thought });
-                });
-                if (msg.value.chat && msg.value.chat.length > 0) {
-                    responseArray.push({ type: "chat", content: msg.value.chat });
-                }
-                messages.push({
-                    role: "assistant",
-                    content: [{ type: "text", value: JSON.stringify(responseArray) }],
-                });
-                break;
-            }
-            case "group_msg": {
-                messages.push({
-                    role: "user",
-                    content: [{ type: "text", value: msg.value.chat }],
-                });
-                break;
-            }
-        }
-    });
-
-    return messages;
 }
 ```
 
@@ -224,18 +194,12 @@ private parseArrayResponse(response: LlmResponse): { thoughts: string[], reply?:
 
 ## 系统提示词管理
 
-### 模板系统集成
-```typescript
-protected promptTemplateManager: PromptTemplateManager;
-
-constructor(...) {
-    this.promptTemplateManager = new PromptTemplateManager();
-}
-```
-
+### 委托给ContextManager
+系统提示词管理现在完全由 [[context_manager]] 负责：
 - 使用 [[prompt_template_manager]] 进行Handlebars模板管理
 - 支持动态插入机器人QQ号、主人信息、当前时间
 - 提供完整的群聊上下文和用户信息
+- MessageHandler通过 `contextManager.buildChatMessages()` 获取完整上下文
 
 ## 架构简化
 
@@ -244,10 +208,11 @@ constructor(...) {
 - 需要策略选择配置 `message_handler_type`
 - 继承关系复杂，维护成本高
 
-### 合并后的简化架构
-- 单一的 `MessageHandler` 具体类
-- 整合所有功能：LLM集成 + 消息历史管理 + 体力系统 + 并发控制
-- 移除抽象层和策略选择，代码结构更直接
+### 重构后的模块化架构
+- 单一的 `MessageHandler` 具体类，职责更聚焦
+- **MessageHandler**: LLM集成 + 并发控制 + 消息处理流程
+- **ContextManager**: 消息历史管理 + 上下文构建 + 提示词生成
+- 通过组合模式实现职责分离，代码结构更清晰
 
 ## 生命周期管理
 
@@ -261,10 +226,9 @@ destroy(): void {
 ## 依赖关系
 
 ### 核心依赖
-- [[llm_client]] - LLM API 调用
+- [[llm_client_manager]] - LLM API 调用和模型降级
+- [[context_manager]] - 上下文管理和历史记录
 - [[session]] - 消息发送功能
-- [[prompt_template_manager]] - Handlebars模板管理
-- [[logger]] - LLM调用日志记录
 
 ### 数据模型依赖
 - [[message_data_model]] - Message 接口和相关类型
@@ -311,13 +275,11 @@ interface BehaviorConfig {
 
 ### 在SessionManager中的使用
 ```typescript
-// 统一创建MessageHandler，不再需要策略选择
+// 创建MessageHandler，ContextManager自动创建
 const handler = new MessageHandler(
-    this.llmClient,
     this.botQQ,
     groupId,
     session,
-    this.behaviorConfig, // 包含体力系统配置
     this.masterConfig,
     maxHistory,
 );

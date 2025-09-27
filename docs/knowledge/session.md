@@ -2,48 +2,81 @@
 
 ## 定义
 
-Session 类封装单个 QQ 群组的消息处理逻辑，负责消息解析、格式化和转发。位于 `src/session.ts:22-96`。
+Session 类封装单个 QQ 群组的消息处理逻辑，负责消息解析、格式化和转发。经过更新，现在支持自然语言格式转换和更好的封装性。位于 `src/session.ts`。
 
 ## 核心功能
 
 ### 消息接收和解析
 ```typescript
-async handleMessage(context: unknown): Promise<void> {
-    const ctx = context as {
-        message_id: number;
-        group_id: number;
-        user_id: number;
-        message: SendMessageSegment[];
-    };
+async handleMessage(context: NapcatGroupMessage): Promise<void> {
+    try {
+        const userNickname = await this.connectionManager.getUserNickname(this.groupId, context.user_id);
 
-    // 获取用户昵称
-    const userNickname = await this.connectionManager.getUserNickname(this.groupId, ctx.user_id);
+        // 转换为自然语言格式
+        const chatContent = await this.convertToNaturalLanguage(context.message);
 
-    // 检查回复消息关系
-    const replySegment = ctx.message.find(segment => segment.type === "reply");
-    const replyToMessageId = replySegment?.data.id;
+        // 在消息前添加发送者信息（单独一行）
+        const senderInfo = `${userNickname ?? "未知用户"}(${String(context.user_id)}):\n`;
+        const fullChatContent = senderInfo + chatContent;
 
-    // 构建标准化消息对象
-    const message: Message = {
-        id: String(ctx.message_id),
-        groupId: ctx.group_id,
-        userId: ctx.user_id,
-        userNickname,
-        content: ctx.message,
-        timestamp: getShanghaiTimestamp(), // Asia/Shanghai时区
-        metadata: replyToMessageId ? { replyToMessageId } : undefined,
-    };
+        const groupMessage: GroupMessage = {
+            id: String(context.message_id),
+            userId: context.user_id,
+            userNickname,
+            chat: fullChatContent,
+            timestamp: getShanghaiTimestamp(),
+        };
 
-    // 委托给消息处理器
-    if (this.messageHandler) {
-        await this.messageHandler.handleMessage(message);
+        const message: Message = {
+            type: "group_msg",
+            value: groupMessage,
+        };
+
+        const displayContent = this.formatMessageForDisplay(context.message);
+        console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(context.user_id)}) 发送消息: ${displayContent}`);
+
+        if (this.messageHandler) {
+            await this.messageHandler.handleMessage(message);
+        }
+    } catch (error) {
+        console.error(`群 ${String(this.groupId)} 消息处理失败:`, error);
     }
 }
 ```
 
-### 消息格式化
+### 自然语言转换
 ```typescript
-private formatMessageForDisplay(messageArray: SendMessageSegment[]): string {
+private async convertToNaturalLanguage(messageArray: Receive[keyof Receive][]): Promise<string> {
+    const parts: string[] = [];
+
+    for (const segment of messageArray) {
+        if (segment.type === "text" && "text" in segment.data && segment.data.text) {
+            // 普通文本消息保持原样
+            parts.push(segment.data.text);
+        } else if (segment.type === "at" && "qq" in segment.data && segment.data.qq) {
+            // @消息格式化
+            const atUserId = Number(segment.data.qq);
+            const atUserNickname = await this.connectionManager.getUserNickname(this.groupId, atUserId);
+            parts.push(`@${atUserNickname ?? "未知用户"}(${segment.data.qq}) `);
+        } else if (segment.type === "reply" && "id" in segment.data) {
+            // 回复消息格式化
+            const replyMessageId = Number(segment.data.id);
+            const replyDetail = await this.connectionManager.getMessageDetail(replyMessageId);
+            if (replyDetail) {
+                const replyNickname = replyDetail.sender.nickname;
+                const replyUserId = replyDetail.sender.user_id;
+                const replyContentPreview = this.formatMessageForDisplay(replyDetail.message).slice(0, 100);
+                parts.push(`回复 ${replyNickname}(${replyUserId}): "${replyContentPreview}"\n`);
+            } else {
+                parts.push(`回复消息(ID:${segment.data.id})\n`);
+            }
+        }
+    }
+
+    return parts.join("");
+}
+
+private formatMessageForDisplay(messageArray: Receive[keyof Receive][]): string {
     const parts: string[] = [];
 
     for (const msg of messageArray) {
@@ -64,44 +97,47 @@ private formatMessageForDisplay(messageArray: SendMessageSegment[]): string {
 
 ### 委托模式
 - **连接委托**：通过 [[connection_manager]] 发送消息
-- **处理委托**：通过 [[base_message_handler]] 处理业务逻辑
+- **处理委托**：通过 [[message_handler]] 处理业务逻辑
 - **职责单一**：专注于群组级别的消息转换和路由
 
 ### 适配器模式
 ```typescript
 // napcat 原始事件 → 标准化 Message 对象
-const message: Message = {
-    id: String(ctx.message_id),
-    groupId: ctx.group_id,
-    userId: ctx.user_id,
+const groupMessage: GroupMessage = {
+    id: String(context.message_id),
+    userId: context.user_id,
     userNickname,
-    content: ctx.message,      // 保持原始的 SendMessageSegment[] 格式
-    timestamp: getShanghaiTimestamp(), // Asia/Shanghai时区
-    metadata: replyToMessageId ? { replyToMessageId } : undefined,
+    chat: fullChatContent,  // 转换为自然语言格式
+    timestamp: getShanghaiTimestamp(),
+};
+
+const message: Message = {
+    type: "group_msg",
+    value: groupMessage,
 };
 ```
 
 ## 消息类型支持
 
-### 基本消息类型
-- **文本消息**：`{"type": "text", "data": {"text": "内容"}}`
-- **@ 消息**：`{"type": "at", "data": {"qq": "QQ号"}}`
-- **回复消息**：`{"type": "reply", "data": {"id": "消息ID"}}`
+### 支持的消息类型
+- **文本消息**：直接保持原始内容
+- **@ 消息**：转换为 `@用户名(QQ号)` 格式
+- **回复消息**：转换为 `回复 用户名(QQ号): "内容预览"` 格式
 
-### 回复关系处理
-- **解析回复**：自动检测消息中的 reply 段
-- **关系记录**：存储到 `metadata.replyToMessageId`
-- **日志显示**：在控制台显示回复关系信息
-- **上下文传递**：将回复信息传递给 LLM
+### 自然语言转换特性
+- **用户友好性**：将QQ号转换为昵称显示
+- **上下文保持**：回复消息包含原始内容预览
+- **格式统一**：所有消息都转换为可读的自然语言
+- **错误容忍**：无法获取用户信息时使用默认值
 
 ## 依赖关系
 
 ### 构造时依赖
 - **groupId**：群组标识符
-- [[connection_manager]]：连接和发送消息
+- [[connection_manager]]：连接、发送消息和用户信息查询
 
 ### 运行时依赖
-- [[base_message_handler]]：具体的消息处理逻辑（通过 `setMessageHandler` 注入）
+- [[message_handler]]：具体的消息处理逻辑（通过 `setMessageHandler` 注入）
 
 ### 数据模型
 - [[message_data_model]]：标准化的消息数据结构
@@ -115,12 +151,36 @@ export interface MessageHandler {
 }
 ```
 
+### 数据类型
+```typescript
+// 群组消息类型
+export interface GroupMessage {
+    id: string;
+    userId: number;
+    userNickname?: string;
+    chat: string;           // 自然语言格式的消息内容
+    timestamp: string;
+}
+
+// 机器人消息类型
+export interface BotMessage {
+    thoughts: string[];     // LLM思考过程
+    chat?: SendMessageSegment[]; // 回复内容
+}
+
+// 统一消息类型
+export type Message =
+    | { type: "bot_msg"; value: BotMessage; }
+    | { type: "group_msg"; value: GroupMessage; };
+```
+
 ### 公共方法
 ```typescript
 class Session {
-    async handleMessage(context: unknown): Promise<void>        // 处理原始 napcat 消息
-    async sendMessage(content: SendMessageSegment[]): Promise<void> // 发送消息到群组
-    setMessageHandler(handler: MessageHandler): void           // 设置消息处理器
+    async handleMessage(context: NapcatGroupMessage): Promise<void>  // 处理原始 napcat 消息
+    async sendMessage(content: SendMessageSegment[]): Promise<void>   // 发送消息到群组
+    setMessageHandler(handler: MessageHandler): void                 // 设置消息处理器
+    getGroupId(): number                                             // 获取群组ID
 }
 ```
 
@@ -147,7 +207,18 @@ class Session {
 - 可动态切换不同的消息处理器
 - 支持链式处理器和中间件模式
 
+## 新增功能
+
+### 群组ID访问
+```typescript
+getGroupId(): number {
+    return this.groupId;
+}
+```
+
+为 [[message_handler]] 提供了对群组ID的安全访问，用于日志记录和错误处理。
+
 ## 相关文件
 - `src/session.ts` - 主要实现
 - `src/connection_manager.ts` - 连接管理依赖
-- `src/base_message_handler.ts` - 消息处理器接口
+- `src/message_handler.ts` - 消息处理器实现

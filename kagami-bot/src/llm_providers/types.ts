@@ -1,13 +1,3 @@
-// deprecated
-export interface ChatMessageData {
-    role: "system" | "user" | "assistant";
-    content: string | {
-        type: "text" | "image_url";
-        text?: string;
-        image_url?: { url: string };
-    }[];
-}
-
 export type ChatMessagePart =
     | {
         type: "text",
