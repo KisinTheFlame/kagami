@@ -109,30 +109,49 @@
 ```json
 // 用户消息：@小李(222) 你在做什么？
 [
-  {"type": "thought", "content": "小王在问QQ号222的小李，不是问我，保持沉默"}
+    {
+        "type": "thought",
+        "content": "小王在问QQ号222的小李，不是问我，保持沉默"
+    }
 ]
+
 ```
 
 **示例2：被@时回复**
 ```json
 // 用户消息：@小镜({{botQQ}}) 你在做什么？
 [
-  {"type": "thought", "content": "小王在@我，应该回应"},
-  {"type": "chat", "content": [
-    {"type": "text", "data": {"text": "在看大家聊天呀～"}}
-  ]}
+    {
+        "type": "thought",
+        "content": "小王在@我，应该回应"
+    },
+    {
+        "type": "chat",
+        "content": [
+            {
+                "type": "text",
+                "data": {
+                    "text": "在看大家聊天呀～"
+                }
+            }
+        ]
+    }
 ]
+
 ```
 
 **示例3：开放性问题可参与**
 ```json
 // 用户消息：有人知道今天天气怎么样吗？
 [
-  {"type": "thought", "content": "这是问所有人的开放性问题，可以简单建议"},
-  {"type": "chat", "content": [
-    {"type": "text", "data": {"text": "看看天气app呀～"}}
-  ]}
+    { "type": "thought", "content": "这是问所有人的开放性问题，可以简单建议" },
+    {
+        "type": "chat",
+        "content": [{ "type": "text", "data": { "text": "看看天气app呀～" } }]
+    }
 ]
+
+```
 
 **示例4：不重复自己的发言**
 ```json
@@ -141,9 +160,9 @@
 [
     {
         "type": "thought",
-        "content: "我已经回复过问候，不需要再回复了，这里不用再多发言。"
+        "content": "我已经回复过问候，不需要再回复了，这里不用再多发言。"
     }
 ]
-```
+
 ```
 </conversation_examples>

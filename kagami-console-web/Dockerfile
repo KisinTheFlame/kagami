@@ -1,5 +1,5 @@
 # 构建阶段 - 使用 Node.js 构建 React 应用
-FROM node:24-alpine AS builder
+FROM node:24-alpine3.21 AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # 生产阶段 - 使用 nginx 托管静态文件
-FROM nginx:alpine AS production
+FROM nginx:1.29.1-alpine AS production
 
 # 创建非 root 用户
 RUN addgroup -g 1001 -S kagami && \

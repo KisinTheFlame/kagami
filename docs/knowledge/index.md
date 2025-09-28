@@ -35,6 +35,9 @@ Kagami System
 - [[console_system]] - Web 控制台整体架构和功能
 - [[message_card_component]] - LLM消息卡片展示组件
 
+### 部署架构
+- [[deployment_system]] - Docker 多容器部署系统，标准化镜像版本管理
+
 ### 消息处理
 - [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制
 - [[context_manager]] - 上下文管理器，负责消息历史管理和LLM数据准备
@@ -87,6 +90,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **回复引用**：智能决策何时使用 QQ 回复功能
 - **配置驱动**：通过 YAML 文件灵活配置所有参数
 - **调用日志**：完整记录 LLM 调用历史，支持问题排查和分析
+- **容器化部署**：标准化 Docker 镜像版本，确保部署一致性和稳定性
 
 ## 技术栈
 
@@ -99,9 +103,11 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **配置**：YAML 配置文件
 - **构建**：TypeScript 编译器 + Prisma 生成器
 - **代码质量**：ESLint
+- **容器化**：Docker 多阶段构建 + Alpine Linux
 
 ### 控制台系统技术栈
 - **后端**：Go + Gin 框架 + GORM
 - **前端**：React + TypeScript + Ant Design + Vite
 - **部署**：Nginx 静态托管 + API 代理
 - **数据库**：共享 PostgreSQL 数据库（通过 API 访问）
+- **容器化**：Go 静态编译 + Nginx Alpine 镜像
