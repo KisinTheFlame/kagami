@@ -20,7 +20,7 @@ addMessageToHistory(message: Message): void {
 
 ### LLM 上下文构建
 ```typescript
-buildChatMessages(): ChatMessages[] {
+buildChatMessages(): ChatMessage[] {
     // 使用Handlebars模板生成系统提示
     const systemPrompt = this.promptTemplateManager.generatePrompt({
         botQQ: this.botQQ,
@@ -28,7 +28,7 @@ buildChatMessages(): ChatMessages[] {
         currentTime: getShanghaiTimestamp(),
     });
 
-    const messages: ChatMessages[] = [
+    const messages: ChatMessage[] = [
         {
             role: "system",
             content: [{ type: "text", value: systemPrompt }],
@@ -90,7 +90,6 @@ constructor(
     maxHistorySize = 40,
 ) {
     this.botQQ = botQQ;
-    this.groupId = groupId;
     this.masterConfig = masterConfig;
     this.maxHistorySize = maxHistorySize;
     this.promptTemplateManager = new PromptTemplateManager();
@@ -99,7 +98,6 @@ constructor(
 
 ### 核心属性
 - **botQQ**: 机器人QQ号，用于生成系统提示词
-- **groupId**: 群组ID，用于上下文识别
 - **messageHistory**: 消息历史数组，采用LRU策略
 - **maxHistorySize**: 历史消息最大长度，默认40条
 - **promptTemplateManager**: 提示词模板管理器
@@ -169,8 +167,9 @@ if (this.messageHistory.length > this.maxHistorySize) {
 
 ### 导入的类型
 - **SendMessageSegment**: node-napcat-ts的消息段类型
-- **ChatMessages**: LLM提供商的消息格式
+- **ChatMessage**: LLM提供商的统一消息格式（支持工具调用）
 - **Message**: 内部消息数据模型
+- **MasterConfig**: 主人配置类型
 
 ### 使用者
 - [[message_handler]] - 主要使用者，通过组合方式使用ContextManager
@@ -206,8 +205,13 @@ export class MessageHandler implements IMessageHandler {
         // 构建LLM上下文
         const chatMessages = this.contextManager.buildChatMessages();
 
-        // 调用LLM...
-        const llmResponse = await llmClientManager.callWithFallback(chatMessages);
+        // 调用LLM（支持模型降级）
+        const request: OneTurnChatRequest = {
+            messages: chatMessages,
+            tools: [],
+            outputFormat: "json"
+        };
+        const llmResponse = await llmClientManager.callWithFallback(request);
 
         // 将响应添加到历史
         const botMessage: Message = {

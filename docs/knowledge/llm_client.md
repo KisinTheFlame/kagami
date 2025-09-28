@@ -6,32 +6,38 @@ LlmClient 是单个 LLM 模型的调用客户端，通过 [[llm_provider_abstrac
 
 ## 核心功能
 
-### 带日志记录的调用接口
+### 支持工具调用的调用接口
 ```typescript
-async oneTurnChat(messages: ChatMessages[]): Promise<string> {
-    let status: "success" | "fail" = "fail";
-    let llmResponse = "";
-
+async oneTurnChat(request: OneTurnChatRequest): Promise<LlmResponse> {
     // 生成输入字符串用于记录（保持原有格式）
-    const inputForLog = JSON.stringify(messages, null, 2);
+    const inputForLog = JSON.stringify(request.messages, null, 2);
 
     try {
-        llmResponse = await this.provider.oneTurnChat(this.model, messages);
-
-        if (llmResponse === "") {
-            status = "fail";
-            void logger.logLLMCall(status, inputForLog, "LLM调用失败");
-            throw new Error("LLM调用失败");
-        }
-
-        status = "success";
-        void logger.logLLMCall(status, inputForLog, llmResponse);
+        const llmResponse = await this.provider.oneTurnChat(this.model, request);
+        void logger.logLLMCall("success", inputForLog, JSON.stringify(llmResponse));
         return llmResponse;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
         void logger.logLLMCall("fail", inputForLog, `模型 ${this.model} 调用失败: ${errorMessage}`);
         throw error;
     }
+}
+```
+
+### 请求参数结构
+```typescript
+interface OneTurnChatRequest {
+    messages: ChatMessage[];      // 对话消息历史
+    tools: Tool[];               // 可用的工具列表
+    outputFormat: OutputFormat;   // 输出格式配置
+}
+```
+
+### 响应数据结构
+```typescript
+interface LlmResponse {
+    content?: string;       // 文本回复内容
+    toolCalls?: ToolCall[]; // 工具调用请求（如果有）
 }
 ```
 
@@ -65,8 +71,8 @@ async oneTurnChat(messages: ChatMessages[]): Promise<string> {
 ## 依赖关系
 
 ### 直接依赖
-- [[api_key_manager]] - API Key 管理和选择（通过 provider 层）
-- **LLM Provider** - 具体的 LLM SDK 实现
+- [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
+- **LLM Provider** - 具体的 LLM SDK 实现，支持工具调用
 - [[logger]] - LLM 调用日志记录
 
 ### 被依赖关系

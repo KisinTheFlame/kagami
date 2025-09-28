@@ -3,7 +3,7 @@ import { Message } from "./session.js";
 import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
-import { ChatMessages } from "./llm_providers/types.js";
+import { ChatMessage } from "./llm_providers/types.js";
 
 interface ThoughtItem {
     type: "thought";
@@ -19,7 +19,6 @@ type LlmResponseItem = ThoughtItem | ChatItem;
 
 export class ContextManager {
     private botQQ: number;
-    private groupId: number;
     private messageHistory: Message[] = [];
     private maxHistorySize: number;
     private promptTemplateManager: PromptTemplateManager;
@@ -32,7 +31,6 @@ export class ContextManager {
         maxHistorySize = 40,
     ) {
         this.botQQ = botQQ;
-        this.groupId = groupId;
         this.masterConfig = masterConfig;
         this.maxHistorySize = maxHistorySize;
         this.promptTemplateManager = new PromptTemplateManager();
@@ -47,7 +45,7 @@ export class ContextManager {
         }
     }
 
-    buildChatMessages(): ChatMessages[] {
+    buildChatMessages(): ChatMessage[] {
         // 使用Handlebars模板生成系统提示
         const systemPrompt = this.promptTemplateManager.generatePrompt({
             botQQ: this.botQQ,
@@ -55,7 +53,7 @@ export class ContextManager {
             currentTime: getShanghaiTimestamp(),
         });
 
-        const messages: ChatMessages[] = [
+        const messages: ChatMessage[] = [
             {
                 role: "system",
                 content: [{ type: "text", value: systemPrompt }],

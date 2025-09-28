@@ -73,10 +73,6 @@ export class SessionManager {
         console.log("正在关闭所有会话...");
 
         try {
-            // 清理 MessageHandler 中的定时器
-            for (const handler of this.messageHandlers.values()) {
-                handler.destroy();
-            }
             this.messageHandlers.clear();
 
             this.connectionManager.disconnect();
