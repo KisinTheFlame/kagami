@@ -1,5 +1,5 @@
 # 使用官方 Go 镜像作为构建阶段
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.1-alpine3.22 AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
 
 # 生产阶段 - 使用更小的 alpine 镜像
-FROM alpine:latest AS production
+FROM alpine:3.21.4 AS production
 
 # 安装必要的证书、时区数据和 curl
 RUN apk --no-cache add ca-certificates tzdata curl

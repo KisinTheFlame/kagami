@@ -1,5 +1,5 @@
-# 使用官方 Node.js 18 镜像作为基础镜像
-FROM node:24-alpine AS builder
+# 使用官方 Node.js 24-alpine3.21 镜像作为基础镜像
+FROM node:24-alpine3.21 AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN npm run build
 RUN cp src/generated/prisma/libquery*.node dist/generated/prisma/
 
 # 生产阶段
-FROM node:24-alpine AS production
+FROM node:24-alpine3.21 AS production
 
 # 创建非 root 用户
 RUN addgroup -g 1001 -S nodejs && \

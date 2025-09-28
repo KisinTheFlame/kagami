@@ -111,6 +111,7 @@ public generatePrompt(context: PromptTemplateContext): string {
 3. **安全规则**: 包含主人特权的动态部分
 4. **输出格式**: LLM 响应格式要求
 5. **对话风格**: 回复策略和示例
+6. **JSON 示例**: 标准化的多行格式示例，提升可读性和维护性
 
 ## 运行时管理
 
@@ -182,7 +183,34 @@ Handlebars.registerHelper('customHelper', function(context) {
 - **类型错误**: TypeScript 接口提供编译时检查
 - **运行时异常**: 捕获并重新抛出，保留堆栈信息
 
+## 模板质量改进
+
+### JSON 格式标准化
+- **多行格式**: 将紧凑的单行 JSON 示例转换为标准化的多行格式
+- **语法修复**: 修复 JSON 示例中的语法错误，如缺失引号和无效格式
+- **可读性提升**: 改进缩进和结构，便于开发者理解和维护
+- **一致性**: 统一所有 JSON 示例的格式风格
+
+### 示例格式对比
+```handlebars
+<!-- 改进前：紧凑但难读 -->
+[{"type": "thought", "content": "小王在问QQ号222的小李，不是问我，保持沉默"}]
+
+<!-- 改进后：结构清晰 -->
+[
+    {
+        "type": "thought",
+        "content": "小王在问QQ号222的小李，不是问我，保持沉默"
+    }
+]
+```
+
+### 维护性优化
+- **错误减少**: 标准格式降低手动编辑时的语法错误
+- **调试便利**: 清晰的结构便于定位问题和验证 JSON 格式
+- **团队协作**: 统一的格式标准提升团队开发效率
+
 ## 相关文件
 - `src/prompt_template_manager.ts` - 主要实现
-- `static/prompt.txt` - 默认模板文件
+- `static/prompt.txt` - 默认模板文件，包含改进的 JSON 示例格式
 - `package.json` - handlebars 依赖声明
