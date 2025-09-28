@@ -6,7 +6,7 @@ import stylistic from "@stylistic/eslint-plugin";
 export default tseslint.config(
     // Global ignores
     {
-        ignores: ["dist/**", "node_modules/**"],
+        ignores: ["dist/**", "node_modules/**", "src/generated/**"],
     },
 
     // Base configs

@@ -49,7 +49,7 @@ Kagami System
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
 ### 数据层
-- [[database_layer]] - SQLite 数据库封装，提供基础数据操作
+- [[database_layer]] - Prisma ORM + PostgreSQL 数据库封装，提供类型安全的数据操作
 - [[logger]] - LLM 调用日志记录服务
 
 ## 关系图谱
@@ -95,13 +95,13 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **QQ 集成**：node-napcat-ts
 - **LLM 集成**：OpenAI API
 - **模板引擎**：Handlebars
-- **数据存储**：SQLite3
+- **数据存储**：PostgreSQL + Prisma ORM
 - **配置**：YAML 配置文件
-- **构建**：TypeScript 编译器
+- **构建**：TypeScript 编译器 + Prisma 生成器
 - **代码质量**：ESLint
 
 ### 控制台系统技术栈
 - **后端**：Go + Gin 框架 + GORM
 - **前端**：React + TypeScript + Ant Design + Vite
 - **部署**：Nginx 静态托管 + API 代理
-- **数据库**：共享 SQLite3 数据库（只读访问）
+- **数据库**：共享 PostgreSQL 数据库（通过 API 访问）

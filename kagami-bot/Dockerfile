@@ -13,8 +13,12 @@ RUN npm ci --only=production
 # 复制源代码
 COPY . .
 
+RUN npm run prisma:generate
+
 # 编译 TypeScript
 RUN npm run build
+
+RUN cp src/generated/prisma/libquery*.node dist/generated/prisma/
 
 # 生产阶段
 FROM node:24-alpine AS production

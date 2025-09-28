@@ -2,7 +2,7 @@
 
 ## 概述
 
-日志服务提供了 LLM 调用的完整记录功能，基于 [[database_layer]] 实现数据持久化。该服务专门负责记录每次 LLM API 调用的详细信息，用于后续的分析和问题排查。
+日志服务提供了 LLM 调用的完整记录功能，基于 [[database_layer]] (Prisma + PostgreSQL) 实现数据持久化。该服务专门负责记录每次 LLM API 调用的详细信息，用于后续的分析和问题排查。
 
 ## 核心功能
 
@@ -109,9 +109,10 @@ export class MessageHandler {
 - 提供详细的错误日志用于问题诊断
 
 ### 数据持久化
-- 基于SQLite数据库存储日志记录
-- 自动生成时间戳和自增ID
+- 基于 PostgreSQL + Prisma ORM 存储日志记录
+- 自动生成时间戳和自增ID (由数据库管理)
 - 支持复杂数据类型的JSON序列化
+- 类型安全的数据库操作
 
 ## 关联组件
 
@@ -122,22 +123,21 @@ export class MessageHandler {
 
 ### 时间戳处理
 ```typescript
-const timestamp = new Date().toISOString();  // 生成标准 ISO 8601 格式
+// Prisma 自动处理时间戳生成，使用数据库的 @default(now())
+// 无需手动生成时间戳
 ```
 
 ### 数据存储
 ```typescript
 // input和output都已经是格式化好的字符串，直接存储
-await db.run(
-    "INSERT INTO llm_call_logs (timestamp, status, input, output) VALUES ($1, $2, $3, $4)",
-    [timestamp, status, input, output],
-);
+// Prisma 自动处理时间戳生成
+await db.logLLMCall(status, input, output);
 ```
 
 ### 错误处理
 ```typescript
 try {
-    await this.database.run(/* SQL 操作 */);
+    await db.logLLMCall(status, input, output);
 } catch (error) {
     console.error("Failed to log LLM call:", error);
     // 不抛出错误，避免影响主业务流程
