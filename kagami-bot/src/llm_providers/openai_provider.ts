@@ -41,6 +41,6 @@ export class OpenAIProvider implements LlmProvider {
         return messages.map(msg => ({
             role: msg.role,
             content: msg.content.map(c => c.value).join(""),
-        }));
+        } satisfies ChatCompletionMessageParam));
     }
 }

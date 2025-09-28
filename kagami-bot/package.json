@@ -17,9 +17,12 @@
     "type": "module",
     "main": "src/main.ts",
     "scripts": {
-        "build": "tsc",
+        "build": "npm run prisma:generate && tsc",
         "lint": "eslint src",
-        "lint:fix": "eslint src --fix"
+        "lint:fix": "eslint src --fix",
+        "prisma:generate": "prisma generate",
+        "prisma:studio": "prisma studio",
+        "prisma:migrate": "prisma migrate dev"
     },
     "license": "ISC",
     "devDependencies": {
@@ -27,7 +30,6 @@
         "@stylistic/eslint-plugin": "^5.2.3",
         "@types/handlebars": "^4.0.40",
         "@types/node": "^24.2.0",
-        "@types/pg": "^8.11.10",
         "eslint": "^9.32.0",
         "ts-node": "^10.9.2",
         "tsx": "^4.20.3",
@@ -36,10 +38,11 @@
     },
     "dependencies": {
         "@google/genai": "^1.20.0",
+        "@prisma/client": "^6.16.2",
         "handlebars": "^4.7.8",
         "node-napcat-ts": "^0.4.15",
         "openai": "^5.12.2",
-        "pg": "^8.13.0",
+        "prisma": "^6.16.2",
         "yaml": "^2.8.1"
     }
 }
