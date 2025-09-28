@@ -6,27 +6,37 @@ LlmClientManager 是统一的 LLM 客户端管理器，负责管理多个 [[llm_
 
 ## 核心功能
 
-### 模型降级调用
+### 支持工具调用的模型降级调用
 ```typescript
-async callWithFallback(messages: ChatMessages[]): Promise<string> {
+async callWithFallback(request: OneTurnChatRequest): Promise<LlmResponse> {
     for (const model of this.configuredModels) {
         try {
             const client = this.getLlmClient(model);
-            const result = await client.oneTurnChat(messages);
-
-            // 如果不是第一个模型，记录降级成功
-            if (attemptedModels.length > 1) {
-                console.log(`模型降级成功: ${attemptedModels.slice(0, -1).join(" → ")} → ${model}`);
-            }
-
-            return result;
-        } catch {
-            console.warn(`模型 ${model} 调用失败，尝试降级到下一个模型`);
+            return await client.oneTurnChat(request);
+        } catch (error) {
+            console.warn(`模型 ${model} 调用失败:`, error);
             // 继续尝试下一个模型
         }
     }
 
     throw new Error("所有配置的模型都调用失败");
+}
+```
+
+### 请求参数接口
+```typescript
+interface OneTurnChatRequest {
+    messages: ChatMessage[];      // 包含工具调用历史的对话消息
+    tools: Tool[];               // 可用的工具列表
+    outputFormat: OutputFormat;   // 输出格式配置（json | text）
+}
+```
+
+### 响应数据结构
+```typescript
+interface LlmResponse {
+    content?: string;       // 文本回复内容
+    toolCalls?: ToolCall[]; // 工具调用请求（如果LLM决定调用工具）
 }
 ```
 
@@ -145,14 +155,30 @@ MessageHandler  →  LlmClientManager  →  LlmClient[]
 import { llmClientManager } from "./llm_client_manager.js";
 
 // 在MessageHandler中使用
-const llmResponse = await llmClientManager.callWithFallback(chatMessages);
+const request: OneTurnChatRequest = {
+    messages: chatMessages,
+    tools: [],
+    outputFormat: "json"
+};
+const llmResponse = await llmClientManager.callWithFallback(request);
 ```
 
 ### 错误处理
 ```typescript
 try {
-    const response = await llmClientManager.callWithFallback(messages);
-    // 处理成功响应
+    const response = await llmClientManager.callWithFallback(request);
+
+    // 处理文本回复
+    if (response.content) {
+        console.log("LLM回复:", response.content);
+    }
+
+    // 处理工具调用
+    if (response.toolCalls) {
+        for (const toolCall of response.toolCalls) {
+            console.log("LLM请求调用工具:", toolCall.function.name);
+        }
+    }
 } catch (error) {
     // 所有模型都失败，处理错误
     console.error("LLM 调用失败:", error);
@@ -204,6 +230,7 @@ try {
 
 ## 相关节点
 - [[llm_client]] - 被管理的客户端实例
+- [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
 - [[config_system]] - 配置加载和验证
 - [[message_handler]] - 主要使用者
 - [[logger]] - LLM 调用日志记录

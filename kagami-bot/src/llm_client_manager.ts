@@ -1,5 +1,5 @@
 import { LlmClient } from "./llm.js";
-import { ChatMessages } from "./llm_providers/types.js";
+import { LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
 import { loadConfig, getProviderForModel } from "./config.js";
 
 class LlmClientManager {
@@ -26,11 +26,11 @@ class LlmClientManager {
         return this.clients[model];
     }
 
-    async callWithFallback(messages: ChatMessages[]): Promise<string> {
+    async callWithFallback(request: OneTurnChatRequest): Promise<LlmResponse> {
         for (const model of this.configuredModels) {
             try {
                 const client = this.getLlmClient(model);
-                return await client.oneTurnChat(messages);
+                return await client.oneTurnChat(request);
             } catch (error) {
                 console.warn(`模型 ${model} 调用失败:`, error);
                 // 继续尝试下一个模型

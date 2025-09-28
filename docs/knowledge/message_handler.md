@@ -20,52 +20,54 @@ async handleMessage(message: Message): Promise<void> {
 }
 ```
 
-### LLM 集成与日志记录
+### 支持工具调用的 LLM 集成
 ```typescript
 protected async processAndReply(): Promise<void> {
     try {
         // 构建数据结构和LLM请求（委托给ContextManager）
         const chatMessages = this.contextManager.buildChatMessages();
 
-        const llmResponse = await llmClientManager.callWithFallback(chatMessages);
-
-        if (llmResponse === "") {
-            status = "fail";
-            void logger.logLLMCall(status, inputForLog, "LLM调用失败");
-            throw new Error("LLM调用失败");
-        }
-
-        status = "success";
-        const { thoughts, reply } = this.parseResponse(llmResponse);
-        void logger.logLLMCall(status, inputForLog, llmResponse);
-
-        // 记录思考过程并发送回复
-        if (thoughts.length > 0) {
-            console.log(`[群 ${String(this.groupId)}] LLM 思考:`);
-            thoughts.forEach((thought, index) => {
-                console.log(`  ${String(index + 1)}. ${thought}`);
-            });
-        }
-
-        // 存储bot消息到历史（委托给ContextManager）
-        const botMessage: Message = {
-            type: "bot_msg",
-            value: { thoughts, chat: reply }
+        // 构建支持工具调用的请求
+        const request: OneTurnChatRequest = {
+            messages: chatMessages,
+            tools: [],  // 当前暂不使用工具调用
+            outputFormat: "json"
         };
-        this.contextManager.addMessageToHistory(botMessage);
 
-        // 发送回复
-        if (reply && reply.length > 0) {
-            await this.session.sendMessage(reply);
-            return true;
+        const llmResponse = await llmClientManager.callWithFallback(request);
+
+        // 处理LLM响应（支持工具调用）
+        if (llmResponse.content) {
+            const { thoughts, reply } = this.parseResponse(llmResponse.content);
+
+            // 记录思考过程并发送回复
+            if (thoughts.length > 0) {
+                console.log(`[群 ${String(this.groupId)}] LLM 思考:`);
+                thoughts.forEach((thought, index) => {
+                    console.log(`  ${String(index + 1)}. ${thought}`);
+                });
+            }
+
+            // 存储bot消息到历史（委托给ContextManager）
+            const botMessage: Message = {
+                type: "bot_msg",
+                value: { thoughts, chat: reply }
+            };
+            this.contextManager.addMessageToHistory(botMessage);
+
+            // 发送回复
+            if (reply && reply.length > 0) {
+                await this.session.sendMessage(reply);
+            }
         }
-        return false;
+
+        // 处理工具调用（未来功能）
+        if (llmResponse.toolCalls) {
+            console.log("LLM 请求调用工具:", llmResponse.toolCalls);
+            // TODO: 实现工具调用处理逻辑
+        }
     } catch (error) {
-        // 完整的错误处理和日志记录
-        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
-        if (inputForLog) {
-            void logger.logLLMCall("fail", inputForLog, errorMessage);
-        }
+        console.error("LLM 处理失败:", error);
         throw error;
     }
 }
@@ -109,12 +111,13 @@ private async tryProcessAndReply(): Promise<void> {
 ### 职责分离
 经过重构，MessageHandler 的职责更加聚焦：
 - **消息处理流程控制**: 并发控制、处理循环
-- **LLM 集成**: 调用LLM并处理响应
+- **LLM 集成**: 调用支持工具调用的 LLM 并处理响应
 - **错误处理**: 异常处理和日志记录
+- **工具调用预留**: 为未来的工具调用功能预留接口
 
 上下文管理职责已完全委托给 [[context_manager]]：
 - **消息历史管理**: LRU策略和历史记录
-- **上下文构建**: buildChatMessages() 方法
+- **上下文构建**: buildChatMessages() 方法，支持工具调用消息格式
 - **数据封装**: 只读访问和数据安全
 
 ### 组合模式
@@ -232,6 +235,7 @@ destroy(): void {
 
 ### 数据模型依赖
 - [[message_data_model]] - Message 接口和相关类型
+- [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
 
 ### 配置依赖
 - **BehaviorConfig**：消息处理行为配置参数

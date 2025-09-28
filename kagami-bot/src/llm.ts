@@ -1,4 +1,4 @@
-import { ProviderConfig, LlmProvider, ChatMessages } from "./llm_providers/types.js";
+import { ProviderConfig, LlmProvider, LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
 import { createLlmProvider } from "./llm_providers/factory.js";
 import { logger } from "./middleware/logger.js";
 
@@ -11,25 +11,13 @@ export class LlmClient {
         this.model = model;
     }
 
-    async oneTurnChat(messages: ChatMessages[]): Promise<string> {
-        let status: "success" | "fail" = "fail";
-        let llmResponse = "";
-
+    async oneTurnChat(request: OneTurnChatRequest): Promise<LlmResponse> {
         // 生成输入字符串用于记录（保持原有格式）
-        const inputForLog = JSON.stringify(messages, null, 2);
+        const inputForLog = JSON.stringify(request.messages, null, 2); // TODO: 增加日志信息
 
         try {
-            llmResponse = await this.provider.oneTurnChat(this.model, messages);
-
-            // 如果LLM返回空字符串，说明调用失败
-            if (llmResponse === "") {
-                status = "fail";
-                void logger.logLLMCall(status, inputForLog, "LLM调用失败");
-                throw new Error("LLM调用失败");
-            }
-
-            status = "success";
-            void logger.logLLMCall(status, inputForLog, llmResponse);
+            const llmResponse = await this.provider.oneTurnChat(this.model, request);
+            void logger.logLLMCall("success", inputForLog, JSON.stringify(llmResponse));
             return llmResponse;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);

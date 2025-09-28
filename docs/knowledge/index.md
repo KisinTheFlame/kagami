@@ -39,12 +39,15 @@ Kagami System
 - [[deployment_system]] - Docker 多容器部署系统，标准化镜像版本管理
 
 ### 消息处理
-- [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制
+- [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制，支持工具调用预留
 - [[context_manager]] - 上下文管理器，负责消息历史管理和LLM数据准备
 
-### 支持组件
+### LLM 集成
 - [[llm_client_manager]] - LLM 客户端管理器，负责模型降级和统一调用
-- [[llm_client]] - 单个 LLM 模型的调用客户端，支持多 LLM 提供商
+- [[llm_client]] - 单个 LLM 模型的调用客户端，支持工具调用接口
+- [[llm_function_calling]] - LLM 工具调用系统，提供完整的 function calling 支持
+
+### 支持组件
 - [[multi_provider_config]] - 多提供商配置系统，支持灵活的模型选择
 - [[api_key_manager]] - 多 API Key 轮询管理
 - [[prompt_template_manager]] - Handlebars 提示词模板管理系统
@@ -61,7 +64,7 @@ Kagami System
 ```
 KagamiBot
 ├── Config → ConfigSystem
-├── LlmClientManager → LlmClient[] → ApiKeyManager
+├── LlmClientManager → LlmClient[] → LlmFunctionCalling
 │                   → logger → DatabaseLayer
 └── SessionManager → ConnectionManager
     └── Session → MessageHandler → LlmClientManager
@@ -83,6 +86,7 @@ napcat群消息 → ConnectionManager → SessionManager → Session → Message
 - **统一处理**：简化的消息处理架构，专注流程控制
 - **上下文管理**：独立的消息历史管理和LLM数据准备模块
 - **模型降级**：支持多模型按优先级降级，提高可用性
+- **工具调用支持**：完整的 LLM Function Calling 类型系统和接口预留
 - **思考链**：LLM 支持结构化的思考-回复流程
 - **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
 - **多提供商支持**：支持 OpenAI、Gemini 等多个 LLM 提供商，自动模型选择
