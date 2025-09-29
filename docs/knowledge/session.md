@@ -96,7 +96,7 @@ private formatMessageForDisplay(messageArray: Receive[keyof Receive][]): string 
 ## 设计模式
 
 ### 委托模式
-- **连接委托**：通过 [[connection_manager]] 发送消息
+- **连接委托**：通过 [[connection_manager]] (NapcatFacade) 发送消息
 - **处理委托**：通过 [[message_handler]] 处理业务逻辑
 - **职责单一**：专注于群组级别的消息转换和路由
 
@@ -134,13 +134,23 @@ const message: Message = {
 
 ### 构造时依赖
 - **groupId**：群组标识符
-- [[connection_manager]]：连接、发送消息和用户信息查询
+- [[connection_manager]]：NapcatFacade 实例，用于连接、发送消息和用户信息查询
 
 ### 运行时依赖
 - [[message_handler]]：具体的消息处理逻辑（通过 `setMessageHandler` 注入）
 
 ### 数据模型
 - [[message_data_model]]：标准化的消息数据结构
+
+## 工厂函数
+
+```typescript
+export const newSession = (groupId: number, napcatFacade: NapcatFacade) => {
+    return new Session(groupId, napcatFacade);
+};
+```
+
+推荐使用工厂函数创建 Session 实例，保持代码风格统一。
 
 ## 接口设计
 
@@ -177,11 +187,21 @@ export type Message =
 ### 公共方法
 ```typescript
 class Session {
+    constructor(groupId: number, napcatFacade: NapcatFacade)
+
     async handleMessage(context: NapcatGroupMessage): Promise<void>  // 处理原始 napcat 消息
     async sendMessage(content: SendMessageSegment[]): Promise<void>   // 发送消息到群组
     setMessageHandler(handler: MessageHandler): void                 // 设置消息处理器
     getGroupId(): number                                             // 获取群组ID
 }
+```
+
+### 使用示例
+```typescript
+// 在 SessionManager 中创建 Session
+const session = newSession(groupId, this.napcatFacade);
+const handler = newMessageHandler(session, contextManager, this.llmClientManager);
+session.setMessageHandler(handler);
 ```
 
 ## 错误处理

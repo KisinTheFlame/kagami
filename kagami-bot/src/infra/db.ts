@@ -1,10 +1,10 @@
 import { PrismaClient } from "../generated/prisma/client.js";
 
-class PrismaDatabase {
+export class Database {
     private prisma: PrismaClient;
 
     constructor() {
-        // 从环境变量构建 DATABASE_URL，保持与原有配置系统兼容
+        // 从环境变量构建 DATABASE_URL
         const dbHost = process.env.DB_HOST ?? "localhost";
         const dbPort = process.env.DB_PORT ?? "5432";
         const dbName = process.env.DB_NAME ?? "kagami";
@@ -41,4 +41,7 @@ class PrismaDatabase {
     }
 }
 
-export const db = new PrismaDatabase();
+export const newDatabase = () => {
+    const instance = new Database();
+    return instance;
+};

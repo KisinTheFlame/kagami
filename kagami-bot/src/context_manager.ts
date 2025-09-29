@@ -1,9 +1,9 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { Message } from "./session.js";
-import { MasterConfig } from "./config.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { ChatMessage } from "./llm_providers/types.js";
+import { ConfigManager } from "./config_manager.js";
 
 interface ThoughtItem {
     type: "thought";
@@ -18,22 +18,19 @@ interface ChatItem {
 type LlmResponseItem = ThoughtItem | ChatItem;
 
 export class ContextManager {
-    private botQQ: number;
     private messageHistory: Message[] = [];
     private maxHistorySize: number;
     private promptTemplateManager: PromptTemplateManager;
-    private masterConfig?: MasterConfig;
+    private configManager: ConfigManager;
 
     constructor(
-        botQQ: number,
-        groupId: number,
-        masterConfig?: MasterConfig,
-        maxHistorySize = 40,
+        configManager: ConfigManager,
+        promptTemplateManager: PromptTemplateManager,
+        maxHistorySize: number,
     ) {
-        this.botQQ = botQQ;
-        this.masterConfig = masterConfig;
+        this.configManager = configManager;
+        this.promptTemplateManager = promptTemplateManager;
         this.maxHistorySize = maxHistorySize;
-        this.promptTemplateManager = new PromptTemplateManager();
     }
 
     addMessageToHistory(message: Message): void {
@@ -47,9 +44,11 @@ export class ContextManager {
 
     buildChatMessages(): ChatMessage[] {
         // 使用Handlebars模板生成系统提示
+        const napcatConfig = this.configManager.getNapcatConfig();
+        const masterConfig = this.configManager.getMasterConfig();
         const systemPrompt = this.promptTemplateManager.generatePrompt({
-            botQQ: this.botQQ,
-            masterConfig: this.masterConfig,
+            botQQ: napcatConfig.bot_qq,
+            masterConfig,
             currentTime: getShanghaiTimestamp(),
         });
 
@@ -100,3 +99,13 @@ export class ContextManager {
         return this.messageHistory;
     }
 }
+
+export const newContextManager = (
+    configManager: ConfigManager,
+    promptTemplateManager: PromptTemplateManager,
+    maxHistorySize?: number,
+) => {
+    const agentConfig = configManager.getAgentConfig();
+    const actualMaxHistorySize = maxHistorySize ?? agentConfig?.history_turns ?? 40;
+    return new ContextManager(configManager, promptTemplateManager, actualMaxHistorySize);
+};

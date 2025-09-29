@@ -1,6 +1,6 @@
 import { GroupMessage as NapcatGroupMessage, SendMessageSegment } from "node-napcat-ts";
 import type { Receive } from "node-napcat-ts/dist/Structs.js";
-import { ConnectionManager } from "./connection_manager.js";
+import { NapcatFacade } from "./connection_manager.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 
 export interface BotMessage {
@@ -32,19 +32,19 @@ export interface MessageHandler {
 
 export class Session {
     private session_id: number;
-    private connectionManager: ConnectionManager;
+    private napcatFacade: NapcatFacade;
     private groupId: number;
     private messageHandler?: MessageHandler;
 
-    constructor(groupId: number, connectionManager: ConnectionManager) {
+    constructor(groupId: number, napcatFacade: NapcatFacade) {
         this.session_id = Math.random();
         this.groupId = groupId;
-        this.connectionManager = connectionManager;
+        this.napcatFacade = napcatFacade;
     }
 
     async handleMessage(context: NapcatGroupMessage): Promise<void> {
         try {
-            const userNickname = await this.connectionManager.getUserNickname(this.groupId, context.user_id);
+            const userNickname = await this.napcatFacade.getUserNickname(this.groupId, context.user_id);
 
             // 转换为自然语言格式
             const chatContent = await this.convertToNaturalLanguage(context.message);
@@ -88,12 +88,12 @@ export class Session {
             } else if (segment.type === "at" && "qq" in segment.data && segment.data.qq) {
                 // @消息格式化
                 const atUserId = Number(segment.data.qq);
-                const atUserNickname = await this.connectionManager.getUserNickname(this.groupId, atUserId);
+                const atUserNickname = await this.napcatFacade.getUserNickname(this.groupId, atUserId);
                 parts.push(`@${atUserNickname ?? "未知用户"}(${segment.data.qq}) `);
             } else if (segment.type === "reply" && "id" in segment.data) {
                 // 回复消息格式化
                 const replyMessageId = Number(segment.data.id);
-                const replyDetail = await this.connectionManager.getMessageDetail(replyMessageId);
+                const replyDetail = await this.napcatFacade.getMessageDetail(replyMessageId);
                 if (replyDetail) {
                     const replyNickname = replyDetail.sender.nickname;
                     const replyUserId = replyDetail.sender.user_id;
@@ -120,7 +120,7 @@ export class Session {
             } else if (segment.type === "at" && "qq" in segment.data && segment.data.qq) {
                 // @消息格式化
                 const atUserId = Number(segment.data.qq);
-                const atUserNickname = await this.connectionManager.getUserNickname(this.groupId, atUserId);
+                const atUserNickname = await this.napcatFacade.getUserNickname(this.groupId, atUserId);
                 parts.push(`@${atUserNickname ?? "未知用户"}(${segment.data.qq}) `);
             }
             // 忽略reply类型的分片，避免嵌套回复
@@ -148,7 +148,7 @@ export class Session {
 
 
     async sendMessage(content: SendMessageSegment[]): Promise<void> {
-        return this.connectionManager.sendGroupMessage(this.groupId, content);
+        return this.napcatFacade.sendGroupMessage(this.groupId, content);
     }
 
     setMessageHandler(handler: MessageHandler): void {
@@ -159,3 +159,7 @@ export class Session {
         return this.groupId;
     }
 }
+
+export const newSession = (groupId: number, napcatFacade: NapcatFacade) => {
+    return new Session(groupId, napcatFacade);
+};

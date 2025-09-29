@@ -27,14 +27,11 @@ protected async processAndReply(): Promise<void> {
         // 构建数据结构和LLM请求（委托给ContextManager）
         const chatMessages = this.contextManager.buildChatMessages();
 
-        // 构建支持工具调用的请求
-        const request: OneTurnChatRequest = {
+        const llmResponse = await this.llmClientManager.callWithFallback({
             messages: chatMessages,
             tools: [],  // 当前暂不使用工具调用
             outputFormat: "json"
-        };
-
-        const llmResponse = await llmClientManager.callWithFallback(request);
+        });
 
         // 处理LLM响应（支持工具调用）
         if (llmResponse.content) {
@@ -125,18 +122,29 @@ private async tryProcessAndReply(): Promise<void> {
 export class MessageHandler implements IMessageHandler {
     private contextManager: ContextManager;
     protected session: Session;
+    private llmClientManager: LlmClientManager;
 
     constructor(
-        botQQ: number,
-        groupId: number,
         session: Session,
-        masterConfig?: MasterConfig,
-        maxHistorySize = 40,
+        contextManager: ContextManager,
+        llmClientManager: LlmClientManager,
     ) {
         this.session = session;
-        this.contextManager = new ContextManager(botQQ, groupId, masterConfig, maxHistorySize);
+        this.contextManager = contextManager;
+        this.llmClientManager = llmClientManager;
     }
 }
+```
+
+### 工厂函数
+```typescript
+export const newMessageHandler = (
+    session: Session,
+    contextManager: ContextManager,
+    llmClientManager: LlmClientManager,
+) => {
+    return new MessageHandler(session, contextManager, llmClientManager);
+};
 ```
 
 ## 思考链系统
@@ -228,19 +236,14 @@ destroy(): void {
 
 ## 依赖关系
 
-### 核心依赖
-- [[llm_client_manager]] - LLM API 调用和模型降级
-- [[context_manager]] - 上下文管理和历史记录
-- [[session]] - 消息发送功能
+### 核心依赖（通过依赖注入）
+- [[llm_client_manager]] - LLM API 调用和模型降级（注入）
+- [[context_manager]] - 上下文管理和历史记录（注入）
+- [[session]] - 消息发送功能（注入）
 
 ### 数据模型依赖
 - [[message_data_model]] - Message 接口和相关类型
 - [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
-
-### 配置依赖
-- **BehaviorConfig**：消息处理行为配置参数
-- **MasterConfig**：主人特权配置（可选）
-- **maxHistorySize**：历史消息长度配置
 
 ## 配置参数
 
@@ -279,14 +282,12 @@ interface BehaviorConfig {
 
 ### 在SessionManager中的使用
 ```typescript
-// 创建MessageHandler，ContextManager自动创建
-const handler = new MessageHandler(
-    this.botQQ,
-    groupId,
-    session,
-    this.masterConfig,
-    maxHistory,
-);
+// 使用工厂函数创建 MessageHandler
+const session = newSession(groupId, this.napcatFacade);
+const contextManager = newContextManager(this.configManager, this.promptTemplateManager);
+const handler = newMessageHandler(session, contextManager, this.llmClientManager);
+
+session.setMessageHandler(handler);
 ```
 
 ## 相关文件

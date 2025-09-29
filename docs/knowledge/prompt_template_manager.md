@@ -152,9 +152,27 @@ public getTemplatePath(): string {
 - [[config_system]] - MasterConfig 接口定义
 
 ### 被依赖关系
-- [[base_message_handler]] - 主要使用者
-- [[active_message_handler]] - 通过基类使用
-- [[passive_message_handler]] - 通过基类使用
+- [[context_manager]] - 主要使用者，通过依赖注入获取
+- [[session_manager]] - 创建 PromptTemplateManager 实例并注入到 ContextManager
+
+## 工厂函数
+
+```typescript
+export const newPromptTemplateManager = (templatePath?: string) => {
+    return new PromptTemplateManager(templatePath);
+};
+```
+
+推荐使用工厂函数创建 PromptTemplateManager 实例，保持代码风格统一。
+
+### 使用示例
+```typescript
+// 在 main.ts bootstrap 函数中
+const promptTemplateManager = newPromptTemplateManager();
+
+// 在 SessionManager 中使用
+const contextManager = newContextManager(configManager, promptTemplateManager);
+```
 
 ## 扩展能力
 

@@ -1,47 +1,42 @@
-import { Session } from "./session.js";
-import { NapcatConfig, AgentConfig, MasterConfig } from "./config.js";
-import { MessageHandler } from "./message_handler.js";
+import { Session, newSession } from "./session.js";
+import { newMessageHandler } from "./message_handler.js";
 import { GroupMessage, SendMessageSegment } from "node-napcat-ts";
-import { ConnectionManager } from "./connection_manager.js";
+import { NapcatFacade } from "./connection_manager.js";
+import { ConfigManager } from "./config_manager.js";
+import { LlmClientManager } from "./llm_client_manager.js";
+import { PromptTemplateManager } from "./prompt_template_manager.js";
+import { newContextManager } from "./context_manager.js";
 
 export class SessionManager {
     private sessions: Map<number, Session>;
-    private messageHandlers = new Map<number, MessageHandler>();
-    private connectionManager: ConnectionManager;
-    private botQQ: number;
-    private agentConfig?: AgentConfig;
-    private masterConfig?: MasterConfig;
+    private napcatFacade: NapcatFacade;
+    private configManager: ConfigManager;
+    private llmClientManager: LlmClientManager;
+    private promptTemplateManager: PromptTemplateManager;
 
-    constructor(napcatConfig: NapcatConfig, botQQ: number, masterConfig?: MasterConfig, agentConfig?: AgentConfig) {
+    constructor(
+        configManager: ConfigManager,
+        napcatFacade: NapcatFacade,
+        llmClientManager: LlmClientManager,
+        promptTemplateManager: PromptTemplateManager,
+    ) {
         this.sessions = new Map();
-        this.connectionManager = new ConnectionManager(napcatConfig);
-        this.connectionManager.setMessageDispatcher(this.handleIncomingMessage.bind(this));
-        this.botQQ = botQQ;
-        this.masterConfig = masterConfig;
-        this.agentConfig = agentConfig;
+        this.configManager = configManager;
+        this.napcatFacade = napcatFacade;
+        this.llmClientManager = llmClientManager;
+        this.promptTemplateManager = promptTemplateManager;
+        this.napcatFacade.setMessageDispatcher(this.handleIncomingMessage.bind(this));
     }
 
-    async initializeSessions(): Promise<void> {
-        console.log("正在为群组初始化会话:", this.connectionManager.getGroupIds());
+    initializeSessions(): void {
+        console.log("正在为群组初始化会话:", this.napcatFacade.getGroupIds());
 
-        // 先连接 ConnectionManager
-        await this.connectionManager.connect();
-
-        // 为每个群组创建 Session（不再需要独立连接）
-        for (const groupId of this.connectionManager.getGroupIds()) {
+        // 为每个群组创建 Session
+        for (const groupId of this.napcatFacade.getGroupIds()) {
             try {
-                const session = new Session(groupId, this.connectionManager);
-                const maxHistory = this.agentConfig?.history_turns ?? 40;
-
-                // 创建统一的消息处理器
-                const handler = new MessageHandler(
-                    this.botQQ,
-                    groupId,
-                    session,
-                    this.masterConfig,
-                    maxHistory,
-                );
-                this.messageHandlers.set(groupId, handler);
+                const session = newSession(groupId, this.napcatFacade);
+                const contextManager = newContextManager(this.configManager, this.promptTemplateManager);
+                const handler = newMessageHandler(session, contextManager, this.llmClientManager);
 
                 session.setMessageHandler(handler);
                 this.sessions.set(groupId, session);
@@ -73,9 +68,7 @@ export class SessionManager {
         console.log("正在关闭所有会话...");
 
         try {
-            this.messageHandlers.clear();
-
-            this.connectionManager.disconnect();
+            this.napcatFacade.disconnect();
             console.log("连接管理器已关闭");
         } catch (error) {
             console.error("关闭连接管理器失败:", error);
@@ -91,7 +84,7 @@ export class SessionManager {
 
     getConnectionStatus(): Map<number, boolean> {
         const status = new Map<number, boolean>();
-        const isConnected = this.connectionManager.isConnectionActive();
+        const isConnected = this.napcatFacade.isConnectionActive();
         for (const [groupId] of this.sessions) {
             status.set(groupId, isConnected);
         }
@@ -114,3 +107,14 @@ export class SessionManager {
         }
     }
 }
+
+export const newSessionManager = (
+    configManager: ConfigManager,
+    napcatFacade: NapcatFacade,
+    llmClientManager: LlmClientManager,
+    promptTemplateManager: PromptTemplateManager,
+) => {
+    const instance = new SessionManager(configManager, napcatFacade, llmClientManager, promptTemplateManager);
+    instance.initializeSessions();
+    return instance;
+};

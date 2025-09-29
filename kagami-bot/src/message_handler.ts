@@ -1,8 +1,7 @@
 import { SendMessageSegment } from "node-napcat-ts";
 import { Message, MessageHandler as IMessageHandler, Session, BotMessage } from "./session.js";
-import { MasterConfig } from "./config.js";
 import { ContextManager } from "./context_manager.js";
-import { llmClientManager } from "./llm_client_manager.js";
+import { LlmClientManager } from "./llm_client_manager.js";
 
 // 新的JSON数组结构化输出接口
 interface ThoughtItem {
@@ -21,20 +20,20 @@ type ChatResponse = [ThoughtItem, ...ChatResponseItem[]];
 export class MessageHandler implements IMessageHandler {
     private contextManager: ContextManager;
     protected session: Session;
+    private llmClientManager: LlmClientManager;
 
     // 来自ActiveMessageHandler的属性
     private isLlmProcessing = false;
     private hasPendingMessages = false;
 
     constructor(
-        botQQ: number,
-        groupId: number,
         session: Session,
-        masterConfig?: MasterConfig,
-        maxHistorySize = 40,
+        contextManager: ContextManager,
+        llmClientManager: LlmClientManager,
     ) {
         this.session = session;
-        this.contextManager = new ContextManager(botQQ, groupId, masterConfig, maxHistorySize);
+        this.contextManager = contextManager;
+        this.llmClientManager = llmClientManager;
     }
 
     async handleMessage(message: Message): Promise<void> {
@@ -79,7 +78,7 @@ export class MessageHandler implements IMessageHandler {
             // 构建数据结构和LLM请求
             const chatMessages = this.contextManager.buildChatMessages();
 
-            const llmResponse = await llmClientManager.callWithFallback({
+            const llmResponse = await this.llmClientManager.callWithFallback({
                 messages: chatMessages,
                 tools: [],
                 outputFormat: "json",
@@ -165,3 +164,11 @@ export class MessageHandler implements IMessageHandler {
         return { thoughts, reply };
     }
 }
+
+export const newMessageHandler = (
+    session: Session,
+    contextManager: ContextManager,
+    llmClientManager: LlmClientManager,
+) => {
+    return new MessageHandler(session, contextManager, llmClientManager);
+};

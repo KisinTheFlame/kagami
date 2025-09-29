@@ -1,18 +1,19 @@
 import { GroupMessage, NCWebsocket, SendMessageSegment, Receive } from "node-napcat-ts";
-import { NapcatConfig } from "./config.js";
+import { ConfigManager } from "./config_manager.js";
 
 export type MessageDispatcher = (context: GroupMessage) => void;
 
-export class ConnectionManager {
+export class NapcatFacade {
     private napcat: NCWebsocket;
     private isConnected: boolean;
     private messageDispatcher?: MessageDispatcher;
-    private napcatConfig: NapcatConfig;
+    private configManager: ConfigManager;
 
-    constructor(napcatConfig: NapcatConfig) {
-        this.napcatConfig = napcatConfig;
+    constructor(configManager: ConfigManager) {
+        this.configManager = configManager;
         this.isConnected = false;
 
+        const napcatConfig = configManager.getNapcatConfig();
         this.napcat = new NCWebsocket({
             baseUrl: napcatConfig.base_url,
             accessToken: napcatConfig.access_token,
@@ -127,6 +128,12 @@ export class ConnectionManager {
     }
 
     getGroupIds(): number[] {
-        return this.napcatConfig.groups;
+        return this.configManager.getNapcatConfig().groups;
     }
 }
+
+export const newNapcatFacade = async (configManager: ConfigManager) => {
+    const instance = new NapcatFacade(configManager);
+    await instance.connect();
+    return instance;
+};

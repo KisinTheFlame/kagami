@@ -6,10 +6,10 @@
 
 ## 核心组件
 
-### PrismaDatabase 类
-位置：`src/infra/prisma.ts`
+### Database 类
+位置：`src/infra/db.ts`
 
-负责管理 PostgreSQL 数据库连接，基于 Prisma ORM 提供类型安全的数据库操作接口。
+负责管理 PostgreSQL 数据库连接，基于 Prisma ORM 提供类型安全的数据库操作接口。采用依赖注入模式，通过工厂函数 `newDatabase()` 创建实例。
 
 **主要功能：**
 - 自动管理 Prisma 客户端连接
@@ -78,10 +78,10 @@ model LlmCallLog {
 
 ## API 接口
 
-### PrismaDatabase 类方法
+### Database 类方法
 
 ```typescript
-class PrismaDatabase {
+class Database {
     constructor() // 自动配置 Prisma 客户端
 
     // 记录 LLM 调用日志
@@ -92,23 +92,31 @@ class PrismaDatabase {
     ): Promise<void>;
 }
 
-// 导出单例实例
-export const db = new PrismaDatabase();
+// 工厂函数
+export const newDatabase = () => Database;
 ```
 
 ## 使用示例
 
 ```typescript
-import { db } from '../infra/prisma';
+import { newDatabase } from './infra/db';
 
-// 记录 LLM 调用日志
-await db.logLLMCall('success', 'user input', 'llm response');
+// 创建数据库实例（通常在 bootstrap 函数中）
+const database = newDatabase();
+
+// 记录 LLM 调用日志（通过依赖注入传递给需要的组件）
+await database.logLLMCall('success', 'user input', 'llm response');
 ```
 
-## 关联组件
+## 依赖关系
 
-- [[logger]] - 基于 PrismaDatabase 层实现的日志服务
-- [[llm_client]] - 使用日志服务记录 LLM 调用
+### 被依赖
+- [[llm_client]] - 接收 Database 实例，直接调用 logLLMCall 记录 LLM 调用日志
+- [[llm_client_manager]] - 创建 LlmClient 时注入 Database 实例
+
+### 依赖
+- Prisma Client - ORM 客户端
+- PostgreSQL - 数据库服务器
 
 ## 技术特点
 
@@ -118,6 +126,12 @@ await db.logLLMCall('success', 'user input', 'llm response');
 - **连接管理**：Prisma 自动管理数据库连接池和生命周期
 - **查询优化**：内置查询优化和缓存机制
 - **迁移管理**：内置数据库迁移和版本管理
+
+### 依赖注入设计
+- **工厂模式**：通过 `newDatabase()` 工厂函数创建实例
+- **无全局单例**：避免全局状态，便于测试和替换实现
+- **显式依赖**：Database 实例通过构造函数注入到需要的组件
+- **生命周期管理**：由应用层统一管理 Database 实例的创建和生命周期
 
 ### PostgreSQL 优势
 - **ACID 事务**：支持完整的事务特性
