@@ -1,65 +1,34 @@
-import { loadConfig, Config } from "./config.js";
-import { SessionManager } from "./session_manager.js";
+import { SessionManager, newSessionManager } from "./session_manager.js";
+import { newConfigManager } from "./config_manager.js";
+import { newDatabase } from "./infra/db.js";
+import { newNapcatFacade } from "./connection_manager.js";
+import { newPromptTemplateManager } from "./prompt_template_manager.js";
+import { newLlmClientManager } from "./llm_client_manager.js";
 
 class KagamiBot {
-    private sessionManager?: SessionManager;
-    private config: Config;
+    private sessionManager: SessionManager;
 
-    constructor() {
-        console.log("正在初始化 Kagami 机器人...");
-
-        try {
-            this.config = loadConfig();
-            console.log("配置加载成功");
-
-            console.log(`机器人 QQ 号码: ${String(this.config.napcat.bot_qq)}`);
-            console.log(`已配置 ${String(this.config.napcat.groups.length)} 个群组:`, this.config.napcat.groups);
-        } catch (error) {
-            console.error("机器人初始化失败:", error);
-            process.exit(1);
-        }
+    constructor(sessionManager: SessionManager) {
+        this.sessionManager = sessionManager;
     }
 
+    start(): void {
+        console.log("Kagami 机器人启动成功");
+        console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
 
-    async start(): Promise<void> {
-        try {
-            console.log("正在启动 Kagami 机器人...");
-
-            this.sessionManager = new SessionManager(
-                this.config.napcat,
-                this.config.napcat.bot_qq,
-                this.config.master,
-                this.config.agent,
-            );
-            await this.sessionManager.initializeSessions();
-
-            const connectionStatus = this.sessionManager.getConnectionStatus();
-            console.log("连接状态:", connectionStatus);
-
-            console.log("Kagami 机器人启动成功");
-            console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
-
-            this.setupGracefulShutdown();
-
-        } catch (error) {
-            console.error("机器人启动失败:", error);
-            process.exit(1);
-        }
+        this.setupGracefulShutdown();
     }
 
     stop(): void {
         console.log("正在停止 Kagami 机器人...");
 
         try {
-            if (this.sessionManager) {
-                this.sessionManager.shutdownAllSessions();
-            }
+            this.sessionManager.shutdownAllSessions();
             console.log("Kagami 机器人停止成功");
         } catch (error) {
             console.error("关闭过程中发生错误:", error);
         }
     }
-
 
     private setupGracefulShutdown(): void {
         const shutdown = (signal: string) => {
@@ -73,11 +42,61 @@ class KagamiBot {
     }
 }
 
-async function main(): Promise<void> {
-    const bot = new KagamiBot();
-    await bot.start();
+export const newKagamiBot = (sessionManager: SessionManager) => {
+    return new KagamiBot(sessionManager);
+};
 
-    console.log("机器人正在运行中。按 Ctrl+C 停止。");
+async function bootstrap() {
+    try {
+        console.log("正在初始化 Kagami 机器人...");
+
+        // 1. 配置层
+        console.log("正在加载配置...");
+        const configManager = newConfigManager();
+        console.log("配置加载成功");
+
+        const napcatConfig = configManager.getNapcatConfig();
+        console.log(`机器人 QQ 号码: ${String(napcatConfig.bot_qq)}`);
+        console.log(`已配置 ${String(napcatConfig.groups.length)} 个群组:`, napcatConfig.groups);
+
+        // 2. 基础设施层 - 数据访问
+        console.log("正在初始化数据库连接...");
+        const database = newDatabase();
+
+        // 3. 基础设施层 - 外部服务
+        console.log("正在初始化 NapCat 连接...");
+        const napcatFacade = await newNapcatFacade(configManager);
+        const promptTemplateManager = newPromptTemplateManager();
+
+        // 4. LLM 层
+        console.log("正在初始化 LLM 客户端...");
+        const llmClientManager = newLlmClientManager(configManager, database);
+
+        // 5. 编排层
+        console.log("正在初始化会话管理器...");
+        const sessionManager = newSessionManager(
+            configManager,
+            napcatFacade,
+            llmClientManager,
+            promptTemplateManager,
+        );
+
+        // 6. 应用层
+        const bot = newKagamiBot(sessionManager);
+
+        console.log("Kagami 机器人初始化完成");
+        return bot;
+    } catch (error) {
+        console.error("机器人初始化失败:", error);
+        process.exit(1);
+    }
+}
+
+async function main(): Promise<void> {
+    const bot = await bootstrap();
+    bot.start();
+
+    console.log("机器人已运行");
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

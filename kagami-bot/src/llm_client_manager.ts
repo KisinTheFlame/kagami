@@ -1,21 +1,21 @@
-import { LlmClient } from "./llm.js";
+import { LlmClient, newLlmClient } from "./llm.js";
 import { LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
-import { loadConfig, getProviderForModel } from "./config.js";
+import { ConfigManager } from "./config_manager.js";
+import { Database } from "./infra/db.js";
 
-class LlmClientManager {
+export class LlmClientManager {
     private clients: Record<string, LlmClient>;
-    private configuredModels: string[];
+    private configManager: ConfigManager;
 
-    constructor() {
-        const config = loadConfig();
-
+    constructor(configManager: ConfigManager, database: Database) {
+        this.configManager = configManager;
         this.clients = {};
-        this.configuredModels = [...config.llm.models];
 
+        const llmConfig = configManager.getLlmConfig();
         // 为每个模型创建对应的 LlmClient
-        for (const model of this.configuredModels) {
-            const providerConfig = getProviderForModel(config.llm_providers, model);
-            this.clients[model] = new LlmClient(providerConfig, model);
+        for (const model of llmConfig.models) {
+            const providerConfig = configManager.getProviderForModel(model);
+            this.clients[model] = newLlmClient(providerConfig, model, database);
         }
     }
 
@@ -27,7 +27,8 @@ class LlmClientManager {
     }
 
     async callWithFallback(request: OneTurnChatRequest): Promise<LlmResponse> {
-        for (const model of this.configuredModels) {
+        const configuredModels = this.configManager.getLlmConfig().models;
+        for (const model of configuredModels) {
             try {
                 const client = this.getLlmClient(model);
                 return await client.oneTurnChat(request);
@@ -41,4 +42,6 @@ class LlmClientManager {
     }
 }
 
-export const llmClientManager = new LlmClientManager();
+export const newLlmClientManager = (configManager: ConfigManager, database: Database) => {
+    return new LlmClientManager(configManager, database);
+};

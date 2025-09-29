@@ -22,9 +22,11 @@ addMessageToHistory(message: Message): void {
 ```typescript
 buildChatMessages(): ChatMessage[] {
     // 使用Handlebars模板生成系统提示
+    const napcatConfig = this.configManager.getNapcatConfig();
+    const masterConfig = this.configManager.getMasterConfig();
     const systemPrompt = this.promptTemplateManager.generatePrompt({
-        botQQ: this.botQQ,
-        masterConfig: this.masterConfig,
+        botQQ: napcatConfig.bot_qq,
+        masterConfig,
         currentTime: getShanghaiTimestamp(),
     });
 
@@ -84,24 +86,36 @@ getMessageHistory(): readonly Message[] {
 ### 初始化参数
 ```typescript
 constructor(
-    botQQ: number,
-    groupId: number,
-    masterConfig?: MasterConfig,
-    maxHistorySize = 40,
+    configManager: ConfigManager,
+    promptTemplateManager: PromptTemplateManager,
+    maxHistorySize: number,
 ) {
-    this.botQQ = botQQ;
-    this.masterConfig = masterConfig;
+    this.configManager = configManager;
+    this.promptTemplateManager = promptTemplateManager;
     this.maxHistorySize = maxHistorySize;
-    this.promptTemplateManager = new PromptTemplateManager();
 }
 ```
 
+### 工厂函数
+```typescript
+export const newContextManager = (
+    configManager: ConfigManager,
+    promptTemplateManager: PromptTemplateManager,
+    maxHistorySize?: number,
+) => {
+    const agentConfig = configManager.getAgentConfig();
+    const actualMaxHistorySize = maxHistorySize ?? agentConfig?.history_turns ?? 40;
+    return new ContextManager(configManager, promptTemplateManager, actualMaxHistorySize);
+};
+```
+
+工厂函数会自动从 AgentConfig 中读取 `history_turns` 配置作为默认的 `maxHistorySize`。
+
 ### 核心属性
-- **botQQ**: 机器人QQ号，用于生成系统提示词
+- **configManager**: 配置管理器，提供机器人配置和主人配置
 - **messageHistory**: 消息历史数组，采用LRU策略
-- **maxHistorySize**: 历史消息最大长度，默认40条
-- **promptTemplateManager**: 提示词模板管理器
-- **masterConfig**: 主人配置信息（可选）
+- **maxHistorySize**: 历史消息最大长度（从 AgentConfig 读取或使用默认值 40）
+- **promptTemplateManager**: 提示词模板管理器（注入）
 
 ## 思考链数据结构
 
@@ -160,16 +174,15 @@ if (this.messageHistory.length > this.maxHistorySize) {
 
 ## 依赖关系
 
-### 核心依赖
-- [[prompt_template_manager]] - Handlebars模板系统
+### 核心依赖（通过依赖注入）
+- [[config_manager]] - 配置管理器，提供机器人和主人配置（注入）
+- [[prompt_template_manager]] - Handlebars模板系统（注入）
 - [[message_data_model]] - Message接口和相关类型
-- [[config_system]] - MasterConfig配置类型
 
 ### 导入的类型
 - **SendMessageSegment**: node-napcat-ts的消息段类型
 - **ChatMessage**: LLM提供商的统一消息格式（支持工具调用）
 - **Message**: 内部消息数据模型
-- **MasterConfig**: 主人配置类型
 
 ### 使用者
 - [[message_handler]] - 主要使用者，通过组合方式使用ContextManager
@@ -178,80 +191,37 @@ if (this.messageHistory.length > this.maxHistorySize) {
 
 ### 在MessageHandler中的使用
 ```typescript
-export class MessageHandler implements IMessageHandler {
-    private contextManager: ContextManager;
-    protected session: Session;
+// 在 SessionManager 中创建
+const contextManager = newContextManager(this.configManager, this.promptTemplateManager);
+const handler = newMessageHandler(session, contextManager, this.llmClientManager);
+```
 
-    constructor(
-        botQQ: number,
-        groupId: number,
-        session: Session,
-        masterConfig?: MasterConfig,
-        maxHistorySize = 40,
-    ) {
-        this.session = session;
-        this.contextManager = new ContextManager(botQQ, groupId, masterConfig, maxHistorySize);
-    }
+### 使用工厂函数的完整示例
+```typescript
+// 在 SessionManager 初始化会话时
+for (const groupId of this.napcatFacade.getGroupIds()) {
+    const session = newSession(groupId, this.napcatFacade);
 
-    async handleMessage(message: Message): Promise<void> {
-        // 添加消息到历史
-        this.contextManager.addMessageToHistory(message);
+    // 使用工厂函数创建 ContextManager，自动从配置读取 maxHistorySize
+    const contextManager = newContextManager(
+        this.configManager,
+        this.promptTemplateManager
+    );
 
-        // 处理消息...
-        await this.tryProcessAndReply();
-    }
-
-    protected async processAndReply(): Promise<void> {
-        // 构建LLM上下文
-        const chatMessages = this.contextManager.buildChatMessages();
-
-        // 调用LLM（支持模型降级）
-        const request: OneTurnChatRequest = {
-            messages: chatMessages,
-            tools: [],
-            outputFormat: "json"
-        };
-        const llmResponse = await llmClientManager.callWithFallback(request);
-
-        // 将响应添加到历史
-        const botMessage: Message = {
-            type: "bot_msg",
-            value: { thoughts, chat: reply },
-        };
-        this.contextManager.addMessageToHistory(botMessage);
-    }
+    const handler = newMessageHandler(session, contextManager, this.llmClientManager);
+    session.setMessageHandler(handler);
+    this.sessions.set(groupId, session);
 }
 ```
 
-### 独立使用示例
+### 手动指定历史长度
 ```typescript
-// 创建上下文管理器
-const contextManager = new ContextManager(
-    123456789,  // botQQ
-    987654321,  // groupId
-    masterConfig,
-    50  // maxHistorySize
+// 如果需要覆盖配置中的 history_turns，可以传入 maxHistorySize 参数
+const contextManager = newContextManager(
+    configManager,
+    promptTemplateManager,
+    100  // 手动指定最大历史长度
 );
-
-// 添加用户消息
-const userMessage: Message = {
-    type: "group_msg",
-    value: {
-        id: "msg123",
-        userId: 111111,
-        userNickname: "用户名",
-        chat: "Hello, bot!",
-        timestamp: "2024-01-01 12:00:00"
-    }
-};
-contextManager.addMessageToHistory(userMessage);
-
-// 构建LLM上下文
-const chatMessages = contextManager.buildChatMessages();
-
-// 获取历史记录（只读）
-const history = contextManager.getMessageHistory();
-console.log(`当前历史记录数量: ${history.length}`);
 ```
 
 ## 相关文件

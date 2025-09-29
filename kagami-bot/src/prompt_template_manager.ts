@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import Handlebars from "handlebars";
-import { MasterConfig } from "./config.js";
+import { MasterConfig } from "./config_manager.js";
 
 export interface PromptTemplateContext {
     botQQ: number;
@@ -55,3 +55,7 @@ export class PromptTemplateManager {
         return this.templatePath;
     }
 }
+
+export const newPromptTemplateManager = (templatePath?: string) => {
+    return new PromptTemplateManager(templatePath);
+};

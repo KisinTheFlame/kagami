@@ -9,7 +9,8 @@ LlmClientManager 是统一的 LLM 客户端管理器，负责管理多个 [[llm_
 ### 支持工具调用的模型降级调用
 ```typescript
 async callWithFallback(request: OneTurnChatRequest): Promise<LlmResponse> {
-    for (const model of this.configuredModels) {
+    const configuredModels = this.configManager.getLlmConfig().models;
+    for (const model of configuredModels) {
         try {
             const client = this.getLlmClient(model);
             return await client.oneTurnChat(request);
@@ -40,31 +41,36 @@ interface LlmResponse {
 }
 ```
 
-### 自动配置加载
+### 依赖注入初始化
 ```typescript
 class LlmClientManager {
-    constructor() {
-        // 自己加载配置，和 db.ts 的模式一致
-        const config = loadConfig();
-
+    constructor(configManager: ConfigManager, database: Database) {
+        this.configManager = configManager;
         this.clients = {};
-        this.configuredModels = [...config.llm.models];
 
+        const llmConfig = configManager.getLlmConfig();
         // 为每个模型创建对应的 LlmClient
-        for (const model of this.configuredModels) {
-            const providerConfig = getProviderForModel(config.llm_providers, model);
-            this.clients[model] = new LlmClient(providerConfig, model);
+        for (const model of llmConfig.models) {
+            const providerConfig = configManager.getProviderForModel(model);
+            this.clients[model] = newLlmClient(providerConfig, model, database);
         }
     }
 }
+
+// 工厂函数
+export const newLlmClientManager = (configManager: ConfigManager, database: Database) => {
+    return new LlmClientManager(configManager, database);
+};
 ```
 
 ## 设计特点
 
-### 单例模式
-- **全局实例**：导出单例实例 `llmClientManager`，与 [[database_layer]] 模式一致
-- **模块初始化**：在模块导入时自动初始化，尽早发现配置错误
-- **配置自包含**：自己调用 `loadConfig()`，不依赖外部传递
+### 依赖注入
+- **工厂模式**：通过 `newLlmClientManager()` 工厂函数创建实例
+- **ConfigManager 注入**：通过构造函数接收 ConfigManager 依赖
+- **Database 注入**：通过构造函数接收 Database 依赖，传递给 LlmClient
+- **无全局单例**：避免全局状态，便于测试和替换实现
+- **显式依赖**：LlmClientManager 实例通过参数传递给需要的组件
 
 ### 降级策略
 - **顺序降级**：按照配置数组顺序依次尝试模型
@@ -72,7 +78,7 @@ class LlmClientManager {
 - **全面跟踪**：记录尝试过的所有模型路径
 
 ### 客户端管理
-- **延迟创建**：在构造函数中为每个模型预创建客户端
+- **预创建**：在构造函数中为每个模型预创建客户端
 - **统一接口**：所有模型都通过相同的 `oneTurnChat` 接口调用
 - **错误隔离**：单个模型的错误不影响其他模型
 
@@ -131,36 +137,50 @@ llm:
 - **早期失败**：配置错误在初始化时立即抛出异常
 - **详细错误**：提供具体的错误信息和缺失模型名称
 
+## 依赖关系
+
+### 依赖
+- [[config_manager]] - 接收 ConfigManager 注入，获取 LLM 配置和提供商配置
+- [[database_layer]] - 接收 Database 注入，传递给 LlmClient 用于日志记录
+- [[llm_client]] - 为每个模型创建 LlmClient 实例
+
+### 被依赖
+- [[message_handler]] - 接收 LlmClientManager 实例，调用 `callWithFallback()` 进行 LLM 调用
+- [[session_manager]] - 创建 MessageHandler 时注入 LlmClientManager
+
 ## 架构集成
 
-### 依赖关系简化
+### 依赖关系图
 ```
 MessageHandler  →  LlmClientManager  →  LlmClient[]
-                                    →  Config System
+                                    →  ConfigManager
+                                    →  Database
 ```
 
 - **移除直接依赖**：[[message_handler]] 不再直接依赖 [[llm_client]]
 - **统一管理**：所有 LLM 调用都通过 LlmClientManager 统一管理
-- **配置集中**：配置加载和验证集中在一个地方
-
-### 与现有组件的关系
-- **替代 LlmClient 直接使用**：[[message_handler]] 现在使用 `llmClientManager.callWithFallback()`
-- **保持日志系统**：每个 [[llm_client]] 仍然记录详细的调用日志
-- **兼容现有接口**：`callWithFallback()` 接口与原来的 `oneTurnChat()` 兼容
+- **依赖注入链**：ConfigManager 和 Database 通过构造函数注入
 
 ## 使用方式
 
-### 导入和使用
+### 创建和使用
 ```typescript
-import { llmClientManager } from "./llm_client_manager.js";
+import { newLlmClientManager } from "./llm_client_manager.js";
+import { newConfigManager } from "./config_manager.js";
+import { newDatabase } from "./infra/db.js";
 
-// 在MessageHandler中使用
+// 在 bootstrap 函数中创建
+const configManager = newConfigManager();
+const database = newDatabase();
+const llmClientManager = newLlmClientManager(configManager, database);
+
+// 在 MessageHandler 中使用（通过依赖注入）
 const request: OneTurnChatRequest = {
     messages: chatMessages,
     tools: [],
     outputFormat: "json"
 };
-const llmResponse = await llmClientManager.callWithFallback(request);
+const llmResponse = await this.llmClientManager.callWithFallback(request);
 ```
 
 ### 错误处理
@@ -222,15 +242,13 @@ try {
 - **超时设置**：模型级别的超时配置
 - **权重系统**：给不同模型分配不同的选择权重
 
-## 相关文件
-- `src/llm_client_manager.ts` - 主要实现
-- `src/config.ts` - LlmConfig 接口定义和验证逻辑
-- `src/llm.ts` - LlmClient 实现
-- `src/message_handler.ts` - 使用 LlmClientManager 的地方
+## 实现位置
+
+`kagami-bot/src/llm_client_manager.ts`
 
 ## 相关节点
 - [[llm_client]] - 被管理的客户端实例
 - [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
-- [[config_system]] - 配置加载和验证
+- [[config_manager]] - 配置管理器，提供 LLM 配置
+- [[database_layer]] - 数据库层，传递给 LlmClient 记录日志
 - [[message_handler]] - 主要使用者
-- [[logger]] - LLM 调用日志记录

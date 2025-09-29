@@ -1,8 +1,8 @@
-# ConnectionManager 连接管理器
+# NapcatFacade（NapCat 外观）
 
 ## 定义
 
-ConnectionManager 负责管理与 napcat 的 WebSocket 连接，提供统一的消息发送接口和用户信息查询功能。位于 `src/connection_manager.ts`。
+NapcatFacade 是 napcat WebSocket 连接的外观层，负责管理与 napcat 的连接，提供统一的消息发送接口和用户信息查询功能。采用外观模式封装 node-napcat-ts 的复杂性，通过依赖注入接收 ConfigManager。位于 `src/connection_manager.ts`。
 
 ## 核心功能
 
@@ -57,10 +57,17 @@ async getBotQQ(): Promise<number | undefined> {
 
 ## 设计特点
 
-### 统一接口
+### 外观模式
 - **抽象底层复杂性**：封装 node-napcat-ts 的具体实现
+- **统一接口**：提供简洁的消息发送和查询接口
 - **类型安全**：提供 TypeScript 类型定义
 - **错误处理**：统一的错误捕获和日志记录
+
+### 依赖注入
+- **ConfigManager 注入**：通过构造函数接收 ConfigManager 依赖
+- **工厂函数**：`newNapcatFacade()` 创建实例并自动执行 connect()
+- **无全局单例**：避免全局状态，便于测试
+- **显式依赖**：NapcatFacade 实例通过参数传递给需要的组件
 
 ### 分发机制
 - **回调模式**：通过消息分发器实现事件驱动
@@ -74,17 +81,34 @@ async getBotQQ(): Promise<number | undefined> {
 
 ## 依赖关系
 
-### 外部依赖
+### 依赖
 - **node-napcat-ts**：WebSocket 连接和 QQ API 封装
-- [[config_system]]：napcat 连接配置
+- [[config_manager]]：接收 ConfigManager 依赖注入，获取 napcat 连接配置
 
-### 被依赖关系
-- [[session_manager]]：使用连接管理器进行消息分发
-- [[session]]：通过连接管理器发送消息
+### 被依赖
+- [[session_manager]]：接收 NapcatFacade 实例，用于消息分发和会话管理
+- [[session]]：接收 NapcatFacade 实例，用于发送消息和查询用户信息
+
+## 使用示例
+
+```typescript
+import { newNapcatFacade } from './connection_manager';
+import { newConfigManager } from './config_manager';
+
+// 创建 NapCat 外观（在 bootstrap 函数中）
+const configManager = newConfigManager();
+const napcatFacade = await newNapcatFacade(configManager);
+
+// 发送群组消息
+await napcatFacade.sendGroupMessage(groupId, [{ type: 'text', data: { text: 'Hello' } }]);
+
+// 查询用户昵称
+const nickname = await napcatFacade.getUserNickname(groupId, userId);
+```
 
 ## 配置要求
 
-### NapcatConfig 配置项
+通过 [[config_manager]] 获取 NapcatConfig 配置项：
 ```typescript
 export interface NapcatConfig {
     base_url: string;        // napcat WebSocket 地址
@@ -113,15 +137,13 @@ export interface NapcatConfig {
 
 ## 生命周期
 
-### 初始化
-1. 创建 NCWebsocket 实例（传入配置）
-2. 设置初始连接状态为 false
-3. 等待 `connect()` 调用
-
-### 连接阶段
-1. 调用 `napcat.connect()`
-2. 设置事件处理器
-3. 更新连接状态为 true
+### 初始化（通过工厂函数）
+1. `newNapcatFacade(configManager)` 创建实例
+2. 从 ConfigManager 获取 NapcatConfig
+3. 创建 NCWebsocket 实例
+4. 自动调用 `connect()` 建立连接
+5. 设置事件处理器
+6. 返回已连接的实例
 
 ### 运行阶段
 1. 接收和分发群组消息
@@ -129,10 +151,10 @@ export interface NapcatConfig {
 3. 响应用户信息查询
 
 ### 关闭阶段
-1. 调用 `napcat.disconnect()`
+1. 调用 `disconnect()`
 2. 更新连接状态为 false
 3. 清理事件监听器
 
-## 相关文件
-- `src/connection_manager.ts` - 主要实现
-- `src/config.ts` - 配置接口定义
+## 实现位置
+
+`kagami-bot/src/connection_manager.ts`
