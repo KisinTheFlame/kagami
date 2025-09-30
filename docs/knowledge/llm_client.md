@@ -14,11 +14,11 @@ async oneTurnChat(request: OneTurnChatRequest): Promise<LlmResponse> {
 
     try {
         const llmResponse = await this.provider.oneTurnChat(this.model, request);
-        void this.database.logLLMCall("success", inputForLog, JSON.stringify(llmResponse));
+        void this.llmCallLogRepository.logLLMCall("success", inputForLog, llmResponse.content ?? "");
         return llmResponse;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
-        void this.database.logLLMCall("fail", inputForLog, `模型 ${this.model} 调用失败: ${errorMessage}`);
+        void this.llmCallLogRepository.logLLMCall("fail", inputForLog, `模型 ${this.model} 调用失败: ${errorMessage}`);
         throw error;
     }
 }
@@ -48,7 +48,7 @@ interface LlmResponse {
 
 ### 简化设计
 - **单一职责**：一个 LlmClient 实例只负责一个模型
-- **日志集成**：通过依赖注入的 Database 实例记录每次调用
+- **日志集成**：通过依赖注入的 [[llm_call_log_repository]] 记录每次调用
 - **统一管理**：由 [[llm_client_manager]] 统一创建和管理
 - **工厂函数**：提供 `newLlmClient()` 工厂函数用于实例化
 
@@ -74,7 +74,7 @@ interface LlmResponse {
 ### 直接依赖
 - [[llm_function_calling]] - 工具调用类型定义（OneTurnChatRequest, LlmResponse）
 - **LLM Provider** - 具体的 LLM SDK 实现，支持工具调用
-- [[database_layer]] - Database 类，用于记录 LLM 调用日志
+- [[llm_call_log_repository]] - 用于记录 LLM 调用日志
 
 ### 被依赖关系
 - [[llm_client_manager]] - 统一管理多个 LlmClient 实例
@@ -84,17 +84,17 @@ interface LlmResponse {
 
 ### 构造函数参数
 ```typescript
-constructor(providerConfig: ProviderConfig, model: string, database: Database)
+constructor(providerConfig: ProviderConfig, model: string, llmCallLogRepository: LlmCallLogRepository)
 ```
 
 - `providerConfig`: 单个提供商的配置对象
 - `model`: 要使用的模型名称（必须被该提供商支持）
-- `database`: Database 实例，用于记录 LLM 调用日志
+- `llmCallLogRepository`: LlmCallLogRepository 实例，用于记录 LLM 调用日志
 
 ### 工厂函数
 ```typescript
-export const newLlmClient = (providerConfig: ProviderConfig, model: string, database: Database) => {
-    return new LlmClient(providerConfig, model, database);
+export const newLlmClient = (providerConfig: ProviderConfig, model: string, llmCallLogRepository: LlmCallLogRepository) => {
+    return new LlmClient(providerConfig, model, llmCallLogRepository);
 };
 ```
 

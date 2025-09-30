@@ -45,7 +45,7 @@ Kagami System
 
 ### LLM 集成
 - [[llm_client_manager]] - LLM 客户端管理器，负责模型降级和统一调用，采用依赖注入
-- [[llm_client]] - 单个 LLM 模型的调用客户端，直接记录日志到数据库
+- [[llm_client]] - 单个 LLM 模型的调用客户端，通过 Repository 记录日志
 - [[llm_function_calling]] - LLM 工具调用系统，提供完整的 function calling 支持
 
 ### 支持组件
@@ -56,7 +56,8 @@ Kagami System
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
 ### 数据层
-- [[database_layer]] - Database 类，Prisma ORM + PostgreSQL 数据库封装，提供 LLM 调用日志记录，采用依赖注入
+- [[database_layer]] - Database 类，Prisma ORM + PostgreSQL 数据库封装，提供 Prisma 客户端访问
+- [[llm_call_log_repository]] - LLM 调用日志仓储，采用 Repository 模式封装日志持久化操作
 
 ## 关系图谱
 
@@ -67,15 +68,16 @@ bootstrap() 函数分层创建：
    └── ConfigManager
 
 2. 基础设施层 - 数据访问
-   └── Database
+   ├── Database
+   └── LlmCallLogRepository (依赖: Database)
 
 3. 基础设施层 - 外部服务
    ├── NapcatFacade (依赖: ConfigManager)
    └── PromptTemplateManager
 
 4. LLM 层
-   └── LlmClientManager (依赖: ConfigManager, Database)
-       └── LlmClient[] (依赖: Database)
+   └── LlmClientManager (依赖: ConfigManager, LlmCallLogRepository)
+       └── LlmClient[] (依赖: LlmCallLogRepository)
 
 5. 编排层
    └── SessionManager (依赖: ConfigManager, NapcatFacade, LlmClientManager, PromptTemplateManager)
@@ -93,7 +95,9 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
                                                            ↓
                                             ContextManager → LlmClientManager → LlmClient[]
                                                  ↓                                   ↓
-                                      PromptTemplateManager              Database.logLLMCall()
+                                      PromptTemplateManager              LlmCallLogRepository
+                                                                                     ↓
+                                                                          Database.getPrisma()
                                                                                      ↓
                                                                                   回复
 ```
@@ -115,7 +119,8 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **多 API Key**：负载均衡和高可用性支持
 - **回复引用**：智能决策何时使用 QQ 回复功能
 - **配置驱动**：通过 ConfigManager 统一管理配置，支持类型安全访问
-- **调用日志**：通过 Database 类记录 LLM 调用历史，支持问题排查和分析
+- **调用日志**：通过 Repository 模式记录 LLM 调用历史，支持问题排查和分析
+- **Repository 模式**：数据访问层采用 Repository 模式，关注点分离，便于测试和维护
 - **容器化部署**：标准化 Docker 镜像版本，确保部署一致性和稳定性
 
 ## 技术栈

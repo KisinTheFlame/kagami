@@ -44,7 +44,7 @@ interface LlmResponse {
 ### 依赖注入初始化
 ```typescript
 class LlmClientManager {
-    constructor(configManager: ConfigManager, database: Database) {
+    constructor(configManager: ConfigManager, llmCallLogRepository: LlmCallLogRepository) {
         this.configManager = configManager;
         this.clients = {};
 
@@ -52,14 +52,14 @@ class LlmClientManager {
         // 为每个模型创建对应的 LlmClient
         for (const model of llmConfig.models) {
             const providerConfig = configManager.getProviderForModel(model);
-            this.clients[model] = newLlmClient(providerConfig, model, database);
+            this.clients[model] = newLlmClient(providerConfig, model, llmCallLogRepository);
         }
     }
 }
 
 // 工厂函数
-export const newLlmClientManager = (configManager: ConfigManager, database: Database) => {
-    return new LlmClientManager(configManager, database);
+export const newLlmClientManager = (configManager: ConfigManager, llmCallLogRepository: LlmCallLogRepository) => {
+    return new LlmClientManager(configManager, llmCallLogRepository);
 };
 ```
 
@@ -68,7 +68,7 @@ export const newLlmClientManager = (configManager: ConfigManager, database: Data
 ### 依赖注入
 - **工厂模式**：通过 `newLlmClientManager()` 工厂函数创建实例
 - **ConfigManager 注入**：通过构造函数接收 ConfigManager 依赖
-- **Database 注入**：通过构造函数接收 Database 依赖，传递给 LlmClient
+- **Repository 注入**：通过构造函数接收 [[llm_call_log_repository]] 依赖，传递给 LlmClient
 - **无全局单例**：避免全局状态，便于测试和替换实现
 - **显式依赖**：LlmClientManager 实例通过参数传递给需要的组件
 
@@ -141,7 +141,7 @@ llm:
 
 ### 依赖
 - [[config_manager]] - 接收 ConfigManager 注入，获取 LLM 配置和提供商配置
-- [[database_layer]] - 接收 Database 注入，传递给 LlmClient 用于日志记录
+- [[llm_call_log_repository]] - 接收 LlmCallLogRepository 注入，传递给 LlmClient 用于日志记录
 - [[llm_client]] - 为每个模型创建 LlmClient 实例
 
 ### 被依赖
@@ -154,12 +154,12 @@ llm:
 ```
 MessageHandler  →  LlmClientManager  →  LlmClient[]
                                     →  ConfigManager
-                                    →  Database
+                                    →  LlmCallLogRepository
 ```
 
 - **移除直接依赖**：[[message_handler]] 不再直接依赖 [[llm_client]]
 - **统一管理**：所有 LLM 调用都通过 LlmClientManager 统一管理
-- **依赖注入链**：ConfigManager 和 Database 通过构造函数注入
+- **依赖注入链**：ConfigManager 和 LlmCallLogRepository 通过构造函数注入
 
 ## 使用方式
 
@@ -168,11 +168,13 @@ MessageHandler  →  LlmClientManager  →  LlmClient[]
 import { newLlmClientManager } from "./llm_client_manager.js";
 import { newConfigManager } from "./config_manager.js";
 import { newDatabase } from "./infra/db.js";
+import { newLlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 
 // 在 bootstrap 函数中创建
 const configManager = newConfigManager();
 const database = newDatabase();
-const llmClientManager = newLlmClientManager(configManager, database);
+const llmCallLogRepository = newLlmCallLogRepository(database);
+const llmClientManager = newLlmClientManager(configManager, llmCallLogRepository);
 
 // 在 MessageHandler 中使用（通过依赖注入）
 const request: OneTurnChatRequest = {

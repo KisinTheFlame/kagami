@@ -22,22 +22,8 @@ export class Database {
         });
     }
 
-    async logLLMCall(
-        status: "success" | "fail",
-        input: string,
-        output: string,
-    ): Promise<void> {
-        try {
-            await this.prisma.llmCallLog.create({
-                data: {
-                    status,
-                    input,
-                    output,
-                },
-            });
-        } catch (error) {
-            throw new Error(`Failed to log LLM call: ${String(error)}`);
-        }
+    getPrisma(): PrismaClient {
+        return this.prisma;
     }
 }
 

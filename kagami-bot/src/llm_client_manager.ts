@@ -1,13 +1,13 @@
 import { LlmClient, newLlmClient } from "./llm.js";
 import { LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
 import { ConfigManager } from "./config_manager.js";
-import { Database } from "./infra/db.js";
+import { LlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 
 export class LlmClientManager {
     private clients: Record<string, LlmClient>;
     private configManager: ConfigManager;
 
-    constructor(configManager: ConfigManager, database: Database) {
+    constructor(configManager: ConfigManager, llmCallLogRepository: LlmCallLogRepository) {
         this.configManager = configManager;
         this.clients = {};
 
@@ -15,7 +15,7 @@ export class LlmClientManager {
         // 为每个模型创建对应的 LlmClient
         for (const model of llmConfig.models) {
             const providerConfig = configManager.getProviderForModel(model);
-            this.clients[model] = newLlmClient(providerConfig, model, database);
+            this.clients[model] = newLlmClient(providerConfig, model, llmCallLogRepository);
         }
     }
 
@@ -42,6 +42,6 @@ export class LlmClientManager {
     }
 }
 
-export const newLlmClientManager = (configManager: ConfigManager, database: Database) => {
-    return new LlmClientManager(configManager, database);
+export const newLlmClientManager = (configManager: ConfigManager, llmCallLogRepository: LlmCallLogRepository) => {
+    return new LlmClientManager(configManager, llmCallLogRepository);
 };

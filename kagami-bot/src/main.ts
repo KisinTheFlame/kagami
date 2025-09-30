@@ -1,6 +1,7 @@
 import { SessionManager, newSessionManager } from "./session_manager.js";
 import { newConfigManager } from "./config_manager.js";
 import { newDatabase } from "./infra/db.js";
+import { newLlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 import { newNapcatFacade } from "./connection_manager.js";
 import { newPromptTemplateManager } from "./prompt_template_manager.js";
 import { newLlmClientManager } from "./llm_client_manager.js";
@@ -62,6 +63,7 @@ async function bootstrap() {
         // 2. 基础设施层 - 数据访问
         console.log("正在初始化数据库连接...");
         const database = newDatabase();
+        const llmCallLogRepository = newLlmCallLogRepository(database);
 
         // 3. 基础设施层 - 外部服务
         console.log("正在初始化 NapCat 连接...");
@@ -70,7 +72,7 @@ async function bootstrap() {
 
         // 4. LLM 层
         console.log("正在初始化 LLM 客户端...");
-        const llmClientManager = newLlmClientManager(configManager, database);
+        const llmClientManager = newLlmClientManager(configManager, llmCallLogRepository);
 
         // 5. 编排层
         console.log("正在初始化会话管理器...");
@@ -104,5 +106,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         console.error("致命错误:", error);
         process.exit(1);
     });
-
 }
