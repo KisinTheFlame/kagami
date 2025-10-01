@@ -8,14 +8,14 @@ Kagami 是一个多子项目架构的 QQ 群聊机器人系统，包含 QQ 机�
 
 ```
 Kagami System
-├── kagami-bot/              # QQ 群聊机器人 (Node.js + TypeScript)
+├── kagami-bot/              # QQ 群聊机器人 + HTTP API (Node.js + TypeScript)
 │   ├── 消息处理引擎
 │   ├── LLM 集成
-│   └── 数据记录
-├── kagami-console/          # 后端 API (Go)
-│   ├── LLM 日志查询 API
-│   ├── 数据库连接
-│   └── CORS 代理
+│   ├── 数据记录
+│   └── HTTP API 服务
+│       ├── LLM 日志查询 API
+│       ├── CORS 中间件
+│       └── RESTful 路由
 └── kagami-console-web/      # 前端控制台 (React + TypeScript)
     ├── LLM 调用历史界面
     ├── 数据筛选和排序
@@ -31,6 +31,9 @@ Kagami System
 - [[connection_manager]] - NapcatFacade 外观层，管理 napcat WebSocket 连接
 - [[session_manager]] - 多群组会话管理和消息分发，采用依赖注入
 - [[session]] - 单个群组的会话封装
+
+### HTTP API 层
+- [[http_api_layer]] - HTTP API 服务层，提供 RESTful 接口用于数据查询和管理
 
 ### 控制台系统
 - [[console_system]] - Web 控制台整体架构和功能
@@ -88,8 +91,11 @@ bootstrap() 函数分层创建：
            └── MessageHandler (依赖: Session, ContextManager, LlmClientManager)
                └── ContextManager (依赖: ConfigManager, PromptTemplateManager)
 
-6. 应用层
-   └── KagamiBot (依赖: SessionManager)
+6. HTTP Handler 层
+   └── LlmLogsRouter (依赖: LlmCallLogRepository)
+
+7. HTTP 服务层
+   └── HttpServer (依赖: LlmLogsRouter, HttpConfig)
 
 注：领域层（domain_layer）不依赖任何其他层，被 Repository 层和应用层使用
 ```
@@ -144,9 +150,15 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **代码质量**：ESLint
 - **容器化**：Docker 多阶段构建 + Alpine Linux
 
+### HTTP API 技术栈
+- **框架**：Express.js + TypeScript
+- **验证**：Zod 类型验证
+- **CORS**：cors 中间件
+- **数据访问**：通过 Repository 模式访问数据库
+- **容器化**：与 kagami-bot 统一打包部署
+
 ### 控制台系统技术栈
-- **后端**：Go + Gin 框架 + GORM
 - **前端**：React + TypeScript + Ant Design + Vite
 - **部署**：Nginx 静态托管 + API 代理
-- **数据库**：共享 PostgreSQL 数据库（通过 API 访问）
-- **容器化**：Go 静态编译 + Nginx Alpine 镜像
+- **数据库**：通过 HTTP API 访问 PostgreSQL 数据库
+- **容器化**：Nginx Alpine 镜像

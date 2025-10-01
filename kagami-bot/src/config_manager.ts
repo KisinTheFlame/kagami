@@ -29,10 +29,20 @@ export type MasterConfig = {
     nickname: string,
 };
 
+export type CorsConfig = {
+    allowed_origins: string[],
+};
+
+export type HttpConfig = {
+    port: number,
+    cors: CorsConfig,
+};
+
 export type Config = {
     llm_providers: Record<string, ProviderConfig>,
     llm: LlmConfig,
     napcat: NapcatConfig,
+    http: HttpConfig,
     master?: MasterConfig,
     agent?: AgentConfig,
 };
@@ -78,6 +88,10 @@ export class ConfigManager {
 
     getAgentConfig(): AgentConfig | undefined {
         return this.config.agent;
+    }
+
+    getHttpConfig(): HttpConfig {
+        return this.config.http;
     }
 
     getProviderForModel(model: string): ProviderConfig {

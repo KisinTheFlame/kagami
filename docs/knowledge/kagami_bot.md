@@ -2,73 +2,80 @@
 
 ## 定义
 
-KagamiBot 是项目的主应用类，负责整个机器人的初始化、启动、运行和关闭过程。位于 `src/main.ts`。
+KagamiBot 主应用负责整个机器人的初始化和启动过程。位于 `kagami-bot/src/main.ts`。
+
+**注**：在最新的重构中，KagamiBot 类已被移除，改为直接在 `bootstrap()` 函数中初始化所有组件，简化了应用层架构。
 
 ## 核心功能
 
 ### 分层初始化流程（bootstrap 函数）
 ```typescript
 async function bootstrap() {
-    console.log("正在初始化 Kagami 机器人...");
+    try {
+        console.log("正在初始化 Kagami 机器人...");
 
-    // 1. 配置层
-    const configManager = newConfigManager();
+        // 1. 配置层
+        const configManager = newConfigManager();
 
-    // 2. 基础设施层 - 数据访问
-    const database = newDatabase();
+        // 2. 基础设施层 - 数据访问
+        const database = newDatabase();
+        const llmCallLogRepository = newLlmCallLogRepository(database);
 
-    // 3. 基础设施层 - 外部服务
-    const napcatFacade = await newNapcatFacade(configManager);
-    const promptTemplateManager = newPromptTemplateManager();
+        // 3. 基础设施层 - 外部服务
+        const napcatFacade = await newNapcatFacade(configManager);
+        const promptTemplateManager = newPromptTemplateManager();
 
-    // 4. LLM 层
-    const llmClientManager = newLlmClientManager(configManager, database);
+        // 4. LLM 层
+        const llmClientManager = newLlmClientManager(configManager, llmCallLogRepository);
 
-    // 5. 编排层
-    const sessionManager = newSessionManager(
-        configManager,
-        napcatFacade,
-        llmClientManager,
-        promptTemplateManager,
-    );
+        // 5. 编排层
+        newSessionManager(configManager, napcatFacade, llmClientManager, promptTemplateManager);
 
-    // 6. 应用层
-    const bot = newKagamiBot(sessionManager);
+        console.log("Kagami 机器人已启动");
 
-    return bot;
-}
-```
+        // 6. HTTP Handler 层
+        const httpConfig: HttpConfig = configManager.getHttpConfig();
+        const llmLogsRouter = createLlmLogsRouter(llmCallLogRepository);
 
-### 启动流程
-```typescript
-start(): void {
-    console.log("Kagami 机器人启动成功");
-    console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
-}
-```
+        // 7. HTTP 服务层
+        await createHttpServer(llmLogsRouter, httpConfig);
 
-## 依赖关系
-
-### 直接依赖（通过依赖注入）
-- [[session_manager]] - 会话和连接管理（注入）
-
-### 构造函数
-```typescript
-class KagamiBot {
-    private sessionManager: SessionManager;
-
-    constructor(sessionManager: SessionManager) {
-        this.sessionManager = sessionManager;
+        console.log(`HTTP 服务器已启动，监听端口 ${String(httpConfig.port)}`);
+    } catch (error) {
+        console.error("机器人初始化失败:", error);
+        process.exit(1);
     }
 }
 ```
 
-### 工厂函数
+### 主函数
 ```typescript
-export const newKagamiBot = (sessionManager: SessionManager) => {
-    return new KagamiBot(sessionManager);
-};
+async function main(): Promise<void> {
+    await bootstrap();
+    console.log("bootstrap 完成");
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+    main().catch((error: unknown) => {
+        console.error("致命错误:", error);
+        process.exit(1);
+    });
+}
 ```
+
+## 架构变更
+
+### 移除 KagamiBot 类
+在重构中移除了 KagamiBot 应用层类，原因：
+- **简化架构**：应用层只包含 bootstrap 和 main 函数，无需额外的类封装
+- **减少抽象**：SessionManager 自动处理会话初始化，无需应用层干预
+- **直接初始化**：HTTP 服务和机器人功能并列初始化，无需分层封装
+
+### Bootstrap 函数作为入口
+Bootstrap 函数承担了原 KagamiBot 类的职责：
+- 按照依赖顺序初始化所有组件
+- 统一的错误处理和日志输出
+- 启动 HTTP 服务
 
 ## 错误处理
 
@@ -85,11 +92,12 @@ export const newKagamiBot = (sessionManager: SessionManager) => {
 
 ### 启动顺序（分层初始化）
 1. **配置层**：ConfigManager 初始化
-2. **基础设施层 - 数据访问**：Database 初始化
+2. **基础设施层 - 数据访问**：Database、LlmCallLogRepository 初始化
 3. **基础设施层 - 外部服务**：NapcatFacade 连接、PromptTemplateManager 加载
-4. **LLM 层**：LlmClientManager 创建（依赖 ConfigManager 和 Database）
+4. **LLM 层**：LlmClientManager 创建（依赖 ConfigManager 和 LlmCallLogRepository）
 5. **编排层**：SessionManager 创建并自动初始化所有会话
-6. **应用层**：KagamiBot 创建并启动
+6. **HTTP Handler 层**：创建 LlmLogsRouter（依赖 LlmCallLogRepository）
+7. **HTTP 服务层**：启动 Express HTTP 服务器
 
 ## 依赖注入架构
 
@@ -98,34 +106,28 @@ export const newKagamiBot = (sessionManager: SessionManager) => {
 - **分层初始化**：按照依赖顺序逐层构建组件
 - **工厂函数模式**：所有组件通过工厂函数创建
 - **依赖注入**：通过构造函数传递依赖关系
+- **简化应用层**：移除 KagamiBot 类，直接在 bootstrap 中初始化
 
-### Bootstrap 函数的六层架构
+### Bootstrap 函数的七层架构
 1. **配置层**：ConfigManager（配置读取和验证）
-2. **基础设施层**：Database、NapcatFacade、PromptTemplateManager
-3. **LLM 层**：LlmClientManager（依赖配置和数据库）
-4. **编排层**：SessionManager（协调所有依赖）
-5. **应用层**：KagamiBot（最上层封装）
-6. **运行层**：main() 函数启动应用
+2. **基础设施层 - 数据访问**：Database、LlmCallLogRepository
+3. **基础设施层 - 外部服务**：NapcatFacade、PromptTemplateManager
+4. **LLM 层**：LlmClientManager（依赖配置和 Repository）
+5. **编排层**：SessionManager（协调所有依赖）
+6. **HTTP Handler 层**：LlmLogsRouter（依赖 Repository）
+7. **HTTP 服务层**：HttpServer（依赖 Router 和配置）
 
-## 使用示例
+## 相关节点
 
-### 基本启动
-```typescript
-async function main(): Promise<void> {
-    const bot = await bootstrap();
-    bot.start();
-
-    console.log("机器人已运行");
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main().catch((error: unknown) => {
-        console.error("致命错误:", error);
-        process.exit(1);
-    });
-}
-```
+- [[config_manager]] - 配置管理
+- [[database_layer]] - 数据库封装
+- [[llm_call_log_repository]] - LLM 日志仓储
+- [[connection_manager]] - NapCat 连接管理
+- [[prompt_template_manager]] - 提示词模板管理
+- [[llm_client_manager]] - LLM 客户端管理
+- [[session_manager]] - 会话管理
+- [[http_api_layer]] - HTTP API 服务
 
 ## 相关文件
-- `src/main.ts` - 主要实现
-- `env.yaml.example` - 配置模板
+- `kagami-bot/src/main.ts` - 主要实现
+- `kagami-bot/env.yaml.example` - 配置模板

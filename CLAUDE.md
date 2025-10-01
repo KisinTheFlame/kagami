@@ -6,8 +6,7 @@
 
 Kagami 是一个基于 TypeScript 构建的 QQ 群聊机器人，集成了 LLM 功能用于智能聊天回复。项目采用多服务容器化架构，包含：
 
-- **kagami-bot**: TypeScript QQ 机器人服务
-- **kagami-console**: Go 后端 API 服务  
+- **kagami-bot**: TypeScript QQ 机器人服务（包含 HTTP API）
 - **kagami-console-web**: React 前端控制台
 - **PostgreSQL**: 数据库服务
 - **NapCat**: QQ 协议服务
@@ -24,7 +23,7 @@ NapCat:     localhost:6099
 
 ### 本地构建和运行
 ```bash
-make build             # 构建所有服务（kagami-bot, kagami-console, kagami-console-web）
+make build             # 构建所有服务（kagami-bot, kagami-console-web）
 make up                # 构建并启动所有容器服务
 make down              # 停止所有容器服务
 make status            # 查看服务状态
@@ -32,14 +31,13 @@ make status            # 查看服务状态
 
 ### 代码质量
 ```bash
-make lint              # 对所有服务运行代码检查（ESLint, go vet, golangci-lint）
+make lint              # 对所有服务运行代码检查（ESLint）
 make clean             # 清理构建产物
 ```
 
 ## 技术栈
 
-- **kagami-bot**: TypeScript, Node.js, PostgreSQL (pg)
-- **kagami-console**: Go, Gin, GORM, PostgreSQL
+- **kagami-bot**: TypeScript, Node.js, Express, PostgreSQL (Prisma ORM)
 - **kagami-console-web**: React, TypeScript, Vite, nginx
 - **数据库**: PostgreSQL 16
 - **容器化**: Docker, Docker Compose
