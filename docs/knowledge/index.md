@@ -55,6 +55,9 @@ Kagami System
 - [[message_data_model]] - 消息数据结构定义
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
+### 领域层
+- [[domain_layer]] - 领域驱动设计核心层，封装业务领域概念和规则，包含 LlmCallLog 实体和 LlmCallStatus 类型
+
 ### 数据层
 - [[database_layer]] - Database 类，Prisma ORM + PostgreSQL 数据库封装，提供 Prisma 客户端访问
 - [[llm_call_log_repository]] - LLM 调用日志仓储，采用 Repository 模式封装日志持久化操作
@@ -68,8 +71,8 @@ bootstrap() 函数分层创建：
    └── ConfigManager
 
 2. 基础设施层 - 数据访问
-   ├── Database
-   └── LlmCallLogRepository (依赖: Database)
+   ├── Database（基础设施层）
+   └── LlmCallLogRepository（依赖: Database，使用 domain_layer 的类型）
 
 3. 基础设施层 - 外部服务
    ├── NapcatFacade (依赖: ConfigManager)
@@ -87,6 +90,8 @@ bootstrap() 函数分层创建：
 
 6. 应用层
    └── KagamiBot (依赖: SessionManager)
+
+注：领域层（domain_layer）不依赖任何其他层，被 Repository 层和应用层使用
 ```
 
 ### 消息流
@@ -96,19 +101,21 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
                                             ContextManager → LlmClientManager → LlmClient[]
                                                  ↓                                   ↓
                                       PromptTemplateManager              LlmCallLogRepository
+                                                                          (使用 domain_layer 类型)
                                                                                      ↓
-                                                                          Database.getPrisma()
+                                                                          Database.prisma()
                                                                                      ↓
                                                                                   回复
 ```
 
 ## 核心特性
 
+- **领域驱动设计**：引入领域层封装业务概念和规则，使用统一的业务语言
 - **依赖注入架构**：采用依赖注入模式，所有组件通过构造函数接收依赖，无全局单例
 - **工厂函数模式**：统一使用 `newXxx()` 工厂函数创建实例，便于测试和替换
 - **分层初始化**：bootstrap 函数分 6 层初始化组件，依赖方向清晰自上而下
 - **外观模式**：NapcatFacade 封装 napcat 连接复杂性，提供简洁接口
-- **分层架构**：职责分离，模块化设计
+- **分层架构**：职责分离，模块化设计，包含应用层、领域层、Repository 层、基础设施层
 - **统一处理**：简化的消息处理架构，专注流程控制
 - **上下文管理**：独立的消息历史管理和 LLM 数据准备模块
 - **模型降级**：支持多模型按优先级降级，提高可用性
@@ -121,6 +128,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **配置驱动**：通过 ConfigManager 统一管理配置，支持类型安全访问
 - **调用日志**：通过 Repository 模式记录 LLM 调用历史，支持问题排查和分析
 - **Repository 模式**：数据访问层采用 Repository 模式，关注点分离，便于测试和维护
+- **类型安全**：使用领域类型约束业务规则，编译时检查保证正确性
 - **容器化部署**：标准化 Docker 镜像版本，确保部署一致性和稳定性
 
 ## 技术栈

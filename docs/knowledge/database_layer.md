@@ -12,10 +12,11 @@
 负责管理 PostgreSQL 数据库连接，基于 Prisma ORM 提供类型安全的数据库操作接口。采用依赖注入模式，通过工厂函数 `newDatabase()` 创建实例。
 
 **主要功能：**
-- 自动管理 Prisma 客户端连接
-- 暴露 Prisma 客户端供 Repository 层使用
-- 动态构建数据库连接URL
+- 初始化和管理 Prisma 客户端连接
+- 提供 Prisma 客户端访问接口供 Repository 层使用
+- 动态构建数据库连接 URL
 - 类型安全的数据库操作
+- 作为纯粹的基础设施组件，不包含业务逻辑
 
 **连接配置：**
 - 支持环境变量配置数据库连接参数
@@ -85,11 +86,11 @@ class Database {
     constructor() // 自动配置 Prisma 客户端
 
     // 获取 Prisma 客户端实例
-    getPrisma(): PrismaClient;
+    prisma(): PrismaClient;
 }
 
 // 工厂函数
-export const newDatabase = () => Database;
+export const newDatabase = (): Database;
 ```
 
 ## 使用示例
@@ -106,19 +107,38 @@ const llmCallLogRepository = newLlmCallLogRepository(database);
 await llmCallLogRepository.logLLMCall('success', 'user input', 'llm response');
 
 // 或直接使用 Prisma 客户端进行其他数据操作
-const prisma = database.getPrisma();
+const prisma = database.prisma();
 const logs = await prisma.llmCallLog.findMany();
 ```
 
 ## 依赖关系
 
 ### 被依赖
-- [[llm_call_log_repository]] - 通过 `getPrisma()` 获取 Prisma 客户端进行数据操作
+- [[llm_call_log_repository]] - 通过 `prisma()` 获取 Prisma 客户端进行数据操作
 - 其他 Repository 类 - 未来可能添加的数据访问层组件
 
 ### 依赖
 - Prisma Client - ORM 客户端
 - PostgreSQL - 数据库服务器
+
+## 架构定位
+
+Database 类在分层架构中的定位：
+
+```
+应用层（Application Layer）
+    ↓
+领域层（Domain Layer）
+    ↓
+数据访问层（Repository Layer）
+    ↓
+基础设施层（Infrastructure Layer）← Database 类位于此层
+```
+
+Database 类作为基础设施层的核心组件，职责明确：
+- **不包含业务逻辑**：仅提供数据库客户端访问能力
+- **技术实现细节**：封装 Prisma ORM 的初始化和配置
+- **被动角色**：由上层（Repository）调用，不主动执行业务操作
 
 ## 技术特点
 

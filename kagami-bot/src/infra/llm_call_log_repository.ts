@@ -1,4 +1,5 @@
 import { Database } from "./db.js";
+import { LlmCallStatus } from "../domain/llm_call_log.js";
 
 export class LlmCallLogRepository {
     private database: Database;
@@ -8,12 +9,12 @@ export class LlmCallLogRepository {
     }
 
     async logLLMCall(
-        status: "success" | "fail",
+        status: LlmCallStatus,
         input: string,
         output: string,
     ): Promise<void> {
         try {
-            await this.database.getPrisma().llmCallLog.create({
+            await this.database.prisma().llmCallLog.create({
                 data: {
                     status,
                     input,

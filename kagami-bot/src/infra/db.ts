@@ -1,7 +1,7 @@
 import { PrismaClient } from "../generated/prisma/client.js";
 
 export class Database {
-    private prisma: PrismaClient;
+    private prismaClient: PrismaClient;
 
     constructor() {
         // 从环境变量构建 DATABASE_URL
@@ -13,7 +13,7 @@ export class Database {
 
         const databaseUrl = `postgresql://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
 
-        this.prisma = new PrismaClient({
+        this.prismaClient = new PrismaClient({
             datasources: {
                 db: {
                     url: databaseUrl,
@@ -22,8 +22,8 @@ export class Database {
         });
     }
 
-    getPrisma(): PrismaClient {
-        return this.prisma;
+    prisma(): PrismaClient {
+        return this.prismaClient;
     }
 }
 
