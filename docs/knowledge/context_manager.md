@@ -121,15 +121,15 @@ export const newContextManager = (
 
 ### 类型定义
 ```typescript
-interface ThoughtItem {
-    type: "thought";
-    content: string;
-}
+type ThoughtItem = {
+    type: "thought",
+    content: string,
+};
 
-interface ChatItem {
-    type: "chat";
-    content: SendMessageSegment[];
-}
+type ChatItem = {
+    type: "chat",
+    content: SendMessageSegment[],
+};
 
 type LlmResponseItem = ThoughtItem | ChatItem;
 ```

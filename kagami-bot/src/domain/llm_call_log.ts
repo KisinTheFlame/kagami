@@ -1,14 +1,14 @@
 export type LlmCallStatus = "success" | "fail";
 
-interface LlmCallLogData {
-    readonly timestamp: Date;
-    readonly status: LlmCallStatus;
-    readonly input: string;
-    readonly output: string;
-}
+type LlmCallLogData = {
+    readonly timestamp: Date,
+    readonly status: LlmCallStatus,
+    readonly input: string,
+    readonly output: string,
+};
 
 export type LlmCallLog = LlmCallLogData & {
-    readonly id: number;
+    readonly id: number,
 };
 
 export type LlmCallLogCreateRequest = LlmCallLogData;

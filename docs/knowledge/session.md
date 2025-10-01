@@ -156,32 +156,32 @@ export const newSession = (groupId: number, napcatFacade: NapcatFacade) => {
 
 ### MessageHandler 接口
 ```typescript
-export interface MessageHandler {
-    handleMessage(message: Message): Promise<void>;
-}
+export type MessageHandler = {
+    handleMessage(message: Message): Promise<void>,
+};
 ```
 
 ### 数据类型
 ```typescript
 // 群组消息类型
-export interface GroupMessage {
-    id: string;
-    userId: number;
-    userNickname?: string;
-    chat: string;           // 自然语言格式的消息内容
-    timestamp: string;
-}
+export type GroupMessage = {
+    id: string,
+    userId: number,
+    userNickname?: string,
+    chat: string,           // 自然语言格式的消息内容
+    timestamp: string,
+};
 
 // 机器人消息类型
-export interface BotMessage {
-    thoughts: string[];     // LLM思考过程
-    chat?: SendMessageSegment[]; // 回复内容
-}
+export type BotMessage = {
+    thoughts: string[],     // LLM思考过程
+    chat?: SendMessageSegment[], // 回复内容
+};
 
 // 统一消息类型
 export type Message =
-    | { type: "bot_msg"; value: BotMessage; }
-    | { type: "group_msg"; value: GroupMessage; };
+    | { type: "bot_msg", value: BotMessage, }
+    | { type: "group_msg", value: GroupMessage, };
 ```
 
 ### 公共方法

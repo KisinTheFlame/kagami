@@ -160,7 +160,7 @@ getConnectionStatus(): Map<number, boolean> {
 ```
 
 ### 会话统计
-- `getSessionCount()`: 活跃会话数量
+- `countSessions()`: 活跃会话数量
 - `getActiveGroupIds()`: 活跃群组 ID 列表
 - `getAllSessions()`: 所有会话实例
 

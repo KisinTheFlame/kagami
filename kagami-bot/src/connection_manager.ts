@@ -14,11 +14,14 @@ export class NapcatFacade {
         this.isConnected = false;
 
         const napcatConfig = configManager.getNapcatConfig();
-        this.napcat = new NCWebsocket({
-            baseUrl: napcatConfig.base_url,
-            accessToken: napcatConfig.access_token,
-            reconnection: napcatConfig.reconnection,
-        }, false);
+        this.napcat = new NCWebsocket(
+            {
+                baseUrl: napcatConfig.base_url,
+                accessToken: napcatConfig.access_token,
+                reconnection: napcatConfig.reconnection,
+            },
+            false,
+        );
     }
 
     async connect(): Promise<void> {
@@ -102,7 +105,12 @@ export class NapcatFacade {
         }
     }
 
-    async getMessageDetail(messageId: number): Promise<{ sender: { nickname: string; user_id: number }; message: Receive[keyof Receive][] } | undefined> {
+    async getMessageDetail(
+        messageId: number,
+    ): Promise<
+        | { sender: { nickname: string, user_id: number }, message: Receive[keyof Receive][] }
+        | undefined
+    > {
         try {
             if (!this.isConnected) {
                 return undefined;

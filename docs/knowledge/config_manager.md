@@ -43,35 +43,35 @@ const provider = configManager.getProviderForModel("gpt-4");
 
 ### LlmConfig
 ```typescript
-interface LlmConfig {
-    models: string[];  // 按优先级排序的模型列表
-}
+type LlmConfig = {
+    models: string[],  // 按优先级排序的模型列表
+};
 ```
 
 ### NapcatConfig
 ```typescript
-interface NapcatConfig {
-    base_url: string;
-    access_token: string;
-    reconnection: NapcatReconnectionConfig;
-    groups: number[];
-    bot_qq: number;
-}
+type NapcatConfig = {
+    base_url: string,
+    access_token: string,
+    reconnection: NapcatReconnectionConfig,
+    groups: number[],
+    bot_qq: number,
+};
 ```
 
 ### MasterConfig (可选)
 ```typescript
-interface MasterConfig {
-    qq: number;
-    nickname: string;
-}
+type MasterConfig = {
+    qq: number,
+    nickname: string,
+};
 ```
 
 ### AgentConfig (可选)
 ```typescript
-interface AgentConfig {
-    history_turns: number;  // 历史消息轮数
-}
+type AgentConfig = {
+    history_turns: number,  // 历史消息轮数
+};
 ```
 
 ## 依赖关系

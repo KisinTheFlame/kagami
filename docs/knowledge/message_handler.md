@@ -151,15 +151,15 @@ export const newMessageHandler = (
 
 ### 响应格式定义
 ```typescript
-interface ThoughtItem {
-    type: "thought";
-    content: string;
-}
+type ThoughtItem = {
+    type: "thought",
+    content: string,
+};
 
-interface ChatItem {
-    type: "chat";
-    content: SendMessageSegment[];
-}
+type ChatItem = {
+    type: "chat",
+    content: SendMessageSegment[],
+};
 
 type LlmResponseItem = ThoughtItem | ChatItem;
 type LlmResponse = [ThoughtItem, ...LlmResponseItem[]];

@@ -21,10 +21,11 @@ export class PromptTemplateManager {
 
 ### 模板上下文接口
 ```typescript
-export interface PromptTemplateContext {
-    botQQ: number;
-    masterConfig?: MasterConfig;
-}
+export type PromptTemplateContext = {
+    botQQ: number,
+    masterConfig?: MasterConfig,
+    currentTime: string,
+};
 ```
 
 ## 模板加载系统
