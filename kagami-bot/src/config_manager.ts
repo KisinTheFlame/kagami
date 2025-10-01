@@ -2,40 +2,40 @@ import * as fs from "fs";
 import * as yaml from "yaml";
 import { ProviderConfig } from "./llm_providers/types.js";
 
-export interface LlmConfig {
-    models: string[];
-}
+export type LlmConfig = {
+    models: string[],
+};
 
-export interface NapcatReconnectionConfig {
-    enable: boolean;
-    attempts: number;
-    delay: number;
-}
+export type NapcatReconnectionConfig = {
+    enable: boolean,
+    attempts: number,
+    delay: number,
+};
 
-export interface NapcatConfig {
-    base_url: string;
-    access_token: string;
-    reconnection: NapcatReconnectionConfig;
-    groups: number[];
-    bot_qq: number;
-}
+export type NapcatConfig = {
+    base_url: string,
+    access_token: string,
+    reconnection: NapcatReconnectionConfig,
+    groups: number[],
+    bot_qq: number,
+};
 
-export interface AgentConfig {
-    history_turns: number;
-}
+export type AgentConfig = {
+    history_turns: number,
+};
 
-export interface MasterConfig {
-    qq: number;
-    nickname: string;
-}
+export type MasterConfig = {
+    qq: number,
+    nickname: string,
+};
 
-export interface Config {
-    llm_providers: Record<string, ProviderConfig>;
-    llm: LlmConfig;
-    napcat: NapcatConfig;
-    master?: MasterConfig;
-    agent?: AgentConfig;
-}
+export type Config = {
+    llm_providers: Record<string, ProviderConfig>,
+    llm: LlmConfig,
+    napcat: NapcatConfig,
+    master?: MasterConfig,
+    agent?: AgentConfig,
+};
 
 export class ConfigManager {
     private config: Config;

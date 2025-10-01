@@ -64,7 +64,7 @@ export class SessionManager {
         }
     }
 
-    getSessionCount(): number {
+    countSessions(): number {
         return this.sessions.size;
     }
 

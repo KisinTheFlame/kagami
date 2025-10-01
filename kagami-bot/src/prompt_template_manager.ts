@@ -2,11 +2,11 @@ import * as fs from "fs";
 import Handlebars from "handlebars";
 import { MasterConfig } from "./config_manager.js";
 
-export interface PromptTemplateContext {
-    botQQ: number;
-    masterConfig?: MasterConfig;
-    currentTime: string;
-}
+export type PromptTemplateContext = {
+    botQQ: number,
+    masterConfig?: MasterConfig,
+    currentTime: string,
+};
 
 export class PromptTemplateManager {
     private template?: HandlebarsTemplateDelegate<PromptTemplateContext>;
@@ -26,7 +26,6 @@ export class PromptTemplateManager {
             const templateContent = fs.readFileSync(this.templatePath, "utf-8");
             this.template = Handlebars.compile(templateContent);
             console.log(`Handlebars模板加载成功: ${this.templatePath}`);
-
         } catch (error) {
             console.error("加载Handlebars模板失败:", error);
             throw error;

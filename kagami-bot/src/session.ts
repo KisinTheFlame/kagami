@@ -3,32 +3,32 @@ import type { Receive } from "node-napcat-ts/dist/Structs.js";
 import { NapcatFacade } from "./connection_manager.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
 
-export interface BotMessage {
-    thoughts: string[];
-    chat?: SendMessageSegment[];
-}
+export type BotMessage = {
+    thoughts: string[],
+    chat?: SendMessageSegment[],
+};
 
-export interface GroupMessage {
-    id: string;
-    userId: number;
-    userNickname?: string;
-    chat: string;
-    timestamp: string;
-}
+export type GroupMessage = {
+    id: string,
+    userId: number,
+    userNickname?: string,
+    chat: string,
+    timestamp: string,
+};
 
 export type Message =
     | {
-        type: "bot_msg";
-        value: BotMessage;
+        type: "bot_msg",
+        value: BotMessage,
     }
     | {
-        type: "group_msg";
-        value: GroupMessage;
+        type: "group_msg",
+        value: GroupMessage,
     };
 
-export interface MessageHandler {
-    handleMessage(message: Message): Promise<void>;
-}
+export type MessageHandler = {
+    handleMessage(message: Message): Promise<void>,
+};
 
 export class Session {
     private session_id: number;
@@ -67,7 +67,9 @@ export class Session {
             };
 
             const displayContent = this.formatMessageForDisplay(context.message);
-            console.log(`[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(context.user_id)}) 发送消息: ${displayContent}`);
+            console.log(
+                `[群 ${String(this.groupId)}] ${userNickname ?? "未知用户"}(${String(context.user_id)}) 发送消息: ${displayContent}`,
+            );
 
             if (this.messageHandler) {
                 await this.messageHandler.handleMessage(message);
@@ -76,7 +78,6 @@ export class Session {
             console.error(`群 ${String(this.groupId)} 消息处理失败:`, error);
         }
     }
-
 
     private async convertToNaturalLanguage(messageArray: Receive[keyof Receive][]): Promise<string> {
         const parts: string[] = [];
@@ -99,7 +100,10 @@ export class Session {
                     const replyUserId = replyDetail.sender.user_id;
                     const replyContent = await this.formatReplyContent(replyDetail.message);
                     // 处理多行消息
-                    const quotedContent = replyContent.split("\n").map(line => `> ${line}`).join("\n");
+                    const quotedContent = replyContent
+                        .split("\n")
+                        .map(line => `> ${line}`)
+                        .join("\n");
                     parts.push(`> ${replyNickname}(${String(replyUserId)})\uff1a\n${quotedContent}\n\n`);
                 }
                 // 如果获取不到原消息，就忽略这个回复段
@@ -145,7 +149,6 @@ export class Session {
 
         return parts.join("");
     }
-
 
     async sendMessage(content: SendMessageSegment[]): Promise<void> {
         return this.napcatFacade.sendGroupMessage(this.groupId, content);

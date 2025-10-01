@@ -4,15 +4,15 @@ import { ContextManager } from "./context_manager.js";
 import { LlmClientManager } from "./llm_client_manager.js";
 
 // 新的JSON数组结构化输出接口
-interface ThoughtItem {
-    type: "thought";
-    content: string;
-}
+type ThoughtItem = {
+    type: "thought",
+    content: string,
+};
 
-interface ChatItem {
-    type: "chat";
-    content: SendMessageSegment[];
-}
+type ChatItem = {
+    type: "chat",
+    content: SendMessageSegment[],
+};
 
 type ChatResponseItem = ThoughtItem | ChatItem;
 type ChatResponse = [ThoughtItem, ...ChatResponseItem[]];
@@ -21,16 +21,11 @@ export class MessageHandler implements IMessageHandler {
     private contextManager: ContextManager;
     protected session: Session;
     private llmClientManager: LlmClientManager;
-
     // 来自ActiveMessageHandler的属性
     private isLlmProcessing = false;
     private hasPendingMessages = false;
 
-    constructor(
-        session: Session,
-        contextManager: ContextManager,
-        llmClientManager: LlmClientManager,
-    ) {
+    constructor(session: Session, contextManager: ContextManager, llmClientManager: LlmClientManager) {
         this.session = session;
         this.contextManager = contextManager;
         this.llmClientManager = llmClientManager;

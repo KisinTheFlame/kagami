@@ -18,6 +18,7 @@
     "main": "src/main.ts",
     "scripts": {
         "build": "npm run prisma:generate && tsc",
+        "format": "eslint src --fix",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
         "prisma:generate": "prisma generate",

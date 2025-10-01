@@ -5,15 +5,15 @@ import { getShanghaiTimestamp } from "./utils/timezone.js";
 import { ChatMessage } from "./llm_providers/types.js";
 import { ConfigManager } from "./config_manager.js";
 
-interface ThoughtItem {
-    type: "thought";
-    content: string;
-}
+type ThoughtItem = {
+    type: "thought",
+    content: string,
+};
 
-interface ChatItem {
-    type: "chat";
-    content: SendMessageSegment[];
-}
+type ChatItem = {
+    type: "chat",
+    content: SendMessageSegment[],
+};
 
 type LlmResponseItem = ThoughtItem | ChatItem;
 
@@ -23,11 +23,7 @@ export class ContextManager {
     private promptTemplateManager: PromptTemplateManager;
     private configManager: ConfigManager;
 
-    constructor(
-        configManager: ConfigManager,
-        promptTemplateManager: PromptTemplateManager,
-        maxHistorySize: number,
-    ) {
+    constructor(configManager: ConfigManager, promptTemplateManager: PromptTemplateManager, maxHistorySize: number) {
         this.configManager = configManager;
         this.promptTemplateManager = promptTemplateManager;
         this.maxHistorySize = maxHistorySize;

@@ -39,6 +39,10 @@ export class LlmClient {
     }
 }
 
-export const newLlmClient = (providerConfig: ProviderConfig, model: string, llmCallLogRepository: LlmCallLogRepository) => {
+export const newLlmClient = (
+    providerConfig: ProviderConfig,
+    model: string,
+    llmCallLogRepository: LlmCallLogRepository,
+) => {
     return new LlmClient(providerConfig, model, llmCallLogRepository);
 };

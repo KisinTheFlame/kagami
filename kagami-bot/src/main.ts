@@ -15,7 +15,7 @@ class KagamiBot {
 
     start(): void {
         console.log("Kagami 机器人启动成功");
-        console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
+        console.log(`活跃会话数量: ${String(this.sessionManager.countSessions())}`);
     }
 }
 
@@ -52,12 +52,7 @@ async function bootstrap() {
 
         // 5. 编排层
         console.log("正在初始化会话管理器...");
-        const sessionManager = newSessionManager(
-            configManager,
-            napcatFacade,
-            llmClientManager,
-            promptTemplateManager,
-        );
+        const sessionManager = newSessionManager(configManager, napcatFacade, llmClientManager, promptTemplateManager);
 
         // 6. 应用层
         const bot = newKagamiBot(sessionManager);

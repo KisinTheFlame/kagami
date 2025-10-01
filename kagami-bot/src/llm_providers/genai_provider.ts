@@ -1,5 +1,24 @@
-import { Content, GoogleGenAI, Part, Tool as GenAITool, FunctionDeclaration, Schema, Type, GenerateContentParameters } from "@google/genai";
-import { LlmProvider, ChatMessage, ChatMessagePart, GenAIProviderConfig, Tool, LlmResponse, ToolParam, ToolCall, OneTurnChatRequest } from "./types.js";
+import {
+    Content,
+    GoogleGenAI,
+    Part,
+    Tool as GenAITool,
+    FunctionDeclaration,
+    Schema,
+    Type,
+    GenerateContentParameters,
+} from "@google/genai";
+import {
+    LlmProvider,
+    ChatMessage,
+    ChatMessagePart,
+    GenAIProviderConfig,
+    Tool,
+    LlmResponse,
+    ToolParam,
+    ToolCall,
+    OneTurnChatRequest,
+} from "./types.js";
 import { ApiKeyManager } from "../api_key_manager.js";
 
 export class GenAIProvider implements LlmProvider {
@@ -24,8 +43,8 @@ export class GenAIProvider implements LlmProvider {
                 contents,
                 config: {
                     responseMimeType: {
-                        "json": "application/json",
-                        "text": "text/plain",
+                        json: "application/json",
+                        text: "text/plain",
                     }[outputFormat],
                     systemInstruction,
                     tools: genaiTools,
@@ -40,13 +59,15 @@ export class GenAIProvider implements LlmProvider {
 
             // 处理工具调用
             if (response.functionCalls && response.functionCalls.length > 0) {
-                result.toolCalls = response.functionCalls.map(functionCall => ({
-                    id: functionCall.id, // TODO: id 可能为空。为空时自己随机生成一个
-                    function: {
-                        name: functionCall.name ?? "unknown",
-                        arguments: functionCall.args ?? {},
-                    },
-                } as ToolCall));
+                result.toolCalls = response.functionCalls.map(
+                    functionCall => ({
+                        id: functionCall.id ?? "", // TODO: id 可能为空。为空时自己随机生成一个
+                        function: {
+                            name: functionCall.name ?? "unknown",
+                            arguments: functionCall.args ?? {},
+                        },
+                    } satisfies ToolCall),
+                );
             }
 
             return result;
@@ -56,13 +77,18 @@ export class GenAIProvider implements LlmProvider {
     }
 
     private convertTools(tools: Tool[]): GenAITool[] {
-        return [{
-            functionDeclarations: tools.map(tool => ({
-                name: tool.name,
-                description: tool.description,
-                parameters: this.convertToolParameters(tool.parameters),
-            } satisfies FunctionDeclaration)),
-        }];
+        return [
+            {
+                functionDeclarations: tools.map(
+                    tool =>
+                        ({
+                            name: tool.name,
+                            description: tool.description,
+                            parameters: this.convertToolParameters(tool.parameters),
+                        }) satisfies FunctionDeclaration,
+                ),
+            },
+        ];
     }
 
     private convertToolParameters(param: ToolParam): Schema {
@@ -150,12 +176,14 @@ export class GenAIProvider implements LlmProvider {
                 // GenAI 处理工具响应 (msg.role === "tool")
                 contents.push({
                     role: "user",
-                    parts: [{
-                        functionResponse: {
-                            name: msg.name ?? "unknown",
-                            response: msg.response,
+                    parts: [
+                        {
+                            functionResponse: {
+                                name: msg.name ?? "unknown",
+                                response: msg.response,
+                            },
                         },
-                    }],
+                    ],
                 });
             }
         }

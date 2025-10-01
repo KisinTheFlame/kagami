@@ -1,6 +1,15 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { LlmProvider, ChatMessage, OpenAIProviderConfig, Tool, LlmResponse, ToolParam, ToolCall, OneTurnChatRequest } from "./types.js";
+import {
+    LlmProvider,
+    ChatMessage,
+    OpenAIProviderConfig,
+    Tool,
+    LlmResponse,
+    ToolParam,
+    ToolCall,
+    OneTurnChatRequest,
+} from "./types.js";
 import { ApiKeyManager } from "../api_key_manager.js";
 import { z } from "zod";
 import { ChatCompletionFunctionTool, FunctionParameters } from "openai/resources.js";
@@ -30,10 +39,12 @@ export class OpenAIProvider implements LlmProvider {
             model: model,
             messages: openaiMessages,
             response_format: {
-                type: ({
-                    "json": "json_object",
-                    "text": "text",
-                } satisfies Record<string, "json_object" | "text">)[outputFormat],
+                type: (
+                    {
+                        json: "json_object",
+                        text: "text",
+                    } satisfies Record<string, "json_object" | "text">
+                )[outputFormat],
             },
         };
 
@@ -53,27 +64,35 @@ export class OpenAIProvider implements LlmProvider {
         if (message.tool_calls) {
             result.toolCalls = message.tool_calls
                 .filter(toolCall => toolCall.type === "function")
-                .map(toolCall => ({
-                    id: toolCall.id,
-                    function: {
-                        name: toolCall.function.name,
-                        arguments: z.record(z.string(), z.unknown()).parse(JSON.parse(toolCall.function.arguments)),
-                    },
-                } satisfies ToolCall));
+                .map(
+                    toolCall =>
+                        ({
+                            id: toolCall.id,
+                            function: {
+                                name: toolCall.function.name,
+                                arguments: z
+                                    .record(z.string(), z.unknown())
+                                    .parse(JSON.parse(toolCall.function.arguments)),
+                            },
+                        }) satisfies ToolCall,
+                );
         }
 
         return result;
     }
 
     private convertTools(tools: Tool[]): ChatCompletionFunctionTool[] {
-        return tools.map(tool => ({
-            type: "function",
-            function: {
-                name: tool.name,
-                description: tool.description,
-                parameters: this.convertToolParameters(tool.parameters),
-            },
-        } satisfies ChatCompletionFunctionTool));
+        return tools.map(
+            tool =>
+                ({
+                    type: "function",
+                    function: {
+                        name: tool.name,
+                        description: tool.description,
+                        parameters: this.convertToolParameters(tool.parameters),
+                    },
+                }) satisfies ChatCompletionFunctionTool,
+        );
     }
 
     private convertToolParameters(param: ToolParam): FunctionParameters {

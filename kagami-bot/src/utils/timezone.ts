@@ -13,8 +13,8 @@ export function getShanghaiTimestamp(): string {
     // 计算 UTC+8 时区的时间
     // getTimezoneOffset() 返回的是分钟数，且与实际时区相反
     // 例如对于 UTC+8，getTimezoneOffset() 通常返回 -480（-8 * 60）
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const shanghaiTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+    const shanghaiTime = new Date(utcTime + 8 * 3600000); // UTC+8
 
     // 格式化为 YYYY-MM-DD HH:mm:ss
     const year = shanghaiTime.getFullYear();
@@ -34,8 +34,8 @@ export function getShanghaiTimestamp(): string {
  */
 export function formatShanghaiTimestamp(date: Date): string {
     // 计算 UTC+8 时区的时间
-    const utcTime = date.getTime() + (date.getTimezoneOffset() * 60000);
-    const shanghaiTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+    const utcTime = date.getTime() + date.getTimezoneOffset() * 60000;
+    const shanghaiTime = new Date(utcTime + 8 * 3600000); // UTC+8
 
     // 格式化为 YYYY-MM-DD HH:mm:ss
     const year = shanghaiTime.getFullYear();
