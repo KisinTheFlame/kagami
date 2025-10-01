@@ -19,5 +19,3 @@ export const llmLogsApi = {
         return api.get(`/llm-logs/${String(id)}`).then(res => res.data as LLMCallLog);
     },
 };
-
-export default api;

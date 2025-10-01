@@ -1,7 +1,7 @@
 # Kagami 项目主 Makefile
 
 # 定义子项目
-SUBPROJECTS = kagami-bot kagami-console-web kagami-console
+SUBPROJECTS = kagami-bot kagami-console-web
 
 # 获取当前用户的 UID 和 GID
 CURRENT_UID := $(shell id -u)

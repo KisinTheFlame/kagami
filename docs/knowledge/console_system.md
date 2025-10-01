@@ -2,16 +2,16 @@
 
 ## 概述
 
-Kagami Console 是一个独立的 Web 控制台系统，用于监控和管理 Kagami QQ 机器人。由 Go 后端 API 和 React 前端组成，提供 LLM 调用历史的查询、筛选和分析功能。
+Kagami Console 是一个 Web 控制台系统，用于监控和管理 Kagami QQ 机器人。由 kagami-bot 的 HTTP API 和 React 前端组成，提供 LLM 调用历史的查询、筛选和分析功能。
 
 ## 架构设计
 
 ### 系统组成
 ```
 Kagami Console System
-├── kagami-console/          # Go 后端 API
+├── kagami-bot HTTP API      # TypeScript/Express 后端 API
 │   ├── RESTful API 服务
-│   ├── SQLite 数据库访问
+│   ├── PostgreSQL 数据库访问（通过 Repository）
 │   └── CORS 跨域支持
 ├── kagami-console-web/      # React 前端
 │   ├── Ant Design 深色主题
@@ -22,10 +22,11 @@ Kagami Console System
     └── API 请求代理
 ```
 
-### 独立架构原则
-- **配置文件隔离**：每个子项目独立的 `package.json`、`tsconfig.json`、`env.yaml`
-- **技术栈分离**：后端 Go、前端 React，与机器人的 Node.js 技术栈分离
-- **部署独立**：可单独构建、部署和扩展
+### 架构特点
+- **技术栈统一**：后端 API 与机器人同为 TypeScript/Node.js，简化技术栈
+- **统一部署**：HTTP API 与 QQ 机器人运行在同一进程中
+- **代码复用**：Repository 层和领域类型被 HTTP API 和机器人共享
+- **前端独立**：前端仍保持独立的 `package.json`、`tsconfig.json` 配置
 
 ## 核心功能
 
@@ -48,17 +49,18 @@ Kagami Console System
 
 ## 技术实现
 
-### 后端 API (kagami-console)
+### 后端 API (kagami-bot HTTP API)
 **技术栈**：
-- Go 1.21+
-- Gin Web 框架
-- GORM ORM
-- SQLite 驱动
+- TypeScript
+- Express.js
+- Zod 类型验证
+- Prisma ORM
+- PostgreSQL
 
 **核心 API**：
 ```
 GET /api/v1/llm-logs
-    参数：page, limit, status, start_time, end_time, order_by, order_direction
+    参数：page, limit, status, startTime, endTime, orderBy, orderDirection
     功能：分页查询 LLM 调用历史
 
 GET /api/v1/llm-logs/{id}
@@ -66,15 +68,17 @@ GET /api/v1/llm-logs/{id}
 ```
 
 **数据模型**：
-```go
-type LLMCallLog struct {
-    ID        int    `json:"id"`
-    Timestamp string `json:"timestamp"`
-    Status    string `json:"status"`  // "success" | "fail"
-    Input     string `json:"input"`   // JSON 格式的请求数据
-    Output    string `json:"output"`  // 响应内容或错误信息
-}
+```typescript
+type LlmCallLog = {
+    id: number,
+    timestamp: Date,
+    status: LlmCallStatus,  // "success" | "fail"
+    input: string,          // JSON 格式的请求数据
+    output: string,         // 响应内容或错误信息
+};
 ```
+
+详细信息参考：[[http_api_layer]]
 
 ### 前端界面 (kagami-console-web)
 **技术栈**：
@@ -101,55 +105,67 @@ type LLMCallLog struct {
 
 ## 部署架构
 
-### Nginx 配置
+### Docker Compose 配置
+```yaml
+services:
+  kagami-bot:
+    ports:
+      - "8080:8080"  # HTTP API 端口
+      - "6099:6099"  # NapCat 端口
+
+  kagami-console-web:
+    ports:
+      - "10000:80"   # 前端控制台端口
+```
+
+### Nginx 配置（在 kagami-console-web 容器内）
 ```nginx
 # 静态文件托管
-location /kagami/ {
-    alias /path/to/kagami-console-web/dist/;
-    try_files $uri $uri/ /kagami/index.html;
+location / {
+    root /usr/share/nginx/html;
+    try_files $uri $uri/ /index.html;
 }
 
 # API 代理
-location /kagami/api/ {
-    proxy_pass http://127.0.0.1:8080/api/;
-}
-
-# URL 规范化
-location = /kagami {
-    return 301 $scheme://$host:$server_port$request_uri/;
+location /api/ {
+    proxy_pass http://kagami-bot:8080/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
 }
 ```
 
 ### 访问方式
-- **控制台入口**：`https://domain.com:8888/kagami`
-- **API 调用**：`https://domain.com:8888/kagami/api/v1/llm-logs`
-- **静态资源**：自动通过 nginx 提供缓存优化
+- **控制台入口**：`http://localhost:10000`
+- **API 调用（内部）**：`http://kagami-bot:8080/api/v1/llm-logs`
+- **API 调用（通过 nginx）**：`http://localhost:10000/api/v1/llm-logs`
 
 ## 数据流
 
 ### 查询流程
 ```
-用户操作 → React 组件 → Axios 请求 → nginx 代理 → Go API → GORM → SQLite → 返回数据 → 界面更新
+用户操作 → React 组件 → Axios 请求 → nginx 代理 → kagami-bot HTTP API → LlmCallLogRepository → Prisma → PostgreSQL → 返回数据 → 界面更新
 ```
 
 ### 关键路径
 1. 用户在界面设置筛选条件
-2. React 组件调用 `/kagami/api/v1/llm-logs`
-3. nginx 将请求代理到 Go 后端 `:8080/api/v1/llm-logs`
-4. Go 服务使用 GORM 查询 SQLite 数据库
-5. 返回 JSON 数据给前端进行渲染
+2. React 组件调用 `/api/v1/llm-logs`
+3. nginx 将请求代理到 kagami-bot `:8080/api/v1/llm-logs`
+4. HTTP API 使用 Zod 验证请求参数
+5. 调用 LlmCallLogRepository.find() 查询数据
+6. Repository 通过 Prisma 查询 PostgreSQL 数据库
+7. 返回 JSON 数据给前端进行渲染
 
 ## 与机器人系统的集成
 
 ### 数据共享
-- **数据库文件**：直接读取机器人创建的 `kagami.db`
-- **表结构**：使用相同的 `llm_call_logs` 表
-- **只读访问**：控制台只读数据，不修改机器人数据
+- **共享数据库**：HTTP API 与机器人共享同一个 PostgreSQL 数据库
+- **共享 Repository**：HTTP API 和机器人使用同一个 LlmCallLogRepository
+- **共享领域类型**：使用统一的 `LlmCallLog` 和 `LlmCallStatus` 类型
 
 ### 实时性
-- **数据更新**：机器人实时写入调用记录
+- **数据更新**：机器人通过 Repository 实时写入调用记录
 - **查询刷新**：控制台支持手动刷新获取最新数据
-- **无冲突**：只读访问避免数据库锁定问题
+- **并发安全**：PostgreSQL 和 Prisma 确保并发读写的一致性
 
 ## 扩展规划
 
@@ -167,6 +183,9 @@ location = /kagami {
 
 ## 关联节点
 
+- [[http_api_layer]] - 提供 HTTP API 服务
+- [[llm_call_log_repository]] - 数据访问层
 - [[database_layer]] - 共享的数据库结构
+- [[domain_layer]] - 领域类型定义
 - [[llm_client]] - 生成被监控的调用记录
-- [[logger]] - 记录系统的数据来源
+- [[message_card_component]] - LLM消息卡片展示组件

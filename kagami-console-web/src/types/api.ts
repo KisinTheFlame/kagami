@@ -12,10 +12,10 @@ export interface LogQueryParams {
     page?: number;
     limit?: number;
     status?: "success" | "fail";
-    start_time?: string;
-    end_time?: string;
-    order_by?: "timestamp" | "status" | "id";
-    order_direction?: "asc" | "desc";
+    startTime?: string;
+    endTime?: string;
+    orderBy?: "timestamp" | "status" | "id";
+    orderDirection?: "asc" | "desc";
 }
 
 export interface LogQueryResponse {

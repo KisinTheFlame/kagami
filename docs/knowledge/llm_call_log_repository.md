@@ -6,7 +6,7 @@ LlmCallLogRepository 是 LLM 调用日志的数据访问层，采用 Repository 
 
 ## 核心功能
 
-### 日志记录接口
+### 1. 日志记录接口
 ```typescript
 import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
 
@@ -25,6 +25,94 @@ async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
     }
 }
 ```
+
+### 2. 列表查询接口
+```typescript
+type QueryListParams = {
+    page: number,
+    limit: number,
+    status?: LlmCallStatus,
+    startTime?: Date,
+    endTime?: Date,
+    orderBy?: 'timestamp' | 'status' | 'id',
+    orderDirection?: 'asc' | 'desc',
+};
+
+type QueryListResult = {
+    data: LlmCallLog[],
+    total: number,
+};
+
+async find(params: QueryListParams): Promise<QueryListResult> {
+    const where = {
+        ...(params.status && { status: params.status }),
+        ...(params.startTime || params.endTime
+            ? {
+                timestamp: {
+                    ...(params.startTime && { gte: params.startTime }),
+                    ...(params.endTime && { lte: params.endTime }),
+                },
+            }
+            : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+        this.database.prisma().llmCallLog.findMany({
+            where,
+            skip: (params.page - 1) * params.limit,
+            take: params.limit,
+            orderBy: {
+                [params.orderBy ?? 'timestamp']: params.orderDirection ?? 'desc',
+            },
+        }),
+        this.database.prisma().llmCallLog.count({ where }),
+    ]);
+
+    const data: LlmCallLog[] = rows.map(row => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        status: row.status as LlmCallStatus,
+        input: row.input,
+        output: row.output,
+    }));
+
+    return { data, total };
+}
+```
+
+**特点**：
+- 支持分页查询（page, limit）
+- 支持状态筛选（status）
+- 支持时间范围筛选（startTime, endTime）
+- 支持多字段排序（orderBy, orderDirection）
+- 并行执行查询和计数，提高性能
+- 将数据库记录转换为领域类型 `LlmCallLog`
+
+### 3. 单条记录查询接口
+```typescript
+async findById(id: number): Promise<LlmCallLog | null> {
+    const row = await this.database.prisma().llmCallLog.findUnique({
+        where: { id },
+    });
+
+    if (!row) {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        timestamp: row.timestamp,
+        status: row.status as LlmCallStatus,
+        input: row.input,
+        output: row.output,
+    };
+}
+```
+
+**特点**：
+- 按 ID 精确查询
+- 返回领域类型 `LlmCallLog` 或 null
+- 类型安全的状态字段转换
 
 ### 工厂函数
 ```typescript
@@ -62,6 +150,7 @@ export const newLlmCallLogRepository = (database: Database) => {
 ### 被依赖
 - [[llm_client]] - 在每次 LLM 调用后记录日志（成功或失败）
 - [[llm_client_manager]] - 创建 LlmClient 时注入 LlmCallLogRepository 实例
+- [[http_api_layer]] - HTTP API 通过 Repository 查询日志数据
 
 ## 数据模型
 
@@ -145,11 +234,13 @@ Repository 层（LlmCallLogRepository）
 
 ## 未来扩展
 
-### 查询功能
-- 按时间范围查询日志
-- 按状态筛选日志
-- 分页查询支持
+### 查询功能（部分已实现）
+- ✅ 按时间范围查询日志
+- ✅ 按状态筛选日志
+- ✅ 分页查询支持
+- ✅ 多字段排序
 - 全文搜索输入/输出内容
+- 按群组 ID 筛选日志
 
 ### 统计分析
 - 计算成功率
@@ -167,4 +258,5 @@ Repository 层（LlmCallLogRepository）
 - [[database_layer]] - 提供数据库访问能力
 - [[llm_client]] - 主要使用者，记录每次 LLM 调用
 - [[llm_client_manager]] - 创建 LlmClient 时注入 Repository
-- [[console_system]] - 通过 API 查询和展示日志数据
+- [[http_api_layer]] - HTTP API 通过 Repository 查询和展示日志数据
+- [[console_system]] - 前端通过 HTTP API 查询和展示日志数据

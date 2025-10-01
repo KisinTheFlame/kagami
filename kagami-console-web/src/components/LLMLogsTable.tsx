@@ -51,8 +51,8 @@ const LLMLogsTable: React.FC = () => {
             const params: LogQueryParams = {
                 page: current,
                 limit: pageSize,
-                order_by: "timestamp",
-                order_direction: orderDirection,
+                orderBy: "timestamp",
+                orderDirection: orderDirection,
             };
 
             if (statusFilter) {
@@ -60,8 +60,8 @@ const LLMLogsTable: React.FC = () => {
             }
 
             if (dateRange) {
-                params.start_time = dateRange[0].toISOString();
-                params.end_time = dateRange[1].toISOString();
+                params.startTime = dateRange[0].toISOString();
+                params.endTime = dateRange[1].toISOString();
             }
 
             const response = await llmLogsApi.getLogs(params);

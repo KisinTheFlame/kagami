@@ -1,27 +1,12 @@
-import { SessionManager, newSessionManager } from "./session_manager.js";
-import { newConfigManager } from "./config_manager.js";
+import { newSessionManager } from "./session_manager.js";
+import { newConfigManager, HttpConfig } from "./config_manager.js";
 import { newDatabase } from "./infra/db.js";
 import { newLlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 import { newNapcatFacade } from "./connection_manager.js";
 import { newPromptTemplateManager } from "./prompt_template_manager.js";
 import { newLlmClientManager } from "./llm_client_manager.js";
-
-class KagamiBot {
-    private sessionManager: SessionManager;
-
-    constructor(sessionManager: SessionManager) {
-        this.sessionManager = sessionManager;
-    }
-
-    start(): void {
-        console.log("Kagami 机器人启动成功");
-        console.log(`活跃会话数量: ${String(this.sessionManager.countSessions())}`);
-    }
-}
-
-export const newKagamiBot = (sessionManager: SessionManager) => {
-    return new KagamiBot(sessionManager);
-};
+import { createHttpServer } from "./api/server.js";
+import { createLlmLogsRouter } from "./api/routes/llm_logs.js";
 
 async function bootstrap() {
     try {
@@ -52,13 +37,20 @@ async function bootstrap() {
 
         // 5. 编排层
         console.log("正在初始化会话管理器...");
-        const sessionManager = newSessionManager(configManager, napcatFacade, llmClientManager, promptTemplateManager);
+        newSessionManager(configManager, napcatFacade, llmClientManager, promptTemplateManager);
 
-        // 6. 应用层
-        const bot = newKagamiBot(sessionManager);
+        console.log("Kagami 机器人已启动");
 
-        console.log("Kagami 机器人初始化完成");
-        return bot;
+        console.log("正在初始化 HTTP 服务器...");
+
+        // 7. HTTP Handler 层
+        const httpConfig: HttpConfig = configManager.getHttpConfig();
+        const llmLogsRouter = createLlmLogsRouter(llmCallLogRepository);
+
+        // 8. HTTP 服务层
+        await createHttpServer(llmLogsRouter, httpConfig);
+
+        console.log(`HTTP 服务器已启动，监听端口 ${String(httpConfig.port)}`);
     } catch (error) {
         console.error("机器人初始化失败:", error);
         process.exit(1);
@@ -66,10 +58,8 @@ async function bootstrap() {
 }
 
 async function main(): Promise<void> {
-    const bot = await bootstrap();
-    bot.start();
-
-    console.log("机器人已运行");
+    await bootstrap();
+    console.log("bootstrap 完成");
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

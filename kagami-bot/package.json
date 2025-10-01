@@ -29,6 +29,8 @@
     "devDependencies": {
         "@eslint/js": "^9.32.0",
         "@stylistic/eslint-plugin": "^5.2.3",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.3",
         "@types/handlebars": "^4.0.40",
         "@types/node": "^24.2.0",
         "eslint": "^9.32.0",
@@ -40,6 +42,8 @@
     "dependencies": {
         "@google/genai": "^1.20.0",
         "@prisma/client": "^6.16.2",
+        "cors": "^2.8.5",
+        "express": "^5.1.0",
         "handlebars": "^4.7.8",
         "node-napcat-ts": "^0.4.15",
         "openai": "^5.12.2",
