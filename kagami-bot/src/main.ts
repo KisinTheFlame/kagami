@@ -16,30 +16,6 @@ class KagamiBot {
     start(): void {
         console.log("Kagami 机器人启动成功");
         console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
-
-        this.setupGracefulShutdown();
-    }
-
-    stop(): void {
-        console.log("正在停止 Kagami 机器人...");
-
-        try {
-            this.sessionManager.shutdownAllSessions();
-            console.log("Kagami 机器人停止成功");
-        } catch (error) {
-            console.error("关闭过程中发生错误:", error);
-        }
-    }
-
-    private setupGracefulShutdown(): void {
-        const shutdown = (signal: string) => {
-            console.log(`接收到 ${signal} 信号，正在优雅关闭...`);
-            this.stop();
-            process.exit(0);
-        };
-
-        process.on("SIGINT", () => { shutdown("SIGINT"); });
-        process.on("SIGTERM", () => { shutdown("SIGTERM"); });
     }
 }
 

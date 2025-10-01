@@ -44,22 +44,6 @@ async function bootstrap() {
 start(): void {
     console.log("Kagami 机器人启动成功");
     console.log(`活跃会话数量: ${String(this.sessionManager.getSessionCount())}`);
-
-    this.setupGracefulShutdown();
-}
-```
-
-### 关闭流程
-```typescript
-stop(): void {
-    console.log("正在停止 Kagami 机器人...");
-
-    try {
-        this.sessionManager.shutdownAllSessions();
-        console.log("Kagami 机器人停止成功");
-    } catch (error) {
-        console.error("关闭过程中发生错误:", error);
-    }
 }
 ```
 
@@ -96,7 +80,6 @@ export const newKagamiBot = (sessionManager: SessionManager) => {
 ### 运行时阶段
 - 会话初始化失败不会终止整个应用
 - 单个群组连接失败不影响其他群组
-- 优雅关闭时捕获并记录清理过程中的错误
 
 ## 生命周期管理
 
@@ -107,13 +90,6 @@ export const newKagamiBot = (sessionManager: SessionManager) => {
 4. **LLM 层**：LlmClientManager 创建（依赖 ConfigManager 和 Database）
 5. **编排层**：SessionManager 创建并自动初始化所有会话
 6. **应用层**：KagamiBot 创建并启动
-7. **信号处理器注册**：setupGracefulShutdown()
-
-### 关闭顺序
-1. 接收关闭信号（SIGINT/SIGTERM）
-2. 关闭所有群组会话
-3. 断开 NapCat 连接
-4. 进程退出
 
 ## 依赖注入架构
 
@@ -147,20 +123,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         console.error("致命错误:", error);
         process.exit(1);
     });
-}
-```
-
-### 优雅关闭
-```typescript
-private setupGracefulShutdown(): void {
-    const shutdown = (signal: string) => {
-        console.log(`接收到 ${signal} 信号，正在优雅关闭...`);
-        this.stop();
-        process.exit(0);
-    };
-
-    process.on("SIGINT", () => { shutdown("SIGINT"); });
-    process.on("SIGTERM", () => { shutdown("SIGTERM"); });
 }
 ```
 

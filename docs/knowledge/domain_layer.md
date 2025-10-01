@@ -34,33 +34,29 @@
 表示 LLM 调用日志的业务实体，封装了 LLM 调用的核心信息。
 
 ```typescript
-export class LlmCallLog {
-    readonly id: number;
+export type LlmCallStatus = "success" | "fail";
+
+interface LlmCallLogData {
     readonly timestamp: Date;
     readonly status: LlmCallStatus;
     readonly input: string;
     readonly output: string;
-
-    constructor(
-        id: number,
-        timestamp: Date,
-        status: LlmCallStatus,
-        input: string,
-        output: string,
-    ) {
-        this.id = id;
-        this.timestamp = timestamp;
-        this.status = status;
-        this.input = input;
-        this.output = output;
-    }
 }
+
+export type LlmCallLog = LlmCallLogData & {
+    readonly id: number;
+};
+
+export type LlmCallLogCreateRequest = LlmCallLogData;
 ```
 
 **特点**：
 - **不可变性**：所有字段均为 `readonly`，确保实体状态不被意外修改
 - **完整性**：封装了 LLM 调用的完整信息
 - **类型安全**：使用 `LlmCallStatus` 类型约束状态值
+- **关注点分离**：
+  - `LlmCallLog`：完整的领域实体（包含 id）
+  - `LlmCallLogCreateRequest`：创建请求（不含 id）
 
 ### LlmCallStatus 类型
 
@@ -79,18 +75,25 @@ export type LlmCallStatus = "success" | "fail";
 
 ### 基础设施层使用领域类型
 
-[[llm_call_log_repository]] 使用 `LlmCallStatus` 定义接口：
+[[llm_call_log_repository]] 使用 `LlmCallLogCreateRequest` 定义接口：
 
 ```typescript
-import { LlmCallStatus } from "../domain/llm_call_log.js";
+import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
 
 class LlmCallLogRepository {
-    async logLLMCall(
-        status: LlmCallStatus,  // 使用领域类型
-        input: string,
-        output: string,
-    ): Promise<void> {
-        // ...
+    async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
+        try {
+            await this.database.prisma().llmCallLog.create({
+                data: {
+                    status: llmCallLog.status,
+                    input: llmCallLog.input,
+                    output: llmCallLog.output,
+                    timestamp: llmCallLog.timestamp,
+                },
+            });
+        } catch (error) {
+            throw new Error(`Failed to log LLM call: ${String(error)}`);
+        }
     }
 }
 ```
@@ -100,7 +103,7 @@ class LlmCallLogRepository {
 未来可能的查询场景：
 
 ```typescript
-import { LlmCallLog } from "../domain/llm_call_log.js";
+import { LlmCallLog, LlmCallStatus } from "../domain/llm_call_log.js";
 
 class LlmCallLogRepository {
     async findById(id: number): Promise<LlmCallLog | null> {
@@ -111,13 +114,13 @@ class LlmCallLogRepository {
         if (!record) return null;
 
         // 将数据库记录转换为领域实体
-        return new LlmCallLog(
-            record.id,
-            record.timestamp,
-            record.status as LlmCallStatus,
-            record.input,
-            record.output
-        );
+        return {
+            id: record.id,
+            timestamp: record.timestamp,
+            status: record.status as LlmCallStatus,
+            input: record.input,
+            output: record.output,
+        };
     }
 }
 ```

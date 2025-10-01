@@ -10,15 +10,25 @@ LlmClient 是单个 LLM 模型的调用客户端，通过 [[llm_provider_abstrac
 ```typescript
 async oneTurnChat(request: OneTurnChatRequest): Promise<LlmResponse> {
     // 生成输入字符串用于记录（保持原有格式）
-    const inputForLog = JSON.stringify(request.messages, null, 2);
+    const inputForLog = JSON.stringify(request.messages, null, 2); // TODO: 增加日志信息
 
     try {
         const llmResponse = await this.provider.oneTurnChat(this.model, request);
-        void this.llmCallLogRepository.logLLMCall("success", inputForLog, llmResponse.content ?? "");
+        void this.llmCallLogRepository.insert({
+            status: "success",
+            input: inputForLog,
+            output: llmResponse.content ?? "",
+            timestamp: new Date(),
+        }); // TODO: 保存工具调用
         return llmResponse;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
-        void this.llmCallLogRepository.logLLMCall("fail", inputForLog, `模型 ${this.model} 调用失败: ${errorMessage}`);
+        void this.llmCallLogRepository.insert({
+            status: "fail",
+            input: inputForLog,
+            output: `模型 ${this.model} 调用失败: ${errorMessage}`,
+            timestamp: new Date(),
+        });
         throw error;
     }
 }

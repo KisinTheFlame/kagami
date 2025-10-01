@@ -1,5 +1,5 @@
 import { Database } from "./db.js";
-import { LlmCallStatus } from "../domain/llm_call_log.js";
+import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
 
 export class LlmCallLogRepository {
     private database: Database;
@@ -8,17 +8,14 @@ export class LlmCallLogRepository {
         this.database = database;
     }
 
-    async logLLMCall(
-        status: LlmCallStatus,
-        input: string,
-        output: string,
-    ): Promise<void> {
+    async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
         try {
             await this.database.prisma().llmCallLog.create({
                 data: {
-                    status,
-                    input,
-                    output,
+                    status: llmCallLog.status,
+                    input: llmCallLog.input,
+                    output: llmCallLog.output,
+                    timestamp: llmCallLog.timestamp,
                 },
             });
         } catch (error) {
