@@ -145,25 +145,6 @@ async broadcastMessage(content: SendMessageSegment[]): Promise<number> {
 }
 ```
 
-## 生命周期管理
-
-### 关闭流程
-```typescript
-shutdownAllSessions(): void {
-    console.log("正在关闭所有会话...");
-
-    try {
-        this.napcatFacade.disconnect();
-        console.log("连接管理器已关闭");
-    } catch (error) {
-        console.error("关闭连接管理器失败:", error);
-    }
-
-    this.sessions.clear();
-    console.log("所有会话已关闭");
-}
-```
-
 ## 状态监控
 
 ### 连接状态查询

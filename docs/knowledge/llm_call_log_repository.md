@@ -8,19 +8,16 @@ LlmCallLogRepository 是 LLM 调用日志的数据访问层，采用 Repository 
 
 ### 日志记录接口
 ```typescript
-import { LlmCallStatus } from "../domain/llm_call_log.js";
+import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
 
-async logLLMCall(
-    status: LlmCallStatus,  // 使用领域层定义的类型
-    input: string,
-    output: string,
-): Promise<void> {
+async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
     try {
         await this.database.prisma().llmCallLog.create({
             data: {
-                status,
-                input,
-                output,
+                status: llmCallLog.status,
+                input: llmCallLog.input,
+                output: llmCallLog.output,
+                timestamp: llmCallLog.timestamp,
             },
         });
     } catch (error) {
@@ -45,10 +42,10 @@ export const newLlmCallLogRepository = (database: Database) => {
 - **类型安全**：利用 Prisma 的类型系统和领域类型确保数据操作正确性
 
 ### 领域驱动设计集成
-- **使用领域类型**：接口参数使用 [[domain_layer]] 定义的 `LlmCallStatus` 类型
+- **使用领域类型**：接口参数使用 [[domain_layer]] 定义的 `LlmCallLogCreateRequest` 类型
 - **统一语言**：数据访问层使用领域层的业务术语
 - **依赖方向**：Repository 依赖领域层，而非相反
-- **类型安全保障**：编译时检查状态值的合法性
+- **类型安全保障**：编译时检查状态值和数据结构的合法性
 
 ### 架构优势
 - **关注点分离**：将 LLM 日志存储逻辑从 [[database_layer]] 中分离
@@ -59,7 +56,7 @@ export const newLlmCallLogRepository = (database: Database) => {
 ## 依赖关系
 
 ### 依赖
-- [[domain_layer]] - 使用 `LlmCallStatus` 类型定义接口参数
+- [[domain_layer]] - 使用 `LlmCallLogCreateRequest` 和 `LlmCallStatus` 类型定义接口参数
 - [[database_layer]] - 通过 `Database.prisma()` 获取 Prisma 客户端访问数据库
 
 ### 被依赖
@@ -87,30 +84,30 @@ Repository 负责将领域类型映射到数据库模型：
 ```typescript
 import { newDatabase } from './infra/db.js';
 import { newLlmCallLogRepository } from './infra/llm_call_log_repository.js';
-import { LlmCallStatus } from './domain/llm_call_log.js';
+import { LlmCallLogCreateRequest } from './domain/llm_call_log.js';
 
 // 在 bootstrap 函数中创建实例
 const database = newDatabase();
 const llmCallLogRepository = newLlmCallLogRepository(database);
 
-// 记录成功调用（使用领域类型）
-const successStatus: LlmCallStatus = 'success';
-await llmCallLogRepository.logLLMCall(
-    successStatus,
-    JSON.stringify(request),
-    responseContent
-);
+// 记录成功调用
+await llmCallLogRepository.insert({
+    status: 'success',
+    input: JSON.stringify(request),
+    output: responseContent,
+    timestamp: new Date(),
+});
 
-// 记录失败调用（使用领域类型）
-const failStatus: LlmCallStatus = 'fail';
-await llmCallLogRepository.logLLMCall(
-    failStatus,
-    JSON.stringify(request),
-    `模型调用失败: ${errorMessage}`
-);
+// 记录失败调用
+await llmCallLogRepository.insert({
+    status: 'fail',
+    input: JSON.stringify(request),
+    output: `模型调用失败: ${errorMessage}`,
+    timestamp: new Date(),
+});
 
 // 类型安全：以下代码会在编译时报错
-// await llmCallLogRepository.logLLMCall('invalid', input, output); // ❌ 类型错误
+// await llmCallLogRepository.insert({ status: 'invalid', ... }); // ❌ 类型错误
 ```
 
 ## 架构集成
@@ -130,7 +127,7 @@ LlmClient.oneTurnChat()
     ↓
 try { provider.oneTurnChat() }
     ↓
-LlmCallLogRepository.logLLMCall(status: LlmCallStatus, ...)
+LlmCallLogRepository.insert(llmCallLog: LlmCallLogCreateRequest)
     ↓
 Database.prisma().llmCallLog.create()
 ```
