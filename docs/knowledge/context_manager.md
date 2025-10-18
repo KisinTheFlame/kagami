@@ -6,6 +6,10 @@ ContextManager 是专门负责消息上下文管理的类，从 [[message_handle
 
 ## 核心功能
 
+### 公共接口方法
+- **addMessageToHistory**: 添加消息到历史记录，采用 LRU 策略自动清理
+- **buildChatMessages**: 构建用于 LLM 调用的上下文，包含系统提示、历史消息和重复发言提醒
+
 ### 消息历史管理
 ```typescript
 addMessageToHistory(message: Message): void {
@@ -17,6 +21,37 @@ addMessageToHistory(message: Message): void {
     }
 }
 ```
+
+### 重复发言提醒机制
+在构建 LLM 上下文时，会检测最后一条消息是否是机器人的发言（且包含实际聊天内容）。如果是，会自动追加一条系统提醒，避免 LLM 连续发言时产生重复内容。这个机制在 `buildChatMessages()` 方法的最后执行：
+
+```typescript
+// 检查最后一条消息是否是 LLM 的发言
+if (this.messageHistory.length > 0) {
+    const lastMessage = this.messageHistory[this.messageHistory.length - 1];
+    if (
+        lastMessage.type === "bot_msg" &&
+        lastMessage.value.chat &&
+        lastMessage.value.chat.length > 0
+    ) {
+        // 追加系统提醒，避免内容重复
+        messages.push({
+            role: "user",
+            content: [{ type: "text", value: "<system-reminder>请注意，你刚刚才发过言，注意避免内容重复</system-reminder>" }],
+        });
+    }
+}
+```
+
+**触发条件**：
+- 消息历史记录不为空
+- 最后一条消息类型为 `bot_msg`（机器人消息）
+- 该机器人消息包含 `chat` 字段且内容不为空
+
+**作用**：
+- 提醒 LLM 避免重复之前刚说过的内容
+- 提升对话质量，减少冗余回复
+- 作为 user 角色的系统提醒注入到上下文末尾
 
 ### LLM 上下文构建
 ```typescript
@@ -70,14 +105,23 @@ buildChatMessages(): ChatMessage[] {
         }
     });
 
-    return messages;
-}
-```
+    // 检查最后一条消息是否是 LLM 的发言
+    if (this.messageHistory.length > 0) {
+        const lastMessage = this.messageHistory[this.messageHistory.length - 1];
+        if (
+            lastMessage.type === "bot_msg" &&
+            lastMessage.value.chat &&
+            lastMessage.value.chat.length > 0
+        ) {
+            // 追加系统提醒，避免内容重复
+            messages.push({
+                role: "user",
+                content: [{ type: "text", value: "<system-reminder>请注意，你刚刚才发过言，注意避免内容重复</system-reminder>" }],
+            });
+        }
+    }
 
-### 只读访问接口
-```typescript
-getMessageHistory(): readonly Message[] {
-    return this.messageHistory;
+    return messages;
 }
 ```
 
@@ -149,7 +193,7 @@ type LlmResponseItem = ThoughtItem | ChatItem;
 ### 封装性
 - **私有属性**: 所有内部状态都是私有的
 - **受控访问**: 通过公共方法控制数据操作
-- **只读接口**: `getMessageHistory()` 提供安全的数据访问
+- **单向数据流**: 只能添加消息和构建上下文，不提供直接访问历史的接口
 
 ### 可复用性
 - **独立性**: 不依赖具体的消息处理逻辑

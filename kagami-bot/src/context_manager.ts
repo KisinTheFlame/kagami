@@ -88,11 +88,23 @@ export class ContextManager {
             }
         });
 
-        return messages;
-    }
+        // 检查最后一条消息是否是 LLM 的发言
+        if (this.messageHistory.length > 0) {
+            const lastMessage = this.messageHistory[this.messageHistory.length - 1];
+            if (
+                lastMessage.type === "bot_msg" &&
+                lastMessage.value.chat &&
+                lastMessage.value.chat.length > 0
+            ) {
+                // 追加系统提醒
+                messages.push({
+                    role: "user",
+                    content: [{ type: "text", value: "<system-reminder>请注意，你刚刚才发过言，注意避免内容重复</system-reminder>" }],
+                });
+            }
+        }
 
-    getMessageHistory(): readonly Message[] {
-        return this.messageHistory;
+        return messages;
     }
 }
 
