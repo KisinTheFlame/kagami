@@ -125,7 +125,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **统一处理**：简化的消息处理架构，专注流程控制
 - **上下文管理**：独立的消息历史管理和 LLM 数据准备模块
 - **模型降级**：支持多模型按优先级降级，提高可用性
-- **工具调用支持**：完整的 LLM Function Calling 类型系统和接口预留
+- **工具调用支持**：完整的 LLM Function Calling 类型系统，支持 toolChoice 模式控制（auto/required/none）
 - **思考链**：LLM 支持结构化的思考-回复流程
 - **模板化提示词**：基于 Handlebars 的动态 prompt 生成系统
 - **多提供商支持**：支持 OpenAI、Gemini 等多个 LLM 提供商，自动模型选择

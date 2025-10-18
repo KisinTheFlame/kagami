@@ -24,7 +24,7 @@ export class OpenAIProvider implements LlmProvider {
     }
 
     async oneTurnChat(model: string, request: OneTurnChatRequest): Promise<LlmResponse> {
-        const { messages, tools, outputFormat } = request;
+        const { messages, tools, outputFormat, toolChoice } = request;
 
         const apiKey = this.apiKeyManager.getRandomApiKey();
         const openai = new OpenAI({
@@ -50,6 +50,9 @@ export class OpenAIProvider implements LlmProvider {
 
         if (openaiTools.length > 0) {
             requestParams.tools = openaiTools;
+            if (toolChoice) {
+                requestParams.tool_choice = toolChoice;
+            }
         }
 
         const response = await openai.chat.completions.create(requestParams);

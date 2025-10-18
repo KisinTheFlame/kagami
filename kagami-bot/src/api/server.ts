@@ -8,12 +8,11 @@ export const createHttpServer = async (llmLogsRouter: Router, httpConfig: HttpCo
     app.use(createCorsMiddleware(httpConfig.cors));
     app.use(express.json());
 
-    app.get("/health", (req, res) => {
+    app.get("/health", (_, res) => {
         res.json({ status: "ok" });
     });
 
     app.use("/api/v1/llm-logs", llmLogsRouter);
-
 
     return new Promise<Express>(resolve => {
         app.listen(httpConfig.port, () => {
