@@ -77,6 +77,7 @@ export type OneTurnChatRequest = {
     messages: ChatMessage[],
     tools: Tool[],
     outputFormat: OutputFormat,
+    toolChoice?: "auto" | "required" | "none",
 };
 
 // LLM 响应解析结果

@@ -7,6 +7,8 @@ import {
     Schema,
     Type,
     GenerateContentParameters,
+    FunctionCallingConfigMode,
+    GenerateContentConfig,
 } from "@google/genai";
 import {
     LlmProvider,
@@ -21,6 +23,12 @@ import {
 } from "./types.js";
 import { ApiKeyManager } from "../api_key_manager.js";
 
+const toolCallModeMapping: Record<string, FunctionCallingConfigMode> = {
+    auto: FunctionCallingConfigMode.AUTO,
+    required: FunctionCallingConfigMode.ANY,
+    none: FunctionCallingConfigMode.NONE,
+};
+
 export class GenAIProvider implements LlmProvider {
     private apiKeyManager: ApiKeyManager;
 
@@ -29,7 +37,7 @@ export class GenAIProvider implements LlmProvider {
     }
 
     async oneTurnChat(model: string, request: OneTurnChatRequest): Promise<LlmResponse> {
-        const { messages, tools, outputFormat } = request;
+        const { messages, tools, outputFormat, toolChoice } = request;
 
         const apiKey = this.apiKeyManager.getRandomApiKey();
         const ai = new GoogleGenAI({ apiKey });
@@ -38,17 +46,27 @@ export class GenAIProvider implements LlmProvider {
         const genaiTools = this.convertTools(tools);
 
         try {
+            const generateContentConfig: GenerateContentConfig = {
+                responseMimeType: {
+                    json: "application/json",
+                    text: "text/plain",
+                }[outputFormat],
+                systemInstruction,
+                tools: genaiTools,
+            };
+
+            if (toolChoice && genaiTools.length > 0) {
+                generateContentConfig.toolConfig = {
+                    functionCallingConfig: {
+                        mode: toolCallModeMapping[toolChoice],
+                    },
+                };
+            }
+
             const requestConfig: GenerateContentParameters = {
                 model,
                 contents,
-                config: {
-                    responseMimeType: {
-                        json: "application/json",
-                        text: "text/plain",
-                    }[outputFormat],
-                    systemInstruction,
-                    tools: genaiTools,
-                },
+                config: generateContentConfig,
             };
 
             const response = await ai.models.generateContent(requestConfig);
