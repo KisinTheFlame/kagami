@@ -8,12 +8,12 @@ all: build
 # 构建项目
 build:
 	@echo "构建 kagami-console-web..."
-	npm run build
+	pnpm build
 
 # 安装依赖
 install:
 	@echo "安装 kagami-console-web 依赖..."
-	npm install
+	pnpm install
 
 # 清理项目
 clean:
@@ -23,4 +23,4 @@ clean:
 # Lint 项目
 lint:
 	@echo "Linting kagami-console-web..."
-	npm run lint
+	pnpm lint

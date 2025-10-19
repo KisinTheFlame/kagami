@@ -85,8 +85,10 @@ type LlmCallLog = {
 - TypeScript
 - React 18
 - Ant Design 5.x
+- Ant Design Icons 6.x
 - Vite 构建工具
 - Axios HTTP 客户端
+- pnpm 包管理器
 
 **核心组件**：
 - `LLMLogsTable`: 主要的数据表格组件

@@ -17,7 +17,7 @@
     "type": "module",
     "main": "src/main.ts",
     "scripts": {
-        "build": "npm run prisma:generate && tsc",
+        "build": "pnpm prisma:generate && tsc",
         "format": "eslint src --fix",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
@@ -34,6 +34,7 @@
         "@types/handlebars": "^4.0.40",
         "@types/node": "^24.2.0",
         "eslint": "^9.32.0",
+        "globals": "^16.4.0",
         "ts-node": "^10.9.2",
         "tsx": "^4.20.3",
         "typescript": "^5.9.2",

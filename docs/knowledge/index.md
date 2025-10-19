@@ -41,6 +41,7 @@ Kagami System
 
 ### 部署架构
 - [[deployment_system]] - Docker 多容器部署系统，标准化镜像版本管理
+- [[pnpm_migration]] - pnpm 包管理器迁移，提升依赖管理和构建性能
 
 ### 消息处理
 - [[message_handler]] - 统一消息处理器，集成 LLM 和并发控制，采用依赖注入
@@ -133,6 +134,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **回复引用**：智能决策何时使用 QQ 回复功能
 - **配置驱动**：通过 ConfigManager 统一管理配置，支持类型安全访问
 - **调用日志**：通过 Repository 模式记录 LLM 调用历史，支持问题排查和分析
+- **现代化包管理**：全面采用 pnpm 包管理器，提升依赖安装和构建性能
 - **Repository 模式**：数据访问层采用 Repository 模式，关注点分离，便于测试和维护
 - **类型安全**：使用领域类型约束业务规则，编译时检查保证正确性
 - **容器化部署**：标准化 Docker 镜像版本，确保部署一致性和稳定性
@@ -141,13 +143,14 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 
 ### QQ 机器人技术栈
 - **运行时**：Node.js + TypeScript
+- **包管理**：pnpm（替代 npm，提升构建效率）
 - **QQ 集成**：node-napcat-ts
 - **LLM 集成**：OpenAI API
 - **模板引擎**：Handlebars
 - **数据存储**：PostgreSQL + Prisma ORM
 - **配置**：YAML 配置文件
 - **构建**：TypeScript 编译器 + Prisma 生成器
-- **代码质量**：ESLint
+- **代码质量**：ESLint + globals 配置
 - **容器化**：Docker 多阶段构建 + Alpine Linux
 
 ### HTTP API 技术栈
@@ -158,7 +161,8 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **容器化**：与 kagami-bot 统一打包部署
 
 ### 控制台系统技术栈
-- **前端**：React + TypeScript + Ant Design + Vite
+- **前端**：React + TypeScript + Ant Design + Ant Design Icons + Vite
+- **包管理**：pnpm（统一构建和依赖管理）
 - **部署**：Nginx 静态托管 + API 代理
 - **数据库**：通过 HTTP API 访问 PostgreSQL 数据库
 - **容器化**：Nginx Alpine 镜像

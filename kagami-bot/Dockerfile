@@ -4,19 +4,22 @@ FROM node:24-alpine3.21 AS builder
 # 设置工作目录
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json（如果存在）
-COPY package*.json ./
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 复制 package.json 和 pnpm-lock.yaml（如果存在）
+COPY package*.json pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
 # 复制源代码
 COPY . .
 
-RUN npm run prisma:generate
+RUN pnpm prisma:generate
 
 # 编译 TypeScript
-RUN npm run build
+RUN pnpm build
 
 RUN cp src/generated/prisma/libquery*.node dist/generated/prisma/
 
@@ -30,11 +33,14 @@ RUN addgroup -g 1001 -S nodejs && \
 # 设置工作目录
 WORKDIR /app
 
-# 复制 package.json
-COPY package*.json ./
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 复制 package.json 和 pnpm-lock.yaml（如果存在）
+COPY package*.json pnpm-lock.yaml* ./
 
 # 安装生产依赖
-RUN npm ci --only=production && npm cache clean --force
+RUN pnpm install --prod && pnpm store prune
 
 # 从构建阶段复制编译后的文件
 COPY --from=builder --chown=kagami:nodejs /app/dist ./dist
@@ -43,13 +49,6 @@ COPY --from=builder --chown=kagami:nodejs /app/env.yaml ./env.yaml
 
 # 切换到非 root 用户
 USER kagami
-
-# 设置环境变量
-ENV NODE_ENV=production
-
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "console.log('Health check passed')" || exit 1
 
 # 启动应用
 CMD ["node", "dist/main.js", "--config", "env.yaml"]
