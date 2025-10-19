@@ -34,12 +34,14 @@ Kagami Deployment System
 FROM node:24-alpine3.21 AS builder
 # - Node.js 24 LTS 版本
 # - Alpine Linux 3.21 基础镜像
+# - pnpm 包管理器
 # - 用于 TypeScript 编译和依赖安装
 
 # 生产阶段
 FROM node:24-alpine3.21 AS production
 # - 相同基础镜像确保环境一致性
 # - 多阶段构建减少镜像体积
+# - pnpm 生产依赖安装
 # - 非 root 用户运行提升安全性
 ```
 
@@ -64,13 +66,14 @@ FROM alpine:3.21.4 AS production
 FROM node:24-alpine3.21 AS builder
 # - 与机器人服务统一 Node.js 版本
 # - React + Vite 构建环境
-# - npm 依赖管理
+# - pnpm 包管理器
 
 # 生产阶段
 FROM nginx:1.29.1-alpine AS production
 # - 精确 Nginx 版本 1.29.1
 # - Alpine 基础镜像
 # - 静态文件托管优化
+# - Content-Type 响应头优化
 ```
 
 ## 版本策略
@@ -111,6 +114,20 @@ RUN cp src/generated/prisma/libquery*.node dist/generated/prisma/
 - 手动复制 Prisma 查询引擎二进制文件
 - 确保 PostgreSQL 运行时依赖完整
 - 支持数据库连接和 ORM 操作
+
+### pnpm 包管理器集成
+```dockerfile
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 使用 pnpm 安装依赖
+RUN pnpm install --frozen-lockfile  # 构建阶段
+RUN pnpm install --prod             # 生产阶段
+```
+- 统一使用 pnpm 包管理器替代 npm
+- `--frozen-lockfile` 确保依赖版本一致性
+- 生产环境仅安装必要依赖减少镜像体积
+- pnpm store prune 清理缓存优化空间
 
 ## Make 构建命令
 
@@ -179,6 +196,7 @@ volumes:
 - **非 root 用户**: 提升容器安全性
 - **健康检查**: 容器服务状态监控
 - **资源限制**: CPU 和内存使用控制
+- **环境变量简化**: 移除冗余的 NODE_ENV 配置
 
 ## 安全策略
 

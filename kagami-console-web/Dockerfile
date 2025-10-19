@@ -4,17 +4,20 @@ FROM node:24-alpine3.21 AS builder
 # 设置工作目录
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 复制 package.json 和 pnpm-lock.yaml
+COPY package*.json pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
 # 复制源代码
 COPY . .
 
 # 构建应用
-RUN npm run build
+RUN pnpm build
 
 # 生产阶段 - 使用 nginx 托管静态文件
 FROM nginx:1.29.1-alpine AS production
