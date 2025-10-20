@@ -16,20 +16,26 @@ export DB_PASSWORD := $(shell yq '.postgres.password' config.yaml)
 export NAPCAT_UID := $(CURRENT_UID)
 export NAPCAT_GID := $(CURRENT_GID)
 
-.PHONY: all build clean lint up down status install \
-        $(SUBPROJECTS) $(addsuffix -build,$(SUBPROJECTS)) $(addsuffix -clean,$(SUBPROJECTS)) $(addsuffix -lint,$(SUBPROJECTS)) $(addsuffix -install,$(SUBPROJECTS))
+.PHONY: all install build clean lint up down status
 
 # 默认目标：构建所有项目
 all: build
 
+# 安装所有项目依赖
+install:
+	pnpm install --frozen-lockfile
+
 # 构建所有项目
-build: $(addsuffix -build,$(SUBPROJECTS))
+build: install
+	pnpm build
 
 # 清理所有项目
-clean: $(addsuffix -clean,$(SUBPROJECTS))
+clean:
+	pnpm clean
 
 # Lint 所有项目
-lint: $(addsuffix -lint,$(SUBPROJECTS))
+lint:
+	pnpm lint
 
 # Docker 管理命令
 # 支持指定单个服务：make up SERVICE=bot 或使用 make up-bot
@@ -55,25 +61,3 @@ down:
 status:
 	@echo "查看 Docker 服务状态"
 	docker compose ps
-
-# 安装所有子项目依赖
-install: $(addsuffix -install,$(SUBPROJECTS))
-
-# 子项目构建规则
-$(addsuffix -build,$(SUBPROJECTS)):
-	$(MAKE) -C $(patsubst %-build,%,$@) build
-
-# 子项目清理规则
-$(addsuffix -clean,$(SUBPROJECTS)):
-	$(MAKE) -C $(patsubst %-clean,%,$@) clean
-
-# 子项目 lint 规则
-$(addsuffix -lint,$(SUBPROJECTS)):
-	$(MAKE) -C $(patsubst %-lint,%,$@) lint
-
-# 子项目依赖安装规则
-$(addsuffix -install,$(SUBPROJECTS)):
-	$(MAKE) -C $(patsubst %-install,%,$@) install
-
-# 单独构建子项目的快捷方式
-$(SUBPROJECTS): %: %-build

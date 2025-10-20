@@ -1,5 +1,5 @@
 {
-    "name": "kagami",
+    "name": "kagami-bot",
     "version": "1.0.0",
     "description": "一个 QQ 群聊机器人",
     "keywords": [
@@ -17,7 +17,8 @@
     "type": "module",
     "main": "src/main.ts",
     "scripts": {
-        "build": "pnpm prisma:generate && tsc",
+        "build": "pnpm prisma:generate && pnpm compile",
+        "compile": "tsc",
         "format": "eslint src --fix",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
@@ -27,18 +28,8 @@
     },
     "license": "ISC",
     "devDependencies": {
-        "@eslint/js": "^9.32.0",
-        "@stylistic/eslint-plugin": "^5.2.3",
         "@types/cors": "^2.8.19",
-        "@types/express": "^5.0.3",
-        "@types/handlebars": "^4.0.40",
-        "@types/node": "^24.2.0",
-        "eslint": "^9.32.0",
-        "globals": "^16.4.0",
-        "ts-node": "^10.9.2",
-        "tsx": "^4.20.3",
-        "typescript": "^5.9.2",
-        "typescript-eslint": "^8.39.0"
+        "@types/express": "^5.0.3"
     },
     "dependencies": {
         "@google/genai": "^1.20.0",
