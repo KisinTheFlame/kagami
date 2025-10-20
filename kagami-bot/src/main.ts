@@ -8,13 +8,29 @@ import { newLlmClientManager } from "./llm_client_manager.js";
 import { createHttpServer } from "./api/server.js";
 import { createLlmLogsRouter } from "./api/routes/llm_logs.js";
 
-async function bootstrap() {
+function parseArgs(): { configPath: string, promptPath: string } {
+    const args = process.argv.slice(2);
+    let configPath = "env.yaml"; // 默认值
+    let promptPath = "static/prompt.txt"; // 默认值
+
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--config" && i + 1 < args.length) {
+            configPath = args[i + 1];
+        } else if (args[i] === "--prompt" && i + 1 < args.length) {
+            promptPath = args[i + 1];
+        }
+    }
+
+    return { configPath, promptPath };
+}
+
+async function bootstrap(configPath: string, promptPath: string) {
     try {
         console.log("正在初始化 Kagami 机器人...");
 
         // 1. 配置层
-        console.log("正在加载配置...");
-        const configManager = newConfigManager();
+        console.log(`正在加载配置: ${configPath}`);
+        const configManager = newConfigManager(configPath);
         console.log("配置加载成功");
 
         const napcatConfig = configManager.getNapcatConfig();
@@ -29,7 +45,8 @@ async function bootstrap() {
         // 3. 基础设施层 - 外部服务
         console.log("正在初始化 NapCat 连接...");
         const napcatFacade = await newNapcatFacade(configManager);
-        const promptTemplateManager = newPromptTemplateManager();
+        console.log(`正在加载 prompt 模板: ${promptPath}`);
+        const promptTemplateManager = newPromptTemplateManager(promptPath);
 
         // 4. LLM 层
         console.log("正在初始化 LLM 客户端...");
@@ -58,7 +75,8 @@ async function bootstrap() {
 }
 
 async function main(): Promise<void> {
-    await bootstrap();
+    const { configPath, promptPath } = parseArgs();
+    await bootstrap(configPath, promptPath);
     console.log("bootstrap 完成");
 }
 

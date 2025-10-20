@@ -2,7 +2,7 @@
 
 ## 定义
 
-Kagami 部署系统是基于 Docker 多容器架构的部署解决方案，为机器人、控制台前后端和数据库提供统一的容器化环境。采用标准化的镜像版本管理，确保构建的可重复性和稳定性。
+Kagami 部署系统是基于 Docker 多容器架构的部署解决方案，为机器人、控制台前后端和数据库提供统一的容器化环境。采用标准化的镜像版本管理和 **pnpm workspace 感知的构建流程**，确保构建的可重复性、稳定性和高效缓存。
 
 ## 容器化架构
 
@@ -34,14 +34,15 @@ Kagami Deployment System
 FROM node:24-alpine3.21 AS builder
 # - Node.js 24 LTS 版本
 # - Alpine Linux 3.21 基础镜像
-# - pnpm 包管理器
+# - corepack 管理 pnpm@10.18.3
 # - 用于 TypeScript 编译和依赖安装
+# - Workspace 感知的分层构建
 
 # 生产阶段
 FROM node:24-alpine3.21 AS production
 # - 相同基础镜像确保环境一致性
 # - 多阶段构建减少镜像体积
-# - pnpm 生产依赖安装
+# - pnpm --filter 选择性安装依赖
 # - 非 root 用户运行提升安全性
 ```
 
@@ -66,7 +67,8 @@ FROM alpine:3.21.4 AS production
 FROM node:24-alpine3.21 AS builder
 # - 与机器人服务统一 Node.js 版本
 # - React + Vite 构建环境
-# - pnpm 包管理器
+# - corepack 管理 pnpm@10.18.3
+# - Workspace 感知的分层构建
 
 # 生产阶段
 FROM nginx:1.29.1-alpine AS production
@@ -95,39 +97,85 @@ PostgreSQL        -                       postgres:16
 
 ## 构建流程
 
-### 多阶段构建策略
-1. **构建阶段**: 包含完整开发工具链
-   - 源码编译
-   - 依赖下载和构建
-   - 静态资源生成
+### Workspace 感知的多阶段构建
 
-2. **生产阶段**: 最小化运行时环境
-   - 仅包含运行时依赖
-   - 移除构建工具和源码
-   - 优化镜像体积
+#### 构建上下文变更
+```yaml
+# docker-compose.yaml
+services:
+  bot:
+    build:
+      context: .                    # 从根目录构建（而非子目录）
+      dockerfile: kagami-bot/Dockerfile
+
+  console-web:
+    build:
+      context: .                    # 从根目录构建（而非子目录）
+      dockerfile: kagami-console-web/Dockerfile
+```
+
+#### 分层构建策略
+1. **第 1 层 - Workspace 配置**: 复制 workspace 配置和所有 package.json
+   - 只有依赖变化时才失效
+   - 最大化缓存命中率
+
+2. **第 2 层 - 依赖安装**: 使用 `--filter` 选择性安装
+   - 仅安装当前子项目所需依赖
+   - 减小镜像体积
+
+3. **第 3 层 - 源码复制**: 复制完整源代码
+   - 代码修改只影响这一层及之后的层
+
+4. **第 4 层 - 项目构建**: 使用 `--filter` 构建指定子项目
+   - 针对性构建，避免构建不需要的子项目
 
 ### kagami-bot 构建特殊处理
+
+#### Prisma 二进制文件处理
 ```dockerfile
-# Prisma 二进制文件复制
-RUN cp src/generated/prisma/libquery*.node dist/generated/prisma/
+# Prisma 生成和二进制文件复制
+RUN pnpm --filter kagami-bot prisma:generate
+RUN pnpm --filter kagami-bot compile
+RUN cp kagami-bot/src/generated/prisma/libquery*.node kagami-bot/dist/generated/prisma/
 ```
+- 使用 `--filter` 针对特定子项目执行 Prisma 生成
 - 手动复制 Prisma 查询引擎二进制文件
-- 确保 PostgreSQL 运行时依赖完整
-- 支持数据库连接和 ORM 操作
+- 路径调整以适配 workspace 结构
+
+#### 启动命令参数化
+```dockerfile
+CMD ["node", "kagami-bot/dist/main.js", "--config", "kagami-bot/env.yaml", "--prompt", "kagami-bot/static/prompt.txt"]
+```
+- 支持命令行参数指定配置和 prompt 文件路径
+- 路径前缀适配 workspace 结构
 
 ### pnpm 包管理器集成
-```dockerfile
-# 安装 pnpm
-RUN npm install -g pnpm
 
-# 使用 pnpm 安装依赖
-RUN pnpm install --frozen-lockfile  # 构建阶段
-RUN pnpm install --prod             # 生产阶段
+#### Corepack 管理 pnpm 版本
+```dockerfile
+# 使用 corepack 启用和固定 pnpm 版本
+RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 ```
-- 统一使用 pnpm 包管理器替代 npm
-- `--frozen-lockfile` 确保依赖版本一致性
-- 生产环境仅安装必要依赖减少镜像体积
-- pnpm store prune 清理缓存优化空间
+- **Corepack**: Node.js 内置的包管理器版本管理工具
+- **版本固定**: 确保所有环境使用相同 pnpm 版本（10.18.3）
+- **无需全局安装**: 不再使用 `npm install -g pnpm`
+
+#### Workspace 感知的依赖安装
+```dockerfile
+# 构建阶段 - 复制 workspace 配置
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY kagami-bot/package.json ./kagami-bot/
+COPY kagami-console-web/package.json ./kagami-console-web/
+
+# 选择性安装依赖（只安装当前子项目）
+RUN pnpm install --frozen-lockfile --filter kagami-bot
+
+# 生产阶段 - 只安装生产依赖
+RUN pnpm install --prod --frozen-lockfile --filter kagami-bot && pnpm store prune
+```
+- **`--filter`**: 只安装指定子项目的依赖，减少不必要的包
+- **`--frozen-lockfile`**: 确保依赖版本一致性
+- **`pnpm store prune`**: 清理缓存优化镜像体积
 
 ## Make 构建命令
 
@@ -188,9 +236,11 @@ volumes:
 
 ### 镜像优化
 - **多阶段构建**: 分离构建和运行环境
-- **层缓存**: 优化 Dockerfile 指令顺序
+- **Workspace 分层缓存**: 依赖配置和源代码分层，最大化缓存命中
+- **选择性依赖安装**: 使用 `--filter` 只安装需要的依赖
 - **基础镜像选择**: Alpine Linux 最小化体积
 - **依赖管理**: 精确版本避免意外更新
+- **.dockerignore**: 排除不必要文件，减少构建上下文
 
 ### 运行时优化
 - **非 root 用户**: 提升容器安全性
@@ -247,6 +297,53 @@ docker exec -it kagami-bot sh
 docker exec -it kagami-console sh
 ```
 
+## Docker 构建优化细节
+
+### .dockerignore 配置
+```
+# 版本控制
+.git
+.gitignore
+
+# 开发工具
+.vscode
+.idea
+
+# 构建产物
+**/dist
+**/node_modules
+
+# 文档
+docs
+*.md
+!README.md
+
+# 配置文件
+.eslintrc*
+.prettierrc*
+
+# 日志和临时文件
+*.log
+*.tmp
+*.temp
+.DS_Store
+```
+- **减少构建上下文**: 排除不必要的文件，加速文件传输
+- **提升缓存效率**: 避免无关文件变化导致缓存失效
+- **保留必要文件**: 白名单方式保留 README.md
+
+### Dockerfile 层顺序优化
+1. 基础镜像和 pnpm 安装（很少变化）
+2. Workspace 配置和 package.json（依赖变化时失效）
+3. 依赖安装（依赖变化时失效）
+4. 源代码复制（代码变化时失效）
+5. 项目构建（每次代码变化都执行）
+
+### 构建缓存策略
+- **依赖层缓存**: 只有 package.json 或 lockfile 变化时才重新安装
+- **代码层独立**: 代码修改不影响依赖安装层的缓存
+- **分层构建**: 最大化 Docker 层缓存命中率
+
 ## 扩展规划
 
 ### 水平扩展
@@ -257,20 +354,26 @@ docker exec -it kagami-console sh
 ### 云原生部署
 - **Kubernetes**: 容器编排和自动扩展
 - **Helm Charts**: 标准化部署配置
-- **CI/CD**: 自动化构建和部署流水线
+- **CI/CD**: 自动化构建和部署流水线，利用 Docker 层缓存加速
 
 ## 依赖关系
 
 ### 基础设施依赖
 - [[database_layer]] - PostgreSQL 数据库服务
 - [[console_system]] - Web 控制台部署架构
+- [[pnpm_migration]] - pnpm workspace 架构和包管理
 
 ### 配置依赖
 - [[config_system]] - 环境配置和参数管理
+- [[config_manager]] - 支持命令行参数的配置管理
+- [[prompt_template_manager]] - 支持路径参数的 prompt 模板管理
 
 ## 相关文件
-- `kagami-bot/Dockerfile` - 机器人容器配置
+- `kagami-bot/Dockerfile` - 机器人容器配置（workspace 感知）
 - `kagami-console/Dockerfile` - 后端 API 容器配置
-- `kagami-console-web/Dockerfile` - 前端容器配置
-- `docker-compose.yml` - 多容器编排配置
-- `Makefile` - 统一构建命令接口
+- `kagami-console-web/Dockerfile` - 前端容器配置（workspace 感知）
+- `docker-compose.yaml` - 多容器编排配置（调整构建上下文）
+- `Makefile` - 统一构建命令接口（委托给 pnpm）
+- `.dockerignore` - Docker 构建优化配置
+- `pnpm-workspace.yaml` - workspace 配置
+- `package.json` - 根目录配置，管理共享依赖

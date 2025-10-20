@@ -2,7 +2,7 @@
 
 ## 定义
 
-PromptTemplateManager 是基于 Handlebars 的提示词模板管理系统，负责动态生成 LLM 系统提示词。位于 `src/prompt_template_manager.ts:10-57`。
+PromptTemplateManager 是基于 Handlebars 的提示词模板管理系统，负责动态生成 LLM 系统提示词。支持通过构造函数参数或命令行参数指定模板文件路径，适配 pnpm workspace 结构。位于 `kagami-bot/src/prompt_template_manager.ts`。
 
 ## 核心功能
 
@@ -12,12 +12,15 @@ export class PromptTemplateManager {
     private template?: HandlebarsTemplateDelegate<PromptTemplateContext>;
     private templatePath: string;
 
-    constructor(templatePath = "./static/prompt.txt") {
+    constructor(templatePath = "static/prompt.txt") {
         this.templatePath = templatePath;
         this.loadTemplate();
     }
 }
 ```
+- 构造函数接受可选的 `templatePath` 参数
+- 默认路径为 `static/prompt.txt`（相对路径）
+- 支持在不同环境中指定不同的模板文件
 
 ### 模板上下文接口
 ```typescript
@@ -102,9 +105,11 @@ public generatePrompt(context: PromptTemplateContext): string {
 ## 模板文件结构
 
 ### 静态模板位置
-- **默认路径**: `./static/prompt.txt`
+- **默认路径**: `static/prompt.txt`（相对路径）
+- **Workspace 环境**: `kagami-bot/static/prompt.txt`（从根目录）
 - **格式**: Handlebars 模板语法混合纯文本
 - **编码**: UTF-8
+- **路径可配置**: 通过构造函数参数或命令行参数指定
 
 ### 模板内容组织
 1. **角色设定**: 机器人人格和行为定义
@@ -167,11 +172,48 @@ export const newPromptTemplateManager = (templatePath?: string) => {
 推荐使用工厂函数创建 PromptTemplateManager 实例，保持代码风格统一。
 
 ### 使用示例
+
+#### 基本用法
 ```typescript
-// 在 main.ts bootstrap 函数中
+// 使用默认路径
 const promptTemplateManager = newPromptTemplateManager();
 
-// 在 SessionManager 中使用
+// 使用自定义路径
+const promptTemplateManager = newPromptTemplateManager("custom/prompt.txt");
+```
+
+#### 命令行参数支持
+```typescript
+// main.ts 中解析命令行参数
+function parseArgs(): { configPath: string, promptPath: string } {
+    const args = process.argv.slice(2);
+    let promptPath = "static/prompt.txt"; // 默认值
+
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--prompt" && i + 1 < args.length) {
+            promptPath = args[i + 1];
+        }
+    }
+
+    return { configPath, promptPath };
+}
+
+// 使用解析的路径创建 PromptTemplateManager
+const { promptPath } = parseArgs();
+const promptTemplateManager = newPromptTemplateManager(promptPath);
+```
+
+#### Docker 环境中使用
+```dockerfile
+# 在 Dockerfile CMD 中指定 prompt 文件路径
+CMD ["node", "kagami-bot/dist/main.js",
+     "--config", "kagami-bot/env.yaml",
+     "--prompt", "kagami-bot/static/prompt.txt"]
+```
+这使得在 workspace 结构中可以明确指定 prompt 模板文件的相对路径。
+
+#### 在 SessionManager 中使用
+```typescript
 const contextManager = newContextManager(configManager, promptTemplateManager);
 ```
 
@@ -187,8 +229,10 @@ Handlebars.registerHelper('customHelper', function(context) {
 
 ### 多模板支持
 - **可配置模板路径**: 构造函数支持自定义路径
-- **模板切换**: 支持运行时更换模板文件
+- **命令行参数**: 支持通过 `--prompt` 参数指定模板路径
+- **模板切换**: 支持运行时更换模板文件（通过 `reloadTemplate()`）
 - **场景化模板**: 可为不同场景使用不同模板
+- **环境隔离**: 开发/测试/生产环境可使用不同的模板文件
 
 ## 错误处理策略
 
@@ -229,7 +273,27 @@ Handlebars.registerHelper('customHelper', function(context) {
 - **调试便利**: 清晰的结构便于定位问题和验证 JSON 格式
 - **团队协作**: 统一的格式标准提升团队开发效率
 
+## 相关变更
+
+### 与 pnpm workspace 迁移的关系
+- 在 workspace 结构中，模板文件路径需要明确指定
+- Docker 构建时需要使用子项目路径前缀（如 `kagami-bot/static/prompt.txt`）
+- 命令行参数支持使得路径配置更加灵活
+
+### 与 deployment_system 的集成
+- Docker CMD 中使用 `--prompt kagami-bot/static/prompt.txt` 明确指定路径
+- 生产环境和开发环境可以使用不同的模板文件
+- 支持通过环境变量或卷挂载更改模板文件位置
+
+### 与 config_manager 的并行设计
+- 两者都支持命令行参数配置路径
+- 统一的参数解析模式（parseArgs 函数）
+- 都适配 workspace 结构的路径要求
+
 ## 相关文件
-- `src/prompt_template_manager.ts` - 主要实现
-- `static/prompt.txt` - 默认模板文件，包含改进的 JSON 示例格式
-- `package.json` - handlebars 依赖声明
+- `kagami-bot/src/prompt_template_manager.ts:10-73` - 主要实现
+- `kagami-bot/src/main.ts:11-25` - parseArgs 命令行参数解析
+- `kagami-bot/src/main.ts:47` - bootstrap 函数中的使用
+- `kagami-bot/static/prompt.txt` - 默认模板文件，包含改进的 JSON 示例格式
+- `kagami-bot/Dockerfile` - Docker 构建配置（指定 prompt 路径）
+- `kagami-bot/package.json` - handlebars 依赖声明

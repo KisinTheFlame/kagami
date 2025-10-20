@@ -5,19 +5,24 @@ FROM node:24-alpine3.21 AS builder
 WORKDIR /app
 
 # 安装 pnpm
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 
-# 复制 package.json 和 pnpm-lock.yaml
-COPY package*.json pnpm-lock.yaml* ./
+# 第 1 层：复制 workspace 配置文件和所有子项目的 package.json
+# 这一层只有在依赖变化时才会失效
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY kagami-bot/package.json ./kagami-bot/
+COPY kagami-console-web/package.json ./kagami-console-web/
 
-# 安装依赖
-RUN pnpm install --frozen-lockfile
+# 第 2 层：只安装当前项目的依赖（会被缓存）
+# 使用 --filter 避免安装其他子项目的依赖，减小镜像大小
+RUN pnpm install --frozen-lockfile --filter kagami-console-web
 
-# 复制源代码
+# 第 3 层：复制源代码
+# 代码修改只会导致这一层及之后的层失效，前面的依赖安装层仍然有效
 COPY . .
 
-# 构建应用
-RUN pnpm build
+# 第 4 层：构建指定子项目
+RUN pnpm --filter kagami-console-web build
 
 # 生产阶段 - 使用 nginx 托管静态文件
 FROM nginx:1.29.1-alpine AS production
@@ -30,10 +35,10 @@ RUN addgroup -g 1001 -S kagami && \
 RUN rm /etc/nginx/conf.d/default.conf
 
 # 从构建阶段复制构建产物到 nginx 目录
-COPY --from=builder --chown=kagami:kagami /app/dist /usr/share/nginx/html
+COPY --from=builder --chown=kagami:kagami /app/kagami-console-web/dist /usr/share/nginx/html
 
 # 复制 nginx 配置文件
-COPY --chown=kagami:kagami nginx.conf /etc/nginx/nginx.conf
+COPY --chown=kagami:kagami kagami-console-web/nginx.conf /etc/nginx/nginx.conf
 
 # 设置权限
 RUN chown -R kagami:kagami /var/cache/nginx && \
