@@ -50,8 +50,7 @@ export type Config = {
 export class ConfigManager {
     private config: Config;
 
-    constructor() {
-        const configPath = "env.yaml";
+    constructor(configPath: string) {
         if (!fs.existsSync(configPath)) {
             throw new Error(`配置文件不存在: ${configPath}`);
         }
@@ -112,6 +111,6 @@ export class ConfigManager {
     }
 }
 
-export const newConfigManager = () => {
-    return new ConfigManager();
+export const newConfigManager = (configPath: string) => {
+    return new ConfigManager(configPath);
 };

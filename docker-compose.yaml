@@ -35,8 +35,8 @@ services:
   # Kagami Bot 服务
   bot:
     build:
-      context: ./kagami-bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: kagami-bot/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -60,8 +60,8 @@ services:
   # Kagami Console Web 前端（通过 nginx 托管）
   console-web:
     build:
-      context: ./kagami-console-web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: kagami-console-web/Dockerfile
     ports:
       - "10000:10000"
     depends_on:

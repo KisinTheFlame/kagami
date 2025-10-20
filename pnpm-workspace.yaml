@@ -1,0 +1,9 @@
+packages:
+  - kagami-bot
+  - kagami-console-web
+
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma
