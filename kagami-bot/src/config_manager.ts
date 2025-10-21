@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as yaml from "yaml";
-import { ProviderConfig } from "./llm_providers/types.js";
+import type { ProviderConfig } from "kagami-types/domain/provider_config";
 
 export type LlmConfig = {
     models: string[],

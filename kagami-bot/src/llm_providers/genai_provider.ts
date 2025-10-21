@@ -10,17 +10,17 @@ import {
     FunctionCallingConfigMode,
     GenerateContentConfig,
 } from "@google/genai";
-import {
+import type {
     LlmProvider,
     ChatMessage,
     ChatMessagePart,
-    GenAIProviderConfig,
     Tool,
     LlmResponse,
     ToolParam,
     ToolCall,
     OneTurnChatRequest,
-} from "./types.js";
+} from "kagami-types/domain/llm";
+import type { GenAIProviderConfig } from "kagami-types/domain/provider_config";
 import { ApiKeyManager } from "../api_key_manager.js";
 
 const toolCallModeMapping: Record<string, FunctionCallingConfigMode> = {

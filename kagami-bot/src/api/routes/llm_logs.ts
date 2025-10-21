@@ -1,7 +1,12 @@
 import { Router, Request, Response } from "express";
 import { LlmCallLogRepository } from "../../infra/llm_call_log_repository.js";
-import { llmLogQueryParamsSchema, LlmLogListResponse, ErrorResponse } from "../types/api_types.js";
-import { LlmCallLog } from "../../domain/llm_call_log.js";
+import {
+    llmLogQueryParamsSchema,
+    type LlmLogListResponse,
+    type ErrorResponse,
+    type LlmCallLogDTO,
+} from "kagami-types/dto/llm_call_log";
+import { llmCallLogToDTO, llmCallLogsToDTO } from "kagami-types/converter/llm_call_log";
 import { ZodError } from "zod";
 
 export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router => {
@@ -22,7 +27,7 @@ export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router =>
             });
 
             res.json({
-                data: result.data,
+                data: llmCallLogsToDTO(result.data),
                 total: result.total,
                 page: params.page,
                 limit: params.limit,
@@ -37,7 +42,7 @@ export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router =>
         }
     });
 
-    router.get("/:id", async (req: Request, res: Response<LlmCallLog | ErrorResponse>) => {
+    router.get("/:id", async (req: Request, res: Response<LlmCallLogDTO | ErrorResponse>) => {
         try {
             const id = Number.parseInt(req.params.id, 10);
             if (Number.isNaN(id)) {
@@ -51,7 +56,7 @@ export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router =>
                 return;
             }
 
-            res.json(log);
+            res.json(llmCallLogToDTO(log));
         } catch (error) {
             console.error("Error fetching LLM log:", error);
             res.status(500).json({ error: "Internal server error" });

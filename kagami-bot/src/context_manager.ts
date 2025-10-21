@@ -2,7 +2,7 @@ import { SendMessageSegment } from "node-napcat-ts";
 import { Message } from "./session.js";
 import { PromptTemplateManager } from "./prompt_template_manager.js";
 import { getShanghaiTimestamp } from "./utils/timezone.js";
-import { ChatMessage } from "./llm_providers/types.js";
+import type { ChatMessage } from "kagami-types/domain/llm";
 import { ConfigManager } from "./config_manager.js";
 
 type ThoughtItem = {

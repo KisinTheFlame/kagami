@@ -53,6 +53,9 @@ importers:
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
+      kagami-types:
+        specifier: workspace:*
+        version: link:../kagami-types
       node-napcat-ts:
         specifier: ^0.4.15
         version: 0.4.20
@@ -90,6 +93,9 @@ importers:
       dayjs:
         specifier: ^1.11.18
         version: 1.11.18
+      kagami-types:
+        specifier: workspace:*
+        version: link:../kagami-types
       react:
         specifier: ^19.1.1
         version: 19.2.0
@@ -115,6 +121,16 @@ importers:
       vite:
         specifier: ^7.1.2
         version: 7.1.11(@types/node@24.9.0)(jiti@2.6.1)(tsx@4.20.6)(yaml@2.8.1)
+
+  kagami-types:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
 
 packages:
 

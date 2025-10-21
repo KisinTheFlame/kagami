@@ -1,5 +1,5 @@
 import { Database } from "./db.js";
-import { LlmCallLog, LlmCallLogCreateRequest, LlmCallStatus } from "../domain/llm_call_log.js";
+import type { LlmCallLog, LlmCallLogCreateRequest, LlmCallStatus } from "kagami-types/domain/llm_call_log";
 
 type QueryListParams = {
     page: number,

@@ -12,6 +12,7 @@
     "antd": "^5.27.2",
     "axios": "^1.11.0",
     "dayjs": "^1.11.18",
+    "kagami-types": "workspace:*",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

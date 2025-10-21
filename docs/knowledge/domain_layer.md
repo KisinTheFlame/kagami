@@ -4,7 +4,9 @@
 
 领域层是 Kagami 项目采用领域驱动设计（DDD）的核心层，封装了业务领域的核心概念和规则。该层独立于具体的技术实现，专注于表达业务逻辑和领域知识。
 
-位置：`kagami-bot/src/domain/`
+**重要变更**：从 monorepo 架构优化开始，领域层类型定义已迁移到独立的共享类型库 [[kagami_types]]，供多个子项目复用。
+
+位置：`kagami-types/src/domain/`（原位置：`kagami-bot/src/domain/`）
 
 ## 设计原则
 
@@ -29,7 +31,7 @@
 
 ### LlmCallLog 领域实体
 
-位置：`src/domain/llm_call_log.ts`
+位置：`kagami-types/src/domain/llm_call_log.ts`
 
 表示 LLM 调用日志的业务实体，封装了 LLM 调用的核心信息。
 
@@ -78,7 +80,7 @@ export type LlmCallStatus = "success" | "fail";
 [[llm_call_log_repository]] 使用 `LlmCallLogCreateRequest` 定义接口：
 
 ```typescript
-import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
+import { LlmCallLogCreateRequest } from "kagami-types/domain/llm_call_log";
 
 class LlmCallLogRepository {
     async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
@@ -103,7 +105,7 @@ class LlmCallLogRepository {
 未来可能的查询场景：
 
 ```typescript
-import { LlmCallLog, LlmCallStatus } from "../domain/llm_call_log.js";
+import { LlmCallLog, LlmCallStatus } from "kagami-types/domain/llm_call_log";
 
 class LlmCallLogRepository {
     async findById(id: number): Promise<LlmCallLog | null> {
@@ -128,8 +130,11 @@ class LlmCallLogRepository {
 ## 依赖关系
 
 ### 被依赖
-- [[llm_call_log_repository]] - 使用 `LlmCallStatus` 类型定义接口
+- [[kagami_types]] - 领域层类型定义的实际存储位置（独立共享库）
+- [[llm_call_log_repository]] - 使用 `LlmCallStatus`、`LlmCallLog` 类型定义接口
 - [[llm_client]] - 间接通过 Repository 使用领域类型
+- [[http_api_layer]] - 使用领域类型进行数据传输
+- [[console_system]] - 通过 DTO 间接使用领域类型
 - 未来的应用服务层 - 将使用 `LlmCallLog` 实体进行业务逻辑处理
 
 ### 依赖
@@ -223,6 +228,8 @@ export class LlmSession {
 
 ## 相关节点
 
+- [[kagami_types]] - 领域层类型定义的独立共享库实现
 - [[llm_call_log_repository]] - 使用领域类型定义数据访问接口
 - [[database_layer]] - 基础设施层，存储领域实体
 - [[llm_client]] - 应用层，使用领域类型记录调用日志
+- [[http_api_layer]] - 使用领域类型和 DTO 转换器

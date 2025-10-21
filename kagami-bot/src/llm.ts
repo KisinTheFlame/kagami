@@ -1,4 +1,5 @@
-import { ProviderConfig, LlmProvider, LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
+import type { LlmProvider, LlmResponse, OneTurnChatRequest } from "kagami-types/domain/llm";
+import type { ProviderConfig } from "kagami-types/domain/provider_config";
 import { createLlmProvider } from "./llm_providers/factory.js";
 import { LlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 

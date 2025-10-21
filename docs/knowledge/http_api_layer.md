@@ -14,10 +14,10 @@ api/
 ├── server.ts              # HTTP 服务器入口
 ├── middleware/
 │   └── cors.ts           # CORS 中间件
-├── routes/
-│   └── llm_logs.ts       # LLM 日志查询路由
-└── types/
-    └── api_types.ts      # API 类型定义和验证
+└── routes/
+    └── llm_logs.ts       # LLM 日志查询路由
+
+注：API 类型定义已迁移至 kagami-types/src/dto/llm_call_log.ts
 ```
 
 ### 分层架构
@@ -128,7 +128,8 @@ export const createCorsMiddleware = (config: CorsConfig) => {
 ```typescript
 import { Router, Request, Response } from "express";
 import { LlmCallLogRepository } from "../../infra/llm_call_log_repository.js";
-import { llmLogQueryParamsSchema, LlmLogListResponse, ErrorResponse } from "../types/api_types.js";
+import { llmLogQueryParamsSchema, LlmLogListResponse, ErrorResponse } from "kagami-types/dto/llm_call_log";
+import { llmCallLogsToDTO } from "kagami-types/converter/llm_call_log";
 
 export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router => {
     const router = Router();
@@ -146,12 +147,14 @@ export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router =>
                 orderDirection: params.orderDirection,
             });
 
-            res.json({
-                data: result.data,
+            const response: LlmLogListResponse = {
+                data: llmCallLogsToDTO(result.data),
                 total: result.total,
                 page: params.page,
                 limit: params.limit,
-            });
+            };
+
+            res.json(response);
         } catch (error) {
             if (error instanceof ZodError) {
                 res.status(400).json({ error: error.errors.map(e => e.message).join(", ") });
@@ -176,16 +179,16 @@ export const createLlmLogsRouter = (repository: LlmCallLogRepository): Router =>
 - 完善的错误处理（验证错误 400、未找到 404、服务器错误 500）
 - TypeScript 类型安全
 
-### API 类型定义 (types/api_types.ts)
+### API DTO 和转换器 (kagami-types)
 
 **核心功能**：
 - 使用 Zod 定义和验证请求参数
-- 定义响应类型
+- 定义 DTO 响应类型
+- 提供领域模型与 DTO 之间的转换函数
 
-**类型定义**：
+**类型定义**（位于 `kagami-types/src/dto/llm_call_log.ts`）：
 ```typescript
 import { z } from "zod";
-import { LlmCallLog } from "../../domain/llm_call_log.js";
 
 // 查询参数验证 Schema
 export const llmLogQueryParamsSchema = z.object({
@@ -200,9 +203,18 @@ export const llmLogQueryParamsSchema = z.object({
 
 export type LlmLogQueryParams = z.infer<typeof llmLogQueryParamsSchema>;
 
+// DTO 类型（timestamp 为 ISO 8601 字符串）
+export type LlmCallLogDTO = {
+    readonly id: number,
+    readonly timestamp: string, // ISO 8601 字符串格式
+    readonly status: "success" | "fail",
+    readonly input: string,
+    readonly output: string,
+};
+
 // 响应类型
 export type LlmLogListResponse = {
-    data: LlmCallLog[],
+    data: LlmCallLogDTO[],
     total: number,
     page: number,
     limit: number,
@@ -213,9 +225,32 @@ export type ErrorResponse = {
 };
 ```
 
+**转换器**（位于 `kagami-types/src/converter/llm_call_log.ts`）：
+```typescript
+import type { LlmCallLog } from "../domain/llm_call_log.js";
+import type { LlmCallLogDTO } from "../dto/llm_call_log.js";
+
+// 领域模型 → DTO（Date → ISO 字符串）
+export function llmCallLogToDTO(log: LlmCallLog): LlmCallLogDTO {
+    return {
+        id: log.id,
+        timestamp: log.timestamp.toISOString(),
+        status: log.status,
+        input: log.input,
+        output: log.output,
+    };
+}
+
+// 批量转换
+export function llmCallLogsToDTO(logs: LlmCallLog[]): LlmCallLogDTO[] {
+    return logs.map(llmCallLogToDTO);
+}
+```
+
 **特点**：
 - 使用 Zod 进行运行时类型验证和自动类型推导
-- 复用领域层的 `LlmCallLog` 类型
+- DTO 和领域模型分离（timestamp: string vs Date）
+- 提供转换器封装时间格式转换逻辑
 - 提供默认值和约束（如 limit 最大 100）
 
 ## 集成方式
@@ -246,7 +281,10 @@ http:
 ### 依赖
 - [[llm_call_log_repository]] - 数据访问层，提供查询和持久化功能
 - [[config_manager]] - 获取 HTTP 配置（端口、CORS 设置）
-- [[domain_layer]] - 使用领域类型 `LlmCallLog`
+- [[kagami_types]] - 使用 DTO、转换器和领域类型
+  - `dto/llm_call_log` - 请求参数验证、响应类型定义
+  - `converter/llm_call_log` - 领域模型与 DTO 转换
+  - `domain/llm_call_log` - 领域类型（间接使用）
 
 ### 被依赖
 - [[console_system]] - 前端控制台通过 HTTP API 获取数据
@@ -335,6 +373,7 @@ location /api/ {
 
 ## 相关节点
 
+- [[kagami_types]] - 共享类型库，提供 DTO、转换器和领域类型
 - [[llm_call_log_repository]] - 数据访问层
 - [[console_system]] - 前端控制台
 - [[config_manager]] - 配置管理
