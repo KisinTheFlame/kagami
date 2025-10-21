@@ -7,21 +7,26 @@ WORKDIR /app
 # 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 
-# 第 1 层：复制 workspace 配置文件和所有子项目的 package.json
-# 这一层只有在依赖变化时才会失效
+# 第 1 层：复制 workspace 配置文件
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+# 第 2 层：复制 kagami-types 的配置和源代码，先构建它
+COPY kagami-types/package.json ./kagami-types/
+RUN pnpm install --frozen-lockfile --filter kagami-types
+COPY kagami-types/tsconfig.json ./kagami-types/
+COPY kagami-types/src ./kagami-types/src
+RUN pnpm --filter kagami-types build
+
+# 第 3 层：复制其他子项目的 package.json 并安装依赖
+# 此时 kagami-types 已经构建完成，pnpm 可以正确链接
 COPY kagami-bot/package.json ./kagami-bot/
 COPY kagami-console-web/package.json ./kagami-console-web/
-
-# 第 2 层：只安装当前项目的依赖（会被缓存）
-# 使用 --filter 避免安装其他子项目的依赖，减小镜像大小
 RUN pnpm install --frozen-lockfile --filter kagami-console-web
 
-# 第 3 层：复制源代码
-# 代码修改只会导致这一层及之后的层失效，前面的依赖安装层仍然有效
-COPY . .
+# 第 4 层：复制 kagami-console-web 源代码
+COPY kagami-console-web ./kagami-console-web
 
-# 第 4 层：构建指定子项目
+# 第 5 层：构建 kagami-console-web
 RUN pnpm --filter kagami-console-web build
 
 # 生产阶段 - 使用 nginx 托管静态文件

@@ -96,18 +96,3 @@ export type LlmProvider = {
      */
     oneTurnChat(model: string, request: OneTurnChatRequest): Promise<LlmResponse>,
 };
-
-export type OpenAIProviderConfig = {
-    interface: "openai",
-    api_keys: string[],
-    models: string[],
-    base_url?: string,
-};
-
-export type GenAIProviderConfig = {
-    interface: "genai",
-    api_keys: string[],
-    models: string[],
-};
-
-export type ProviderConfig = OpenAIProviderConfig | GenAIProviderConfig;

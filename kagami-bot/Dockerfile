@@ -7,21 +7,26 @@ WORKDIR /app
 # 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 
-# 第 1 层：复制 workspace 配置文件和所有子项目的 package.json
-# 这一层只有在依赖变化时才会失效
+# 第 1 层：复制 workspace 配置文件
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+# 第 2 层：复制 kagami-types 的配置和源代码，先构建它
+COPY kagami-types/package.json ./kagami-types/
+RUN pnpm install --frozen-lockfile --filter kagami-types
+COPY kagami-types/tsconfig.json ./kagami-types/
+COPY kagami-types/src ./kagami-types/src
+RUN pnpm --filter kagami-types build
+
+# 第 3 层：复制其他子项目的 package.json 并安装依赖
+# 此时 kagami-types 已经构建完成，pnpm 可以正确链接
 COPY kagami-bot/package.json ./kagami-bot/
 COPY kagami-console-web/package.json ./kagami-console-web/
-
-# 第 2 层：只安装当前项目的依赖（会被缓存）
-# 使用 --filter 避免安装其他子项目的依赖，减小镜像大小
 RUN pnpm install --frozen-lockfile --filter kagami-bot
 
-# 第 3 层：复制源代码
-# 代码修改只会导致这一层及之后的层失效，前面的依赖安装层仍然有效
-COPY . .
+# 第 4 层：复制 kagami-bot 源代码
+COPY kagami-bot ./kagami-bot
 
-# 第 4 层：构建指定子项目
+# 第 5 层：构建 kagami-bot
 RUN pnpm --filter kagami-bot prisma:generate
 
 RUN pnpm --filter kagami-bot compile
@@ -41,13 +46,19 @@ WORKDIR /app
 # 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 
-# 复制 workspace 配置文件和所有子项目的 package.json
+# 复制 workspace 配置文件
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+# 先复制并安装 kagami-types（需要先有构建产物）
+COPY kagami-types/package.json ./kagami-types/
+COPY --from=builder /app/kagami-types/dist ./kagami-types/dist
+
+# 复制其他子项目的 package.json
 COPY kagami-bot/package.json ./kagami-bot/
 COPY kagami-console-web/package.json ./kagami-console-web/
 
-# 安装生产依赖
-RUN pnpm install --prod --frozen-lockfile --filter kagami-bot && pnpm store prune
+# 安装生产依赖（包括 kagami-types 和 kagami-bot）
+RUN pnpm install --prod --frozen-lockfile --filter kagami-types --filter kagami-bot && pnpm store prune
 
 # 从构建阶段复制编译后的文件
 COPY --from=builder --chown=kagami:nodejs /app/kagami-bot/dist ./kagami-bot/dist

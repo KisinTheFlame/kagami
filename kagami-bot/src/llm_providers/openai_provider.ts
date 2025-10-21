@@ -1,15 +1,15 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import {
+import type {
     LlmProvider,
     ChatMessage,
-    OpenAIProviderConfig,
     Tool,
     LlmResponse,
     ToolParam,
     ToolCall,
     OneTurnChatRequest,
-} from "./types.js";
+} from "kagami-types/domain/llm";
+import type { OpenAIProviderConfig } from "kagami-types/domain/provider_config";
 import { ApiKeyManager } from "../api_key_manager.js";
 import { z } from "zod";
 import { ChatCompletionFunctionTool, FunctionParameters } from "openai/resources.js";

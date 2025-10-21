@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { 
-    Table, 
-    Tag, 
-    Space, 
-    Button, 
-    DatePicker, 
-    Select, 
-    Card, 
+import {
+    Table,
+    Tag,
+    Space,
+    Button,
+    DatePicker,
+    Select,
+    Card,
     message,
     Modal,
     Typography,
@@ -17,7 +17,7 @@ import {
 } from "antd";
 import { ReloadOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
-import type { LLMCallLog, LogQueryParams } from "../types/api";
+import type { LlmCallLogDTO, LlmLogQueryParams } from "kagami-types/dto/llm_call_log";
 import { llmLogsApi } from "../services/api";
 import MessageCard from "./MessageCard";
 
@@ -26,7 +26,7 @@ const { Option } = Select;
 const { Text } = Typography;
 
 const LLMLogsTable: React.FC = () => {
-    const [logs, setLogs] = useState<LLMCallLog[]>([]);
+    const [logs, setLogs] = useState<LlmCallLogDTO[]>([]);
     const [loading, setLoading] = useState(false);
     const [total, setTotal] = useState(0);
     const [current, setCurrent] = useState(1);
@@ -39,7 +39,7 @@ const LLMLogsTable: React.FC = () => {
 
     // 详情模态框
     const [detailVisible, setDetailVisible] = useState(false);
-    const [selectedLog, setSelectedLog] = useState<LLMCallLog | null>(null);
+    const [selectedLog, setSelectedLog] = useState<LlmCallLogDTO | null>(null);
 
     // 响应式屏幕宽度检测
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -48,7 +48,7 @@ const LLMLogsTable: React.FC = () => {
     const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
-            const params: LogQueryParams = {
+            const params: LlmLogQueryParams = {
                 page: current,
                 limit: pageSize,
                 orderBy: "timestamp",
@@ -91,7 +91,7 @@ const LLMLogsTable: React.FC = () => {
         };
     }, []);
 
-    const handleViewDetail = (record: LLMCallLog) => {
+    const handleViewDetail = (record: LlmCallLogDTO) => {
         setSelectedLog(record);
         setDetailVisible(true);
     };
@@ -156,7 +156,7 @@ const LLMLogsTable: React.FC = () => {
             title: "操作",
             key: "action",
             width: isMobile ? 80 : 120,
-            render: (_: unknown, record: LLMCallLog) => (
+            render: (_: unknown, record: LlmCallLogDTO) => (
                 <Space size="middle">
                     <Button
                         type="link"

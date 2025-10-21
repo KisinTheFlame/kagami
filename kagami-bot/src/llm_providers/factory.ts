@@ -1,4 +1,5 @@
-import { LlmProvider, ProviderConfig } from "./types.js";
+import type { LlmProvider } from "kagami-types/domain/llm";
+import type { ProviderConfig } from "kagami-types/domain/provider_config";
 import { OpenAIProvider } from "./openai_provider.js";
 import { GenAIProvider } from "./genai_provider.js";
 

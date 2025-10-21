@@ -1,6 +1,7 @@
 packages:
   - kagami-bot
   - kagami-console-web
+  - kagami-types
 
 onlyBuiltDependencies:
   - '@prisma/client'

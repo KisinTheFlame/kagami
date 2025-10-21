@@ -8,7 +8,7 @@ LlmCallLogRepository 是 LLM 调用日志的数据访问层，采用 Repository 
 
 ### 1. 日志记录接口
 ```typescript
-import { LlmCallLogCreateRequest } from "../domain/llm_call_log.js";
+import { LlmCallLogCreateRequest } from "kagami-types/domain/llm_call_log";
 
 async insert(llmCallLog: LlmCallLogCreateRequest): Promise<void> {
     try {
@@ -130,7 +130,7 @@ export const newLlmCallLogRepository = (database: Database) => {
 - **类型安全**：利用 Prisma 的类型系统和领域类型确保数据操作正确性
 
 ### 领域驱动设计集成
-- **使用领域类型**：接口参数使用 [[domain_layer]] 定义的 `LlmCallLogCreateRequest` 类型
+- **使用领域类型**：接口参数使用 [[kagami_types]] 的 `domain/llm_call_log` 定义的类型
 - **统一语言**：数据访问层使用领域层的业务术语
 - **依赖方向**：Repository 依赖领域层，而非相反
 - **类型安全保障**：编译时检查状态值和数据结构的合法性
@@ -144,7 +144,10 @@ export const newLlmCallLogRepository = (database: Database) => {
 ## 依赖关系
 
 ### 依赖
-- [[domain_layer]] - 使用 `LlmCallLogCreateRequest` 和 `LlmCallStatus` 类型定义接口参数
+- [[kagami_types]] - 使用 `domain/llm_call_log` 中的类型定义接口参数
+  - `LlmCallLogCreateRequest` - 创建请求类型
+  - `LlmCallLog` - 查询返回类型
+  - `LlmCallStatus` - 状态枚举类型
 - [[database_layer]] - 通过 `Database.prisma()` 获取 Prisma 客户端访问数据库
 
 ### 被依赖
@@ -173,7 +176,7 @@ Repository 负责将领域类型映射到数据库模型：
 ```typescript
 import { newDatabase } from './infra/db.js';
 import { newLlmCallLogRepository } from './infra/llm_call_log_repository.js';
-import { LlmCallLogCreateRequest } from './domain/llm_call_log.js';
+import { LlmCallLogCreateRequest } from 'kagami-types/domain/llm_call_log';
 
 // 在 bootstrap 函数中创建实例
 const database = newDatabase();
@@ -254,7 +257,8 @@ Repository 层（LlmCallLogRepository）
 - 数据导出功能
 
 ## 相关节点
-- [[domain_layer]] - 提供领域类型定义（LlmCallStatus, LlmCallLog）
+- [[kagami_types]] - 提供领域类型定义（LlmCallStatus, LlmCallLog, LlmCallLogCreateRequest）
+- [[domain_layer]] - 领域驱动设计概念层
 - [[database_layer]] - 提供数据库访问能力
 - [[llm_client]] - 主要使用者，记录每次 LLM 调用
 - [[llm_client_manager]] - 创建 LlmClient 时注入 Repository

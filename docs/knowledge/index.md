@@ -16,6 +16,11 @@ Kagami Workspace
 ├── Makefile                 # 统一构建接口
 ├── docker-compose.yaml       # 多容器编排
 │
+├── kagami-types/            # 共享类型库 (TypeScript)
+│   ├── domain/             # 领域层类型定义
+│   ├── dto/                # 数据传输对象
+│   └── converter/          # 类型转换器
+│
 ├── kagami-bot/              # QQ 群聊机器人 + HTTP API (Node.js + TypeScript)
 │   ├── 消息处理引擎
 │   ├── LLM 集成
@@ -37,6 +42,9 @@ Kagami Workspace
 - **版本统一**: 共享依赖的版本在根目录统一管理，确保一致性
 
 ## 节点总览
+
+### 共享类型库
+- [[kagami_types]] - 独立的共享类型库，提供领域类型、DTO 和转换器，供多个子项目复用
 
 ### QQ 机器人 (kagami-bot)
 - [[kagami_bot]] - 主应用类，负责初始化和生命周期管理，采用分层 bootstrap 模式
@@ -74,31 +82,34 @@ Kagami Workspace
 - [[timezone_utils]] - 时区处理工具，提供 Asia/Shanghai 时间戳
 
 ### 领域层
-- [[domain_layer]] - 领域驱动设计核心层，封装业务领域概念和规则，包含 LlmCallLog 实体和 LlmCallStatus 类型
+- [[domain_layer]] - 领域驱动设计核心层概念，业务领域类型已迁移至 [[kagami_types]]
 
 ### 数据层
 - [[database_layer]] - Database 类，Prisma ORM + PostgreSQL 数据库封装，提供 Prisma 客户端访问
-- [[llm_call_log_repository]] - LLM 调用日志仓储，采用 Repository 模式封装日志持久化操作
+- [[llm_call_log_repository]] - LLM 调用日志仓储，采用 Repository 模式封装日志持久化操作，使用 [[kagami_types]] 的领域类型
 
 ## 关系图谱
 
 ### 依赖注入架构（分层初始化）
 ```
 bootstrap() 函数分层创建：
+0. 共享类型层
+   └── kagami-types（独立库，提供 domain/dto/converter 类型）
+
 1. 配置层
    └── ConfigManager
 
 2. 基础设施层 - 数据访问
    ├── Database（基础设施层）
-   └── LlmCallLogRepository（依赖: Database，使用 domain_layer 的类型）
+   └── LlmCallLogRepository（依赖: Database, kagami-types/domain）
 
 3. 基础设施层 - 外部服务
    ├── NapcatFacade (依赖: ConfigManager)
    └── PromptTemplateManager
 
 4. LLM 层
-   └── LlmClientManager (依赖: ConfigManager, LlmCallLogRepository)
-       └── LlmClient[] (依赖: LlmCallLogRepository)
+   └── LlmClientManager (依赖: ConfigManager, LlmCallLogRepository, kagami-types/domain)
+       └── LlmClient[] (依赖: LlmCallLogRepository, kagami-types/domain)
 
 5. 编排层
    └── SessionManager (依赖: ConfigManager, NapcatFacade, LlmClientManager, PromptTemplateManager)
@@ -107,12 +118,12 @@ bootstrap() 函数分层创建：
                └── ContextManager (依赖: ConfigManager, PromptTemplateManager)
 
 6. HTTP Handler 层
-   └── LlmLogsRouter (依赖: LlmCallLogRepository)
+   └── LlmLogsRouter (依赖: LlmCallLogRepository, kagami-types/dto, kagami-types/converter)
 
 7. HTTP 服务层
    └── HttpServer (依赖: LlmLogsRouter, HttpConfig)
 
-注：领域层（domain_layer）不依赖任何其他层，被 Repository 层和应用层使用
+注：kagami-types 是独立的共享类型库，不依赖任何其他层，被所有子项目使用
 ```
 
 ### 消息流
@@ -122,7 +133,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
                                             ContextManager → LlmClientManager → LlmClient[]
                                                  ↓                                   ↓
                                       PromptTemplateManager              LlmCallLogRepository
-                                                                          (使用 domain_layer 类型)
+                                                                          (使用 kagami-types/domain)
                                                                                      ↓
                                                                           Database.prisma()
                                                                                      ↓
@@ -133,12 +144,14 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 
 ### 架构设计
 - **Monorepo 架构**：采用 pnpm workspace 管理多个子项目，统一依赖和构建
+- **共享类型库**：独立的 kagami-types 子项目，提供跨项目复用的领域类型、DTO 和转换器
 - **领域驱动设计**：引入领域层封装业务概念和规则，使用统一的业务语言
+- **分层类型架构**：Domain（业务核心）→ DTO（传输格式）→ Converter（转换逻辑）
 - **依赖注入架构**：采用依赖注入模式，所有组件通过构造函数接收依赖，无全局单例
 - **工厂函数模式**：统一使用 `newXxx()` 工厂函数创建实例，便于测试和替换
-- **分层初始化**：bootstrap 函数分 6 层初始化组件，依赖方向清晰自上而下
+- **分层初始化**：bootstrap 函数分 7 层初始化组件（含共享类型层），依赖方向清晰自上而下
 - **外观模式**：NapcatFacade 封装 napcat 连接复杂性，提供简洁接口
-- **分层架构**：职责分离，模块化设计，包含应用层、领域层、Repository 层、基础设施层
+- **分层架构**：职责分离，模块化设计，包含应用层、领域层、DTO 层、转换器层、Repository 层、基础设施层
 
 ### 消息处理和 LLM 集成
 - **统一处理**：简化的消息处理架构，专注流程控制
@@ -156,6 +169,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **调用日志**：通过 Repository 模式记录 LLM 调用历史，支持问题排查和分析
 - **Repository 模式**：数据访问层采用 Repository 模式，关注点分离，便于测试和维护
 - **类型安全**：使用领域类型约束业务规则，编译时检查保证正确性
+- **语义化时间类型**：领域层使用 Date，DTO 层使用 ISO 8601 字符串，转换器负责转换
 
 ### 构建和部署
 - **现代化包管理**：全面采用 pnpm workspace，提升依赖安装和构建性能
@@ -172,12 +186,20 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **构建工具**：Makefile（委托给 pnpm workspace）
 - **容器编排**：Docker Compose
 
+### 共享类型库技术栈（kagami-types）
+- **语言**：TypeScript 5.8.3
+- **验证**：Zod（DTO 层参数验证）
+- **模块系统**：ESM（NodeNext）
+- **构建**：TypeScript 编译器（生成 .d.ts 和 .js）
+- **导出**：多路径 exports（domain, dto, converter）
+
 ### QQ 机器人技术栈（kagami-bot）
 - **运行时**：Node.js 24 + TypeScript 5.8.3
 - **QQ 集成**：node-napcat-ts
 - **LLM 集成**：OpenAI API、Google Gemini API
 - **模板引擎**：Handlebars（提示词模板管理）
 - **数据存储**：PostgreSQL 16 + Prisma ORM
+- **类型依赖**：kagami-types（domain, dto, converter）
 - **配置**：YAML 配置文件，支持命令行参数
 - **构建**：TypeScript 编译器 + Prisma 生成器
 - **代码质量**：ESLint（根目录统一管理）
@@ -185,7 +207,8 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 
 ### HTTP API 技术栈
 - **框架**：Express.js + TypeScript
-- **验证**：Zod 类型验证
+- **验证**：Zod 类型验证（通过 kagami-types/dto）
+- **类型依赖**：kagami-types（dto, converter, domain）
 - **CORS**：cors 中间件
 - **数据访问**：通过 Repository 模式访问数据库
 - **容器化**：与 kagami-bot 统一打包部署
@@ -194,6 +217,7 @@ napcat群消息 → NapcatFacade → SessionManager → Session → MessageHandl
 - **前端**：React 19 + TypeScript 5.8.3 + Ant Design 5 + Vite 7
 - **UI 组件**：Ant Design + Ant Design Icons
 - **HTTP 客户端**：Axios
+- **类型依赖**：kagami-types（dto 层，用于 API 通信）
 - **构建工具**：Vite（快速开发和生产构建）
 - **代码质量**：ESLint（根目录统一管理）
 - **部署**：Nginx 1.29.1 静态托管 + API 代理

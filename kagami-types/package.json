@@ -1,0 +1,30 @@
+{
+  "name": "kagami-types",
+  "version": "1.0.0",
+  "description": "Kagami 项目共享类型定义",
+  "type": "module",
+  "exports": {
+    "./domain/*": {
+      "types": "./dist/domain/*.d.ts",
+      "default": "./dist/domain/*.js"
+    },
+    "./dto/*": {
+      "types": "./dist/dto/*.d.ts",
+      "default": "./dist/dto/*.js"
+    },
+    "./converter/*": {
+      "types": "./dist/converter/*.d.ts",
+      "default": "./dist/converter/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3"
+  }
+}

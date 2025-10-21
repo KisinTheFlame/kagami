@@ -1,5 +1,5 @@
 import { LlmClient, newLlmClient } from "./llm.js";
-import { LlmResponse, OneTurnChatRequest } from "./llm_providers/types.js";
+import type { LlmResponse, OneTurnChatRequest } from "kagami-types/domain/llm";
 import { ConfigManager } from "./config_manager.js";
 import { LlmCallLogRepository } from "./infra/llm_call_log_repository.js";
 
