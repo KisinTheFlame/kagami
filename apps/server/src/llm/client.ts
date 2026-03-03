@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertNever } from "@kagami/shared";
 import { env } from "../env.js";
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
@@ -62,7 +63,7 @@ function createActiveProvider(): LlmProvider {
     case "openai":
       return createOpenAiProvider();
     default:
-      return assertNever(env.LLM_ACTIVE_PROVIDER);
+      return assertNever(env.LLM_ACTIVE_PROVIDER, "Unsupported provider");
   }
 }
 
@@ -73,10 +74,6 @@ function getDefaultModel(providerId: LlmProvider["id"]): string {
     case "openai":
       return env.OPENAI_CHAT_MODEL;
     default:
-      return assertNever(providerId);
+      return assertNever(providerId, "Unsupported provider");
   }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unsupported provider: ${String(value)}`);
 }
