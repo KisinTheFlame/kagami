@@ -8,9 +8,14 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@host.docker.internal:5432/kagami}
+      LLM_ACTIVE_PROVIDER: ${LLM_ACTIVE_PROVIDER}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
       DEEPSEEK_CHAT_MODEL: ${DEEPSEEK_CHAT_MODEL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL}
     ports:
       - "3000:3000"
     restart: unless-stopped

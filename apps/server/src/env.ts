@@ -1,12 +1,47 @@
 import { z } from "@kagami/shared";
 
+const emptyStringToUndefined = (value: unknown): unknown => {
+  if (typeof value === "string" && value.trim().length === 0) {
+    return undefined;
+  }
+  return value;
+};
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().url(),
-  DEEPSEEK_API_KEY: z.string().min(1),
-  DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com"),
-  DEEPSEEK_CHAT_MODEL: z.string().default("deepseek-chat"),
-});
+  LLM_ACTIVE_PROVIDER: z.enum(["deepseek", "openai"]).default("deepseek"),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
+  DEEPSEEK_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
+  DEEPSEEK_BASE_URL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().url().default("https://api.deepseek.com"),
+  ),
+  DEEPSEEK_CHAT_MODEL: z.preprocess(emptyStringToUndefined, z.string().default("deepseek-chat")),
+  OPENAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
+  OPENAI_BASE_URL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().url().default("https://api.openai.com/v1"),
+  ),
+  OPENAI_CHAT_MODEL: z.preprocess(emptyStringToUndefined, z.string().default("gpt-4o-mini")),
+})
+  .superRefine((value, ctx) => {
+    if (value.LLM_ACTIVE_PROVIDER === "deepseek" && !value.DEEPSEEK_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["DEEPSEEK_API_KEY"],
+        message: "DEEPSEEK_API_KEY is required when LLM_ACTIVE_PROVIDER=deepseek",
+      });
+    }
+
+    if (value.LLM_ACTIVE_PROVIDER === "openai" && !value.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["OPENAI_API_KEY"],
+        message: "OPENAI_API_KEY is required when LLM_ACTIVE_PROVIDER=openai",
+      });
+    }
+  });
 
 export const env = EnvSchema.parse(process.env);
