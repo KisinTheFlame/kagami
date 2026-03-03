@@ -1,7 +1,8 @@
 import Fastify from "fastify";
-import { HealthResponseSchema, createHealthResponse, formatGreeting } from "@kagami/shared";
+import { HealthResponseSchema, createHealthResponse } from "@kagami/shared";
 import { env } from "./env.js";
 import { db } from "./db/client.js";
+import * as schema from "./db/schema.js";
 
 const app = Fastify({ logger: true });
 
@@ -11,9 +12,8 @@ app.get("/health", async () => {
 });
 
 app.get("/", async () => {
-  return {
-    message: formatGreeting("Kagami Server"),
-  };
+  const users = await db.select().from(schema.users);
+  return users;
 });
 
 async function start() {
