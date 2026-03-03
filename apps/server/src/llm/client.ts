@@ -5,7 +5,7 @@ import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
 import type { LlmProvider } from "./provider.js";
 import type { LlmChatRequest, LlmChatResponse } from "./types.js";
-import { logLlmError, logLlmRequest, logLlmResponse } from "./logger.js";
+import { recordLlmChatCallError, recordLlmChatCallSuccess } from "./chat-call-recorder.js";
 
 export interface LlmClient {
   chat(request: LlmChatRequest): Promise<LlmChatResponse>;
@@ -18,32 +18,28 @@ export function createLlmClient(provider: LlmProvider = createActiveProvider()):
       const startedAt = Date.now();
       const model = request.model ?? getDefaultModel(provider.id);
 
-      logLlmRequest({
-        provider: provider.id,
-        model,
-        requestId,
-        request,
-      });
-
       try {
         const response = await provider.chat(request);
+        const latencyMs = Date.now() - startedAt;
 
-        logLlmResponse({
+        recordLlmChatCallSuccess({
           provider: provider.id,
           model: response.model,
           requestId,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
           request,
           response,
         });
 
         return response;
       } catch (error) {
-        logLlmError({
+        const latencyMs = Date.now() - startedAt;
+
+        recordLlmChatCallError({
           provider: provider.id,
           model,
           requestId,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
           request,
           error,
         });
