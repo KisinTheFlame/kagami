@@ -5,3 +5,4 @@ import { env } from "../env.js";
 const queryClient = postgres(env.DATABASE_URL);
 
 export const db = drizzle(queryClient);
+export type Database = typeof db;

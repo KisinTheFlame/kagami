@@ -1,57 +1,28 @@
 import Fastify from "fastify";
-import { HealthResponseSchema, createHealthResponse, z } from "@kagami/shared";
-import { desc } from "drizzle-orm";
 import { env } from "./env.js";
 import { db } from "./db/client.js";
-import { llmChatCall } from "./db/schema.js";
-import { runAgentLoop } from "./agent/agent-loop.js";
+import { AgentLoop } from "./agent/agent-loop.js";
+import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
+import { HealthHandler } from "./handler/health-handler.js";
+import { LlmChatCallHandler } from "./handler/llm-chat-call-handler.js";
+import { TestHandler } from "./handler/test-handler.js";
+import { createLlmClient } from "./llm/client.js";
 
 const app = Fastify({ logger: true });
 
-app.get("/health", async () => {
-  const response = createHealthResponse();
-  return HealthResponseSchema.parse(response);
-});
+const llmChatCallDao = new DrizzleLlmChatCallDao(db);
+const llmClient = createLlmClient({ llmChatCallDao });
+const agentLoop = new AgentLoop({ llmClient });
 
-const AgentRequestSchema = z.object({
-  input: z.string().min(1),
-  maxSteps: z.coerce.number().int().positive().max(8).optional(),
-});
+const healthHandler = new HealthHandler();
+const testHandler = new TestHandler(agentLoop);
+const llmChatCallHandler = new LlmChatCallHandler(llmChatCallDao);
 
-const LlmChatCallListQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
-});
-
-app.post("/test/agent", async (request) => {
-  const payload = AgentRequestSchema.parse(request.body);
-  return runAgentLoop(payload);
-});
-
-app.get("/llm/chat-calls", async (request) => {
-  const { page, pageSize } = LlmChatCallListQuerySchema.parse(request.query);
-  const offset = (page - 1) * pageSize;
-
-  const rows = await db
-    .select()
-    .from(llmChatCall)
-    .orderBy(desc(llmChatCall.createdAt), desc(llmChatCall.id))
-    .limit(pageSize + 1)
-    .offset(offset);
-
-  const hasMore = rows.length > pageSize;
-  const items = hasMore ? rows.slice(0, pageSize) : rows;
-
-  return {
-    page,
-    pageSize,
-    hasMore,
-    items,
-  };
-});
+healthHandler.register(app);
+testHandler.register(app);
+llmChatCallHandler.register(app);
 
 async function start() {
-  // Keep the DB client initialized for future query handlers.
   void db;
 
   try {
