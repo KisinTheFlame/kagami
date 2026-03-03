@@ -8,8 +8,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@kagami/shared": "workspace:*",

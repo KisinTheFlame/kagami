@@ -4,9 +4,6 @@
   "version": "0.0.0",
   "packageManager": "pnpm@10.18.3",
   "scripts": {
-    "dev": "pnpm -r --parallel --if-present dev",
-    "dev:web": "pnpm --filter @kagami/web dev",
-    "dev:server": "pnpm --filter @kagami/server dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
