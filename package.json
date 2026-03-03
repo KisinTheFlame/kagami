@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.18.3",
   "scripts": {
     "build": "pnpm -r build",
+    "deploy": "docker compose up --build --detach",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -19,6 +20,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.0"
   }
 }

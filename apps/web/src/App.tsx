@@ -1,4 +1,3 @@
-import { formatGreeting } from "@kagami/shared";
 import { Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -11,7 +10,7 @@ function App() {
       </div>
 
       <h1 className="text-4xl font-bold tracking-tight">Kagami Starter</h1>
-      <p className="text-muted-foreground">{formatGreeting("Web App")}</p>
+      <p className="text-muted-foreground">{"Hello, Web App"}</p>
 
       <Button>shadcn/ui Button</Button>
     </main>
