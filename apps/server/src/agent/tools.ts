@@ -1,11 +1,11 @@
-import type { LlmTool, LlmToolCall } from "../llm/types.js";
+import type { Tool, LlmToolCall } from "../llm/types.js";
 import {
   executeGetServerTimeTool,
   GET_SERVER_TIME_TOOL_NAME,
   getServerTimeTool,
 } from "./get-server-time.js";
 
-export const AGENT_TOOLS: LlmTool[] = [getServerTimeTool];
+export const AGENT_TOOLS: Tool[] = [getServerTimeTool];
 
 export async function executeToolCall(toolCall: LlmToolCall): Promise<string> {
   if (toolCall.name === GET_SERVER_TIME_TOOL_NAME) {

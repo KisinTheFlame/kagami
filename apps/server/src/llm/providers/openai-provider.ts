@@ -16,7 +16,7 @@ export function createOpenAiProvider(): LlmProvider {
     id: "openai",
     async chat(request: LlmChatRequest) {
       const model = request.model ?? env.OPENAI_CHAT_MODEL;
-      const payload = toOpenAiChatRequest(request, model);
+      const payload = toOpenAiChatRequest({ model, request });
       const completion = await client.chat.completions.create(payload, {
         timeout: env.LLM_TIMEOUT_MS,
       });
@@ -25,7 +25,7 @@ export function createOpenAiProvider(): LlmProvider {
         throw new LlmProviderResponseError("openai", "OpenAI chat completion returned no choices");
       }
 
-      return toLlmChatResponse("openai", model, completion);
+      return toLlmChatResponse(completion, "openai");
     },
   };
 }

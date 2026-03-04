@@ -16,16 +16,19 @@ export function createDeepSeekProvider(): LlmProvider {
     id: "deepseek",
     async chat(request: LlmChatRequest) {
       const model = request.model ?? env.DEEPSEEK_CHAT_MODEL;
-      const payload = toOpenAiChatRequest(request, model);
+      const payload = toOpenAiChatRequest({ model, request });
       const completion = await client.chat.completions.create(payload, {
         timeout: env.LLM_TIMEOUT_MS,
       });
 
       if (!completion.choices[0]?.message) {
-        throw new LlmProviderResponseError("deepseek", "DeepSeek chat completion returned no choices");
+        throw new LlmProviderResponseError(
+          "deepseek",
+          "DeepSeek chat completion returned no choices",
+        );
       }
 
-      return toLlmChatResponse("deepseek", model, completion);
+      return toLlmChatResponse(completion, "deepseek");
     },
   };
 }
