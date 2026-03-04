@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "@kagami/shared";
+import { z } from "zod";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 
 const LlmChatCallListQuerySchema = z.object({
@@ -13,7 +13,7 @@ export class LlmChatCallHandler {
   public constructor(private readonly llmChatCallDao: LlmChatCallDao) {}
 
   public register(app: FastifyInstance): void {
-    app.get(`${this.prefix}/query`, async (request) => {
+    app.get(`${this.prefix}/query`, async request => {
       const query = LlmChatCallListQuerySchema.parse(request.query);
       return this.llmChatCallDao.listPaginated(query);
     });
