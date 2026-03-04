@@ -58,7 +58,7 @@ services:
     depends_on:
       - server
     ports:
-      - "32004:80"
+      - "20004:80"
     restart: unless-stopped
     networks:
       - axis

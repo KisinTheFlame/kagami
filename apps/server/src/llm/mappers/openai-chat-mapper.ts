@@ -57,7 +57,7 @@ export function toOpenAiChatRequest({
       : undefined;
 
   const toolChoice =
-    request.toolChoice === "auto" || request.toolChoice === "none"
+    request.toolChoice === "auto" || request.toolChoice === "none" || request.toolChoice === "required"
       ? request.toolChoice
       : { type: "function" as const, function: { name: request.toolChoice.tool_name } };
 

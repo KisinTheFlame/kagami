@@ -13,7 +13,7 @@ export type Tool = {
   parameters: JsonSchema;
 };
 
-export type LlmToolChoice = "auto" | "none" | { tool_name: string };
+export type LlmToolChoice = "required" | "auto" | "none" | { tool_name: string };
 
 export type LlmToolCall = {
   id: string;
