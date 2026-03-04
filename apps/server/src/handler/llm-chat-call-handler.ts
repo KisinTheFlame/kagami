@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { LlmChatCallListQuerySchema, LlmChatCallListResponseSchema } from "@kagami/shared";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { toLlmChatCallListResponse } from "./llm-chat-call-response.mapper.js";
+import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
 
 export class LlmChatCallHandler {
   public readonly prefix = "/llm-chat-call";
@@ -12,7 +12,7 @@ export class LlmChatCallHandler {
     app.get(`${this.prefix}/query`, async request => {
       const query = LlmChatCallListQuerySchema.parse(request.query);
       const result = await this.llmChatCallDao.listPaginated(query);
-      return LlmChatCallListResponseSchema.parse(toLlmChatCallListResponse(result));
+      return LlmChatCallListResponseSchema.parse(mapLlmChatCallList(result));
     });
   }
 }

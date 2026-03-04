@@ -4,18 +4,16 @@ import type {
   QueryLlmChatCallListDaoResult,
 } from "../dao/llm-chat-call.dao.js";
 
-export function toLlmChatCallListResponse(
-  result: QueryLlmChatCallListDaoResult,
-): LlmChatCallListResponse {
+export function mapLlmChatCallList(result: QueryLlmChatCallListDaoResult): LlmChatCallListResponse {
   return {
     page: result.page,
     pageSize: result.pageSize,
     hasMore: result.hasMore,
-    items: result.items.map(toLlmChatCallItemDto),
+    items: result.items.map(mapLlmChatCallItem),
   };
 }
 
-function toLlmChatCallItemDto(item: LlmChatCallDaoItem): LlmChatCallItem {
+export function mapLlmChatCallItem(item: LlmChatCallDaoItem): LlmChatCallItem {
   return {
     id: item.id,
     requestId: item.requestId,
