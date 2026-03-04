@@ -9,10 +9,14 @@ import type {
   RecordLlmChatCallSuccessInput,
 } from "../llm-chat-call.dao.js";
 
+type DrizzleLlmChatCallDaoDeps = {
+  database: Database;
+};
+
 export class DrizzleLlmChatCallDao implements LlmChatCallDao {
   private readonly database: Database;
 
-  public constructor({ database }: { database: Database }) {
+  public constructor({ database }: DrizzleLlmChatCallDaoDeps) {
     this.database = database;
   }
 

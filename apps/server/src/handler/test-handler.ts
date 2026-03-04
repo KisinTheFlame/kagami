@@ -2,11 +2,15 @@ import type { FastifyInstance } from "fastify";
 import { AgentRunRequestSchema, AgentRunResponseSchema } from "@kagami/shared";
 import type { AgentLoop } from "../agent/agent-loop.js";
 
+type TestHandlerDeps = {
+  agentLoop: AgentLoop;
+};
+
 export class TestHandler {
   public readonly prefix = "/test";
   private readonly agentLoop: AgentLoop;
 
-  public constructor({ agentLoop }: { agentLoop: AgentLoop }) {
+  public constructor({ agentLoop }: TestHandlerDeps) {
     this.agentLoop = agentLoop;
   }
 

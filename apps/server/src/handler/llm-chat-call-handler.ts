@@ -3,11 +3,15 @@ import { LlmChatCallListQuerySchema, LlmChatCallListResponseSchema } from "@kaga
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
 
+type LlmChatCallHandlerDeps = {
+  llmChatCallDao: LlmChatCallDao;
+};
+
 export class LlmChatCallHandler {
   public readonly prefix = "/llm-chat-call";
   private readonly llmChatCallDao: LlmChatCallDao;
 
-  public constructor({ llmChatCallDao }: { llmChatCallDao: LlmChatCallDao }) {
+  public constructor({ llmChatCallDao }: LlmChatCallHandlerDeps) {
     this.llmChatCallDao = llmChatCallDao;
   }
 
