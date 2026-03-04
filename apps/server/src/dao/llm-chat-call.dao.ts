@@ -9,7 +9,7 @@ export type QueryLlmChatCallListInput = {
   pageSize: number;
 };
 
-export type QueryLlmChatCallListResult = {
+export type QueryLlmChatCallListDaoResult = {
   page: number;
   pageSize: number;
   hasMore: boolean;
@@ -33,7 +33,7 @@ export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
 };
 
 export interface LlmChatCallDao {
-  listPaginated(input: QueryLlmChatCallListInput): Promise<QueryLlmChatCallListResult>;
+  listPaginated(input: QueryLlmChatCallListInput): Promise<QueryLlmChatCallListDaoResult>;
   recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void>;
   recordError(input: RecordLlmChatCallErrorInput): Promise<void>;
 }

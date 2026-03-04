@@ -4,7 +4,7 @@ import { llmChatCall } from "../../db/schema.js";
 import type {
   LlmChatCallDao,
   QueryLlmChatCallListInput,
-  QueryLlmChatCallListResult,
+  QueryLlmChatCallListDaoResult,
   RecordLlmChatCallErrorInput,
   RecordLlmChatCallSuccessInput,
 } from "../llm-chat-call.dao.js";
@@ -14,7 +14,7 @@ export class DrizzleLlmChatCallDao implements LlmChatCallDao {
 
   public async listPaginated(
     input: QueryLlmChatCallListInput,
-  ): Promise<QueryLlmChatCallListResult> {
+  ): Promise<QueryLlmChatCallListDaoResult> {
     const offset = (input.page - 1) * input.pageSize;
     const rows = await this.database
       .select()
