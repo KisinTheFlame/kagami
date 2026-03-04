@@ -4,8 +4,8 @@ import { AgentContextManager } from "./agent/context-manager.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
-import { HealthHandler } from "./handler/health-handler.js";
-import { LlmChatCallHandler } from "./handler/llm-chat-call-handler.js";
+import { HealthHandler } from "./handler/health.handler.js";
+import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
 import { createLlmClient } from "./llm/client.js";
 
 const app = Fastify({ logger: true });
