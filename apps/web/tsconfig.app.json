@@ -17,9 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@kagami/shared": ["./../../packages/shared/src/index.ts"],
-      "@kagami/shared/*": ["./../../packages/shared/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]
