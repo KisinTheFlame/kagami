@@ -1,9 +1,11 @@
 import Fastify from "fastify";
 import { AgentLoop } from "./agent/agent-loop.js";
 import { AgentContextManager } from "./agent/context-manager.js";
+import { AgentEventQueue } from "./agent/event-queue.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
+import { AgentHandler } from "./handler/agent.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
 import { createLlmClient } from "./llm/client.js";
@@ -14,11 +16,14 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager = new AgentContextManager({});
-const agentLoop = new AgentLoop({ llmClient, contextManager });
+const eventQueue = new AgentEventQueue();
+const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 
+const agentHandler = new AgentHandler({ eventQueue });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallDao });
 
+agentHandler.register(app);
 healthHandler.register(app);
 llmChatCallHandler.register(app);
 
@@ -84,12 +89,16 @@ async function start() {
     });
     isServerStarted = true;
 
-    try {
-      const result = await agentLoop.run();
-      app.log.info({ result }, "Agent loop completed");
-    } catch (error) {
-      app.log.error({ error }, "Agent loop failed");
-    }
+    void agentLoop
+      .run()
+      .then(() => {
+        app.log.fatal("Agent loop exited unexpectedly");
+        void shutdown("SIGTERM");
+      })
+      .catch(error => {
+        app.log.fatal({ error }, "Agent loop failed");
+        void shutdown("SIGTERM");
+      });
   } catch (error) {
     app.log.error(error);
     try {

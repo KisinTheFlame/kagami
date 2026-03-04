@@ -1,16 +1,35 @@
 import type { Tool, LlmToolCall } from "../llm/types.js";
+import { executeFinishTool, FINISH_TOOL_NAME, finishTool } from "./finish.js";
 import {
   executeGetServerTimeTool,
   GET_SERVER_TIME_TOOL_NAME,
   getServerTimeTool,
 } from "./get-server-time.js";
 
-export const AGENT_TOOLS: Tool[] = [getServerTimeTool];
+export type ToolExecutionResult = {
+  content: string;
+  shouldFinishRound: boolean;
+};
 
-export async function executeToolCall(toolCall: LlmToolCall): Promise<string> {
+export const AGENT_TOOLS: Tool[] = [getServerTimeTool, finishTool];
+
+export async function executeToolCall(toolCall: LlmToolCall): Promise<ToolExecutionResult> {
   if (toolCall.name === GET_SERVER_TIME_TOOL_NAME) {
-    return executeGetServerTimeTool();
+    return {
+      content: executeGetServerTimeTool(),
+      shouldFinishRound: false,
+    };
   }
 
-  return JSON.stringify({ error: `Unknown tool: ${toolCall.name}` });
+  if (toolCall.name === FINISH_TOOL_NAME) {
+    return {
+      content: executeFinishTool(),
+      shouldFinishRound: true,
+    };
+  }
+
+  return {
+    content: JSON.stringify({ error: `Unknown tool: ${toolCall.name}` }),
+    shouldFinishRound: false,
+  };
 }

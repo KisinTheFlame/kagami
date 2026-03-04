@@ -65,3 +65,16 @@ export const AgentRunResponseSchema = z.object({
 });
 
 export type AgentRunResponse = z.infer<typeof AgentRunResponseSchema>;
+
+export const AgentEventEnqueueRequestSchema = z.object({
+  message: z.string().min(1),
+});
+
+export type AgentEventEnqueueRequest = z.infer<typeof AgentEventEnqueueRequestSchema>;
+
+export const AgentEventEnqueueResponseSchema = z.object({
+  accepted: z.literal(true),
+  queued: z.number().int().positive(),
+});
+
+export type AgentEventEnqueueResponse = z.infer<typeof AgentEventEnqueueResponseSchema>;

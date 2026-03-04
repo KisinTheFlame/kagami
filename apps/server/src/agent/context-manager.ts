@@ -29,6 +29,13 @@ export class AgentContextManager {
     return this.steps;
   }
 
+  public pushUserMessage(content: string): void {
+    this.messages.push({
+      role: "user",
+      content,
+    });
+  }
+
   public pushAssistantMessage(message: AssistantMessage): string | null {
     this.steps += 1;
     this.messages.push(message);
