@@ -1,19 +1,17 @@
-import { Rocket } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { LlmHistoryPage } from "@/pages/llm-history/LlmHistoryPage";
 
 function App() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-6 px-6 py-12 text-center">
-      <div className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1 text-sm text-muted-foreground">
-        <Rocket className="h-4 w-4" />
-        PNPM Monorepo Ready
-      </div>
-
-      <h1 className="text-4xl font-bold tracking-tight">Kagami Starter</h1>
-      <p className="text-muted-foreground">{"Hello, Web App"}</p>
-
-      <Button>shadcn/ui Button</Button>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<Navigate to="/llm-history" replace />} />
+          <Route path="/llm-history" element={<LlmHistoryPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
 
