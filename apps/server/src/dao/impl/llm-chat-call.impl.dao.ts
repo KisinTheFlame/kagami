@@ -12,7 +12,9 @@ import type {
 export class DrizzleLlmChatCallDao implements LlmChatCallDao {
   public constructor(private readonly database: Database) {}
 
-  public async listPaginated(input: QueryLlmChatCallListInput): Promise<QueryLlmChatCallListResult> {
+  public async listPaginated(
+    input: QueryLlmChatCallListInput,
+  ): Promise<QueryLlmChatCallListResult> {
     const offset = (input.page - 1) * input.pageSize;
     const rows = await this.database
       .select()

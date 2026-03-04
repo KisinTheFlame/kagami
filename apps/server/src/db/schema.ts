@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -21,7 +30,7 @@ export const llmChatCall = pgTable(
     latencyMs: integer("latency_ms"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
+  table => [
     uniqueIndex("llm_chat_call_request_id_uq").on(table.requestId),
     index("llm_chat_call_provider_model_idx").on(table.provider, table.model),
     index("llm_chat_call_created_at_idx").on(table.createdAt),

@@ -60,6 +60,7 @@ pnpm --filter @kagami/shared <script>
 - 前端额外开启 `noUnusedLocals` 和 `noUnusedParameters`
 
 路径别名：
+
 - `@kagami/shared` 在前后端均映射到 `packages/shared/src/index.ts`（开发时直接引用源码）
 - 前端额外有 `@/*` 映射到 `apps/web/src/*`
 
@@ -89,6 +90,7 @@ Zod 本身也从此包再导出（`export { z } from "zod"`），业务代码统
 ### Docker 部署
 
 两个服务均为多阶段构建：
+
 - 后端：Node 22 Alpine 构建 → 精简 runner 镜像，运行编译后的 `dist/index.js`
 - 前端：Node 22 Alpine 构建 → Nginx 1.27 Alpine 提供静态文件
 
