@@ -14,10 +14,23 @@ export const GreetingInputSchema = z.object({
 export type GreetingInput = z.infer<typeof GreetingInputSchema>;
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
+const parseNumberInput = (value: unknown): unknown => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return value;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : value;
+};
 
 export const LlmChatCallListQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  page: z.preprocess(parseNumberInput, z.number().int().positive()).default(1),
+  pageSize: z.preprocess(parseNumberInput, z.number().int().positive().max(100)).default(20),
 });
 
 export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
@@ -48,7 +61,7 @@ export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSche
 
 export const AgentRunRequestSchema = z.object({
   input: z.string().min(1),
-  maxSteps: z.coerce.number().int().positive().max(8).optional(),
+  maxSteps: z.preprocess(parseNumberInput, z.number().int().positive().max(8).optional()),
 });
 
 export type AgentRunRequest = z.infer<typeof AgentRunRequestSchema>;

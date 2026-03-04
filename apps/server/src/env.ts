@@ -7,13 +7,27 @@ const emptyStringToUndefined = (value: unknown): unknown => {
   return value;
 };
 
+const parseNumberEnv = (value: unknown): unknown => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    PORT: z.coerce.number().int().positive().default(3000),
+    PORT: z.preprocess(parseNumberEnv, z.number().int().positive()).default(3000),
     DATABASE_URL: z.string().url(),
     LLM_ACTIVE_PROVIDER: z.enum(["deepseek", "openai"]).default("deepseek"),
-    LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
+    LLM_TIMEOUT_MS: z.preprocess(parseNumberEnv, z.number().int().positive()).default(45000),
     DEEPSEEK_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
     DEEPSEEK_BASE_URL: z.preprocess(
       emptyStringToUndefined,
