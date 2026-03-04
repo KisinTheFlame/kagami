@@ -23,8 +23,10 @@ export function createDeepSeekProvider(): LlmProvider {
 
       if (!completion.choices[0]?.message) {
         throw new LlmProviderResponseError(
-          "deepseek",
-          "DeepSeek chat completion returned no choices",
+          {
+            provider: "deepseek",
+            message: "DeepSeek chat completion returned no choices",
+          },
         );
       }
 

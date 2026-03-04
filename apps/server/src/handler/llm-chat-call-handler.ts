@@ -5,8 +5,11 @@ import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
 
 export class LlmChatCallHandler {
   public readonly prefix = "/llm-chat-call";
+  private readonly llmChatCallDao: LlmChatCallDao;
 
-  public constructor(private readonly llmChatCallDao: LlmChatCallDao) {}
+  public constructor({ llmChatCallDao }: { llmChatCallDao: LlmChatCallDao }) {
+    this.llmChatCallDao = llmChatCallDao;
+  }
 
   public register(app: FastifyInstance): void {
     app.get(`${this.prefix}/query`, async request => {

@@ -4,8 +4,11 @@ import type { AgentLoop } from "../agent/agent-loop.js";
 
 export class TestHandler {
   public readonly prefix = "/test";
+  private readonly agentLoop: AgentLoop;
 
-  public constructor(private readonly agentLoop: AgentLoop) {}
+  public constructor({ agentLoop }: { agentLoop: AgentLoop }) {
+    this.agentLoop = agentLoop;
+  }
 
   public register(app: FastifyInstance): void {
     app.post(`${this.prefix}/agent`, async request => {

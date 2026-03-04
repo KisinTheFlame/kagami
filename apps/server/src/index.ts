@@ -11,13 +11,13 @@ import { createLlmClient } from "./llm/client.js";
 const app = Fastify({ logger: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-const llmChatCallDao = new DrizzleLlmChatCallDao(db);
+const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
 const llmClient = createLlmClient({ llmChatCallDao });
 const agentLoop = new AgentLoop({ llmClient });
 
 const healthHandler = new HealthHandler();
-const testHandler = new TestHandler(agentLoop);
-const llmChatCallHandler = new LlmChatCallHandler(llmChatCallDao);
+const testHandler = new TestHandler({ agentLoop });
+const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallDao });
 
 healthHandler.register(app);
 testHandler.register(app);

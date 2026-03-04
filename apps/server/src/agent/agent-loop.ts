@@ -28,11 +28,16 @@ export class AgentLoop {
   private readonly executeToolCall: ExecuteToolCall;
   private readonly systemPrompt: string;
 
-  public constructor(options: AgentLoopOptions) {
-    this.llmClient = options.llmClient;
-    this.tools = options.tools ?? AGENT_TOOLS;
-    this.executeToolCall = options.executeToolCall ?? executeToolCall;
-    this.systemPrompt = options.systemPrompt ?? AGENT_SYSTEM_PROMPT;
+  public constructor({
+    llmClient,
+    tools,
+    executeToolCall: executeToolCallFn,
+    systemPrompt,
+  }: AgentLoopOptions) {
+    this.llmClient = llmClient;
+    this.tools = tools ?? AGENT_TOOLS;
+    this.executeToolCall = executeToolCallFn ?? executeToolCall;
+    this.systemPrompt = systemPrompt ?? AGENT_SYSTEM_PROMPT;
   }
 
   public async run({ input, maxSteps = 4 }: RunAgentLoopInput): Promise<RunAgentLoopResult> {

@@ -22,7 +22,10 @@ export function createOpenAiProvider(): LlmProvider {
       });
 
       if (!completion.choices[0]?.message) {
-        throw new LlmProviderResponseError("openai", "OpenAI chat completion returned no choices");
+        throw new LlmProviderResponseError({
+          provider: "openai",
+          message: "OpenAI chat completion returned no choices",
+        });
       }
 
       return toLlmChatResponse(completion, "openai");

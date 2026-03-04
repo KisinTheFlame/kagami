@@ -10,7 +10,11 @@ import type {
 } from "../llm-chat-call.dao.js";
 
 export class DrizzleLlmChatCallDao implements LlmChatCallDao {
-  public constructor(private readonly database: Database) {}
+  private readonly database: Database;
+
+  public constructor({ database }: { database: Database }) {
+    this.database = database;
+  }
 
   public async listPaginated(
     input: QueryLlmChatCallListInput,
