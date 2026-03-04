@@ -1,11 +1,11 @@
 import Fastify from "fastify";
+import { AgentLoop } from "./agent/agent-loop.js";
+import { AgentContextManager } from "./agent/context-manager.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
-import { AgentLoop } from "./agent/agent-loop.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { HealthHandler } from "./handler/health-handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call-handler.js";
-import { TestHandler } from "./handler/test-handler.js";
 import { createLlmClient } from "./llm/client.js";
 
 const app = Fastify({ logger: true });
@@ -13,14 +13,13 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
 const llmClient = createLlmClient({ llmChatCallDao });
-const agentLoop = new AgentLoop({ llmClient });
+const contextManager = new AgentContextManager({});
+const agentLoop = new AgentLoop({ llmClient, contextManager });
 
 const healthHandler = new HealthHandler();
-const testHandler = new TestHandler({ agentLoop });
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallDao });
 
 healthHandler.register(app);
-testHandler.register(app);
 llmChatCallHandler.register(app);
 
 let isServerStarted = false;
@@ -76,7 +75,6 @@ function registerShutdownSignals(): void {
 }
 
 async function start() {
-  void db;
   registerShutdownSignals();
 
   try {
@@ -85,6 +83,13 @@ async function start() {
       port: env.PORT,
     });
     isServerStarted = true;
+
+    try {
+      const result = await agentLoop.run();
+      app.log.info({ result }, "Agent loop completed");
+    } catch (error) {
+      app.log.error({ error }, "Agent loop failed");
+    }
   } catch (error) {
     app.log.error(error);
     try {

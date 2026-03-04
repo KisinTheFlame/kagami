@@ -7,12 +7,6 @@ export const HealthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
-export const GreetingInputSchema = z.object({
-  appName: z.string().min(1),
-});
-
-export type GreetingInput = z.infer<typeof GreetingInputSchema>;
-
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 const parseNumberInput = (value: unknown): unknown => {
   if (typeof value !== "string") {
@@ -61,7 +55,6 @@ export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSche
 
 export const AgentRunRequestSchema = z.object({
   input: z.string().min(1),
-  maxSteps: z.preprocess(parseNumberInput, z.number().int().positive().max(8).optional()),
 });
 
 export type AgentRunRequest = z.infer<typeof AgentRunRequestSchema>;

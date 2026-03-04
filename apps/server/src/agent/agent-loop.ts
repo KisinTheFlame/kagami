@@ -1,74 +1,45 @@
-import { AGENT_SYSTEM_PROMPT } from "./context.js";
+import { AgentContextManager } from "./context-manager.js";
 import type { LlmClient } from "../llm/client.js";
-import type { LlmMessage, Tool, LlmToolCall } from "../llm/types.js";
 import { AGENT_TOOLS, executeToolCall } from "./tools.js";
-
-export type RunAgentLoopInput = {
-  input: string;
-  maxSteps?: number;
-};
 
 export type RunAgentLoopResult = {
   output: string;
   steps: number;
 };
 
-type ExecuteToolCall = (toolCall: LlmToolCall) => Promise<string>;
-
-type AgentLoopOptions = {
+type AgentLoopDeps = {
   llmClient: LlmClient;
-  tools?: Tool[];
-  executeToolCall?: ExecuteToolCall;
-  systemPrompt?: string;
+  contextManager: AgentContextManager;
 };
 
 export class AgentLoop {
   private readonly llmClient: LlmClient;
-  private readonly tools: Tool[];
-  private readonly executeToolCall: ExecuteToolCall;
-  private readonly systemPrompt: string;
+  private readonly contextManager: AgentContextManager;
 
-  public constructor({
-    llmClient,
-    tools,
-    executeToolCall: executeToolCallFn,
-    systemPrompt,
-  }: AgentLoopOptions) {
+  public constructor({ llmClient, contextManager }: AgentLoopDeps) {
     this.llmClient = llmClient;
-    this.tools = tools ?? AGENT_TOOLS;
-    this.executeToolCall = executeToolCallFn ?? executeToolCall;
-    this.systemPrompt = systemPrompt ?? AGENT_SYSTEM_PROMPT;
+    this.contextManager = contextManager;
   }
 
-  public async run({ input, maxSteps = 4 }: RunAgentLoopInput): Promise<RunAgentLoopResult> {
-    const messages: LlmMessage[] = [{ role: "user", content: input }];
-
-    for (let step = 1; step <= maxSteps; step += 1) {
+  public async run(): Promise<RunAgentLoopResult> {
+    while (true) {
       const completion = await this.llmClient.chat({
-        system: this.systemPrompt,
-        messages,
-        tools: this.tools,
+        system: this.contextManager.getSystemPrompt(),
+        messages: this.contextManager.getMessages(),
+        tools: AGENT_TOOLS, // TODO: tool manager
         toolChoice: "auto",
       });
       const assistant = completion.message;
-
-      messages.push(assistant);
+      const output = this.contextManager.pushAssistantMessage(assistant);
 
       for (const toolCall of assistant.toolCalls) {
-        const toolResult = await this.executeToolCall(toolCall);
-        messages.push({
-          role: "tool",
-          toolCallId: toolCall.id,
-          content: toolResult,
-        });
+        const toolResult = await executeToolCall(toolCall);
+        this.contextManager.pushToolMessage(toolCall.id, toolResult);
       }
 
-      const output = assistant.content.trim();
-      if (output.length > 0) {
-        return { output, steps: step };
+      if (output !== null) {
+        return { output, steps: this.contextManager.getSteps() };
       }
     }
-
-    throw new Error(`Agent loop exceeded maxSteps=${maxSteps} without final output`);
   }
 }
