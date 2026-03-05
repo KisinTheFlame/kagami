@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AgentEventPage } from "@/pages/agent-event/AgentEventPage";
 import { LlmHistoryPage } from "@/pages/llm-history/LlmHistoryPage";
 
 function App() {
@@ -9,6 +10,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/llm-history" replace />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
+          <Route path="/agent-event" element={<AgentEventPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

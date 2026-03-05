@@ -1,8 +1,11 @@
-import { History } from "lucide-react";
+import { History, TestTube2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-const navItems = [{ to: "/llm-history", label: "LLM 调用历史", icon: History }];
+const navItems = [
+  { to: "/llm-history", label: "LLM 调用历史", icon: History },
+  { to: "/agent-event", label: "Agent Event 测试台", icon: TestTube2 },
+];
 
 export function Sidebar() {
   return (
