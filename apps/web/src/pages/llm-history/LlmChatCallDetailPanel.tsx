@@ -1,6 +1,7 @@
 import type { LlmChatCallItem, LlmRequestMessage } from "@kagami/shared";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 
 type LlmChatCallDetailPanelProps = {
@@ -8,7 +9,25 @@ type LlmChatCallDetailPanelProps = {
 };
 
 export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
-  if (item === null) {
+  const [inputOrder, setInputOrder] = useState<"asc" | "desc">("asc");
+  const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
+  const orderedInputMessages = useMemo(() => {
+    if (!parsed?.request) {
+      return [];
+    }
+
+    const entries = parsed.request.messages.map((message, index) => ({
+      message,
+      originalIndex: index,
+    }));
+    if (inputOrder === "asc") {
+      return entries;
+    }
+
+    return [...entries].reverse();
+  }, [inputOrder, parsed?.request]);
+
+  if (item === null || parsed === null) {
     return (
       <div className="flex h-full flex-col">
         <div className="border-b px-5 py-4">
@@ -21,8 +40,6 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
       </div>
     );
   }
-
-  const parsed = parseLlmChatCallDetail(item);
 
   return (
     <div className="flex h-full flex-col">
@@ -53,36 +70,11 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
 
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
         <section className="space-y-3">
-          <h3 className="text-base font-semibold">输入</h3>
-          {parsed.request ? (
-            <>
-              {parsed.request.system ? (
-                <ContentCard title="System Prompt" preview={buildPreview(parsed.request.system)} defaultOpen>
-                  <pre className="whitespace-pre-wrap break-words text-xs leading-6">
-                    {parsed.request.system}
-                  </pre>
-                </ContentCard>
-              ) : null}
-
-              {parsed.request.messages.map((message, index) => (
-                <MessageCard key={`input-${index}`} message={message} index={index} />
-              ))}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">输入结构解析失败，请查看下方原始 JSON。</p>
-          )}
-        </section>
-
-        <section className="space-y-3">
           <h3 className="text-base font-semibold">输出</h3>
           {item.status === "success" ? (
             parsed.response ? (
               <>
-                <ContentCard
-                  title="Assistant 输出"
-                  preview={buildPreview(parsed.response.message.content)}
-                  defaultOpen
-                >
+                <ContentCard title="Assistant 输出" preview={buildPreview(parsed.response.message.content)}>
                   <pre className="whitespace-pre-wrap break-words text-xs leading-6">
                     {parsed.response.message.content}
                   </pre>
@@ -118,8 +110,47 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
         </section>
 
         <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold">输入</h3>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={inputOrder === "asc" ? "default" : "outline"}
+                onClick={() => setInputOrder("asc")}
+              >
+                正序
+              </Button>
+              <Button
+                size="sm"
+                variant={inputOrder === "desc" ? "default" : "outline"}
+                onClick={() => setInputOrder("desc")}
+              >
+                倒序
+              </Button>
+            </div>
+          </div>
+          {parsed.request ? (
+            <>
+              {parsed.request.system ? (
+                <ContentCard title="System Prompt" preview={buildPreview(parsed.request.system)}>
+                  <pre className="whitespace-pre-wrap break-words text-xs leading-6">
+                    {parsed.request.system}
+                  </pre>
+                </ContentCard>
+              ) : null}
+
+              {orderedInputMessages.map(({ message, originalIndex }) => (
+                <MessageCard key={`input-${originalIndex}`} message={message} index={originalIndex} />
+              ))}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">输入结构解析失败，请查看下方原始 JSON。</p>
+          )}
+        </section>
+
+        <section className="space-y-3">
           <h3 className="text-base font-semibold">原始 Payload</h3>
-          <JsonPanel title="requestPayload" value={item.requestPayload} defaultOpen />
+          <JsonPanel title="requestPayload" value={item.requestPayload} />
           <JsonPanel title="responsePayload" value={item.responsePayload} />
           <JsonPanel title="error" value={item.error} />
         </section>
@@ -133,7 +164,7 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
   const preview = buildPreview(message.content);
 
   return (
-    <ContentCard title={title} preview={preview} defaultOpen={index < 2}>
+    <ContentCard title={title} preview={preview}>
       <div className="mb-2 flex items-center gap-2">
         <Badge variant="secondary">{message.role}</Badge>
       </div>
