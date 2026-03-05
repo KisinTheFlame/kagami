@@ -111,7 +111,7 @@ export function AppLogHistoryPage() {
       <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">级别</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">级别</span>
             <select
               value={formState.level}
               onChange={event =>
@@ -132,7 +132,7 @@ export function AppLogHistoryPage() {
           </label>
 
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">Trace ID</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">Trace ID</span>
             <input
               value={formState.traceId}
               onChange={event => setFormState(prev => ({ ...prev, traceId: event.target.value }))}
@@ -142,7 +142,7 @@ export function AppLogHistoryPage() {
           </label>
 
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">Message 关键词</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">Message 关键词</span>
             <input
               value={formState.message}
               onChange={event => setFormState(prev => ({ ...prev, message: event.target.value }))}
@@ -152,7 +152,7 @@ export function AppLogHistoryPage() {
           </label>
 
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">Source 关键词</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">Source 关键词</span>
             <input
               value={formState.source}
               onChange={event => setFormState(prev => ({ ...prev, source: event.target.value }))}
@@ -162,7 +162,7 @@ export function AppLogHistoryPage() {
           </label>
 
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">开始时间</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">开始时间</span>
             <input
               type="datetime-local"
               value={formState.startAtLocal}
@@ -174,7 +174,7 @@ export function AppLogHistoryPage() {
           </label>
 
           <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-muted-foreground">结束时间</span>
+            <span className="w-24 shrink-0 text-right text-muted-foreground">结束时间</span>
             <input
               type="datetime-local"
               value={formState.endAtLocal}
