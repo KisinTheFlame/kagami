@@ -12,5 +12,5 @@
       "@kagami/shared/*": ["./../../packages/shared/src/*"]
     }
   },
-  "include": ["src", "drizzle.config.ts"]
+  "include": ["src", "test", "drizzle.config.ts"]
 }

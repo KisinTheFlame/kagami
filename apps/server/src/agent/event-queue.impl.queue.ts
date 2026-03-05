@@ -1,8 +1,6 @@
-export type AgentEvent = {
-  message: string;
-};
+import type { AgentEvent, AgentEventQueue } from "./event-queue.queue.js";
 
-export class AgentEventQueue {
+export class InMemoryAgentEventQueue implements AgentEventQueue {
   private readonly events: AgentEvent[] = [];
   private waitPromise: Promise<void> | null = null;
   private waitResolve: (() => void) | null = null;

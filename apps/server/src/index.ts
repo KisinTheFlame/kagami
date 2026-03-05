@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "@kagami/shared";
 import { AgentLoop } from "./agent/agent-loop.js";
-import { AgentContextManager } from "./agent/context-manager.js";
-import { AgentEventQueue } from "./agent/event-queue.js";
+import type { AgentContextManager } from "./agent/context-manager.manager.js";
+import { DefaultAgentContextManager } from "./agent/context-manager.impl.manager.js";
+import type { AgentEventQueue } from "./agent/event-queue.queue.js";
+import { InMemoryAgentEventQueue } from "./agent/event-queue.impl.queue.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
@@ -17,8 +19,10 @@ import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
-import { AppLogQueryService } from "./service/app-log-query.service.js";
-import { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
+import type { AppLogQueryService } from "./service/app-log-query.service.js";
+import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
+import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
+import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
 
 const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -32,11 +36,13 @@ initLoggerRuntime({
 const logger = new AppLogger({ source: "bootstrap" });
 
 const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
-const llmChatCallQueryService = new LlmChatCallQueryService({ llmChatCallDao });
-const appLogQueryService = new AppLogQueryService({ logDao });
+const llmChatCallQueryService: LlmChatCallQueryService = new DefaultLlmChatCallQueryService({
+  llmChatCallDao,
+});
+const appLogQueryService: AppLogQueryService = new DefaultAppLogQueryService({ logDao });
 const llmClient = createLlmClient({ llmChatCallDao });
-const contextManager = new AgentContextManager({});
-const eventQueue = new AgentEventQueue();
+const contextManager: AgentContextManager = new DefaultAgentContextManager({});
+const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
 const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 
 const agentHandler = new AgentHandler({ eventQueue });

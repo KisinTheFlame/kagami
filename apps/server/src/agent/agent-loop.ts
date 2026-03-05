@@ -1,5 +1,5 @@
-import { AgentContextManager } from "./context-manager.js";
-import type { AgentEventQueue } from "./event-queue.js";
+import type { AgentContextManager } from "./context-manager.manager.js";
+import type { AgentEventQueue } from "./event-queue.queue.js";
 import type { LlmClient } from "../llm/client.js";
 import { AGENT_TOOLS, executeToolCall } from "./tools.js";
 

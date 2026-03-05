@@ -1,18 +1,17 @@
 import { AGENT_SYSTEM_PROMPT } from "./context.js";
+import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
 import type { LlmMessage } from "../llm/types.js";
 
-type AssistantMessage = Extract<LlmMessage, { role: "assistant" }>;
-
-type AgentContextManagerOptions = {
+type DefaultAgentContextManagerOptions = {
   systemPrompt?: string;
 };
 
-export class AgentContextManager {
+export class DefaultAgentContextManager implements AgentContextManager {
   private readonly systemPrompt: string;
   private readonly messages: LlmMessage[];
   private steps = 0;
 
-  public constructor({ systemPrompt }: AgentContextManagerOptions) {
+  public constructor({ systemPrompt }: DefaultAgentContextManagerOptions) {
     this.systemPrompt = systemPrompt ?? AGENT_SYSTEM_PROMPT;
     this.messages = [];
   }

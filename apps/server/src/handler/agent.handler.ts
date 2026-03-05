@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { AgentEventEnqueueRequestSchema, AgentEventEnqueueResponseSchema } from "@kagami/shared";
-import type { AgentEventQueue } from "../agent/event-queue.js";
+import type { AgentEventQueue } from "../agent/event-queue.queue.js";
 import { AppLogger } from "../logger/logger.js";
 
 type AgentHandlerDeps = {

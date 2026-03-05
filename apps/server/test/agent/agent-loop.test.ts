@@ -1,0 +1,89 @@
+import { describe, expect, it, vi } from "vitest";
+import { AgentLoop } from "../../src/agent/agent-loop.js";
+import type { AgentContextManager } from "../../src/agent/context-manager.manager.js";
+import type { AgentEventQueue } from "../../src/agent/event-queue.queue.js";
+import type { LlmClient } from "../../src/llm/client.js";
+import type { LlmChatResponse } from "../../src/llm/types.js";
+
+class StopLoopError extends Error {}
+
+function createLlmResponse(): LlmChatResponse {
+  const message = {
+    role: "assistant" as const,
+    content: "done",
+    toolCalls: [{ id: "tool-call-1", name: "finish", arguments: {} }],
+  };
+
+  return {
+    provider: "openai",
+    model: "gpt-test",
+    message,
+    text: () => message.content,
+    json: () => {
+      throw new Error("json() should not be called in this test");
+    },
+    toolCalls: () => message.toolCalls,
+  };
+}
+
+describe("AgentLoop", () => {
+  it("should consume queue events and execute one tool round with injected mocks", async () => {
+    const stopError = new StopLoopError("stop-loop");
+
+    const chat = vi.fn().mockResolvedValue(createLlmResponse());
+    const llmClient: LlmClient = {
+      chat,
+    };
+
+    const getSystemPrompt = vi.fn().mockReturnValue("system-prompt");
+    const getMessages = vi.fn().mockReturnValue([]);
+    const getSteps = vi.fn().mockReturnValue(0);
+    const pushUserMessage = vi.fn();
+    const pushAssistantMessage = vi.fn().mockReturnValue("done");
+    const pushToolMessage = vi.fn();
+    const contextManager: AgentContextManager = {
+      getSystemPrompt,
+      getMessages,
+      getSteps,
+      pushUserMessage,
+      pushAssistantMessage,
+      pushToolMessage,
+    };
+
+    const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
+    const drainAll = vi
+      .fn()
+      .mockReturnValueOnce([{ message: "hello" }])
+      .mockReturnValue([]);
+    const size = vi.fn().mockReturnValue(0);
+    const enqueue = vi.fn().mockReturnValue(1);
+    const eventQueue: AgentEventQueue = {
+      enqueue,
+      drainAll,
+      size,
+      waitForEvent,
+    };
+
+    const loop = new AgentLoop({ llmClient, contextManager, eventQueue });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(waitForEvent).toHaveBeenCalledTimes(2);
+    expect(drainAll).toHaveBeenCalled();
+    expect(pushUserMessage).toHaveBeenCalledWith("hello");
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: "system-prompt",
+        messages: [],
+        toolChoice: "auto",
+      }),
+    );
+    expect(pushAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+      }),
+    );
+    expect(pushToolMessage).toHaveBeenCalledWith("tool-call-1", JSON.stringify({ finished: true }));
+  });
+});
