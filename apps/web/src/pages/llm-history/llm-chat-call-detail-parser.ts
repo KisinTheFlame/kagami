@@ -19,7 +19,9 @@ export type LlmChatCallDetailParseResult = {
 export function parseLlmChatCallDetail(item: LlmChatCallItem): LlmChatCallDetailParseResult {
   const requestParsed = LlmChatRequestPayloadSchema.safeParse(item.requestPayload);
   const responseParsed =
-    item.responsePayload === null ? null : LlmChatResponsePayloadSchema.safeParse(item.responsePayload);
+    item.responsePayload === null
+      ? null
+      : LlmChatResponsePayloadSchema.safeParse(item.responsePayload);
   const errorParsed = item.error === null ? null : LlmChatErrorPayloadSchema.safeParse(item.error);
 
   const schemaErrors: string[] = [];

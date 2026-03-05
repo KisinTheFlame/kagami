@@ -63,7 +63,9 @@ export function AgentEventPage() {
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-6">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold">Agent Event 测试台</h1>
-        <p className="text-sm text-muted-foreground">调用 POST /api/agent/event，向后端事件队列发送消息。</p>
+        <p className="text-sm text-muted-foreground">
+          调用 POST /api/agent/event，向后端事件队列发送消息。
+        </p>
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-3 rounded-md border p-4">

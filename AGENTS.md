@@ -41,6 +41,19 @@ pnpm --filter @kagami/web <script>
 pnpm --filter @kagami/shared <script>
 ```
 
+## 开发规约
+
+每次开发完成后，执行：
+
+```sh
+pnpm build # 构建所有包（顺序执行，shared → server/web）
+pnpm typecheck # 对所有包执行 TypeScript 类型检查
+pnpm lint # ESLint 检查
+pnpm format # Prettier 格式检查
+```
+
+需保证均成功。
+
 ## 代码规范
 
 ### Prettier
@@ -71,6 +84,18 @@ pnpm --filter @kagami/shared <script>
 
 ## 架构要点
 
+### 后端服务（@kagami/server）
+
+后端采用事件驱动的 agent 循环架构，核心模块分布如下：
+
+- `agent/` — agent 循环、上下文管理、事件队列、工具定义
+- `dao/` — 数据访问层接口，实现在 `dao/impl/`（DAO 模式）
+- `db/` — Drizzle ORM 客户端与 Schema
+- `handler/` — Fastify 路由注册（各模块一个 handler）
+- `llm/` — LLM 客户端封装、provider 适配（DeepSeek / OpenAI）、类型与错误定义
+
+构造函数统一使用对象参数风格（`{ dep1, dep2 }`）。
+
 ### 共享库（@kagami/shared）
 
 `packages/shared` 是前后端共用 Zod Schema 和工具函数的核心。
@@ -89,13 +114,14 @@ Zod 本身也从此包再导出（`export { z } from "zod"`），业务代码统
 
 ### Docker 部署
 
-两个服务均为多阶段构建：
-
-- 后端：Node 22 Alpine 构建 → 精简 runner 镜像，运行编译后的 `dist/index.js`
-- 前端：Node 22 Alpine 构建 → Nginx 1.27 Alpine 提供静态文件
-
-两个服务使用同一个外部 Docker 网络（`axis`），部署前需确保该网络已创建：
+三个服务均使用同一个外部 Docker 网络（`axis`），部署前需确保该网络已创建：
 
 ```bash
 docker network create axis
 ```
+
+服务列表：
+
+- 后端（`server`）：Node 22 Alpine 多阶段构建 → 精简 runner 镜像，运行编译后的 `dist/index.js`，内部端口 3000
+- 前端（`kagami-web`）：Node 22 Alpine 多阶段构建 → Nginx 1.27 Alpine 提供静态文件，对外端口 **20004**
+- napcat：QQ bot 集成服务
