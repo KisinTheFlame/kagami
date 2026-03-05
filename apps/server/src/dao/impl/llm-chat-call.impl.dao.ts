@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { llmChatCall } from "../../db/schema.js";
+import { AppLogger } from "../../logger/logger.js";
 import type {
   LlmChatCallDao,
   QueryLlmChatCallListInput,
@@ -8,6 +9,8 @@ import type {
   RecordLlmChatCallErrorInput,
   RecordLlmChatCallSuccessInput,
 } from "../llm-chat-call.dao.js";
+
+const logger = new AppLogger({ source: "dao.llm-chat-call" });
 
 type DrizzleLlmChatCallDaoDeps = {
   database: Database;
@@ -77,19 +80,11 @@ export class DrizzleLlmChatCallDao implements LlmChatCallDao {
   }
 
   private logRecordFailure(requestId: string, error: unknown): void {
-    console.error(
-      JSON.stringify(
-        {
-          event: "llm.chat_call_record.error",
-          scope: "llm",
-          timestamp: new Date().toISOString(),
-          requestId,
-          error: serializeError(error),
-        },
-        null,
-        2,
-      ),
-    );
+    logger.error("Failed to record llm chat call", {
+      event: "llm.chat_call_record.error",
+      requestId,
+      error: serializeError(error),
+    });
   }
 }
 

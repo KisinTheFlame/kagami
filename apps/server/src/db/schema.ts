@@ -36,3 +36,21 @@ export const llmChatCall = pgTable(
     index("llm_chat_call_created_at_idx").on(table.createdAt),
   ],
 );
+
+export const appLog = pgTable(
+  "app_log",
+  {
+    id: serial("id").primaryKey(),
+    traceId: text("trace_id").notNull(),
+    level: text("level").$type<"debug" | "info" | "warn" | "error" | "fatal">().notNull(),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("app_log_trace_id_created_at_idx").on(table.traceId, table.createdAt),
+    index("app_log_level_created_at_idx").on(table.level, table.createdAt),
+    index("app_log_created_at_idx").on(table.createdAt),
+  ],
+);

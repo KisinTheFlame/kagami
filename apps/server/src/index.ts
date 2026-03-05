@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { AgentLoop } from "./agent/agent-loop.js";
 import { AgentContextManager } from "./agent/context-manager.js";
@@ -5,13 +6,26 @@ import { AgentEventQueue } from "./agent/event-queue.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
+import { DrizzleLogDao } from "./dao/impl/log.impl.dao.js";
 import { AgentHandler } from "./handler/agent.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
 import { createLlmClient } from "./llm/client.js";
+import { AppLogger } from "./logger/logger.js";
+import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
+import { DbLogSink } from "./logger/sinks/db-sink.js";
+import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
+
+const logDao = new DrizzleLogDao({ database: db });
+initLoggerRuntime({
+  sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
+});
+
+const logger = new AppLogger({ source: "bootstrap" });
 
 const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
 const llmClient = createLlmClient({ llmChatCallDao });
@@ -23,6 +37,15 @@ const agentHandler = new AgentHandler({ eventQueue });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallDao });
 
+app.addHook("onRequest", (_request, reply, done) => {
+  const traceId = randomUUID();
+  reply.header(TRACE_ID_HEADER_NAME, traceId);
+
+  withTraceContext(traceId, () => {
+    done();
+  });
+});
+
 agentHandler.register(app);
 healthHandler.register(app);
 llmChatCallHandler.register(app);
@@ -32,15 +55,17 @@ let isShuttingDown = false;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (isShuttingDown) {
-    app.log.warn({ signal }, "Shutdown already in progress");
+    logger.warn("Shutdown already in progress", { signal });
     return;
   }
 
   isShuttingDown = true;
-  app.log.info({ signal }, "Received shutdown signal, starting graceful shutdown");
+  logger.info("Received shutdown signal, starting graceful shutdown", { signal });
 
   const forceExitTimer = setTimeout(() => {
-    app.log.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Graceful shutdown timeout, forcing exit");
+    logger.error("Graceful shutdown timeout, forcing exit", {
+      timeoutMs: SHUTDOWN_TIMEOUT_MS,
+    });
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
   forceExitTimer.unref();
@@ -50,19 +75,25 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (isServerStarted) {
     try {
       await app.close();
-      app.log.info("Fastify server closed");
+      logger.info("Fastify server closed");
     } catch (error) {
       exitCode = 1;
-      app.log.error({ error }, "Failed to close Fastify server");
+      logger.error("Failed to close Fastify server", { error });
     }
   }
 
   try {
-    await closeDb();
-    app.log.info("Database connection closed");
+    await getLoggerRuntime().close();
   } catch (error) {
     exitCode = 1;
-    app.log.error({ error }, "Failed to close database connection");
+    writeProcessError("Failed to close logger runtime", error);
+  }
+
+  try {
+    await closeDb();
+  } catch (error) {
+    exitCode = 1;
+    writeProcessError("Failed to close database connection", error);
   }
 
   clearTimeout(forceExitTimer);
@@ -92,22 +123,40 @@ async function start() {
     void agentLoop
       .run()
       .then(() => {
-        app.log.fatal("Agent loop exited unexpectedly");
+        logger.fatal("Agent loop exited unexpectedly");
         void shutdown("SIGTERM");
       })
       .catch(error => {
-        app.log.fatal({ error }, "Agent loop failed");
+        logger.fatal("Agent loop failed", { error });
         void shutdown("SIGTERM");
       });
   } catch (error) {
-    app.log.error(error);
+    logger.error("Failed to start server", { error });
+
+    try {
+      await getLoggerRuntime().close();
+    } catch (closeLoggerError) {
+      writeProcessError("Failed to close logger runtime after startup failure", closeLoggerError);
+    }
+
     try {
       await closeDb();
     } catch (closeError) {
-      app.log.error({ error: closeError }, "Failed to close database after startup failure");
+      writeProcessError("Failed to close database after startup failure", closeError);
     }
+
     process.exit(1);
   }
 }
 
 void start();
+
+function writeProcessError(message: string, error: unknown): void {
+  const payload = {
+    message,
+    error: error instanceof Error ? error.message : String(error),
+    timestamp: new Date().toISOString(),
+  };
+
+  process.stderr.write(`${JSON.stringify(payload)}\n`);
+}
