@@ -54,24 +54,24 @@ export function LlmHistoryPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col p-6">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
       <h1 className="text-xl font-semibold">LLM 调用历史</h1>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:basis-1/2">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {isError && (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
           )}
 
-          <div className="min-h-0 flex-1 rounded-md border">
-            <Table>
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+            <Table className="min-w-[680px] table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead>时间</TableHead>
-                  <TableHead>Provider</TableHead>
+                  <TableHead className="w-[190px]">时间</TableHead>
+                  <TableHead className="w-[130px]">Provider</TableHead>
                   <TableHead>Model</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">延迟 (ms)</TableHead>
+                  <TableHead className="w-[140px]">状态</TableHead>
+                  <TableHead className="w-[110px] text-right">延迟 (ms)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -98,9 +98,9 @@ export function LlmHistoryPage() {
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                         {formatDate(item.createdAt)}
                       </TableCell>
-                      <TableCell className="text-sm">{item.provider}</TableCell>
-                      <TableCell className="text-sm">{item.model}</TableCell>
-                      <TableCell>
+                      <TableCell className="truncate text-sm">{item.provider}</TableCell>
+                      <TableCell className="truncate text-sm">{item.model}</TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Badge variant={item.status === "success" ? "default" : "destructive"}>
                           {item.status}
                         </Badge>
@@ -146,7 +146,7 @@ export function LlmHistoryPage() {
           </p>
         </section>
 
-        <aside className="h-[460px] w-full shrink-0 rounded-md border bg-background xl:h-full xl:basis-1/2">
+        <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
           <LlmChatCallDetailPanel item={selectedItem} />
         </aside>
       </div>

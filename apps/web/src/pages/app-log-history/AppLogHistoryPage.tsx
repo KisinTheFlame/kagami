@@ -107,7 +107,7 @@ export function AppLogHistoryPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col p-6">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
       <h1 className="text-xl font-semibold">应用日志查询</h1>
 
       <form onSubmit={handleFilterSubmit} className="mt-4 rounded-md border p-4">
@@ -199,19 +199,19 @@ export function AppLogHistoryPage() {
       </form>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:basis-1/2">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {isError ? (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
           ) : null}
 
-          <div className="min-h-0 flex-1 rounded-md border">
-            <Table>
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+            <Table className="min-w-[980px] table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead>时间</TableHead>
-                  <TableHead>级别</TableHead>
-                  <TableHead>Trace ID</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead className="w-[190px]">时间</TableHead>
+                  <TableHead className="w-[96px]">级别</TableHead>
+                  <TableHead className="w-[260px]">Trace ID</TableHead>
+                  <TableHead className="w-[220px]">Source</TableHead>
                   <TableHead>Message</TableHead>
                 </TableRow>
               </TableHeader>
@@ -242,15 +242,13 @@ export function AppLogHistoryPage() {
                       <TableCell>
                         <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
+                      <TableCell className="truncate font-mono text-xs text-muted-foreground">
                         {item.traceId}
                       </TableCell>
-                      <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground">
+                      <TableCell className="truncate text-xs text-muted-foreground">
                         {getSource(item.metadata)}
                       </TableCell>
-                      <TableCell className="max-w-[320px] truncate text-sm">
-                        {item.message}
-                      </TableCell>
+                      <TableCell className="truncate text-sm">{item.message}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -284,7 +282,7 @@ export function AppLogHistoryPage() {
           </p>
         </section>
 
-        <aside className="h-[460px] w-full shrink-0 rounded-md border bg-background xl:h-full xl:basis-1/2">
+        <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
           <AppLogDetailPanel item={selectedItem} />
         </aside>
       </div>
