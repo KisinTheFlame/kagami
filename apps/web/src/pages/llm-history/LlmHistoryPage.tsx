@@ -55,9 +55,7 @@ export function LlmHistoryPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <h1 className="text-xl font-semibold">LLM 调用历史</h1>
-
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {isError && (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>

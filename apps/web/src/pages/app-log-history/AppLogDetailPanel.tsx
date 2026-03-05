@@ -8,12 +8,6 @@ export function AppLogDetailPanel({ item }: AppLogDetailPanelProps) {
   if (item === null) {
     return (
       <div className="flex h-full flex-col">
-        <div className="border-b px-5 py-4">
-          <h2 className="text-base font-semibold">日志详情</h2>
-          <p className="text-sm text-muted-foreground">
-            从左侧列表选择一条日志后，这里会展示完整内容。
-          </p>
-        </div>
         <div className="flex flex-1 items-center justify-center px-6">
           <p className="text-sm text-muted-foreground">暂无选中记录</p>
         </div>
@@ -26,9 +20,7 @@ export function AppLogDetailPanel({ item }: AppLogDetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-5 py-4">
-        <h2 className="text-base font-semibold">日志详情</h2>
-        <p className="text-sm text-muted-foreground">查看日志元信息与原始 metadata。</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
           <MetaItem label="ID" value={String(item.id)} mono />
           <MetaItem label="Level" value={item.level} />
           <MetaItem label="Source" value={source} />

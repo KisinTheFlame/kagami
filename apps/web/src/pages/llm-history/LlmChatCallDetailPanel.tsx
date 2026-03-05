@@ -30,12 +30,6 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
   if (item === null || parsed === null) {
     return (
       <div className="flex h-full flex-col">
-        <div className="border-b px-5 py-4">
-          <h2 className="text-base font-semibold">调用详情</h2>
-          <p className="text-sm text-muted-foreground">
-            从中间列表选择一条记录后，这里会显示输入与输出。
-          </p>
-        </div>
         <div className="flex flex-1 items-center justify-center px-6">
           <p className="text-sm text-muted-foreground">暂无选中记录</p>
         </div>
@@ -46,10 +40,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-5 py-4">
-        <h2 className="text-base font-semibold">调用详情</h2>
-        <p className="text-sm text-muted-foreground">查看模型输入、输出与元信息。</p>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
           <MetaItem label="Request ID" value={item.requestId} mono />
           <MetaItem label="Provider" value={item.provider} />
           <MetaItem label="Model" value={item.model} />

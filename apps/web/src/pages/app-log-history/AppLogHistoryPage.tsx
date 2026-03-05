@@ -108,12 +108,10 @@ export function AppLogHistoryPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <h1 className="text-xl font-semibold">应用日志查询</h1>
-
-      <form onSubmit={handleFilterSubmit} className="mt-4 rounded-md border p-4">
+      <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">级别</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">级别</span>
             <select
               value={formState.level}
               onChange={event =>
@@ -122,7 +120,7 @@ export function AppLogHistoryPage() {
                   level: event.target.value as FilterFormState["level"],
                 }))
               }
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <option value="">全部</option>
               {APP_LOG_LEVELS.map(level => (
@@ -133,57 +131,57 @@ export function AppLogHistoryPage() {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">Trace ID</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">Trace ID</span>
             <input
               value={formState.traceId}
               onChange={event => setFormState(prev => ({ ...prev, traceId: event.target.value }))}
               placeholder="精确匹配"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">Message 关键词</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">Message 关键词</span>
             <input
               value={formState.message}
               onChange={event => setFormState(prev => ({ ...prev, message: event.target.value }))}
               placeholder="包含匹配"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">Source 关键词</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">Source 关键词</span>
             <input
               value={formState.source}
               onChange={event => setFormState(prev => ({ ...prev, source: event.target.value }))}
               placeholder="metadata.source 包含匹配"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">开始时间</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">开始时间</span>
             <input
               type="datetime-local"
               value={formState.startAtLocal}
               onChange={event =>
                 setFormState(prev => ({ ...prev, startAtLocal: event.target.value }))
               }
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">结束时间</span>
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-muted-foreground">结束时间</span>
             <input
               type="datetime-local"
               value={formState.endAtLocal}
               onChange={event =>
                 setFormState(prev => ({ ...prev, endAtLocal: event.target.value }))
               }
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
         </div>
