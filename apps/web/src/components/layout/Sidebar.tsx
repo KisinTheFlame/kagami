@@ -1,9 +1,10 @@
-import { History, TestTube2 } from "lucide-react";
+import { FileText, History, TestTube2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
+  { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/agent-event", label: "Agent Event 测试台", icon: TestTube2 },
 ];
 

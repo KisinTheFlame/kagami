@@ -34,6 +34,8 @@ export function LlmHistoryPage() {
   const page = Math.max(1, Number(params.get("page") ?? "1"));
 
   const { data, isLoading, isError } = useLlmChatCallList(page, PAGE_SIZE);
+  const total = data?.pagination.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rows = useMemo(
     () =>
       (data?.items ?? []).map(item => ({
@@ -57,7 +59,9 @@ export function LlmHistoryPage() {
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:basis-1/2">
-          {isError && <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>}
+          {isError && (
+            <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
+          )}
 
           <div className="min-h-0 flex-1 rounded-md border">
             <Table>
@@ -130,13 +134,16 @@ export function LlmHistoryPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={!data?.hasMore}
+              disabled={!data || page >= totalPages}
               onClick={() => goToPage(page + 1)}
             >
               下一页
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-right text-xs text-muted-foreground">
+            共 {total} 条，{totalPages} 页
+          </p>
         </section>
 
         <aside className="h-[460px] w-full shrink-0 rounded-md border bg-background xl:h-full xl:basis-1/2">

@@ -1,25 +1,24 @@
 import type { FastifyInstance } from "fastify";
 import { LlmChatCallListQuerySchema, LlmChatCallListResponseSchema } from "@kagami/shared";
-import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
+import type { LlmChatCallQueryService } from "../service/llm-chat-call-query.service.js";
 
 type LlmChatCallHandlerDeps = {
-  llmChatCallDao: LlmChatCallDao;
+  llmChatCallQueryService: LlmChatCallQueryService;
 };
 
 export class LlmChatCallHandler {
   public readonly prefix = "/llm-chat-call";
-  private readonly llmChatCallDao: LlmChatCallDao;
+  private readonly llmChatCallQueryService: LlmChatCallQueryService;
 
-  public constructor({ llmChatCallDao }: LlmChatCallHandlerDeps) {
-    this.llmChatCallDao = llmChatCallDao;
+  public constructor({ llmChatCallQueryService }: LlmChatCallHandlerDeps) {
+    this.llmChatCallQueryService = llmChatCallQueryService;
   }
 
   public register(app: FastifyInstance): void {
     app.get(`${this.prefix}/query`, async request => {
       const query = LlmChatCallListQuerySchema.parse(request.query);
-      const result = await this.llmChatCallDao.listPaginated(query);
-      return LlmChatCallListResponseSchema.parse(mapLlmChatCallList(result));
+      const result = await this.llmChatCallQueryService.queryList(query);
+      return LlmChatCallListResponseSchema.parse(result);
     });
   }
 }

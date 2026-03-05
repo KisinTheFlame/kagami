@@ -25,14 +25,16 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
     }
 
     return [...entries].reverse();
-  }, [inputOrder, parsed?.request]);
+  }, [inputOrder, parsed]);
 
   if (item === null || parsed === null) {
     return (
       <div className="flex h-full flex-col">
         <div className="border-b px-5 py-4">
           <h2 className="text-base font-semibold">调用详情</h2>
-          <p className="text-sm text-muted-foreground">从中间列表选择一条记录后，这里会显示输入与输出。</p>
+          <p className="text-sm text-muted-foreground">
+            从中间列表选择一条记录后，这里会显示输入与输出。
+          </p>
         </div>
         <div className="flex flex-1 items-center justify-center px-6">
           <p className="text-sm text-muted-foreground">暂无选中记录</p>
@@ -74,7 +76,10 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           {item.status === "success" ? (
             parsed.response ? (
               <>
-                <ContentCard title="Assistant 输出" preview={buildPreview(parsed.response.message.content)}>
+                <ContentCard
+                  title="Assistant 输出"
+                  preview={buildPreview(parsed.response.message.content)}
+                >
                   <pre className="whitespace-pre-wrap break-words text-xs leading-6">
                     {parsed.response.message.content}
                   </pre>
@@ -92,7 +97,9 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
                 ) : null}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">输出结构解析失败，请查看下方原始 JSON。</p>
+              <p className="text-sm text-muted-foreground">
+                输出结构解析失败，请查看下方原始 JSON。
+              </p>
             )
           ) : parsed.error ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
@@ -140,7 +147,11 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
               ) : null}
 
               {orderedInputMessages.map(({ message, originalIndex }) => (
-                <MessageCard key={`input-${originalIndex}`} message={message} index={originalIndex} />
+                <MessageCard
+                  key={`input-${originalIndex}`}
+                  message={message}
+                  index={originalIndex}
+                />
               ))}
             </>
           ) : (
@@ -175,7 +186,9 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
       ) : null}
 
       {message.role === "tool" ? (
-        <p className="mt-2 font-mono text-xs text-muted-foreground">toolCallId: {message.toolCallId}</p>
+        <p className="mt-2 font-mono text-xs text-muted-foreground">
+          toolCallId: {message.toolCallId}
+        </p>
       ) : null}
     </ContentCard>
   );
@@ -248,11 +261,21 @@ function JsonPanel({
   );
 }
 
-function MetaItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function MetaItem({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={mono ? "break-all font-mono text-xs text-foreground" : "text-xs text-foreground"}>
+      <p
+        className={mono ? "break-all font-mono text-xs text-foreground" : "text-xs text-foreground"}
+      >
         {value}
       </p>
     </div>

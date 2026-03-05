@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
+import { z } from "@kagami/shared";
 import { AgentLoop } from "./agent/agent-loop.js";
 import { AgentContextManager } from "./agent/context-manager.js";
 import { AgentEventQueue } from "./agent/event-queue.js";
@@ -8,6 +9,7 @@ import { closeDb, db } from "./db/client.js";
 import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { DrizzleLogDao } from "./dao/impl/log.impl.dao.js";
 import { AgentHandler } from "./handler/agent.handler.js";
+import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
 import { createLlmClient } from "./llm/client.js";
@@ -15,6 +17,8 @@ import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
+import { AppLogQueryService } from "./service/app-log-query.service.js";
+import { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 
 const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -28,6 +32,8 @@ initLoggerRuntime({
 const logger = new AppLogger({ source: "bootstrap" });
 
 const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
+const llmChatCallQueryService = new LlmChatCallQueryService({ llmChatCallDao });
+const appLogQueryService = new AppLogQueryService({ logDao });
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager = new AgentContextManager({});
 const eventQueue = new AgentEventQueue();
@@ -35,7 +41,8 @@ const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 
 const agentHandler = new AgentHandler({ eventQueue });
 const healthHandler = new HealthHandler();
-const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallDao });
+const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
+const appLogHandler = new AppLogHandler({ appLogQueryService });
 
 app.addHook("onRequest", (_request, reply, done) => {
   const traceId = randomUUID();
@@ -46,9 +53,37 @@ app.addHook("onRequest", (_request, reply, done) => {
   });
 });
 
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof z.ZodError) {
+    logger.warn("Request validation failed", {
+      event: "http.request.validation_failed",
+      method: request.method,
+      url: request.url,
+      issues: error.issues,
+    });
+
+    return reply.code(400).send({
+      code: "BAD_REQUEST",
+      message: "请求参数不合法",
+    });
+  }
+
+  logger.errorWithCause("Unhandled request error", error, {
+    event: "http.request.unhandled_error",
+    method: request.method,
+    url: request.url,
+  });
+
+  return reply.code(500).send({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "服务器内部错误",
+  });
+});
+
 agentHandler.register(app);
 healthHandler.register(app);
 llmChatCallHandler.register(app);
+appLogHandler.register(app);
 
 let isServerStarted = false;
 let isShuttingDown = false;

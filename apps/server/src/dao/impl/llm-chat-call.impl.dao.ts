@@ -1,11 +1,11 @@
-import { desc } from "drizzle-orm";
+import { count, desc } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { llmChatCall } from "../../db/schema.js";
 import { AppLogger } from "../../logger/logger.js";
 import type {
+  LlmChatCallItem,
   LlmChatCallDao,
   QueryLlmChatCallListInput,
-  QueryLlmChatCallListDaoResult,
   RecordLlmChatCallErrorInput,
   RecordLlmChatCallSuccessInput,
 } from "../llm-chat-call.dao.js";
@@ -23,26 +23,19 @@ export class DrizzleLlmChatCallDao implements LlmChatCallDao {
     this.database = database;
   }
 
-  public async listPaginated(
-    input: QueryLlmChatCallListInput,
-  ): Promise<QueryLlmChatCallListDaoResult> {
+  public async countAll(): Promise<number> {
+    const [{ total }] = await this.database.select({ total: count() }).from(llmChatCall);
+    return total;
+  }
+
+  public async listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]> {
     const offset = (input.page - 1) * input.pageSize;
-    const rows = await this.database
+    return this.database
       .select()
       .from(llmChatCall)
       .orderBy(desc(llmChatCall.createdAt), desc(llmChatCall.id))
-      .limit(input.pageSize + 1)
+      .limit(input.pageSize)
       .offset(offset);
-
-    const hasMore = rows.length > input.pageSize;
-    const items = hasMore ? rows.slice(0, input.pageSize) : rows;
-
-    return {
-      page: input.page,
-      pageSize: input.pageSize,
-      hasMore,
-      items,
-    };
   }
 
   public async recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void> {

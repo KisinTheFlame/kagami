@@ -9,6 +9,53 @@ export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 
+const parseNumberInput = (value: unknown): unknown => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return value;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
+const parseOptionalStringInput = (value: unknown): unknown => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
+export const PaginationQuerySchema = z.object({
+  page: z.preprocess(parseNumberInput, z.number().int().positive()).default(1),
+  pageSize: z.preprocess(parseNumberInput, z.number().int().positive().max(100)).default(20),
+});
+
+export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
+
+export const PaginationSchema = z.object({
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive().max(100),
+  total: z.number().int().nonnegative(),
+});
+
+export type Pagination = z.infer<typeof PaginationSchema>;
+
+export function createPaginatedResponseSchema<ItemSchema extends z.ZodTypeAny>(
+  itemSchema: ItemSchema,
+) {
+  return z.object({
+    pagination: PaginationSchema,
+    items: z.array(itemSchema),
+  });
+}
+
 export const LlmToolCallPayloadSchema = z
   .object({
     id: z.string().min(1),
@@ -111,24 +158,8 @@ export const LlmChatErrorPayloadSchema = z
   .strict();
 
 export type LlmChatErrorPayload = z.infer<typeof LlmChatErrorPayloadSchema>;
-const parseNumberInput = (value: unknown): unknown => {
-  if (typeof value !== "string") {
-    return value;
-  }
 
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return value;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : value;
-};
-
-export const LlmChatCallListQuerySchema = z.object({
-  page: z.preprocess(parseNumberInput, z.number().int().positive()).default(1),
-  pageSize: z.preprocess(parseNumberInput, z.number().int().positive().max(100)).default(20),
-});
+export const LlmChatCallListQuerySchema = PaginationQuerySchema;
 
 export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
 
@@ -147,14 +178,51 @@ export const LlmChatCallItemSchema = z.object({
 
 export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
 
-export const LlmChatCallListResponseSchema = z.object({
-  page: z.number().int().positive(),
-  pageSize: z.number().int().positive().max(100),
-  hasMore: z.boolean(),
-  items: z.array(LlmChatCallItemSchema),
-});
+export const LlmChatCallListResponseSchema = createPaginatedResponseSchema(LlmChatCallItemSchema);
 
 export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
+
+export const AppLogLevelSchema = z.enum(["debug", "info", "warn", "error", "fatal"]);
+
+export type AppLogLevel = z.infer<typeof AppLogLevelSchema>;
+
+export const AppLogListQuerySchema = PaginationQuerySchema.extend({
+  level: z.preprocess(parseOptionalStringInput, AppLogLevelSchema.optional()),
+  traceId: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+  message: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+  source: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+  startAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
+  endAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
+}).superRefine((value, ctx) => {
+  if (!value.startAt || !value.endAt) {
+    return;
+  }
+
+  if (new Date(value.startAt).getTime() > new Date(value.endAt).getTime()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["startAt"],
+      message: "startAt must be less than or equal to endAt",
+    });
+  }
+});
+
+export type AppLogListQuery = z.infer<typeof AppLogListQuerySchema>;
+
+export const AppLogItemSchema = z.object({
+  id: z.number().int().positive(),
+  traceId: z.string().min(1),
+  level: AppLogLevelSchema,
+  message: z.string().min(1),
+  metadata: JsonRecordSchema,
+  createdAt: z.string().datetime(),
+});
+
+export type AppLogItem = z.infer<typeof AppLogItemSchema>;
+
+export const AppLogListResponseSchema = createPaginatedResponseSchema(AppLogItemSchema);
+
+export type AppLogListResponse = z.infer<typeof AppLogListResponseSchema>;
 
 export const AgentRunRequestSchema = z.object({
   input: z.string().min(1),
@@ -181,3 +249,5 @@ export const AgentEventEnqueueResponseSchema = z.object({
 });
 
 export type AgentEventEnqueueResponse = z.infer<typeof AgentEventEnqueueResponseSchema>;
+
+export { z };

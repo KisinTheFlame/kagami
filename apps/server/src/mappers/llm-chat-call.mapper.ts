@@ -1,15 +1,21 @@
 import type { LlmChatCallItem, LlmChatCallListResponse } from "@kagami/shared";
-import type {
-  LlmChatCallItem as LlmChatCallDaoItem,
-  QueryLlmChatCallListDaoResult,
-} from "../dao/llm-chat-call.dao.js";
+import type { LlmChatCallItem as LlmChatCallDaoItem } from "../dao/llm-chat-call.dao.js";
 
-export function mapLlmChatCallList(result: QueryLlmChatCallListDaoResult): LlmChatCallListResponse {
+type MapLlmChatCallListInput = {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: LlmChatCallDaoItem[];
+};
+
+export function mapLlmChatCallList(input: MapLlmChatCallListInput): LlmChatCallListResponse {
   return {
-    page: result.page,
-    pageSize: result.pageSize,
-    hasMore: result.hasMore,
-    items: result.items.map(mapLlmChatCallItem),
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total: input.total,
+    },
+    items: input.items.map(mapLlmChatCallItem),
   };
 }
 
