@@ -159,7 +159,13 @@ export const LlmChatErrorPayloadSchema = z
 
 export type LlmChatErrorPayload = z.infer<typeof LlmChatErrorPayloadSchema>;
 
-export const LlmChatCallListQuerySchema = PaginationQuerySchema;
+export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);
+
+export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
+
+export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
+  status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
+});
 
 export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
 
@@ -168,7 +174,7 @@ export const LlmChatCallItemSchema = z.object({
   requestId: z.string().min(1),
   provider: z.string().min(1),
   model: z.string().min(1),
-  status: z.enum(["success", "failed"]),
+  status: LlmChatCallStatusSchema,
   requestPayload: JsonRecordSchema,
   responsePayload: JsonRecordSchema.nullable(),
   error: JsonRecordSchema.nullable(),

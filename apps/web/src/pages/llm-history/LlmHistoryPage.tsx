@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { type LlmChatCallStatus } from "@kagami/shared";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,10 @@ import { useLlmChatCallList } from "./useLlmChatCallList";
 
 const PAGE_SIZE = 20;
 
+type FilterFormState = {
+  status: "" | LlmChatCallStatus;
+};
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("zh-CN", {
     year: "numeric",
@@ -31,9 +36,20 @@ function formatDate(iso: string) {
 export function LlmHistoryPage() {
   const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const page = Math.max(1, Number(params.get("page") ?? "1"));
+  const page = parsePage(params.get("page"));
+  const filters = useMemo(
+    () => ({
+      status: parseStatus(params.get("status")),
+    }),
+    [params],
+  );
+  const [formState, setFormState] = useState<FilterFormState>(() => toFormState(params));
 
-  const { data, isLoading, isError } = useLlmChatCallList(page, PAGE_SIZE);
+  useEffect(() => {
+    setFormState(toFormState(params));
+  }, [params]);
+
+  const { data, isLoading, isError, refetch } = useLlmChatCallList(page, PAGE_SIZE, filters);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rows = useMemo(
@@ -49,13 +65,78 @@ export function LlmHistoryPage() {
     [rows, selectedId],
   );
 
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const nextParams = new URLSearchParams();
+    nextParams.set("page", "1");
+    if (formState.status) {
+      nextParams.set("status", formState.status);
+    }
+
+    setSelectedId(null);
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
+    setParams(nextParams);
+  }
+
+  function handleResetFilters() {
+    const nextParams = new URLSearchParams();
+    nextParams.set("page", "1");
+
+    setFormState({ status: "" });
+    setSelectedId(null);
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
+    setParams(nextParams);
+  }
+
   function goToPage(next: number) {
-    setParams({ page: String(next) });
+    const nextParams = new URLSearchParams(params);
+    nextParams.set("page", String(next));
+    setParams(nextParams);
   }
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+      <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="flex items-center gap-3 text-sm">
+            <span className="w-24 shrink-0 text-right text-muted-foreground">状态</span>
+            <select
+              value={formState.status}
+              onChange={event =>
+                setFormState(prev => ({
+                  ...prev,
+                  status: event.target.value as FilterFormState["status"],
+                }))
+              }
+              className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <option value="">全部</option>
+              <option value="success">成功</option>
+              <option value="failed">失败</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <Button type="submit" size="sm">
+            查询
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={handleResetFilters}>
+            重置
+          </Button>
+        </div>
+      </form>
+
+      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {isError && (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
@@ -100,7 +181,7 @@ export function LlmHistoryPage() {
                       <TableCell className="truncate text-sm">{item.model}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge variant={item.status === "success" ? "default" : "destructive"}>
-                          {item.status}
+                          {toStatusLabel(item.status)}
                         </Badge>
                         {detailParse.hasSchemaError ? (
                           <Badge variant="outline" className="ml-2">
@@ -150,4 +231,41 @@ export function LlmHistoryPage() {
       </div>
     </div>
   );
+}
+
+function parsePage(value: string | null): number {
+  const parsed = Number(value ?? "1");
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function parseStatus(value: string | null): LlmChatCallStatus | undefined {
+  if (value === "success" || value === "failed") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function toFormState(params: URLSearchParams): FilterFormState {
+  return {
+    status: parseStatus(params.get("status")) ?? "",
+  };
+}
+
+function hasSameSearchParams(left: URLSearchParams, right: URLSearchParams): boolean {
+  return toComparableSearchParams(left) === toComparableSearchParams(right);
+}
+
+function toComparableSearchParams(params: URLSearchParams): string {
+  const clone = new URLSearchParams(params);
+  clone.sort();
+  return clone.toString();
+}
+
+function toStatusLabel(status: LlmChatCallStatus): string {
+  return status === "success" ? "成功" : "失败";
 }

@@ -18,6 +18,7 @@ export type LlmChatCallItem = {
 export type QueryLlmChatCallListInput = {
   page: number;
   pageSize: number;
+  status?: LlmChatCallStatus;
 };
 
 type LlmChatCallBaseInput = {
@@ -37,7 +38,7 @@ export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
 };
 
 export interface LlmChatCallDao {
-  countAll(): Promise<number>;
+  countByQuery(input: QueryLlmChatCallListInput): Promise<number>;
   listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]>;
   recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void>;
   recordError(input: RecordLlmChatCallErrorInput): Promise<void>;

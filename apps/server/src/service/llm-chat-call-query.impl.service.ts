@@ -16,7 +16,7 @@ export class DefaultLlmChatCallQueryService implements LlmChatCallQueryService {
 
   public async queryList(query: LlmChatCallListQuery): Promise<LlmChatCallListResponse> {
     const [total, items] = await Promise.all([
-      this.llmChatCallDao.countAll(),
+      this.llmChatCallDao.countByQuery(query),
       this.llmChatCallDao.listPage(query),
     ]);
 

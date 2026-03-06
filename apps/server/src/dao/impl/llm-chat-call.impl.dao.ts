@@ -22,13 +22,16 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
     this.database = database;
   }
 
-  public async countAll(): Promise<number> {
-    return this.database.llmChatCall.count();
+  public async countByQuery(input: QueryLlmChatCallListInput): Promise<number> {
+    return this.database.llmChatCall.count({
+      where: toWhereInput(input),
+    });
   }
 
   public async listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]> {
     const offset = (input.page - 1) * input.pageSize;
     const rows = await this.database.llmChatCall.findMany({
+      where: toWhereInput(input),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: input.pageSize,
       skip: offset,
@@ -180,4 +183,14 @@ function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
 
     return String(value);
   }
+}
+
+function toWhereInput(input: QueryLlmChatCallListInput): Prisma.LlmChatCallWhereInput {
+  if (!input.status) {
+    return {};
+  }
+
+  return {
+    status: input.status,
+  };
 }

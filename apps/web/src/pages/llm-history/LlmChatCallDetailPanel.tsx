@@ -44,7 +44,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           <MetaItem label="Request ID" value={item.requestId} mono />
           <MetaItem label="Provider" value={item.provider} />
           <MetaItem label="Model" value={item.model} />
-          <MetaItem label="状态" value={item.status} />
+          <MetaItem label="状态" value={toStatusLabel(item.status)} />
           <MetaItem label="延迟" value={item.latencyMs === null ? "—" : `${item.latencyMs} ms`} />
           <MetaItem label="时间" value={formatDate(item.createdAt)} />
         </div>
@@ -282,6 +282,10 @@ function formatDate(iso: string): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function toStatusLabel(status: LlmChatCallItem["status"]): string {
+  return status === "success" ? "成功" : "失败";
 }
 
 function buildPreview(content: string): string {

@@ -50,7 +50,7 @@ export function AppLogHistoryPage() {
     setFormState(toFormState(params));
   }, [params]);
 
-  const { data, isLoading, isError } = useAppLogList(page, PAGE_SIZE, filters);
+  const { data, isLoading, isError, refetch } = useAppLogList(page, PAGE_SIZE, filters);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const items = data?.items ?? [];
@@ -84,10 +84,18 @@ export function AppLogHistoryPage() {
     }
 
     setSelectedId(null);
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
     setParams(nextParams);
   }
 
   function handleResetFilters() {
+    const nextParams = new URLSearchParams();
+    nextParams.set("page", "1");
+
     setFormState({
       level: "",
       traceId: "",
@@ -97,7 +105,12 @@ export function AppLogHistoryPage() {
       endAtLocal: "",
     });
     setSelectedId(null);
-    setParams({ page: "1" });
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
+    setParams(nextParams);
   }
 
   function goToPage(next: number) {
@@ -392,4 +405,14 @@ function formatDate(iso: string): string {
 function getSource(metadata: Record<string, unknown>): string {
   const source = metadata.source;
   return typeof source === "string" && source.length > 0 ? source : "—";
+}
+
+function hasSameSearchParams(left: URLSearchParams, right: URLSearchParams): boolean {
+  return toComparableSearchParams(left) === toComparableSearchParams(right);
+}
+
+function toComparableSearchParams(params: URLSearchParams): string {
+  const clone = new URLSearchParams(params);
+  clone.sort();
+  return clone.toString();
 }

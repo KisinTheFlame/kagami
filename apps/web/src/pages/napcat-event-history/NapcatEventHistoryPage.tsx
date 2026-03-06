@@ -47,7 +47,7 @@ export function NapcatEventHistoryPage() {
     setFormState(toFormState(params));
   }, [params]);
 
-  const { data, isLoading, isError } = useNapcatEventList(page, PAGE_SIZE, filters);
+  const { data, isLoading, isError, refetch } = useNapcatEventList(page, PAGE_SIZE, filters);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const items = data?.items ?? [];
@@ -79,10 +79,18 @@ export function NapcatEventHistoryPage() {
     }
 
     setSelectedId(null);
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
     setParams(nextParams);
   }
 
   function handleResetFilters() {
+    const nextParams = new URLSearchParams();
+    nextParams.set("page", "1");
+
     setFormState({
       postType: "",
       messageType: "",
@@ -92,7 +100,12 @@ export function NapcatEventHistoryPage() {
       endAtLocal: "",
     });
     setSelectedId(null);
-    setParams({ page: "1" });
+    if (hasSameSearchParams(params, nextParams)) {
+      void refetch();
+      return;
+    }
+
+    setParams(nextParams);
   }
 
   function goToPage(next: number) {
@@ -347,4 +360,14 @@ function formatDate(iso: string): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function hasSameSearchParams(left: URLSearchParams, right: URLSearchParams): boolean {
+  return toComparableSearchParams(left) === toComparableSearchParams(right);
+}
+
+function toComparableSearchParams(params: URLSearchParams): string {
+  const clone = new URLSearchParams(params);
+  clone.sort();
+  return clone.toString();
 }
