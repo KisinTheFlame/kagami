@@ -1,4 +1,4 @@
-import type { Tool } from "../llm/types.js";
+import type { Tool } from "../../llm/types.js";
 
 export const FINISH_TOOL_NAME = "finish";
 

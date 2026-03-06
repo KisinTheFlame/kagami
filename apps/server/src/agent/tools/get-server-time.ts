@@ -1,4 +1,4 @@
-import type { Tool } from "../llm/types.js";
+import type { Tool } from "../../llm/types.js";
 
 export const GET_SERVER_TIME_TOOL_NAME = "get_server_time";
 

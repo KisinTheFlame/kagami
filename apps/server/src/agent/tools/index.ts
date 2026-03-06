@@ -1,4 +1,4 @@
-import type { Tool, LlmToolCall } from "../llm/types.js";
+import type { Tool, LlmToolCall } from "../../llm/types.js";
 import { executeFinishTool, FINISH_TOOL_NAME, finishTool } from "./finish.js";
 import {
   executeGetServerTimeTool,
