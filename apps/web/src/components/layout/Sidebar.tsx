@@ -6,7 +6,7 @@ const navItems = [
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
-  { to: "/agent-event", label: "Agent Event 测试台", icon: TestTube2 },
+  { to: "/api-lab", label: "后端接口测试台", icon: TestTube2 },
 ];
 
 export function Sidebar() {

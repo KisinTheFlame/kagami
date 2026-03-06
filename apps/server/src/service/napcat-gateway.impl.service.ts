@@ -4,6 +4,8 @@ import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
   NapcatGatewayService,
+  NapcatSendGroupTextInput,
+  NapcatSendGroupTextResult,
   NapcatSendPrivateTextInput,
   NapcatSendPrivateTextResult,
 } from "./napcat-gateway.service.js";
@@ -26,7 +28,7 @@ type WebSocketLike = {
 
 type PendingRequest = {
   timeout: NodeJS.Timeout;
-  resolve: (result: NapcatSendPrivateTextResult) => void;
+  resolve: (result: { messageId: number }) => void;
   reject: (error: Error) => void;
 };
 
@@ -110,6 +112,37 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     userId,
     message,
   }: NapcatSendPrivateTextInput): Promise<NapcatSendPrivateTextResult> {
+    return await this.sendTextMessage({
+      action: "send_private_msg",
+      targetKey: "user_id",
+      targetId: userId,
+      message,
+    });
+  }
+
+  public async sendGroupText({
+    groupId,
+    message,
+  }: NapcatSendGroupTextInput): Promise<NapcatSendGroupTextResult> {
+    return await this.sendTextMessage({
+      action: "send_group_msg",
+      targetKey: "group_id",
+      targetId: groupId,
+      message,
+    });
+  }
+
+  private async sendTextMessage({
+    action,
+    targetKey,
+    targetId,
+    message,
+  }: {
+    action: "send_private_msg" | "send_group_msg";
+    targetKey: "user_id" | "group_id";
+    targetId: string;
+    message: string;
+  }): Promise<{ messageId: number }> {
     const activeSocket = this.socket;
     if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
       throw new NapcatGatewayError({
@@ -120,9 +153,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     const echo = randomUUID();
     const payload = {
-      action: "send_private_msg",
+      action,
       params: {
-        user_id: userId,
+        [targetKey]: targetId,
         message: [
           {
             type: "text",

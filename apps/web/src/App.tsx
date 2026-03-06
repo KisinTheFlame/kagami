@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { AgentEventPage } from "@/pages/agent-event/AgentEventPage";
+import { ApiLabPage } from "@/pages/api-lab/ApiLabPage";
 import { AppLogHistoryPage } from "@/pages/app-log-history/AppLogHistoryPage";
 import { LlmHistoryPage } from "@/pages/llm-history/LlmHistoryPage";
 import { NapcatEventHistoryPage } from "@/pages/napcat-event-history/NapcatEventHistoryPage";
@@ -14,7 +14,8 @@ function App() {
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
-          <Route path="/agent-event" element={<AgentEventPage />} />
+          <Route path="/api-lab" element={<ApiLabPage />} />
+          <Route path="/agent-event" element={<Navigate to="/api-lab" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

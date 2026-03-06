@@ -11,7 +11,6 @@ import { closeDb, db } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
-import { AgentHandler } from "./handler/agent.handler.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
@@ -24,8 +23,6 @@ import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import type { AppLogQueryService } from "./service/app-log-query.service.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
-import type { AgentEventCommandService } from "./service/agent-event-command.service.js";
-import { DefaultAgentEventCommandService } from "./service/agent-event-command.impl.service.js";
 import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
 import type { NapcatEventQueryService } from "./service/napcat-event-query.service.js";
@@ -57,9 +54,6 @@ const napcatEventQueryService: NapcatEventQueryService = new DefaultNapcatEventQ
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
-const agentEventCommandService: AgentEventCommandService = new DefaultAgentEventCommandService({
-  eventQueue,
-});
 const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
   wsUrl: env.NAPCAT_WS_URL,
@@ -68,7 +62,6 @@ const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayServi
   napcatEventDao,
 });
 
-const agentHandler = new AgentHandler({ agentEventCommandService });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
 const appLogHandler = new AppLogHandler({ appLogQueryService });
@@ -125,7 +118,6 @@ app.setErrorHandler((error, request, reply) => {
 });
 
 for (const handler of [
-  agentHandler,
   healthHandler,
   llmChatCallHandler,
   appLogHandler,

@@ -110,6 +110,55 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should resolve sendGroupText when NapCat returns success response", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    const sendPromise = gateway.sendGroupText({
+      groupId: "987654",
+      message: "hello group",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      action: string;
+      params: {
+        group_id: string;
+      };
+      echo: string;
+    };
+
+    expect(sentPayload.action).toBe("send_group_msg");
+    expect(sentPayload.params.group_id).toBe("987654");
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          message_id: 9528,
+        },
+        message: "",
+        echo: sentPayload.echo,
+        stream: "normal-action",
+      }),
+    );
+
+    await expect(sendPromise).resolves.toEqual({ messageId: 9528 });
+    await gateway.stop();
+  });
+
   it("should reject when NapCat returns retcode error", async () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = new DefaultNapcatGatewayService({

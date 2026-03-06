@@ -285,19 +285,6 @@ export const AgentRunResponseSchema = z.object({
 
 export type AgentRunResponse = z.infer<typeof AgentRunResponseSchema>;
 
-export const AgentEventEnqueueRequestSchema = z.object({
-  message: z.string().min(1),
-});
-
-export type AgentEventEnqueueRequest = z.infer<typeof AgentEventEnqueueRequestSchema>;
-
-export const AgentEventEnqueueResponseSchema = z.object({
-  accepted: z.literal(true),
-  queued: z.number().int().positive(),
-});
-
-export type AgentEventEnqueueResponse = z.infer<typeof AgentEventEnqueueResponseSchema>;
-
 export const NapcatSendPrivateMessageRequestSchema = z.object({
   userId: z.string().min(1),
   message: z.string().min(1),
@@ -312,5 +299,18 @@ export const NapcatSendPrivateMessageResponseSchema = z.object({
 export type NapcatSendPrivateMessageResponse = z.infer<
   typeof NapcatSendPrivateMessageResponseSchema
 >;
+
+export const NapcatSendGroupMessageRequestSchema = z.object({
+  groupId: z.string().min(1),
+  message: z.string().min(1),
+});
+
+export type NapcatSendGroupMessageRequest = z.infer<typeof NapcatSendGroupMessageRequestSchema>;
+
+export const NapcatSendGroupMessageResponseSchema = z.object({
+  messageId: z.number().int().positive(),
+});
+
+export type NapcatSendGroupMessageResponse = z.infer<typeof NapcatSendGroupMessageResponseSchema>;
 
 export { z };
