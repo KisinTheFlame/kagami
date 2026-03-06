@@ -48,11 +48,10 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 已有数据库接入 Prisma Migrate（基线）：
 
-1. 当前基线迁移为 `20260306214613_init`。
-2. 如果数据库结构已与当前 schema 对齐，先执行  
-   `pnpm db:migrate:resolve -- --applied 20260306214613_init`  
+1. 如果数据库结构已与当前 schema 对齐，先执行  
+   `pnpm db:migrate:resolve -- --applied <baseline_migration_id>`  
    避免重复建表。
-3. 后续按标准流程使用 `db:migrate:dev`（生成）和 `db:migrate:deploy`（应用）。
+2. 后续按标准流程使用 `db:migrate:dev`（生成）和 `db:migrate:deploy`（应用）。
 
 ### 针对单个包执行命令
 
