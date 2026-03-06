@@ -30,7 +30,7 @@ pnpm format:write # Prettier 自动格式化
 ### 数据库（在仓库根目录执行，统一容器内访问）
 
 ```bash
-pnpm db:migrate:dev -- --name <migration_name> # 生成并应用迁移（落盘到仓库）
+pnpm db:migrate:dev -- --name <migration_name> # 在临时干净库生成迁移（create-only，落盘到仓库）
 pnpm db:migrate:deploy # 部署/上线时应用已有迁移
 pnpm db:migrate:status # 查看迁移状态
 pnpm db:migrate:reset # 重置数据库（危险）
@@ -42,9 +42,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 数据库变更流程：
 
 1. 修改 `apps/server/prisma/schema.prisma`。
-2. 在本地执行 `pnpm db:migrate:dev -- --name <migration_name>` 生成并应用迁移。
+2. 在本地执行 `pnpm db:migrate:dev -- --name <migration_name>`（脚本会自动拉起临时 PostgreSQL，应用历史迁移后以 `--create-only` 生成新迁移）。
 3. 提交 `prisma/migrations/*` 与 schema 变更。
-4. 部署执行 `pnpm deploy`（内部会先执行 `prisma migrate deploy`，成功后再更新服务）。
+4. 通过 `pnpm db:migrate:deploy`（或 `pnpm deploy` 内置步骤）将迁移应用到目标数据库。
 
 已有数据库接入 Prisma Migrate（基线）：
 
@@ -52,7 +52,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 2. 如果数据库结构已与当前 schema 对齐，先执行  
    `pnpm db:migrate:resolve -- --applied 20260306214613_init`  
    避免重复建表。
-3. 后续再按标准流程使用 `db:migrate:dev` / `db:migrate:deploy`。
+3. 后续按标准流程使用 `db:migrate:dev`（生成）和 `db:migrate:deploy`（应用）。
 
 ### 针对单个包执行命令
 
