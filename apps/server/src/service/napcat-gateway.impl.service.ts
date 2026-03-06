@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
   NapcatGatewayService,
@@ -12,6 +13,7 @@ type NapcatGatewayOptions = {
   wsUrl: string;
   reconnectMs: number;
   requestTimeoutMs: number;
+  napcatEventDao?: NapcatEventDao;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -40,20 +42,23 @@ const ActionResponseSchema = z.object({
   echo: z.string(),
 });
 
-const PrivateMessageEventSchema = z.object({
-  post_type: z.literal("message"),
-  message_type: z.literal("private"),
-  user_id: z.union([z.string(), z.number()]),
-  message_id: z.number().optional(),
-  raw_message: z.string().optional(),
-  time: z.number().optional(),
-  sub_type: z.string().optional(),
-});
+const PostTypeEventSchema = z
+  .object({
+    post_type: z.string().min(1),
+    message_type: z.string().optional(),
+    sub_type: z.string().optional(),
+    user_id: z.union([z.string(), z.number()]).optional(),
+    group_id: z.union([z.string(), z.number()]).optional(),
+    raw_message: z.string().optional(),
+    time: z.union([z.number(), z.string()]).optional(),
+  })
+  .passthrough();
 
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly wsUrl: string;
   private readonly reconnectMs: number;
   private readonly requestTimeoutMs: number;
+  private readonly napcatEventDao: NapcatEventDao | null;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
 
@@ -65,11 +70,13 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     wsUrl,
     reconnectMs,
     requestTimeoutMs,
+    napcatEventDao,
     createWebSocket,
   }: NapcatGatewayOptions) {
     this.wsUrl = wsUrl;
     this.reconnectMs = reconnectMs;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.napcatEventDao = napcatEventDao ?? null;
     this.createWebSocket = createWebSocket ?? (url => new WebSocket(url));
   }
 
@@ -230,18 +237,54 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       return;
     }
 
-    const privateMessageEvent = PrivateMessageEventSchema.safeParse(payload);
-    if (privateMessageEvent.success) {
-      const event = privateMessageEvent.data;
+    const postTypeEvent = PostTypeEventSchema.safeParse(payload);
+    if (!postTypeEvent.success) {
+      return;
+    }
+
+    this.handlePostTypeEvent(postTypeEvent.data);
+  }
+
+  private handlePostTypeEvent(eventPayload: z.infer<typeof PostTypeEventSchema>): void {
+    const userId = toNullableId(eventPayload.user_id);
+    const groupId = toNullableId(eventPayload.group_id);
+    const eventTime = toEventTime(eventPayload.time);
+
+    if (eventPayload.post_type === "message" && eventPayload.message_type === "private") {
       logger.info("Received NapCat private message event", {
         event: "napcat.gateway.private_message_received",
-        userId: String(event.user_id),
-        messageId: event.message_id,
-        rawMessage: event.raw_message,
-        time: event.time,
-        subType: event.sub_type,
+        userId,
+        messageId: toNullableNumber(eventPayload.message_id),
+        rawMessage: eventPayload.raw_message,
+        time: eventPayload.time,
+        subType: eventPayload.sub_type,
       });
     }
+
+    if (!this.napcatEventDao) {
+      return;
+    }
+
+    const payload = eventPayload as unknown as Record<string, unknown>;
+
+    void this.napcatEventDao
+      .insert({
+        postType: eventPayload.post_type,
+        messageType: toNullableString(eventPayload.message_type),
+        subType: toNullableString(eventPayload.sub_type),
+        userId,
+        groupId,
+        rawMessage: toNullableString(eventPayload.raw_message),
+        eventTime,
+        payload,
+      })
+      .catch(error => {
+        logger.errorWithCause("Failed to persist NapCat event", error, {
+          event: "napcat.gateway.event_persist_failed",
+          postType: eventPayload.post_type,
+          messageType: eventPayload.message_type,
+        });
+      });
   }
 
   private resolveActionResponse(response: z.infer<typeof ActionResponseSchema>): void {
@@ -350,4 +393,47 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       this.pendingRequests.delete(echo);
     }
   }
+}
+
+function toNullableId(value: unknown): string | null {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return null;
+}
+
+function toNullableString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value.length > 0 ? value : null;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  return null;
+}
+
+function toEventTime(value: unknown): Date | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return new Date(Math.trunc(value) * 1000);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return new Date(Math.trunc(parsed) * 1000);
+    }
+  }
+
+  return null;
 }

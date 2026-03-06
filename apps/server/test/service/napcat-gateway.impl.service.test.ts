@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NapcatEventDao } from "../../src/dao/napcat-event.dao.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import { DefaultNapcatGatewayService } from "../../src/service/napcat-gateway.impl.service.js";
@@ -236,4 +237,109 @@ describe("DefaultNapcatGatewayService", () => {
 
     await gateway.stop();
   });
+
+  it("should persist post_type events into dao", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const napcatEventDao = createNapcatEventDao();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      napcatEventDao,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "private",
+        user_id: 123456,
+        message_id: 9988,
+        raw_message: "hi",
+        time: 1710000000,
+        sub_type: "friend",
+      }),
+    );
+    await waitOneTick();
+
+    expect(napcatEventDao.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postType: "message",
+        messageType: "private",
+        subType: "friend",
+        userId: "123456",
+        groupId: null,
+        rawMessage: "hi",
+        eventTime: new Date(1710000000 * 1000),
+      }),
+    );
+
+    await gateway.stop();
+  });
+
+  it("should not persist action response message", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const napcatEventDao = createNapcatEventDao();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      napcatEventDao,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    const sendPromise = gateway.sendPrivateText({
+      userId: "123456",
+      message: "hello",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          message_id: 9527,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+    await sendPromise;
+    await waitOneTick();
+
+    expect(napcatEventDao.insert).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
 });
+
+function createNapcatEventDao(): NapcatEventDao & {
+  insert: ReturnType<typeof vi.fn>;
+} {
+  return {
+    insert: vi.fn().mockResolvedValue(undefined),
+    countByQuery: vi.fn().mockResolvedValue(0),
+    listByQueryPage: vi.fn().mockResolvedValue([]),
+  };
+}
+
+async function waitOneTick(): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, 0));
+}

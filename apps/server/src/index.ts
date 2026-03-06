@@ -10,10 +10,12 @@ import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
+import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
 import { AgentHandler } from "./handler/agent.handler.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
+import { NapcatEventHandler } from "./handler/napcat-event.handler.js";
 import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
 import { AppLogger } from "./logger/logger.js";
@@ -24,6 +26,8 @@ import type { AppLogQueryService } from "./service/app-log-query.service.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
 import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
+import type { NapcatEventQueryService } from "./service/napcat-event-query.service.js";
+import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 
@@ -39,10 +43,14 @@ initLoggerRuntime({
 const logger = new AppLogger({ source: "bootstrap" });
 
 const llmChatCallDao = new PrismaLlmChatCallDao({ database: db });
+const napcatEventDao = new PrismaNapcatEventDao({ database: db });
 const llmChatCallQueryService: LlmChatCallQueryService = new DefaultLlmChatCallQueryService({
   llmChatCallDao,
 });
 const appLogQueryService: AppLogQueryService = new DefaultAppLogQueryService({ logDao });
+const napcatEventQueryService: NapcatEventQueryService = new DefaultNapcatEventQueryService({
+  napcatEventDao,
+});
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
@@ -51,12 +59,14 @@ const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayServi
   wsUrl: env.NAPCAT_WS_URL,
   reconnectMs: env.NAPCAT_WS_RECONNECT_MS,
   requestTimeoutMs: env.NAPCAT_WS_REQUEST_TIMEOUT_MS,
+  napcatEventDao,
 });
 
 const agentHandler = new AgentHandler({ eventQueue });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
 const appLogHandler = new AppLogHandler({ appLogQueryService });
+const napcatEventHandler = new NapcatEventHandler({ napcatEventQueryService });
 const napcatHandler = new NapcatHandler({ napcatGatewayService });
 
 app.addHook("onRequest", (_request, reply, done) => {
@@ -99,6 +109,7 @@ agentHandler.register(app);
 healthHandler.register(app);
 llmChatCallHandler.register(app);
 appLogHandler.register(app);
+napcatEventHandler.register(app);
 napcatHandler.register(app);
 
 let isServerStarted = false;

@@ -46,3 +46,22 @@ model AppLog {
   @@index([createdAt], map: "app_log_created_at_idx")
   @@map("app_log")
 }
+
+model NapcatEvent {
+  id          Int       @id @default(autoincrement())
+  postType    String    @map("post_type")
+  messageType String?   @map("message_type")
+  subType     String?   @map("sub_type")
+  userId      String?   @map("user_id")
+  groupId     String?   @map("group_id")
+  rawMessage  String?   @map("raw_message")
+  eventTime   DateTime? @map("event_time") @db.Timestamptz(6)
+  payload     Json      @db.JsonB
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "napcat_event_created_at_idx")
+  @@index([postType, createdAt], map: "napcat_event_post_type_created_at_idx")
+  @@index([messageType, createdAt], map: "napcat_event_message_type_created_at_idx")
+  @@index([userId, createdAt], map: "napcat_event_user_id_created_at_idx")
+  @@map("napcat_event")
+}
