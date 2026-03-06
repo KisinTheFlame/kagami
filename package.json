@@ -5,7 +5,12 @@
   "packageManager": "pnpm@10.18.3",
   "scripts": {
     "build": "pnpm -r build",
-    "deploy": "docker compose up --build --detach",
+    "deploy": "bash ./scripts/deploy.sh",
+    "db:migrate:dev": "bash ./scripts/prisma-docker.sh migrate dev",
+    "db:migrate:deploy": "bash ./scripts/prisma-docker.sh migrate deploy",
+    "db:migrate:status": "bash ./scripts/prisma-docker.sh migrate status",
+    "db:migrate:reset": "bash ./scripts/prisma-docker.sh migrate reset",
+    "db:migrate:resolve": "bash ./scripts/prisma-docker.sh migrate resolve",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -1,8 +1,19 @@
-import type { InferSelectModel } from "drizzle-orm";
-import { llmChatCall } from "../db/schema.js";
 import type { LlmChatRequest, LlmChatResponse, LlmProviderId } from "../llm/types.js";
 
-export type LlmChatCallItem = InferSelectModel<typeof llmChatCall>;
+export type LlmChatCallStatus = "success" | "failed";
+
+export type LlmChatCallItem = {
+  id: number;
+  requestId: string;
+  provider: string;
+  model: string;
+  status: LlmChatCallStatus;
+  requestPayload: Record<string, unknown>;
+  responsePayload: Record<string, unknown> | null;
+  error: Record<string, unknown> | null;
+  latencyMs: number | null;
+  createdAt: Date;
+};
 
 export type QueryLlmChatCallListInput = {
   page: number;

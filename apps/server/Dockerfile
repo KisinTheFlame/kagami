@@ -5,6 +5,7 @@ RUN corepack enable
 
 FROM base AS build
 WORKDIR /app
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY apps/server/package.json apps/server/package.json
@@ -18,6 +19,7 @@ COPY packages/shared ./packages/shared
 RUN pnpm --filter @kagami/shared build
 RUN pnpm --filter @kagami/server build
 RUN pnpm --filter @kagami/server deploy --prod --legacy /prod/server
+RUN cd /prod/server && node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma
 
 FROM node:22-alpine AS runner
 WORKDIR /app

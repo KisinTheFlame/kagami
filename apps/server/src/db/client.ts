@@ -1,12 +1,13 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import prismaClientPkg from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { env } from "../env.js";
 
-const queryClient = postgres(env.DATABASE_URL);
+const { PrismaClient } = prismaClientPkg;
+const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 
-export const db = drizzle(queryClient);
+export const db = new PrismaClient({ adapter });
 export type Database = typeof db;
 
 export async function closeDb(): Promise<void> {
-  await queryClient.end();
+  await db.$disconnect();
 }

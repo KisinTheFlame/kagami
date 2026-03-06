@@ -1,6 +1,5 @@
-import { count, desc } from "drizzle-orm";
+import type { Prisma } from "@prisma/client";
 import type { Database } from "../../db/client.js";
-import { llmChatCall } from "../../db/schema.js";
 import { AppLogger } from "../../logger/logger.js";
 import type {
   LlmChatCallItem,
@@ -12,42 +11,55 @@ import type {
 
 const logger = new AppLogger({ source: "dao.llm-chat-call" });
 
-type DrizzleLlmChatCallDaoDeps = {
+type PrismaLlmChatCallDaoDeps = {
   database: Database;
 };
 
-export class DrizzleLlmChatCallDao implements LlmChatCallDao {
+export class PrismaLlmChatCallDao implements LlmChatCallDao {
   private readonly database: Database;
 
-  public constructor({ database }: DrizzleLlmChatCallDaoDeps) {
+  public constructor({ database }: PrismaLlmChatCallDaoDeps) {
     this.database = database;
   }
 
   public async countAll(): Promise<number> {
-    const [{ total }] = await this.database.select({ total: count() }).from(llmChatCall);
-    return total;
+    return this.database.llmChatCall.count();
   }
 
   public async listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]> {
     const offset = (input.page - 1) * input.pageSize;
-    return this.database
-      .select()
-      .from(llmChatCall)
-      .orderBy(desc(llmChatCall.createdAt), desc(llmChatCall.id))
-      .limit(input.pageSize)
-      .offset(offset);
+    const rows = await this.database.llmChatCall.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: input.pageSize,
+      skip: offset,
+    });
+
+    return rows.map(item => ({
+      id: item.id,
+      requestId: item.requestId,
+      provider: item.provider,
+      model: item.model,
+      status: item.status as LlmChatCallItem["status"],
+      requestPayload: toJsonRecord(item.requestPayload),
+      responsePayload: toOptionalJsonRecord(item.responsePayload),
+      error: toOptionalJsonRecord(item.error),
+      latencyMs: item.latencyMs,
+      createdAt: item.createdAt,
+    }));
   }
 
   public async recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void> {
     try {
-      await this.database.insert(llmChatCall).values({
-        requestId: input.requestId,
-        provider: input.provider,
-        model: input.response.model,
-        status: "success",
-        requestPayload: toJsonRecord(input.request),
-        responsePayload: toJsonRecord(input.response),
-        latencyMs: input.latencyMs,
+      await this.database.llmChatCall.create({
+        data: {
+          requestId: input.requestId,
+          provider: input.provider,
+          model: input.response.model,
+          status: "success",
+          requestPayload: toInputJsonRecord(input.request),
+          responsePayload: toInputJsonRecord(input.response),
+          latencyMs: input.latencyMs,
+        },
       });
     } catch (error) {
       this.logRecordFailure(input.requestId, error);
@@ -57,14 +69,16 @@ export class DrizzleLlmChatCallDao implements LlmChatCallDao {
 
   public async recordError(input: RecordLlmChatCallErrorInput): Promise<void> {
     try {
-      await this.database.insert(llmChatCall).values({
-        requestId: input.requestId,
-        provider: input.provider,
-        model: input.model,
-        status: "failed",
-        requestPayload: toJsonRecord(input.request),
-        error: serializeError(input.error),
-        latencyMs: input.latencyMs,
+      await this.database.llmChatCall.create({
+        data: {
+          requestId: input.requestId,
+          provider: input.provider,
+          model: input.model,
+          status: "failed",
+          requestPayload: toInputJsonRecord(input.request),
+          error: toInputJsonRecord(serializeError(input.error)),
+          latencyMs: input.latencyMs,
+        },
       });
     } catch (error) {
       this.logRecordFailure(input.requestId, error);
@@ -113,4 +127,57 @@ function toJsonRecord(value: unknown): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toOptionalJsonRecord(value: Prisma.JsonValue | null): Record<string, unknown> | null {
+  if (value === null) {
+    return null;
+  }
+
+  return toJsonRecord(value);
+}
+
+function toInputJsonRecord(value: unknown): Prisma.InputJsonObject {
+  const normalized = normalizeInputJsonValue(value);
+  if (typeof normalized === "object" && !Array.isArray(normalized)) {
+    return normalized as Prisma.InputJsonObject;
+  }
+
+  return {
+    value: normalized,
+  };
+}
+
+function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
+  try {
+    const serialized = JSON.stringify(value, (_key, currentValue) => {
+      if (currentValue instanceof Date) {
+        return currentValue.toISOString();
+      }
+      if (typeof currentValue === "bigint") {
+        return currentValue.toString();
+      }
+      if (typeof currentValue === "function" || typeof currentValue === "symbol") {
+        return String(currentValue);
+      }
+      return currentValue;
+    });
+
+    if (serialized === undefined) {
+      return "undefined";
+    }
+
+    const parsed = JSON.parse(serialized) as unknown;
+    if (parsed === null) {
+      return "null";
+    }
+
+    return parsed as Prisma.InputJsonValue;
+  } catch {
+    if (value instanceof Error) {
+      return value.message;
+    }
+
+    return String(value);
+  }
 }

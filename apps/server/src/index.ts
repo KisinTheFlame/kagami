@@ -8,8 +8,8 @@ import type { AgentEventQueue } from "./agent/event-queue.queue.js";
 import { InMemoryAgentEventQueue } from "./agent/event-queue.impl.queue.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
-import { DrizzleLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
-import { DrizzleLogDao } from "./dao/impl/log.impl.dao.js";
+import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
+import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
 import { AgentHandler } from "./handler/agent.handler.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
@@ -28,14 +28,14 @@ const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 
-const logDao = new DrizzleLogDao({ database: db });
+const logDao = new PrismaLogDao({ database: db });
 initLoggerRuntime({
   sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
 });
 
 const logger = new AppLogger({ source: "bootstrap" });
 
-const llmChatCallDao = new DrizzleLlmChatCallDao({ database: db });
+const llmChatCallDao = new PrismaLlmChatCallDao({ database: db });
 const llmChatCallQueryService: LlmChatCallQueryService = new DefaultLlmChatCallQueryService({
   llmChatCallDao,
 });

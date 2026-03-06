@@ -22,7 +22,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@host.docker.internal:5432/kagami}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       LLM_ACTIVE_PROVIDER: ${LLM_ACTIVE_PROVIDER}
       LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
