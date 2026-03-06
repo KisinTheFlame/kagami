@@ -189,13 +189,13 @@ export function NapcatEventHistoryPage() {
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <Table className="min-w-[980px] table-fixed">
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[190px]">入库时间</TableHead>
-                  <TableHead className="w-[150px]">Post Type</TableHead>
-                  <TableHead className="w-[150px]">Message Type</TableHead>
-                  <TableHead className="w-[220px]">User ID</TableHead>
+                  <TableHead className="w-[160px]">入库时间</TableHead>
+                  <TableHead className="w-[120px]">Post Type</TableHead>
+                  <TableHead className="w-[120px]">Message Type</TableHead>
+                  <TableHead className="w-[180px]">User ID</TableHead>
                   <TableHead>Raw Message</TableHead>
                 </TableRow>
               </TableHeader>
@@ -238,7 +238,7 @@ export function NapcatEventHistoryPage() {
             </Table>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap">
             <Button
               variant="outline"
               size="sm"
@@ -258,10 +258,10 @@ export function NapcatEventHistoryPage() {
               下一页
               <ChevronRight className="h-4 w-4" />
             </Button>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              共 {total} 条，{totalPages} 页
+            </span>
           </div>
-          <p className="text-right text-xs text-muted-foreground">
-            共 {total} 条，{totalPages} 页
-          </p>
         </section>
 
         <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">

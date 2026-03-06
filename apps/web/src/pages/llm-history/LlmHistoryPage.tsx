@@ -118,7 +118,7 @@ export function LlmHistoryPage() {
             </Table>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -138,10 +138,10 @@ export function LlmHistoryPage() {
               下一页
               <ChevronRight className="h-4 w-4" />
             </Button>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              共 {total} 条，{totalPages} 页
+            </span>
           </div>
-          <p className="text-right text-xs text-muted-foreground">
-            共 {total} 条，{totalPages} 页
-          </p>
         </section>
 
         <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
