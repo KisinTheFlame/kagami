@@ -1,0 +1,139 @@
+import {
+  createPaginatedResponseSchema,
+  JsonRecordSchema,
+  PaginationQuerySchema,
+  parseOptionalStringInput,
+  z,
+} from "./base.js";
+
+export const LlmToolCallPayloadSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    arguments: JsonRecordSchema,
+  })
+  .strict();
+
+export type LlmToolCallPayload = z.infer<typeof LlmToolCallPayloadSchema>;
+
+export const LlmRequestMessageSchema = z.discriminatedUnion("role", [
+  z
+    .object({
+      role: z.literal("user"),
+      content: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      role: z.literal("assistant"),
+      content: z.string(),
+      toolCalls: z.array(LlmToolCallPayloadSchema),
+    })
+    .strict(),
+  z
+    .object({
+      role: z.literal("tool"),
+      toolCallId: z.string().min(1),
+      content: z.string(),
+    })
+    .strict(),
+]);
+
+export type LlmRequestMessage = z.infer<typeof LlmRequestMessageSchema>;
+
+export const LlmChatRequestPayloadSchema = z
+  .object({
+    system: z.string().optional(),
+    messages: z.array(LlmRequestMessageSchema),
+    tools: z.array(
+      z
+        .object({
+          name: z.string().min(1),
+          description: z.string().optional(),
+          parameters: z
+            .object({
+              type: z.literal("object"),
+              properties: JsonRecordSchema,
+            })
+            .strict(),
+        })
+        .strict(),
+    ),
+    toolChoice: z.union([
+      z.literal("required"),
+      z.literal("auto"),
+      z.literal("none"),
+      z
+        .object({
+          tool_name: z.string().min(1),
+        })
+        .strict(),
+    ]),
+    model: z.string().min(1).optional(),
+  })
+  .strict();
+
+export type LlmChatRequestPayload = z.infer<typeof LlmChatRequestPayloadSchema>;
+
+export const LlmChatResponsePayloadSchema = z
+  .object({
+    provider: z.enum(["deepseek", "openai"]),
+    model: z.string().min(1),
+    message: z
+      .object({
+        role: z.literal("assistant"),
+        content: z.string(),
+        toolCalls: z.array(LlmToolCallPayloadSchema),
+      })
+      .strict(),
+    usage: z
+      .object({
+        promptTokens: z.number().int().nonnegative().optional(),
+        completionTokens: z.number().int().nonnegative().optional(),
+        totalTokens: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type LlmChatResponsePayload = z.infer<typeof LlmChatResponsePayloadSchema>;
+
+export const LlmChatErrorPayloadSchema = z
+  .object({
+    name: z.string().min(1),
+    message: z.string().min(1),
+    code: z.string().min(1).optional(),
+  })
+  .strict();
+
+export type LlmChatErrorPayload = z.infer<typeof LlmChatErrorPayloadSchema>;
+
+export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);
+
+export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
+
+export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
+  status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
+});
+
+export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
+
+export const LlmChatCallItemSchema = z.object({
+  id: z.number().int().positive(),
+  requestId: z.string().min(1),
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  status: LlmChatCallStatusSchema,
+  requestPayload: JsonRecordSchema,
+  responsePayload: JsonRecordSchema.nullable(),
+  error: JsonRecordSchema.nullable(),
+  latencyMs: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+});
+
+export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
+
+export const LlmChatCallListResponseSchema = createPaginatedResponseSchema(LlmChatCallItemSchema);
+
+export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
