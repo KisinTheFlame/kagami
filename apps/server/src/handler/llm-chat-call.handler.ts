@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { LlmChatCallListQuerySchema, LlmChatCallListResponseSchema } from "@kagami/shared";
 import type { LlmChatCallQueryService } from "../service/llm-chat-call-query.service.js";
+import { registerQueryRoute } from "./route.helper.js";
 
 type LlmChatCallHandlerDeps = {
   llmChatCallQueryService: LlmChatCallQueryService;
@@ -15,10 +16,14 @@ export class LlmChatCallHandler {
   }
 
   public register(app: FastifyInstance): void {
-    app.get(`${this.prefix}/query`, async request => {
-      const query = LlmChatCallListQuerySchema.parse(request.query);
-      const result = await this.llmChatCallQueryService.queryList(query);
-      return LlmChatCallListResponseSchema.parse(result);
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/query`,
+      querySchema: LlmChatCallListQuerySchema,
+      responseSchema: LlmChatCallListResponseSchema,
+      execute: ({ query }) => {
+        return this.llmChatCallQueryService.queryList(query);
+      },
     });
   }
 }

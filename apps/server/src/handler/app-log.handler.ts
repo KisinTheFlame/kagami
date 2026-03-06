@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { AppLogListQuerySchema, AppLogListResponseSchema } from "@kagami/shared";
 import type { AppLogQueryService } from "../service/app-log-query.service.js";
+import { registerQueryRoute } from "./route.helper.js";
 
 type AppLogHandlerDeps = {
   appLogQueryService: AppLogQueryService;
@@ -15,10 +16,14 @@ export class AppLogHandler {
   }
 
   public register(app: FastifyInstance): void {
-    app.get(`${this.prefix}/query`, async request => {
-      const query = AppLogListQuerySchema.parse(request.query);
-      const result = await this.appLogQueryService.queryList(query);
-      return AppLogListResponseSchema.parse(result);
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/query`,
+      querySchema: AppLogListQuerySchema,
+      responseSchema: AppLogListResponseSchema,
+      execute: ({ query }) => {
+        return this.appLogQueryService.queryList(query);
+      },
     });
   }
 }

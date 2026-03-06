@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { NapcatEventListQuerySchema, NapcatEventListResponseSchema } from "@kagami/shared";
 import type { NapcatEventQueryService } from "../service/napcat-event-query.service.js";
+import { registerQueryRoute } from "./route.helper.js";
 
 type NapcatEventHandlerDeps = {
   napcatEventQueryService: NapcatEventQueryService;
@@ -15,10 +16,14 @@ export class NapcatEventHandler {
   }
 
   public register(app: FastifyInstance): void {
-    app.get(`${this.prefix}/query`, async request => {
-      const query = NapcatEventListQuerySchema.parse(request.query);
-      const result = await this.napcatEventQueryService.queryList(query);
-      return NapcatEventListResponseSchema.parse(result);
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/query`,
+      querySchema: NapcatEventListQuerySchema,
+      responseSchema: NapcatEventListResponseSchema,
+      execute: ({ query }) => {
+        return this.napcatEventQueryService.queryList(query);
+      },
     });
   }
 }

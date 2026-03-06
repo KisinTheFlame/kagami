@@ -20,6 +20,13 @@ describe("NapcatHandler", () => {
         });
       }
 
+      if (error instanceof NapcatGatewayError) {
+        return reply.code(502).send({
+          code: "NAPCAT_UPSTREAM_ERROR",
+          message: "NapCat 上游服务不可用",
+        });
+      }
+
       throw error;
     });
   });

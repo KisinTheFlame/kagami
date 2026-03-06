@@ -24,11 +24,14 @@ import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import type { AppLogQueryService } from "./service/app-log-query.service.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
+import type { AgentEventCommandService } from "./service/agent-event-command.service.js";
+import { DefaultAgentEventCommandService } from "./service/agent-event-command.impl.service.js";
 import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
 import type { NapcatEventQueryService } from "./service/napcat-event-query.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
+import { NapcatGatewayError } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 
 const app = Fastify({ logger: false, disableRequestLogging: true });
@@ -54,6 +57,9 @@ const napcatEventQueryService: NapcatEventQueryService = new DefaultNapcatEventQ
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
+const agentEventCommandService: AgentEventCommandService = new DefaultAgentEventCommandService({
+  eventQueue,
+});
 const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
   wsUrl: env.NAPCAT_WS_URL,
@@ -62,7 +68,7 @@ const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayServi
   napcatEventDao,
 });
 
-const agentHandler = new AgentHandler({ eventQueue });
+const agentHandler = new AgentHandler({ agentEventCommandService });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
 const appLogHandler = new AppLogHandler({ appLogQueryService });
@@ -93,6 +99,19 @@ app.setErrorHandler((error, request, reply) => {
     });
   }
 
+  if (error instanceof NapcatGatewayError) {
+    logger.errorWithCause("NapCat upstream request failed", error, {
+      event: "http.request.napcat_upstream_error",
+      method: request.method,
+      url: request.url,
+    });
+
+    return reply.code(502).send({
+      code: "NAPCAT_UPSTREAM_ERROR",
+      message: "NapCat 上游服务不可用",
+    });
+  }
+
   logger.errorWithCause("Unhandled request error", error, {
     event: "http.request.unhandled_error",
     method: request.method,
@@ -105,12 +124,16 @@ app.setErrorHandler((error, request, reply) => {
   });
 });
 
-agentHandler.register(app);
-healthHandler.register(app);
-llmChatCallHandler.register(app);
-appLogHandler.register(app);
-napcatEventHandler.register(app);
-napcatHandler.register(app);
+for (const handler of [
+  agentHandler,
+  healthHandler,
+  llmChatCallHandler,
+  appLogHandler,
+  napcatEventHandler,
+  napcatHandler,
+]) {
+  handler.register(app);
+}
 
 let isServerStarted = false;
 let isShuttingDown = false;

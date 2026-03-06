@@ -1,50 +1,30 @@
 import type { FastifyInstance } from "fastify";
 import { AgentEventEnqueueRequestSchema, AgentEventEnqueueResponseSchema } from "@kagami/shared";
-import type { AgentEventQueue } from "../agent/event-queue.queue.js";
-import { AppLogger } from "../logger/logger.js";
+import type { AgentEventCommandService } from "../service/agent-event-command.service.js";
+import { registerCommandRoute } from "./route.helper.js";
 
 type AgentHandlerDeps = {
-  eventQueue: AgentEventQueue;
+  agentEventCommandService: AgentEventCommandService;
 };
-
-const logger = new AppLogger({ source: "handler.agent" });
 
 export class AgentHandler {
   public readonly prefix = "/agent";
-  private readonly eventQueue: AgentEventQueue;
+  private readonly agentEventCommandService: AgentEventCommandService;
 
-  public constructor({ eventQueue }: AgentHandlerDeps) {
-    this.eventQueue = eventQueue;
+  public constructor({ agentEventCommandService }: AgentHandlerDeps) {
+    this.agentEventCommandService = agentEventCommandService;
   }
 
   public register(app: FastifyInstance): void {
-    app.post(`${this.prefix}/event`, async (request, reply) => {
-      logger.info("Received agent event enqueue request", {
-        event: "agent.event.enqueue.request_received",
-      });
-
-      try {
-        const payload = AgentEventEnqueueRequestSchema.parse(request.body);
-        const queued = this.eventQueue.enqueue({ message: payload.message });
-
-        logger.info("Agent event enqueued", {
-          event: "agent.event.enqueue.accepted",
-          queued,
-          messageLength: payload.message.length,
-        });
-
-        const response = AgentEventEnqueueResponseSchema.parse({
-          accepted: true,
-          queued,
-        });
-
-        return reply.code(202).send(response);
-      } catch (error) {
-        logger.errorWithCause("Failed to enqueue agent event", error, {
-          event: "agent.event.enqueue.failed",
-        });
-        throw error;
-      }
+    registerCommandRoute({
+      app,
+      path: `${this.prefix}/event`,
+      bodySchema: AgentEventEnqueueRequestSchema,
+      responseSchema: AgentEventEnqueueResponseSchema,
+      statusCode: 202,
+      execute: ({ body }) => {
+        return this.agentEventCommandService.enqueueEvent(body);
+      },
     });
   }
 }
