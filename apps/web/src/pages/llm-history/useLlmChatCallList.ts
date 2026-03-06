@@ -1,5 +1,9 @@
-import { type LlmChatCallListQuery, LlmChatCallListResponseSchema } from "@kagami/shared";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type LlmChatCallListQuery,
+  type LlmChatCallListResponse,
+  LlmChatCallListResponseSchema,
+} from "@kagami/shared";
+import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 type LlmChatCallListFilters = Omit<LlmChatCallListQuery, "page" | "pageSize">;
@@ -8,7 +12,7 @@ export function useLlmChatCallList(
   page: number,
   pageSize: number,
   filters: LlmChatCallListFilters,
-) {
+): UseQueryResult<LlmChatCallListResponse, Error> {
   return useQuery({
     queryKey: ["llm-chat-call", page, pageSize, filters],
     queryFn: async () => {
