@@ -14,6 +14,7 @@ import { AgentHandler } from "./handler/agent.handler.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
+import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
 import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
@@ -23,6 +24,8 @@ import type { AppLogQueryService } from "./service/app-log-query.service.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
 import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
+import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
+import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 
 const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -44,11 +47,17 @@ const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
 const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
+const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
+  wsUrl: env.NAPCAT_WS_URL,
+  reconnectMs: env.NAPCAT_WS_RECONNECT_MS,
+  requestTimeoutMs: env.NAPCAT_WS_REQUEST_TIMEOUT_MS,
+});
 
 const agentHandler = new AgentHandler({ eventQueue });
 const healthHandler = new HealthHandler();
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
 const appLogHandler = new AppLogHandler({ appLogQueryService });
+const napcatHandler = new NapcatHandler({ napcatGatewayService });
 
 app.addHook("onRequest", (_request, reply, done) => {
   const traceId = randomUUID();
@@ -90,6 +99,7 @@ agentHandler.register(app);
 healthHandler.register(app);
 llmChatCallHandler.register(app);
 appLogHandler.register(app);
+napcatHandler.register(app);
 
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -121,6 +131,14 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       exitCode = 1;
       logger.error("Failed to close Fastify server", { error });
     }
+  }
+
+  try {
+    await napcatGatewayService.stop();
+    logger.info("NapCat gateway stopped");
+  } catch (error) {
+    exitCode = 1;
+    logger.error("Failed to stop NapCat gateway", { error });
   }
 
   try {
@@ -160,6 +178,10 @@ async function start() {
       port: env.PORT,
     });
     isServerStarted = true;
+
+    void napcatGatewayService.start().catch(error => {
+      logger.error("Failed to start NapCat gateway", { error });
+    });
 
     void agentLoop
       .run()

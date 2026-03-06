@@ -12,6 +12,8 @@ services:
       - napcat-config:/app/napcat/config
       - napcat-qq:/app/.config/QQ
     restart: unless-stopped
+    networks:
+      - axis
 
   server:
     container_name: kagami-server
@@ -31,6 +33,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL}
+      NAPCAT_WS_URL: ${NAPCAT_WS_URL:-ws://napcat:3001/}
+      NAPCAT_WS_RECONNECT_MS: ${NAPCAT_WS_RECONNECT_MS:-3000}
+      NAPCAT_WS_REQUEST_TIMEOUT_MS: ${NAPCAT_WS_REQUEST_TIMEOUT_MS:-10000}
     ports:
       - "3000:3000"
     healthcheck:
