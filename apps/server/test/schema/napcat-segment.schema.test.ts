@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { NapcatSendGroupMessageRequestSchema } from "@kagami/shared";
 import {
   NapcatReceiveMessageSegmentSchema,
-  NapcatSendGroupMessageRequestSchema,
   NapcatSendMessageSegmentSchema,
-} from "@kagami/shared";
+} from "../../src/schema/napcat-segment.js";
 
 describe("NapCat segment schemas", () => {
   it("should validate all supported send segments", () => {
