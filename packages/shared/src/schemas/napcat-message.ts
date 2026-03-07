@@ -1,9 +1,8 @@
 import { z } from "./base.js";
-import { NapcatSendGroupSegmentSchema } from "./napcat-segment.js";
 
 export const NapcatSendGroupMessageRequestSchema = z.object({
   groupId: z.string().min(1),
-  message: z.array(NapcatSendGroupSegmentSchema).min(1),
+  message: z.string().min(1),
 });
 
 export type NapcatSendGroupMessageRequest = z.infer<typeof NapcatSendGroupMessageRequestSchema>;

@@ -51,21 +51,7 @@ describe("NapcatHandler", () => {
       url: "/napcat/group/send",
       payload: {
         groupId: "1122334455",
-        message: [
-          {
-            type: "text",
-            data: {
-              text: "hello group",
-            },
-          },
-          {
-            type: "image",
-            data: {
-              file: "https://example.com/demo.png",
-              summary: "demo",
-            },
-          },
-        ],
+        message: "hello group",
       },
     });
 
@@ -73,21 +59,7 @@ describe("NapcatHandler", () => {
     expect(response.json()).toEqual({ messageId: 654321 });
     expect(sendGroupMessage).toHaveBeenCalledWith({
       groupId: "1122334455",
-      message: [
-        {
-          type: "text",
-          data: {
-            text: "hello group",
-          },
-        },
-        {
-          type: "image",
-          data: {
-            file: "https://example.com/demo.png",
-            summary: "demo",
-          },
-        },
-      ],
+      message: "hello group",
     });
   });
 
@@ -107,14 +79,7 @@ describe("NapcatHandler", () => {
       url: "/napcat/group/send",
       payload: {
         groupId: "",
-        message: [
-          {
-            type: "face",
-            data: {
-              id: "1",
-            },
-          },
-        ],
+        message: "",
       },
     });
 
@@ -143,14 +108,7 @@ describe("NapcatHandler", () => {
       url: "/napcat/group/send",
       payload: {
         groupId: "2987345656",
-        message: [
-          {
-            type: "text",
-            data: {
-              text: "hello",
-            },
-          },
-        ],
+        message: "hello",
       },
     });
 

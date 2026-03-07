@@ -123,7 +123,14 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       action: "send_group_msg",
       params: {
         group_id: groupId,
-        message,
+        message: [
+          {
+            type: "text",
+            data: {
+              text: message,
+            },
+          },
+        ],
       },
       echo,
     };

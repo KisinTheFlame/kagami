@@ -80,21 +80,7 @@ describe("DefaultNapcatGatewayService", () => {
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
-      message: [
-        {
-          type: "text",
-          data: {
-            text: "hello group",
-          },
-        },
-        {
-          type: "image",
-          data: {
-            file: "https://example.com/demo.png",
-            summary: "demo",
-          },
-        },
-      ],
+      message: "hello group",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       action: string;
@@ -115,13 +101,6 @@ describe("DefaultNapcatGatewayService", () => {
         type: "text",
         data: {
           text: "hello group",
-        },
-      },
-      {
-        type: "image",
-        data: {
-          file: "https://example.com/demo.png",
-          summary: "demo",
         },
       },
     ]);
@@ -162,14 +141,7 @@ describe("DefaultNapcatGatewayService", () => {
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
-      message: [
-        {
-          type: "text",
-          data: {
-            text: "hello",
-          },
-        },
-      ],
+      message: "hello",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
@@ -210,14 +182,7 @@ describe("DefaultNapcatGatewayService", () => {
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
-      message: [
-        {
-          type: "text",
-          data: {
-            text: "hello",
-          },
-        },
-      ],
+      message: "hello",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
@@ -353,14 +318,7 @@ describe("DefaultNapcatGatewayService", () => {
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
-      message: [
-        {
-          type: "text",
-          data: {
-            text: "hello",
-          },
-        },
-      ],
+      message: "hello",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
 

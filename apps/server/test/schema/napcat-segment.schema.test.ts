@@ -105,7 +105,16 @@ describe("NapCat segment schemas", () => {
     }
   });
 
-  it("should allow group send text/image mixed segments only", () => {
+  it("should allow group send plain text message only", () => {
+    const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
+      groupId: "112233",
+      message: "hello",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("should reject non string group send message", () => {
     const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
       groupId: "112233",
       message: [
@@ -113,29 +122,6 @@ describe("NapCat segment schemas", () => {
           type: "text",
           data: {
             text: "hello",
-          },
-        },
-        {
-          type: "image",
-          data: {
-            file: "https://example.com/demo.png",
-            summary: "demo",
-          },
-        },
-      ],
-    });
-
-    expect(parsed.success).toBe(true);
-  });
-
-  it("should reject non text/image group send segment", () => {
-    const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
-      groupId: "112233",
-      message: [
-        {
-          type: "face",
-          data: {
-            id: "66",
           },
         },
       ],
