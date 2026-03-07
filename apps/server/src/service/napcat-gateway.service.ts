@@ -1,20 +1,7 @@
-export type NapcatSendPrivateTextInput = {
-  userId: string;
-  message: string;
-};
+import type { NapcatSendGroupMessageRequest, NapcatSendGroupMessageResponse } from "@kagami/shared";
 
-export type NapcatSendPrivateTextResult = {
-  messageId: number;
-};
-
-export type NapcatSendGroupTextInput = {
-  groupId: string;
-  message: string;
-};
-
-export type NapcatSendGroupTextResult = {
-  messageId: number;
-};
+export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
+export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
 
 export type NapcatGatewayErrorCode = "NOT_CONNECTED" | "REQUEST_TIMEOUT" | "UPSTREAM_ERROR";
 
@@ -39,6 +26,5 @@ export class NapcatGatewayError extends Error {
 export interface NapcatGatewayService {
   start(): Promise<void>;
   stop(): Promise<void>;
-  sendPrivateText(input: NapcatSendPrivateTextInput): Promise<NapcatSendPrivateTextResult>;
-  sendGroupText(input: NapcatSendGroupTextInput): Promise<NapcatSendGroupTextResult>;
+  sendGroupMessage(input: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult>;
 }

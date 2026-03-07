@@ -4,7 +4,6 @@ import {
   LlmChatCallListQuerySchema,
   NapcatEventListQuerySchema,
   NapcatSendGroupMessageRequestSchema,
-  NapcatSendPrivateMessageRequestSchema,
   z,
 } from "@kagami/shared";
 import { useMutation } from "@tanstack/react-query";
@@ -24,6 +23,8 @@ type ApiLabEndpointSpec = {
   description: string;
   querySchema: z.ZodTypeAny;
   bodySchema: z.ZodTypeAny;
+  bodyInputMode?: "fields" | "json";
+  defaultBodyJson?: string;
 };
 
 type PreparedRequest = {
@@ -48,6 +49,27 @@ type ApiLabEndpoint = ApiLabEndpointSpec & {
 };
 
 const EMPTY_INPUT_SCHEMA = z.object({});
+
+function createNapcatGroupSendBodyJsonTemplate(): string {
+  return formatJson({
+    groupId: "1122334455",
+    message: [
+      {
+        type: "text",
+        data: {
+          text: "hello group",
+        },
+      },
+      {
+        type: "image",
+        data: {
+          file: "https://example.com/demo.png",
+          summary: "demo image",
+        },
+      },
+    ],
+  });
+}
 
 const API_LAB_ENDPOINT_SPECS: ApiLabEndpointSpec[] = [
   {
@@ -87,22 +109,15 @@ const API_LAB_ENDPOINT_SPECS: ApiLabEndpointSpec[] = [
     bodySchema: EMPTY_INPUT_SCHEMA,
   },
   {
-    id: "napcat-private-send",
-    label: "NapCat 发送私聊",
-    method: "POST",
-    path: "/napcat/private/send",
-    description: "发送私聊文本消息",
-    querySchema: EMPTY_INPUT_SCHEMA,
-    bodySchema: NapcatSendPrivateMessageRequestSchema,
-  },
-  {
     id: "napcat-group-send",
     label: "NapCat 发送群聊",
     method: "POST",
     path: "/napcat/group/send",
-    description: "发送群聊文本消息",
+    description: "发送群聊图文混合消息",
     querySchema: EMPTY_INPUT_SCHEMA,
     bodySchema: NapcatSendGroupMessageRequestSchema,
+    bodyInputMode: "json",
+    defaultBodyJson: createNapcatGroupSendBodyJsonTemplate(),
   },
 ];
 
@@ -131,6 +146,14 @@ function createDefaultFormValues(endpoint: ApiLabEndpoint): Record<string, strin
   }
 
   return Object.fromEntries(entries);
+}
+
+function createDefaultBodyJsonValue(endpoint: ApiLabEndpoint): string {
+  if (endpoint.bodyInputMode !== "json") {
+    return "";
+  }
+
+  return endpoint.defaultBodyJson ?? "{}";
 }
 
 function collectScopeInput({
@@ -184,6 +207,7 @@ function toSchemaInputValue(field: GeneratedField, rawValue: string): unknown {
 function prepareRequest(
   endpoint: ApiLabEndpoint,
   values: Record<string, string>,
+  bodyJsonValue: string,
 ): { request?: PreparedRequest; error?: string } {
   const queryInput = collectScopeInput({
     scope: "query",
@@ -195,11 +219,26 @@ function prepareRequest(
     return { error: formatSchemaError("query", queryParsed.error.issues) };
   }
 
-  const bodyInput = collectScopeInput({
-    scope: "body",
-    fields: endpoint.bodyFields,
-    values,
-  });
+  let bodyInput: unknown = {};
+  if (endpoint.method === "POST") {
+    if (endpoint.bodyInputMode === "json") {
+      const trimmedBody = bodyJsonValue.trim();
+      if (trimmedBody.length > 0) {
+        try {
+          bodyInput = JSON.parse(trimmedBody);
+        } catch {
+          return { error: "body.<root>: JSON 格式不合法" };
+        }
+      }
+    } else {
+      bodyInput = collectScopeInput({
+        scope: "body",
+        fields: endpoint.bodyFields,
+        values,
+      });
+    }
+  }
+
   const bodyParsed = endpoint.bodySchema.safeParse(bodyInput);
   if (!bodyParsed.success) {
     return { error: formatSchemaError("body", bodyParsed.error.issues) };
@@ -256,6 +295,9 @@ export function ApiLabPage() {
   const [selectedEndpointId, setSelectedEndpointId] = useState<string>(ENDPOINTS[0].id);
   const [formValues, setFormValues] = useState<Record<string, string>>(() =>
     createDefaultFormValues(ENDPOINTS[0]),
+  );
+  const [bodyJsonValue, setBodyJsonValue] = useState<string>(() =>
+    createDefaultBodyJsonValue(ENDPOINTS[0]),
   );
   const [apiState, setApiState] = useState<ApiState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -318,6 +360,7 @@ export function ApiLabPage() {
     const nextEndpoint = ENDPOINTS.find(item => item.id === nextEndpointId) ?? ENDPOINTS[0];
     setSelectedEndpointId(nextEndpoint.id);
     setFormValues(createDefaultFormValues(nextEndpoint));
+    setBodyJsonValue(createDefaultBodyJsonValue(nextEndpoint));
     setApiState("idle");
     setErrorMessage(null);
   }
@@ -325,7 +368,7 @@ export function ApiLabPage() {
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
 
-    const result = prepareRequest(selectedEndpoint, formValues);
+    const result = prepareRequest(selectedEndpoint, formValues, bodyJsonValue);
     if (!result.request) {
       setApiState("error");
       setErrorMessage(result.error ?? "表单参数不合法");
@@ -392,7 +435,7 @@ export function ApiLabPage() {
       <header className="space-y-2">
         <h1 className="text-lg font-semibold">后端接口测试台</h1>
         <p className="text-sm text-muted-foreground">
-          选择预置接口并填写字段，直接发起调试请求。无需手写 JSON。
+          选择预置接口并填写字段，直接发起调试请求。复杂接口支持 JSON body 模式。
         </p>
       </header>
 
@@ -452,7 +495,18 @@ export function ApiLabPage() {
               </section>
             ) : null}
 
-            {selectedEndpoint.bodyFields.length > 0 ? (
+            {selectedEndpoint.method === "POST" && selectedEndpoint.bodyInputMode === "json" ? (
+              <section className="space-y-3 rounded-md border p-3">
+                <h2 className="text-sm font-medium">Body 参数（JSON）</h2>
+                <textarea
+                  value={bodyJsonValue}
+                  onChange={event => setBodyJsonValue(event.target.value)}
+                  spellCheck={false}
+                  rows={12}
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </section>
+            ) : selectedEndpoint.bodyFields.length > 0 ? (
               <section className="space-y-3 rounded-md border p-3">
                 <h2 className="text-sm font-medium">Body 参数</h2>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

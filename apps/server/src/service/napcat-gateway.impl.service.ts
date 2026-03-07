@@ -4,10 +4,8 @@ import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
   NapcatGatewayService,
-  NapcatSendGroupTextInput,
-  NapcatSendGroupTextResult,
-  NapcatSendPrivateTextInput,
-  NapcatSendPrivateTextResult,
+  NapcatSendGroupMessageInput,
+  NapcatSendGroupMessageResult,
 } from "./napcat-gateway.service.js";
 import { NapcatGatewayError } from "./napcat-gateway.service.js";
 
@@ -108,41 +106,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
   }
 
-  public async sendPrivateText({
-    userId,
-    message,
-  }: NapcatSendPrivateTextInput): Promise<NapcatSendPrivateTextResult> {
-    return await this.sendTextMessage({
-      action: "send_private_msg",
-      targetKey: "user_id",
-      targetId: userId,
-      message,
-    });
-  }
-
-  public async sendGroupText({
+  public async sendGroupMessage({
     groupId,
     message,
-  }: NapcatSendGroupTextInput): Promise<NapcatSendGroupTextResult> {
-    return await this.sendTextMessage({
-      action: "send_group_msg",
-      targetKey: "group_id",
-      targetId: groupId,
-      message,
-    });
-  }
-
-  private async sendTextMessage({
-    action,
-    targetKey,
-    targetId,
-    message,
-  }: {
-    action: "send_private_msg" | "send_group_msg";
-    targetKey: "user_id" | "group_id";
-    targetId: string;
-    message: string;
-  }): Promise<{ messageId: number }> {
+  }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
     const activeSocket = this.socket;
     if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
       throw new NapcatGatewayError({
@@ -153,17 +120,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     const echo = randomUUID();
     const payload = {
-      action,
+      action: "send_group_msg",
       params: {
-        [targetKey]: targetId,
-        message: [
-          {
-            type: "text",
-            data: {
-              text: message,
-            },
-          },
-        ],
+        group_id: groupId,
+        message,
       },
       echo,
     };

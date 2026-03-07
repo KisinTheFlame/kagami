@@ -61,7 +61,7 @@ describe("DefaultNapcatGatewayService", () => {
     vi.useRealTimers();
   });
 
-  it("should resolve sendPrivateText when NapCat returns success response", async () => {
+  it("should resolve sendGroupMessage when NapCat returns success response", async () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = new DefaultNapcatGatewayService({
       wsUrl: "ws://napcat:3001/",
@@ -78,69 +78,53 @@ describe("DefaultNapcatGatewayService", () => {
     const socket = sockets[0];
     socket.emitOpen();
 
-    const sendPromise = gateway.sendPrivateText({
-      userId: "123456",
-      message: "hello",
-    });
-    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
-      action: string;
-      params: {
-        user_id: string;
-      };
-      echo: string;
-    };
-
-    expect(sentPayload.action).toBe("send_private_msg");
-    expect(sentPayload.params.user_id).toBe("123456");
-
-    socket.emitMessage(
-      JSON.stringify({
-        status: "ok",
-        retcode: 0,
-        data: {
-          message_id: 9527,
-        },
-        message: "",
-        echo: sentPayload.echo,
-        stream: "normal-action",
-      }),
-    );
-
-    await expect(sendPromise).resolves.toEqual({ messageId: 9527 });
-    await gateway.stop();
-  });
-
-  it("should resolve sendGroupText when NapCat returns success response", async () => {
-    const sockets: FakeWebSocket[] = [];
-    const gateway = new DefaultNapcatGatewayService({
-      wsUrl: "ws://napcat:3001/",
-      reconnectMs: 3000,
-      requestTimeoutMs: 10000,
-      createWebSocket: () => {
-        const socket = new FakeWebSocket();
-        sockets.push(socket);
-        return socket;
-      },
-    });
-
-    await gateway.start();
-    const socket = sockets[0];
-    socket.emitOpen();
-
-    const sendPromise = gateway.sendGroupText({
+    const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
-      message: "hello group",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello group",
+          },
+        },
+        {
+          type: "image",
+          data: {
+            file: "https://example.com/demo.png",
+            summary: "demo",
+          },
+        },
+      ],
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       action: string;
       params: {
         group_id: string;
+        message: Array<{
+          type: string;
+          data: Record<string, unknown>;
+        }>;
       };
       echo: string;
     };
 
     expect(sentPayload.action).toBe("send_group_msg");
     expect(sentPayload.params.group_id).toBe("987654");
+    expect(sentPayload.params.message).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "hello group",
+        },
+      },
+      {
+        type: "image",
+        data: {
+          file: "https://example.com/demo.png",
+          summary: "demo",
+        },
+      },
+    ]);
 
     socket.emitMessage(
       JSON.stringify({
@@ -176,9 +160,16 @@ describe("DefaultNapcatGatewayService", () => {
     const socket = sockets[0];
     socket.emitOpen();
 
-    const sendPromise = gateway.sendPrivateText({
-      userId: "123456",
-      message: "hello",
+    const sendPromise = gateway.sendGroupMessage({
+      groupId: "987654",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello",
+          },
+        },
+      ],
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
@@ -217,9 +208,16 @@ describe("DefaultNapcatGatewayService", () => {
     const socket = sockets[0];
     socket.emitOpen();
 
-    const sendPromise = gateway.sendPrivateText({
-      userId: "123456",
-      message: "hello",
+    const sendPromise = gateway.sendGroupMessage({
+      groupId: "987654",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello",
+          },
+        },
+      ],
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
@@ -353,9 +351,16 @@ describe("DefaultNapcatGatewayService", () => {
     const socket = sockets[0];
     socket.emitOpen();
 
-    const sendPromise = gateway.sendPrivateText({
-      userId: "123456",
-      message: "hello",
+    const sendPromise = gateway.sendGroupMessage({
+      groupId: "987654",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello",
+          },
+        },
+      ],
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
 
