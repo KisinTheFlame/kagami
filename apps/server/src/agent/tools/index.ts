@@ -1,11 +1,6 @@
 import type { Tool, LlmToolCall } from "../../llm/types.js";
 import { executeFinishTool, FINISH_TOOL_NAME, finishTool } from "./finish.js";
 import {
-  executeGetServerTimeTool,
-  GET_SERVER_TIME_TOOL_NAME,
-  getServerTimeTool,
-} from "./get-server-time.js";
-import {
   executeSendGroupMessageTool,
   SEND_GROUP_MESSAGE_TOOL_NAME,
   sendGroupMessageTool,
@@ -20,19 +15,12 @@ export type ToolExecutionDeps = {
   sendGroupMessage: (input: { message: string }) => Promise<{ messageId: number }>;
 };
 
-export const AGENT_TOOLS: Tool[] = [getServerTimeTool, sendGroupMessageTool, finishTool];
+export const AGENT_TOOLS: Tool[] = [sendGroupMessageTool, finishTool];
 
 export async function executeToolCall(
   toolCall: LlmToolCall,
   deps: ToolExecutionDeps,
 ): Promise<ToolExecutionResult> {
-  if (toolCall.name === GET_SERVER_TIME_TOOL_NAME) {
-    return {
-      content: executeGetServerTimeTool(),
-      shouldFinishRound: false,
-    };
-  }
-
   if (toolCall.name === SEND_GROUP_MESSAGE_TOOL_NAME) {
     return {
       content: await executeSendGroupMessageTool(toolCall.arguments, deps),

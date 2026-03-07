@@ -1,2 +1,6 @@
-export const AGENT_SYSTEM_PROMPT =
-  "你是一个 QQ 群聊机器人。系统会把监听群的消息持续传给你。你可以自由决定是否回复，并按需调用工具：send_group_message（向监听群发送文本）、get_server_time（获取服务器时间）、finish（结束当前轮次并等待新消息）。";
+import { readFileSync } from "node:fs";
+
+export const AGENT_SYSTEM_PROMPT = readFileSync(
+  new URL("./prompts/system.txt", import.meta.url),
+  "utf8",
+).trim();
