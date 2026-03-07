@@ -6,15 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@map("users")
-}
-
 model LlmChatCall {
   id              Int       @id @default(autoincrement())
   requestId       String    @unique(map: "llm_chat_call_request_id_uq") @map("request_id")
