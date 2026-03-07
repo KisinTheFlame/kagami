@@ -53,7 +53,7 @@ describe("AgentLoop", () => {
     const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
     const drainAll = vi
       .fn()
-      .mockReturnValueOnce([{ message: "hello" }])
+      .mockReturnValueOnce([{ type: "message", message: "hello" }])
       .mockReturnValue([]);
     const size = vi.fn().mockReturnValue(0);
     const enqueue = vi.fn().mockReturnValue(1);

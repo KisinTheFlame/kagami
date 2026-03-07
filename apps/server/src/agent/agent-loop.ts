@@ -1,4 +1,6 @@
 import type { AgentContextManager } from "./context-manager.manager.js";
+import type { Event } from "./event.js";
+import { formatEventToUserMessage } from "./event.js";
 import type { AgentEventQueue } from "./event-queue.queue.js";
 import type { LlmClient } from "../llm/client.js";
 import { AGENT_TOOLS, executeToolCall } from "./tools/index.js";
@@ -26,7 +28,7 @@ export class AgentLoop {
 
       while (true) {
         for (const event of this.eventQueue.drainAll()) {
-          this.contextManager.pushUserMessage(event.message);
+          this.handleEvent(event);
         }
 
         const completion = await this.llmClient.chat({
@@ -51,6 +53,13 @@ export class AgentLoop {
           break;
         }
       }
+    }
+  }
+
+  private handleEvent(event: Event): void {
+    const userMessage = formatEventToUserMessage(event);
+    if (userMessage !== null) {
+      this.contextManager.pushUserMessage(userMessage);
     }
   }
 }

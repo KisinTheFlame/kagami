@@ -1,10 +1,8 @@
-export type AgentEvent = {
-  message: string;
-};
+import type { Event } from "./event.js";
 
 export interface AgentEventQueue {
-  enqueue(event: AgentEvent): number;
-  drainAll(): AgentEvent[];
+  enqueue(event: Event): number;
+  drainAll(): Event[];
   size(): number;
   waitForEvent(): Promise<void>;
 }

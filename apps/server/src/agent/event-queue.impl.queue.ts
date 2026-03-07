@@ -1,11 +1,12 @@
-import type { AgentEvent, AgentEventQueue } from "./event-queue.queue.js";
+import type { Event } from "./event.js";
+import type { AgentEventQueue } from "./event-queue.queue.js";
 
 export class InMemoryAgentEventQueue implements AgentEventQueue {
-  private readonly events: AgentEvent[] = [];
+  private readonly events: Event[] = [];
   private waitPromise: Promise<void> | null = null;
   private waitResolve: (() => void) | null = null;
 
-  public enqueue(event: AgentEvent): number {
+  public enqueue(event: Event): number {
     this.events.push(event);
 
     if (this.waitResolve !== null) {
@@ -17,7 +18,7 @@ export class InMemoryAgentEventQueue implements AgentEventQueue {
     return this.events.length;
   }
 
-  public drainAll(): AgentEvent[] {
+  public drainAll(): Event[] {
     if (this.events.length === 0) {
       return [];
     }
