@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type {
   ChatCompletion,
   ChatCompletionCreateParamsNonStreaming,
@@ -8,7 +7,7 @@ import type {
 } from "openai/resources/chat/completions";
 import type {
   LlmChatRequest,
-  LlmChatResponse,
+  LlmChatResponsePayload,
   LlmMessage,
   LlmProviderId,
   LlmToolCall,
@@ -70,10 +69,10 @@ export function toOpenAiChatRequest({
   };
 }
 
-export function toLlmChatResponse(
+export function toLlmChatResponsePayload(
   completion: ChatCompletion,
   provider: LlmProviderId,
-): LlmChatResponse {
+): LlmChatResponsePayload {
   const openAiMessage = completion.choices[0]!.message;
 
   const toolCalls: LlmToolCall[] = (openAiMessage.tool_calls ?? [])
@@ -101,14 +100,5 @@ export function toLlmChatResponse(
           totalTokens: completion.usage.total_tokens,
         }
       : undefined,
-    text() {
-      return this.message.content;
-    },
-    json<S extends z.ZodTypeAny>(schema: S): z.infer<S> {
-      return schema.parse(JSON.parse(this.message.content)) as z.infer<S>;
-    },
-    toolCalls() {
-      return this.message.toolCalls;
-    },
   };
 }

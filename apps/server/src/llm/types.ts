@@ -1,5 +1,3 @@
-import type { z } from "zod";
-
 export type LlmProviderId = "deepseek" | "openai";
 
 export type JsonSchema = {
@@ -40,13 +38,9 @@ export type LlmChatRequest = {
   model?: string;
 };
 
-export type LlmChatResponse = {
+export type LlmChatResponsePayload = {
   provider: LlmProviderId;
   model: string;
   message: Extract<LlmMessage, { role: "assistant" }>;
   usage?: LlmUsage;
-
-  text(): string;
-  json<S extends z.ZodTypeAny>(schema: S): z.infer<S>;
-  toolCalls(): LlmToolCall[];
 };

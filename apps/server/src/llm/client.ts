@@ -5,10 +5,10 @@ import { env } from "../env.js";
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
 import type { LlmProvider } from "./provider.js";
-import type { LlmChatRequest, LlmChatResponse } from "./types.js";
+import type { LlmChatRequest, LlmChatResponsePayload } from "./types.js";
 
 export interface LlmClient {
-  chat(request: LlmChatRequest): Promise<LlmChatResponse>;
+  chat(request: LlmChatRequest): Promise<LlmChatResponsePayload>;
 }
 
 type CreateLlmClientOptions = {
@@ -20,7 +20,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
   const provider = options.provider ?? createActiveProvider();
 
   return {
-    async chat(request: LlmChatRequest): Promise<LlmChatResponse> {
+    async chat(request: LlmChatRequest): Promise<LlmChatResponsePayload> {
       const requestId = randomUUID();
       const startedAt = Date.now();
       const model = request.model ?? getDefaultModel(provider.id);

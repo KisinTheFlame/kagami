@@ -3,26 +3,19 @@ import { AgentLoop } from "../../src/agent/agent-loop.js";
 import type { AgentContextManager } from "../../src/agent/context-manager.manager.js";
 import type { AgentEventQueue } from "../../src/agent/event-queue.queue.js";
 import type { LlmClient } from "../../src/llm/client.js";
-import type { LlmChatResponse } from "../../src/llm/types.js";
+import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 
 class StopLoopError extends Error {}
 
-function createLlmResponse(): LlmChatResponse {
-  const message = {
-    role: "assistant" as const,
-    content: "done",
-    toolCalls: [{ id: "tool-call-1", name: "finish", arguments: {} }],
-  };
-
+function createLlmResponse(): LlmChatResponsePayload {
   return {
     provider: "openai",
     model: "gpt-test",
-    message,
-    text: () => message.content,
-    json: () => {
-      throw new Error("json() should not be called in this test");
+    message: {
+      role: "assistant",
+      content: "done",
+      toolCalls: [{ id: "tool-call-1", name: "finish", arguments: {} }],
     },
-    toolCalls: () => message.toolCalls,
   };
 }
 

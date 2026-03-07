@@ -21,7 +21,7 @@ export function parseLlmChatCallDetail(item: LlmChatCallItem): LlmChatCallDetail
   const responseParsed =
     item.responsePayload === null
       ? null
-      : LlmChatResponsePayloadSchema.safeParse(item.responsePayload);
+      : LlmChatResponsePayloadSchema.safeParse(sanitizeResponsePayload(item.responsePayload));
   const errorParsed = item.error === null ? null : LlmChatErrorPayloadSchema.safeParse(item.error);
 
   const schemaErrors: string[] = [];
@@ -52,6 +52,14 @@ export function parseLlmChatCallDetail(item: LlmChatCallItem): LlmChatCallDetail
     hasSchemaError: schemaErrors.length > 0,
     schemaErrors,
   };
+}
+
+function sanitizeResponsePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const sanitized = { ...payload };
+  delete sanitized.text;
+  delete sanitized.json;
+  delete sanitized.toolCalls;
+  return sanitized;
 }
 
 function formatIssueSummary(

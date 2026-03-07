@@ -60,7 +60,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           model: input.response.model,
           status: "success",
           requestPayload: toInputJsonRecord(input.request),
-          responsePayload: toInputJsonRecord(input.response),
+          responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
           latencyMs: input.latencyMs,
         },
       });
@@ -110,6 +110,17 @@ function serializeError(error: unknown): Record<string, unknown> {
   return {
     name: "UnknownError",
     message: typeof error === "string" ? error : "Unknown error",
+  };
+}
+
+function toResponsePayloadRecord(
+  response: RecordLlmChatCallSuccessInput["response"],
+): Record<string, unknown> {
+  return {
+    provider: response.provider,
+    model: response.model,
+    message: response.message,
+    ...(response.usage ? { usage: response.usage } : {}),
   };
 }
 

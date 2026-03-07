@@ -3,7 +3,7 @@ import type { LlmProvider } from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
 import { env } from "../../env.js";
 import { LlmProviderResponseError } from "../errors.js";
-import { toLlmChatResponse, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
+import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
 
 export function createDeepSeekProvider(): LlmProvider {
   const client = new OpenAI({
@@ -28,7 +28,7 @@ export function createDeepSeekProvider(): LlmProvider {
         });
       }
 
-      return toLlmChatResponse(completion, "deepseek");
+      return toLlmChatResponsePayload(completion, "deepseek");
     },
   };
 }

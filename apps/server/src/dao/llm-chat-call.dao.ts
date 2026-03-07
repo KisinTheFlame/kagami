@@ -1,4 +1,4 @@
-import type { LlmChatRequest, LlmChatResponse, LlmProviderId } from "../llm/types.js";
+import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "../llm/types.js";
 
 export type LlmChatCallStatus = "success" | "failed";
 
@@ -30,7 +30,7 @@ type LlmChatCallBaseInput = {
 };
 
 export type RecordLlmChatCallSuccessInput = LlmChatCallBaseInput & {
-  response: LlmChatResponse;
+  response: LlmChatResponsePayload;
 };
 
 export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
