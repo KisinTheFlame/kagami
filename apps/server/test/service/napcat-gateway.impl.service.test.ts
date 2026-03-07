@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NapcatEventDao } from "../../src/dao/napcat-event.dao.js";
+import type { NapcatGroupMessageDao } from "../../src/dao/napcat-group-message.dao.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import { DefaultNapcatGatewayService } from "../../src/service/napcat-gateway.impl.service.js";
@@ -257,12 +258,14 @@ describe("DefaultNapcatGatewayService", () => {
   it("should publish listened group message events", async () => {
     const sockets: FakeWebSocket[] = [];
     const onGroupMessage = vi.fn();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const gateway = new DefaultNapcatGatewayService({
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
       listenGroupId: "987654",
       onGroupMessage,
+      napcatGroupMessageDao,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -284,6 +287,10 @@ describe("DefaultNapcatGatewayService", () => {
         message_id: 9988,
         raw_message: "hello group",
         time: 1710000000,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
       }),
     );
 
@@ -298,6 +305,17 @@ describe("DefaultNapcatGatewayService", () => {
         message_type: "group",
       }),
     });
+    await waitOneTick();
+    expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: "987654",
+        userId: "123456",
+        nickname: "测试群名片",
+        messageId: 9988,
+        rawMessage: "hello group",
+        eventTime: new Date(1710000000 * 1000),
+      }),
+    );
 
     await gateway.stop();
   });
@@ -305,12 +323,14 @@ describe("DefaultNapcatGatewayService", () => {
   it("should ignore non-listened group message events", async () => {
     const sockets: FakeWebSocket[] = [];
     const onGroupMessage = vi.fn();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const gateway = new DefaultNapcatGatewayService({
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
       listenGroupId: "987654",
       onGroupMessage,
+      napcatGroupMessageDao,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -336,6 +356,8 @@ describe("DefaultNapcatGatewayService", () => {
     );
 
     expect(onGroupMessage).not.toHaveBeenCalled();
+    await waitOneTick();
+    expect(napcatGroupMessageDao.insert).not.toHaveBeenCalled();
 
     await gateway.stop();
   });
@@ -343,12 +365,14 @@ describe("DefaultNapcatGatewayService", () => {
   it("should ignore bot self group message events", async () => {
     const sockets: FakeWebSocket[] = [];
     const onGroupMessage = vi.fn();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const gateway = new DefaultNapcatGatewayService({
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
       listenGroupId: "987654",
       onGroupMessage,
+      napcatGroupMessageDao,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -374,6 +398,49 @@ describe("DefaultNapcatGatewayService", () => {
     );
 
     expect(onGroupMessage).not.toHaveBeenCalled();
+    await waitOneTick();
+    expect(napcatGroupMessageDao.insert).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
+
+  it("should ignore listened group message without raw_message when persisting group message", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      napcatGroupMessageDao,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        time: 1710000000,
+      }),
+    );
+
+    expect(onGroupMessage).not.toHaveBeenCalled();
+    await waitOneTick();
+    expect(napcatGroupMessageDao.insert).not.toHaveBeenCalled();
 
     await gateway.stop();
   });
@@ -473,6 +540,16 @@ describe("DefaultNapcatGatewayService", () => {
 });
 
 function createNapcatEventDao(): NapcatEventDao & {
+  insert: ReturnType<typeof vi.fn>;
+} {
+  return {
+    insert: vi.fn().mockResolvedValue(undefined),
+    countByQuery: vi.fn().mockResolvedValue(0),
+    listByQueryPage: vi.fn().mockResolvedValue([]),
+  };
+}
+
+function createNapcatGroupMessageDao(): NapcatGroupMessageDao & {
   insert: ReturnType<typeof vi.fn>;
 } {
   return {

@@ -65,3 +65,21 @@ model NapcatEvent {
   @@index([userId, createdAt], map: "napcat_event_user_id_created_at_idx")
   @@map("napcat_event")
 }
+
+model NapcatGroupMessage {
+  id         Int       @id @default(autoincrement())
+  groupId    String    @map("group_id")
+  userId     String?   @map("user_id")
+  nickname   String?
+  messageId  Int?      @map("message_id")
+  rawMessage String    @map("raw_message")
+  eventTime  DateTime? @map("event_time") @db.Timestamptz(6)
+  payload    Json      @db.JsonB
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "napcat_group_message_created_at_idx")
+  @@index([groupId, createdAt], map: "napcat_group_message_group_id_created_at_idx")
+  @@index([nickname, createdAt], map: "napcat_group_message_nickname_created_at_idx")
+  @@index([userId, createdAt], map: "napcat_group_message_user_id_created_at_idx")
+  @@map("napcat_group_message")
+}

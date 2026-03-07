@@ -4,6 +4,7 @@ import { ApiLabPage } from "@/pages/api-lab/ApiLabPage";
 import { AppLogHistoryPage } from "@/pages/app-log-history/AppLogHistoryPage";
 import { LlmHistoryPage } from "@/pages/llm-history/LlmHistoryPage";
 import { NapcatEventHistoryPage } from "@/pages/napcat-event-history/NapcatEventHistoryPage";
+import { NapcatGroupMessageHistoryPage } from "@/pages/napcat-group-message-history/NapcatGroupMessageHistoryPage";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
+          <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
           <Route path="/api-lab" element={<ApiLabPage />} />
           <Route path="/agent-event" element={<Navigate to="/api-lab" replace />} />
         </Route>

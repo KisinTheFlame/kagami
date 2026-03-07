@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
+import type { NapcatGroupMessageDao } from "../dao/napcat-group-message.dao.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
   NapcatGroupMessageEvent,
@@ -17,6 +18,7 @@ type NapcatGatewayOptions = {
   listenGroupId: string;
   onGroupMessage?: (event: NapcatGroupMessageEvent) => void | Promise<void>;
   napcatEventDao?: NapcatEventDao;
+  napcatGroupMessageDao?: NapcatGroupMessageDao;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -67,6 +69,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     | ((event: NapcatGroupMessageEvent) => void | Promise<void>)
     | null;
   private readonly napcatEventDao: NapcatEventDao | null;
+  private readonly napcatGroupMessageDao: NapcatGroupMessageDao | null;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
 
@@ -81,6 +84,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     listenGroupId,
     onGroupMessage,
     napcatEventDao,
+    napcatGroupMessageDao,
     createWebSocket,
   }: NapcatGatewayOptions) {
     this.wsUrl = wsUrl;
@@ -89,6 +93,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     this.listenGroupId = listenGroupId;
     this.onGroupMessage = onGroupMessage ?? null;
     this.napcatEventDao = napcatEventDao ?? null;
+    this.napcatGroupMessageDao = napcatGroupMessageDao ?? null;
     this.createWebSocket = createWebSocket ?? (url => new WebSocket(url));
   }
 
@@ -261,6 +266,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     const userId = toNullableId(eventPayload.user_id);
     const selfId = toNullableId(eventPayload.self_id);
     const groupId = toNullableId(eventPayload.group_id);
+    const nickname = extractSenderNickname(eventPayload as unknown as Record<string, unknown>);
     const rawMessage = toNullableString(eventPayload.raw_message);
     const eventTime = toEventTime(eventPayload.time);
     const payload = eventPayload as unknown as Record<string, unknown>;
@@ -285,14 +291,17 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         rawMessage,
       })
     ) {
-      this.emitGroupMessageEvent({
+      const groupMessageEvent = {
         groupId: groupId!,
         userId,
         rawMessage: rawMessage!,
         messageId: toNullablePositiveInt(eventPayload.message_id),
         time: toNullablePositiveInt(eventPayload.time),
         payload,
-      });
+      };
+
+      this.emitGroupMessageEvent(groupMessageEvent);
+      this.persistGroupMessage(groupMessageEvent, eventTime);
     }
 
     if (!this.napcatEventDao) {
@@ -315,6 +324,32 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
           event: "napcat.gateway.event_persist_failed",
           postType: eventPayload.post_type,
           messageType: eventPayload.message_type,
+          nickname,
+        });
+      });
+  }
+
+  private persistGroupMessage(event: NapcatGroupMessageEvent, eventTime: Date | null): void {
+    if (!this.napcatGroupMessageDao) {
+      return;
+    }
+
+    void this.napcatGroupMessageDao
+      .insert({
+        groupId: event.groupId,
+        userId: event.userId,
+        nickname: extractSenderNickname(event.payload),
+        messageId: event.messageId,
+        rawMessage: event.rawMessage,
+        eventTime,
+        payload: event.payload,
+      })
+      .catch(error => {
+        logger.errorWithCause("Failed to persist NapCat group message", error, {
+          event: "napcat.gateway.group_message_persist_failed",
+          groupId: event.groupId,
+          userId: event.userId,
+          messageId: event.messageId,
         });
       });
   }
@@ -494,6 +529,24 @@ function toNullableId(value: unknown): string | null {
   }
 
   return null;
+}
+
+function extractSenderNickname(payload: Record<string, unknown>): string | null {
+  const sender = payload.sender;
+  if (!isRecord(sender)) {
+    return null;
+  }
+
+  const card = toNullableString(sender.card);
+  if (card) {
+    return card;
+  }
+
+  return toNullableString(sender.nickname);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toNullableString(value: unknown): string | null {
