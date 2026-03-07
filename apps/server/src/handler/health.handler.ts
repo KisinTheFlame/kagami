@@ -1,8 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { HealthResponseSchema, createHealthResponse, z } from "@kagami/shared";
+import { HealthQuerySchema, HealthResponseSchema, createHealthResponse } from "@kagami/shared";
 import { registerQueryRoute } from "./route.helper.js";
-
-const HealthQuerySchema = z.object({}).passthrough();
 
 export class HealthHandler {
   public readonly prefix = "";

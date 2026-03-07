@@ -1,45 +1,36 @@
-import type { AppLogLevel, LlmChatCallStatus } from "@kagami/shared";
+import {
+  AppLogListQuerySchema,
+  HealthQuerySchema,
+  LlmChatCallListQuerySchema,
+  NapcatEventListQuerySchema,
+  NapcatSendGroupMessageRequestSchema,
+  NapcatSendPrivateMessageRequestSchema,
+  z,
+} from "@kagami/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { apiRequest, type ApiRequestResult } from "@/lib/api";
+import { generateFieldsFromSchema, type GeneratedField } from "./schema-fields";
 
 type ApiState = "idle" | "loading" | "success" | "error";
 type FieldScope = "query" | "body";
-type FieldType = "text" | "textarea" | "number" | "datetime" | "select";
 
-type SelectOption = {
-  label: string;
-  value: string;
-};
-
-type EndpointField = {
-  name: string;
-  label: string;
-  type: FieldType;
-  required?: boolean;
-  placeholder?: string;
-  defaultValue?: string;
-  options?: SelectOption[];
-  min?: number;
-  max?: number;
-};
-
-type EndpointConfig = {
+type ApiLabEndpointSpec = {
   id: string;
   label: string;
   method: "GET" | "POST";
   path: string;
   description: string;
-  queryFields: EndpointField[];
-  bodyFields: EndpointField[];
+  querySchema: z.ZodTypeAny;
+  bodySchema: z.ZodTypeAny;
 };
 
 type PreparedRequest = {
-  method: EndpointConfig["method"];
+  method: ApiLabEndpointSpec["method"];
   path: string;
   url: string;
-  query: Record<string, string | number>;
+  query: Record<string, unknown>;
   body: Record<string, unknown> | null;
 };
 
@@ -51,28 +42,22 @@ type ResponseSummary = ApiRequestResult & {
   receivedAt: string;
 };
 
-const APP_LOG_LEVEL_OPTIONS: SelectOption[] = [
-  { label: "debug", value: "debug" satisfies AppLogLevel },
-  { label: "info", value: "info" satisfies AppLogLevel },
-  { label: "warn", value: "warn" satisfies AppLogLevel },
-  { label: "error", value: "error" satisfies AppLogLevel },
-  { label: "fatal", value: "fatal" satisfies AppLogLevel },
-];
+type ApiLabEndpoint = ApiLabEndpointSpec & {
+  queryFields: GeneratedField[];
+  bodyFields: GeneratedField[];
+};
 
-const LLM_CHAT_STATUS_OPTIONS: SelectOption[] = [
-  { label: "success", value: "success" satisfies LlmChatCallStatus },
-  { label: "failed", value: "failed" satisfies LlmChatCallStatus },
-];
+const EMPTY_INPUT_SCHEMA = z.object({});
 
-const ENDPOINTS: EndpointConfig[] = [
+const API_LAB_ENDPOINT_SPECS: ApiLabEndpointSpec[] = [
   {
     id: "health",
     label: "健康检查",
     method: "GET",
     path: "/health",
     description: "查询服务健康状态",
-    queryFields: [],
-    bodyFields: [],
+    querySchema: HealthQuerySchema,
+    bodySchema: EMPTY_INPUT_SCHEMA,
   },
   {
     id: "app-log-query",
@@ -80,25 +65,8 @@ const ENDPOINTS: EndpointConfig[] = [
     method: "GET",
     path: "/app-log/query",
     description: "按条件查询应用日志",
-    queryFields: [
-      { name: "page", label: "页码", type: "number", required: true, defaultValue: "1", min: 1 },
-      {
-        name: "pageSize",
-        label: "每页数量",
-        type: "number",
-        required: true,
-        defaultValue: "20",
-        min: 1,
-        max: 100,
-      },
-      { name: "level", label: "级别", type: "select", options: APP_LOG_LEVEL_OPTIONS },
-      { name: "traceId", label: "Trace ID", type: "text", placeholder: "精确匹配" },
-      { name: "message", label: "Message 关键词", type: "text", placeholder: "包含匹配" },
-      { name: "source", label: "Source 关键词", type: "text", placeholder: "包含匹配" },
-      { name: "startAt", label: "开始时间", type: "datetime" },
-      { name: "endAt", label: "结束时间", type: "datetime" },
-    ],
-    bodyFields: [],
+    querySchema: AppLogListQuerySchema,
+    bodySchema: EMPTY_INPUT_SCHEMA,
   },
   {
     id: "llm-chat-call-query",
@@ -106,20 +74,8 @@ const ENDPOINTS: EndpointConfig[] = [
     method: "GET",
     path: "/llm-chat-call/query",
     description: "查询 LLM 调用历史",
-    queryFields: [
-      { name: "page", label: "页码", type: "number", required: true, defaultValue: "1", min: 1 },
-      {
-        name: "pageSize",
-        label: "每页数量",
-        type: "number",
-        required: true,
-        defaultValue: "20",
-        min: 1,
-        max: 100,
-      },
-      { name: "status", label: "状态", type: "select", options: LLM_CHAT_STATUS_OPTIONS },
-    ],
-    bodyFields: [],
+    querySchema: LlmChatCallListQuerySchema,
+    bodySchema: EMPTY_INPUT_SCHEMA,
   },
   {
     id: "napcat-event-query",
@@ -127,25 +83,8 @@ const ENDPOINTS: EndpointConfig[] = [
     method: "GET",
     path: "/napcat-event/query",
     description: "查询 NapCat 事件记录",
-    queryFields: [
-      { name: "page", label: "页码", type: "number", required: true, defaultValue: "1", min: 1 },
-      {
-        name: "pageSize",
-        label: "每页数量",
-        type: "number",
-        required: true,
-        defaultValue: "20",
-        min: 1,
-        max: 100,
-      },
-      { name: "postType", label: "Post Type", type: "text", placeholder: "例如 message" },
-      { name: "messageType", label: "Message Type", type: "text", placeholder: "例如 private" },
-      { name: "userId", label: "User ID", type: "text" },
-      { name: "keyword", label: "关键词", type: "text", placeholder: "按 rawMessage 搜索" },
-      { name: "startAt", label: "开始时间", type: "datetime" },
-      { name: "endAt", label: "结束时间", type: "datetime" },
-    ],
-    bodyFields: [],
+    querySchema: NapcatEventListQuerySchema,
+    bodySchema: EMPTY_INPUT_SCHEMA,
   },
   {
     id: "napcat-private-send",
@@ -153,11 +92,8 @@ const ENDPOINTS: EndpointConfig[] = [
     method: "POST",
     path: "/napcat/private/send",
     description: "发送私聊文本消息",
-    queryFields: [],
-    bodyFields: [
-      { name: "userId", label: "User ID", type: "text", required: true },
-      { name: "message", label: "消息内容", type: "textarea", required: true },
-    ],
+    querySchema: EMPTY_INPUT_SCHEMA,
+    bodySchema: NapcatSendPrivateMessageRequestSchema,
   },
   {
     id: "napcat-group-send",
@@ -165,13 +101,16 @@ const ENDPOINTS: EndpointConfig[] = [
     method: "POST",
     path: "/napcat/group/send",
     description: "发送群聊文本消息",
-    queryFields: [],
-    bodyFields: [
-      { name: "groupId", label: "Group ID", type: "text", required: true },
-      { name: "message", label: "消息内容", type: "textarea", required: true },
-    ],
+    querySchema: EMPTY_INPUT_SCHEMA,
+    bodySchema: NapcatSendGroupMessageRequestSchema,
   },
 ];
+
+const ENDPOINTS: ApiLabEndpoint[] = API_LAB_ENDPOINT_SPECS.map(endpoint => ({
+  ...endpoint,
+  queryFields: generateFieldsFromSchema(endpoint.querySchema),
+  bodyFields: generateFieldsFromSchema(endpoint.bodySchema),
+}));
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -181,7 +120,7 @@ function getFormKey(scope: FieldScope, fieldName: string): string {
   return `${scope}.${fieldName}`;
 }
 
-function createDefaultFormValues(endpoint: EndpointConfig): Record<string, string> {
+function createDefaultFormValues(endpoint: ApiLabEndpoint): Record<string, string> {
   const entries: Array<[string, string]> = [];
 
   for (const field of endpoint.queryFields) {
@@ -194,119 +133,86 @@ function createDefaultFormValues(endpoint: EndpointConfig): Record<string, strin
   return Object.fromEntries(entries);
 }
 
-function parseFieldValue(
-  field: EndpointField,
-  rawValue: string,
-): {
-  hasValue: boolean;
-  value?: string | number;
-  error?: string;
-} {
-  const trimmed = rawValue.trim();
-  if (trimmed.length === 0) {
-    if (field.required) {
-      return {
-        hasValue: false,
-        error: `${field.label}不能为空`,
-      };
+function collectScopeInput({
+  scope,
+  fields,
+  values,
+}: {
+  scope: FieldScope;
+  fields: GeneratedField[];
+  values: Record<string, string>;
+}): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const field of fields) {
+    const key = getFormKey(scope, field.name);
+    const rawValue = values[key] ?? "";
+    if (rawValue.length === 0 && !field.required) {
+      continue;
     }
-    return { hasValue: false };
+    result[field.name] = toSchemaInputValue(field, rawValue);
   }
+  return result;
+}
 
+function toSchemaInputValue(field: GeneratedField, rawValue: string): unknown {
   if (field.type === "number") {
+    const trimmed = rawValue.trim();
+    if (trimmed.length === 0) {
+      return rawValue;
+    }
     const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-      return {
-        hasValue: false,
-        error: `${field.label}必须是整数`,
-      };
+    if (Number.isFinite(parsed)) {
+      return parsed;
     }
-    if (field.min !== undefined && parsed < field.min) {
-      return {
-        hasValue: false,
-        error: `${field.label}不能小于 ${field.min}`,
-      };
-    }
-    if (field.max !== undefined && parsed > field.max) {
-      return {
-        hasValue: false,
-        error: `${field.label}不能大于 ${field.max}`,
-      };
-    }
-    return {
-      hasValue: true,
-      value: parsed,
-    };
+    return rawValue;
   }
 
   if (field.type === "datetime") {
-    const date = new Date(trimmed);
-    if (Number.isNaN(date.getTime())) {
-      return {
-        hasValue: false,
-        error: `${field.label}不是合法时间`,
-      };
+    if (rawValue.length === 0) {
+      return rawValue;
     }
-    return {
-      hasValue: true,
-      value: date.toISOString(),
-    };
+    const parsedDate = new Date(rawValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return rawValue;
+    }
+    return parsedDate.toISOString();
   }
 
-  if (field.type === "textarea") {
-    return {
-      hasValue: true,
-      value: rawValue,
-    };
-  }
-
-  return {
-    hasValue: true,
-    value: trimmed,
-  };
+  return rawValue;
 }
 
 function prepareRequest(
-  endpoint: EndpointConfig,
+  endpoint: ApiLabEndpoint,
   values: Record<string, string>,
 ): { request?: PreparedRequest; error?: string } {
-  const query: Record<string, string | number> = {};
-  const body: Record<string, unknown> = {};
-
-  for (const field of endpoint.queryFields) {
-    const valueKey = getFormKey("query", field.name);
-    const parsed = parseFieldValue(field, values[valueKey] ?? "");
-    if (parsed.error) {
-      return { error: parsed.error };
-    }
-    if (parsed.hasValue) {
-      query[field.name] = parsed.value as string | number;
-    }
+  const queryInput = collectScopeInput({
+    scope: "query",
+    fields: endpoint.queryFields,
+    values,
+  });
+  const queryParsed = endpoint.querySchema.safeParse(queryInput);
+  if (!queryParsed.success) {
+    return { error: formatSchemaError("query", queryParsed.error.issues) };
   }
 
-  for (const field of endpoint.bodyFields) {
-    const valueKey = getFormKey("body", field.name);
-    const parsed = parseFieldValue(field, values[valueKey] ?? "");
-    if (parsed.error) {
-      return { error: parsed.error };
-    }
-    if (parsed.hasValue) {
-      body[field.name] = parsed.value as string | number;
-    }
+  const bodyInput = collectScopeInput({
+    scope: "body",
+    fields: endpoint.bodyFields,
+    values,
+  });
+  const bodyParsed = endpoint.bodySchema.safeParse(bodyInput);
+  if (!bodyParsed.success) {
+    return { error: formatSchemaError("body", bodyParsed.error.issues) };
   }
 
-  const startAt = query.startAt;
-  const endAt = query.endAt;
-  if (typeof startAt === "string" && typeof endAt === "string") {
-    const startAtMs = new Date(startAt).getTime();
-    const endAtMs = new Date(endAt).getTime();
-    if (startAtMs > endAtMs) {
-      return { error: "开始时间不能晚于结束时间" };
-    }
-  }
+  const query = toRecord(queryParsed.data);
+  const body = toRecord(bodyParsed.data);
 
   const queryParams = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
     queryParams.set(key, String(value));
   }
   const queryString = queryParams.toString();
@@ -322,7 +228,23 @@ function prepareRequest(
   };
 }
 
-function getMethodClassName(method: EndpointConfig["method"]): string {
+function formatSchemaError(scope: FieldScope, issues: z.ZodIssue[]): string {
+  return issues
+    .map(issue => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "<root>";
+      return `${scope}.${path}: ${issue.message}`;
+    })
+    .join("; ");
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function getMethodClassName(method: ApiLabEndpointSpec["method"]): string {
   if (method === "POST") {
     return "bg-blue-100 text-blue-800";
   }
@@ -413,7 +335,7 @@ export function ApiLabPage() {
     requestMutation.mutate(result.request);
   }
 
-  function renderField(scope: FieldScope, field: EndpointField) {
+  function renderField(scope: FieldScope, field: GeneratedField) {
     const key = getFormKey(scope, field.name);
     const value = formValues[key] ?? "";
 
@@ -440,23 +362,6 @@ export function ApiLabPage() {
       );
     }
 
-    if (field.type === "textarea") {
-      return (
-        <label key={key} className="space-y-1 md:col-span-2">
-          <span className="text-sm font-medium">
-            {field.label}
-            {field.required ? " *" : ""}
-          </span>
-          <textarea
-            value={value}
-            onChange={event => handleFieldChange(scope, field.name, event.target.value)}
-            placeholder={field.placeholder}
-            className="min-h-28 w-full rounded-md border bg-background p-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </label>
-      );
-    }
-
     return (
       <label key={key} className="space-y-1">
         <span className="text-sm font-medium">
@@ -473,10 +378,9 @@ export function ApiLabPage() {
           }
           value={value}
           onChange={event => handleFieldChange(scope, field.name, event.target.value)}
-          placeholder={field.placeholder}
           min={field.min}
           max={field.max}
-          step={field.type === "number" ? 1 : undefined}
+          step={field.type === "number" ? (field.numberMode === "integer" ? 1 : "any") : undefined}
           className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
       </label>
