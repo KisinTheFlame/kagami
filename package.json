@@ -12,6 +12,7 @@
     "db:migrate:reset": "bash ./scripts/prisma-docker.sh migrate reset",
     "db:migrate:resolve": "bash ./scripts/prisma-docker.sh migrate resolve",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --check",
