@@ -1,4 +1,4 @@
-import { z } from "./base.js";
+import { z } from "zod";
 
 export const AgentRunRequestSchema = z.object({
   input: z.string().min(1),

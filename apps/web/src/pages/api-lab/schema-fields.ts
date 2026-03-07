@@ -1,5 +1,5 @@
-import { type z } from "@kagami/shared";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { type z } from "zod";
 
 type JsonSchemaNode = {
   type?: string | string[];

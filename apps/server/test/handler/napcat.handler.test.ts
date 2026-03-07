@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { z } from "@kagami/shared";
+import { z } from "zod";
 import { NapcatHandler } from "../../src/handler/napcat.handler.js";
 import { NapcatGatewayError } from "../../src/service/napcat-gateway.service.js";
 import type { NapcatGatewayService } from "../../src/service/napcat-gateway.service.js";

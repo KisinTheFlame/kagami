@@ -4,10 +4,10 @@ import {
   LlmChatCallListQuerySchema,
   NapcatEventListQuerySchema,
   NapcatSendGroupMessageRequestSchema,
-  z,
 } from "@kagami/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, type FormEvent } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { apiRequest, type ApiRequestResult } from "@/lib/api";
 import { generateFieldsFromSchema, type GeneratedField } from "./schema-fields";

@@ -1,4 +1,4 @@
-import { z } from "./base.js";
+import { z } from "zod";
 
 export const HealthQuerySchema = z.object({}).passthrough();
 

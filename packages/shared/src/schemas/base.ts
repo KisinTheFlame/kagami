@@ -48,5 +48,3 @@ export function createPaginatedResponseSchema<ItemSchema extends z.ZodTypeAny>(
     items: z.array(itemSchema),
   });
 }
-
-export { z };

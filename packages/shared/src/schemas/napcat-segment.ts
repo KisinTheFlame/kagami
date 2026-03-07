@@ -1,4 +1,4 @@
-import { z } from "./base.js";
+import { z } from "zod";
 
 const NonEmptyStringSchema = z.string().min(1);
 

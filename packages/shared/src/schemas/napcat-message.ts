@@ -1,4 +1,4 @@
-import { z } from "./base.js";
+import { z } from "zod";
 
 export const NapcatSendGroupMessageRequestSchema = z.object({
   groupId: z.string().min(1),

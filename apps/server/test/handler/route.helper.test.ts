@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "@kagami/shared";
+import { z } from "zod";
 import { registerCommandRoute, registerQueryRoute } from "../../src/handler/route.helper.js";
 
 describe("route helpers", () => {

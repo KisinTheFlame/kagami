@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { z } from "@kagami/shared";
+import type { z } from "zod";
 
 type QueryRouteDef<TQuerySchema extends z.ZodTypeAny, TResponseSchema extends z.ZodTypeAny> = {
   app: FastifyInstance;

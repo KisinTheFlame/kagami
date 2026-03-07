@@ -1,9 +1,9 @@
+import { z } from "zod";
 import {
   createPaginatedResponseSchema,
   JsonRecordSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
-  z,
 } from "./base.js";
 
 export const AppLogLevelSchema = z.enum(["debug", "info", "warn", "error", "fatal"]);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
-import { z } from "@kagami/shared";
+import { z } from "zod";
 import { AgentLoop } from "./agent/agent-loop.js";
 import type { AgentContextManager } from "./agent/context-manager.manager.js";
 import { DefaultAgentContextManager } from "./agent/context-manager.impl.manager.js";
