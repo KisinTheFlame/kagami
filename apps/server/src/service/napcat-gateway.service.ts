@@ -3,6 +3,15 @@ import type { NapcatSendGroupMessageRequest, NapcatSendGroupMessageResponse } fr
 export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
 export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
 
+export type NapcatGroupMessageEvent = {
+  groupId: string;
+  userId: string | null;
+  rawMessage: string;
+  messageId: number | null;
+  time: number | null;
+  payload: Record<string, unknown>;
+};
+
 export type NapcatGatewayErrorCode = "NOT_CONNECTED" | "REQUEST_TIMEOUT" | "UPSTREAM_ERROR";
 
 export class NapcatGatewayError extends Error {

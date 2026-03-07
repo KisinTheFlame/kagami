@@ -43,6 +43,7 @@ const EnvSchema = z
     NAPCAT_WS_URL: z.preprocess(emptyStringToUndefined, z.string().url()),
     NAPCAT_WS_RECONNECT_MS: z.preprocess(parseNumberEnv, z.number().int().positive()),
     NAPCAT_WS_REQUEST_TIMEOUT_MS: z.preprocess(parseNumberEnv, z.number().int().positive()),
+    NAPCAT_LISTEN_GROUP_ID: z.preprocess(emptyStringToUndefined, z.string().min(1)),
   })
   .superRefine((value, ctx) => {
     if (value.LLM_ACTIVE_PROVIDER === "deepseek" && !value.DEEPSEEK_API_KEY) {

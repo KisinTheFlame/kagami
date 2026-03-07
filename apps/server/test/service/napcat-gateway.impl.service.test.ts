@@ -67,6 +67,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
+      listenGroupId: "987654",
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -128,6 +129,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
+      listenGroupId: "987654",
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -169,6 +171,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 1000,
+      listenGroupId: "987654",
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -214,6 +217,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
+      listenGroupId: "987654",
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -250,6 +254,130 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should publish listened group message events", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hello group",
+        time: 1710000000,
+      }),
+    );
+
+    expect(onGroupMessage).toHaveBeenCalledWith({
+      groupId: "987654",
+      userId: "123456",
+      rawMessage: "hello group",
+      messageId: 9988,
+      time: 1710000000,
+      payload: expect.objectContaining({
+        post_type: "message",
+        message_type: "group",
+      }),
+    });
+
+    await gateway.stop();
+  });
+
+  it("should ignore non-listened group message events", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "10086",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hello group",
+        time: 1710000000,
+      }),
+    );
+
+    expect(onGroupMessage).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
+
+  it("should ignore bot self group message events", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 123456,
+        message_id: 9988,
+        raw_message: "hello group",
+        time: 1710000000,
+      }),
+    );
+
+    expect(onGroupMessage).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
+
   it("should persist post_type events into dao", async () => {
     const sockets: FakeWebSocket[] = [];
     const napcatEventDao = createNapcatEventDao();
@@ -257,6 +385,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
+      listenGroupId: "987654",
       napcatEventDao,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
@@ -304,6 +433,7 @@ describe("DefaultNapcatGatewayService", () => {
       wsUrl: "ws://napcat:3001/",
       reconnectMs: 3000,
       requestTimeoutMs: 10000,
+      listenGroupId: "987654",
       napcatEventDao,
       createWebSocket: () => {
         const socket = new FakeWebSocket();

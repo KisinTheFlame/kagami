@@ -54,12 +54,35 @@ const napcatEventQueryService: NapcatEventQueryService = new DefaultNapcatEventQ
 const llmClient = createLlmClient({ llmChatCallDao });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
-const agentLoop = new AgentLoop({ llmClient, contextManager, eventQueue });
 const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
   wsUrl: env.NAPCAT_WS_URL,
   reconnectMs: env.NAPCAT_WS_RECONNECT_MS,
   requestTimeoutMs: env.NAPCAT_WS_REQUEST_TIMEOUT_MS,
+  listenGroupId: env.NAPCAT_LISTEN_GROUP_ID,
+  onGroupMessage: event => {
+    eventQueue.enqueue({
+      type: "napcat_group_message",
+      groupId: event.groupId,
+      userId: event.userId,
+      rawMessage: event.rawMessage,
+      messageId: event.messageId,
+      time: event.time,
+    });
+  },
   napcatEventDao,
+});
+const agentLoop = new AgentLoop({
+  llmClient,
+  contextManager,
+  eventQueue,
+  toolExecutionDeps: {
+    sendGroupMessage: ({ message }) => {
+      return napcatGatewayService.sendGroupMessage({
+        groupId: env.NAPCAT_LISTEN_GROUP_ID,
+        message,
+      });
+    },
+  },
 });
 
 const healthHandler = new HealthHandler();

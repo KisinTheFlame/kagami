@@ -53,7 +53,16 @@ describe("AgentLoop", () => {
     const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
     const drainAll = vi
       .fn()
-      .mockReturnValueOnce([{ type: "message", message: "hello" }])
+      .mockReturnValueOnce([
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "654321",
+          rawMessage: "hello",
+          messageId: 1001,
+          time: 1710000000,
+        },
+      ])
       .mockReturnValue([]);
     const size = vi.fn().mockReturnValue(0);
     const enqueue = vi.fn().mockReturnValue(1);
@@ -64,13 +73,29 @@ describe("AgentLoop", () => {
       waitForEvent,
     };
 
-    const loop = new AgentLoop({ llmClient, contextManager, eventQueue });
+    const loop = new AgentLoop({
+      llmClient,
+      contextManager,
+      eventQueue,
+      toolExecutionDeps: {
+        sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      },
+    });
 
     await expect(loop.run()).rejects.toBe(stopError);
 
     expect(waitForEvent).toHaveBeenCalledTimes(2);
     expect(drainAll).toHaveBeenCalled();
-    expect(pushUserMessage).toHaveBeenCalledWith("hello");
+    expect(pushUserMessage).toHaveBeenCalledWith(
+      [
+        "[NAPCAT_GROUP_MESSAGE]",
+        "group_id=123456",
+        "user_id=654321",
+        "message_id=1001",
+        "time=1710000000",
+        "raw_message=hello",
+      ].join("\n"),
+    );
     expect(chat).toHaveBeenCalledTimes(1);
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({

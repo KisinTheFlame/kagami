@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
+  NapcatGroupMessageEvent,
   NapcatGatewayService,
   NapcatSendGroupMessageInput,
   NapcatSendGroupMessageResult,
@@ -13,6 +14,8 @@ type NapcatGatewayOptions = {
   wsUrl: string;
   reconnectMs: number;
   requestTimeoutMs: number;
+  listenGroupId: string;
+  onGroupMessage?: (event: NapcatGroupMessageEvent) => void | Promise<void>;
   napcatEventDao?: NapcatEventDao;
   createWebSocket?: (url: string) => WebSocketLike;
 };
@@ -48,6 +51,7 @@ const PostTypeEventSchema = z
     message_type: z.string().optional(),
     sub_type: z.string().optional(),
     user_id: z.union([z.string(), z.number()]).optional(),
+    self_id: z.union([z.string(), z.number()]).optional(),
     group_id: z.union([z.string(), z.number()]).optional(),
     raw_message: z.string().optional(),
     time: z.union([z.number(), z.string()]).optional(),
@@ -58,6 +62,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly wsUrl: string;
   private readonly reconnectMs: number;
   private readonly requestTimeoutMs: number;
+  private readonly listenGroupId: string;
+  private readonly onGroupMessage:
+    | ((event: NapcatGroupMessageEvent) => void | Promise<void>)
+    | null;
   private readonly napcatEventDao: NapcatEventDao | null;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
@@ -70,12 +78,16 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     wsUrl,
     reconnectMs,
     requestTimeoutMs,
+    listenGroupId,
+    onGroupMessage,
     napcatEventDao,
     createWebSocket,
   }: NapcatGatewayOptions) {
     this.wsUrl = wsUrl;
     this.reconnectMs = reconnectMs;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.listenGroupId = listenGroupId;
+    this.onGroupMessage = onGroupMessage ?? null;
     this.napcatEventDao = napcatEventDao ?? null;
     this.createWebSocket = createWebSocket ?? (url => new WebSocket(url));
   }
@@ -247,8 +259,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
   private handlePostTypeEvent(eventPayload: z.infer<typeof PostTypeEventSchema>): void {
     const userId = toNullableId(eventPayload.user_id);
+    const selfId = toNullableId(eventPayload.self_id);
     const groupId = toNullableId(eventPayload.group_id);
+    const rawMessage = toNullableString(eventPayload.raw_message);
     const eventTime = toEventTime(eventPayload.time);
+    const payload = eventPayload as unknown as Record<string, unknown>;
 
     if (eventPayload.post_type === "message" && eventPayload.message_type === "private") {
       logger.info("Received NapCat private message event", {
@@ -261,11 +276,28 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       });
     }
 
+    if (
+      this.shouldDispatchGroupMessageEvent({
+        eventPayload,
+        groupId,
+        userId,
+        selfId,
+        rawMessage,
+      })
+    ) {
+      this.emitGroupMessageEvent({
+        groupId: groupId!,
+        userId,
+        rawMessage: rawMessage!,
+        messageId: toNullablePositiveInt(eventPayload.message_id),
+        time: toNullablePositiveInt(eventPayload.time),
+        payload,
+      });
+    }
+
     if (!this.napcatEventDao) {
       return;
     }
-
-    const payload = eventPayload as unknown as Record<string, unknown>;
 
     void this.napcatEventDao
       .insert({
@@ -274,7 +306,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         subType: toNullableString(eventPayload.sub_type),
         userId,
         groupId,
-        rawMessage: toNullableString(eventPayload.raw_message),
+        rawMessage,
         eventTime,
         payload,
       })
@@ -285,6 +317,63 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
           messageType: eventPayload.message_type,
         });
       });
+  }
+
+  private shouldDispatchGroupMessageEvent({
+    eventPayload,
+    groupId,
+    userId,
+    selfId,
+    rawMessage,
+  }: {
+    eventPayload: z.infer<typeof PostTypeEventSchema>;
+    groupId: string | null;
+    userId: string | null;
+    selfId: string | null;
+    rawMessage: string | null;
+  }): boolean {
+    if (eventPayload.post_type !== "message" || eventPayload.message_type !== "group") {
+      return false;
+    }
+
+    if (!groupId || groupId !== this.listenGroupId) {
+      return false;
+    }
+
+    if (!rawMessage) {
+      return false;
+    }
+
+    if (selfId !== null && userId !== null && selfId === userId) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private emitGroupMessageEvent(event: NapcatGroupMessageEvent): void {
+    if (!this.onGroupMessage) {
+      return;
+    }
+
+    try {
+      const result = this.onGroupMessage(event);
+      void Promise.resolve(result).catch(error => {
+        logger.errorWithCause("Failed to publish group message event", error, {
+          event: "napcat.gateway.group_message_publish_failed",
+          groupId: event.groupId,
+          userId: event.userId,
+          messageId: event.messageId,
+        });
+      });
+    } catch (error) {
+      logger.errorWithCause("Failed to publish group message event", error, {
+        event: "napcat.gateway.group_message_publish_failed",
+        groupId: event.groupId,
+        userId: event.userId,
+        messageId: event.messageId,
+      });
+    }
   }
 
   private resolveActionResponse(response: z.infer<typeof ActionResponseSchema>): void {
@@ -418,6 +507,21 @@ function toNullableString(value: unknown): string | null {
 function toNullableNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
+  }
+
+  return null;
+}
+
+function toNullablePositiveInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.trunc(parsed);
+    }
   }
 
   return null;
