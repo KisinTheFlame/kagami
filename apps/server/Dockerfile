@@ -24,6 +24,11 @@ RUN cd /prod/server && node node_modules/prisma/build/index.js generate --schema
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV="production"
+ENV TZ="Asia/Shanghai"
+
+RUN apk add --no-cache tzdata \
+  && ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
+  && echo "${TZ}" > /etc/timezone
 
 COPY --from=build /prod/server ./
 
