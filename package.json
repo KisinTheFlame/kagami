@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.18.3",
   "scripts": {
     "build": "pnpm -r build",
-    "deploy": "bash ./scripts/deploy.sh",
+    "app:deploy": "bash ./scripts/deploy.sh",
     "db:migrate:dev": "bash ./scripts/prisma-docker.sh migrate dev",
     "db:migrate:deploy": "bash ./scripts/prisma-docker.sh migrate deploy",
     "db:migrate:status": "bash ./scripts/prisma-docker.sh migrate status",
