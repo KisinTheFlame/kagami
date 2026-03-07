@@ -37,6 +37,7 @@ type PendingRequest = {
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const WS_OPEN_READY_STATE = 1;
+const BLOCKED_NAPCAT_EVENT_POST_TYPES = new Set<string>(["meta_event"]);
 
 const ActionResponseSchema = z.object({
   status: z.string(),
@@ -305,6 +306,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
 
     if (!this.napcatEventDao) {
+      return;
+    }
+
+    if (BLOCKED_NAPCAT_EVENT_POST_TYPES.has(eventPayload.post_type)) {
       return;
     }
 

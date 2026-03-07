@@ -493,6 +493,41 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should not persist blocked post_type events", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const napcatEventDao = createNapcatEventDao();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      napcatEventDao,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "meta_event",
+        meta_event_type: "heartbeat",
+        self_id: 714457117,
+        time: 1710000000,
+      }),
+    );
+    await waitOneTick();
+
+    expect(napcatEventDao.insert).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
+
   it("should not persist action response message", async () => {
     const sockets: FakeWebSocket[] = [];
     const napcatEventDao = createNapcatEventDao();
