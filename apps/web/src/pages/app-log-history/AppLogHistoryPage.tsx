@@ -351,13 +351,13 @@ export function AppLogHistoryPage() {
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : isMobile
                 ? "hidden"
-                : "h-[40%] min-h-[160px] w-full xl:h-full xl:min-h-0 xl:w-auto xl:flex-1",
+                : "flex min-h-[160px] w-full flex-col overflow-hidden md:h-[40%] xl:h-full xl:min-h-0 xl:w-auto xl:flex-1",
           )}
         >
           {showMobileDetail ? (
             <MobileDetailHeader title={getDetailTitle(selectedItem)} onBack={handleBackToList} />
           ) : null}
-          <div className={cn(showMobileDetail && "min-h-0 flex-1 overflow-hidden")}>
+          <div className="min-h-0 flex-1 overflow-hidden">
             <AppLogDetailPanel item={selectedItem} />
           </div>
         </aside>
