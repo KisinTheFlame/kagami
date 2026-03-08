@@ -1,7 +1,10 @@
+import { type NapcatGroupMessageItem } from "@kagami/shared";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { MobileDetailHeader } from "@/components/layout/MobileDetailHeader";
 import { Button } from "@/components/ui/button";
+import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
   Table,
   TableBody,
@@ -10,6 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useMobileDetailState } from "@/hooks/useMobileDetailState";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { cn, truncateText } from "@/lib/utils";
 import { NapcatGroupMessageDetailPanel } from "./NapcatGroupMessageDetailPanel";
 import { useNapcatGroupMessageList } from "./useNapcatGroupMessageList";
 
@@ -26,7 +32,9 @@ type FilterFormState = {
 
 export function NapcatGroupMessageHistoryPage() {
   const [params, setParams] = useSearchParams();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const { selectedId, showMobileDetail, handleSelectItem, handleBackToList, resetDetailState } =
+    useMobileDetailState({ isMobile });
   const page = parsePage(params.get("page"));
 
   const filters = useMemo(
@@ -78,7 +86,7 @@ export function NapcatGroupMessageHistoryPage() {
       nextParams.set("endAt", endAt);
     }
 
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -99,7 +107,7 @@ export function NapcatGroupMessageHistoryPage() {
       startAtLocal: "",
       endAtLocal: "",
     });
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -111,15 +119,21 @@ export function NapcatGroupMessageHistoryPage() {
   function goToPage(next: number) {
     const nextParams = new URLSearchParams(params);
     nextParams.set("page", String(next));
+    resetDetailState();
     setParams(nextParams);
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-3 md:p-6">
+      <form
+        onSubmit={handleFilterSubmit}
+        className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+      >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">Group ID</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              Group ID
+            </span>
             <input
               value={formState.groupId}
               onChange={event => setFormState(prev => ({ ...prev, groupId: event.target.value }))}
@@ -128,8 +142,8 @@ export function NapcatGroupMessageHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">User ID</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">User ID</span>
             <input
               value={formState.userId}
               onChange={event => setFormState(prev => ({ ...prev, userId: event.target.value }))}
@@ -138,8 +152,8 @@ export function NapcatGroupMessageHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">昵称</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">昵称</span>
             <input
               value={formState.nickname}
               onChange={event => setFormState(prev => ({ ...prev, nickname: event.target.value }))}
@@ -148,8 +162,8 @@ export function NapcatGroupMessageHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">关键词</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">关键词</span>
             <input
               value={formState.keyword}
               onChange={event => setFormState(prev => ({ ...prev, keyword: event.target.value }))}
@@ -158,8 +172,10 @@ export function NapcatGroupMessageHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">开始时间</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              开始时间
+            </span>
             <input
               type="datetime-local"
               value={formState.startAtLocal}
@@ -170,8 +186,10 @@ export function NapcatGroupMessageHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">结束时间</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              结束时间
+            </span>
             <input
               type="datetime-local"
               value={formState.endAtLocal}
@@ -193,63 +211,93 @@ export function NapcatGroupMessageHistoryPage() {
         </div>
       </form>
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 md:mt-4 md:gap-4 xl:flex-row">
+        <section
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:gap-4",
+            showMobileDetail && "hidden",
+          )}
+        >
           {isError ? (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[160px]">事件时间</TableHead>
-                  <TableHead className="w-[140px]">Group ID</TableHead>
-                  <TableHead className="w-[140px]">User ID</TableHead>
-                  <TableHead className="w-[140px]">昵称</TableHead>
-                  <TableHead>消息内容</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      加载中…
-                    </TableCell>
-                  </TableRow>
-                ) : items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      暂无数据
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map(item => (
-                    <TableRow
+          {isMobile ? (
+            <div className="min-h-0 flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  加载中…
+                </div>
+              ) : items.length === 0 ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  暂无数据
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {items.map(item => (
+                    <NapcatGroupMessageMobileCard
                       key={item.id}
-                      data-state={selectedId === item.id ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDate(item.eventTime)}
+                      item={item}
+                      isSelected={selectedId === item.id}
+                      onClick={() => handleSelectItem(item.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+              <Table className="min-w-[760px] table-fixed">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[160px]">事件时间</TableHead>
+                    <TableHead className="w-[140px]">Group ID</TableHead>
+                    <TableHead className="w-[140px]">User ID</TableHead>
+                    <TableHead className="w-[140px]">昵称</TableHead>
+                    <TableHead>消息内容</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        加载中…
                       </TableCell>
-                      <TableCell className="truncate font-mono text-xs text-muted-foreground">
-                        {item.groupId}
-                      </TableCell>
-                      <TableCell className="truncate font-mono text-xs text-muted-foreground">
-                        {item.userId ?? "—"}
-                      </TableCell>
-                      <TableCell className="truncate text-sm text-muted-foreground">
-                        {item.nickname ?? "—"}
-                      </TableCell>
-                      <TableCell className="truncate text-sm">{item.rawMessage}</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        暂无数据
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map(item => (
+                      <TableRow
+                        key={item.id}
+                        data-state={selectedId === item.id ? "selected" : undefined}
+                        className="cursor-pointer"
+                        onClick={() => handleSelectItem(item.id)}
+                      >
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDate(item.eventTime)}
+                        </TableCell>
+                        <TableCell className="truncate font-mono text-xs text-muted-foreground">
+                          {item.groupId}
+                        </TableCell>
+                        <TableCell className="truncate font-mono text-xs text-muted-foreground">
+                          {item.userId ?? "—"}
+                        </TableCell>
+                        <TableCell className="truncate text-sm text-muted-foreground">
+                          {item.nickname ?? "—"}
+                        </TableCell>
+                        <TableCell className="truncate text-sm">{item.rawMessage}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap">
             <Button
@@ -277,8 +325,22 @@ export function NapcatGroupMessageHistoryPage() {
           </div>
         </section>
 
-        <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
-          <NapcatGroupMessageDetailPanel item={selectedItem} />
+        <aside
+          className={cn(
+            "min-w-0 rounded-md border bg-background",
+            showMobileDetail
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : isMobile
+                ? "hidden"
+                : "h-[40%] min-h-[160px] w-full xl:h-full xl:min-h-0 xl:w-auto xl:flex-1",
+          )}
+        >
+          {showMobileDetail ? (
+            <MobileDetailHeader title={getDetailTitle(selectedItem)} onBack={handleBackToList} />
+          ) : null}
+          <div className={cn(showMobileDetail && "min-h-0 flex-1 overflow-hidden")}>
+            <NapcatGroupMessageDetailPanel item={selectedItem} />
+          </div>
         </aside>
       </div>
     </div>
@@ -374,4 +436,41 @@ function toComparableSearchParams(params: URLSearchParams): string {
   const clone = new URLSearchParams(params);
   clone.sort();
   return clone.toString();
+}
+
+function getDetailTitle(
+  item: { groupId: string; nickname: string | null; userId: string | null } | null,
+): string {
+  if (item === null) {
+    return "群聊消息详情";
+  }
+
+  return `${item.groupId} · ${item.nickname ?? item.userId ?? "群聊消息"}`;
+}
+
+function NapcatGroupMessageMobileCard({
+  item,
+  isSelected,
+  onClick,
+}: {
+  item: NapcatGroupMessageItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <MobileSelectCard isSelected={isSelected} onClick={onClick}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-mono text-xs text-muted-foreground">{item.groupId}</p>
+          <p className="mt-2 text-sm font-medium">{item.nickname ?? item.userId ?? "匿名成员"}</p>
+        </div>
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+          {item.userId ?? "—"}
+        </span>
+      </div>
+
+      <p className="mt-3 text-sm text-foreground">{truncateText(item.rawMessage, 140)}</p>
+      <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.eventTime)}</p>
+    </MobileSelectCard>
+  );
 }

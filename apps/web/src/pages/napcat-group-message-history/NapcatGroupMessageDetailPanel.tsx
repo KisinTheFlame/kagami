@@ -18,7 +18,7 @@ export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetail
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-5 py-4">
-        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+        <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <MetaItem label="ID" value={String(item.id)} mono />
           <MetaItem label="Group ID" value={item.groupId} mono />
           <MetaItem label="User ID" value={item.userId ?? "—"} mono />

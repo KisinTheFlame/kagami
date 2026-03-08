@@ -1,9 +1,11 @@
-import { type LlmChatCallStatus } from "@kagami/shared";
+import { type LlmChatCallItem, type LlmChatCallStatus } from "@kagami/shared";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { MobileDetailHeader } from "@/components/layout/MobileDetailHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
   Table,
   TableBody,
@@ -12,6 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useMobileDetailState } from "@/hooks/useMobileDetailState";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
 import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallList } from "./useLlmChatCallList";
@@ -35,7 +40,9 @@ function formatDate(iso: string) {
 
 export function LlmHistoryPage() {
   const [params, setParams] = useSearchParams();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const { selectedId, showMobileDetail, handleSelectItem, handleBackToList, resetDetailState } =
+    useMobileDetailState({ isMobile });
   const page = parsePage(params.get("page"));
   const filters = useMemo(
     () => ({
@@ -74,7 +81,7 @@ export function LlmHistoryPage() {
       nextParams.set("status", formState.status);
     }
 
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -88,7 +95,7 @@ export function LlmHistoryPage() {
     nextParams.set("page", "1");
 
     setFormState({ status: "" });
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -100,15 +107,19 @@ export function LlmHistoryPage() {
   function goToPage(next: number) {
     const nextParams = new URLSearchParams(params);
     nextParams.set("page", String(next));
+    resetDetailState();
     setParams(nextParams);
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-3 md:p-6">
+      <form
+        onSubmit={handleFilterSubmit}
+        className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+      >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">状态</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">状态</span>
             <select
               value={formState.status}
               onChange={event =>
@@ -136,68 +147,99 @@ export function LlmHistoryPage() {
         </div>
       </form>
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+      <div className={cn("mt-3 flex min-h-0 flex-1 flex-col gap-3 md:mt-4 md:gap-4 xl:flex-row")}>
+        <section
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:gap-4",
+            showMobileDetail && "hidden",
+          )}
+        >
           {isError && (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
           )}
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <Table className="min-w-[680px] table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[190px]">时间</TableHead>
-                  <TableHead className="w-[130px]">Provider</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead className="w-[140px]">状态</TableHead>
-                  <TableHead className="w-[110px] text-right">延迟 (ms)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      加载中…
-                    </TableCell>
-                  </TableRow>
-                ) : data?.items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      暂无数据
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map(({ item, detailParse }) => (
-                    <TableRow
+          {isMobile ? (
+            <div className="min-h-0 flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  加载中…
+                </div>
+              ) : rows.length === 0 ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  暂无数据
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {rows.map(({ item, detailParse }) => (
+                    <LlmHistoryMobileCard
                       key={item.id}
-                      data-state={selectedId === item.id ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                        {formatDate(item.createdAt)}
-                      </TableCell>
-                      <TableCell className="truncate text-sm">{item.provider}</TableCell>
-                      <TableCell className="truncate text-sm">{item.model}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge variant={item.status === "success" ? "default" : "destructive"}>
-                          {toStatusLabel(item.status)}
-                        </Badge>
-                        {detailParse.hasSchemaError ? (
-                          <Badge variant="outline" className="ml-2">
-                            解析失败
-                          </Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">
-                        {item.latencyMs ?? "—"}
+                      item={item}
+                      hasSchemaError={detailParse.hasSchemaError}
+                      isSelected={selectedId === item.id}
+                      onClick={() => handleSelectItem(item.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+              <Table className="min-w-[680px] table-fixed">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[190px]">时间</TableHead>
+                    <TableHead className="w-[130px]">Provider</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead className="w-[140px]">状态</TableHead>
+                    <TableHead className="w-[110px] text-right">延迟 (ms)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        加载中…
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : data?.items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        暂无数据
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map(({ item, detailParse }) => (
+                      <TableRow
+                        key={item.id}
+                        data-state={selectedId === item.id ? "selected" : undefined}
+                        className="cursor-pointer"
+                        onClick={() => handleSelectItem(item.id)}
+                      >
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(item.createdAt)}
+                        </TableCell>
+                        <TableCell className="truncate text-sm">{item.provider}</TableCell>
+                        <TableCell className="truncate text-sm">{item.model}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant={item.status === "success" ? "default" : "destructive"}>
+                            {toStatusLabel(item.status)}
+                          </Badge>
+                          {detailParse.hasSchemaError ? (
+                            <Badge variant="outline" className="ml-2">
+                              解析失败
+                            </Badge>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {item.latencyMs ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           <div className="flex items-center justify-center gap-2">
             <Button
@@ -225,8 +267,22 @@ export function LlmHistoryPage() {
           </div>
         </section>
 
-        <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
-          <LlmChatCallDetailPanel item={selectedItem} />
+        <aside
+          className={cn(
+            "min-w-0 rounded-md border bg-background",
+            showMobileDetail
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : isMobile
+                ? "hidden"
+                : "h-[40%] min-h-[160px] w-full xl:h-full xl:min-h-0 xl:w-auto xl:flex-1",
+          )}
+        >
+          {showMobileDetail ? (
+            <MobileDetailHeader title={getDetailTitle(selectedItem)} onBack={handleBackToList} />
+          ) : null}
+          <div className={cn(showMobileDetail && "min-h-0 flex-1 overflow-hidden")}>
+            <LlmChatCallDetailPanel item={selectedItem} />
+          </div>
         </aside>
       </div>
     </div>
@@ -268,4 +324,46 @@ function toComparableSearchParams(params: URLSearchParams): string {
 
 function toStatusLabel(status: LlmChatCallStatus): string {
   return status === "success" ? "成功" : "失败";
+}
+
+function getDetailTitle(item: LlmChatCallItem | null): string {
+  if (item === null) {
+    return "LLM 调用详情";
+  }
+
+  return `${item.provider} · ${item.model} · ${toStatusLabel(item.status)}`;
+}
+
+function LlmHistoryMobileCard({
+  item,
+  hasSchemaError,
+  isSelected,
+  onClick,
+}: {
+  item: LlmChatCallItem;
+  hasSchemaError: boolean;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <MobileSelectCard isSelected={isSelected} onClick={onClick}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{item.model}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{item.provider}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge variant={item.status === "success" ? "default" : "destructive"}>
+            {toStatusLabel(item.status)}
+          </Badge>
+          {hasSchemaError ? <Badge variant="outline">解析失败</Badge> : null}
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>{formatDate(item.createdAt)}</span>
+        <span className="tabular-nums">延迟 {item.latencyMs ?? "—"} ms</span>
+      </div>
+    </MobileSelectCard>
+  );
 }

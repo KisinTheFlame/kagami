@@ -40,7 +40,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-5 py-4">
-        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+        <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <MetaItem label="Request ID" value={item.requestId} mono />
           <MetaItem label="Provider" value={item.provider} />
           <MetaItem label="Model" value={item.model} />
@@ -108,7 +108,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
         </section>
 
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-base font-semibold">输入</h3>
             <div className="flex items-center gap-2">
               <Button
@@ -226,7 +226,9 @@ function ContentCard({
     <details open={defaultOpen} className="rounded-md border bg-muted/20 p-3">
       <summary className="cursor-pointer text-sm font-medium">
         {title}
-        <span className="ml-2 text-xs font-normal text-muted-foreground">{preview}</span>
+        <span className="mt-1 block text-xs font-normal text-muted-foreground sm:ml-2 sm:mt-0 sm:inline">
+          {preview}
+        </span>
       </summary>
       <div className="mt-3">{children}</div>
     </details>

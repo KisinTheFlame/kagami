@@ -1,9 +1,11 @@
-import { type AppLogLevel } from "@kagami/shared";
+import { type AppLogItem, type AppLogLevel } from "@kagami/shared";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { MobileDetailHeader } from "@/components/layout/MobileDetailHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
   Table,
   TableBody,
@@ -12,6 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useMobileDetailState } from "@/hooks/useMobileDetailState";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { cn, truncateText } from "@/lib/utils";
 import { AppLogDetailPanel } from "./AppLogDetailPanel";
 import { useAppLogList } from "./useAppLogList";
 
@@ -29,7 +34,9 @@ type FilterFormState = {
 
 export function AppLogHistoryPage() {
   const [params, setParams] = useSearchParams();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const { selectedId, showMobileDetail, handleSelectItem, handleBackToList, resetDetailState } =
+    useMobileDetailState({ isMobile });
   const page = parsePage(params.get("page"));
 
   const filters = useMemo(
@@ -83,7 +90,7 @@ export function AppLogHistoryPage() {
       nextParams.set("endAt", endAt);
     }
 
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -104,7 +111,7 @@ export function AppLogHistoryPage() {
       startAtLocal: "",
       endAtLocal: "",
     });
-    setSelectedId(null);
+    resetDetailState();
     if (hasSameSearchParams(params, nextParams)) {
       void refetch();
       return;
@@ -116,15 +123,19 @@ export function AppLogHistoryPage() {
   function goToPage(next: number) {
     const nextParams = new URLSearchParams(params);
     nextParams.set("page", String(next));
+    resetDetailState();
     setParams(nextParams);
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <form onSubmit={handleFilterSubmit} className="rounded-md border p-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-3 md:p-6">
+      <form
+        onSubmit={handleFilterSubmit}
+        className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+      >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">级别</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">级别</span>
             <select
               value={formState.level}
               onChange={event =>
@@ -144,8 +155,10 @@ export function AppLogHistoryPage() {
             </select>
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">Trace ID</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              Trace ID
+            </span>
             <input
               value={formState.traceId}
               onChange={event => setFormState(prev => ({ ...prev, traceId: event.target.value }))}
@@ -154,8 +167,10 @@ export function AppLogHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">Message 关键词</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              Message 关键词
+            </span>
             <input
               value={formState.message}
               onChange={event => setFormState(prev => ({ ...prev, message: event.target.value }))}
@@ -164,8 +179,10 @@ export function AppLogHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">Source 关键词</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              Source 关键词
+            </span>
             <input
               value={formState.source}
               onChange={event => setFormState(prev => ({ ...prev, source: event.target.value }))}
@@ -174,8 +191,10 @@ export function AppLogHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">开始时间</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              开始时间
+            </span>
             <input
               type="datetime-local"
               value={formState.startAtLocal}
@@ -186,8 +205,10 @@ export function AppLogHistoryPage() {
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-right text-muted-foreground">结束时间</span>
+          <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+              结束时间
+            </span>
             <input
               type="datetime-local"
               value={formState.endAtLocal}
@@ -209,63 +230,93 @@ export function AppLogHistoryPage() {
         </div>
       </form>
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 md:mt-4 md:gap-4 xl:flex-row">
+        <section
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:gap-4",
+            showMobileDetail && "hidden",
+          )}
+        >
           {isError ? (
             <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[160px]">时间</TableHead>
-                  <TableHead className="w-[80px]">级别</TableHead>
-                  <TableHead className="w-[220px]">Trace ID</TableHead>
-                  <TableHead className="w-[160px]">Source</TableHead>
-                  <TableHead>Message</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      加载中…
-                    </TableCell>
-                  </TableRow>
-                ) : items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      暂无数据
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map(item => (
-                    <TableRow
+          {isMobile ? (
+            <div className="min-h-0 flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  加载中…
+                </div>
+              ) : items.length === 0 ? (
+                <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  暂无数据
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {items.map(item => (
+                    <AppLogMobileCard
                       key={item.id}
-                      data-state={selectedId === item.id ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDate(item.createdAt)}
+                      item={item}
+                      isSelected={selectedId === item.id}
+                      onClick={() => handleSelectItem(item.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+              <Table className="min-w-[760px] table-fixed">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[160px]">时间</TableHead>
+                    <TableHead className="w-[80px]">级别</TableHead>
+                    <TableHead className="w-[220px]">Trace ID</TableHead>
+                    <TableHead className="w-[160px]">Source</TableHead>
+                    <TableHead>Message</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        加载中…
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
-                      </TableCell>
-                      <TableCell className="truncate font-mono text-xs text-muted-foreground">
-                        {item.traceId}
-                      </TableCell>
-                      <TableCell className="truncate text-xs text-muted-foreground">
-                        {getSource(item.metadata)}
-                      </TableCell>
-                      <TableCell className="truncate text-sm">{item.message}</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        暂无数据
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map(item => (
+                      <TableRow
+                        key={item.id}
+                        data-state={selectedId === item.id ? "selected" : undefined}
+                        className="cursor-pointer"
+                        onClick={() => handleSelectItem(item.id)}
+                      >
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDate(item.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
+                        </TableCell>
+                        <TableCell className="truncate font-mono text-xs text-muted-foreground">
+                          {item.traceId}
+                        </TableCell>
+                        <TableCell className="truncate text-xs text-muted-foreground">
+                          {getSource(item.metadata)}
+                        </TableCell>
+                        <TableCell className="truncate text-sm">{item.message}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           <div className="flex items-center justify-center gap-2">
             <Button
@@ -293,8 +344,22 @@ export function AppLogHistoryPage() {
           </div>
         </section>
 
-        <aside className="h-[40%] min-h-[160px] w-full min-w-0 rounded-md border bg-background xl:h-full xl:min-h-0 xl:w-auto xl:flex-1">
-          <AppLogDetailPanel item={selectedItem} />
+        <aside
+          className={cn(
+            "min-w-0 rounded-md border bg-background",
+            showMobileDetail
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : isMobile
+                ? "hidden"
+                : "h-[40%] min-h-[160px] w-full xl:h-full xl:min-h-0 xl:w-auto xl:flex-1",
+          )}
+        >
+          {showMobileDetail ? (
+            <MobileDetailHeader title={getDetailTitle(selectedItem)} onBack={handleBackToList} />
+          ) : null}
+          <div className={cn(showMobileDetail && "min-h-0 flex-1 overflow-hidden")}>
+            <AppLogDetailPanel item={selectedItem} />
+          </div>
         </aside>
       </div>
     </div>
@@ -415,4 +480,39 @@ function toComparableSearchParams(params: URLSearchParams): string {
   const clone = new URLSearchParams(params);
   clone.sort();
   return clone.toString();
+}
+
+function getDetailTitle(item: { level: AppLogLevel; traceId: string } | null): string {
+  if (item === null) {
+    return "应用日志详情";
+  }
+
+  return `${item.level.toUpperCase()} · ${item.traceId}`;
+}
+
+function AppLogMobileCard({
+  item,
+  isSelected,
+  onClick,
+}: {
+  item: AppLogItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <MobileSelectCard isSelected={isSelected} onClick={onClick}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-xs text-muted-foreground">{item.traceId}</p>
+          <p className="mt-2 text-sm font-medium">{truncateText(item.message, 140)}</p>
+        </div>
+        <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
+      </div>
+
+      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+        <p>{formatDate(item.createdAt)}</p>
+        <p>Source: {getSource(item.metadata)}</p>
+      </div>
+    </MobileSelectCard>
+  );
 }

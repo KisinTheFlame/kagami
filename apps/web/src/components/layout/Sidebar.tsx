@@ -1,18 +1,15 @@
-import { FileText, History, MessagesSquare, TestTube2, Webhook } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { navItems } from "./navigation";
 
-const navItems = [
-  { to: "/llm-history", label: "LLM 调用历史", icon: History },
-  { to: "/app-log-history", label: "应用日志", icon: FileText },
-  { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
-  { to: "/napcat-group-message-history", label: "群聊消息", icon: MessagesSquare },
-  { to: "/api-lab", label: "后端接口测试台", icon: TestTube2 },
-];
+type SidebarProps = {
+  className?: string;
+  onNavigate?: () => void;
+};
 
-export function Sidebar() {
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   return (
-    <aside className="flex h-screen w-56 flex-col border-r bg-background">
+    <aside className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-background", className)}>
       <div className="flex h-14 items-center border-b px-4">
         <span className="text-base font-semibold tracking-tight">Kagami</span>
       </div>
@@ -29,6 +26,7 @@ export function Sidebar() {
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )
             }
+            onClick={onNavigate}
           >
             <Icon className="h-4 w-4 shrink-0" />
             {label}

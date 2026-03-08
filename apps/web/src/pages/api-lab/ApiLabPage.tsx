@@ -6,10 +6,15 @@ import {
   NapcatSendGroupMessageRequestSchema,
 } from "@kagami/shared";
 import { useMutation } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { z } from "zod";
+import { MobileDetailHeader } from "@/components/layout/MobileDetailHeader";
 import { Button } from "@/components/ui/button";
+import { MobileSelectCard } from "@/components/ui/mobile-select-card";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { apiRequest, type ApiRequestResult } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { generateFieldsFromSchema, type GeneratedField } from "./schema-fields";
 
 type ApiState = "idle" | "loading" | "success" | "error";
@@ -245,6 +250,7 @@ function getMethodClassName(method: ApiLabEndpointSpec["method"]): string {
 
 export function ApiLabPage() {
   const [selectedEndpointId, setSelectedEndpointId] = useState<string>(ENDPOINTS[0].id);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>(() =>
     createDefaultFormValues(ENDPOINTS[0]),
   );
@@ -252,11 +258,13 @@ export function ApiLabPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastRequest, setLastRequest] = useState<RequestSummary | null>(null);
   const [lastResponse, setLastResponse] = useState<ResponseSummary | null>(null);
+  const isMobile = useIsMobile();
 
   const selectedEndpoint = useMemo(
     () => ENDPOINTS.find(item => item.id === selectedEndpointId) ?? ENDPOINTS[0],
     [selectedEndpointId],
   );
+  const showMobileDetail = isMobile && isMobileDetailOpen;
 
   const requestMutation = useMutation({
     mutationFn: async (request: PreparedRequest) => {
@@ -311,6 +319,17 @@ export function ApiLabPage() {
     setFormValues(createDefaultFormValues(nextEndpoint));
     setApiState("idle");
     setErrorMessage(null);
+  }
+
+  function handleOpenEndpoint(nextEndpointId: string): void {
+    handleEndpointChange(nextEndpointId);
+    if (isMobile) {
+      setIsMobileDetailOpen(true);
+    }
+  }
+
+  function handleBackToList(): void {
+    setIsMobileDetailOpen(false);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -379,50 +398,61 @@ export function ApiLabPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-6">
-      <header className="space-y-2">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden p-3 md:p-6">
+      <header className={cn("space-y-2", showMobileDetail && "hidden")}>
         <h1 className="text-lg font-semibold">后端接口测试台</h1>
         <p className="text-sm text-muted-foreground">
           选择预置接口并填写字段，直接发起调试请求。无需手写 JSON。
         </p>
       </header>
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <aside className="flex w-full min-h-0 flex-col rounded-md border xl:w-72">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 md:mt-4 md:gap-4 xl:flex-row">
+        <aside
+          className={cn(
+            "flex w-full min-h-0 flex-col rounded-md border xl:w-72",
+            showMobileDetail && "hidden",
+          )}
+        >
           <div className="border-b px-4 py-3">
             <h2 className="text-sm font-medium">可用接口</h2>
-            <p className="mt-1 text-xs text-muted-foreground">点击左侧接口后在右侧调试</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isMobile ? "点击卡片进入详情并调试" : "点击左侧接口后在右侧调试"}
+            </p>
           </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-auto p-2">
-            {ENDPOINTS.map(endpoint => {
-              const isActive = endpoint.id === selectedEndpoint.id;
-              return (
-                <button
-                  key={endpoint.id}
-                  type="button"
-                  onClick={() => handleEndpointChange(endpoint.id)}
-                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                    isActive
-                      ? "border-primary bg-accent"
-                      : "border-transparent hover:border-border hover:bg-accent/60"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${getMethodClassName(endpoint.method)}`}
-                    >
-                      {endpoint.method}
-                    </span>
-                    <span className="font-medium">{endpoint.label}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{endpoint.path}</p>
-                </button>
-              );
-            })}
+          <div className="min-h-0 flex-1 overflow-auto p-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              {ENDPOINTS.map(endpoint => {
+                const isActive = endpoint.id === selectedEndpoint.id;
+                return (
+                  <EndpointCard
+                    key={endpoint.id}
+                    endpoint={endpoint}
+                    isActive={isActive}
+                    showChevron={isMobile}
+                    onClick={() => handleOpenEndpoint(endpoint.id)}
+                  />
+                );
+              })}
+            </div>
           </div>
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+        <div
+          className={cn(
+            "min-w-0 flex-1 flex-col gap-3 md:gap-4",
+            showMobileDetail
+              ? "flex min-h-0 overflow-hidden"
+              : isMobile
+                ? "hidden"
+                : "flex min-h-0",
+          )}
+        >
+          {showMobileDetail ? (
+            <MobileDetailHeader
+              title={`${selectedEndpoint.label} · ${selectedEndpoint.method}`}
+              onBack={handleBackToList}
+            />
+          ) : null}
           <form onSubmit={handleSubmit} className="space-y-4 rounded-md border p-4">
             <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2">
               <span
@@ -452,7 +482,7 @@ export function ApiLabPage() {
               </section>
             ) : null}
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={requestMutation.isPending}>
                 {requestMutation.isPending ? "发送中..." : "发送请求"}
               </Button>
@@ -478,5 +508,42 @@ export function ApiLabPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function EndpointCard({
+  endpoint,
+  isActive,
+  showChevron,
+  onClick,
+}: {
+  endpoint: ApiLabEndpoint;
+  isActive: boolean;
+  showChevron: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <MobileSelectCard isSelected={isActive} onClick={onClick}>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase",
+                getMethodClassName(endpoint.method),
+              )}
+            >
+              {endpoint.method}
+            </span>
+            <span className="text-sm font-semibold">{endpoint.label}</span>
+          </div>
+          <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{endpoint.path}</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">{endpoint.description}</p>
+        </div>
+        {showChevron ? (
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : null}
+      </div>
+    </MobileSelectCard>
   );
 }
