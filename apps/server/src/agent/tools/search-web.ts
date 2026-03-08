@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Tool } from "../../llm/types.js";
 import type { WebSearchResult, WebSearchResultItem } from "../../service/web-search.service.js";
-import type { ToolExecutionDeps } from "./index.js";
+import type { AgentToolDefinition } from "./index.js";
 
 export const SEARCH_WEB_TOOL_NAME = "search_web";
 const MAX_AGENT_SOURCES = 3;
@@ -34,29 +34,18 @@ export const searchWebTool: Tool = {
   },
 };
 
-export async function executeSearchWebTool(
-  argumentsValue: Record<string, unknown>,
-  deps: ToolExecutionDeps,
-): Promise<string> {
-  const parsed = SearchWebArgumentsSchema.safeParse(argumentsValue);
-  if (!parsed.success) {
-    return JSON.stringify({
-      ok: false,
-      error: "INVALID_ARGUMENTS",
-      details: parsed.error.issues.map(issue => issue.message),
-    });
-  }
+type CreateSearchWebToolDeps = {
+  searchWeb: (input: z.infer<typeof SearchWebArgumentsSchema>) => Promise<WebSearchResult>;
+};
 
-  try {
-    const result = await deps.searchWeb(parsed.data);
-
-    return JSON.stringify(formatResultForAgent(result));
-  } catch (error) {
-    return JSON.stringify({
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+export function createSearchWebTool({ searchWeb }: CreateSearchWebToolDeps): AgentToolDefinition {
+  return {
+    tool: searchWebTool,
+    execute: async argumentsValue => ({
+      content: await executeSearchWeb(argumentsValue, { searchWeb }),
+      shouldFinishRound: false,
+    }),
+  };
 }
 
 function formatResultForAgent(result: WebSearchResult): {
@@ -112,4 +101,29 @@ function normalizeUrl(url: string): string {
 
 function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+async function executeSearchWeb(
+  argumentsValue: Record<string, unknown>,
+  deps: CreateSearchWebToolDeps,
+): Promise<string> {
+  const parsed = SearchWebArgumentsSchema.safeParse(argumentsValue);
+  if (!parsed.success) {
+    return JSON.stringify({
+      ok: false,
+      error: "INVALID_ARGUMENTS",
+      details: parsed.error.issues.map(issue => issue.message),
+    });
+  }
+
+  try {
+    const result = await deps.searchWeb(parsed.data);
+
+    return JSON.stringify(formatResultForAgent(result));
+  } catch (error) {
+    return JSON.stringify({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

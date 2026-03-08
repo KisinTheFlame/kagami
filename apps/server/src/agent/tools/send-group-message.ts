@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Tool } from "../../llm/types.js";
-import type { ToolExecutionDeps } from "./index.js";
+import type { AgentToolDefinition } from "./index.js";
 
 export const SEND_GROUP_MESSAGE_TOOL_NAME = "send_group_message";
 
@@ -22,9 +22,27 @@ export const sendGroupMessageTool: Tool = {
   },
 };
 
-export async function executeSendGroupMessageTool(
+type CreateSendGroupMessageToolDeps = {
+  sendGroupMessage: (input: { message: string }) => Promise<{ messageId: number }>;
+};
+
+export function createSendGroupMessageTool({
+  sendGroupMessage,
+}: CreateSendGroupMessageToolDeps): AgentToolDefinition {
+  return {
+    tool: sendGroupMessageTool,
+    execute: async argumentsValue => ({
+      content: await executeSendGroupMessage(argumentsValue, {
+        sendGroupMessage,
+      }),
+      shouldFinishRound: false,
+    }),
+  };
+}
+
+async function executeSendGroupMessage(
   argumentsValue: Record<string, unknown>,
-  deps: ToolExecutionDeps,
+  deps: CreateSendGroupMessageToolDeps,
 ): Promise<string> {
   const parsed = SendGroupMessageArgumentsSchema.safeParse(argumentsValue);
   if (!parsed.success) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeToolCall } from "../../src/agent/tools/index.js";
+import { createSearchWebTool } from "../../src/agent/tools/search-web.js";
 
 describe("search_web tool", () => {
   it("should call injected web search service and return simplified agent output", async () => {
@@ -35,23 +35,15 @@ describe("search_web tool", () => {
         },
       ],
     });
+    const tool = createSearchWebTool({ searchWeb });
 
-    const result = await executeToolCall(
-      {
-        id: "tool-1",
-        name: "search_web",
-        arguments: {
-          query: "  OpenAI latest news  ",
-          topic: "news",
-          timeRange: "week",
-        },
-      },
-      {
-        sendGroupMessage: vi.fn(),
-        searchWeb,
-      },
-    );
+    const result = await tool.execute({
+      query: "  OpenAI latest news  ",
+      topic: "news",
+      timeRange: "week",
+    });
 
+    expect(tool.tool.name).toBe("search_web");
     expect(searchWeb).toHaveBeenCalledWith({
       query: "OpenAI latest news",
       topic: "news",
@@ -74,20 +66,11 @@ describe("search_web tool", () => {
 
   it("should reject empty query", async () => {
     const searchWeb = vi.fn();
+    const tool = createSearchWebTool({ searchWeb });
 
-    const result = await executeToolCall(
-      {
-        id: "tool-2",
-        name: "search_web",
-        arguments: {
-          query: "   ",
-        },
-      },
-      {
-        sendGroupMessage: vi.fn(),
-        searchWeb,
-      },
-    );
+    const result = await tool.execute({
+      query: "   ",
+    });
 
     expect(searchWeb).not.toHaveBeenCalled();
     expect(result.shouldFinishRound).toBe(false);

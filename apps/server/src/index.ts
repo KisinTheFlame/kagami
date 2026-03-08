@@ -6,6 +6,7 @@ import type { AgentContextManager } from "./agent/context-manager.manager.js";
 import { DefaultAgentContextManager } from "./agent/context-manager.impl.manager.js";
 import type { AgentEventQueue } from "./agent/event-queue.queue.js";
 import { InMemoryAgentEventQueue } from "./agent/event-queue.impl.queue.js";
+import { createAgentToolRegistry } from "./agent/tools/index.js";
 import { env } from "./env.js";
 import { closeDb, db } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
@@ -96,25 +97,26 @@ const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayServi
   napcatEventDao,
   napcatGroupMessageDao,
 });
+const toolRegistry = createAgentToolRegistry({
+  sendGroupMessage: ({ message }) => {
+    return napcatGatewayService.sendGroupMessage({
+      groupId: env.NAPCAT_LISTEN_GROUP_ID,
+      message,
+    });
+  },
+  searchWeb: input => {
+    if (!webSearchService) {
+      throw new Error("TAVILY_API_KEY 未配置，无法使用 search_web 工具");
+    }
+
+    return webSearchService.search(input);
+  },
+});
 const agentLoop = new AgentLoop({
   llmClient,
   contextManager,
   eventQueue,
-  toolExecutionDeps: {
-    sendGroupMessage: ({ message }) => {
-      return napcatGatewayService.sendGroupMessage({
-        groupId: env.NAPCAT_LISTEN_GROUP_ID,
-        message,
-      });
-    },
-    searchWeb: input => {
-      if (!webSearchService) {
-        throw new Error("TAVILY_API_KEY 未配置，无法使用 search_web 工具");
-      }
-
-      return webSearchService.search(input);
-    },
-  },
+  toolRegistry,
 });
 
 const healthHandler = new HealthHandler();
@@ -219,120 +221,101 @@ let isShuttingDown = false;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (isShuttingDown) {
-    logger.warn("Shutdown already in progress", { signal });
+    logger.warn("Shutdown already in progress, ignoring repeated signal", {
+      event: "server.shutdown.signal_ignored",
+      signal,
+    });
     return;
   }
 
   isShuttingDown = true;
-  logger.info("Received shutdown signal, starting graceful shutdown", { signal });
 
-  const forceExitTimer = setTimeout(() => {
-    logger.error("Graceful shutdown timeout, forcing exit", {
+  logger.info("Shutdown signal received", {
+    event: "server.shutdown.signal_received",
+    signal,
+  });
+
+  const timeoutHandle = setTimeout(() => {
+    logger.error("Shutdown timed out", {
+      event: "server.shutdown.timeout",
       timeoutMs: SHUTDOWN_TIMEOUT_MS,
     });
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
-  forceExitTimer.unref();
 
-  let exitCode = 0;
-
-  if (isServerStarted) {
-    try {
+  try {
+    if (isServerStarted) {
       await app.close();
-      logger.info("Fastify server closed");
-    } catch (error) {
-      exitCode = 1;
-      logger.error("Failed to close Fastify server", { error });
-    }
-  }
-
-  try {
-    await napcatGatewayService.stop();
-    logger.info("NapCat gateway stopped");
-  } catch (error) {
-    exitCode = 1;
-    logger.error("Failed to stop NapCat gateway", { error });
-  }
-
-  try {
-    await getLoggerRuntime().close();
-  } catch (error) {
-    exitCode = 1;
-    writeProcessError("Failed to close logger runtime", error);
-  }
-
-  try {
-    await closeDb();
-  } catch (error) {
-    exitCode = 1;
-    writeProcessError("Failed to close database connection", error);
-  }
-
-  clearTimeout(forceExitTimer);
-  process.exit(exitCode);
-}
-
-function registerShutdownSignals(): void {
-  const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
-
-  for (const signal of shutdownSignals) {
-    process.once(signal, () => {
-      void shutdown(signal);
-    });
-  }
-}
-
-async function start() {
-  registerShutdownSignals();
-
-  try {
-    await app.listen({
-      host: "0.0.0.0",
-      port: env.PORT,
-    });
-    isServerStarted = true;
-
-    void napcatGatewayService.start().catch(error => {
-      logger.error("Failed to start NapCat gateway", { error });
-    });
-
-    void agentLoop
-      .run()
-      .then(() => {
-        logger.fatal("Agent loop exited unexpectedly");
-        void shutdown("SIGTERM");
-      })
-      .catch(error => {
-        logger.fatal("Agent loop failed", { error });
-        void shutdown("SIGTERM");
+      logger.info("HTTP server closed", {
+        event: "server.shutdown.http_closed",
       });
+    }
+
+    await napcatGatewayService.stop();
+    logger.info("Napcat gateway closed", {
+      event: "server.shutdown.napcat_closed",
+    });
+
+    await closeDb();
+    logger.info("Database client closed", {
+      event: "server.shutdown.db_closed",
+    });
+
+    clearTimeout(timeoutHandle);
+    process.exit(0);
   } catch (error) {
-    logger.error("Failed to start server", { error });
-
-    try {
-      await getLoggerRuntime().close();
-    } catch (closeLoggerError) {
-      writeProcessError("Failed to close logger runtime after startup failure", closeLoggerError);
-    }
-
-    try {
-      await closeDb();
-    } catch (closeError) {
-      writeProcessError("Failed to close database after startup failure", closeError);
-    }
-
+    clearTimeout(timeoutHandle);
+    logger.errorWithCause("Shutdown failed", error, {
+      event: "server.shutdown.failed",
+      signal,
+    });
     process.exit(1);
   }
 }
 
-void start();
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
 
-function writeProcessError(message: string, error: unknown): void {
-  const payload = {
-    message,
-    error: error instanceof Error ? error.message : String(error),
-    timestamp: new Date().toISOString(),
-  };
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
 
-  process.stderr.write(`${JSON.stringify(payload)}\n`);
+const port = env.PORT;
+
+try {
+  await napcatGatewayService.start();
+
+  await app.listen({ port });
+  isServerStarted = true;
+
+  logger.info("Server started", {
+    event: "server.started",
+    port,
+    pid: process.pid,
+    providers: llmClient.listAvailableProviders(),
+    listenGroupId: env.NAPCAT_LISTEN_GROUP_ID,
+    hasTavilyApiKey: Boolean(env.TAVILY_API_KEY),
+    traceRuntimeEnabled: getLoggerRuntime() !== null,
+  });
+
+  void agentLoop.run().catch(error => {
+    logger.errorWithCause("Agent loop crashed", error, {
+      event: "agent.loop.crashed",
+    });
+    void shutdown("SIGTERM");
+  });
+} catch (error) {
+  logger.errorWithCause("Failed to start server", error, {
+    event: "server.start_failed",
+    port,
+  });
+
+  await closeDb().catch(closeError => {
+    logger.errorWithCause("Failed to close database client after startup failure", closeError, {
+      event: "server.start_failed.db_close_failed",
+    });
+  });
+
+  process.exit(1);
 }

@@ -1,22 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeToolCall } from "../../src/agent/tools/index.js";
+import { createSendGroupMessageTool } from "../../src/agent/tools/send-group-message.js";
 
 describe("send_group_message tool", () => {
   it("should send message by injected gateway function", async () => {
     const sendGroupMessage = vi.fn().mockResolvedValue({ messageId: 9527 });
-    const searchWeb = vi.fn();
+    const tool = createSendGroupMessageTool({ sendGroupMessage });
 
-    const result = await executeToolCall(
-      {
-        id: "tool-1",
-        name: "send_group_message",
-        arguments: {
-          message: "  hello group  ",
-        },
-      },
-      { sendGroupMessage, searchWeb },
-    );
+    const result = await tool.execute({
+      message: "  hello group  ",
+    });
 
+    expect(tool.tool.name).toBe("send_group_message");
     expect(sendGroupMessage).toHaveBeenCalledWith({
       message: "hello group",
     });
@@ -31,18 +25,11 @@ describe("send_group_message tool", () => {
 
   it("should return invalid arguments result when message is empty", async () => {
     const sendGroupMessage = vi.fn().mockResolvedValue({ messageId: 1 });
-    const searchWeb = vi.fn();
+    const tool = createSendGroupMessageTool({ sendGroupMessage });
 
-    const result = await executeToolCall(
-      {
-        id: "tool-2",
-        name: "send_group_message",
-        arguments: {
-          message: "   ",
-        },
-      },
-      { sendGroupMessage, searchWeb },
-    );
+    const result = await tool.execute({
+      message: "   ",
+    });
 
     expect(sendGroupMessage).not.toHaveBeenCalled();
     expect(result.shouldFinishRound).toBe(false);
