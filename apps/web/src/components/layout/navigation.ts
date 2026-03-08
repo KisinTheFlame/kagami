@@ -1,6 +1,7 @@
-import { FileText, History, MessagesSquare, TestTube2, Webhook } from "lucide-react";
+import { FileText, FlaskConical, History, MessagesSquare, TestTube2, Webhook } from "lucide-react";
 
 export const navItems = [
+  { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },

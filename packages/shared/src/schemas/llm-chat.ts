@@ -137,3 +137,35 @@ export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
 export const LlmChatCallListResponseSchema = createPaginatedResponseSchema(LlmChatCallItemSchema);
 
 export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
+
+export const LlmProviderOptionSchema = z
+  .object({
+    id: z.enum(["deepseek", "openai"]),
+    defaultModel: z.string().min(1),
+    isActive: z.boolean(),
+  })
+  .strict();
+
+export type LlmProviderOption = z.infer<typeof LlmProviderOptionSchema>;
+
+export const LlmProviderListResponseSchema = z
+  .object({
+    providers: z.array(LlmProviderOptionSchema),
+  })
+  .strict();
+
+export type LlmProviderListResponse = z.infer<typeof LlmProviderListResponseSchema>;
+
+export const LlmPlaygroundChatRequestSchema = z
+  .object({
+    provider: z.enum(["deepseek", "openai"]),
+    model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+    request: LlmChatRequestPayloadSchema,
+  })
+  .strict();
+
+export type LlmPlaygroundChatRequest = z.infer<typeof LlmPlaygroundChatRequestSchema>;
+
+export const LlmPlaygroundChatResponseSchema = LlmChatResponsePayloadSchema;
+
+export type LlmPlaygroundChatResponse = z.infer<typeof LlmPlaygroundChatResponseSchema>;
