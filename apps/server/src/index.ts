@@ -14,11 +14,17 @@ import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatGroupMessageDao } from "./dao/impl/napcat-group-message.impl.dao.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
+import { LlmHandler } from "./handler/llm.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
 import { NapcatEventHandler } from "./handler/napcat-event.handler.js";
 import { NapcatGroupMessageHandler } from "./handler/napcat-group-message.handler.js";
 import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
+import {
+  LlmProviderResponseError,
+  LlmProviderUnavailableError,
+  LlmProviderUpstreamError,
+} from "./llm/errors.js";
 import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
@@ -27,6 +33,8 @@ import type { AppLogQueryService } from "./service/app-log-query.service.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
 import type { LlmChatCallQueryService } from "./service/llm-chat-call-query.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
+import type { LlmPlaygroundService } from "./service/llm-playground.service.js";
+import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.service.js";
 import type { NapcatEventQueryService } from "./service/napcat-event-query.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import type { NapcatGroupMessageQueryService } from "./service/napcat-group-message-query.service.js";
@@ -34,6 +42,7 @@ import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-me
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { NapcatGatewayError } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
+import { TavilyWebSearchService } from "./service/tavily-web-search.impl.service.js";
 
 const app = Fastify({ logger: false, disableRequestLogging: true });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -60,7 +69,13 @@ const napcatGroupMessageQueryService: NapcatGroupMessageQueryService =
   new DefaultNapcatGroupMessageQueryService({
     napcatGroupMessageDao,
   });
+const webSearchService = env.TAVILY_API_KEY
+  ? new TavilyWebSearchService({
+      apiKey: env.TAVILY_API_KEY,
+    })
+  : null;
 const llmClient = createLlmClient({ llmChatCallDao });
+const llmPlaygroundService: LlmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
 const contextManager: AgentContextManager = new DefaultAgentContextManager({});
 const eventQueue: AgentEventQueue = new InMemoryAgentEventQueue();
 const napcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
@@ -92,10 +107,18 @@ const agentLoop = new AgentLoop({
         message,
       });
     },
+    searchWeb: input => {
+      if (!webSearchService) {
+        throw new Error("TAVILY_API_KEY 未配置，无法使用 search_web 工具");
+      }
+
+      return webSearchService.search(input);
+    },
   },
 });
 
 const healthHandler = new HealthHandler();
+const llmHandler = new LlmHandler({ llmPlaygroundService });
 const llmChatCallHandler = new LlmChatCallHandler({ llmChatCallQueryService });
 const appLogHandler = new AppLogHandler({ appLogQueryService });
 const napcatEventHandler = new NapcatEventHandler({ napcatEventQueryService });
@@ -139,6 +162,34 @@ app.setErrorHandler((error, request, reply) => {
     });
   }
 
+  if (error instanceof LlmProviderUnavailableError) {
+    logger.warn("Requested LLM provider is unavailable", {
+      event: "http.request.llm_provider_unavailable",
+      method: request.method,
+      url: request.url,
+      provider: error.provider,
+    });
+
+    return reply.code(400).send({
+      code: "LLM_PROVIDER_UNAVAILABLE",
+      message: "所选 LLM provider 当前不可用",
+    });
+  }
+
+  if (error instanceof LlmProviderResponseError || error instanceof LlmProviderUpstreamError) {
+    logger.errorWithCause("LLM upstream request failed", error, {
+      event: "http.request.llm_upstream_error",
+      method: request.method,
+      url: request.url,
+      provider: error.provider,
+    });
+
+    return reply.code(502).send({
+      code: "LLM_UPSTREAM_ERROR",
+      message: "LLM 上游服务调用失败",
+    });
+  }
+
   logger.errorWithCause("Unhandled request error", error, {
     event: "http.request.unhandled_error",
     method: request.method,
@@ -153,6 +204,7 @@ app.setErrorHandler((error, request, reply) => {
 
 for (const handler of [
   healthHandler,
+  llmHandler,
   llmChatCallHandler,
   appLogHandler,
   napcatEventHandler,

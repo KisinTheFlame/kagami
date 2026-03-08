@@ -26,6 +26,7 @@ describe("AgentLoop", () => {
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
       chat,
+      listAvailableProviders: vi.fn().mockReturnValue([]),
     };
 
     const getSystemPrompt = vi.fn().mockReturnValue("system-prompt");
@@ -72,6 +73,7 @@ describe("AgentLoop", () => {
       eventQueue,
       toolExecutionDeps: {
         sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+        searchWeb: vi.fn(),
       },
     });
 

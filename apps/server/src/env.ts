@@ -1,4 +1,7 @@
+import { existsSync } from "node:fs";
 import { z } from "zod";
+
+loadLocalEnvFile();
 
 const emptyStringToUndefined = (value: unknown): unknown => {
   if (typeof value === "string" && value.trim().length === 0) {
@@ -40,6 +43,7 @@ const EnvSchema = z
       z.string().url().default("https://api.openai.com/v1"),
     ),
     OPENAI_CHAT_MODEL: z.preprocess(emptyStringToUndefined, z.string().default("gpt-4o-mini")),
+    TAVILY_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
     NAPCAT_WS_URL: z.preprocess(emptyStringToUndefined, z.string().url()),
     NAPCAT_WS_RECONNECT_MS: z.preprocess(parseNumberEnv, z.number().int().positive()),
     NAPCAT_WS_REQUEST_TIMEOUT_MS: z.preprocess(parseNumberEnv, z.number().int().positive()),
@@ -65,3 +69,13 @@ const EnvSchema = z
   });
 
 export const env = EnvSchema.parse(process.env);
+
+function loadLocalEnvFile(): void {
+  const envFileUrl = new URL("../../../.env", import.meta.url);
+
+  if (!existsSync(envFileUrl)) {
+    return;
+  }
+
+  process.loadEnvFile(envFileUrl.pathname);
+}

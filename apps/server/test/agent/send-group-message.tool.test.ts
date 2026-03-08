@@ -4,6 +4,7 @@ import { executeToolCall } from "../../src/agent/tools/index.js";
 describe("send_group_message tool", () => {
   it("should send message by injected gateway function", async () => {
     const sendGroupMessage = vi.fn().mockResolvedValue({ messageId: 9527 });
+    const searchWeb = vi.fn();
 
     const result = await executeToolCall(
       {
@@ -13,7 +14,7 @@ describe("send_group_message tool", () => {
           message: "  hello group  ",
         },
       },
-      { sendGroupMessage },
+      { sendGroupMessage, searchWeb },
     );
 
     expect(sendGroupMessage).toHaveBeenCalledWith({
@@ -30,6 +31,7 @@ describe("send_group_message tool", () => {
 
   it("should return invalid arguments result when message is empty", async () => {
     const sendGroupMessage = vi.fn().mockResolvedValue({ messageId: 1 });
+    const searchWeb = vi.fn();
 
     const result = await executeToolCall(
       {
@@ -39,7 +41,7 @@ describe("send_group_message tool", () => {
           message: "   ",
         },
       },
-      { sendGroupMessage },
+      { sendGroupMessage, searchWeb },
     );
 
     expect(sendGroupMessage).not.toHaveBeenCalled();
