@@ -63,7 +63,7 @@ describe("TavilyWebSearchService", () => {
       include_domains: ["example.com"],
       exclude_domains: ["ignored.com"],
       time_range: "month",
-      include_answer: "basic",
+      include_answer: "advanced",
       include_raw_content: false,
     });
 
