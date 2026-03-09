@@ -15,7 +15,10 @@ type AgentLoopDeps = {
   contextManager: AgentContextManager;
   eventQueue: AgentEventQueue;
   toolRegistry: AgentToolRegistry;
+  now?: () => Date;
 };
+
+const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 export class AgentLoop {
   private readonly llmClient: LlmClient;
@@ -23,11 +26,13 @@ export class AgentLoop {
   private readonly eventQueue: AgentEventQueue;
   private readonly activeTools: AgentToolDefinition[];
   private readonly activeToolMap: AgentToolRegistry;
+  private readonly now: () => Date;
 
-  public constructor({ llmClient, contextManager, eventQueue, toolRegistry }: AgentLoopDeps) {
+  public constructor({ llmClient, contextManager, eventQueue, toolRegistry, now }: AgentLoopDeps) {
     this.llmClient = llmClient;
     this.contextManager = contextManager;
     this.eventQueue = eventQueue;
+    this.now = now ?? (() => new Date());
     this.activeTools = ENABLED_TOOL_NAMES.map(toolName => {
       const toolDefinition = toolRegistry[toolName];
       if (!toolDefinition) {
@@ -43,7 +48,11 @@ export class AgentLoop {
 
   public async run(): Promise<void> {
     while (true) {
+      const shouldAddWakeReminder = this.eventQueue.size() === 0;
       await this.eventQueue.waitForEvent();
+      if (shouldAddWakeReminder) {
+        this.contextManager.pushUserMessage(createWakeReminder(this.now()));
+      }
 
       while (true) {
         for (const event of this.eventQueue.drainAll()) {
@@ -96,4 +105,19 @@ export class AgentLoop {
 
     return toolDefinition.execute(argumentsValue);
   }
+}
+
+function createWakeReminder(now: Date): string {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+
+  return `<system_reminder>当前时间为北京时间 ${values.year} 年 ${values.month} 月 ${values.day} 日 ${values.hour}:${values.minute}</system_reminder>`;
 }

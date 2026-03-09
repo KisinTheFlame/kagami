@@ -23,6 +23,7 @@ function createLlmResponse(): LlmChatResponsePayload {
 describe("AgentLoop", () => {
   it("should consume queue events and execute one enabled tool round", async () => {
     const stopError = new StopLoopError("stop-loop");
+    const now = vi.fn().mockReturnValue(new Date("2026-03-09T10:21:00.000Z"));
     const finishExecute = vi.fn().mockResolvedValue({
       content: JSON.stringify({ finished: true }),
       shouldFinishRound: true,
@@ -114,13 +115,19 @@ describe("AgentLoop", () => {
       contextManager,
       eventQueue,
       toolRegistry,
+      now,
     });
 
     await expect(loop.run()).rejects.toBe(stopError);
 
     expect(waitForEvent).toHaveBeenCalledTimes(2);
     expect(drainAll).toHaveBeenCalled();
-    expect(pushUserMessage).toHaveBeenCalledWith(
+    expect(pushUserMessage).toHaveBeenNthCalledWith(
+      1,
+      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
+    );
+    expect(pushUserMessage).toHaveBeenNthCalledWith(
+      2,
       [
         "[NAPCAT_GROUP_MESSAGE]",
         "group_id=123456",
@@ -150,6 +157,97 @@ describe("AgentLoop", () => {
     expect(disabledExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
     expect(pushToolMessage).toHaveBeenCalledWith("tool-call-1", JSON.stringify({ finished: true }));
+  });
+
+  it("should add a wake reminder each time the loop resumes from sleep", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
+      .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
+    const finishExecute = vi.fn().mockResolvedValue({
+      content: JSON.stringify({ finished: true }),
+      shouldFinishRound: true,
+    });
+    const toolRegistry: AgentToolRegistry = {
+      finish: {
+        tool: {
+          name: "finish",
+          description: "finish",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: finishExecute,
+      },
+      search_web: {
+        tool: {
+          name: "search_web",
+          description: "search",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: vi.fn(),
+      },
+      send_group_message: {
+        tool: {
+          name: "send_group_message",
+          description: "send",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: vi.fn(),
+      },
+    };
+
+    const chat = vi.fn().mockResolvedValue(createLlmResponse());
+    const contextManager: AgentContextManager = {
+      getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),
+      getMessages: vi.fn().mockReturnValue([]),
+      getSteps: vi.fn().mockReturnValue(0),
+      pushUserMessage: vi.fn(),
+      pushAssistantMessage: vi.fn().mockReturnValue("done"),
+      pushToolMessage: vi.fn(),
+    };
+
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      drainAll: vi.fn().mockReturnValue([]),
+      size: vi.fn().mockReturnValue(0),
+      waitForEvent: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(stopError),
+    };
+
+    const loop = new AgentLoop({
+      llmClient: {
+        chat,
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      contextManager,
+      eventQueue,
+      toolRegistry,
+      now,
+    });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(contextManager.pushUserMessage).toHaveBeenCalledTimes(2);
+    expect(contextManager.pushUserMessage).toHaveBeenNthCalledWith(
+      1,
+      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
+    );
+    expect(contextManager.pushUserMessage).toHaveBeenNthCalledWith(
+      2,
+      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:22</system_reminder>",
+    );
   });
 
   it("should throw when an enabled tool is missing from registry", () => {
