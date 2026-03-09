@@ -1,13 +1,15 @@
-import prismaClientPkg from "@prisma/client";
+import prismaClientPkg, { type PrismaClient as PrismaClientType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { env } from "../env.js";
 
 const { PrismaClient } = prismaClientPkg;
-const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 
-export const db = new PrismaClient({ adapter });
-export type Database = typeof db;
+export type Database = PrismaClientType;
 
-export async function closeDb(): Promise<void> {
-  await db.$disconnect();
+export function createDbClient({ databaseUrl }: { databaseUrl: string }): Database {
+  const adapter = new PrismaPg({ connectionString: databaseUrl });
+  return new PrismaClient({ adapter });
+}
+
+export async function closeDb(database: Database): Promise<void> {
+  await database.$disconnect();
 }

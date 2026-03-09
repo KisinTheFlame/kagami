@@ -68,7 +68,7 @@ describe("AgentLoop", () => {
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
       chat,
-      listAvailableProviders: vi.fn().mockReturnValue([]),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
 
     const getSystemPrompt = vi.fn().mockReturnValue("system-prompt");
@@ -155,7 +155,7 @@ describe("AgentLoop", () => {
   it("should throw when an enabled tool is missing from registry", () => {
     const llmClient: LlmClient = {
       chat: vi.fn(),
-      listAvailableProviders: vi.fn().mockReturnValue([]),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const contextManager: AgentContextManager = {
       getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),

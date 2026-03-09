@@ -1,22 +1,32 @@
-import { AGENT_SYSTEM_PROMPT } from "./context.js";
+import { createAgentSystemPrompt } from "./context.js";
 import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
 import type { LlmMessage } from "../llm/types.js";
 
 type DefaultAgentContextManagerOptions = {
   systemPrompt?: string;
+  systemPromptFactory?: () => Promise<string> | string;
 };
 
 export class DefaultAgentContextManager implements AgentContextManager {
-  private readonly systemPrompt: string;
+  private readonly systemPrompt: string | (() => Promise<string> | string);
   private readonly messages: LlmMessage[];
   private steps = 0;
 
-  public constructor({ systemPrompt }: DefaultAgentContextManagerOptions) {
-    this.systemPrompt = systemPrompt ?? AGENT_SYSTEM_PROMPT;
+  public constructor({ systemPrompt, systemPromptFactory }: DefaultAgentContextManagerOptions) {
+    this.systemPrompt =
+      systemPromptFactory ??
+      systemPrompt ??
+      createAgentSystemPrompt({
+        botQQ: "unknown",
+      });
     this.messages = [];
   }
 
-  public getSystemPrompt(): string {
+  public async getSystemPrompt(): Promise<string> {
+    if (typeof this.systemPrompt === "function") {
+      return await this.systemPrompt();
+    }
+
     return this.systemPrompt;
   }
 

@@ -1,27 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ConfigManager, LlmRuntimeConfig } from "../../src/config/config.manager.js";
 import type { LlmChatCallDao } from "../../src/dao/llm-chat-call.dao.js";
 import type { LlmProvider } from "../../src/llm/provider.js";
-
-const ORIGINAL_ENV = { ...process.env };
-
-function applyBaseEnv(): void {
-  process.env.NODE_ENV = "test";
-  process.env.DATABASE_URL = "https://example.com/database";
-  process.env.LLM_ACTIVE_PROVIDER = "openai";
-  process.env.LLM_TIMEOUT_MS = "45000";
-  process.env.OPENAI_BASE_URL = "https://api.openai.com/v1";
-  process.env.OPENAI_CHAT_MODEL = "gpt-4o-mini";
-  process.env.OPENAI_API_KEY = "openai-key";
-  process.env.DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-  process.env.DEEPSEEK_CHAT_MODEL = "deepseek-chat";
-  delete process.env.DEEPSEEK_API_KEY;
-  process.env.NAPCAT_WS_URL = "https://example.com/ws";
-  process.env.NAPCAT_WS_RECONNECT_MS = "1000";
-  process.env.NAPCAT_WS_REQUEST_TIMEOUT_MS = "1000";
-  process.env.NAPCAT_LISTEN_GROUP_ID = "10001";
-  process.env.BOT_QQ = "10002";
-  delete process.env.TAVILY_API_KEY;
-}
 
 function createLlmChatCallDaoMock(): LlmChatCallDao {
   return {
@@ -32,28 +12,57 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
   };
 }
 
+function createLlmRuntimeConfig(overrides: Partial<LlmRuntimeConfig> = {}): LlmRuntimeConfig {
+  return {
+    activeProvider: "openai",
+    timeoutMs: 45_000,
+    deepseek: {
+      apiKey: undefined,
+      baseUrl: "https://api.deepseek.com",
+      chatModel: "deepseek-chat",
+      timeoutMs: 45_000,
+    },
+    openai: {
+      apiKey: "openai-key",
+      baseUrl: "https://api.openai.com/v1",
+      chatModel: "gpt-4o-mini",
+      timeoutMs: 45_000,
+    },
+    ...overrides,
+  };
+}
+
+function createConfigManagerMock(
+  llmRuntimeConfig: LlmRuntimeConfig = createLlmRuntimeConfig(),
+): ConfigManager {
+  return {
+    getBootConfig: vi.fn(),
+    getLlmRuntimeConfig: vi.fn().mockResolvedValue(llmRuntimeConfig),
+    getTavilyConfig: vi.fn(),
+    getBotProfileConfig: vi.fn(),
+  };
+}
+
 describe("createLlmClient", () => {
-  beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-    applyBaseEnv();
-    vi.resetModules();
-  });
-
-  afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-  });
-
   it("should list configured providers with the active provider first", async () => {
-    process.env.DEEPSEEK_API_KEY = "deepseek-key";
-    vi.resetModules();
-
     const { createLlmClient } = await import("../../src/llm/client.js");
+    const configManager = createConfigManagerMock(
+      createLlmRuntimeConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          baseUrl: "https://api.deepseek.com",
+          chatModel: "deepseek-chat",
+          timeoutMs: 45_000,
+        },
+      }),
+    );
 
     const client = createLlmClient({
+      configManager,
       llmChatCallDao: createLlmChatCallDaoMock(),
     });
 
-    expect(client.listAvailableProviders()).toEqual([
+    await expect(client.listAvailableProviders()).resolves.toEqual([
       {
         id: "openai",
         defaultModel: "gpt-4o-mini",
@@ -84,6 +93,7 @@ describe("createLlmClient", () => {
     };
 
     const client = createLlmClient({
+      configManager: createConfigManagerMock(),
       llmChatCallDao,
       providers: {
         openai: provider,
@@ -110,6 +120,17 @@ describe("createLlmClient", () => {
     const { createLlmClient } = await import("../../src/llm/client.js");
 
     const client = createLlmClient({
+      configManager: createConfigManagerMock(
+        createLlmRuntimeConfig({
+          activeProvider: "deepseek",
+          openai: {
+            apiKey: undefined,
+            baseUrl: "https://api.openai.com/v1",
+            chatModel: "gpt-4o-mini",
+            timeoutMs: 45_000,
+          },
+        }),
+      ),
       llmChatCallDao: createLlmChatCallDaoMock(),
       providers: {},
     });

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { LlmProviderOption } from "@kagami/shared";
 import { assertNever } from "@kagami/shared";
+import type { ConfigManager, LlmRuntimeConfig } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { env } from "../env.js";
 import { LlmProviderUnavailableError } from "./errors.js";
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
@@ -11,10 +11,11 @@ import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "./ty
 
 export interface LlmClient {
   chat(request: LlmChatRequest, options?: LlmChatOptions): Promise<LlmChatResponsePayload>;
-  listAvailableProviders(): LlmProviderOption[];
+  listAvailableProviders(): Promise<LlmProviderOption[]>;
 }
 
 type CreateLlmClientOptions = {
+  configManager: ConfigManager;
   llmChatCallDao: LlmChatCallDao;
   providers?: Partial<Record<LlmProviderId, LlmProvider>>;
 };
@@ -25,20 +26,21 @@ export type LlmChatOptions = {
 };
 
 export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
-  const providers = createProviderRegistry(options.providers);
-  const availableProviders = listAvailableProviders(providers);
-
   return {
-    listAvailableProviders(): LlmProviderOption[] {
-      return availableProviders;
+    async listAvailableProviders(): Promise<LlmProviderOption[]> {
+      const config = await options.configManager.getLlmRuntimeConfig();
+      const providers = createProviderRegistry(config, options.providers);
+      return listAvailableProviders(config, providers);
     },
     async chat(
       request: LlmChatRequest,
       chatOptions?: LlmChatOptions,
     ): Promise<LlmChatResponsePayload> {
+      const config = await options.configManager.getLlmRuntimeConfig();
+      const providers = createProviderRegistry(config, options.providers);
       const requestId = randomUUID();
       const startedAt = Date.now();
-      const providerId = chatOptions?.providerId ?? env.LLM_ACTIVE_PROVIDER;
+      const providerId = chatOptions?.providerId ?? config.activeProvider;
       const provider = providers[providerId];
       const recordCall = chatOptions?.recordCall ?? true;
 
@@ -46,10 +48,14 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
         throw new LlmProviderUnavailableError({ provider: providerId });
       }
 
-      const model = request.model ?? getDefaultModel(providerId);
+      const model = request.model ?? getDefaultModel(config, providerId);
+      const requestWithModel = {
+        ...request,
+        model,
+      };
 
       try {
-        const response = await provider.chat(request);
+        const response = await provider.chat(requestWithModel);
         const latencyMs = Date.now() - startedAt;
 
         if (recordCall) {
@@ -59,7 +65,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               model: response.model,
               requestId,
               latencyMs,
-              request,
+              request: requestWithModel,
               response,
             })
             .catch(() => {});
@@ -76,7 +82,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               model,
               requestId,
               latencyMs,
-              request,
+              request: requestWithModel,
               error,
             })
             .catch(() => {});
@@ -89,26 +95,27 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
 }
 
 function createProviderRegistry(
+  config: LlmRuntimeConfig,
   providerOverrides?: Partial<Record<LlmProviderId, LlmProvider>>,
 ): Partial<Record<LlmProviderId, LlmProvider>> {
   return {
-    deepseek:
-      providerOverrides?.deepseek ?? (env.DEEPSEEK_API_KEY ? createDeepSeekProvider() : undefined),
-    openai: providerOverrides?.openai ?? (env.OPENAI_API_KEY ? createOpenAiProvider() : undefined),
+    deepseek: providerOverrides?.deepseek ?? createRuntimeProvider("deepseek", config),
+    openai: providerOverrides?.openai ?? createRuntimeProvider("openai", config),
   };
 }
 
 function listAvailableProviders(
+  config: LlmRuntimeConfig,
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
 ): LlmProviderOption[] {
   const orderedIds = (["deepseek", "openai"] as const)
     .filter(providerId => providers[providerId] !== undefined)
     .sort((left, right) => {
-      if (left === env.LLM_ACTIVE_PROVIDER) {
+      if (left === config.activeProvider) {
         return -1;
       }
 
-      if (right === env.LLM_ACTIVE_PROVIDER) {
+      if (right === config.activeProvider) {
         return 1;
       }
 
@@ -117,17 +124,41 @@ function listAvailableProviders(
 
   return orderedIds.map(providerId => ({
     id: providerId,
-    defaultModel: getDefaultModel(providerId),
-    isActive: providerId === env.LLM_ACTIVE_PROVIDER,
+    defaultModel: getDefaultModel(config, providerId),
+    isActive: providerId === config.activeProvider,
   }));
 }
 
-function getDefaultModel(providerId: LlmProviderId): string {
+function getDefaultModel(config: LlmRuntimeConfig, providerId: LlmProviderId): string {
   switch (providerId) {
     case "deepseek":
-      return env.DEEPSEEK_CHAT_MODEL;
+      return config.deepseek.chatModel;
     case "openai":
-      return env.OPENAI_CHAT_MODEL;
+      return config.openai.chatModel;
+    default:
+      return assertNever(providerId, "Unsupported provider");
+  }
+}
+
+function createRuntimeProvider(
+  providerId: LlmProviderId,
+  config: LlmRuntimeConfig,
+): LlmProvider | undefined {
+  switch (providerId) {
+    case "deepseek":
+      return config.deepseek.apiKey
+        ? createDeepSeekProvider({
+            ...config.deepseek,
+            apiKey: config.deepseek.apiKey,
+          })
+        : undefined;
+    case "openai":
+      return config.openai.apiKey
+        ? createOpenAiProvider({
+            ...config.openai,
+            apiKey: config.openai.apiKey,
+          })
+        : undefined;
     default:
       return assertNever(providerId, "Unsupported provider");
   }

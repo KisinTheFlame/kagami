@@ -15,7 +15,7 @@ describe("LlmHandler", () => {
   });
 
   it("should list configured providers", async () => {
-    const listProviders = vi.fn().mockReturnValue({
+    const listProviders = vi.fn().mockResolvedValue({
       providers: [
         {
           id: "openai",

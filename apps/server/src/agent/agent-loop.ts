@@ -51,7 +51,7 @@ export class AgentLoop {
         }
 
         const completion = await this.llmClient.chat({
-          system: this.contextManager.getSystemPrompt(),
+          system: await this.contextManager.getSystemPrompt(),
           messages: this.contextManager.getMessages(),
           tools: this.activeTools.map(toolDefinition => toolDefinition.tool),
           toolChoice: "auto",

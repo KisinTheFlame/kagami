@@ -5,6 +5,6 @@ import type {
 } from "@kagami/shared";
 
 export interface LlmPlaygroundService {
-  listProviders(): LlmProviderListResponse;
+  listProviders(): Promise<LlmProviderListResponse>;
   chat(input: LlmPlaygroundChatRequest): Promise<LlmPlaygroundChatResponse>;
 }

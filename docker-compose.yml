@@ -23,23 +23,9 @@ services:
     image: kagami-server:latest
     environment:
       NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      LLM_ACTIVE_PROVIDER: ${LLM_ACTIVE_PROVIDER}
-      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
-      DEEPSEEK_CHAT_MODEL: ${DEEPSEEK_CHAT_MODEL}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL}
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
       TZ: ${TZ:-Asia/Shanghai}
-      NAPCAT_WS_URL: ${NAPCAT_WS_URL:-ws://napcat:3001/}
-      NAPCAT_WS_RECONNECT_MS: ${NAPCAT_WS_RECONNECT_MS:-3000}
-      NAPCAT_WS_REQUEST_TIMEOUT_MS: ${NAPCAT_WS_REQUEST_TIMEOUT_MS:-10000}
-      NAPCAT_LISTEN_GROUP_ID: ${NAPCAT_LISTEN_GROUP_ID:?NAPCAT_LISTEN_GROUP_ID is required}
-      BOT_QQ: ${BOT_QQ:?BOT_QQ is required}
+    volumes:
+      - ./gaia.config.yml:/app/gaia.config.yml:ro
     ports:
       - "3000:3000"
     healthcheck:

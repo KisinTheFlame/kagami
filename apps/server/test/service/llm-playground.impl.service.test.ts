@@ -3,10 +3,10 @@ import { DefaultLlmPlaygroundService } from "../../src/service/llm-playground.im
 import type { LlmClient } from "../../src/llm/client.js";
 
 describe("DefaultLlmPlaygroundService", () => {
-  it("should return available providers from llm client", () => {
+  it("should return available providers from llm client", async () => {
     const llmClient: LlmClient = {
       chat: vi.fn(),
-      listAvailableProviders: vi.fn().mockReturnValue([
+      listAvailableProviders: vi.fn().mockResolvedValue([
         {
           id: "openai",
           defaultModel: "gpt-4o-mini",
@@ -17,7 +17,7 @@ describe("DefaultLlmPlaygroundService", () => {
 
     const service = new DefaultLlmPlaygroundService({ llmClient });
 
-    expect(service.listProviders()).toEqual({
+    await expect(service.listProviders()).resolves.toEqual({
       providers: [
         {
           id: "openai",
@@ -40,7 +40,7 @@ describe("DefaultLlmPlaygroundService", () => {
     });
     const llmClient: LlmClient = {
       chat,
-      listAvailableProviders: vi.fn().mockReturnValue([]),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
 
     const service = new DefaultLlmPlaygroundService({ llmClient });

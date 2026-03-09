@@ -3,7 +3,7 @@ import type { LlmMessage } from "../llm/types.js";
 export type AssistantMessage = Extract<LlmMessage, { role: "assistant" }>;
 
 export interface AgentContextManager {
-  getSystemPrompt(): string;
+  getSystemPrompt(): Promise<string> | string;
   getMessages(): LlmMessage[];
   getSteps(): number;
   pushUserMessage(content: string): void;

@@ -17,9 +17,9 @@ export class DefaultLlmPlaygroundService implements LlmPlaygroundService {
     this.llmClient = llmClient;
   }
 
-  public listProviders(): LlmProviderListResponse {
+  public async listProviders(): Promise<LlmProviderListResponse> {
     return {
-      providers: this.llmClient.listAvailableProviders(),
+      providers: await this.llmClient.listAvailableProviders(),
     };
   }
 
