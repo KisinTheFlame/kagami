@@ -69,11 +69,19 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
               <>
                 <ContentCard
                   title="Assistant 输出"
-                  preview={buildPreview(parsed.response.message.content)}
+                  preview={buildMessagePreview({
+                    content: parsed.response.message.content,
+                    toolCalls: parsed.response.message.toolCalls,
+                  })}
                 >
-                  <pre className="whitespace-pre-wrap break-words text-xs leading-6">
-                    {parsed.response.message.content}
-                  </pre>
+                  <MessageContent
+                    content={parsed.response.message.content}
+                    emptyHint={
+                      parsed.response.message.toolCalls.length > 0
+                        ? "该输出仅包含工具调用。"
+                        : undefined
+                    }
+                  />
                   {parsed.response.message.toolCalls.length > 0 ? (
                     <ToolCallsList toolCalls={parsed.response.message.toolCalls} className="mt-3" />
                   ) : null}
@@ -163,14 +171,24 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
 
 function MessageCard({ message, index }: { message: LlmRequestMessage; index: number }) {
   const title = `消息 #${index + 1}`;
-  const preview = buildPreview(message.content);
+  const preview = buildMessagePreview({
+    content: message.content,
+    toolCalls: message.role === "assistant" ? message.toolCalls : [],
+  });
 
   return (
     <ContentCard title={title} preview={preview}>
       <div className="mb-2 flex items-center gap-2">
         <Badge variant="secondary">{message.role}</Badge>
       </div>
-      <pre className="whitespace-pre-wrap break-words text-xs leading-6">{message.content}</pre>
+      <MessageContent
+        content={message.content}
+        emptyHint={
+          message.role === "assistant" && message.toolCalls.length > 0
+            ? "该消息仅包含工具调用。"
+            : undefined
+        }
+      />
 
       {message.role === "assistant" && message.toolCalls.length > 0 ? (
         <ToolCallsList toolCalls={message.toolCalls} className="mt-3" />
@@ -183,6 +201,15 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
       ) : null}
     </ContentCard>
   );
+}
+
+function MessageContent({ content, emptyHint }: { content: string; emptyHint?: string }) {
+  const normalizedContent = content.trim();
+  if (normalizedContent.length === 0) {
+    return emptyHint ? <p className="text-xs text-muted-foreground">{emptyHint}</p> : null;
+  }
+
+  return <pre className="whitespace-pre-wrap break-words text-xs leading-6">{content}</pre>;
 }
 
 function ToolCallsList({
@@ -301,6 +328,32 @@ function buildPreview(content: string): string {
   }
 
   return `${singleLine.slice(0, 60)}...`;
+}
+
+function buildMessagePreview({
+  content,
+  toolCalls = [],
+}: {
+  content: string;
+  toolCalls?: Array<{ name: string }>;
+}): string {
+  const contentPreview = buildPreview(content);
+  if (contentPreview !== "(空内容)") {
+    return contentPreview;
+  }
+
+  if (toolCalls.length === 0) {
+    return contentPreview;
+  }
+
+  const toolNames = toolCalls.slice(0, 2).map(toolCall => toolCall.name);
+  const remainingCount = toolCalls.length - toolNames.length;
+  const summary =
+    remainingCount > 0
+      ? `${toolNames.join("、")} 等 ${toolCalls.length} 个工具`
+      : toolNames.join("、");
+
+  return `工具调用: ${summary}`;
 }
 
 function safeStringify(value: unknown): string {
