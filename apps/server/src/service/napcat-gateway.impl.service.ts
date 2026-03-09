@@ -288,13 +288,15 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         eventPayload,
         groupId,
         userId,
+        nickname,
         selfId,
         rawMessage,
       })
     ) {
       const groupMessageEvent = {
         groupId: groupId!,
-        userId,
+        userId: userId!,
+        nickname: nickname!,
         rawMessage: rawMessage!,
         messageId: toNullablePositiveInt(eventPayload.message_id),
         time: toNullablePositiveInt(eventPayload.time),
@@ -363,12 +365,14 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     eventPayload,
     groupId,
     userId,
+    nickname,
     selfId,
     rawMessage,
   }: {
     eventPayload: z.infer<typeof PostTypeEventSchema>;
     groupId: string | null;
     userId: string | null;
+    nickname: string | null;
     selfId: string | null;
     rawMessage: string | null;
   }): boolean {
@@ -381,6 +385,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
 
     if (!rawMessage) {
+      return false;
+    }
+
+    if (!userId || !nickname) {
       return false;
     }
 

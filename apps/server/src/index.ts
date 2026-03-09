@@ -181,6 +181,7 @@ try {
         type: "napcat_group_message",
         groupId: event.groupId,
         userId: event.userId,
+        nickname: event.nickname,
         rawMessage: event.rawMessage,
         messageId: event.messageId,
         time: event.time,

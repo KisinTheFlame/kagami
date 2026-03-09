@@ -297,6 +297,7 @@ describe("DefaultNapcatGatewayService", () => {
     expect(onGroupMessage).toHaveBeenCalledWith({
       groupId: "987654",
       userId: "123456",
+      nickname: "测试群名片",
       rawMessage: "hello group",
       messageId: 9988,
       time: 1710000000,

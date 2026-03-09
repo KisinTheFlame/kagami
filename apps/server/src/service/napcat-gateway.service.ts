@@ -5,7 +5,8 @@ export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
 
 export type NapcatGroupMessageEvent = {
   groupId: string;
-  userId: string | null;
+  userId: string;
+  nickname: string;
   rawMessage: string;
   messageId: number | null;
   time: number | null;

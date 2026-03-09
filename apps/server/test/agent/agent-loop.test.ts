@@ -95,6 +95,7 @@ describe("AgentLoop", () => {
           type: "napcat_group_message",
           groupId: "123456",
           userId: "654321",
+          nickname: "测试昵称",
           rawMessage: "hello",
           messageId: 1001,
           time: 1710000000,
@@ -128,14 +129,7 @@ describe("AgentLoop", () => {
     );
     expect(pushUserMessage).toHaveBeenNthCalledWith(
       2,
-      [
-        "[NAPCAT_GROUP_MESSAGE]",
-        "group_id=123456",
-        "user_id=654321",
-        "message_id=1001",
-        "time=1710000000",
-        "raw_message=hello",
-      ].join("\n"),
+      ["<message>", "测试昵称 (654321):", "hello", "</message>"].join("\n"),
     );
     expect(chat).toHaveBeenCalledTimes(1);
     expect(chat).toHaveBeenCalledWith({
@@ -353,6 +347,7 @@ describe("AgentLoop", () => {
             type: "napcat_group_message",
             groupId: "123456",
             userId: "654321",
+            nickname: "测试昵称",
             rawMessage: "hello",
             messageId: 1001,
             time: 1710000000,
@@ -364,6 +359,7 @@ describe("AgentLoop", () => {
             type: "napcat_group_message",
             groupId: "123456",
             userId: "654321",
+            nickname: "测试昵称",
             rawMessage: "world",
             messageId: 1002,
             time: 1710000001,

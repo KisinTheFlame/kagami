@@ -1,7 +1,8 @@
 export type NapcatGroupMessageEvent = {
   type: "napcat_group_message";
   groupId: string;
-  userId: string | null;
+  userId: string;
+  nickname: string;
   rawMessage: string;
   messageId: number | null;
   time: number | null;
@@ -13,12 +14,10 @@ export function formatEventToUserMessage(event: Event): string | null {
   switch (event.type) {
     case "napcat_group_message":
       return [
-        "[NAPCAT_GROUP_MESSAGE]",
-        `group_id=${event.groupId}`,
-        `user_id=${event.userId ?? "unknown"}`,
-        `message_id=${event.messageId ?? "unknown"}`,
-        `time=${event.time ?? "unknown"}`,
-        `raw_message=${event.rawMessage}`,
+        "<message>",
+        `${event.nickname} (${event.userId}):`,
+        event.rawMessage,
+        "</message>",
       ].join("\n");
   }
 }
