@@ -41,9 +41,6 @@ importers:
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@kisinwen/gaia-client':
-        specifier: ^0.2.1
-        version: 0.2.1
       '@prisma/adapter-pg':
         specifier: ^7.4.2
         version: 7.4.2
@@ -65,6 +62,9 @@ importers:
       prisma:
         specifier: ^7.4.2
         version: 7.4.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
       zod:
         specifier: ^3.24.4
         version: 3.25.76
@@ -526,12 +526,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@kisinwen/gaia-client@0.2.1':
-    resolution: {integrity: sha512-pbvFHBlQcC7dGJpZuQ1TCFnSKtJsTvqOsqAw402dnFpVcPeyJuam58AVu6lPXL0hpjUrN0FjURMRh7qeF8aURw==}
-
-  '@kisinwen/gaia-shared@0.2.1':
-    resolution: {integrity: sha512-2d5fVhujpLWwAdaKHCEkzklJ7GrsGu52O72U87EX90eSTwuPfPBu8v3+ThaN7SM8FFJiCfYuVGWOpB0WBjkDsA==}
 
   '@mrleebo/prisma-ast@0.13.1':
     resolution: {integrity: sha512-XyroGQXcHrZdvmrGJvsA9KNeOOgGMg1Vg9OlheUsBOSKznLMDl+YChxbkboRHvtFYJEMRYmlV3uoo/njCw05iw==}
@@ -2581,16 +2575,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@kisinwen/gaia-client@0.2.1':
-    dependencies:
-      '@kisinwen/gaia-shared': 0.2.1
-      yaml: 2.8.2
-      zod: 3.25.76
-
-  '@kisinwen/gaia-shared@0.2.1':
-    dependencies:
-      zod: 3.25.76
 
   '@mrleebo/prisma-ast@0.13.1':
     dependencies:

@@ -25,7 +25,7 @@ services:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      - ./gaia.config.yml:/app/gaia.config.yml:ro
+      - ./config.yaml:/app/config.yaml:ro
     ports:
       - "3000:3000"
     healthcheck:
@@ -60,7 +60,7 @@ services:
 
 networks:
   axis:
-    name: ${NETWORK}
+    name: axis
     external: true
 
 volumes:

@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
-import { closeGaiaClient, initializeGaiaClient } from "@kisinwen/gaia-client";
 import { z } from "zod";
 import { AgentLoop } from "./agent/agent-loop.js";
 import { DefaultAgentContextManager } from "./agent/context-manager.impl.manager.js";
@@ -8,6 +7,7 @@ import { createAgentSystemPrompt } from "./agent/context.js";
 import { InMemoryAgentEventQueue } from "./agent/event-queue.impl.queue.js";
 import { createAgentToolRegistry } from "./agent/tools/index.js";
 import { ConfigManagerError, DefaultConfigManager } from "./config/config.impl.manager.js";
+import { loadStaticConfig } from "./config/config.loader.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
@@ -105,8 +105,6 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     if (database) {
       await closeDb(database);
     }
-    await closeGaiaClient();
-
     clearTimeout(timeoutHandle);
     process.exit(0);
   } catch (error) {
@@ -128,8 +126,10 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  await initializeGaiaClient();
-  const activeConfigManager = new DefaultConfigManager({});
+  const staticConfig = await loadStaticConfig();
+  const activeConfigManager = new DefaultConfigManager({
+    config: staticConfig,
+  });
 
   const bootConfig = await activeConfigManager.getBootConfig();
   port = bootConfig.port;
@@ -361,6 +361,5 @@ try {
     });
   }
 
-  await closeGaiaClient().catch(() => undefined);
   process.exit(1);
 }

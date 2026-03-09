@@ -1,0 +1,24 @@
+server:
+  databaseUrl: postgresql://user:password@postgres_db:5432/kagami?schema=public
+  port: 3000
+  napcat:
+    wsUrl: ws://napcat:6099
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    activeProvider: deepseek
+    timeoutMs: 45000
+    providers:
+      deepseek:
+        apiKey: ""
+        baseUrl: https://api.deepseek.com
+        chatModel: deepseek-chat
+      openai:
+        apiKey: ""
+        baseUrl: https://api.openai.com/v1
+        chatModel: gpt-4o-mini
+  tavily:
+    apiKey: ""
+  bot:
+    qq: "10001"

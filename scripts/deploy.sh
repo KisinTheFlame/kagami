@@ -7,29 +7,17 @@ cd "$ROOT_DIR"
 resolve_database_url() {
   docker compose run --rm --no-deps server node --input-type=module <<'NODE'
 import { readFile } from "node:fs/promises";
+import { parse } from "yaml";
 
-const fileContent = await readFile("gaia.config.yml", "utf8");
-const match = fileContent.match(/^\s*baseUrl\s*:\s*(.+?)\s*$/m);
+const fileContent = await readFile("config.yaml", "utf8");
+const parsed = parse(fileContent);
+const databaseUrl = parsed?.server?.databaseUrl;
 
-if (!match) {
-  throw new Error("gaia.config.yml 缺少 baseUrl");
+if (typeof databaseUrl !== "string" || databaseUrl.length === 0) {
+  throw new Error("config.yaml 缺少合法的 server.databaseUrl");
 }
 
-const rawBaseUrl = match[1].trim().replace(/^['"]|['"]$/g, "");
-const requestUrl = new URL("/get", rawBaseUrl.endsWith("/") ? rawBaseUrl : `${rawBaseUrl}/`);
-requestUrl.searchParams.set("key", "kagami.database-url");
-
-const response = await fetch(requestUrl);
-if (!response.ok) {
-  throw new Error(`读取 kagami.database-url 失败（HTTP ${response.status}）`);
-}
-
-const payload = await response.json();
-if (typeof payload?.value !== "string" || payload.value.length === 0) {
-  throw new Error("kagami.database-url 缺失或非法");
-}
-
-process.stdout.write(payload.value);
+process.stdout.write(databaseUrl);
 NODE
 }
 
