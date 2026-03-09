@@ -4,7 +4,7 @@ import type { AgentContextManager } from "../../src/agent/context-manager.manage
 import type { AgentEventQueue } from "../../src/agent/event-queue.queue.js";
 import type { AgentToolRegistry } from "../../src/agent/tools/index.js";
 import type { LlmClient } from "../../src/llm/client.js";
-import type { LlmChatResponsePayload } from "../../src/llm/types.js";
+import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
 
 class StopLoopError extends Error {}
 
@@ -25,7 +25,7 @@ describe("AgentLoop", () => {
     const stopError = new StopLoopError("stop-loop");
     const now = vi.fn().mockReturnValue(new Date("2026-03-09T10:21:00.000Z"));
     const finishExecute = vi.fn().mockResolvedValue({
-      content: JSON.stringify({ finished: true }),
+      content: "",
       shouldFinishRound: true,
     });
     const disabledExecute = vi.fn();
@@ -151,12 +151,14 @@ describe("AgentLoop", () => {
     expect(pushAssistantMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "assistant",
+        content: "done",
+        toolCalls: [],
       }),
     );
     expect(finishExecute).toHaveBeenCalledWith({});
     expect(disabledExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
-    expect(pushToolMessage).toHaveBeenCalledWith("tool-call-1", JSON.stringify({ finished: true }));
+    expect(pushToolMessage).not.toHaveBeenCalled();
   });
 
   it("should add a wake reminder each time the loop resumes from sleep", async () => {
@@ -166,7 +168,7 @@ describe("AgentLoop", () => {
       .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
       .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
     const finishExecute = vi.fn().mockResolvedValue({
-      content: JSON.stringify({ finished: true }),
+      content: "",
       shouldFinishRound: true,
     });
     const toolRegistry: AgentToolRegistry = {
@@ -247,6 +249,175 @@ describe("AgentLoop", () => {
     expect(contextManager.pushUserMessage).toHaveBeenNthCalledWith(
       2,
       "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:22</system_reminder>",
+    );
+  });
+
+  it("should not carry finish tool calls or responses into later chat context", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
+      .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
+    const finishExecute = vi.fn().mockResolvedValue({
+      content: "",
+      shouldFinishRound: true,
+    });
+    const toolRegistry: AgentToolRegistry = {
+      finish: {
+        tool: {
+          name: "finish",
+          description: "finish",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: finishExecute,
+      },
+      search_web: {
+        tool: {
+          name: "search_web",
+          description: "search",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: vi.fn(),
+      },
+      send_group_message: {
+        tool: {
+          name: "send_group_message",
+          description: "send",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+        execute: vi.fn(),
+      },
+    };
+
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "round-1",
+          toolCalls: [{ id: "finish-1", name: "finish", arguments: {} }],
+        },
+      } satisfies LlmChatResponsePayload)
+      .mockResolvedValueOnce({
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "round-2",
+          toolCalls: [{ id: "finish-2", name: "finish", arguments: {} }],
+        },
+      } satisfies LlmChatResponsePayload);
+
+    const messages: LlmMessage[] = [];
+    const contextManager: AgentContextManager = {
+      getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),
+      getMessages: vi.fn(() => messages),
+      getSteps: vi.fn().mockReturnValue(0),
+      pushUserMessage: vi.fn(content => {
+        messages.push({
+          role: "user",
+          content,
+        });
+      }),
+      pushAssistantMessage: vi.fn(message => {
+        messages.push(message);
+        const output = message.content.trim();
+        return output.length > 0 ? output : null;
+      }),
+      pushToolMessage: vi.fn((toolCallId, content) => {
+        messages.push({
+          role: "tool",
+          toolCallId,
+          content,
+        });
+      }),
+    };
+
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      drainAll: vi
+        .fn()
+        .mockReturnValueOnce([
+          {
+            type: "napcat_group_message",
+            groupId: "123456",
+            userId: "654321",
+            rawMessage: "hello",
+            messageId: 1001,
+            time: 1710000000,
+          },
+        ])
+        .mockReturnValueOnce([])
+        .mockReturnValueOnce([
+          {
+            type: "napcat_group_message",
+            groupId: "123456",
+            userId: "654321",
+            rawMessage: "world",
+            messageId: 1002,
+            time: 1710000001,
+          },
+        ])
+        .mockReturnValueOnce([]),
+      size: vi.fn().mockReturnValue(0),
+      waitForEvent: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(stopError),
+    };
+
+    const loop = new AgentLoop({
+      llmClient: {
+        chat,
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      contextManager,
+      eventQueue,
+      toolRegistry,
+      now,
+    });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(chat.mock.calls[1]?.[0]?.messages).toEqual(
+      expect.arrayContaining([
+        {
+          role: "assistant",
+          content: "round-1",
+          toolCalls: [],
+        },
+      ]),
+    );
+    expect(chat.mock.calls[1]?.[0]?.messages).not.toEqual(
+      expect.arrayContaining([
+        {
+          role: "assistant",
+          content: "round-1",
+          toolCalls: [{ id: "finish-1", name: "finish", arguments: {} }],
+        },
+      ]),
+    );
+    expect(chat.mock.calls[1]?.[0]?.messages).not.toEqual(
+      expect.arrayContaining([
+        {
+          role: "tool",
+          toolCallId: "finish-1",
+          content: "",
+        },
+      ]),
     );
   });
 

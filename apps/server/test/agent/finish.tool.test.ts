@@ -7,7 +7,7 @@ describe("finish tool", () => {
 
     expect(finishTool.tool.name).toBe("finish");
     expect(result).toEqual({
-      content: JSON.stringify({ finished: true }),
+      content: "",
       shouldFinishRound: true,
     });
   });

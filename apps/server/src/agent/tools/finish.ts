@@ -12,7 +12,7 @@ export const finishTool: AgentToolDefinition = {
     },
   },
   execute: async () => ({
-    content: JSON.stringify({ finished: true }),
+    content: "",
     shouldFinishRound: true,
   }),
 };

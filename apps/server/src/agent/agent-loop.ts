@@ -1,4 +1,4 @@
-import type { AgentContextManager } from "./context-manager.manager.js";
+import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
 import type { Event } from "./event.js";
 import { formatEventToUserMessage } from "./event.js";
 import type { AgentEventQueue } from "./event-queue.queue.js";
@@ -66,7 +66,10 @@ export class AgentLoop {
           toolChoice: "auto",
         });
         const assistant = completion.message;
-        this.contextManager.pushAssistantMessage(assistant);
+        const persistentAssistantMessage = omitFinishToolCalls(assistant);
+        if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
+          this.contextManager.pushAssistantMessage(persistentAssistantMessage);
+        }
 
         let shouldFinishRound = false;
         for (const toolCall of assistant.toolCalls) {
@@ -74,7 +77,9 @@ export class AgentLoop {
           if (toolResult.shouldFinishRound) {
             shouldFinishRound = true;
           }
-          this.contextManager.pushToolMessage(toolCall.id, toolResult.content);
+          if (toolCall.name !== FINISH_TOOL_NAME && toolResult.content.length > 0) {
+            this.contextManager.pushToolMessage(toolCall.id, toolResult.content);
+          }
         }
 
         if (shouldFinishRound && this.eventQueue.size() === 0) {
@@ -120,4 +125,15 @@ function createWakeReminder(now: Date): string {
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
 
   return `<system_reminder>当前时间为北京时间 ${values.year} 年 ${values.month} 月 ${values.day} 日 ${values.hour}:${values.minute}</system_reminder>`;
+}
+
+function omitFinishToolCalls(message: AssistantMessage): AssistantMessage {
+  return {
+    ...message,
+    toolCalls: message.toolCalls.filter(toolCall => toolCall.name !== FINISH_TOOL_NAME),
+  };
+}
+
+function shouldPersistAssistantMessage(message: AssistantMessage): boolean {
+  return message.content.trim().length > 0 || message.toolCalls.length > 0;
 }
