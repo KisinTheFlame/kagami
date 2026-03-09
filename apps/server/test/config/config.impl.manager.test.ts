@@ -181,4 +181,31 @@ server:
       },
     });
   });
+
+  it("should default server port to 20003", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: ws://localhost:6099
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek: {}
+      openai: {}
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    const manager = new DefaultConfigManager({
+      config: await loadStaticConfig({ configPath }),
+    });
+
+    await expect(manager.getBootConfig()).resolves.toMatchObject({
+      port: 20003,
+    });
+  });
 });

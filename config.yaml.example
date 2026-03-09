@@ -1,8 +1,8 @@
 server:
-  databaseUrl: postgresql://user:password@postgres_db:5432/kagami?schema=public
-  port: 3000
+  databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
+  port: 20003
   napcat:
-    wsUrl: ws://napcat:6099
+    wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
     listenGroupId: "123456"

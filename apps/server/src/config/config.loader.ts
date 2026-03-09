@@ -7,7 +7,7 @@ import { z } from "zod";
 import { ConfigManagerError } from "./config.impl.manager.js";
 import type { LlmProviderId } from "../llm/types.js";
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 20003;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_DEEPSEEK_CHAT_MODEL = "deepseek-chat";

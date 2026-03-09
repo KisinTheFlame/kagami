@@ -4,33 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-resolve_database_url() {
-  docker compose run --rm --no-deps server node --input-type=module <<'NODE'
-import { readFile } from "node:fs/promises";
-import { parse } from "yaml";
+echo "[app:deploy] Step 1/4: Building workspace..."
+pnpm build
 
-const fileContent = await readFile("config.yaml", "utf8");
-const parsed = parse(fileContent);
-const databaseUrl = parsed?.server?.databaseUrl;
+echo "[app:deploy] Step 2/4: Applying Prisma migrations..."
+pnpm db:migrate:deploy
 
-if (typeof databaseUrl !== "string" || databaseUrl.length === 0) {
-  throw new Error("config.yaml 缺少合法的 server.databaseUrl");
-}
+echo "[app:deploy] Step 3/4: Reloading PM2 apps..."
+pnpm exec pm2 startOrReload ecosystem.config.cjs --update-env
 
-process.stdout.write(databaseUrl);
-NODE
-}
-
-echo "[app:deploy] Step 1/3: Building images..."
-docker compose build
-
-echo "[app:deploy] Step 2/3: Applying Prisma migrations..."
-DATABASE_URL="$(resolve_database_url)"
-docker compose run --rm --no-deps \
-  -e "DATABASE_URL=$DATABASE_URL" \
-  server node_modules/prisma/build/index.js migrate deploy
-
-echo "[app:deploy] Step 3/3: Starting services..."
-docker compose up --detach server web napcat
+echo "[app:deploy] Step 4/4: Saving PM2 process list..."
+pnpm exec pm2 save
 
 echo "[app:deploy] Done."
