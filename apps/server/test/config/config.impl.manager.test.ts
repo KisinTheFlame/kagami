@@ -39,6 +39,9 @@ server:
         apiKey: ""
       openai:
         apiKey: openai-key
+  rag:
+    embedding:
+      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -61,7 +64,6 @@ server:
     });
 
     await expect(manager.getLlmRuntimeConfig()).resolves.toEqual({
-      activeProvider: "openai",
       timeoutMs: 15000,
       deepseek: {
         apiKey: undefined,
@@ -81,6 +83,29 @@ server:
         chatModel: "gpt-5.3-codex",
         refreshLeewayMs: 60_000,
         timeoutMs: 15000,
+      },
+      usages: {
+        agent: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+        ragQueryPlanner: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+      },
+    });
+
+    await expect(manager.getRagRuntimeConfig()).resolves.toEqual({
+      embedding: {
+        provider: "google",
+        apiKey: "gemini-key",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        model: "gemini-embedding-001",
+        outputDimensionality: 768,
+      },
+      retrieval: {
+        topK: 3,
       },
     });
 
@@ -116,6 +141,9 @@ server:
     providers:
       deepseek: {}
       openai: {}
+  rag:
+    embedding:
+      apiKey: gemini-key
   tavily: {}
   bot:
     qq: "10001"
@@ -141,6 +169,9 @@ server:
     providers:
       deepseek: {}
       openai: {}
+  rag:
+    embedding:
+      apiKey: gemini-key
   tavily: {}
   bot:
     qq: "10001"
@@ -169,6 +200,9 @@ server:
         apiKey: "   "
         baseUrl: ""
         chatModel: " "
+  rag:
+    embedding:
+      apiKey: gemini-key
   tavily: {}
   bot:
     qq: "10001"
@@ -179,7 +213,6 @@ server:
     });
 
     await expect(manager.getLlmRuntimeConfig()).resolves.toMatchObject({
-      activeProvider: "deepseek",
       timeoutMs: 45_000,
       openai: {
         apiKey: undefined,
@@ -191,6 +224,12 @@ server:
         baseUrl: "https://chatgpt.com/backend-api/codex/responses",
         chatModel: "gpt-5.3-codex",
         refreshLeewayMs: 60_000,
+      },
+      usages: {
+        agent: {
+          provider: "deepseek",
+          model: "deepseek-chat",
+        },
       },
     });
   });
@@ -208,6 +247,9 @@ server:
     providers:
       deepseek: {}
       openai: {}
+  rag:
+    embedding:
+      apiKey: gemini-key
   tavily: {}
   bot:
     qq: "10001"
@@ -220,5 +262,32 @@ server:
     await expect(manager.getBootConfig()).resolves.toMatchObject({
       port: 20003,
     });
+  });
+
+  it("should fail when rag embedding apiKey is missing", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek: {}
+      openai: {}
+  rag:
+    embedding: {}
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.rag.embedding.apiKey",
+    } satisfies Partial<ConfigManagerError>);
   });
 });

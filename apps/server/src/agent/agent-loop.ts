@@ -1,6 +1,5 @@
 import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
 import type { Event } from "./event.js";
-import { formatEventToUserMessage } from "./event.js";
 import type { AgentEventQueue } from "./event-queue.queue.js";
 import { FINISH_TOOL_NAME } from "./tools/finish.js";
 import { SEARCH_WEB_TOOL_NAME } from "./tools/search-web.js";
@@ -56,7 +55,7 @@ export class AgentLoop {
 
       while (true) {
         for (const event of this.eventQueue.drainAll()) {
-          this.handleEvent(event);
+          await this.handleEvent(event);
         }
 
         const completion = await this.llmClient.chat({
@@ -89,11 +88,8 @@ export class AgentLoop {
     }
   }
 
-  private handleEvent(event: Event): void {
-    const userMessage = formatEventToUserMessage(event);
-    if (userMessage !== null) {
-      this.contextManager.pushUserMessage(userMessage);
-    }
+  private async handleEvent(event: Event): Promise<void> {
+    await this.contextManager.pushGroupMessageEvent(event);
   }
 
   private async executeToolCall(

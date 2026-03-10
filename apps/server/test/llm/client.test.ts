@@ -14,7 +14,6 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
 
 function createLlmRuntimeConfig(overrides: Partial<LlmRuntimeConfig> = {}): LlmRuntimeConfig {
   return {
-    activeProvider: "openai",
     timeoutMs: 45_000,
     deepseek: {
       apiKey: undefined,
@@ -35,6 +34,16 @@ function createLlmRuntimeConfig(overrides: Partial<LlmRuntimeConfig> = {}): LlmR
       refreshLeewayMs: 60_000,
       timeoutMs: 45_000,
     },
+    usages: {
+      agent: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      },
+      ragQueryPlanner: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      },
+    },
     ...overrides,
   };
 }
@@ -45,6 +54,7 @@ function createConfigManagerMock(
   return {
     getBootConfig: vi.fn(),
     getLlmRuntimeConfig: vi.fn().mockResolvedValue(llmRuntimeConfig),
+    getRagRuntimeConfig: vi.fn(),
     getTavilyConfig: vi.fn(),
     getBotProfileConfig: vi.fn(),
   };
@@ -141,7 +151,16 @@ describe("createLlmClient", () => {
     const client = createLlmClient({
       configManager: createConfigManagerMock(
         createLlmRuntimeConfig({
-          activeProvider: "deepseek",
+          usages: {
+            agent: {
+              provider: "deepseek",
+              model: "deepseek-chat",
+            },
+            ragQueryPlanner: {
+              provider: "deepseek",
+              model: "deepseek-chat",
+            },
+          },
           openai: {
             apiKey: undefined,
             baseUrl: "https://api.openai.com/v1",

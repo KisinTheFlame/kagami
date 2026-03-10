@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { z } from "zod";
 import { ConfigManagerError } from "./config.impl.manager.js";
-import type { LlmProviderId } from "../llm/types.js";
+import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
@@ -17,6 +17,10 @@ const DEFAULT_OPENAI_CODEX_AUTH_FILE_PATH = "~/.codex/auth.json";
 const DEFAULT_OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/responses";
 const DEFAULT_OPENAI_CODEX_CHAT_MODEL = "gpt-5.3-codex";
 const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
+const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
+const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
+const DEFAULT_RAG_TOP_K = 3;
 
 const UrlSchema = z.string().url();
 const NonEmptyStringSchema = z.string().trim().min(1);
@@ -51,6 +55,11 @@ const ActiveProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satis
   LlmProviderId,
   ...LlmProviderId[],
 ]);
+const RagEmbeddingProviderSchema = z.literal("google");
+const LlmUsageConfigSchema = z.object({
+  provider: ActiveProviderSchema,
+  model: NonEmptyStringSchema.optional(),
+});
 
 const StaticConfigFileSchema = z.object({
   server: z.object({
@@ -63,7 +72,7 @@ const StaticConfigFileSchema = z.object({
       listenGroupId: StringLikeSchema,
     }),
     llm: z.object({
-      activeProvider: ActiveProviderSchema.default("deepseek"),
+      activeProvider: ActiveProviderSchema.optional(),
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
       providers: z.object({
         deepseek: z.object({
@@ -85,6 +94,29 @@ const StaticConfigFileSchema = z.object({
           })
           .default({}),
       }),
+      usages: z
+        .object({
+          agent: LlmUsageConfigSchema.optional(),
+          ragQueryPlanner: LlmUsageConfigSchema.optional(),
+        })
+        .partial()
+        .default({}),
+    }),
+    rag: z.object({
+      embedding: z.object({
+        provider: RagEmbeddingProviderSchema.default("google"),
+        apiKey: NonEmptyStringSchema,
+        baseUrl: UrlSchema.default(DEFAULT_GEMINI_EMBEDDING_BASE_URL),
+        model: NonEmptyStringSchema.default(DEFAULT_GEMINI_EMBEDDING_MODEL),
+        outputDimensionality: PositiveIntSchema.default(
+          DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY,
+        ),
+      }),
+      retrieval: z
+        .object({
+          topK: PositiveIntSchema.default(DEFAULT_RAG_TOP_K),
+        })
+        .default({}),
     }),
     tavily: z.object({
       apiKey: OptionalNonEmptyStringSchema,
@@ -148,6 +180,7 @@ export async function loadStaticConfig(
       ...parsedConfig.data.server,
       llm: {
         ...parsedConfig.data.server.llm,
+        activeProvider: parsedConfig.data.server.llm.activeProvider ?? "deepseek",
         providers: {
           ...parsedConfig.data.server.llm.providers,
           openai: {
@@ -158,9 +191,66 @@ export async function loadStaticConfig(
               parsedConfig.data.server.llm.providers.openai.chatModel ?? DEFAULT_OPENAI_CHAT_MODEL,
           },
         },
+        usages: normalizeLlmUsages(parsedConfig.data.server.llm),
       },
     },
   };
+}
+
+function normalizeLlmUsages(input: StaticConfig["server"]["llm"]): Record<
+  LlmUsageId,
+  {
+    provider: LlmProviderId;
+    model: string;
+  }
+> {
+  const activeProvider = input.activeProvider ?? "deepseek";
+  const defaults = {
+    agent: {
+      provider: activeProvider,
+      model: getProviderDefaultModel(input, activeProvider),
+    },
+    ragQueryPlanner: {
+      provider: activeProvider,
+      model: getProviderDefaultModel(input, activeProvider),
+    },
+  } satisfies Record<LlmUsageId, { provider: LlmProviderId; model: string }>;
+
+  return {
+    agent: normalizeUsageConfig(input, defaults.agent, input.usages.agent),
+    ragQueryPlanner: normalizeUsageConfig(
+      input,
+      defaults.ragQueryPlanner,
+      input.usages.ragQueryPlanner,
+    ),
+  };
+}
+
+function normalizeUsageConfig(
+  input: StaticConfig["server"]["llm"],
+  defaultValue: { provider: LlmProviderId; model: string },
+  value?: { provider: LlmProviderId; model?: string },
+): { provider: LlmProviderId; model: string } {
+  const provider = value?.provider ?? defaultValue.provider;
+
+  return {
+    provider,
+    model: value?.model ?? getProviderDefaultModel(input, provider),
+  };
+}
+
+function getProviderDefaultModel(
+  input: StaticConfig["server"]["llm"],
+  provider: LlmProviderId,
+): string {
+  switch (provider) {
+    case "deepseek":
+      return input.providers.deepseek.chatModel;
+    case "openai":
+      return input.providers.openai.chatModel;
+    case "openai-codex":
+      return input.providers.openaiCodex.chatModel;
+  }
 }
 
 function resolveConfigPath(): string {

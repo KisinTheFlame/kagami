@@ -941,9 +941,10 @@ function createNapcatGroupMessageDao(): NapcatGroupMessageDao & {
   insert: ReturnType<typeof vi.fn>;
 } {
   return {
-    insert: vi.fn().mockResolvedValue(undefined),
+    insert: vi.fn().mockResolvedValue(1),
     countByQuery: vi.fn().mockResolvedValue(0),
     listByQueryPage: vi.fn().mockResolvedValue([]),
+    listContextWindowById: vi.fn().mockResolvedValue([]),
   };
 }
 

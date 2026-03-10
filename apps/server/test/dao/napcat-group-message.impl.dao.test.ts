@@ -5,7 +5,7 @@ import { PrismaNapcatGroupMessageDao } from "../../src/dao/impl/napcat-group-mes
 
 describe("PrismaNapcatGroupMessageDao", () => {
   it("should persist structured message into message column", async () => {
-    const create = vi.fn().mockResolvedValue(undefined);
+    const create = vi.fn().mockResolvedValue({ id: 1 });
     const database = {
       napcatGroupMessage: {
         create,
@@ -22,19 +22,21 @@ describe("PrismaNapcatGroupMessageDao", () => {
       },
     ];
 
-    await dao.insert({
-      groupId: "987654",
-      userId: "123456",
-      nickname: "测试昵称",
-      messageId: 9988,
-      message,
-      eventTime: new Date("2026-03-10T10:00:00.000Z"),
-      payload: {
-        post_type: "message",
-        message_type: "group",
+    await expect(
+      dao.insert({
+        groupId: "987654",
+        userId: "123456",
+        nickname: "测试昵称",
+        messageId: 9988,
         message,
-      },
-    });
+        eventTime: new Date("2026-03-10T10:00:00.000Z"),
+        payload: {
+          post_type: "message",
+          message_type: "group",
+          message,
+        },
+      }),
+    ).resolves.toBe(1);
 
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -49,6 +51,9 @@ describe("PrismaNapcatGroupMessageDao", () => {
           message,
         },
       }),
+      select: {
+        id: true,
+      },
     });
   });
 
@@ -198,5 +203,56 @@ describe("PrismaNapcatGroupMessageDao", () => {
     expect(count).not.toHaveBeenCalled();
     expect(findMany).not.toHaveBeenCalled();
     expect(queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it("should load a same-group context window ordered by message time", async () => {
+    const queryRaw = vi.fn().mockResolvedValue([
+      {
+        id: 10,
+        groupId: "987654",
+        userId: "123456",
+        nickname: "甲",
+        messageText: "前文",
+        eventTime: new Date("2026-03-10T10:00:00.000Z"),
+        createdAt: new Date("2026-03-10T10:00:01.000Z"),
+      },
+      {
+        id: 11,
+        groupId: "987654",
+        userId: "123457",
+        nickname: "乙",
+        messageText: "命中",
+        eventTime: new Date("2026-03-10T10:00:02.000Z"),
+        createdAt: new Date("2026-03-10T10:00:03.000Z"),
+      },
+    ]);
+    const database = {
+      napcatGroupMessage: {
+        create: vi.fn(),
+        count: vi.fn(),
+        findMany: vi.fn(),
+      },
+      $queryRaw: queryRaw,
+    } as unknown as Database;
+
+    const dao = new PrismaNapcatGroupMessageDao({ database });
+
+    await expect(
+      dao.listContextWindowById({
+        groupId: "987654",
+        messageId: 11,
+        before: 2,
+        after: 2,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 10,
+        messageText: "前文",
+      }),
+      expect.objectContaining({
+        id: 11,
+        messageText: "命中",
+      }),
+    ]);
   });
 });

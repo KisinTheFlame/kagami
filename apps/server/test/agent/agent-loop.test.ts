@@ -76,6 +76,7 @@ describe("AgentLoop", () => {
     const getMessages = vi.fn().mockReturnValue([]);
     const getSteps = vi.fn().mockReturnValue(0);
     const pushUserMessage = vi.fn();
+    const pushGroupMessageEvent = vi.fn().mockResolvedValue(undefined);
     const pushAssistantMessage = vi.fn().mockReturnValue("done");
     const pushToolMessage = vi.fn();
     const contextManager: AgentContextManager = {
@@ -83,6 +84,7 @@ describe("AgentLoop", () => {
       getMessages,
       getSteps,
       pushUserMessage,
+      pushGroupMessageEvent,
       pushAssistantMessage,
       pushToolMessage,
     };
@@ -127,10 +129,15 @@ describe("AgentLoop", () => {
       1,
       "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
     );
-    expect(pushUserMessage).toHaveBeenNthCalledWith(
-      2,
-      ["<message>", "测试昵称 (654321):", "hello", "</message>"].join("\n"),
-    );
+    expect(pushGroupMessageEvent).toHaveBeenCalledWith({
+      type: "napcat_group_message",
+      groupId: "123456",
+      userId: "654321",
+      nickname: "测试昵称",
+      rawMessage: "hello",
+      messageId: 1001,
+      time: 1710000000,
+    });
     expect(chat).toHaveBeenCalledTimes(1);
     expect(chat).toHaveBeenCalledWith({
       system: "system-prompt",
@@ -207,6 +214,7 @@ describe("AgentLoop", () => {
       getMessages: vi.fn().mockReturnValue([]),
       getSteps: vi.fn().mockReturnValue(0),
       pushUserMessage: vi.fn(),
+      pushGroupMessageEvent: vi.fn().mockResolvedValue(undefined),
       pushAssistantMessage: vi.fn().mockReturnValue("done"),
       pushToolMessage: vi.fn(),
     };
@@ -324,6 +332,17 @@ describe("AgentLoop", () => {
           content,
         });
       }),
+      pushGroupMessageEvent: vi.fn(async event => {
+        messages.push({
+          role: "user",
+          content: [
+            "<message>",
+            `${event.nickname} (${event.userId}):`,
+            event.rawMessage,
+            "</message>",
+          ].join("\n"),
+        });
+      }),
       pushAssistantMessage: vi.fn(message => {
         messages.push(message);
         const output = message.content.trim();
@@ -427,6 +446,7 @@ describe("AgentLoop", () => {
       getMessages: vi.fn().mockReturnValue([]),
       getSteps: vi.fn().mockReturnValue(0),
       pushUserMessage: vi.fn(),
+      pushGroupMessageEvent: vi.fn().mockResolvedValue(undefined),
       pushAssistantMessage: vi.fn(),
       pushToolMessage: vi.fn(),
     };

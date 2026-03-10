@@ -1,4 +1,4 @@
-import type { LlmProviderId } from "../llm/types.js";
+import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
 
 export type NapcatBootConfig = {
   wsUrl: string;
@@ -28,12 +28,36 @@ export type OpenAiCodexRuntimeConfig = {
   timeoutMs: number;
 };
 
+export type LlmUsageRuntimeConfig = {
+  provider: LlmProviderId;
+  model: string;
+};
+
 export type LlmRuntimeConfig = {
-  activeProvider: LlmProviderId;
   timeoutMs: number;
   deepseek: LlmProviderRuntimeConfig;
   openai: LlmProviderRuntimeConfig;
   openaiCodex: OpenAiCodexRuntimeConfig;
+  usages: Record<LlmUsageId, LlmUsageRuntimeConfig>;
+};
+
+export type RagEmbeddingProviderId = "google";
+
+export type RagEmbeddingRuntimeConfig = {
+  provider: RagEmbeddingProviderId;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  outputDimensionality: number;
+};
+
+export type RagRetrievalRuntimeConfig = {
+  topK: number;
+};
+
+export type RagRuntimeConfig = {
+  embedding: RagEmbeddingRuntimeConfig;
+  retrieval: RagRetrievalRuntimeConfig;
 };
 
 export type TavilyConfig = {
@@ -47,6 +71,7 @@ export type BotProfileConfig = {
 export interface ConfigManager {
   getBootConfig(): Promise<BootConfig>;
   getLlmRuntimeConfig(): Promise<LlmRuntimeConfig>;
+  getRagRuntimeConfig(): Promise<RagRuntimeConfig>;
   getTavilyConfig(): Promise<TavilyConfig>;
   getBotProfileConfig(): Promise<BotProfileConfig>;
 }

@@ -2,6 +2,7 @@ import type {
   BootConfig,
   BotProfileConfig,
   ConfigManager,
+  RagRuntimeConfig,
   LlmRuntimeConfig,
   TavilyConfig,
 } from "./config.manager.js";
@@ -40,10 +41,13 @@ type DefaultConfigManagerOptions = {
 export class DefaultConfigManager implements ConfigManager {
   private readonly bootConfig: BootConfig;
   private readonly llmRuntimeConfig: LlmRuntimeConfig;
+  private readonly ragRuntimeConfig: RagRuntimeConfig;
   private readonly tavilyConfig: TavilyConfig;
   private readonly botProfileConfig: BotProfileConfig;
 
   public constructor({ config }: DefaultConfigManagerOptions) {
+    const llmUsages = config.server.llm.usages as LlmRuntimeConfig["usages"];
+
     this.bootConfig = {
       databaseUrl: config.server.databaseUrl,
       port: config.server.port,
@@ -56,7 +60,6 @@ export class DefaultConfigManager implements ConfigManager {
     };
 
     this.llmRuntimeConfig = {
-      activeProvider: config.server.llm.activeProvider,
       timeoutMs: config.server.llm.timeoutMs,
       deepseek: {
         apiKey: config.server.llm.providers.deepseek.apiKey,
@@ -77,6 +80,29 @@ export class DefaultConfigManager implements ConfigManager {
         refreshLeewayMs: config.server.llm.providers.openaiCodex.refreshLeewayMs,
         timeoutMs: config.server.llm.timeoutMs,
       },
+      usages: {
+        agent: {
+          provider: llmUsages.agent.provider,
+          model: llmUsages.agent.model,
+        },
+        ragQueryPlanner: {
+          provider: llmUsages.ragQueryPlanner.provider,
+          model: llmUsages.ragQueryPlanner.model,
+        },
+      },
+    };
+
+    this.ragRuntimeConfig = {
+      embedding: {
+        provider: config.server.rag.embedding.provider,
+        apiKey: config.server.rag.embedding.apiKey,
+        baseUrl: config.server.rag.embedding.baseUrl,
+        model: config.server.rag.embedding.model,
+        outputDimensionality: config.server.rag.embedding.outputDimensionality,
+      },
+      retrieval: {
+        topK: config.server.rag.retrieval.topK,
+      },
     };
 
     this.tavilyConfig = {
@@ -94,6 +120,10 @@ export class DefaultConfigManager implements ConfigManager {
 
   public async getLlmRuntimeConfig(): Promise<LlmRuntimeConfig> {
     return this.llmRuntimeConfig;
+  }
+
+  public async getRagRuntimeConfig(): Promise<RagRuntimeConfig> {
+    return this.ragRuntimeConfig;
   }
 
   public async getTavilyConfig(): Promise<TavilyConfig> {

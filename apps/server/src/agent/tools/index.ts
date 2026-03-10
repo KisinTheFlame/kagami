@@ -16,6 +16,12 @@ export type AgentToolDefinition = {
 
 export type AgentToolRegistry = Record<string, AgentToolDefinition>;
 
+export {
+  createSearchMemoryTool,
+  SEARCH_MEMORY_TOOL_NAME,
+  searchMemoryTool,
+} from "./search-memory.js";
+
 type CreateAgentToolRegistryDeps = {
   sendGroupMessage: (input: { message: string }) => Promise<{ messageId: number }>;
   searchWeb: (input: WebSearchInput) => Promise<WebSearchResult>;

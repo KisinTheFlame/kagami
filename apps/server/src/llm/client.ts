@@ -8,11 +8,11 @@ import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
 import { createOpenAiCodexProvider } from "./providers/openai-codex-provider.js";
 import type { LlmProvider } from "./provider.js";
-import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "./types.js";
+import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "./types.js";
 
 export interface LlmClient {
   chat(request: LlmChatRequest, options?: LlmChatOptions): Promise<LlmChatResponsePayload>;
-  listAvailableProviders(): Promise<LlmProviderOption[]>;
+  listAvailableProviders(options?: { usage?: LlmUsageId }): Promise<LlmProviderOption[]>;
 }
 
 type CreateLlmClientOptions = {
@@ -24,14 +24,17 @@ type CreateLlmClientOptions = {
 export type LlmChatOptions = {
   providerId?: LlmProviderId;
   recordCall?: boolean;
+  usage?: LlmUsageId;
 };
 
 export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
   return {
-    async listAvailableProviders(): Promise<LlmProviderOption[]> {
+    async listAvailableProviders(listOptions?: {
+      usage?: LlmUsageId;
+    }): Promise<LlmProviderOption[]> {
       const config = await options.configManager.getLlmRuntimeConfig();
       const providers = createProviderRegistry(config, options.providers);
-      return await listAvailableProviders(config, providers);
+      return await listAvailableProviders(config, providers, listOptions?.usage ?? "agent");
     },
     async chat(
       request: LlmChatRequest,
@@ -41,7 +44,9 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       const providers = createProviderRegistry(config, options.providers);
       const requestId = randomUUID();
       const startedAt = Date.now();
-      const providerId = chatOptions?.providerId ?? config.activeProvider;
+      const usage = chatOptions?.usage ?? "agent";
+      const usageConfig = config.usages[usage];
+      const providerId = chatOptions?.providerId ?? usageConfig.provider;
       const provider = providers[providerId];
       const recordCall = chatOptions?.recordCall ?? true;
 
@@ -49,7 +54,9 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
         throw new LlmProviderUnavailableError({ provider: providerId });
       }
 
-      const model = request.model ?? getDefaultModel(config, providerId);
+      const model =
+        request.model ??
+        (chatOptions?.providerId ? getDefaultModel(config, providerId) : usageConfig.model);
       const requestWithModel = {
         ...request,
         model,
@@ -110,7 +117,9 @@ function createProviderRegistry(
 async function listAvailableProviders(
   config: LlmRuntimeConfig,
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
+  usage: LlmUsageId,
 ): Promise<LlmProviderOption[]> {
+  const activeProvider = config.usages[usage].provider;
   const availability = await Promise.all(
     (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
       const provider = providers[providerId];
@@ -132,11 +141,11 @@ async function listAvailableProviders(
       (providerId): providerId is (typeof availability)[number] & string => providerId !== null,
     )
     .sort((left, right) => {
-      if (left === config.activeProvider) {
+      if (left === activeProvider) {
         return -1;
       }
 
-      if (right === config.activeProvider) {
+      if (right === activeProvider) {
         return 1;
       }
 
@@ -146,7 +155,7 @@ async function listAvailableProviders(
   return orderedIds.map(providerId => ({
     id: providerId,
     defaultModel: getDefaultModel(config, providerId),
-    isActive: providerId === config.activeProvider,
+    isActive: providerId === activeProvider,
   }));
 }
 

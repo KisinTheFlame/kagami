@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { formatGroupMessagePlainText } from "../agent/event.js";
 import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
+import type { NapcatGroupMessageChunkDao } from "../dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../dao/napcat-group-message.dao.js";
 import { AppLogger } from "../logger/logger.js";
+import type { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import {
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
@@ -25,6 +28,8 @@ type NapcatGatewayOptions = {
   onGroupMessage?: (event: NapcatGroupMessageEvent) => void | Promise<void>;
   napcatEventDao?: NapcatEventDao;
   napcatGroupMessageDao?: NapcatGroupMessageDao;
+  napcatGroupMessageChunkDao?: NapcatGroupMessageChunkDao;
+  groupMessageChunkIndexer?: GroupMessageChunkIndexer;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -85,6 +90,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     | null;
   private readonly napcatEventDao: NapcatEventDao | null;
   private readonly napcatGroupMessageDao: NapcatGroupMessageDao | null;
+  private readonly napcatGroupMessageChunkDao: NapcatGroupMessageChunkDao | null;
+  private readonly groupMessageChunkIndexer: GroupMessageChunkIndexer | null;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly groupMemberDisplayNameCache = new Map<
@@ -104,6 +111,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     onGroupMessage,
     napcatEventDao,
     napcatGroupMessageDao,
+    napcatGroupMessageChunkDao,
+    groupMessageChunkIndexer,
     createWebSocket,
   }: NapcatGatewayOptions) {
     this.wsUrl = wsUrl;
@@ -113,6 +122,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     this.onGroupMessage = onGroupMessage ?? null;
     this.napcatEventDao = napcatEventDao ?? null;
     this.napcatGroupMessageDao = napcatGroupMessageDao ?? null;
+    this.napcatGroupMessageChunkDao = napcatGroupMessageChunkDao ?? null;
+    this.groupMessageChunkIndexer = groupMessageChunkIndexer ?? null;
     this.createWebSocket = createWebSocket ?? (url => new WebSocket(url));
   }
 
@@ -352,6 +363,27 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         message: toStoredMessageSegments(event.payload.message),
         eventTime,
         payload: event.payload,
+      })
+      .then(async sourceMessageId => {
+        if (!this.napcatGroupMessageChunkDao) {
+          return;
+        }
+
+        const chunkId = await this.napcatGroupMessageChunkDao.insert({
+          sourceMessageId,
+          groupId: event.groupId,
+          chunkIndex: 0,
+          content: formatGroupMessagePlainText({
+            nickname: event.nickname,
+            userId: event.userId,
+            rawMessage: event.rawMessage,
+          }),
+          status: "pending",
+          embeddingModel: null,
+          embeddingDim: null,
+          errorMessage: null,
+        });
+        this.groupMessageChunkIndexer?.enqueue(chunkId);
       })
       .catch(error => {
         logger.errorWithCause("Failed to persist NapCat group message", error, {

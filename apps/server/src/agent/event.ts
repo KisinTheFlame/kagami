@@ -10,14 +10,17 @@ export type NapcatGroupMessageEvent = {
 
 export type Event = NapcatGroupMessageEvent;
 
+export function formatGroupMessagePlainText(input: {
+  nickname: string;
+  userId: string;
+  rawMessage: string;
+}): string {
+  return [`${input.nickname} (${input.userId}):`, input.rawMessage].join("\n");
+}
+
 export function formatEventToUserMessage(event: Event): string | null {
   switch (event.type) {
     case "napcat_group_message":
-      return [
-        "<message>",
-        `${event.nickname} (${event.userId}):`,
-        event.rawMessage,
-        "</message>",
-      ].join("\n");
+      return ["<message>", formatGroupMessagePlainText(event), "</message>"].join("\n");
   }
 }

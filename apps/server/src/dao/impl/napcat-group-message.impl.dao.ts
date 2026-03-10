@@ -3,6 +3,7 @@ import type { JsonValue } from "@kagami/shared";
 import type { Database } from "../../db/client.js";
 import type {
   InsertNapcatGroupMessageItem,
+  NapcatGroupMessageContextItem,
   NapcatGroupMessageDao,
   NapcatGroupMessageItem,
   QueryNapcatGroupMessageListFilterInput,
@@ -20,8 +21,8 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     this.database = database;
   }
 
-  public async insert(item: InsertNapcatGroupMessageItem): Promise<void> {
-    await this.database.napcatGroupMessage.create({
+  public async insert(item: InsertNapcatGroupMessageItem): Promise<number> {
+    const row = await this.database.napcatGroupMessage.create({
       data: {
         groupId: item.groupId,
         userId: item.userId,
@@ -32,7 +33,12 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
         payload: toInputJsonValue(item.payload),
         createdAt: item.createdAt,
       },
+      select: {
+        id: true,
+      },
     });
+
+    return row.id;
   }
 
   public async countByQuery(input: QueryNapcatGroupMessageListFilterInput): Promise<number> {
@@ -104,6 +110,60 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     `);
 
     return rows.map(mapRawRowToItem);
+  }
+
+  public async listContextWindowById(input: {
+    groupId: string;
+    messageId: number;
+    before: number;
+    after: number;
+  }): Promise<NapcatGroupMessageContextItem[]> {
+    const rows = await this.database.$queryRaw<RawNapcatGroupMessageContextRow[]>(Prisma.sql`
+      WITH ordered_messages AS (
+        SELECT
+          gm."id" AS "id",
+          gm."group_id" AS "groupId",
+          gm."user_id" AS "userId",
+          gm."nickname" AS "nickname",
+          COALESCE(
+            NULLIF(regexp_replace(chunk."content", '^[^\n]*\n', ''), ''),
+            gm."payload"->>'raw_message',
+            gm."message"::text
+          ) AS "messageText",
+          gm."event_time" AS "eventTime",
+          gm."created_at" AS "createdAt",
+          ROW_NUMBER() OVER (
+            PARTITION BY gm."group_id"
+            ORDER BY COALESCE(gm."event_time", gm."created_at") ASC, gm."id" ASC
+          ) AS "rowNumber"
+        FROM "napcat_group_message" AS gm
+        LEFT JOIN "napcat_group_message_chunk" AS chunk
+          ON chunk."source_message_id" = gm."id"
+          AND chunk."chunk_index" = 0
+        WHERE gm."group_id" = ${input.groupId}
+      ),
+      center_message AS (
+        SELECT "rowNumber"
+        FROM ordered_messages
+        WHERE "id" = ${input.messageId}
+      )
+      SELECT
+        "id",
+        "groupId",
+        "userId",
+        "nickname",
+        "messageText",
+        "eventTime",
+        "createdAt"
+      FROM ordered_messages
+      WHERE "rowNumber" BETWEEN
+        (SELECT "rowNumber" - ${input.before} FROM center_message)
+        AND
+        (SELECT "rowNumber" + ${input.after} FROM center_message)
+      ORDER BY "rowNumber" ASC
+    `);
+
+    return rows.map(mapRawContextRowToItem);
   }
 }
 
@@ -204,6 +264,16 @@ type RawNapcatGroupMessageRow = {
   createdAt: Date;
 };
 
+type RawNapcatGroupMessageContextRow = {
+  id: number;
+  groupId: string;
+  userId: string | null;
+  nickname: string | null;
+  messageText: string;
+  eventTime: Date | null;
+  createdAt: Date;
+};
+
 function mapRawRowToItem(row: RawNapcatGroupMessageRow): NapcatGroupMessageItem {
   return {
     id: row.id,
@@ -214,6 +284,20 @@ function mapRawRowToItem(row: RawNapcatGroupMessageRow): NapcatGroupMessageItem 
     message: toJsonValue(row.message),
     eventTime: row.eventTime,
     payload: toJsonRecord(row.payload),
+    createdAt: row.createdAt,
+  };
+}
+
+function mapRawContextRowToItem(
+  row: RawNapcatGroupMessageContextRow,
+): NapcatGroupMessageContextItem {
+  return {
+    id: row.id,
+    groupId: row.groupId,
+    userId: row.userId,
+    nickname: row.nickname,
+    messageText: row.messageText,
+    eventTime: row.eventTime,
     createdAt: row.createdAt,
   };
 }

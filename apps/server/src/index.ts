@@ -12,6 +12,7 @@ import { closeDb, createDbClient, type Database } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
+import { PrismaNapcatGroupMessageChunkDao } from "./dao/impl/napcat-group-message-chunk.impl.dao.js";
 import { PrismaNapcatGroupMessageDao } from "./dao/impl/napcat-group-message.impl.dao.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
@@ -21,6 +22,7 @@ import { NapcatEventHandler } from "./handler/napcat-event.handler.js";
 import { NapcatGroupMessageHandler } from "./handler/napcat-group-message.handler.js";
 import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
+import { createEmbeddingClient } from "./llm/embedding/client.js";
 import {
   LlmProviderResponseError,
   LlmProviderUnavailableError,
@@ -28,6 +30,9 @@ import {
 } from "./llm/errors.js";
 import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
+import { GroupMessageChunkIndexer } from "./rag/indexer.service.js";
+import { GroupMessageMemorySearchService } from "./rag/memory-search.service.js";
+import { RagQueryPlannerService } from "./rag/query-planner.service.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
@@ -146,6 +151,9 @@ try {
   const llmChatCallDao = new PrismaLlmChatCallDao({ database: databaseClient });
   const napcatEventDao = new PrismaNapcatEventDao({ database: databaseClient });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database: databaseClient });
+  const napcatGroupMessageChunkDao = new PrismaNapcatGroupMessageChunkDao({
+    database: databaseClient,
+  });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
   });
@@ -160,15 +168,37 @@ try {
     configManager: activeConfigManager,
     llmChatCallDao,
   });
+  const ragConfig = await activeConfigManager.getRagRuntimeConfig();
+  const embeddingClient = createEmbeddingClient({
+    config: ragConfig.embedding,
+  });
+  const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
+    chunkDao: napcatGroupMessageChunkDao,
+    embeddingClient,
+    outputDimensionality: ragConfig.embedding.outputDimensionality,
+  });
+  const memorySearchService = new GroupMessageMemorySearchService({
+    config: ragConfig,
+    embeddingClient,
+    chunkDao: napcatGroupMessageChunkDao,
+    groupMessageDao: napcatGroupMessageDao,
+  });
+  const agentSystemPromptFactory = async () => {
+    const botProfile = await activeConfigManager.getBotProfileConfig();
+    return createAgentSystemPrompt({
+      botQQ: botProfile.botQQ,
+    });
+  };
+  const ragQueryPlanner = new RagQueryPlannerService({
+    llmClient,
+    memorySearchService,
+    systemPromptFactory: agentSystemPromptFactory,
+  });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
   const eventQueue = new InMemoryAgentEventQueue();
   const contextManager = new DefaultAgentContextManager({
-    systemPromptFactory: async () => {
-      const botProfile = await activeConfigManager.getBotProfileConfig();
-      return createAgentSystemPrompt({
-        botQQ: botProfile.botQQ,
-      });
-    },
+    systemPromptFactory: agentSystemPromptFactory,
+    ragQueryPlanner,
   });
 
   const activeNapcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
@@ -189,6 +219,8 @@ try {
     },
     napcatEventDao,
     napcatGroupMessageDao,
+    napcatGroupMessageChunkDao,
+    groupMessageChunkIndexer,
   });
   napcatGatewayService = activeNapcatGatewayService;
 

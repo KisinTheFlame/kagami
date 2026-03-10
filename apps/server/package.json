@@ -16,6 +16,7 @@
     "db:migrate:resolve": "bash ../../scripts/prisma.sh migrate resolve"
   },
   "dependencies": {
+    "@google/genai": "^1.44.0",
     "@kagami/shared": "workspace:*",
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",

@@ -67,10 +67,33 @@ model NapcatGroupMessage {
   eventTime  DateTime? @map("event_time") @db.Timestamptz(6)
   payload    Json      @db.JsonB
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  chunks     NapcatGroupMessageChunk[]
 
   @@index([createdAt], map: "napcat_group_message_created_at_idx")
   @@index([groupId, createdAt], map: "napcat_group_message_group_id_created_at_idx")
   @@index([nickname, createdAt], map: "napcat_group_message_nickname_created_at_idx")
   @@index([userId, createdAt], map: "napcat_group_message_user_id_created_at_idx")
   @@map("napcat_group_message")
+}
+
+model NapcatGroupMessageChunk {
+  id              Int                @id @default(autoincrement())
+  sourceMessageId Int                @map("source_message_id")
+  groupId         String             @map("group_id")
+  chunkIndex      Int                @default(0) @map("chunk_index")
+  content         String
+  status          String
+  embeddingModel  String?            @map("embedding_model")
+  embeddingDim    Int?               @map("embedding_dim")
+  embedding       Unsupported("vector(768)")?
+  errorMessage    String?            @map("error_message")
+  indexedAt       DateTime?          @map("indexed_at") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  sourceMessage   NapcatGroupMessage @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceMessageId, chunkIndex], map: "napcat_group_message_chunk_source_chunk_idx_uq")
+  @@index([groupId, status, createdAt], map: "napcat_group_message_chunk_group_status_created_at_idx")
+  @@index([sourceMessageId], map: "napcat_group_message_chunk_source_message_id_idx")
+  @@map("napcat_group_message_chunk")
 }
