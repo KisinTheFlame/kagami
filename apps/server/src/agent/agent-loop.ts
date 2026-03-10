@@ -63,7 +63,7 @@ export class AgentLoop {
           system: await this.contextManager.getSystemPrompt(),
           messages: this.contextManager.getMessages(),
           tools: this.activeTools.map(toolDefinition => toolDefinition.tool),
-          toolChoice: "auto",
+          toolChoice: "required",
         });
         const assistant = completion.message;
         const persistentAssistantMessage = omitFinishToolCalls(assistant);

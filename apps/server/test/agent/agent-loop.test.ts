@@ -140,7 +140,7 @@ describe("AgentLoop", () => {
         toolRegistry.send_group_message.tool,
         toolRegistry.finish.tool,
       ],
-      toolChoice: "auto",
+      toolChoice: "required",
     });
     expect(pushAssistantMessage).toHaveBeenCalledWith(
       expect.objectContaining({
