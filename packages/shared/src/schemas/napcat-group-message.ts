@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   createPaginatedResponseSchema,
   JsonRecordSchema,
+  JsonValueSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
 } from "./base.js";
@@ -35,7 +36,7 @@ export const NapcatGroupMessageItemSchema = z.object({
   userId: z.string().min(1).nullable(),
   nickname: z.string().min(1).nullable(),
   messageId: z.number().int().positive().nullable(),
-  rawMessage: z.string().min(1),
+  message: JsonValueSchema,
   eventTime: z.string().datetime().nullable(),
   payload: JsonRecordSchema,
   createdAt: z.string().datetime(),

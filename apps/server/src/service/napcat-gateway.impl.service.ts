@@ -349,7 +349,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         userId: event.userId,
         nickname: extractSenderNickname(event.payload),
         messageId: event.messageId,
-        rawMessage: event.rawMessage,
+        message: toStoredMessageSegments(event.payload.message),
         eventTime,
         payload: event.payload,
       })
@@ -796,6 +796,10 @@ function parseMessageSegments(value: unknown): NapcatReceiveMessageSegment[] | n
   }
 
   return parsed.data;
+}
+
+function toStoredMessageSegments(value: unknown): NapcatReceiveMessageSegment[] {
+  return parseMessageSegments(value) ?? [];
 }
 
 function isTextOrAtSegment(

@@ -16,6 +16,7 @@ import {
 import { useMobileDetailState } from "@/hooks/useMobileDetailState";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn, truncateText } from "@/lib/utils";
+import { renderNapcatMessagePreview } from "./message-render";
 import { NapcatGroupMessageDetailPanel } from "./NapcatGroupMessageDetailPanel";
 import { useNapcatGroupMessageList } from "./useNapcatGroupMessageList";
 
@@ -167,7 +168,7 @@ export function NapcatGroupMessageHistoryPage() {
             <input
               value={formState.keyword}
               onChange={event => setFormState(prev => ({ ...prev, keyword: event.target.value }))}
-              placeholder="匹配 raw_message"
+              placeholder="匹配 message JSON 文本"
               className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
@@ -290,7 +291,9 @@ export function NapcatGroupMessageHistoryPage() {
                         <TableCell className="truncate text-sm text-muted-foreground">
                           {item.nickname ?? "—"}
                         </TableCell>
-                        <TableCell className="truncate text-sm">{item.rawMessage}</TableCell>
+                        <TableCell className="truncate text-sm">
+                          {renderNapcatMessagePreview(item.message)}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -469,7 +472,9 @@ function NapcatGroupMessageMobileCard({
         </span>
       </div>
 
-      <p className="mt-3 text-sm text-foreground">{truncateText(item.rawMessage, 140)}</p>
+      <p className="mt-3 text-sm text-foreground">
+        {truncateText(renderNapcatMessagePreview(item.message), 140)}
+      </p>
       <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.eventTime)}</p>
     </MobileSelectCard>
   );

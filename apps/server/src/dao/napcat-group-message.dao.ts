@@ -1,11 +1,11 @@
-import type { NapcatGroupMessageListQuery } from "@kagami/shared";
+import type { JsonValue, NapcatGroupMessageListQuery } from "@kagami/shared";
 
 export type InsertNapcatGroupMessageItem = {
   groupId: string;
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
-  rawMessage: string;
+  message: JsonValue;
   eventTime: Date | null;
   payload: Record<string, unknown>;
   createdAt?: Date;
@@ -17,7 +17,7 @@ export type NapcatGroupMessageItem = {
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
-  rawMessage: string;
+  message: JsonValue;
   eventTime: Date | null;
   payload: Record<string, unknown>;
   createdAt: Date;

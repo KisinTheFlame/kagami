@@ -1,4 +1,5 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { JsonValue } from "@kagami/shared";
 import type { Database } from "../../db/client.js";
 import type {
   InsertNapcatGroupMessageItem,
@@ -26,15 +27,19 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
         userId: item.userId,
         nickname: item.nickname,
         messageId: item.messageId,
-        rawMessage: item.rawMessage,
+        message: toInputJsonValue(item.message),
         eventTime: item.eventTime,
-        payload: toInputJsonObject(item.payload),
+        payload: toInputJsonValue(item.payload),
         createdAt: item.createdAt,
       },
     });
   }
 
   public async countByQuery(input: QueryNapcatGroupMessageListFilterInput): Promise<number> {
+    if (input.keyword) {
+      return this.countByKeywordQuery(input);
+    }
+
     const where = buildWhereInput(input);
     return this.database.napcatGroupMessage.count({ where });
   }
@@ -42,6 +47,10 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
   public async listByQueryPage(
     input: QueryNapcatGroupMessageListPageInput,
   ): Promise<NapcatGroupMessageItem[]> {
+    if (input.keyword) {
+      return this.listByKeywordQuery(input);
+    }
+
     const where = buildWhereInput(input);
     const offset = (input.page - 1) * input.pageSize;
 
@@ -52,17 +61,49 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
       skip: offset,
     });
 
-    return rows.map(item => ({
-      id: item.id,
-      groupId: item.groupId,
-      userId: item.userId,
-      nickname: item.nickname,
-      messageId: item.messageId,
-      rawMessage: item.rawMessage,
-      eventTime: item.eventTime,
-      payload: toJsonRecord(item.payload),
-      createdAt: item.createdAt,
-    }));
+    return rows.map(mapPrismaRowToItem);
+  }
+
+  private async countByKeywordQuery(
+    input: QueryNapcatGroupMessageListFilterInput,
+  ): Promise<number> {
+    const whereClause = buildKeywordSqlWhereClause(input);
+    const rows = await this.database.$queryRaw<
+      Array<{ total: bigint | number | string }>
+    >(Prisma.sql`
+      SELECT COUNT(*)::bigint AS "total"
+      FROM "napcat_group_message"
+      ${whereClause}
+    `);
+
+    return toCount(rows[0]?.total ?? 0);
+  }
+
+  private async listByKeywordQuery(
+    input: QueryNapcatGroupMessageListPageInput,
+  ): Promise<NapcatGroupMessageItem[]> {
+    const whereClause = buildKeywordSqlWhereClause(input);
+    const offset = (input.page - 1) * input.pageSize;
+
+    const rows = await this.database.$queryRaw<RawNapcatGroupMessageRow[]>(Prisma.sql`
+      SELECT
+        "id" AS "id",
+        "group_id" AS "groupId",
+        "user_id" AS "userId",
+        "nickname" AS "nickname",
+        "message_id" AS "messageId",
+        "message" AS "message",
+        "event_time" AS "eventTime",
+        "payload" AS "payload",
+        "created_at" AS "createdAt"
+      FROM "napcat_group_message"
+      ${whereClause}
+      ORDER BY "created_at" DESC, "id" DESC
+      LIMIT ${input.pageSize}
+      OFFSET ${offset}
+    `);
+
+    return rows.map(mapRawRowToItem);
   }
 }
 
@@ -83,12 +124,6 @@ function buildWhereInput(
       mode: "insensitive",
     };
   }
-  if (input.keyword) {
-    where.rawMessage = {
-      contains: input.keyword,
-      mode: "insensitive",
-    };
-  }
 
   const createdAt: Prisma.DateTimeFilter = {};
   if (input.startAt) {
@@ -104,24 +139,89 @@ function buildWhereInput(
   return where;
 }
 
-function toJsonRecord(value: Prisma.JsonValue): Record<string, unknown> {
-  if (isRecord(value)) {
-    return value;
+function buildKeywordSqlWhereClause(input: QueryNapcatGroupMessageListFilterInput): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [];
+
+  if (input.groupId) {
+    conditions.push(Prisma.sql`"group_id" = ${input.groupId}`);
+  }
+  if (input.userId) {
+    conditions.push(Prisma.sql`"user_id" = ${input.userId}`);
+  }
+  if (input.nickname) {
+    conditions.push(Prisma.sql`"nickname" ILIKE ${toContainsPattern(input.nickname)}`);
+  }
+  if (input.keyword) {
+    conditions.push(Prisma.sql`"message"::text ILIKE ${toContainsPattern(input.keyword)}`);
+  }
+  if (input.startAt) {
+    conditions.push(Prisma.sql`"created_at" >= ${new Date(input.startAt)}`);
+  }
+  if (input.endAt) {
+    conditions.push(Prisma.sql`"created_at" <= ${new Date(input.endAt)}`);
   }
 
+  if (conditions.length === 0) {
+    return Prisma.sql``;
+  }
+
+  return Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`;
+}
+
+function mapPrismaRowToItem(item: {
+  id: number;
+  groupId: string;
+  userId: string | null;
+  nickname: string | null;
+  messageId: number | null;
+  message: Prisma.JsonValue;
+  eventTime: Date | null;
+  payload: Prisma.JsonValue;
+  createdAt: Date;
+}): NapcatGroupMessageItem {
   return {
-    value,
+    id: item.id,
+    groupId: item.groupId,
+    userId: item.userId,
+    nickname: item.nickname,
+    messageId: item.messageId,
+    message: toJsonValue(item.message),
+    eventTime: item.eventTime,
+    payload: toJsonRecord(item.payload),
+    createdAt: item.createdAt,
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+type RawNapcatGroupMessageRow = {
+  id: number;
+  groupId: string;
+  userId: string | null;
+  nickname: string | null;
+  messageId: number | null;
+  message: unknown;
+  eventTime: Date | null;
+  payload: unknown;
+  createdAt: Date;
+};
+
+function mapRawRowToItem(row: RawNapcatGroupMessageRow): NapcatGroupMessageItem {
+  return {
+    id: row.id,
+    groupId: row.groupId,
+    userId: row.userId,
+    nickname: row.nickname,
+    messageId: row.messageId,
+    message: toJsonValue(row.message),
+    eventTime: row.eventTime,
+    payload: toJsonRecord(row.payload),
+    createdAt: row.createdAt,
+  };
 }
 
-function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
-  const normalized = normalizeInputJsonValue(value);
-  if (typeof normalized === "object" && !Array.isArray(normalized)) {
-    return normalized as Prisma.InputJsonObject;
+function toJsonRecord(value: unknown): Record<string, unknown> {
+  const normalized = toJsonValue(value);
+  if (isRecord(normalized)) {
+    return normalized;
   }
 
   return {
@@ -129,7 +229,19 @@ function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObje
   };
 }
 
-function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
+function toJsonValue(value: unknown): JsonValue {
+  return normalizeJsonValue(value) as JsonValue;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toInputJsonValue(value: unknown): Prisma.InputJsonValue {
+  return normalizeJsonValue(value);
+}
+
+function normalizeJsonValue(value: unknown): Prisma.InputJsonValue {
   try {
     const serialized = JSON.stringify(value, (_key, currentValue) => {
       if (currentValue instanceof Date) {
@@ -161,4 +273,20 @@ function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
 
     return String(value);
   }
+}
+
+function toContainsPattern(value: string): string {
+  return `%${value}%`;
+}
+
+function toCount(value: bigint | number | string): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }

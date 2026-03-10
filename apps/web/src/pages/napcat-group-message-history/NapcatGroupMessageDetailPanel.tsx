@@ -1,4 +1,5 @@
 import type { NapcatGroupMessageItem } from "@kagami/shared";
+import { safeStringify } from "./message-render";
 
 type NapcatGroupMessageDetailPanelProps = {
   item: NapcatGroupMessageItem | null;
@@ -30,9 +31,9 @@ export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetail
 
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <section className="space-y-2">
-          <h3 className="text-base font-semibold">Raw Message</h3>
-          <pre className="whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
-            {item.rawMessage}
+          <h3 className="text-base font-semibold">Message (JSON)</h3>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
+            {safeStringify(item.message)}
           </pre>
         </section>
 
@@ -81,12 +82,4 @@ function formatDate(iso: string | null): string {
     minute: "2-digit",
     second: "2-digit",
   });
-}
-
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }

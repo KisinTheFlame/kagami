@@ -2,6 +2,19 @@ import { z } from "zod";
 
 export const JsonRecordSchema = z.record(z.string(), z.unknown());
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonObject = {
+  [key: string]: JsonValue;
+};
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+
+const JsonPrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([JsonPrimitiveSchema, z.record(z.string(), JsonValueSchema), z.array(JsonValueSchema)]),
+);
+
 const parseNumberInput = (value: unknown): unknown => {
   if (typeof value !== "string") {
     return value;

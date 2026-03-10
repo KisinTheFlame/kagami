@@ -63,7 +63,7 @@ model NapcatGroupMessage {
   userId     String?   @map("user_id")
   nickname   String?
   messageId  Int?      @map("message_id")
-  rawMessage String    @map("raw_message")
+  message    Json      @db.JsonB
   eventTime  DateTime? @map("event_time") @db.Timestamptz(6)
   payload    Json      @db.JsonB
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

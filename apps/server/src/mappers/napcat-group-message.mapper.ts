@@ -28,7 +28,7 @@ function mapNapcatGroupMessageItem(item: NapcatGroupMessageDaoItem): NapcatGroup
     userId: item.userId,
     nickname: item.nickname,
     messageId: item.messageId,
-    rawMessage: item.rawMessage,
+    message: item.message,
     eventTime: item.eventTime ? item.eventTime.toISOString() : null,
     payload: item.payload,
     createdAt: item.createdAt.toISOString(),

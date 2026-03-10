@@ -28,7 +28,14 @@ describe("NapcatGroupMessageHandler", () => {
           userId: "123456",
           nickname: "测试昵称",
           messageId: 9988,
-          rawMessage: "hello group",
+          message: [
+            {
+              type: "text",
+              data: {
+                text: "hello group",
+              },
+            },
+          ],
           eventTime: new Date().toISOString(),
           payload: {
             post_type: "message",

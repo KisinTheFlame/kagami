@@ -358,7 +358,20 @@ describe("DefaultNapcatGatewayService", () => {
         userId: "123456",
         nickname: "测试群名片",
         messageId: 9988,
-        rawMessage: "{@测试成员(10001)} hello group",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hello group",
+            },
+          },
+        ],
         eventTime: new Date(1710000000 * 1000),
       }),
     );
@@ -689,6 +702,57 @@ describe("DefaultNapcatGatewayService", () => {
     expect(onGroupMessage).not.toHaveBeenCalled();
     await waitOneTick();
     expect(napcatGroupMessageDao.insert).not.toHaveBeenCalled();
+
+    await gateway.stop();
+  });
+
+  it("should persist empty message segments when payload.message is missing", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      napcatGroupMessageDao,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hello group",
+        time: 1710000000,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
+      }),
+    );
+
+    await waitOneTick();
+    expect(onGroupMessage).toHaveBeenCalledTimes(1);
+    expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: "987654",
+        message: [],
+      }),
+    );
 
     await gateway.stop();
   });
