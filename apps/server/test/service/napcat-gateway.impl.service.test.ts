@@ -241,6 +241,7 @@ describe("DefaultNapcatGatewayService", () => {
         sub_type: "friend",
       }),
     );
+    await waitOneTick();
 
     const matchedLog = logs.find(
       log => log.metadata.event === "napcat.gateway.private_message_received",
@@ -285,7 +286,132 @@ describe("DefaultNapcatGatewayService", () => {
         user_id: 123456,
         self_id: 654321,
         message_id: 9988,
-        raw_message: "hello group",
+        raw_message: "[CQ:at,qq=10001] hello group",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hello group",
+            },
+          },
+        ],
+        time: 1710000000,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
+      }),
+    );
+    const lookupPayload = JSON.parse(socket.sentPayloads[0]) as {
+      action: string;
+      params: {
+        group_id: string;
+        user_id: string;
+        no_cache: boolean;
+      };
+      echo: string;
+    };
+
+    expect(lookupPayload.action).toBe("get_group_member_info");
+    expect(lookupPayload.params).toEqual({
+      group_id: "987654",
+      user_id: "10001",
+      no_cache: false,
+    });
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          card: "测试成员",
+          nickname: "备用昵称",
+        },
+        message: "",
+        echo: lookupPayload.echo,
+        stream: "normal-action",
+      }),
+    );
+    await waitOneTick();
+
+    expect(onGroupMessage).toHaveBeenCalledWith({
+      groupId: "987654",
+      userId: "123456",
+      nickname: "测试群名片",
+      rawMessage: "{@测试成员(10001)} hello group",
+      messageId: 9988,
+      time: 1710000000,
+      payload: expect.objectContaining({
+        post_type: "message",
+        message_type: "group",
+      }),
+    });
+    expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: "987654",
+        userId: "123456",
+        nickname: "测试群名片",
+        messageId: 9988,
+        rawMessage: "{@测试成员(10001)} hello group",
+        eventTime: new Date(1710000000 * 1000),
+      }),
+    );
+
+    await gateway.stop();
+  });
+
+  it("should reuse cached group member display name within ttl", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-10T00:00:00.000Z"));
+
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1001,
+        raw_message: "[CQ:at,qq=10001] hi",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hi",
+            },
+          },
+        ],
         time: 1710000000,
         sender: {
           card: "测试群名片",
@@ -294,27 +420,189 @@ describe("DefaultNapcatGatewayService", () => {
       }),
     );
 
-    expect(onGroupMessage).toHaveBeenCalledWith({
-      groupId: "987654",
-      userId: "123456",
-      nickname: "测试群名片",
-      rawMessage: "hello group",
-      messageId: 9988,
-      time: 1710000000,
-      payload: expect.objectContaining({
+    const firstLookupPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          card: "缓存昵称",
+        },
+        message: "",
+        echo: firstLookupPayload.echo,
+        stream: "normal-action",
+      }),
+    );
+    await flushMicrotasks();
+    expect(onGroupMessage).toHaveBeenCalledTimes(1);
+
+    socket.emitMessage(
+      JSON.stringify({
         post_type: "message",
         message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1002,
+        raw_message: "[CQ:at,qq=10001] again",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " again",
+            },
+          },
+        ],
+        time: 1710000001,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
       }),
-    });
-    await waitOneTick();
-    expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+    );
+    await flushMicrotasks();
+
+    expect(socket.sentPayloads).toHaveLength(1);
+    expect(onGroupMessage).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
-        groupId: "987654",
-        userId: "123456",
-        nickname: "测试群名片",
-        messageId: 9988,
-        rawMessage: "hello group",
-        eventTime: new Date(1710000000 * 1000),
+        rawMessage: "{@缓存昵称(10001)} again",
+      }),
+    );
+
+    await gateway.stop();
+  });
+
+  it("should refresh cached group member display name after ttl expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-10T00:00:00.000Z"));
+
+    const sockets: FakeWebSocket[] = [];
+    const onGroupMessage = vi.fn();
+    const gateway = new DefaultNapcatGatewayService({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      listenGroupId: "987654",
+      onGroupMessage,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1001,
+        raw_message: "[CQ:at,qq=10001] hi",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hi",
+            },
+          },
+        ],
+        time: 1710000000,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
+      }),
+    );
+
+    const firstLookupPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          card: "旧昵称",
+        },
+        message: "",
+        echo: firstLookupPayload.echo,
+        stream: "normal-action",
+      }),
+    );
+    await flushMicrotasks();
+    expect(onGroupMessage).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(new Date("2026-03-10T00:10:00.001Z"));
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1002,
+        raw_message: "[CQ:at,qq=10001] again",
+        message: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " again",
+            },
+          },
+        ],
+        time: 1710000001,
+        sender: {
+          card: "测试群名片",
+          nickname: "测试昵称",
+        },
+      }),
+    );
+
+    expect(socket.sentPayloads).toHaveLength(2);
+
+    const secondLookupPayload = JSON.parse(socket.sentPayloads[1]) as { echo: string };
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          card: "新昵称",
+        },
+        message: "",
+        echo: secondLookupPayload.echo,
+        stream: "normal-action",
+      }),
+    );
+    await flushMicrotasks();
+
+    expect(onGroupMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        rawMessage: "{@新昵称(10001)} again",
       }),
     );
 
@@ -597,4 +885,11 @@ function createNapcatGroupMessageDao(): NapcatGroupMessageDao & {
 
 async function waitOneTick(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function flushMicrotasks(times = 3): Promise<void> {
+  for (let index = 0; index < times; index += 1) {
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+  }
 }

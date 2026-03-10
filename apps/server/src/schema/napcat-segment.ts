@@ -385,6 +385,7 @@ export type NapcatReceiveAtSegment = {
   type: "at";
   data: {
     qq: string | "all";
+    name?: string;
   };
 };
 
@@ -549,6 +550,7 @@ export const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z
   type: z.literal("at"),
   data: z.object({
     qq: z.union([NonEmptyStringSchema, z.literal("all")]),
+    name: z.string().optional(),
   }),
 });
 

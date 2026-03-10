@@ -50,7 +50,7 @@ describe("NapCat segment schemas", () => {
   it("should validate all supported receive segments", () => {
     const samples: unknown[] = [
       { type: "text", data: { text: "hello" } },
-      { type: "at", data: { qq: "all" } },
+      { type: "at", data: { qq: "all", name: "全体成员" } },
       {
         type: "image",
         data: {

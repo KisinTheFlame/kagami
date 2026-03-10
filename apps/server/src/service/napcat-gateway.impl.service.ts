@@ -3,6 +3,12 @@ import { z } from "zod";
 import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import type { NapcatGroupMessageDao } from "../dao/napcat-group-message.dao.js";
 import { AppLogger } from "../logger/logger.js";
+import {
+  NapcatReceiveMessageSegmentSchema,
+  type NapcatReceiveAtSegment,
+  type NapcatReceiveMessageSegment,
+  type NapcatReceiveTextSegment,
+} from "../schema/napcat-segment.js";
 import type {
   NapcatGroupMessageEvent,
   NapcatGatewayService,
@@ -31,13 +37,21 @@ type WebSocketLike = {
 
 type PendingRequest = {
   timeout: NodeJS.Timeout;
-  resolve: (result: { messageId: number }) => void;
+  resolve: (result: Record<string, unknown> | null) => void;
   reject: (error: Error) => void;
+};
+
+type GroupMemberDisplayNameCacheEntry = {
+  displayName: string;
+  expiresAt: number;
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const WS_OPEN_READY_STATE = 1;
 const BLOCKED_NAPCAT_EVENT_POST_TYPES = new Set<string>(["meta_event"]);
+const GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS = 10 * 60 * 1000;
+const MessageSegmentsSchema = z.array(NapcatReceiveMessageSegmentSchema);
+type NapcatReceiveTextOrAtSegment = NapcatReceiveTextSegment | NapcatReceiveAtSegment;
 
 const ActionResponseSchema = z.object({
   status: z.string(),
@@ -73,6 +87,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly napcatGroupMessageDao: NapcatGroupMessageDao | null;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
+  private readonly groupMemberDisplayNameCache = new Map<
+    string,
+    GroupMemberDisplayNameCacheEntry
+  >();
 
   private started = false;
   private socket: WebSocketLike | null = null;
@@ -128,16 +146,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     groupId,
     message,
   }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
-    const activeSocket = this.socket;
-    if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
-      throw new NapcatGatewayError({
-        code: "NOT_CONNECTED",
-        message: "NapCat WebSocket 未连接",
-      });
-    }
-
-    const echo = randomUUID();
-    const payload = {
+    const data = await this.sendActionRequest({
       action: "send_group_msg",
       params: {
         group_id: groupId,
@@ -150,36 +159,19 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
           },
         ],
       },
-      echo,
-    };
-
-    return await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(echo);
-        reject(
-          new NapcatGatewayError({
-            code: "REQUEST_TIMEOUT",
-            message: "NapCat 请求超时",
-          }),
-        );
-      }, this.requestTimeoutMs);
-
-      this.pendingRequests.set(echo, { timeout, resolve, reject });
-
-      try {
-        activeSocket.send(JSON.stringify(payload));
-      } catch (error) {
-        clearTimeout(timeout);
-        this.pendingRequests.delete(echo);
-        reject(
-          new NapcatGatewayError({
-            code: "UPSTREAM_ERROR",
-            message: "NapCat 请求发送失败",
-            cause: error,
-          }),
-        );
-      }
     });
+
+    const messageIdResult = z.number().int().positive().safeParse(data?.message_id);
+    if (!messageIdResult.success) {
+      throw new NapcatGatewayError({
+        code: "UPSTREAM_ERROR",
+        message: "NapCat 返回结果缺少 message_id",
+      });
+    }
+
+    return {
+      messageId: messageIdResult.data,
+    };
   }
 
   private connect(): void {
@@ -260,17 +252,27 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       return;
     }
 
-    this.handlePostTypeEvent(postTypeEvent.data);
+    void this.handlePostTypeEvent(postTypeEvent.data).catch(error => {
+      logger.errorWithCause("Failed to handle NapCat post type event", error, {
+        event: "napcat.gateway.post_type_event_handle_failed",
+        postType: postTypeEvent.data.post_type,
+        messageType: postTypeEvent.data.message_type,
+        groupId: toNullableId(postTypeEvent.data.group_id),
+        userId: toNullableId(postTypeEvent.data.user_id),
+      });
+    });
   }
 
-  private handlePostTypeEvent(eventPayload: z.infer<typeof PostTypeEventSchema>): void {
+  private async handlePostTypeEvent(
+    eventPayload: z.infer<typeof PostTypeEventSchema>,
+  ): Promise<void> {
     const userId = toNullableId(eventPayload.user_id);
     const selfId = toNullableId(eventPayload.self_id);
     const groupId = toNullableId(eventPayload.group_id);
     const nickname = extractSenderNickname(eventPayload as unknown as Record<string, unknown>);
-    const rawMessage = toNullableString(eventPayload.raw_message);
     const eventTime = toEventTime(eventPayload.time);
     const payload = eventPayload as unknown as Record<string, unknown>;
+    const rawMessage = await this.extractFormattedRawMessage({ payload, groupId });
 
     if (eventPayload.post_type === "message" && eventPayload.message_type === "private") {
       logger.info("Received NapCat private message event", {
@@ -443,20 +445,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       return;
     }
 
-    const messageIdResult = z.number().int().positive().safeParse(response.data?.message_id);
-    if (!messageIdResult.success) {
-      pendingRequest.reject(
-        new NapcatGatewayError({
-          code: "UPSTREAM_ERROR",
-          message: "NapCat 返回结果缺少 message_id",
-        }),
-      );
-      return;
-    }
-
-    pendingRequest.resolve({
-      messageId: messageIdResult.data,
-    });
+    pendingRequest.resolve(response.data ?? null);
   }
 
   private handleSocketClose(
@@ -528,6 +517,198 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       clearTimeout(pendingRequest.timeout);
       pendingRequest.reject(error);
       this.pendingRequests.delete(echo);
+    }
+  }
+
+  private async sendActionRequest({
+    action,
+    params,
+  }: {
+    action: string;
+    params: Record<string, unknown>;
+  }): Promise<Record<string, unknown> | null> {
+    const activeSocket = this.socket;
+    if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
+      throw new NapcatGatewayError({
+        code: "NOT_CONNECTED",
+        message: "NapCat WebSocket 未连接",
+      });
+    }
+
+    const echo = randomUUID();
+    const payload = {
+      action,
+      params,
+      echo,
+    };
+
+    return await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(echo);
+        reject(
+          new NapcatGatewayError({
+            code: "REQUEST_TIMEOUT",
+            message: "NapCat 请求超时",
+          }),
+        );
+      }, this.requestTimeoutMs);
+
+      this.pendingRequests.set(echo, { timeout, resolve, reject });
+
+      try {
+        activeSocket.send(JSON.stringify(payload));
+      } catch (error) {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(echo);
+        reject(
+          new NapcatGatewayError({
+            code: "UPSTREAM_ERROR",
+            message: "NapCat 请求发送失败",
+            cause: error,
+          }),
+        );
+      }
+    });
+  }
+
+  private async extractFormattedRawMessage({
+    payload,
+    groupId,
+  }: {
+    payload: Record<string, unknown>;
+    groupId: string | null;
+  }): Promise<string | null> {
+    const rawMessage = toNullableString(payload.raw_message);
+    const messageSegments = parseMessageSegments(payload.message);
+
+    if (!messageSegments || messageSegments.length === 0) {
+      return rawMessage;
+    }
+
+    const hydratedSegments = await this.hydrateAtSegmentNames({
+      groupId,
+      messageSegments,
+    });
+
+    if (
+      hydratedSegments.every(isTextOrAtSegment) &&
+      hydratedSegments.every(canRenderTextOrAtSegment)
+    ) {
+      return hydratedSegments
+        .map(segment => {
+          if (segment.type === "text") {
+            return segment.data.text;
+          }
+
+          return formatAtSegment(segment) ?? "";
+        })
+        .join("");
+    }
+
+    if (!rawMessage) {
+      return null;
+    }
+
+    return replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments);
+  }
+
+  private async hydrateAtSegmentNames({
+    groupId,
+    messageSegments,
+  }: {
+    groupId: string | null;
+    messageSegments: NapcatReceiveMessageSegment[];
+  }): Promise<NapcatReceiveMessageSegment[]> {
+    return await Promise.all(
+      messageSegments.map(async segment => {
+        if (segment.type !== "at") {
+          return segment;
+        }
+
+        const currentName = toNullableString(segment.data.name);
+        if (currentName) {
+          return segment;
+        }
+
+        const displayName = await this.resolveAtDisplayName({
+          groupId,
+          qq: segment.data.qq,
+        });
+        if (!displayName) {
+          return segment;
+        }
+
+        return withAtSegmentName(segment, displayName);
+      }),
+    );
+  }
+
+  private async resolveAtDisplayName({
+    groupId,
+    qq,
+  }: {
+    groupId: string | null;
+    qq: string | "all";
+  }): Promise<string | null> {
+    if (qq === "all") {
+      return "全体成员";
+    }
+
+    if (!groupId) {
+      return null;
+    }
+
+    return await this.queryGroupMemberDisplayName({
+      groupId,
+      userId: qq,
+    });
+  }
+
+  private async queryGroupMemberDisplayName({
+    groupId,
+    userId,
+  }: {
+    groupId: string;
+    userId: string;
+  }): Promise<string | null> {
+    const cacheKey = `${groupId}:${userId}`;
+    const now = Date.now();
+    const cachedEntry = this.groupMemberDisplayNameCache.get(cacheKey);
+    if (cachedEntry && cachedEntry.expiresAt > now) {
+      return cachedEntry.displayName;
+    }
+
+    if (cachedEntry) {
+      this.groupMemberDisplayNameCache.delete(cacheKey);
+    }
+
+    try {
+      const data = await this.sendActionRequest({
+        action: "get_group_member_info",
+        params: {
+          group_id: groupId,
+          user_id: userId,
+          no_cache: false,
+        },
+      });
+      const displayName = extractDisplayNameFromGroupMemberInfo(data);
+
+      if (displayName) {
+        this.groupMemberDisplayNameCache.set(cacheKey, {
+          displayName,
+          expiresAt: now + GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
+        });
+      }
+
+      return displayName;
+    } catch (error) {
+      logger.warn("Failed to query NapCat group member info", {
+        event: "napcat.gateway.group_member_info_query_failed",
+        groupId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
     }
   }
 }
@@ -606,4 +787,101 @@ function toEventTime(value: unknown): Date | null {
   }
 
   return null;
+}
+
+function parseMessageSegments(value: unknown): NapcatReceiveMessageSegment[] | null {
+  const parsed = MessageSegmentsSchema.safeParse(value);
+  if (!parsed.success) {
+    return null;
+  }
+
+  return parsed.data;
+}
+
+function isTextOrAtSegment(
+  segment: NapcatReceiveMessageSegment,
+): segment is NapcatReceiveTextOrAtSegment {
+  return segment.type === "text" || segment.type === "at";
+}
+
+function canRenderTextOrAtSegment(segment: NapcatReceiveTextOrAtSegment): boolean {
+  if (segment.type === "text") {
+    return true;
+  }
+
+  return formatAtSegment(segment) !== null;
+}
+
+function replaceAtSegmentsInRawMessage(
+  rawMessage: string,
+  messageSegments: NapcatReceiveMessageSegment[],
+): string {
+  let nextMessage = rawMessage;
+
+  for (const segment of messageSegments) {
+    if (segment.type !== "at") {
+      continue;
+    }
+
+    const formattedAt = formatAtSegment(segment);
+    if (!formattedAt) {
+      continue;
+    }
+
+    const cqAtPattern = new RegExp(`\\[CQ:at,qq=${escapeRegExp(segment.data.qq)}(?:,[^\\]]*)?\\]`);
+
+    if (cqAtPattern.test(nextMessage)) {
+      nextMessage = nextMessage.replace(cqAtPattern, formattedAt);
+      continue;
+    }
+
+    const atName = toNullableString(segment.data.name);
+    if (!atName) {
+      continue;
+    }
+
+    const plainAtPattern = new RegExp(`@${escapeRegExp(atName)}`);
+    nextMessage = nextMessage.replace(plainAtPattern, formattedAt);
+  }
+
+  return nextMessage;
+}
+
+function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
+  const qq = segment.data.qq;
+  const name = toNullableString(segment.data.name) ?? (qq === "all" ? "全体成员" : null);
+  if (!name) {
+    return null;
+  }
+
+  return `{@${name}(${qq})}`;
+}
+
+function withAtSegmentName(segment: NapcatReceiveAtSegment, name: string): NapcatReceiveAtSegment {
+  return {
+    ...segment,
+    data: {
+      ...segment.data,
+      name,
+    },
+  };
+}
+
+function extractDisplayNameFromGroupMemberInfo(
+  data: Record<string, unknown> | null,
+): string | null {
+  if (!data) {
+    return null;
+  }
+
+  const card = toNullableString(data.card);
+  if (card) {
+    return card;
+  }
+
+  return toNullableString(data.nickname);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
