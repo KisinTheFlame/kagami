@@ -6,6 +6,7 @@ import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { LlmProviderUnavailableError } from "./errors.js";
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
+import { createOpenAiCodexProvider } from "./providers/openai-codex-provider.js";
 import type { LlmProvider } from "./provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "./types.js";
 
@@ -30,7 +31,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
     async listAvailableProviders(): Promise<LlmProviderOption[]> {
       const config = await options.configManager.getLlmRuntimeConfig();
       const providers = createProviderRegistry(config, options.providers);
-      return listAvailableProviders(config, providers);
+      return await listAvailableProviders(config, providers);
     },
     async chat(
       request: LlmChatRequest,
@@ -101,15 +102,35 @@ function createProviderRegistry(
   return {
     deepseek: providerOverrides?.deepseek ?? createRuntimeProvider("deepseek", config),
     openai: providerOverrides?.openai ?? createRuntimeProvider("openai", config),
+    "openai-codex":
+      providerOverrides?.["openai-codex"] ?? createRuntimeProvider("openai-codex", config),
   };
 }
 
-function listAvailableProviders(
+async function listAvailableProviders(
   config: LlmRuntimeConfig,
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
-): LlmProviderOption[] {
-  const orderedIds = (["deepseek", "openai"] as const)
-    .filter(providerId => providers[providerId] !== undefined)
+): Promise<LlmProviderOption[]> {
+  const availability = await Promise.all(
+    (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
+      const provider = providers[providerId];
+      if (!provider) {
+        return null;
+      }
+
+      const isAvailable = await provider.isAvailable?.();
+      if (isAvailable === false) {
+        return null;
+      }
+
+      return providerId;
+    }),
+  );
+
+  const orderedIds = availability
+    .filter(
+      (providerId): providerId is (typeof availability)[number] & string => providerId !== null,
+    )
     .sort((left, right) => {
       if (left === config.activeProvider) {
         return -1;
@@ -135,6 +156,8 @@ function getDefaultModel(config: LlmRuntimeConfig, providerId: LlmProviderId): s
       return config.deepseek.chatModel;
     case "openai":
       return config.openai.chatModel;
+    case "openai-codex":
+      return config.openaiCodex.chatModel;
     default:
       return assertNever(providerId, "Unsupported provider");
   }
@@ -159,6 +182,8 @@ function createRuntimeProvider(
             apiKey: config.openai.apiKey,
           })
         : undefined;
+    case "openai-codex":
+      return createOpenAiCodexProvider(config.openaiCodex);
     default:
       return assertNever(providerId, "Unsupported provider");
   }

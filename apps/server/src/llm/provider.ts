@@ -2,5 +2,6 @@ import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "./ty
 
 export interface LlmProvider {
   id: LlmProviderId;
+  isAvailable?(): Promise<boolean>;
   chat(request: LlmChatRequest): Promise<LlmChatResponsePayload>;
 }

@@ -30,6 +30,11 @@ server:
         apiKey: ""
         baseUrl: https://api.openai.com/v1
         chatModel: gpt-4o-mini
+      openaiCodex:
+        authFilePath: ~/.codex/auth.json
+        baseUrl: https://chatgpt.com/backend-api/codex/responses
+        chatModel: gpt-5.3-codex
+        refreshLeewayMs: 60000
   tavily:
     apiKey: ""
   bot:
@@ -43,6 +48,7 @@ server:
 - `server.llm.activeProvider` 默认值为 `deepseek`，`server.llm.timeoutMs` 默认值为 `45000`。
 - `server.llm.providers.deepseek.baseUrl` 和 `chatModel` 分别默认到 `https://api.deepseek.com`、`deepseek-chat`。
 - `server.llm.providers.openai.baseUrl` 和 `chatModel` 为空字符串时，会分别回退到 `https://api.openai.com/v1`、`gpt-4o-mini`。
+- `server.llm.providers.openaiCodex` 默认复用本机 `~/.codex/auth.json` 的 ChatGPT/Codex 登录态，并在服务端自动刷新票据。
 - `server.llm.providers.*.apiKey` 与 `server.tavily.apiKey` 为空字符串时视为未配置。
 
 ## PM2 部署

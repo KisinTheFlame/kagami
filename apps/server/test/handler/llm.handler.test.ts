@@ -52,8 +52,8 @@ describe("LlmHandler", () => {
 
   it("should execute a chat playground request", async () => {
     const chat = vi.fn().mockResolvedValue({
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: "openai-codex",
+      model: "gpt-5.3-codex",
       message: {
         role: "assistant",
         content: "pong",
@@ -72,7 +72,7 @@ describe("LlmHandler", () => {
     handler.register(app);
 
     const payload = {
-      provider: "openai",
+      provider: "openai-codex",
       request: {
         messages: [{ role: "user", content: "ping" }],
         tools: [],
@@ -88,8 +88,8 @@ describe("LlmHandler", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: "openai-codex",
+      model: "gpt-5.3-codex",
       message: {
         role: "assistant",
         content: "pong",

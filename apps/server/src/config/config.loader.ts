@@ -13,6 +13,10 @@ const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_DEEPSEEK_CHAT_MODEL = "deepseek-chat";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_OPENAI_CHAT_MODEL = "gpt-4o-mini";
+const DEFAULT_OPENAI_CODEX_AUTH_FILE_PATH = "~/.codex/auth.json";
+const DEFAULT_OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/responses";
+const DEFAULT_OPENAI_CODEX_CHAT_MODEL = "gpt-5.3-codex";
+const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
 
 const UrlSchema = z.string().url();
 const NonEmptyStringSchema = z.string().trim().min(1);
@@ -43,7 +47,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
 
   return value;
 }, z.string().trim().min(1).optional());
-const ActiveProviderSchema = z.enum(["deepseek", "openai"] satisfies [
+const ActiveProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satisfies [
   LlmProviderId,
   ...LlmProviderId[],
 ]);
@@ -72,6 +76,14 @@ const StaticConfigFileSchema = z.object({
           baseUrl: OpenAiDefaultableStringSchema.default(DEFAULT_OPENAI_BASE_URL),
           chatModel: OpenAiDefaultableStringSchema.default(DEFAULT_OPENAI_CHAT_MODEL),
         }),
+        openaiCodex: z
+          .object({
+            authFilePath: z.string().trim().min(1).default(DEFAULT_OPENAI_CODEX_AUTH_FILE_PATH),
+            baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
+            chatModel: NonEmptyStringSchema.default(DEFAULT_OPENAI_CODEX_CHAT_MODEL),
+            refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
+          })
+          .default({}),
       }),
     }),
     tavily: z.object({

@@ -75,6 +75,13 @@ server:
         chatModel: "gpt-4o-mini",
         timeoutMs: 15000,
       },
+      openaiCodex: {
+        authFilePath: "~/.codex/auth.json",
+        baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+        chatModel: "gpt-5.3-codex",
+        refreshLeewayMs: 60_000,
+        timeoutMs: 15000,
+      },
     });
 
     await expect(manager.getTavilyConfig()).resolves.toEqual({
@@ -178,6 +185,12 @@ server:
         apiKey: undefined,
         baseUrl: "https://api.openai.com/v1",
         chatModel: "gpt-4o-mini",
+      },
+      openaiCodex: {
+        authFilePath: "~/.codex/auth.json",
+        baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+        chatModel: "gpt-5.3-codex",
+        refreshLeewayMs: 60_000,
       },
     });
   });

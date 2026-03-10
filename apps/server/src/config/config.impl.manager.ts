@@ -70,6 +70,13 @@ export class DefaultConfigManager implements ConfigManager {
         chatModel: config.server.llm.providers.openai.chatModel,
         timeoutMs: config.server.llm.timeoutMs,
       },
+      openaiCodex: {
+        authFilePath: config.server.llm.providers.openaiCodex.authFilePath,
+        baseUrl: config.server.llm.providers.openaiCodex.baseUrl,
+        chatModel: config.server.llm.providers.openaiCodex.chatModel,
+        refreshLeewayMs: config.server.llm.providers.openaiCodex.refreshLeewayMs,
+        timeoutMs: config.server.llm.timeoutMs,
+      },
     };
 
     this.tavilyConfig = {

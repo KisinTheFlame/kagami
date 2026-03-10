@@ -10,8 +10,8 @@ describe("llm playground schemas", () => {
     const result = LlmProviderListResponseSchema.parse({
       providers: [
         {
-          id: "openai",
-          defaultModel: "gpt-4o-mini",
+          id: "openai-codex",
+          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ],
@@ -40,8 +40,8 @@ describe("llm playground schemas", () => {
 
   it("should parse playground chat response", () => {
     const result = LlmPlaygroundChatResponseSchema.parse({
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: "openai-codex",
+      model: "gpt-5.3-codex",
       message: {
         role: "assistant",
         content: "pong",

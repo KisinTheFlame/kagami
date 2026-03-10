@@ -161,7 +161,7 @@ export function LlmPlaygroundPage() {
               ) : providersQuery.isError ? (
                 <StateHint text={providersQuery.error.message} tone="error" />
               ) : providers.length === 0 ? (
-                <StateHint text="没有可用 provider，请先在服务端配置 API Key。" tone="warning" />
+                <StateHint text="没有可用 provider，请先在服务端配置 LLM 凭证。" tone="warning" />
               ) : (
                 <div className="space-y-2">
                   {providers.map(provider => {

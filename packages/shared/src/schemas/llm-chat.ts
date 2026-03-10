@@ -6,6 +6,10 @@ import {
   parseOptionalStringInput,
 } from "./base.js";
 
+export const LlmProviderIdSchema = z.enum(["deepseek", "openai", "openai-codex"]);
+
+export type LlmProviderId = z.infer<typeof LlmProviderIdSchema>;
+
 export const LlmToolCallPayloadSchema = z
   .object({
     id: z.string().min(1),
@@ -77,7 +81,7 @@ export type LlmChatRequestPayload = z.infer<typeof LlmChatRequestPayloadSchema>;
 
 export const LlmChatResponsePayloadSchema = z
   .object({
-    provider: z.enum(["deepseek", "openai"]),
+    provider: LlmProviderIdSchema,
     model: z.string().min(1),
     message: z
       .object({
@@ -140,7 +144,7 @@ export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSche
 
 export const LlmProviderOptionSchema = z
   .object({
-    id: z.enum(["deepseek", "openai"]),
+    id: LlmProviderIdSchema,
     defaultModel: z.string().min(1),
     isActive: z.boolean(),
   })
@@ -158,7 +162,7 @@ export type LlmProviderListResponse = z.infer<typeof LlmProviderListResponseSche
 
 export const LlmPlaygroundChatRequestSchema = z
   .object({
-    provider: z.enum(["deepseek", "openai"]),
+    provider: LlmProviderIdSchema,
     model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
     request: LlmChatRequestPayloadSchema,
   })

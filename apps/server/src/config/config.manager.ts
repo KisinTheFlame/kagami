@@ -20,11 +20,20 @@ export type LlmProviderRuntimeConfig = {
   timeoutMs: number;
 };
 
+export type OpenAiCodexRuntimeConfig = {
+  authFilePath: string;
+  baseUrl: string;
+  chatModel: string;
+  refreshLeewayMs: number;
+  timeoutMs: number;
+};
+
 export type LlmRuntimeConfig = {
   activeProvider: LlmProviderId;
   timeoutMs: number;
   deepseek: LlmProviderRuntimeConfig;
   openai: LlmProviderRuntimeConfig;
+  openaiCodex: OpenAiCodexRuntimeConfig;
 };
 
 export type TavilyConfig = {

@@ -18,6 +18,11 @@ server:
         apiKey: ""
         baseUrl: https://api.openai.com/v1
         chatModel: gpt-4o-mini
+      openaiCodex:
+        authFilePath: ~/.codex/auth.json
+        baseUrl: https://chatgpt.com/backend-api/codex/responses
+        chatModel: gpt-5.3-codex
+        refreshLeewayMs: 60000
   tavily:
     apiKey: ""
   bot:

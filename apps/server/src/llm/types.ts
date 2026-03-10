@@ -1,4 +1,4 @@
-export type LlmProviderId = "deepseek" | "openai";
+export type LlmProviderId = "deepseek" | "openai" | "openai-codex";
 
 export type JsonSchema = {
   type: "object";

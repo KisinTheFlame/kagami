@@ -8,8 +8,8 @@ describe("DefaultLlmPlaygroundService", () => {
       chat: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([
         {
-          id: "openai",
-          defaultModel: "gpt-4o-mini",
+          id: "openai-codex",
+          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ]),
@@ -20,8 +20,8 @@ describe("DefaultLlmPlaygroundService", () => {
     await expect(service.listProviders()).resolves.toEqual({
       providers: [
         {
-          id: "openai",
-          defaultModel: "gpt-4o-mini",
+          id: "openai-codex",
+          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ],

@@ -28,6 +28,13 @@ function createLlmRuntimeConfig(overrides: Partial<LlmRuntimeConfig> = {}): LlmR
       chatModel: "gpt-4o-mini",
       timeoutMs: 45_000,
     },
+    openaiCodex: {
+      authFilePath: "/tmp/kagami-missing-codex-auth.json",
+      baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+      chatModel: "gpt-5.3-codex",
+      refreshLeewayMs: 60_000,
+      timeoutMs: 45_000,
+    },
     ...overrides,
   };
 }
@@ -60,6 +67,13 @@ describe("createLlmClient", () => {
     const client = createLlmClient({
       configManager,
       llmChatCallDao: createLlmChatCallDaoMock(),
+      providers: {
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
+      },
     });
 
     await expect(client.listAvailableProviders()).resolves.toEqual([
@@ -97,6 +111,11 @@ describe("createLlmClient", () => {
       llmChatCallDao,
       providers: {
         openai: provider,
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
       },
     });
 
