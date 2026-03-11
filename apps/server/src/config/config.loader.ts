@@ -118,7 +118,7 @@ const StaticConfigFileSchema = z.object({
         .default({}),
     }),
     tavily: z.object({
-      apiKey: OptionalNonEmptyStringSchema,
+      apiKey: NonEmptyStringSchema,
     }),
     bot: z.object({
       qq: StringLikeSchema,

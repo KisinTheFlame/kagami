@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { finishTool } from "../../src/agent/tools/finish.js";
+import { FinishTool } from "../../src/tools/index.js";
 
 describe("finish tool", () => {
   it("should mark the current round as finished", async () => {
-    const result = await finishTool.execute({});
+    const tool = new FinishTool();
+    const result = await tool.execute({}, {});
 
-    expect(finishTool.tool.name).toBe("finish");
+    expect(tool.name).toBe("finish");
     expect(result).toEqual({
       content: "",
-      shouldFinishRound: true,
+      signal: "finish_round",
     });
   });
 });

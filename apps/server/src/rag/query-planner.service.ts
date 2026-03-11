@@ -1,29 +1,27 @@
 import { createAgentSystemPrompt } from "../agent/context.js";
 import type { LlmClient } from "../llm/client.js";
 import type { LlmMessage } from "../llm/types.js";
-import { createSearchMemoryTool, SEARCH_MEMORY_TOOL_NAME } from "../agent/tools/search-memory.js";
-import type { GroupMessageMemorySearchService } from "./memory-search.service.js";
+import type { ToolSet } from "../tools/index.js";
+import { SEARCH_MEMORY_TOOL_NAME } from "../tools/index.js";
 
 export class RagQueryPlannerService {
   private readonly llmClient: LlmClient;
-  private readonly searchMemoryTool: ReturnType<typeof createSearchMemoryTool>;
+  private readonly plannerTools: ToolSet;
   private readonly systemPrompt: string | (() => Promise<string> | string);
 
   public constructor({
     llmClient,
-    memorySearchService,
+    plannerTools,
     systemPrompt,
     systemPromptFactory,
   }: {
     llmClient: LlmClient;
-    memorySearchService: GroupMessageMemorySearchService;
+    plannerTools: ToolSet;
     systemPrompt?: string;
     systemPromptFactory?: () => Promise<string> | string;
   }) {
     this.llmClient = llmClient;
-    this.searchMemoryTool = createSearchMemoryTool({
-      memorySearchService,
-    });
+    this.plannerTools = plannerTools;
     this.systemPrompt =
       systemPromptFactory ??
       systemPrompt ??
@@ -54,7 +52,7 @@ export class RagQueryPlannerService {
       {
         system: await this.getSystemPrompt(),
         messages: baseMessages,
-        tools: [this.searchMemoryTool.tool],
+        tools: this.plannerTools.definitions(),
         toolChoice: { tool_name: SEARCH_MEMORY_TOOL_NAME },
       },
       {
@@ -67,8 +65,7 @@ export class RagQueryPlannerService {
       return null;
     }
 
-    const executionResult = await this.searchMemoryTool.execute({
-      ...toolCall.arguments,
+    const executionResult = await this.plannerTools.execute(toolCall.name, toolCall.arguments, {
       groupId: input.groupId,
     });
     const searchResult = executionResult.content;

@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agent/agent-loop.js";
 import type { AgentContextManager } from "../../src/agent/context.manager.js";
 import type { AgentEventQueue } from "../../src/agent/event.queue.js";
-import type { AgentToolRegistry } from "../../src/agent/tools/index.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
+import { ToolCatalog } from "../../src/tools/index.js";
+import type { ToolComponent, ToolSet } from "../../src/tools/index.js";
 
 class StopLoopError extends Error {}
 
@@ -20,51 +21,109 @@ function createLlmResponse(): LlmChatResponsePayload {
   };
 }
 
+function createAgentTools(overrides?: {
+  finishExecute?: ReturnType<typeof vi.fn>;
+  searchWebExecute?: ReturnType<typeof vi.fn>;
+  sendGroupMessageExecute?: ReturnType<typeof vi.fn>;
+}): {
+  agentTools: ToolSet;
+  finishExecute: ReturnType<typeof vi.fn>;
+  searchWebExecute: ReturnType<typeof vi.fn>;
+  sendGroupMessageExecute: ReturnType<typeof vi.fn>;
+} {
+  const finishExecute =
+    overrides?.finishExecute ??
+    vi.fn().mockResolvedValue({
+      content: "",
+      signal: "finish_round",
+    });
+  const searchWebExecute =
+    overrides?.searchWebExecute ??
+    vi.fn().mockResolvedValue({
+      content: "",
+      signal: "continue",
+    });
+  const sendGroupMessageExecute =
+    overrides?.sendGroupMessageExecute ??
+    vi.fn().mockResolvedValue({
+      content: "",
+      signal: "continue",
+    });
+
+  const components: ToolComponent[] = [
+    {
+      name: "search_web",
+      description: "search",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+      kind: "business",
+      llmTool: {
+        name: "search_web",
+        description: "search",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+      },
+      execute: searchWebExecute,
+    },
+    {
+      name: "send_group_message",
+      description: "send",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+      kind: "business",
+      llmTool: {
+        name: "send_group_message",
+        description: "send",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+      },
+      execute: sendGroupMessageExecute,
+    },
+    {
+      name: "finish",
+      description: "finish",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+      kind: "control",
+      llmTool: {
+        name: "finish",
+        description: "finish",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+      },
+      execute: finishExecute,
+    },
+  ];
+
+  return {
+    agentTools: new ToolCatalog(components).pick(["search_web", "send_group_message", "finish"]),
+    finishExecute,
+    searchWebExecute,
+    sendGroupMessageExecute,
+  };
+}
+
 describe("AgentLoop", () => {
   it("should consume queue events and execute one enabled tool round", async () => {
     const stopError = new StopLoopError("stop-loop");
     const now = vi.fn().mockReturnValue(new Date("2026-03-09T10:21:00.000Z"));
-    const finishExecute = vi.fn().mockResolvedValue({
-      content: "",
-      shouldFinishRound: true,
-    });
-    const disabledExecute = vi.fn();
-    const sendGroupMessageExecute = vi.fn();
-    const toolRegistry: AgentToolRegistry = {
-      finish: {
-        tool: {
-          name: "finish",
-          description: "finish",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: finishExecute,
-      },
-      search_web: {
-        tool: {
-          name: "search_web",
-          description: "search",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: disabledExecute,
-      },
-      send_group_message: {
-        tool: {
-          name: "send_group_message",
-          description: "send",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: sendGroupMessageExecute,
-      },
-    };
+    const { agentTools, finishExecute, searchWebExecute, sendGroupMessageExecute } =
+      createAgentTools({
+        searchWebExecute: vi.fn(),
+        sendGroupMessageExecute: vi.fn(),
+      });
 
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
@@ -118,7 +177,7 @@ describe("AgentLoop", () => {
       llmClient,
       contextManager,
       eventQueue,
-      toolRegistry,
+      agentTools,
       now,
     });
 
@@ -144,11 +203,7 @@ describe("AgentLoop", () => {
       {
         system: "system-prompt",
         messages: [],
-        tools: [
-          toolRegistry.search_web.tool,
-          toolRegistry.send_group_message.tool,
-          toolRegistry.finish.tool,
-        ],
+        tools: agentTools.definitions(),
         toolChoice: "required",
       },
       {
@@ -162,8 +217,8 @@ describe("AgentLoop", () => {
         toolCalls: [],
       }),
     );
-    expect(finishExecute).toHaveBeenCalledWith({});
-    expect(disabledExecute).not.toHaveBeenCalled();
+    expect(finishExecute).toHaveBeenCalledWith({}, {});
+    expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
     expect(pushToolMessage).not.toHaveBeenCalled();
   });
@@ -174,45 +229,7 @@ describe("AgentLoop", () => {
       .fn<() => Date>()
       .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
       .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
-    const finishExecute = vi.fn().mockResolvedValue({
-      content: "",
-      shouldFinishRound: true,
-    });
-    const toolRegistry: AgentToolRegistry = {
-      finish: {
-        tool: {
-          name: "finish",
-          description: "finish",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: finishExecute,
-      },
-      search_web: {
-        tool: {
-          name: "search_web",
-          description: "search",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: vi.fn(),
-      },
-      send_group_message: {
-        tool: {
-          name: "send_group_message",
-          description: "send",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: vi.fn(),
-      },
-    };
+    const { agentTools } = createAgentTools();
 
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const contextManager: AgentContextManager = {
@@ -244,7 +261,7 @@ describe("AgentLoop", () => {
       },
       contextManager,
       eventQueue,
-      toolRegistry,
+      agentTools,
       now,
     });
 
@@ -267,45 +284,7 @@ describe("AgentLoop", () => {
       .fn<() => Date>()
       .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
       .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
-    const finishExecute = vi.fn().mockResolvedValue({
-      content: "",
-      shouldFinishRound: true,
-    });
-    const toolRegistry: AgentToolRegistry = {
-      finish: {
-        tool: {
-          name: "finish",
-          description: "finish",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: finishExecute,
-      },
-      search_web: {
-        tool: {
-          name: "search_web",
-          description: "search",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: vi.fn(),
-      },
-      send_group_message: {
-        tool: {
-          name: "send_group_message",
-          description: "send",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-        execute: vi.fn(),
-      },
-    };
+    const { agentTools } = createAgentTools();
 
     const chat = vi
       .fn()
@@ -408,7 +387,7 @@ describe("AgentLoop", () => {
       },
       contextManager,
       eventQueue,
-      toolRegistry,
+      agentTools,
       now,
     });
 
@@ -442,38 +421,5 @@ describe("AgentLoop", () => {
         },
       ]),
     );
-  });
-
-  it("should throw when an enabled tool is missing from registry", () => {
-    const llmClient: LlmClient = {
-      chat: vi.fn(),
-      chatDirect: vi.fn(),
-      listAvailableProviders: vi.fn().mockResolvedValue([]),
-    };
-    const contextManager: AgentContextManager = {
-      getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),
-      getMessages: vi.fn().mockReturnValue([]),
-      getSteps: vi.fn().mockReturnValue(0),
-      pushUserMessage: vi.fn(),
-      pushGroupMessageEvent: vi.fn().mockResolvedValue(undefined),
-      pushAssistantMessage: vi.fn(),
-      pushToolMessage: vi.fn(),
-    };
-    const eventQueue: AgentEventQueue = {
-      enqueue: vi.fn().mockReturnValue(1),
-      drainAll: vi.fn().mockReturnValue([]),
-      size: vi.fn().mockReturnValue(0),
-      waitForEvent: vi.fn(),
-    };
-
-    expect(
-      () =>
-        new AgentLoop({
-          llmClient,
-          contextManager,
-          eventQueue,
-          toolRegistry: {},
-        }),
-    ).toThrowError("Agent tool is not registered: search_web");
   });
 });

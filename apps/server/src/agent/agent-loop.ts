@@ -1,19 +1,14 @@
 import type { AgentContextManager, AssistantMessage } from "./context.manager.js";
 import type { Event } from "./event.js";
 import type { AgentEventQueue } from "./event.queue.js";
-import { FINISH_TOOL_NAME } from "./tools/finish.js";
-import { SEARCH_WEB_TOOL_NAME } from "./tools/search-web.js";
-import { SEND_GROUP_MESSAGE_TOOL_NAME } from "./tools/send-group-message.js";
 import type { LlmClient } from "../llm/client.js";
-import type { AgentToolDefinition, AgentToolRegistry, ToolExecutionResult } from "./tools/index.js";
-
-const ENABLED_TOOL_NAMES = [SEARCH_WEB_TOOL_NAME, SEND_GROUP_MESSAGE_TOOL_NAME, FINISH_TOOL_NAME];
+import type { ToolSet, ToolSetExecutionResult } from "../tools/index.js";
 
 type AgentLoopDeps = {
   llmClient: LlmClient;
   contextManager: AgentContextManager;
   eventQueue: AgentEventQueue;
-  toolRegistry: AgentToolRegistry;
+  agentTools: ToolSet;
   now?: () => Date;
 };
 
@@ -23,26 +18,15 @@ export class AgentLoop {
   private readonly llmClient: LlmClient;
   private readonly contextManager: AgentContextManager;
   private readonly eventQueue: AgentEventQueue;
-  private readonly activeTools: AgentToolDefinition[];
-  private readonly activeToolMap: AgentToolRegistry;
+  private readonly agentTools: ToolSet;
   private readonly now: () => Date;
 
-  public constructor({ llmClient, contextManager, eventQueue, toolRegistry, now }: AgentLoopDeps) {
+  public constructor({ llmClient, contextManager, eventQueue, agentTools, now }: AgentLoopDeps) {
     this.llmClient = llmClient;
     this.contextManager = contextManager;
     this.eventQueue = eventQueue;
+    this.agentTools = agentTools;
     this.now = now ?? (() => new Date());
-    this.activeTools = ENABLED_TOOL_NAMES.map(toolName => {
-      const toolDefinition = toolRegistry[toolName];
-      if (!toolDefinition) {
-        throw new Error(`Agent tool is not registered: ${toolName}`);
-      }
-
-      return toolDefinition;
-    });
-    this.activeToolMap = Object.fromEntries(
-      this.activeTools.map(toolDefinition => [toolDefinition.tool.name, toolDefinition]),
-    );
   }
 
   public async run(): Promise<void> {
@@ -62,7 +46,7 @@ export class AgentLoop {
           {
             system: await this.contextManager.getSystemPrompt(),
             messages: this.contextManager.getMessages(),
-            tools: this.activeTools.map(toolDefinition => toolDefinition.tool),
+            tools: this.agentTools.definitions(),
             toolChoice: "required",
           },
           {
@@ -70,7 +54,7 @@ export class AgentLoop {
           },
         );
         const assistant = completion.message;
-        const persistentAssistantMessage = omitFinishToolCalls(assistant);
+        const persistentAssistantMessage = omitControlToolCalls(assistant, this.agentTools);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
           this.contextManager.pushAssistantMessage(persistentAssistantMessage);
         }
@@ -78,10 +62,10 @@ export class AgentLoop {
         let shouldFinishRound = false;
         for (const toolCall of assistant.toolCalls) {
           const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments);
-          if (toolResult.shouldFinishRound) {
+          if (toolResult.signal === "finish_round") {
             shouldFinishRound = true;
           }
-          if (toolCall.name !== FINISH_TOOL_NAME && toolResult.content.length > 0) {
+          if (toolResult.kind !== "control" && toolResult.content.length > 0) {
             this.contextManager.pushToolMessage(toolCall.id, toolResult.content);
           }
         }
@@ -100,16 +84,8 @@ export class AgentLoop {
   private async executeToolCall(
     toolName: string,
     argumentsValue: Record<string, unknown>,
-  ): Promise<ToolExecutionResult> {
-    const toolDefinition = this.activeToolMap[toolName];
-    if (!toolDefinition) {
-      return {
-        content: JSON.stringify({ error: `Unknown tool: ${toolName}` }),
-        shouldFinishRound: false,
-      };
-    }
-
-    return toolDefinition.execute(argumentsValue);
+  ): Promise<ToolSetExecutionResult> {
+    return await this.agentTools.execute(toolName, argumentsValue, {});
   }
 }
 
@@ -128,10 +104,12 @@ function createWakeReminder(now: Date): string {
   return `<system_reminder>当前时间为北京时间 ${values.year} 年 ${values.month} 月 ${values.day} 日 ${values.hour}:${values.minute}</system_reminder>`;
 }
 
-function omitFinishToolCalls(message: AssistantMessage): AssistantMessage {
+function omitControlToolCalls(message: AssistantMessage, agentTools: ToolSet): AssistantMessage {
   return {
     ...message,
-    toolCalls: message.toolCalls.filter(toolCall => toolCall.name !== FINISH_TOOL_NAME),
+    toolCalls: message.toolCalls.filter(
+      toolCall => agentTools.getKind(toolCall.name) !== "control",
+    ),
   };
 }
 

@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { RagQueryPlannerService } from "../../src/rag/query-planner.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { GroupMessageMemorySearchService } from "../../src/rag/memory-search.service.js";
+import { SearchMemoryTool, ToolCatalog } from "../../src/tools/index.js";
+
+function createPlannerTools(memorySearchService: GroupMessageMemorySearchService) {
+  return new ToolCatalog([new SearchMemoryTool({ memorySearchService })]).pick(["search_memory"]);
+}
 
 describe("RagQueryPlannerService", () => {
   it("should return null when planner decides not to search", async () => {
@@ -30,7 +35,7 @@ describe("RagQueryPlannerService", () => {
 
     const service = new RagQueryPlannerService({
       llmClient,
-      memorySearchService,
+      plannerTools: createPlannerTools(memorySearchService),
     });
 
     await expect(
@@ -73,7 +78,7 @@ describe("RagQueryPlannerService", () => {
 
     const service = new RagQueryPlannerService({
       llmClient,
-      memorySearchService,
+      plannerTools: createPlannerTools(memorySearchService),
     });
 
     await expect(
@@ -119,7 +124,7 @@ describe("RagQueryPlannerService", () => {
 
     const service = new RagQueryPlannerService({
       llmClient,
-      memorySearchService,
+      plannerTools: createPlannerTools(memorySearchService),
     });
 
     await expect(
@@ -158,7 +163,7 @@ describe("RagQueryPlannerService", () => {
 
     const service = new RagQueryPlannerService({
       llmClient,
-      memorySearchService,
+      plannerTools: createPlannerTools(memorySearchService),
     });
     const currentMessage = "<message>\nA (1):\nhello\n</message>";
 
@@ -201,7 +206,7 @@ describe("RagQueryPlannerService", () => {
 
     const service = new RagQueryPlannerService({
       llmClient,
-      memorySearchService,
+      plannerTools: createPlannerTools(memorySearchService),
       systemPromptFactory: () => "custom system prompt",
     });
 

@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSearchMemoryTool, searchMemoryTool } from "../../src/agent/tools/search-memory.js";
+import { SEARCH_MEMORY_TOOL_NAME, SearchMemoryTool } from "../../src/tools/index.js";
 import type { GroupMessageMemorySearchService } from "../../src/rag/memory-search.service.js";
 
 describe("search memory tool", () => {
   it("should not expose groupId to llm tool parameters", () => {
-    expect(searchMemoryTool.parameters).toEqual({
+    const tool = new SearchMemoryTool({
+      memorySearchService: {
+        search: vi.fn(),
+      } as unknown as GroupMessageMemorySearchService,
+    });
+
+    expect(tool.name).toBe(SEARCH_MEMORY_TOOL_NAME);
+    expect(tool.parameters).toEqual({
       type: "object",
       properties: {
         shouldSearch: {
@@ -24,19 +31,21 @@ describe("search memory tool", () => {
       search: vi.fn(),
     } as unknown as GroupMessageMemorySearchService;
 
-    const tool = createSearchMemoryTool({
+    const tool = new SearchMemoryTool({
       memorySearchService,
     });
 
     await expect(
-      tool.execute({
-        shouldSearch: false,
-        query: "",
-        groupId: "123456",
-      }),
+      tool.execute(
+        {
+          shouldSearch: false,
+          query: "",
+        },
+        { groupId: "123456" },
+      ),
     ).resolves.toEqual({
       content: "",
-      shouldFinishRound: false,
+      signal: "continue",
     });
     expect(memorySearchService.search).not.toHaveBeenCalled();
   });
@@ -46,19 +55,21 @@ describe("search memory tool", () => {
       search: vi.fn().mockResolvedValue("<memory_history_message />"),
     } as unknown as GroupMessageMemorySearchService;
 
-    const tool = createSearchMemoryTool({
+    const tool = new SearchMemoryTool({
       memorySearchService,
     });
 
     await expect(
-      tool.execute({
-        shouldSearch: true,
-        query: "老话题",
-        groupId: "123456",
-      }),
+      tool.execute(
+        {
+          shouldSearch: true,
+          query: "老话题",
+        },
+        { groupId: "123456" },
+      ),
     ).resolves.toEqual({
       content: "<memory_history_message />",
-      shouldFinishRound: false,
+      signal: "continue",
     });
     expect(memorySearchService.search).toHaveBeenCalledWith({
       groupId: "123456",

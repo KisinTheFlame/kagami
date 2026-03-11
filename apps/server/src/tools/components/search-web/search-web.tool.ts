@@ -1,7 +1,10 @@
 import { z } from "zod";
-import type { Tool } from "../../llm/types.js";
-import type { WebSearchResult, WebSearchResultItem } from "../../service/web-search.service.js";
-import type { AgentToolDefinition } from "./index.js";
+import type {
+  WebSearchResult,
+  WebSearchResultItem,
+  WebSearchService,
+} from "../../../service/web-search.service.js";
+import { ZodToolComponent, type ToolKind } from "../../core/tool-component.js";
 
 export const SEARCH_WEB_TOOL_NAME = "search_web";
 const MAX_AGENT_SOURCES = 3;
@@ -12,10 +15,11 @@ const SearchWebArgumentsSchema = z.object({
   timeRange: z.enum(["day", "week", "month", "year"]).optional(),
 });
 
-export const searchWebTool: Tool = {
-  name: SEARCH_WEB_TOOL_NAME,
-  description: "使用 Tavily 检索互联网信息，适合查最新新闻、背景资料和带来源链接的网页结果。",
-  parameters: {
+export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema> {
+  public readonly name = SEARCH_WEB_TOOL_NAME;
+  public readonly description =
+    "使用 Tavily 检索互联网信息，适合查最新新闻、背景资料和带来源链接的网页结果。";
+  public readonly parameters = {
     type: "object",
     properties: {
       query: {
@@ -31,21 +35,20 @@ export const searchWebTool: Tool = {
         description: "时间范围过滤，可选 day、week、month、year。",
       },
     },
-  },
-};
+  } as const;
+  public readonly kind: ToolKind = "business";
+  protected readonly inputSchema = SearchWebArgumentsSchema;
+  private readonly webSearchService: WebSearchService;
 
-type CreateSearchWebToolDeps = {
-  searchWeb: (input: z.infer<typeof SearchWebArgumentsSchema>) => Promise<WebSearchResult>;
-};
+  public constructor({ webSearchService }: { webSearchService: WebSearchService }) {
+    super();
+    this.webSearchService = webSearchService;
+  }
 
-export function createSearchWebTool({ searchWeb }: CreateSearchWebToolDeps): AgentToolDefinition {
-  return {
-    tool: searchWebTool,
-    execute: async argumentsValue => ({
-      content: await executeSearchWeb(argumentsValue, { searchWeb }),
-      shouldFinishRound: false,
-    }),
-  };
+  protected async executeTyped(input: z.infer<typeof SearchWebArgumentsSchema>): Promise<string> {
+    const result = await this.webSearchService.search(input);
+    return JSON.stringify(formatResultForAgent(result));
+  }
 }
 
 function formatResultForAgent(result: WebSearchResult): {
@@ -101,29 +104,4 @@ function normalizeUrl(url: string): string {
 
 function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
-}
-
-async function executeSearchWeb(
-  argumentsValue: Record<string, unknown>,
-  deps: CreateSearchWebToolDeps,
-): Promise<string> {
-  const parsed = SearchWebArgumentsSchema.safeParse(argumentsValue);
-  if (!parsed.success) {
-    return JSON.stringify({
-      ok: false,
-      error: "INVALID_ARGUMENTS",
-      details: parsed.error.issues.map(issue => issue.message),
-    });
-  }
-
-  try {
-    const result = await deps.searchWeb(parsed.data);
-
-    return JSON.stringify(formatResultForAgent(result));
-  } catch (error) {
-    return JSON.stringify({
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
 }

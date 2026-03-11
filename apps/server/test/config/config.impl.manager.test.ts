@@ -190,7 +190,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -237,7 +238,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -285,7 +287,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -331,7 +334,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -378,7 +382,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -423,7 +428,8 @@ server:
             model: deepseek-chat
   rag:
     embedding: {}
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -433,6 +439,53 @@ server:
       message: "配置值不合法",
       meta: {
         key: "server.rag.embedding.apiKey",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should fail when tavily apiKey is missing", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+    usages:
+      agent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.tavily.apiKey",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -469,7 +522,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -514,7 +568,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);
@@ -562,7 +617,8 @@ server:
   rag:
     embedding:
       apiKey: gemini-key
-  tavily: {}
+  tavily:
+    apiKey: tavily-key
   bot:
     qq: "10001"
 `);

@@ -66,7 +66,7 @@ export type RagRuntimeConfig = {
 };
 
 export type TavilyConfig = {
-  apiKey?: string;
+  apiKey: string;
 };
 
 export type BotProfileConfig = {

@@ -1,0 +1,41 @@
+import { z } from "zod";
+import type { AgentMessageService } from "../../../service/agent-message.service.js";
+import { ZodToolComponent, type ToolKind } from "../../core/tool-component.js";
+
+export const SEND_GROUP_MESSAGE_TOOL_NAME = "send_group_message";
+
+const SendGroupMessageArgumentsSchema = z.object({
+  message: z.string().trim().min(1),
+});
+
+export class SendGroupMessageTool extends ZodToolComponent<typeof SendGroupMessageArgumentsSchema> {
+  public readonly name = SEND_GROUP_MESSAGE_TOOL_NAME;
+  public readonly description = "向当前监听的 QQ 群发送一条文本消息。";
+  public readonly parameters = {
+    type: "object",
+    properties: {
+      message: {
+        type: "string",
+        description: "要发送到群里的文本内容。",
+      },
+    },
+  } as const;
+  public readonly kind: ToolKind = "business";
+  protected readonly inputSchema = SendGroupMessageArgumentsSchema;
+  private readonly agentMessageService: AgentMessageService;
+
+  public constructor({ agentMessageService }: { agentMessageService: AgentMessageService }) {
+    super();
+    this.agentMessageService = agentMessageService;
+  }
+
+  protected async executeTyped(
+    input: z.infer<typeof SendGroupMessageArgumentsSchema>,
+  ): Promise<string> {
+    const result = await this.agentMessageService.sendGroupMessage(input);
+    return JSON.stringify({
+      ok: true,
+      messageId: result.messageId,
+    });
+  }
+}

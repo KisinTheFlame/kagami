@@ -5,7 +5,6 @@ import { AgentLoop } from "./agent/agent-loop.js";
 import { DefaultAgentContextManager } from "./agent/context.impl.manager.js";
 import { createAgentSystemPrompt } from "./agent/context.js";
 import { InMemoryAgentEventQueue } from "./agent/event.impl.queue.js";
-import { createAgentToolRegistry } from "./agent/tools/index.js";
 import { DefaultConfigManager } from "./config/config.impl.manager.js";
 import { loadStaticConfig } from "./config/config.loader.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
@@ -38,11 +37,23 @@ import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.service.js";
+import { DefaultAgentMessageService } from "./service/agent-message.impl.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-message-query.impl.service.js";
 import { TavilyWebSearchService } from "./service/tavily-web-search.impl.service.js";
+import {
+  FINISH_TOOL_NAME,
+  FinishTool,
+  SEARCH_MEMORY_TOOL_NAME,
+  SEARCH_WEB_TOOL_NAME,
+  SearchMemoryTool,
+  SEND_GROUP_MESSAGE_TOOL_NAME,
+  SearchWebTool,
+  SendGroupMessageTool,
+  ToolCatalog,
+} from "./tools/index.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -211,17 +222,11 @@ try {
       botQQ: botProfile.botQQ,
     });
   };
-  const ragQueryPlanner = new RagQueryPlannerService({
-    llmClient,
-    memorySearchService,
-    systemPromptFactory: agentSystemPromptFactory,
+  const tavilyConfig = await activeConfigManager.getTavilyConfig();
+  const webSearchService = new TavilyWebSearchService({
+    apiKey: tavilyConfig.apiKey,
   });
-  const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
   const eventQueue = new InMemoryAgentEventQueue();
-  const contextManager = new DefaultAgentContextManager({
-    systemPromptFactory: agentSystemPromptFactory,
-    ragQueryPlanner,
-  });
 
   const activeNapcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
     wsUrl: bootConfig.napcat.wsUrl,
@@ -246,29 +251,42 @@ try {
   });
   napcatGatewayService = activeNapcatGatewayService;
 
-  const toolRegistry = createAgentToolRegistry({
-    sendGroupMessage: ({ message }) => {
-      return activeNapcatGatewayService.sendGroupMessage({
-        groupId: bootConfig.napcat.listenGroupId,
-        message,
-      });
-    },
-    searchWeb: async input => {
-      const tavilyConfig = await activeConfigManager.getTavilyConfig();
-      if (!tavilyConfig.apiKey) {
-        throw new Error("kagami.tavily.api-key 未配置，无法使用 search_web 工具");
-      }
-
-      return new TavilyWebSearchService({
-        apiKey: tavilyConfig.apiKey,
-      }).search(input);
-    },
+  const agentMessageService = new DefaultAgentMessageService({
+    napcatGatewayService: activeNapcatGatewayService,
+    targetGroupId: bootConfig.napcat.listenGroupId,
   });
+  const toolCatalog = new ToolCatalog([
+    new SearchWebTool({
+      webSearchService,
+    }),
+    new SendGroupMessageTool({
+      agentMessageService,
+    }),
+    new FinishTool(),
+    new SearchMemoryTool({
+      memorySearchService,
+    }),
+  ]);
+  const ragQueryPlanner = new RagQueryPlannerService({
+    llmClient,
+    plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
+    systemPromptFactory: agentSystemPromptFactory,
+  });
+  const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
+  const contextManager = new DefaultAgentContextManager({
+    systemPromptFactory: agentSystemPromptFactory,
+    ragQueryPlanner,
+  });
+  const agentTools = toolCatalog.pick([
+    SEARCH_WEB_TOOL_NAME,
+    SEND_GROUP_MESSAGE_TOOL_NAME,
+    FINISH_TOOL_NAME,
+  ]);
   const agentLoop = new AgentLoop({
     llmClient,
     contextManager,
     eventQueue,
-    toolRegistry,
+    agentTools,
   });
 
   const serverApp = Fastify({ logger: false, disableRequestLogging: true });
@@ -337,7 +355,6 @@ try {
   isServerStarted = true;
 
   const providers = await llmClient.listAvailableProviders({ usage: "agent" });
-  const tavilyConfig = await activeConfigManager.getTavilyConfig();
 
   logger.info("Server started", {
     event: "server.started",
