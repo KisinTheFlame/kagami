@@ -191,19 +191,18 @@ export function LlmHistoryPage() {
                     <TableHead className="w-[130px]">Provider</TableHead>
                     <TableHead>Model</TableHead>
                     <TableHead className="w-[140px]">状态</TableHead>
-                    <TableHead className="w-[110px] text-right">延迟 (ms)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                         加载中…
                       </TableCell>
                     </TableRow>
                   ) : data?.items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                         暂无数据
                       </TableCell>
                     </TableRow>
@@ -229,9 +228,6 @@ export function LlmHistoryPage() {
                               解析失败
                             </Badge>
                           ) : null}
-                        </TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">
-                          {item.latencyMs ?? "—"}
                         </TableCell>
                       </TableRow>
                     ))
@@ -362,7 +358,6 @@ function LlmHistoryMobileCard({
 
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{formatDate(item.createdAt)}</span>
-        <span className="tabular-nums">延迟 {item.latencyMs ?? "—"} ms</span>
       </div>
     </MobileSelectCard>
   );

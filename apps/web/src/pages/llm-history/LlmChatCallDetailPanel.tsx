@@ -8,24 +8,52 @@ type LlmChatCallDetailPanelProps = {
   item: LlmChatCallItem | null;
 };
 
+type InputEntry =
+  | {
+      type: "system";
+      content: string;
+    }
+  | {
+      type: "message";
+      message: LlmRequestMessage;
+      originalIndex: number;
+    };
+
 export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
-  const [inputOrder, setInputOrder] = useState<"asc" | "desc">("asc");
+  const [inputOrder, setInputOrder] = useState<"asc" | "desc">("desc");
   const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
-  const orderedInputMessages = useMemo(() => {
+  const orderedInputEntries = useMemo(() => {
+    if (!parsed?.request) {
+      return [] as InputEntry[];
+    }
+
+    const messageEntries: InputEntry[] = parsed.request.messages.map((message, index) => ({
+      type: "message" as const,
+      message,
+      originalIndex: index,
+    }));
+    const systemEntry: InputEntry | null = parsed.request.system
+      ? {
+          type: "system",
+          content: parsed.request.system,
+        }
+      : null;
+
+    if (inputOrder === "asc") {
+      return systemEntry ? [systemEntry, ...messageEntries] : messageEntries;
+    }
+
+    return systemEntry
+      ? [...messageEntries].reverse().concat(systemEntry)
+      : [...messageEntries].reverse();
+  }, [inputOrder, parsed]);
+  const toolNames = useMemo(() => {
     if (!parsed?.request) {
       return [];
     }
 
-    const entries = parsed.request.messages.map((message, index) => ({
-      message,
-      originalIndex: index,
-    }));
-    if (inputOrder === "asc") {
-      return entries;
-    }
-
-    return [...entries].reverse();
-  }, [inputOrder, parsed]);
+    return [...new Set(parsed.request.tools.map(tool => tool.name))];
+  }, [parsed]);
 
   if (item === null || parsed === null) {
     return (
@@ -137,24 +165,45 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           </div>
           {parsed.request ? (
             <>
-              {parsed.request.system ? (
-                <ContentCard title="System Prompt" preview={buildPreview(parsed.request.system)}>
-                  <pre className="whitespace-pre-wrap break-words text-xs leading-6">
-                    {parsed.request.system}
-                  </pre>
-                </ContentCard>
-              ) : null}
-
-              {orderedInputMessages.map(({ message, originalIndex }) => (
-                <MessageCard
-                  key={`input-${originalIndex}`}
-                  message={message}
-                  index={originalIndex}
-                />
-              ))}
+              {orderedInputEntries.map(entry =>
+                entry.type === "system" ? (
+                  <ContentCard
+                    key="input-system"
+                    title="System Prompt"
+                    preview={buildPreview(entry.content)}
+                  >
+                    <pre className="whitespace-pre-wrap break-words text-xs leading-6">
+                      {entry.content}
+                    </pre>
+                  </ContentCard>
+                ) : (
+                  <MessageCard
+                    key={`input-${entry.originalIndex}`}
+                    message={entry.message}
+                    index={entry.originalIndex}
+                  />
+                ),
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">输入结构解析失败，请查看下方原始 JSON。</p>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold">提供的工具</h3>
+          {!parsed?.request ? (
+            <p className="text-sm text-muted-foreground">输入结构解析失败，无法展示工具列表。</p>
+          ) : toolNames.length === 0 ? (
+            <p className="text-sm text-muted-foreground">本次请求没有提供工具。</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {toolNames.map(toolName => (
+                <Badge key={toolName} variant="secondary">
+                  {toolName}
+                </Badge>
+              ))}
+            </div>
           )}
         </section>
 
@@ -224,7 +273,7 @@ function ToolCallsList({
       <p className="text-xs font-medium text-muted-foreground">Tool Calls</p>
       <div className="mt-2 space-y-2">
         {toolCalls.map(toolCall => (
-          <details key={toolCall.id} className="rounded-md border bg-muted/20 p-2">
+          <details key={toolCall.id} open className="rounded-md border bg-muted/20 p-2">
             <summary className="cursor-pointer text-xs">
               {toolCall.name} ({toolCall.id})
             </summary>
