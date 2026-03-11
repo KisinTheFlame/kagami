@@ -51,13 +51,13 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
 
   return value;
 }, z.string().trim().min(1).optional());
-const ActiveProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satisfies [
+const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satisfies [
   LlmProviderId,
   ...LlmProviderId[],
 ]);
 const RagEmbeddingProviderSchema = z.literal("google");
 const LlmUsageConfigSchema = z.object({
-  provider: ActiveProviderSchema,
+  provider: LlmProviderSchema,
   model: NonEmptyStringSchema.optional(),
 });
 
@@ -72,7 +72,6 @@ const StaticConfigFileSchema = z.object({
       listenGroupId: StringLikeSchema,
     }),
     llm: z.object({
-      activeProvider: ActiveProviderSchema.optional(),
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
       providers: z.object({
         deepseek: z.object({
@@ -96,11 +95,10 @@ const StaticConfigFileSchema = z.object({
       }),
       usages: z
         .object({
-          agent: LlmUsageConfigSchema.optional(),
-          ragQueryPlanner: LlmUsageConfigSchema.optional(),
+          agent: LlmUsageConfigSchema,
+          ragQueryPlanner: LlmUsageConfigSchema,
         })
-        .partial()
-        .default({}),
+        .strict(),
     }),
     rag: z.object({
       embedding: z.object({
@@ -180,7 +178,6 @@ export async function loadStaticConfig(
       ...parsedConfig.data.server,
       llm: {
         ...parsedConfig.data.server.llm,
-        activeProvider: parsedConfig.data.server.llm.activeProvider ?? "deepseek",
         providers: {
           ...parsedConfig.data.server.llm.providers,
           openai: {
@@ -204,38 +201,21 @@ function normalizeLlmUsages(input: StaticConfig["server"]["llm"]): Record<
     model: string;
   }
 > {
-  const activeProvider = input.activeProvider ?? "deepseek";
-  const defaults = {
-    agent: {
-      provider: activeProvider,
-      model: getProviderDefaultModel(input, activeProvider),
-    },
-    ragQueryPlanner: {
-      provider: activeProvider,
-      model: getProviderDefaultModel(input, activeProvider),
-    },
-  } satisfies Record<LlmUsageId, { provider: LlmProviderId; model: string }>;
-
   return {
-    agent: normalizeUsageConfig(input, defaults.agent, input.usages.agent),
-    ragQueryPlanner: normalizeUsageConfig(
-      input,
-      defaults.ragQueryPlanner,
-      input.usages.ragQueryPlanner,
-    ),
+    agent: normalizeUsageConfig(input, input.usages.agent),
+    ragQueryPlanner: normalizeUsageConfig(input, input.usages.ragQueryPlanner),
   };
 }
 
 function normalizeUsageConfig(
   input: StaticConfig["server"]["llm"],
-  defaultValue: { provider: LlmProviderId; model: string },
-  value?: { provider: LlmProviderId; model?: string },
+  value: { provider: LlmProviderId; model?: string },
 ): { provider: LlmProviderId; model: string } {
-  const provider = value?.provider ?? defaultValue.provider;
+  const provider = value.provider;
 
   return {
     provider,
-    model: value?.model ?? getProviderDefaultModel(input, provider),
+    model: value.model ?? getProviderDefaultModel(input, provider),
   };
 }
 

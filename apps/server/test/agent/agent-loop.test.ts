@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agent/agent-loop.js";
-import type { AgentContextManager } from "../../src/agent/context-manager.manager.js";
-import type { AgentEventQueue } from "../../src/agent/event-queue.queue.js";
+import type { AgentContextManager } from "../../src/agent/context.manager.js";
+import type { AgentEventQueue } from "../../src/agent/event.queue.js";
 import type { AgentToolRegistry } from "../../src/agent/tools/index.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";

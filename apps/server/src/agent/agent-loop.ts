@@ -1,6 +1,6 @@
-import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
+import type { AgentContextManager, AssistantMessage } from "./context.manager.js";
 import type { Event } from "./event.js";
-import type { AgentEventQueue } from "./event-queue.queue.js";
+import type { AgentEventQueue } from "./event.queue.js";
 import { FINISH_TOOL_NAME } from "./tools/finish.js";
 import { SEARCH_WEB_TOOL_NAME } from "./tools/search-web.js";
 import { SEND_GROUP_MESSAGE_TOOL_NAME } from "./tools/send-group-message.js";

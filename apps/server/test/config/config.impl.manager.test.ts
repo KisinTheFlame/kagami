@@ -32,13 +32,17 @@ server:
     requestTimeoutMs: 10000
     listenGroupId: "123456"
   llm:
-    activeProvider: openai
     timeoutMs: 15000
     providers:
       deepseek:
         apiKey: ""
       openai:
         apiKey: openai-key
+    usages:
+      agent:
+        provider: openai
+      ragQueryPlanner:
+        provider: openai
   rag:
     embedding:
       apiKey: gemini-key
@@ -141,6 +145,11 @@ server:
     providers:
       deepseek: {}
       openai: {}
+    usages:
+      agent:
+        provider: deepseek
+      ragQueryPlanner:
+        provider: deepseek
   rag:
     embedding:
       apiKey: gemini-key
@@ -169,6 +178,11 @@ server:
     providers:
       deepseek: {}
       openai: {}
+    usages:
+      agent:
+        provider: deepseek
+      ragQueryPlanner:
+        provider: deepseek
   rag:
     embedding:
       apiKey: gemini-key
@@ -200,6 +214,11 @@ server:
         apiKey: "   "
         baseUrl: ""
         chatModel: " "
+    usages:
+      agent:
+        provider: deepseek
+      ragQueryPlanner:
+        provider: deepseek
   rag:
     embedding:
       apiKey: gemini-key
@@ -230,6 +249,10 @@ server:
           provider: "deepseek",
           model: "deepseek-chat",
         },
+        ragQueryPlanner: {
+          provider: "deepseek",
+          model: "deepseek-chat",
+        },
       },
     });
   });
@@ -247,6 +270,11 @@ server:
     providers:
       deepseek: {}
       openai: {}
+    usages:
+      agent:
+        provider: deepseek
+      ragQueryPlanner:
+        provider: deepseek
   rag:
     embedding:
       apiKey: gemini-key
@@ -277,6 +305,11 @@ server:
     providers:
       deepseek: {}
       openai: {}
+    usages:
+      agent:
+        provider: deepseek
+      ragQueryPlanner:
+        provider: deepseek
   rag:
     embedding: {}
   tavily: {}

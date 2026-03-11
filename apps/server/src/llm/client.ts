@@ -119,7 +119,7 @@ async function listAvailableProviders(
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
   usage: LlmUsageId,
 ): Promise<LlmProviderOption[]> {
-  const activeProvider = config.usages[usage].provider;
+  const preferredProvider = config.usages[usage].provider;
   const availability = await Promise.all(
     (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
       const provider = providers[providerId];
@@ -141,11 +141,11 @@ async function listAvailableProviders(
       (providerId): providerId is (typeof availability)[number] & string => providerId !== null,
     )
     .sort((left, right) => {
-      if (left === activeProvider) {
+      if (left === preferredProvider) {
         return -1;
       }
 
-      if (right === activeProvider) {
+      if (right === preferredProvider) {
         return 1;
       }
 
@@ -155,7 +155,7 @@ async function listAvailableProviders(
   return orderedIds.map(providerId => ({
     id: providerId,
     defaultModel: getDefaultModel(config, providerId),
-    isActive: providerId === activeProvider,
+    isActive: providerId === preferredProvider,
   }));
 }
 

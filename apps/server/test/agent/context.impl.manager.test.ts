@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DefaultAgentContextManager } from "../../src/agent/context-manager.impl.manager.js";
+import { DefaultAgentContextManager } from "../../src/agent/context.impl.manager.js";
 import type { RagQueryPlannerService } from "../../src/rag/query-planner.service.js";
 
 describe("DefaultAgentContextManager", () => {

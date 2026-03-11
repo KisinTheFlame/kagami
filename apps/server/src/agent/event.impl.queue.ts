@@ -1,5 +1,5 @@
 import type { Event } from "./event.js";
-import type { AgentEventQueue } from "./event-queue.queue.js";
+import type { AgentEventQueue } from "./event.queue.js";
 
 export class InMemoryAgentEventQueue implements AgentEventQueue {
   private readonly events: Event[] = [];

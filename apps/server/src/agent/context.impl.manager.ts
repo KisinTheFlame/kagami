@@ -1,5 +1,5 @@
 import { createAgentSystemPrompt } from "./context.js";
-import type { AgentContextManager, AssistantMessage } from "./context-manager.manager.js";
+import type { AgentContextManager, AssistantMessage } from "./context.manager.js";
 import { formatEventToUserMessage } from "./event.js";
 import type { Event } from "./event.js";
 import type { LlmMessage } from "../llm/types.js";
