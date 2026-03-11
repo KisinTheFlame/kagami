@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { z } from "zod";
-import { ConfigManagerError } from "./config.impl.manager.js";
+import { BizError } from "../errors/biz-error.js";
 import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
 import type { LlmUsageAttemptRuntimeConfig, LlmUsageRuntimeConfig } from "./config.manager.js";
 
@@ -141,10 +141,12 @@ export async function loadStaticConfig(
   try {
     fileContent = await readFile(configPath, "utf8");
   } catch (error) {
-    throw new ConfigManagerError({
-      code: "CONFIG_READ_FAILED",
-      key: configPath,
-      message: `读取配置文件失败：${configPath}`,
+    throw new BizError({
+      message: "读取配置文件失败",
+      meta: {
+        key: configPath,
+        reason: "CONFIG_READ_FAILED",
+      },
       cause: error,
     });
   }
@@ -153,10 +155,12 @@ export async function loadStaticConfig(
   try {
     parsedYaml = parse(fileContent);
   } catch (error) {
-    throw new ConfigManagerError({
-      code: "CONFIG_INVALID",
-      key: configPath,
-      message: `配置文件不是合法的 YAML：${configPath}`,
+    throw new BizError({
+      message: "配置文件不是合法的 YAML",
+      meta: {
+        key: configPath,
+        reason: "CONFIG_INVALID",
+      },
       cause: error,
     });
   }
@@ -165,10 +169,12 @@ export async function loadStaticConfig(
   if (!parsedConfig.success) {
     const issue = parsedConfig.error.issues[0];
     const key = issue?.path.length ? issue.path.join(".") : configPath;
-    throw new ConfigManagerError({
-      code: "CONFIG_INVALID",
-      key,
-      message: `配置值不合法：${key}`,
+    throw new BizError({
+      message: "配置值不合法",
+      meta: {
+        key,
+        reason: "CONFIG_INVALID",
+      },
       cause: parsedConfig.error,
     });
   }
@@ -225,9 +231,11 @@ function resolveConfigPath(): string {
     }
   }
 
-  throw new ConfigManagerError({
-    code: "CONFIG_NOT_FOUND",
-    key: "config.yaml",
+  throw new BizError({
     message: "未找到 config.yaml",
+    meta: {
+      key: "config.yaml",
+      reason: "CONFIG_NOT_FOUND",
+    },
   });
 }

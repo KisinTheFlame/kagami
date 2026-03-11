@@ -6,7 +6,7 @@ import { DefaultAgentContextManager } from "./agent/context.impl.manager.js";
 import { createAgentSystemPrompt } from "./agent/context.js";
 import { InMemoryAgentEventQueue } from "./agent/event.impl.queue.js";
 import { createAgentToolRegistry } from "./agent/tools/index.js";
-import { ConfigManagerError, DefaultConfigManager } from "./config/config.impl.manager.js";
+import { DefaultConfigManager } from "./config/config.impl.manager.js";
 import { loadStaticConfig } from "./config/config.loader.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
@@ -14,6 +14,8 @@ import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatGroupMessageChunkDao } from "./dao/impl/napcat-group-message-chunk.impl.dao.js";
 import { PrismaNapcatGroupMessageDao } from "./dao/impl/napcat-group-message.impl.dao.js";
+import { BizError } from "./errors/biz-error.js";
+import { toHttpErrorResponse } from "./errors/http-error.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmHandler } from "./handler/llm.handler.js";
@@ -23,12 +25,6 @@ import { NapcatGroupMessageHandler } from "./handler/napcat-group-message.handle
 import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
 import { createEmbeddingClient } from "./llm/embedding/client.js";
-import {
-  LlmModelNotConfiguredError,
-  LlmProviderResponseError,
-  LlmProviderUnavailableError,
-  LlmProviderUpstreamError,
-} from "./llm/errors.js";
 import { createDeepSeekProvider } from "./llm/providers/deepseek-provider.js";
 import { createOpenAiCodexProvider } from "./llm/providers/openai-codex-provider.js";
 import { createOpenAiProvider } from "./llm/providers/openai-provider.js";
@@ -44,7 +40,7 @@ import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.im
 import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
-import { NapcatGatewayError, type NapcatGatewayService } from "./service/napcat-gateway.service.js";
+import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-message-query.impl.service.js";
 import { TavilyWebSearchService } from "./service/tavily-web-search.impl.service.js";
 
@@ -297,80 +293,20 @@ try {
       });
 
       return reply.code(400).send({
-        code: "BAD_REQUEST",
         message: "请求参数不合法",
       });
     }
 
-    if (error instanceof ConfigManagerError) {
-      logger.errorWithCause("Runtime config access failed", error, {
-        event: "http.request.config_error",
+    if (error instanceof BizError) {
+      logger.errorWithCause("Handled business request error", error, {
+        event: "http.request.biz_error",
         method: request.method,
         url: request.url,
-        configKey: error.key,
-        configErrorCode: error.code,
+        ...(error.meta ?? {}),
       });
 
-      return reply.code(500).send({
-        code: "CONFIG_ERROR",
-        message: "运行时配置读取失败",
-      });
-    }
-
-    if (error instanceof NapcatGatewayError) {
-      logger.errorWithCause("NapCat upstream request failed", error, {
-        event: "http.request.napcat_upstream_error",
-        method: request.method,
-        url: request.url,
-      });
-
-      return reply.code(502).send({
-        code: "NAPCAT_UPSTREAM_ERROR",
-        message: "NapCat 上游服务不可用",
-      });
-    }
-
-    if (error instanceof LlmProviderUnavailableError) {
-      logger.warn("Requested LLM provider is unavailable", {
-        event: "http.request.llm_provider_unavailable",
-        method: request.method,
-        url: request.url,
-        provider: error.provider,
-      });
-
-      return reply.code(400).send({
-        code: "LLM_PROVIDER_UNAVAILABLE",
-        message: "所选 LLM provider 当前不可用",
-      });
-    }
-
-    if (error instanceof LlmModelNotConfiguredError) {
-      logger.warn("Requested LLM model is not configured for provider", {
-        event: "http.request.llm_model_not_configured",
-        method: request.method,
-        url: request.url,
-        provider: error.provider,
-        model: error.model,
-      });
-
-      return reply.code(400).send({
-        code: "LLM_MODEL_NOT_CONFIGURED",
-        message: "所选 LLM 模型未在当前 provider 中配置",
-      });
-    }
-
-    if (error instanceof LlmProviderResponseError || error instanceof LlmProviderUpstreamError) {
-      logger.errorWithCause("LLM upstream request failed", error, {
-        event: "http.request.llm_upstream_error",
-        method: request.method,
-        url: request.url,
-        provider: error.provider,
-      });
-
-      return reply.code(502).send({
-        code: "LLM_UPSTREAM_ERROR",
-        message: "LLM 上游服务调用失败",
-      });
+      const response = toHttpErrorResponse(error);
+      return reply.code(response.statusCode).send(response.body);
     }
 
     logger.errorWithCause("Unhandled request error", error, {
@@ -380,7 +316,6 @@ try {
     });
 
     return reply.code(500).send({
-      code: "INTERNAL_SERVER_ERROR",
       message: "服务器内部错误",
     });
   });

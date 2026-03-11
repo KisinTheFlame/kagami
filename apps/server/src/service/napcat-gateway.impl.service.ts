@@ -4,6 +4,7 @@ import { formatGroupMessagePlainText } from "../agent/event.js";
 import type { NapcatEventDao } from "../dao/napcat-event.dao.js";
 import type { NapcatGroupMessageChunkDao } from "../dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../dao/napcat-group-message.dao.js";
+import { BizError } from "../errors/biz-error.js";
 import { AppLogger } from "../logger/logger.js";
 import type { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import {
@@ -18,7 +19,6 @@ import type {
   NapcatSendGroupMessageInput,
   NapcatSendGroupMessageResult,
 } from "./napcat-gateway.service.js";
-import { NapcatGatewayError } from "./napcat-gateway.service.js";
 
 type NapcatGatewayOptions = {
   wsUrl: string;
@@ -140,9 +140,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     this.started = false;
     this.clearReconnectTimer();
     this.rejectAllPending(
-      new NapcatGatewayError({
-        code: "UPSTREAM_ERROR",
+      new BizError({
         message: "NapCat 网关已停止",
+        meta: {
+          reason: "GATEWAY_STOPPED",
+        },
       }),
     );
 
@@ -174,9 +176,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     const messageIdResult = z.number().int().positive().safeParse(data?.message_id);
     if (!messageIdResult.success) {
-      throw new NapcatGatewayError({
-        code: "UPSTREAM_ERROR",
+      throw new BizError({
         message: "NapCat 返回结果缺少 message_id",
+        meta: {
+          reason: "MISSING_MESSAGE_ID",
+        },
       });
     }
 
@@ -469,9 +473,12 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     if (response.status !== "ok" || response.retcode !== 0) {
       pendingRequest.reject(
-        new NapcatGatewayError({
-          code: "UPSTREAM_ERROR",
+        new BizError({
           message: response.wording ?? response.message ?? `NapCat 返回错误: ${response.retcode}`,
+          meta: {
+            reason: "ACTION_FAILED",
+            retcode: response.retcode,
+          },
         }),
       );
       return;
@@ -492,9 +499,13 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
 
     this.rejectAllPending(
-      new NapcatGatewayError({
-        code: "UPSTREAM_ERROR",
+      new BizError({
         message: "NapCat websocket 已断开",
+        meta: {
+          reason: "SOCKET_CLOSED",
+          code: event.code,
+          socketReason: event.reason,
+        },
       }),
     );
 
@@ -561,9 +572,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   }): Promise<Record<string, unknown> | null> {
     const activeSocket = this.socket;
     if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
-      throw new NapcatGatewayError({
-        code: "NOT_CONNECTED",
+      throw new BizError({
         message: "NapCat WebSocket 未连接",
+        meta: {
+          reason: "NOT_CONNECTED",
+        },
       });
     }
 
@@ -578,9 +591,12 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(echo);
         reject(
-          new NapcatGatewayError({
-            code: "REQUEST_TIMEOUT",
+          new BizError({
             message: "NapCat 请求超时",
+            meta: {
+              reason: "REQUEST_TIMEOUT",
+              action,
+            },
           }),
         );
       }, this.requestTimeoutMs);
@@ -593,9 +609,12 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         clearTimeout(timeout);
         this.pendingRequests.delete(echo);
         reject(
-          new NapcatGatewayError({
-            code: "UPSTREAM_ERROR",
+          new BizError({
             message: "NapCat 请求发送失败",
+            meta: {
+              reason: "SEND_FAILED",
+              action,
+            },
             cause: error,
           }),
         );

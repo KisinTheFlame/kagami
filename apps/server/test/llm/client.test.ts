@@ -5,6 +5,7 @@ import type {
   OpenAiCodexRuntimeConfig,
 } from "../../src/config/config.manager.js";
 import type { LlmChatCallDao } from "../../src/dao/llm-chat-call.dao.js";
+import { BizError } from "../../src/errors/biz-error.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
 import type { LlmProvider } from "../../src/llm/provider.js";
 import type { LlmProviderId, LlmUsageId } from "../../src/llm/types.js";
@@ -185,9 +186,12 @@ describe("createLlmClient", () => {
         },
       ),
     ).rejects.toMatchObject({
-      name: "LlmProviderUnavailableError",
-      provider: "deepseek",
-    });
+      name: "BizError",
+      message: "所选 LLM provider 当前不可用",
+      meta: {
+        provider: "deepseek",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject direct chat when the model is not configured for the provider", async () => {
@@ -213,10 +217,13 @@ describe("createLlmClient", () => {
         },
       ),
     ).rejects.toMatchObject({
-      name: "LlmModelNotConfiguredError",
-      provider: "openai",
-      model: "deepseek-chat",
-    });
+      name: "BizError",
+      message: "所选 LLM 模型未在当前 provider 中配置",
+      meta: {
+        provider: "openai",
+        model: "deepseek-chat",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should retry next usage attempt after an error and reuse requestId", async () => {
@@ -442,10 +449,13 @@ describe("createLlmClient", () => {
         },
       ),
     ).rejects.toMatchObject({
-      name: "LlmModelNotConfiguredError",
-      provider: "openai",
-      model: "non-existent-model",
-    });
+      name: "BizError",
+      message: "所选 LLM 模型未在当前 provider 中配置",
+      meta: {
+        provider: "openai",
+        model: "non-existent-model",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should retry the same usage attempt for the configured times before fallback", async () => {

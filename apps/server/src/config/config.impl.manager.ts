@@ -8,32 +8,6 @@ import type {
 } from "./config.manager.js";
 import type { StaticConfig } from "./config.loader.js";
 
-export type ConfigManagerErrorCode = "CONFIG_NOT_FOUND" | "CONFIG_INVALID" | "CONFIG_READ_FAILED";
-
-export class ConfigManagerError extends Error {
-  public readonly code: ConfigManagerErrorCode;
-  public readonly key: string;
-  public readonly cause?: unknown;
-
-  public constructor({
-    code,
-    key,
-    message,
-    cause,
-  }: {
-    code: ConfigManagerErrorCode;
-    key: string;
-    message: string;
-    cause?: unknown;
-  }) {
-    super(message);
-    this.name = "ConfigManagerError";
-    this.code = code;
-    this.key = key;
-    this.cause = cause;
-  }
-}
-
 type DefaultConfigManagerOptions = {
   config: StaticConfig;
 };

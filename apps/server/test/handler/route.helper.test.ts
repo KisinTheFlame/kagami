@@ -43,7 +43,7 @@ describe("route helpers", () => {
     app.setErrorHandler((error, _request, reply) => {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
-          code: "BAD_REQUEST",
+          message: "请求参数不合法",
         });
       }
 
@@ -68,7 +68,7 @@ describe("route helpers", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ code: "BAD_REQUEST" });
+    expect(response.json()).toEqual({ message: "请求参数不合法" });
   });
 
   it("registerCommandRoute should use default 200 status", async () => {
@@ -126,13 +126,11 @@ describe("route helpers", () => {
     app.setErrorHandler((error, _request, reply) => {
       if (error instanceof Error) {
         return reply.code(500).send({
-          code: "UNHANDLED",
           message: error.message,
         });
       }
 
       return reply.code(500).send({
-        code: "UNHANDLED",
         message: "unknown",
       });
     });
@@ -159,7 +157,6 @@ describe("route helpers", () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({
-      code: "UNHANDLED",
       message: "unmapped",
     });
   });

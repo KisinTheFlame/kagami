@@ -1,8 +1,8 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { BizError } from "../../src/errors/biz-error.js";
 import { NapcatHandler } from "../../src/handler/napcat.handler.js";
-import { NapcatGatewayError } from "../../src/service/napcat-gateway.service.js";
 import type { NapcatGatewayService } from "../../src/service/napcat-gateway.service.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
@@ -15,15 +15,13 @@ describe("NapcatHandler", () => {
     app.setErrorHandler((error, _request, reply) => {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
-          code: "BAD_REQUEST",
           message: "请求参数不合法",
         });
       }
 
-      if (error instanceof NapcatGatewayError) {
-        return reply.code(502).send({
-          code: "NAPCAT_UPSTREAM_ERROR",
-          message: "NapCat 上游服务不可用",
+      if (error instanceof BizError) {
+        return reply.code(500).send({
+          message: error.message,
         });
       }
 
@@ -89,9 +87,8 @@ describe("NapcatHandler", () => {
 
   it("should return 502 when NapCat gateway raises upstream error", async () => {
     const sendGroupMessage = vi.fn().mockRejectedValue(
-      new NapcatGatewayError({
-        code: "UPSTREAM_ERROR",
-        message: "boom",
+      new BizError({
+        message: "NapCat 请求发送失败",
       }),
     );
     const napcatGatewayService: NapcatGatewayService = {
@@ -112,10 +109,9 @@ describe("NapcatHandler", () => {
       },
     });
 
-    expect(response.statusCode).toBe(502);
+    expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({
-      code: "NAPCAT_UPSTREAM_ERROR",
-      message: "NapCat 上游服务不可用",
+      message: "NapCat 请求发送失败",
     });
   });
 

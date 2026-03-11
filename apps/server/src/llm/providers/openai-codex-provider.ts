@@ -1,16 +1,8 @@
 import type { LlmProvider } from "../provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmToolCall } from "../types.js";
+import { BizError } from "../../errors/biz-error.js";
 import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
-import {
-  LlmProviderResponseError,
-  LlmProviderUnavailableError,
-  LlmProviderUpstreamError,
-} from "../errors.js";
-import {
-  OpenAiCodexAuthRefreshError,
-  OpenAiCodexAuthStore,
-  OpenAiCodexAuthUnavailableError,
-} from "./openai-codex-auth.js";
+import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
 
 const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
 
@@ -56,33 +48,15 @@ export function createOpenAiCodexProvider(config: OpenAiCodexRuntimeConfig): Llm
           request,
         });
       } catch (error) {
-        if (error instanceof LlmProviderUnavailableError) {
+        if (error instanceof BizError) {
           throw error;
         }
 
-        if (error instanceof LlmProviderResponseError) {
-          throw error;
-        }
-
-        if (error instanceof OpenAiCodexAuthUnavailableError) {
-          throw new LlmProviderUnavailableError({ provider: "openai-codex" });
-        }
-
-        if (error instanceof OpenAiCodexAuthRefreshError) {
-          if (error.status === 400 || error.status === 401 || error.status === 403) {
-            throw new LlmProviderUnavailableError({ provider: "openai-codex" });
-          }
-
-          throw new LlmProviderUpstreamError({
+        throw new BizError({
+          message: "LLM 上游服务调用失败",
+          meta: {
             provider: "openai-codex",
-            message: error.message,
-            cause: error,
-          });
-        }
-
-        throw new LlmProviderUpstreamError({
-          provider: "openai-codex",
-          message: error instanceof Error ? error.message : "OpenAI Codex 请求失败",
+          },
           cause: error,
         });
       }
@@ -114,7 +88,13 @@ async function sendCodexRequest(params: {
   });
 
   if (retriedResponse.status === 401 || retriedResponse.status === 403) {
-    throw new LlmProviderUnavailableError({ provider: "openai-codex" });
+    throw new BizError({
+      message: "所选 LLM provider 当前不可用",
+      meta: {
+        provider: "openai-codex",
+        reason: "UNAUTHORIZED",
+      },
+    });
   }
 
   return mapCompletedEvent(retriedResponse.completedEvent);
@@ -140,9 +120,11 @@ async function fetchCodexResponse(params: {
       signal: AbortSignal.timeout(params.config.timeoutMs),
     });
   } catch (error) {
-    throw new LlmProviderUpstreamError({
-      provider: "openai-codex",
-      message: error instanceof Error ? error.message : "OpenAI Codex 请求失败",
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+      },
       cause: error,
     });
   }
@@ -165,9 +147,13 @@ async function fetchCodexResponse(params: {
       };
     }
 
-    throw new LlmProviderResponseError({
-      provider: "openai-codex",
-      message: `OpenAI Codex 返回了无法解析的响应（HTTP ${response.status}）`,
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "INVALID_SSE_RESPONSE",
+        status: response.status,
+      },
     });
   }
 
@@ -176,11 +162,13 @@ async function fetchCodexResponse(params: {
   }
 
   if (!response.ok) {
-    throw new LlmProviderUpstreamError({
-      provider: "openai-codex",
-      message:
-        completedEvent.response?.error?.message ??
-        `OpenAI Codex 返回异常状态码（HTTP ${response.status}）`,
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "HTTP_ERROR",
+        status: response.status,
+      },
     });
   }
 
@@ -290,9 +278,12 @@ function extractCompletedEvent(sseText: string): CodexResponseCompletedEvent | n
 function mapCompletedEvent(event: CodexResponseCompletedEvent): LlmChatResponsePayload {
   const response = event.response;
   if (!response) {
-    throw new LlmProviderResponseError({
-      provider: "openai-codex",
-      message: "OpenAI Codex 响应缺少 response 字段",
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "MISSING_RESPONSE",
+      },
     });
   }
 
@@ -318,16 +309,22 @@ function mapCompletedEvent(event: CodexResponseCompletedEvent): LlmChatResponseP
   }
 
   if (toolCalls.some(toolCall => toolCall.id.length === 0 || toolCall.name.length === 0)) {
-    throw new LlmProviderResponseError({
-      provider: "openai-codex",
-      message: "OpenAI Codex 返回了不完整的 tool call",
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "INVALID_TOOL_CALL",
+      },
     });
   }
 
   if (content.length === 0 && toolCalls.length === 0) {
-    throw new LlmProviderResponseError({
-      provider: "openai-codex",
-      message: "OpenAI Codex 响应中没有 assistant 内容或 tool call",
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "EMPTY_ASSISTANT_OUTPUT",
+      },
     });
   }
 
@@ -356,9 +353,12 @@ function parseToolArguments(value: string | undefined): Record<string, unknown> 
 
   const parsed = safeParseJson<Record<string, unknown>>(value);
   if (!parsed) {
-    throw new LlmProviderResponseError({
-      provider: "openai-codex",
-      message: "OpenAI Codex tool call arguments 不是合法 JSON",
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "INVALID_TOOL_ARGUMENTS",
+      },
     });
   }
 

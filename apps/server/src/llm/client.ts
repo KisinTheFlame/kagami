@@ -7,7 +7,7 @@ import type {
   LlmUsageRuntimeConfig,
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { LlmModelNotConfiguredError, LlmProviderUnavailableError } from "./errors.js";
+import { BizError } from "../errors/biz-error.js";
 import type { LlmProvider } from "./provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "./types.js";
 
@@ -135,7 +135,12 @@ async function executeChatAttempt({
 
   try {
     if (!provider) {
-      throw new LlmProviderUnavailableError({ provider: attempt.provider });
+      throw new BizError({
+        message: "所选 LLM provider 当前不可用",
+        meta: {
+          provider: attempt.provider,
+        },
+      });
     }
 
     const response = await provider.chat(requestWithModel);
@@ -264,8 +269,11 @@ function requireConfiguredModel(
     return;
   }
 
-  throw new LlmModelNotConfiguredError({
-    provider: providerId,
-    model,
+  throw new BizError({
+    message: "所选 LLM 模型未在当前 provider 中配置",
+    meta: {
+      provider: providerId,
+      model,
+    },
   });
 }

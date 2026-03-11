@@ -1,9 +1,9 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
+import { BizError } from "../../errors/biz-error.js";
 import type { LlmProvider } from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
 import type { LlmProviderRuntimeConfig } from "../../config/config.manager.js";
-import { LlmProviderResponseError, LlmProviderUpstreamError } from "../errors.js";
 import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
 
 export function createOpenAiProvider(
@@ -27,17 +27,22 @@ export function createOpenAiProvider(
           timeout: config.timeoutMs,
         });
       } catch (error) {
-        throw new LlmProviderUpstreamError({
-          provider: "openai",
-          message: error instanceof Error ? error.message : "OpenAI chat completion request failed",
+        throw new BizError({
+          message: "LLM 上游服务调用失败",
+          meta: {
+            provider: "openai",
+          },
           cause: error,
         });
       }
 
       if (!completion.choices[0]?.message) {
-        throw new LlmProviderResponseError({
-          provider: "openai",
-          message: "OpenAI chat completion returned no choices",
+        throw new BizError({
+          message: "LLM 上游服务调用失败",
+          meta: {
+            provider: "openai",
+            reason: "EMPTY_CHOICES",
+          },
         });
       }
 

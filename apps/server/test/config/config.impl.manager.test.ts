@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ConfigManagerError, DefaultConfigManager } from "../../src/config/config.impl.manager.js";
+import { DefaultConfigManager } from "../../src/config/config.impl.manager.js";
+import { BizError } from "../../src/errors/biz-error.js";
 import { loadStaticConfig } from "../../src/config/config.loader.js";
 
 const tempDirs: string[] = [];
@@ -147,10 +148,13 @@ server:
     const configPath = path.join(os.tmpdir(), `missing-${Date.now()}.yml`);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_READ_FAILED",
-      key: configPath,
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "读取配置文件失败",
+      meta: {
+        key: configPath,
+        reason: "CONFIG_READ_FAILED",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject invalid config values", async () => {
@@ -192,10 +196,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.port",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.port",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should fail when required config is missing", async () => {
@@ -236,10 +243,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.databaseUrl",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.databaseUrl",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject legacy chatModel config", async () => {
@@ -281,10 +291,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.llm.providers.openai.models",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.providers.openai.models",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject provider config with empty models", async () => {
@@ -324,10 +337,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.llm.providers.deepseek.models",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.providers.deepseek.models",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should default server port to 20003", async () => {
@@ -413,10 +429,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.rag.embedding.apiKey",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.rag.embedding.apiKey",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject legacy llm usage config without attempts", async () => {
@@ -456,10 +475,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.llm.usages.agent.attempts",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.usages.agent.attempts",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject llm usage config with empty attempts", async () => {
@@ -498,10 +520,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.llm.usages.agent.attempts",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.usages.agent.attempts",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should reject llm usage config with non-positive times", async () => {
@@ -543,9 +568,12 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigManagerError",
-      code: "CONFIG_INVALID",
-      key: "server.llm.usages.agent.attempts.0.times",
-    } satisfies Partial<ConfigManagerError>);
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.usages.agent.attempts.0.times",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 });

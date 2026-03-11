@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { BizError } from "../../errors/biz-error.js";
 import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
 
 const CODEX_TOKEN_REFRESH_URL = "https://auth.openai.com/oauth/token";
@@ -45,25 +46,6 @@ type RefreshTokenResponse = {
 
 const refreshPromises = new Map<string, Promise<OpenAiCodexAuth>>();
 
-export class OpenAiCodexAuthUnavailableError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = "OpenAiCodexAuthUnavailableError";
-  }
-}
-
-export class OpenAiCodexAuthRefreshError extends Error {
-  public readonly status?: number;
-  public override readonly cause?: unknown;
-
-  public constructor(message: string, options?: { status?: number; cause?: unknown }) {
-    super(message);
-    this.name = "OpenAiCodexAuthRefreshError";
-    this.status = options?.status;
-    this.cause = options?.cause;
-  }
-}
-
 export class OpenAiCodexAuthStore {
   private readonly config: OpenAiCodexRuntimeConfig;
 
@@ -79,7 +61,13 @@ export class OpenAiCodexAuthStore {
     const authFilePath = resolveAuthFilePath(this.config.authFilePath);
     const auth = await this.readBestEffort();
     if (!auth) {
-      throw new OpenAiCodexAuthUnavailableError("未找到可用的 OpenAI Codex 登录态");
+      throw new BizError({
+        message: "所选 LLM provider 当前不可用",
+        meta: {
+          provider: "openai-codex",
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
     }
 
     if (
@@ -115,7 +103,13 @@ export class OpenAiCodexAuthStore {
     return await withFileLock(`${authFilePath}.lock`, async () => {
       const auth = await this.readBestEffort();
       if (!auth) {
-        throw new OpenAiCodexAuthUnavailableError("OpenAI Codex 凭证不存在，无法刷新");
+        throw new BizError({
+          message: "所选 LLM provider 当前不可用",
+          meta: {
+            provider: "openai-codex",
+            reason: "AUTH_UNAVAILABLE",
+          },
+        });
       }
 
       if (!forceRefresh && !isRefreshRequired(auth, this.config.refreshLeewayMs)) {
@@ -202,26 +196,52 @@ async function refreshCodexToken(params: {
       signal: AbortSignal.timeout(params.timeoutMs),
     });
   } catch (error) {
-    throw new OpenAiCodexAuthRefreshError("刷新 OpenAI Codex 票据失败", { cause: error });
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "AUTH_REFRESH_FAILED",
+      },
+      cause: error,
+    });
   }
 
   const text = await response.text();
   const parsed = safeParseJson<RefreshTokenResponse>(text);
 
   if (!response.ok) {
-    throw new OpenAiCodexAuthRefreshError(`OpenAI Codex 票据刷新失败（HTTP ${response.status}）`, {
-      status: response.status,
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw new BizError({
+        message: "所选 LLM provider 当前不可用",
+        meta: {
+          provider: "openai-codex",
+          reason: "AUTH_REFRESH_UNAVAILABLE",
+          status: response.status,
+        },
+        cause: parsed ?? text.slice(0, 500),
+      });
+    }
+
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "AUTH_REFRESH_FAILED",
+        status: response.status,
+      },
       cause: parsed ?? text.slice(0, 500),
     });
   }
 
   if (!parsed?.access_token || !parsed.refresh_token) {
-    throw new OpenAiCodexAuthRefreshError(
-      "OpenAI Codex 刷新响应缺少 access_token 或 refresh_token",
-      {
+    throw new BizError({
+      message: "LLM 上游服务调用失败",
+      meta: {
+        provider: "openai-codex",
+        reason: "AUTH_REFRESH_INVALID_RESPONSE",
         status: response.status,
       },
-    );
+    });
   }
 
   return {
@@ -363,7 +383,13 @@ async function withFileLock<T>(lockPath: string, task: () => Promise<T>): Promis
       }
 
       if (Date.now() - startedAt >= LOCK_TIMEOUT_MS) {
-        throw new OpenAiCodexAuthRefreshError("等待 OpenAI Codex 凭证锁超时");
+        throw new BizError({
+          message: "LLM 上游服务调用失败",
+          meta: {
+            provider: "openai-codex",
+            reason: "AUTH_REFRESH_LOCK_TIMEOUT",
+          },
+        });
       }
 
       await sleep(LOCK_RETRY_MS);

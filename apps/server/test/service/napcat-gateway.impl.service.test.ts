@@ -161,7 +161,14 @@ describe("DefaultNapcatGatewayService", () => {
       }),
     );
 
-    await expect(sendPromise).rejects.toMatchObject({ code: "UPSTREAM_ERROR" });
+    await expect(sendPromise).rejects.toMatchObject({
+      name: "BizError",
+      message: "请求参数错误",
+      meta: {
+        reason: "ACTION_FAILED",
+        retcode: 1400,
+      },
+    });
     await gateway.stop();
   });
 
@@ -193,7 +200,12 @@ describe("DefaultNapcatGatewayService", () => {
     };
 
     const rejectionAssertion = expect(sendPromise).rejects.toMatchObject({
-      code: "REQUEST_TIMEOUT",
+      name: "BizError",
+      message: "NapCat 请求超时",
+      meta: {
+        reason: "REQUEST_TIMEOUT",
+        action: "send_group_msg",
+      },
     });
     await vi.advanceTimersByTimeAsync(1001);
     await rejectionAssertion;
