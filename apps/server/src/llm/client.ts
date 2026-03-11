@@ -1,77 +1,71 @@
 import { randomUUID } from "node:crypto";
 import type { LlmProviderOption } from "@kagami/shared";
-import { assertNever } from "@kagami/shared";
 import type {
-  ConfigManager,
-  LlmRuntimeConfig,
   LlmUsageAttemptRuntimeConfig,
+  LlmUsageRuntimeConfig,
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { LlmProviderUnavailableError } from "./errors.js";
-import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
-import { createOpenAiProvider } from "./providers/openai-provider.js";
-import { createOpenAiCodexProvider } from "./providers/openai-codex-provider.js";
 import type { LlmProvider } from "./provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "./types.js";
 
 export interface LlmClient {
-  chat(request: LlmChatRequest, options?: LlmChatOptions): Promise<LlmChatResponsePayload>;
-  listAvailableProviders(options?: { usage?: LlmUsageId }): Promise<LlmProviderOption[]>;
+  chat(request: LlmChatRequest, options: LlmChatOptions): Promise<LlmChatResponsePayload>;
+  chatDirect(
+    request: LlmChatRequest,
+    options: LlmChatDirectOptions,
+  ): Promise<LlmChatResponsePayload>;
+  listAvailableProviders(options: LlmListAvailableProvidersOptions): Promise<LlmProviderOption[]>;
 }
 
 type CreateLlmClientOptions = {
-  configManager: ConfigManager;
   llmChatCallDao: LlmChatCallDao;
-  providers?: Partial<Record<LlmProviderId, LlmProvider>>;
+  providers: Partial<Record<LlmProviderId, LlmProvider>>;
+  usages: Record<LlmUsageId, LlmUsageRuntimeConfig>;
 };
 
 export type LlmChatOptions = {
-  providerId?: LlmProviderId;
+  usage: LlmUsageId;
   recordCall?: boolean;
-  usage?: LlmUsageId;
+};
+
+export type LlmChatDirectOptions = {
+  providerId: LlmProviderId;
+  model: string;
+  recordCall?: boolean;
+};
+
+export type LlmListAvailableProvidersOptions = {
+  usage: LlmUsageId;
 };
 
 export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
   return {
-    async listAvailableProviders(listOptions?: {
-      usage?: LlmUsageId;
-    }): Promise<LlmProviderOption[]> {
-      const config = await options.configManager.getLlmRuntimeConfig();
-      const providers = createProviderRegistry(config, options.providers);
-      return await listAvailableProviders(config, providers, listOptions?.usage ?? "agent");
+    async listAvailableProviders(
+      listOptions: LlmListAvailableProvidersOptions,
+    ): Promise<LlmProviderOption[]> {
+      const usage = requireUsage(listOptions?.usage);
+      return await listAvailableProviders(
+        options.providers,
+        requireUsageConfig(options.usages, usage),
+      );
     },
     async chat(
       request: LlmChatRequest,
-      chatOptions?: LlmChatOptions,
+      chatOptions: LlmChatOptions,
     ): Promise<LlmChatResponsePayload> {
-      const config = await options.configManager.getLlmRuntimeConfig();
-      const providers = createProviderRegistry(config, options.providers);
+      const usage = requireUsage(chatOptions?.usage);
       const requestId = randomUUID();
-      const usage = chatOptions?.usage ?? "agent";
       const recordCall = chatOptions?.recordCall ?? true;
-
-      if (chatOptions?.providerId) {
-        return await executeChatAttempt({
-          llmChatCallDao: options.llmChatCallDao,
-          providers,
-          request,
-          attempt: {
-            provider: chatOptions.providerId,
-            model: request.model ?? getDefaultModel(config, chatOptions.providerId),
-            times: 1,
-          },
-          requestId,
-          recordCall,
-        });
-      }
+      const usageConfig = requireUsageConfig(options.usages, usage);
 
       let lastError: unknown;
-      for (const attempt of config.usages[usage].attempts) {
+      for (const attempt of usageConfig.attempts) {
         for (let currentTry = 0; currentTry < attempt.times; currentTry += 1) {
           try {
             return await executeChatAttempt({
               llmChatCallDao: options.llmChatCallDao,
-              providers,
+              providers: options.providers,
               request,
               attempt,
               requestId,
@@ -84,6 +78,26 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       }
 
       throw lastError;
+    },
+    async chatDirect(
+      request: LlmChatRequest,
+      chatOptions: LlmChatDirectOptions,
+    ): Promise<LlmChatResponsePayload> {
+      const providerId = requireProviderId(chatOptions?.providerId);
+      const model = requireModel(chatOptions?.model);
+
+      return await executeChatAttempt({
+        llmChatCallDao: options.llmChatCallDao,
+        providers: options.providers,
+        request,
+        attempt: {
+          provider: providerId,
+          model,
+          times: 1,
+        },
+        requestId: randomUUID(),
+        recordCall: chatOptions?.recordCall ?? true,
+      });
     },
   };
 }
@@ -152,24 +166,11 @@ async function executeChatAttempt({
   }
 }
 
-function createProviderRegistry(
-  config: LlmRuntimeConfig,
-  providerOverrides?: Partial<Record<LlmProviderId, LlmProvider>>,
-): Partial<Record<LlmProviderId, LlmProvider>> {
-  return {
-    deepseek: providerOverrides?.deepseek ?? createRuntimeProvider("deepseek", config),
-    openai: providerOverrides?.openai ?? createRuntimeProvider("openai", config),
-    "openai-codex":
-      providerOverrides?.["openai-codex"] ?? createRuntimeProvider("openai-codex", config),
-  };
-}
-
 async function listAvailableProviders(
-  config: LlmRuntimeConfig,
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
-  usage: LlmUsageId,
+  usageConfig: LlmUsageRuntimeConfig,
 ): Promise<LlmProviderOption[]> {
-  const preferredProvider = config.usages[usage].attempts[0]?.provider;
+  const preferredProvider = usageConfig.attempts[0]?.provider;
   const availability = await Promise.all(
     (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
       const provider = providers[providerId];
@@ -204,46 +205,42 @@ async function listAvailableProviders(
 
   return orderedIds.map(providerId => ({
     id: providerId,
-    defaultModel: getDefaultModel(config, providerId),
     isActive: providerId === preferredProvider,
   }));
 }
 
-function getDefaultModel(config: LlmRuntimeConfig, providerId: LlmProviderId): string {
-  switch (providerId) {
-    case "deepseek":
-      return config.deepseek.chatModel;
-    case "openai":
-      return config.openai.chatModel;
-    case "openai-codex":
-      return config.openaiCodex.chatModel;
-    default:
-      return assertNever(providerId, "Unsupported provider");
+function requireUsage(usage: LlmUsageId | undefined): LlmUsageId {
+  if (!usage) {
+    throw new Error("LlmClient.chat and listAvailableProviders require an explicit usage");
   }
+
+  return usage;
 }
 
-function createRuntimeProvider(
-  providerId: LlmProviderId,
-  config: LlmRuntimeConfig,
-): LlmProvider | undefined {
-  switch (providerId) {
-    case "deepseek":
-      return config.deepseek.apiKey
-        ? createDeepSeekProvider({
-            ...config.deepseek,
-            apiKey: config.deepseek.apiKey,
-          })
-        : undefined;
-    case "openai":
-      return config.openai.apiKey
-        ? createOpenAiProvider({
-            ...config.openai,
-            apiKey: config.openai.apiKey,
-          })
-        : undefined;
-    case "openai-codex":
-      return createOpenAiCodexProvider(config.openaiCodex);
-    default:
-      return assertNever(providerId, "Unsupported provider");
+function requireUsageConfig(
+  usages: Record<LlmUsageId, LlmUsageRuntimeConfig>,
+  usage: LlmUsageId,
+): LlmUsageRuntimeConfig {
+  const usageConfig = usages[usage];
+  if (!usageConfig) {
+    throw new Error(`LlmClient usage is not configured: ${usage}`);
   }
+
+  return usageConfig;
+}
+
+function requireProviderId(providerId: LlmProviderId | undefined): LlmProviderId {
+  if (!providerId) {
+    throw new Error("LlmClient.chatDirect requires providerId");
+  }
+
+  return providerId;
+}
+
+function requireModel(model: string | undefined): string {
+  if (!model || model.trim().length === 0) {
+    throw new Error("LlmClient.chatDirect requires model");
+  }
+
+  return model;
 }

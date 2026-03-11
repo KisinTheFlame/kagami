@@ -19,7 +19,6 @@ describe("LlmHandler", () => {
       providers: [
         {
           id: "openai",
-          defaultModel: "gpt-4o-mini",
           isActive: true,
         },
       ],
@@ -42,7 +41,6 @@ describe("LlmHandler", () => {
       providers: [
         {
           id: "openai",
-          defaultModel: "gpt-4o-mini",
           isActive: true,
         },
       ],
@@ -73,6 +71,7 @@ describe("LlmHandler", () => {
 
     const payload = {
       provider: "openai-codex",
+      model: "gpt-5.3-codex",
       request: {
         messages: [{ role: "user", content: "ping" }],
         tools: [],

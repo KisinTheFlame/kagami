@@ -19,18 +19,18 @@ export class DefaultLlmPlaygroundService implements LlmPlaygroundService {
 
   public async listProviders(): Promise<LlmProviderListResponse> {
     return {
-      providers: await this.llmClient.listAvailableProviders(),
+      providers: await this.llmClient.listAvailableProviders({ usage: "agent" }),
     };
   }
 
   public async chat(input: LlmPlaygroundChatRequest): Promise<LlmPlaygroundChatResponse> {
-    return this.llmClient.chat(
+    return this.llmClient.chatDirect(
       {
         ...input.request,
-        model: input.model ?? input.request.model,
       },
       {
         providerId: input.provider,
+        model: input.model,
         recordCall: false,
       },
     );

@@ -113,12 +113,7 @@ export function LlmPlaygroundPage() {
 
   function handleProviderChange(nextProviderId: string): void {
     setSelectedProviderId(nextProviderId as LlmProviderOption["id"]);
-    const provider = providers.find(item => item.id === nextProviderId);
-    if (!provider) {
-      return;
-    }
-
-    setModel(provider.defaultModel);
+    setModel("");
   }
 
   function handleResetTemplate(): void {
@@ -185,7 +180,7 @@ export function LlmPlaygroundPage() {
                                 isActive ? "text-primary-foreground/80" : "text-muted-foreground"
                               }`}
                             >
-                              默认模型：{provider.defaultModel}
+                              手动指定 provider 后，请在右侧输入 model。
                             </p>
                           </div>
                           {provider.isActive ? (
@@ -209,7 +204,7 @@ export function LlmPlaygroundPage() {
 
             <Panel
               title="Model"
-              description="可手动覆盖 provider 默认模型，留空时走默认值。"
+              description="必须显式填写完整模型名，playground 不再提供默认模型。"
               className="flex min-h-0 flex-col"
               bodyClassName="flex flex-1 flex-col"
             >
@@ -219,7 +214,7 @@ export function LlmPlaygroundPage() {
                   type="text"
                   value={model}
                   onChange={event => setModel(event.target.value)}
-                  placeholder={selectedProvider?.defaultModel ?? "例如 gpt-4o-mini"}
+                  placeholder="例如 gpt-4o-mini / deepseek-chat"
                   disabled={providers.length === 0}
                   className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 />
@@ -227,7 +222,7 @@ export function LlmPlaygroundPage() {
 
               <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
                 <p>当前 provider：{selectedProvider?.id ?? "未选择"}</p>
-                <p className="mt-1">回落默认模型：{selectedProvider?.defaultModel ?? "—"}</p>
+                <p className="mt-1">当前 model：{model.trim().length > 0 ? model : "未填写"}</p>
               </div>
             </Panel>
           </div>
@@ -279,12 +274,7 @@ export function LlmPlaygroundPage() {
                   {lastPayload ? (
                     <div className="grid grid-cols-1 gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-3">
                       <MetaItem label="Provider" value={lastPayload.provider} />
-                      <MetaItem
-                        label="Model"
-                        value={
-                          lastPayload.model?.trim().length ? lastPayload.model : "使用默认模型"
-                        }
-                      />
+                      <MetaItem label="Model" value={lastPayload.model} />
                       <MetaItem
                         label="HTTP"
                         value={`${lastResponse.status} ${lastResponse.statusText}`.trim()}
@@ -404,6 +394,13 @@ function parsePayload({
     return {
       success: false,
       error: `请求结构校验失败：${formatSchemaIssues(requestParsed.error.issues)}`,
+    };
+  }
+
+  if (model.trim().length === 0) {
+    return {
+      success: false,
+      error: "请先填写 model，playground 不提供默认模型。",
     };
   }
 

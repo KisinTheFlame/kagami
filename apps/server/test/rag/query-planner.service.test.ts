@@ -21,6 +21,7 @@ describe("RagQueryPlannerService", () => {
           ],
         },
       }),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const memorySearchService = {
@@ -59,6 +60,7 @@ describe("RagQueryPlannerService", () => {
           ],
         },
       }),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const memorySearchService = {
@@ -108,6 +110,7 @@ describe("RagQueryPlannerService", () => {
           ],
         },
       }),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const memorySearchService = {
@@ -146,6 +149,7 @@ describe("RagQueryPlannerService", () => {
           ],
         },
       }),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const memorySearchService = {
@@ -188,6 +192,7 @@ describe("RagQueryPlannerService", () => {
           ],
         },
       }),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const memorySearchService = {

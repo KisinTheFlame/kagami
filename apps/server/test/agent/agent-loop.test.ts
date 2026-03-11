@@ -69,6 +69,7 @@ describe("AgentLoop", () => {
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
       chat,
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
 
@@ -139,16 +140,21 @@ describe("AgentLoop", () => {
       time: 1710000000,
     });
     expect(chat).toHaveBeenCalledTimes(1);
-    expect(chat).toHaveBeenCalledWith({
-      system: "system-prompt",
-      messages: [],
-      tools: [
-        toolRegistry.search_web.tool,
-        toolRegistry.send_group_message.tool,
-        toolRegistry.finish.tool,
-      ],
-      toolChoice: "required",
-    });
+    expect(chat).toHaveBeenCalledWith(
+      {
+        system: "system-prompt",
+        messages: [],
+        tools: [
+          toolRegistry.search_web.tool,
+          toolRegistry.send_group_message.tool,
+          toolRegistry.finish.tool,
+        ],
+        toolChoice: "required",
+      },
+      {
+        usage: "agent",
+      },
+    );
     expect(pushAssistantMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "assistant",
@@ -233,6 +239,7 @@ describe("AgentLoop", () => {
     const loop = new AgentLoop({
       llmClient: {
         chat,
+        chatDirect: vi.fn(),
         listAvailableProviders: vi.fn().mockResolvedValue([]),
       },
       contextManager,
@@ -396,6 +403,7 @@ describe("AgentLoop", () => {
     const loop = new AgentLoop({
       llmClient: {
         chat,
+        chatDirect: vi.fn(),
         listAvailableProviders: vi.fn().mockResolvedValue([]),
       },
       contextManager,
@@ -439,6 +447,7 @@ describe("AgentLoop", () => {
   it("should throw when an enabled tool is missing from registry", () => {
     const llmClient: LlmClient = {
       chat: vi.fn(),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
     const contextManager: AgentContextManager = {

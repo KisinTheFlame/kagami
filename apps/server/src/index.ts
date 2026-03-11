@@ -28,6 +28,9 @@ import {
   LlmProviderUnavailableError,
   LlmProviderUpstreamError,
 } from "./llm/errors.js";
+import { createDeepSeekProvider } from "./llm/providers/deepseek-provider.js";
+import { createOpenAiCodexProvider } from "./llm/providers/openai-codex-provider.js";
+import { createOpenAiProvider } from "./llm/providers/openai-provider.js";
 import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
 import { GroupMessageChunkIndexer } from "./rag/indexer.service.js";
@@ -164,9 +167,26 @@ try {
   const napcatGroupMessageQueryService = new DefaultNapcatGroupMessageQueryService({
     napcatGroupMessageDao,
   });
+  const llmConfig = await activeConfigManager.getLlmRuntimeConfig();
+  const llmProviders = {
+    deepseek: llmConfig.deepseek.apiKey
+      ? createDeepSeekProvider({
+          ...llmConfig.deepseek,
+          apiKey: llmConfig.deepseek.apiKey,
+        })
+      : undefined,
+    openai: llmConfig.openai.apiKey
+      ? createOpenAiProvider({
+          ...llmConfig.openai,
+          apiKey: llmConfig.openai.apiKey,
+        })
+      : undefined,
+    "openai-codex": createOpenAiCodexProvider(llmConfig.openaiCodex),
+  };
   const llmClient = createLlmClient({
-    configManager: activeConfigManager,
     llmChatCallDao,
+    providers: llmProviders,
+    usages: llmConfig.usages,
   });
   const ragConfig = await activeConfigManager.getRagRuntimeConfig();
   const embeddingClient = createEmbeddingClient({
@@ -360,7 +380,7 @@ try {
   await serverApp.listen({ host: "0.0.0.0", port: bootConfig.port });
   isServerStarted = true;
 
-  const providers = await llmClient.listAvailableProviders();
+  const providers = await llmClient.listAvailableProviders({ usage: "agent" });
   const tavilyConfig = await activeConfigManager.getTavilyConfig();
 
   logger.info("Server started", {

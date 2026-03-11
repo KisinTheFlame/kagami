@@ -11,7 +11,6 @@ describe("llm playground schemas", () => {
       providers: [
         {
           id: "openai-codex",
-          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ],

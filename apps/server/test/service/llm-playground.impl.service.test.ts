@@ -6,10 +6,10 @@ describe("DefaultLlmPlaygroundService", () => {
   it("should return available providers from llm client", async () => {
     const llmClient: LlmClient = {
       chat: vi.fn(),
+      chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([
         {
           id: "openai-codex",
-          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ]),
@@ -21,15 +21,15 @@ describe("DefaultLlmPlaygroundService", () => {
       providers: [
         {
           id: "openai-codex",
-          defaultModel: "gpt-5.3-codex",
           isActive: true,
         },
       ],
     });
+    expect(llmClient.listAvailableProviders).toHaveBeenCalledWith({ usage: "agent" });
   });
 
   it("should disable history recording and route to the selected provider", async () => {
-    const chat = vi.fn().mockResolvedValue({
+    const chatDirect = vi.fn().mockResolvedValue({
       provider: "deepseek",
       model: "deepseek-chat",
       message: {
@@ -39,7 +39,8 @@ describe("DefaultLlmPlaygroundService", () => {
       },
     });
     const llmClient: LlmClient = {
-      chat,
+      chat: vi.fn(),
+      chatDirect,
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
 
@@ -55,15 +56,15 @@ describe("DefaultLlmPlaygroundService", () => {
       },
     });
 
-    expect(chat).toHaveBeenCalledWith(
+    expect(chatDirect).toHaveBeenCalledWith(
       {
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",
-        model: "deepseek-reasoner",
       },
       {
         providerId: "deepseek",
+        model: "deepseek-reasoner",
         recordCall: false,
       },
     );

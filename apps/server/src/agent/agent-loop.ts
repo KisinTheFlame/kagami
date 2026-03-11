@@ -58,12 +58,17 @@ export class AgentLoop {
           await this.handleEvent(event);
         }
 
-        const completion = await this.llmClient.chat({
-          system: await this.contextManager.getSystemPrompt(),
-          messages: this.contextManager.getMessages(),
-          tools: this.activeTools.map(toolDefinition => toolDefinition.tool),
-          toolChoice: "required",
-        });
+        const completion = await this.llmClient.chat(
+          {
+            system: await this.contextManager.getSystemPrompt(),
+            messages: this.contextManager.getMessages(),
+            tools: this.activeTools.map(toolDefinition => toolDefinition.tool),
+            toolChoice: "required",
+          },
+          {
+            usage: "agent",
+          },
+        );
         const assistant = completion.message;
         const persistentAssistantMessage = omitFinishToolCalls(assistant);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
