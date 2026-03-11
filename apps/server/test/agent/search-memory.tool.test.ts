@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSearchMemoryTool } from "../../src/agent/tools/search-memory.js";
+import { createSearchMemoryTool, searchMemoryTool } from "../../src/agent/tools/search-memory.js";
 import type { GroupMessageMemorySearchService } from "../../src/rag/memory-search.service.js";
 
 describe("search memory tool", () => {
+  it("should not expose groupId to llm tool parameters", () => {
+    expect(searchMemoryTool.parameters).toEqual({
+      type: "object",
+      properties: {
+        shouldSearch: {
+          type: "boolean",
+          description: "是否需要执行历史检索。不需要检索时设为 false。",
+        },
+        query: {
+          type: "string",
+          description: "需要检索时使用的短 query；不检索时留空字符串。",
+        },
+      },
+    });
+  });
+
   it("should skip search when shouldSearch is false", async () => {
     const memorySearchService = {
       search: vi.fn(),

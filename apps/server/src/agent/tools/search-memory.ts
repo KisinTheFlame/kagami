@@ -29,10 +29,6 @@ export const searchMemoryTool: Tool = {
         type: "string",
         description: "需要检索时使用的短 query；不检索时留空字符串。",
       },
-      groupId: {
-        type: "string",
-        description: "当前群号，用于将检索范围限制在同一群聊内。",
-      },
     },
   },
 };
