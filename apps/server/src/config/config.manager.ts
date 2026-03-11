@@ -16,14 +16,14 @@ export type BootConfig = {
 export type LlmProviderRuntimeConfig = {
   apiKey?: string;
   baseUrl: string;
-  chatModel: string;
+  models: string[];
   timeoutMs: number;
 };
 
 export type OpenAiCodexRuntimeConfig = {
   authFilePath: string;
   baseUrl: string;
-  chatModel: string;
+  models: string[];
   refreshLeewayMs: number;
   timeoutMs: number;
 };

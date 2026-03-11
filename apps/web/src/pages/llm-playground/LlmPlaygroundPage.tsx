@@ -58,6 +58,9 @@ export function LlmPlaygroundPage() {
     () => providers.find(provider => provider.id === selectedProviderId) ?? providers[0] ?? null,
     [providers, selectedProviderId],
   );
+  const selectedModel = selectedProvider?.models.includes(model)
+    ? model
+    : (selectedProvider?.models[0] ?? "");
 
   const requestMutation = useMutation({
     mutationFn: async (payload: LlmPlaygroundChatRequest): Promise<PlaygroundResult> => {
@@ -113,7 +116,6 @@ export function LlmPlaygroundPage() {
 
   function handleProviderChange(nextProviderId: string): void {
     setSelectedProviderId(nextProviderId as LlmProviderOption["id"]);
-    setModel("");
   }
 
   function handleResetTemplate(): void {
@@ -129,7 +131,8 @@ export function LlmPlaygroundPage() {
 
     const payload = parsePayload({
       provider: selectedProvider.id,
-      model,
+      model: selectedModel,
+      availableModels: selectedProvider.models,
       requestJson,
     });
     if (!payload.success) {
@@ -180,20 +183,9 @@ export function LlmPlaygroundPage() {
                                 isActive ? "text-primary-foreground/80" : "text-muted-foreground"
                               }`}
                             >
-                              手动指定 provider 后，请在右侧输入 model。
+                              已配置 {provider.models.length} 个可选模型。
                             </p>
                           </div>
-                          {provider.isActive ? (
-                            <span
-                              className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                                isActive
-                                  ? "bg-primary-foreground/15 text-primary-foreground"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              active
-                            </span>
-                          ) : null}
                         </div>
                       </button>
                     );
@@ -204,25 +196,35 @@ export function LlmPlaygroundPage() {
 
             <Panel
               title="Model"
-              description="必须显式填写完整模型名，playground 不再提供默认模型。"
+              description="从当前 provider 已配置的模型列表中选择。"
               className="flex min-h-0 flex-col"
               bodyClassName="flex flex-1 flex-col"
             >
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-medium">模型名称</span>
-                <input
-                  type="text"
-                  value={model}
+                <select
+                  value={selectedModel}
                   onChange={event => setModel(event.target.value)}
-                  placeholder="例如 gpt-4o-mini / deepseek-chat"
-                  disabled={providers.length === 0}
+                  disabled={!selectedProvider || selectedProvider.models.length === 0}
                   className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                />
+                >
+                  {selectedProvider ? (
+                    selectedProvider.models.map(providerModel => (
+                      <option key={providerModel} value={providerModel}>
+                        {providerModel}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">请先选择 provider</option>
+                  )}
+                </select>
               </label>
 
               <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
                 <p>当前 provider：{selectedProvider?.id ?? "未选择"}</p>
-                <p className="mt-1">当前 model：{model.trim().length > 0 ? model : "未填写"}</p>
+                <p className="mt-1">
+                  当前 model：{selectedModel.trim().length > 0 ? selectedModel : "未选择"}
+                </p>
               </div>
             </Panel>
           </div>
@@ -364,10 +366,12 @@ export function LlmPlaygroundPage() {
 function parsePayload({
   provider,
   model,
+  availableModels,
   requestJson,
 }: {
   provider: LlmProviderOption["id"];
   model: string;
+  availableModels: string[];
   requestJson: string;
 }):
   | {
@@ -400,7 +404,14 @@ function parsePayload({
   if (model.trim().length === 0) {
     return {
       success: false,
-      error: "请先填写 model，playground 不提供默认模型。",
+      error: "请先选择 model。",
+    };
+  }
+
+  if (!availableModels.includes(model)) {
+    return {
+      success: false,
+      error: "所选 model 不在当前 provider 的配置列表中。",
     };
   }
 

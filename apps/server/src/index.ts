@@ -24,6 +24,7 @@ import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
 import { createEmbeddingClient } from "./llm/embedding/client.js";
 import {
+  LlmModelNotConfiguredError,
   LlmProviderResponseError,
   LlmProviderUnavailableError,
   LlmProviderUpstreamError,
@@ -186,6 +187,11 @@ try {
   const llmClient = createLlmClient({
     llmChatCallDao,
     providers: llmProviders,
+    providerConfigs: {
+      deepseek: llmConfig.deepseek,
+      openai: llmConfig.openai,
+      "openai-codex": llmConfig.openaiCodex,
+    },
     usages: llmConfig.usages,
   });
   const ragConfig = await activeConfigManager.getRagRuntimeConfig();
@@ -335,6 +341,21 @@ try {
       return reply.code(400).send({
         code: "LLM_PROVIDER_UNAVAILABLE",
         message: "所选 LLM provider 当前不可用",
+      });
+    }
+
+    if (error instanceof LlmModelNotConfiguredError) {
+      logger.warn("Requested LLM model is not configured for provider", {
+        event: "http.request.llm_model_not_configured",
+        method: request.method,
+        url: request.url,
+        provider: error.provider,
+        model: error.model,
+      });
+
+      return reply.code(400).send({
+        code: "LLM_MODEL_NOT_CONFIGURED",
+        message: "所选 LLM 模型未在当前 provider 中配置",
       });
     }
 

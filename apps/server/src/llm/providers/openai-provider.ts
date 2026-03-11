@@ -18,7 +18,7 @@ export function createOpenAiProvider(
   return {
     id: "openai",
     async chat(request: LlmChatRequest) {
-      const model = request.model ?? config.chatModel;
+      const model = requireRequestModel(request);
       const payload = toOpenAiChatRequest({ model, request });
       let completion: ChatCompletion;
 
@@ -44,4 +44,12 @@ export function createOpenAiProvider(
       return toLlmChatResponsePayload(completion, "openai");
     },
   };
+}
+
+function requireRequestModel(request: LlmChatRequest): string {
+  if (!request.model) {
+    throw new Error("OpenAI provider requires an explicit model");
+  }
+
+  return request.model;
 }

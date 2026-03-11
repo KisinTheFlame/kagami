@@ -64,19 +64,19 @@ export class DefaultConfigManager implements ConfigManager {
       deepseek: {
         apiKey: config.server.llm.providers.deepseek.apiKey,
         baseUrl: config.server.llm.providers.deepseek.baseUrl,
-        chatModel: config.server.llm.providers.deepseek.chatModel,
+        models: config.server.llm.providers.deepseek.models,
         timeoutMs: config.server.llm.timeoutMs,
       },
       openai: {
         apiKey: config.server.llm.providers.openai.apiKey,
         baseUrl: config.server.llm.providers.openai.baseUrl,
-        chatModel: config.server.llm.providers.openai.chatModel,
+        models: config.server.llm.providers.openai.models,
         timeoutMs: config.server.llm.timeoutMs,
       },
       openaiCodex: {
         authFilePath: config.server.llm.providers.openaiCodex.authFilePath,
         baseUrl: config.server.llm.providers.openaiCodex.baseUrl,
-        chatModel: config.server.llm.providers.openaiCodex.chatModel,
+        models: config.server.llm.providers.openaiCodex.models,
         refreshLeewayMs: config.server.llm.providers.openaiCodex.refreshLeewayMs,
         timeoutMs: config.server.llm.timeoutMs,
       },

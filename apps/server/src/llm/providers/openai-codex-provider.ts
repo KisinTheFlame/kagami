@@ -136,7 +136,7 @@ async function fetchCodexResponse(params: {
         ...(params.auth.accountId ? { "ChatGPT-Account-Id": params.auth.accountId } : {}),
         "User-Agent": "Kagami/1.0",
       },
-      body: JSON.stringify(toCodexRequestBody(params.request, params.config.chatModel)),
+      body: JSON.stringify(toCodexRequestBody(params.request)),
       signal: AbortSignal.timeout(params.config.timeoutMs),
     });
   } catch (error) {
@@ -187,10 +187,7 @@ async function fetchCodexResponse(params: {
   return { status: response.status, completedEvent };
 }
 
-function toCodexRequestBody(
-  request: LlmChatRequest,
-  defaultModel: string,
-): Record<string, unknown> {
+function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
   const input: Array<Record<string, unknown>> = [];
 
   for (const message of request.messages) {
@@ -230,7 +227,7 @@ function toCodexRequestBody(
   }
 
   return {
-    model: request.model ?? defaultModel,
+    model: requireRequestModel(request),
     instructions: request.system ?? DEFAULT_INSTRUCTIONS,
     input,
     tools: request.tools.map(tool => ({
@@ -251,6 +248,14 @@ function toCodexRequestBody(
     stream: true,
     store: false,
   };
+}
+
+function requireRequestModel(request: LlmChatRequest): string {
+  if (!request.model) {
+    throw new Error("OpenAI Codex provider requires an explicit model");
+  }
+
+  return request.model;
 }
 
 function extractCompletedEvent(sseText: string): CodexResponseCompletedEvent | null {

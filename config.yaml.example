@@ -12,23 +12,28 @@ server:
       deepseek:
         apiKey: ""
         baseUrl: https://api.deepseek.com
-        chatModel: deepseek-chat
+        models:
+          - deepseek-chat
       openai:
         apiKey: ""
         baseUrl: https://api.openai.com/v1
-        chatModel: gpt-4o-mini
+        models:
+          - gpt-4o-mini
       openaiCodex:
         authFilePath: ~/.codex/auth.json
         baseUrl: https://chatgpt.com/backend-api/codex/responses
-        chatModel: gpt-5.3-codex
+        models:
+          - gpt-5.3-codex
         refreshLeewayMs: 60000
     usages:
       agent:
-        provider: deepseek
-        model: deepseek-chat
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: openai
-        model: gpt-4o-mini
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       provider: google

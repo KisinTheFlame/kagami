@@ -36,8 +36,15 @@ server:
     providers:
       deepseek:
         apiKey: ""
+        models:
+          - deepseek-chat
       openai:
         apiKey: openai-key
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -77,19 +84,19 @@ server:
       deepseek: {
         apiKey: undefined,
         baseUrl: "https://api.deepseek.com",
-        chatModel: "deepseek-chat",
+        models: ["deepseek-chat"],
         timeoutMs: 15000,
       },
       openai: {
         apiKey: "openai-key",
         baseUrl: "https://api.openai.com/v1",
-        chatModel: "gpt-4o-mini",
+        models: ["gpt-4o-mini"],
         timeoutMs: 15000,
       },
       openaiCodex: {
         authFilePath: "~/.codex/auth.json",
         baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-        chatModel: "gpt-5.3-codex",
+        models: ["gpt-5.3-codex"],
         refreshLeewayMs: 60_000,
         timeoutMs: 15000,
       },
@@ -158,8 +165,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -195,8 +209,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -221,7 +242,7 @@ server:
     } satisfies Partial<ConfigManagerError>);
   });
 
-  it("should tolerate empty OpenAI config placeholders", async () => {
+  it("should reject legacy chatModel config", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -232,11 +253,16 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
+      deepseek:
+        models:
+          - deepseek-chat
       openai:
         apiKey: "   "
         baseUrl: ""
         chatModel: " "
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -254,44 +280,54 @@ server:
     qq: "10001"
 `);
 
-    const manager = new DefaultConfigManager({
-      config: await loadStaticConfig({ configPath }),
-    });
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.llm.providers.openai.models",
+    } satisfies Partial<ConfigManagerError>);
+  });
 
-    await expect(manager.getLlmRuntimeConfig()).resolves.toMatchObject({
-      timeoutMs: 45_000,
-      openai: {
-        apiKey: undefined,
-        baseUrl: "https://api.openai.com/v1",
-        chatModel: "gpt-4o-mini",
-      },
-      openaiCodex: {
-        authFilePath: "~/.codex/auth.json",
-        baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-        chatModel: "gpt-5.3-codex",
-        refreshLeewayMs: 60_000,
-      },
-      usages: {
-        agent: {
-          attempts: [
-            {
-              provider: "deepseek",
-              model: "deepseek-chat",
-              times: 1,
-            },
-          ],
-        },
-        ragQueryPlanner: {
-          attempts: [
-            {
-              provider: "deepseek",
-              model: "deepseek-chat",
-              times: 1,
-            },
-          ],
-        },
-      },
-    });
+  it("should reject provider config with empty models", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek:
+        models: []
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+    usages:
+      agent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.llm.providers.deepseek.models",
+    } satisfies Partial<ConfigManagerError>);
   });
 
   it("should default server port to 20003", async () => {
@@ -305,8 +341,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -344,8 +387,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:
@@ -380,8 +430,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         provider: deepseek
@@ -416,8 +473,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts: []
@@ -451,8 +515,15 @@ server:
     listenGroupId: "123456"
   llm:
     providers:
-      deepseek: {}
-      openai: {}
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
     usages:
       agent:
         attempts:

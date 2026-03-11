@@ -63,7 +63,7 @@ describe("OpenAiCodexAuthStore", () => {
     const store = new OpenAiCodexAuthStore({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });
@@ -110,7 +110,7 @@ describe("OpenAiCodexAuthStore", () => {
     const store = new OpenAiCodexAuthStore({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });
@@ -164,7 +164,7 @@ describe("OpenAiCodexAuthStore", () => {
     const store = new OpenAiCodexAuthStore({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });

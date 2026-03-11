@@ -19,7 +19,7 @@ describe("LlmHandler", () => {
       providers: [
         {
           id: "openai",
-          isActive: true,
+          models: ["gpt-4o-mini"],
         },
       ],
     });
@@ -41,7 +41,7 @@ describe("LlmHandler", () => {
       providers: [
         {
           id: "openai",
-          isActive: true,
+          models: ["gpt-4o-mini"],
         },
       ],
     });

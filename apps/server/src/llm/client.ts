@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { LlmProviderOption } from "@kagami/shared";
 import type {
+  LlmProviderRuntimeConfig,
+  OpenAiCodexRuntimeConfig,
   LlmUsageAttemptRuntimeConfig,
   LlmUsageRuntimeConfig,
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { LlmProviderUnavailableError } from "./errors.js";
+import { LlmModelNotConfiguredError, LlmProviderUnavailableError } from "./errors.js";
 import type { LlmProvider } from "./provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "./types.js";
 
@@ -21,6 +23,7 @@ export interface LlmClient {
 type CreateLlmClientOptions = {
   llmChatCallDao: LlmChatCallDao;
   providers: Partial<Record<LlmProviderId, LlmProvider>>;
+  providerConfigs: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>;
   usages: Record<LlmUsageId, LlmUsageRuntimeConfig>;
 };
 
@@ -47,6 +50,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       const usage = requireUsage(listOptions?.usage);
       return await listAvailableProviders(
         options.providers,
+        options.providerConfigs,
         requireUsageConfig(options.usages, usage),
       );
     },
@@ -66,6 +70,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
             return await executeChatAttempt({
               llmChatCallDao: options.llmChatCallDao,
               providers: options.providers,
+              providerConfigs: options.providerConfigs,
               request,
               attempt,
               requestId,
@@ -89,6 +94,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       return await executeChatAttempt({
         llmChatCallDao: options.llmChatCallDao,
         providers: options.providers,
+        providerConfigs: options.providerConfigs,
         request,
         attempt: {
           provider: providerId,
@@ -105,6 +111,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
 async function executeChatAttempt({
   llmChatCallDao,
   providers,
+  providerConfigs,
   request,
   attempt,
   requestId,
@@ -112,11 +119,13 @@ async function executeChatAttempt({
 }: {
   llmChatCallDao: LlmChatCallDao;
   providers: Partial<Record<LlmProviderId, LlmProvider>>;
+  providerConfigs: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>;
   request: LlmChatRequest;
   attempt: LlmUsageAttemptRuntimeConfig;
   requestId: string;
   recordCall: boolean;
 }): Promise<LlmChatResponsePayload> {
+  requireConfiguredModel(providerConfigs, attempt.provider, attempt.model);
   const provider = providers[attempt.provider];
   const requestWithModel = {
     ...request,
@@ -168,6 +177,7 @@ async function executeChatAttempt({
 
 async function listAvailableProviders(
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
+  providerConfigs: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>,
   usageConfig: LlmUsageRuntimeConfig,
 ): Promise<LlmProviderOption[]> {
   const preferredProvider = usageConfig.attempts[0]?.provider;
@@ -205,7 +215,7 @@ async function listAvailableProviders(
 
   return orderedIds.map(providerId => ({
     id: providerId,
-    isActive: providerId === preferredProvider,
+    models: providerConfigs[providerId].models,
   }));
 }
 
@@ -243,4 +253,19 @@ function requireModel(model: string | undefined): string {
   }
 
   return model;
+}
+
+function requireConfiguredModel(
+  providerConfigs: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>,
+  providerId: LlmProviderId,
+  model: string,
+): void {
+  if (providerConfigs[providerId].models.includes(model)) {
+    return;
+  }
+
+  throw new LlmModelNotConfiguredError({
+    provider: providerId,
+    model,
+  });
 }

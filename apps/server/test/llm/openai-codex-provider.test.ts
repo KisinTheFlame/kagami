@@ -81,13 +81,14 @@ describe("createOpenAiCodexProvider", () => {
     const provider = createOpenAiCodexProvider({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });
 
     await expect(
       provider.chat({
+        model: "gpt-5.3-codex",
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",
@@ -139,13 +140,14 @@ describe("createOpenAiCodexProvider", () => {
     const provider = createOpenAiCodexProvider({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });
 
     await expect(
       provider.chat({
+        model: "gpt-5.3-codex",
         messages: [{ role: "user", content: "ping" }],
         tools: [
           {
@@ -250,13 +252,14 @@ describe("createOpenAiCodexProvider", () => {
     const provider = createOpenAiCodexProvider({
       authFilePath,
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-      chatModel: "gpt-5.3-codex",
+      models: ["gpt-5.3-codex"],
       refreshLeewayMs: 60_000,
       timeoutMs: 5_000,
     });
 
     await expect(
       provider.chat({
+        model: "gpt-5.3-codex",
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",

@@ -18,7 +18,7 @@ export function createDeepSeekProvider(
   return {
     id: "deepseek",
     async chat(request: LlmChatRequest) {
-      const model = request.model ?? config.chatModel;
+      const model = requireRequestModel(request);
       const payload = toOpenAiChatRequest({ model, request });
       let completion: ChatCompletion;
 
@@ -45,4 +45,12 @@ export function createDeepSeekProvider(
       return toLlmChatResponsePayload(completion, "deepseek");
     },
   };
+}
+
+function requireRequestModel(request: LlmChatRequest): string {
+  if (!request.model) {
+    throw new Error("DeepSeek provider requires an explicit model");
+  }
+
+  return request.model;
 }

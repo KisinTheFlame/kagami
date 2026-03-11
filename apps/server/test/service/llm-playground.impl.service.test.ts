@@ -10,7 +10,7 @@ describe("DefaultLlmPlaygroundService", () => {
       listAvailableProviders: vi.fn().mockResolvedValue([
         {
           id: "openai-codex",
-          isActive: true,
+          models: ["gpt-5.3-codex"],
         },
       ]),
     };
@@ -21,7 +21,7 @@ describe("DefaultLlmPlaygroundService", () => {
       providers: [
         {
           id: "openai-codex",
-          isActive: true,
+          models: ["gpt-5.3-codex"],
         },
       ],
     });

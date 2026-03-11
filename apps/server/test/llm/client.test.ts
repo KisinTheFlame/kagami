@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LlmUsageRuntimeConfig } from "../../src/config/config.manager.js";
+import type {
+  LlmProviderRuntimeConfig,
+  LlmUsageRuntimeConfig,
+  OpenAiCodexRuntimeConfig,
+} from "../../src/config/config.manager.js";
 import type { LlmChatCallDao } from "../../src/dao/llm-chat-call.dao.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
 import type { LlmProvider } from "../../src/llm/provider.js";
@@ -40,9 +44,37 @@ function createUsageConfig(
   };
 }
 
+function createProviderConfigs(): Record<
+  LlmProviderId,
+  LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig
+> {
+  return {
+    deepseek: {
+      apiKey: undefined,
+      baseUrl: "https://api.deepseek.com",
+      models: ["deepseek-chat", "deepseek-reasoner"],
+      timeoutMs: 45_000,
+    },
+    openai: {
+      apiKey: undefined,
+      baseUrl: "https://api.openai.com/v1",
+      models: ["gpt-4o-mini", "gpt-5.4"],
+      timeoutMs: 45_000,
+    },
+    "openai-codex": {
+      authFilePath: "~/.codex/auth.json",
+      baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+      models: ["gpt-5.3-codex"],
+      refreshLeewayMs: 60_000,
+      timeoutMs: 45_000,
+    },
+  };
+}
+
 function createClient(params?: {
   llmChatCallDao?: LlmChatCallDao;
   providers?: Partial<Record<LlmProviderId, LlmProvider>>;
+  providerConfigs?: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>;
   usages?: Record<LlmUsageId, LlmUsageRuntimeConfig>;
 }): { client: LlmClient; llmChatCallDao: LlmChatCallDao } {
   const llmChatCallDao = params?.llmChatCallDao ?? createLlmChatCallDaoMock();
@@ -51,6 +83,7 @@ function createClient(params?: {
     client: createLlmClient({
       llmChatCallDao,
       providers: params?.providers ?? {},
+      providerConfigs: params?.providerConfigs ?? createProviderConfigs(),
       usages: params?.usages ?? createUsageConfig(),
     }),
     llmChatCallDao,
@@ -91,11 +124,11 @@ describe("createLlmClient", () => {
     await expect(client.listAvailableProviders({ usage: "agent" })).resolves.toEqual([
       {
         id: "openai",
-        isActive: true,
+        models: ["gpt-4o-mini", "gpt-5.4"],
       },
       {
         id: "deepseek",
-        isActive: false,
+        models: ["deepseek-chat", "deepseek-reasoner"],
       },
     ]);
   });
@@ -154,6 +187,35 @@ describe("createLlmClient", () => {
     ).rejects.toMatchObject({
       name: "LlmProviderUnavailableError",
       provider: "deepseek",
+    });
+  });
+
+  it("should reject direct chat when the model is not configured for the provider", async () => {
+    const { client } = createClient({
+      providers: {
+        openai: {
+          id: "openai",
+          chat: vi.fn(),
+        },
+      },
+    });
+
+    await expect(
+      client.chatDirect(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          providerId: "openai",
+          model: "deepseek-chat",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "LlmModelNotConfiguredError",
+      provider: "openai",
+      model: "deepseek-chat",
     });
   });
 
@@ -345,6 +407,45 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it("should reject usage attempts when the configured model is not in provider models", async () => {
+    const { client } = createClient({
+      providers: {
+        openai: {
+          id: "openai",
+          chat: vi.fn(),
+        },
+      },
+      usages: createUsageConfig({
+        agent: {
+          attempts: [
+            {
+              provider: "openai",
+              model: "non-existent-model",
+              times: 1,
+            },
+          ],
+        },
+      }),
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          usage: "agent",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "LlmModelNotConfiguredError",
+      provider: "openai",
+      model: "non-existent-model",
+    });
   });
 
   it("should retry the same usage attempt for the configured times before fallback", async () => {

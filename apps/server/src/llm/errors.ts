@@ -15,6 +15,11 @@ type LlmProviderUpstreamErrorOptions = {
   cause?: unknown;
 };
 
+type LlmModelNotConfiguredErrorOptions = {
+  provider: LlmProviderId;
+  model: string;
+};
+
 export class LlmProviderResponseError extends Error {
   public readonly provider: LlmProviderId;
 
@@ -44,5 +49,17 @@ export class LlmProviderUpstreamError extends Error {
     this.name = "LlmProviderUpstreamError";
     this.provider = provider;
     this.cause = cause;
+  }
+}
+
+export class LlmModelNotConfiguredError extends Error {
+  public readonly provider: LlmProviderId;
+  public readonly model: string;
+
+  public constructor({ provider, model }: LlmModelNotConfiguredErrorOptions) {
+    super(`Model ${model} is not configured for provider ${provider}`);
+    this.name = "LlmModelNotConfiguredError";
+    this.provider = provider;
+    this.model = model;
   }
 }

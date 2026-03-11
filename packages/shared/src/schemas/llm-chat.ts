@@ -145,7 +145,7 @@ export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSche
 export const LlmProviderOptionSchema = z
   .object({
     id: LlmProviderIdSchema,
-    isActive: z.boolean(),
+    models: z.array(z.string().min(1)).min(1),
   })
   .strict();
 
