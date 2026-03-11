@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { LlmProviderOption } from "@kagami/shared";
 import { assertNever } from "@kagami/shared";
-import type { ConfigManager, LlmRuntimeConfig } from "../config/config.manager.js";
+import type {
+  ConfigManager,
+  LlmRuntimeConfig,
+  LlmUsageAttemptRuntimeConfig,
+} from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { LlmProviderUnavailableError } from "./errors.js";
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
@@ -43,63 +47,109 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       const config = await options.configManager.getLlmRuntimeConfig();
       const providers = createProviderRegistry(config, options.providers);
       const requestId = randomUUID();
-      const startedAt = Date.now();
       const usage = chatOptions?.usage ?? "agent";
-      const usageConfig = config.usages[usage];
-      const providerId = chatOptions?.providerId ?? usageConfig.provider;
-      const provider = providers[providerId];
       const recordCall = chatOptions?.recordCall ?? true;
 
-      if (!provider) {
-        throw new LlmProviderUnavailableError({ provider: providerId });
+      if (chatOptions?.providerId) {
+        return await executeChatAttempt({
+          llmChatCallDao: options.llmChatCallDao,
+          providers,
+          request,
+          attempt: {
+            provider: chatOptions.providerId,
+            model: request.model ?? getDefaultModel(config, chatOptions.providerId),
+            times: 1,
+          },
+          requestId,
+          recordCall,
+        });
       }
 
-      const model =
-        request.model ??
-        (chatOptions?.providerId ? getDefaultModel(config, providerId) : usageConfig.model);
-      const requestWithModel = {
-        ...request,
-        model,
-      };
-
-      try {
-        const response = await provider.chat(requestWithModel);
-        const latencyMs = Date.now() - startedAt;
-
-        if (recordCall) {
-          void options.llmChatCallDao
-            .recordSuccess({
-              provider: provider.id,
-              model: response.model,
+      let lastError: unknown;
+      for (const attempt of config.usages[usage].attempts) {
+        for (let currentTry = 0; currentTry < attempt.times; currentTry += 1) {
+          try {
+            return await executeChatAttempt({
+              llmChatCallDao: options.llmChatCallDao,
+              providers,
+              request,
+              attempt,
               requestId,
-              latencyMs,
-              request: requestWithModel,
-              response,
-            })
-            .catch(() => {});
+              recordCall,
+            });
+          } catch (error) {
+            lastError = error;
+          }
         }
-
-        return response;
-      } catch (error) {
-        const latencyMs = Date.now() - startedAt;
-
-        if (recordCall) {
-          void options.llmChatCallDao
-            .recordError({
-              provider: provider.id,
-              model,
-              requestId,
-              latencyMs,
-              request: requestWithModel,
-              error,
-            })
-            .catch(() => {});
-        }
-
-        throw error;
       }
+
+      throw lastError;
     },
   };
+}
+
+async function executeChatAttempt({
+  llmChatCallDao,
+  providers,
+  request,
+  attempt,
+  requestId,
+  recordCall,
+}: {
+  llmChatCallDao: LlmChatCallDao;
+  providers: Partial<Record<LlmProviderId, LlmProvider>>;
+  request: LlmChatRequest;
+  attempt: LlmUsageAttemptRuntimeConfig;
+  requestId: string;
+  recordCall: boolean;
+}): Promise<LlmChatResponsePayload> {
+  const provider = providers[attempt.provider];
+  const requestWithModel = {
+    ...request,
+    model: attempt.model,
+  };
+  const startedAt = Date.now();
+
+  try {
+    if (!provider) {
+      throw new LlmProviderUnavailableError({ provider: attempt.provider });
+    }
+
+    const response = await provider.chat(requestWithModel);
+    const latencyMs = Date.now() - startedAt;
+
+    if (recordCall) {
+      void llmChatCallDao
+        .recordSuccess({
+          provider: provider.id,
+          model: response.model,
+          requestId,
+          latencyMs,
+          request: requestWithModel,
+          response,
+        })
+        .catch(() => {});
+    }
+
+    return response;
+  } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+
+    if (recordCall) {
+      void llmChatCallDao
+        .recordError({
+          provider: attempt.provider,
+          model: attempt.model,
+          requestId,
+          latencyMs,
+          request: requestWithModel,
+          error,
+        })
+        .catch(() => {});
+    }
+
+    throw error;
+  }
 }
 
 function createProviderRegistry(
@@ -119,7 +169,7 @@ async function listAvailableProviders(
   providers: Partial<Record<LlmProviderId, LlmProvider>>,
   usage: LlmUsageId,
 ): Promise<LlmProviderOption[]> {
-  const preferredProvider = config.usages[usage].provider;
+  const preferredProvider = config.usages[usage].attempts[0]?.provider;
   const availability = await Promise.all(
     (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
       const provider = providers[providerId];
@@ -141,11 +191,11 @@ async function listAvailableProviders(
       (providerId): providerId is (typeof availability)[number] & string => providerId !== null,
     )
     .sort((left, right) => {
-      if (left === preferredProvider) {
+      if (preferredProvider && left === preferredProvider) {
         return -1;
       }
 
-      if (right === preferredProvider) {
+      if (preferredProvider && right === preferredProvider) {
         return 1;
       }
 

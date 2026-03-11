@@ -6,6 +6,7 @@ import { parse } from "yaml";
 import { z } from "zod";
 import { ConfigManagerError } from "./config.impl.manager.js";
 import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
+import type { LlmUsageAttemptRuntimeConfig, LlmUsageRuntimeConfig } from "./config.manager.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
@@ -56,9 +57,13 @@ const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satisfie
   ...LlmProviderId[],
 ]);
 const RagEmbeddingProviderSchema = z.literal("google");
-const LlmUsageConfigSchema = z.object({
+const LlmUsageAttemptConfigSchema = z.object({
   provider: LlmProviderSchema,
-  model: NonEmptyStringSchema.optional(),
+  model: NonEmptyStringSchema,
+  times: PositiveIntSchema.default(1),
+});
+const LlmUsageConfigSchema = z.object({
+  attempts: z.array(LlmUsageAttemptConfigSchema).min(1),
 });
 
 const StaticConfigFileSchema = z.object({
@@ -194,43 +199,31 @@ export async function loadStaticConfig(
   };
 }
 
-function normalizeLlmUsages(input: StaticConfig["server"]["llm"]): Record<
-  LlmUsageId,
-  {
-    provider: LlmProviderId;
-    model: string;
-  }
-> {
+function normalizeLlmUsages(
+  input: StaticConfig["server"]["llm"],
+): Record<LlmUsageId, LlmUsageRuntimeConfig> {
   return {
-    agent: normalizeUsageConfig(input, input.usages.agent),
-    ragQueryPlanner: normalizeUsageConfig(input, input.usages.ragQueryPlanner),
+    agent: normalizeUsageConfig(input.usages.agent),
+    ragQueryPlanner: normalizeUsageConfig(input.usages.ragQueryPlanner),
   };
 }
 
 function normalizeUsageConfig(
-  input: StaticConfig["server"]["llm"],
-  value: { provider: LlmProviderId; model?: string },
-): { provider: LlmProviderId; model: string } {
-  const provider = value.provider;
-
+  value: StaticConfig["server"]["llm"]["usages"]["agent"],
+): LlmUsageRuntimeConfig {
   return {
-    provider,
-    model: value.model ?? getProviderDefaultModel(input, provider),
+    attempts: value.attempts.map(attempt => normalizeUsageAttempt(attempt)),
   };
 }
 
-function getProviderDefaultModel(
-  input: StaticConfig["server"]["llm"],
-  provider: LlmProviderId,
-): string {
-  switch (provider) {
-    case "deepseek":
-      return input.providers.deepseek.chatModel;
-    case "openai":
-      return input.providers.openai.chatModel;
-    case "openai-codex":
-      return input.providers.openaiCodex.chatModel;
-  }
+function normalizeUsageAttempt(
+  value: StaticConfig["server"]["llm"]["usages"]["agent"]["attempts"][number],
+): LlmUsageAttemptRuntimeConfig {
+  return {
+    provider: value.provider,
+    model: value.model,
+    times: value.times,
+  };
 }
 
 function resolveConfigPath(): string {

@@ -40,9 +40,14 @@ server:
         apiKey: openai-key
     usages:
       agent:
-        provider: openai
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+            times: 2
       ragQueryPlanner:
-        provider: openai
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       apiKey: gemini-key
@@ -90,12 +95,22 @@ server:
       },
       usages: {
         agent: {
-          provider: "openai",
-          model: "gpt-4o-mini",
+          attempts: [
+            {
+              provider: "openai",
+              model: "gpt-4o-mini",
+              times: 2,
+            },
+          ],
         },
         ragQueryPlanner: {
-          provider: "openai",
-          model: "gpt-4o-mini",
+          attempts: [
+            {
+              provider: "openai",
+              model: "gpt-4o-mini",
+              times: 1,
+            },
+          ],
         },
       },
     });
@@ -147,9 +162,13 @@ server:
       openai: {}
     usages:
       agent:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -180,9 +199,13 @@ server:
       openai: {}
     usages:
       agent:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -216,9 +239,13 @@ server:
         chatModel: " "
     usages:
       agent:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -246,12 +273,22 @@ server:
       },
       usages: {
         agent: {
-          provider: "deepseek",
-          model: "deepseek-chat",
+          attempts: [
+            {
+              provider: "deepseek",
+              model: "deepseek-chat",
+              times: 1,
+            },
+          ],
         },
         ragQueryPlanner: {
-          provider: "deepseek",
-          model: "deepseek-chat",
+          attempts: [
+            {
+              provider: "deepseek",
+              model: "deepseek-chat",
+              times: 1,
+            },
+          ],
         },
       },
     });
@@ -272,9 +309,13 @@ server:
       openai: {}
     usages:
       agent:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -307,9 +348,13 @@ server:
       openai: {}
     usages:
       agent:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
       ragQueryPlanner:
-        provider: deepseek
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding: {}
   tavily: {}
@@ -321,6 +366,115 @@ server:
       name: "ConfigManagerError",
       code: "CONFIG_INVALID",
       key: "server.rag.embedding.apiKey",
+    } satisfies Partial<ConfigManagerError>);
+  });
+
+  it("should reject legacy llm usage config without attempts", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek: {}
+      openai: {}
+    usages:
+      agent:
+        provider: deepseek
+        model: deepseek-chat
+      ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.llm.usages.agent.attempts",
+    } satisfies Partial<ConfigManagerError>);
+  });
+
+  it("should reject llm usage config with empty attempts", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek: {}
+      openai: {}
+    usages:
+      agent:
+        attempts: []
+      ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.llm.usages.agent.attempts",
+    } satisfies Partial<ConfigManagerError>);
+  });
+
+  it("should reject llm usage config with non-positive times", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupId: "123456"
+  llm:
+    providers:
+      deepseek: {}
+      openai: {}
+    usages:
+      agent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+            times: 0
+      ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily: {}
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigManagerError",
+      code: "CONFIG_INVALID",
+      key: "server.llm.usages.agent.attempts.0.times",
     } satisfies Partial<ConfigManagerError>);
   });
 });

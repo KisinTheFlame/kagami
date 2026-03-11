@@ -28,9 +28,14 @@ export type OpenAiCodexRuntimeConfig = {
   timeoutMs: number;
 };
 
-export type LlmUsageRuntimeConfig = {
+export type LlmUsageAttemptRuntimeConfig = {
   provider: LlmProviderId;
   model: string;
+  times: number;
+};
+
+export type LlmUsageRuntimeConfig = {
+  attempts: LlmUsageAttemptRuntimeConfig[];
 };
 
 export type LlmRuntimeConfig = {

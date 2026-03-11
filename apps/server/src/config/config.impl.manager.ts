@@ -82,12 +82,18 @@ export class DefaultConfigManager implements ConfigManager {
       },
       usages: {
         agent: {
-          provider: llmUsages.agent.provider,
-          model: llmUsages.agent.model,
+          attempts: llmUsages.agent.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
         },
         ragQueryPlanner: {
-          provider: llmUsages.ragQueryPlanner.provider,
-          model: llmUsages.ragQueryPlanner.model,
+          attempts: llmUsages.ragQueryPlanner.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
         },
       },
     };

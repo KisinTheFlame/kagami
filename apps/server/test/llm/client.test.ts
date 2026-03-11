@@ -36,12 +36,22 @@ function createLlmRuntimeConfig(overrides: Partial<LlmRuntimeConfig> = {}): LlmR
     },
     usages: {
       agent: {
-        provider: "openai",
-        model: "gpt-4o-mini",
+        attempts: [
+          {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            times: 1,
+          },
+        ],
       },
       ragQueryPlanner: {
-        provider: "openai",
-        model: "gpt-4o-mini",
+        attempts: [
+          {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            times: 1,
+          },
+        ],
       },
     },
     ...overrides,
@@ -153,12 +163,22 @@ describe("createLlmClient", () => {
         createLlmRuntimeConfig({
           usages: {
             agent: {
-              provider: "deepseek",
-              model: "deepseek-chat",
+              attempts: [
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
             },
             ragQueryPlanner: {
-              provider: "deepseek",
-              model: "deepseek-chat",
+              attempts: [
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
             },
           },
           openai: {
@@ -188,5 +208,352 @@ describe("createLlmClient", () => {
       name: "LlmProviderUnavailableError",
       provider: "deepseek",
     });
+  });
+
+  it("should retry next usage attempt after an error and reuse requestId", async () => {
+    const { createLlmClient } = await import("../../src/llm/client.js");
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const openaiProvider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockRejectedValue(new Error("openai failed")),
+    };
+    const deepseekProvider: LlmProvider = {
+      id: "deepseek",
+      chat: vi.fn().mockResolvedValue({
+        provider: "deepseek",
+        model: "deepseek-chat",
+        message: {
+          role: "assistant",
+          content: "fallback pong",
+          toolCalls: [],
+        },
+      }),
+    };
+
+    const client = createLlmClient({
+      configManager: createConfigManagerMock(
+        createLlmRuntimeConfig({
+          deepseek: {
+            apiKey: "deepseek-key",
+            baseUrl: "https://api.deepseek.com",
+            chatModel: "deepseek-chat",
+            timeoutMs: 45_000,
+          },
+          usages: {
+            agent: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
+            },
+            ragQueryPlanner: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+              ],
+            },
+          },
+        }),
+      ),
+      llmChatCallDao,
+      providers: {
+        openai: openaiProvider,
+        deepseek: deepseekProvider,
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
+      },
+    });
+
+    await expect(
+      client.chat({
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+    });
+
+    expect(openaiProvider.chat).toHaveBeenCalledWith({
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
+      model: "gpt-4o-mini",
+    });
+    expect(deepseekProvider.chat).toHaveBeenCalledWith({
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
+      model: "deepseek-chat",
+    });
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+
+    const errorRequestId = vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].requestId;
+    const successRequestId = vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].requestId;
+    expect(errorRequestId).toBe(successRequestId);
+  });
+
+  it("should continue after an unavailable usage attempt", async () => {
+    const { createLlmClient } = await import("../../src/llm/client.js");
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const deepseekProvider: LlmProvider = {
+      id: "deepseek",
+      chat: vi.fn().mockResolvedValue({
+        provider: "deepseek",
+        model: "deepseek-chat",
+        message: {
+          role: "assistant",
+          content: "pong",
+          toolCalls: [],
+        },
+      }),
+    };
+
+    const client = createLlmClient({
+      configManager: createConfigManagerMock(
+        createLlmRuntimeConfig({
+          deepseek: {
+            apiKey: "deepseek-key",
+            baseUrl: "https://api.deepseek.com",
+            chatModel: "deepseek-chat",
+            timeoutMs: 45_000,
+          },
+          usages: {
+            agent: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
+            },
+            ragQueryPlanner: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+              ],
+            },
+          },
+          openai: {
+            apiKey: undefined,
+            baseUrl: "https://api.openai.com/v1",
+            chatModel: "gpt-4o-mini",
+            timeoutMs: 45_000,
+          },
+        }),
+      ),
+      llmChatCallDao,
+      providers: {
+        deepseek: deepseekProvider,
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
+      },
+    });
+
+    await expect(
+      client.chat({
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+    });
+
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0]).toMatchObject({
+      provider: "openai",
+      model: "gpt-4o-mini",
+    });
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("should throw the last error when all usage attempts fail", async () => {
+    const { createLlmClient } = await import("../../src/llm/client.js");
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const firstError = new Error("openai failed");
+    const lastError = new Error("deepseek failed");
+
+    const client = createLlmClient({
+      configManager: createConfigManagerMock(
+        createLlmRuntimeConfig({
+          deepseek: {
+            apiKey: "deepseek-key",
+            baseUrl: "https://api.deepseek.com",
+            chatModel: "deepseek-chat",
+            timeoutMs: 45_000,
+          },
+          usages: {
+            agent: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
+            },
+            ragQueryPlanner: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+              ],
+            },
+          },
+        }),
+      ),
+      llmChatCallDao,
+      providers: {
+        openai: {
+          id: "openai",
+          chat: vi.fn().mockRejectedValue(firstError),
+        },
+        deepseek: {
+          id: "deepseek",
+          chat: vi.fn().mockRejectedValue(lastError),
+        },
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
+      },
+    });
+
+    await expect(
+      client.chat({
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).rejects.toBe(lastError);
+
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
+    expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it("should retry the same usage attempt for the configured times before fallback", async () => {
+    const { createLlmClient } = await import("../../src/llm/client.js");
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const openaiProvider: LlmProvider = {
+      id: "openai",
+      chat: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("openai failed #1"))
+        .mockRejectedValueOnce(new Error("openai failed #2")),
+    };
+    const deepseekProvider: LlmProvider = {
+      id: "deepseek",
+      chat: vi.fn().mockResolvedValue({
+        provider: "deepseek",
+        model: "deepseek-chat",
+        message: {
+          role: "assistant",
+          content: "fallback pong",
+          toolCalls: [],
+        },
+      }),
+    };
+
+    const client = createLlmClient({
+      configManager: createConfigManagerMock(
+        createLlmRuntimeConfig({
+          deepseek: {
+            apiKey: "deepseek-key",
+            baseUrl: "https://api.deepseek.com",
+            chatModel: "deepseek-chat",
+            timeoutMs: 45_000,
+          },
+          usages: {
+            agent: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 2,
+                },
+                {
+                  provider: "deepseek",
+                  model: "deepseek-chat",
+                  times: 1,
+                },
+              ],
+            },
+            ragQueryPlanner: {
+              attempts: [
+                {
+                  provider: "openai",
+                  model: "gpt-4o-mini",
+                  times: 1,
+                },
+              ],
+            },
+          },
+        }),
+      ),
+      llmChatCallDao,
+      providers: {
+        openai: openaiProvider,
+        deepseek: deepseekProvider,
+        "openai-codex": {
+          id: "openai-codex",
+          isAvailable: vi.fn().mockResolvedValue(false),
+          chat: vi.fn(),
+        },
+      },
+    });
+
+    await expect(
+      client.chat({
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+    });
+
+    expect(openaiProvider.chat).toHaveBeenCalledTimes(2);
+    expect(deepseekProvider.chat).toHaveBeenCalledTimes(1);
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
   });
 });
