@@ -9,6 +9,7 @@ const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../a
 const indexPath = path.join(distDir, "index.html");
 const port = Number(process.env.PORT ?? "20004");
 const apiTarget = new URL(process.env.API_TARGET ?? "http://localhost:20003");
+const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -30,7 +31,10 @@ const server = createServer(async (req, res) => {
     const requestUrl = new URL(req.url ?? "/", "http://localhost");
 
     if (requestUrl.pathname === "/health") {
-      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      });
       res.end(JSON.stringify({ ok: true }));
       return;
     }
@@ -98,7 +102,10 @@ async function serveStaticAsset(req, res, requestUrl) {
 
   const ext = path.extname(selectedPath).toLowerCase();
   const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
-  res.writeHead(200, { "content-type": contentType });
+  res.writeHead(200, {
+    "content-type": contentType,
+    "cache-control": getCacheControlHeader(selectedPath),
+  });
 
   if (req.method === "HEAD") {
     res.end();
@@ -143,4 +150,28 @@ async function fileExists(targetPath) {
   } catch {
     return false;
   }
+}
+
+function getCacheControlHeader(targetPath) {
+  if (targetPath === indexPath) {
+    return "no-cache";
+  }
+
+  const relativePath = path.relative(distDir, targetPath);
+  const normalizedPath = relativePath.split(path.sep).join("/");
+  const fileName = path.basename(targetPath);
+
+  if (normalizedPath.startsWith("assets/") && isHashedAsset(fileName)) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  if (isHashedAsset(fileName)) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  return "no-cache";
+}
+
+function isHashedAsset(fileName) {
+  return HASHED_ASSET_NAME_PATTERN.test(fileName);
 }

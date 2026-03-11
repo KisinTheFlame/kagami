@@ -1,6 +1,7 @@
 import { AppLogListResponseSchema, type AppLogListQuery } from "@kagami/shared";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { buildQueryString } from "@/lib/search-params";
 
 type AppLogListFilters = Omit<AppLogListQuery, "page" | "pageSize">;
 
@@ -8,28 +9,19 @@ export function useAppLogList(page: number, pageSize: number, filters: AppLogLis
   return useQuery({
     queryKey: ["app-log", page, pageSize, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
+      const query = buildQueryString({
         page: String(page),
         pageSize: String(pageSize),
+        level: filters.level,
+        traceId: filters.traceId,
+        message: filters.message,
+        source: filters.source,
+        startAt: filters.startAt,
+        endAt: filters.endAt,
       });
 
-      setIfDefined(params, "level", filters.level);
-      setIfDefined(params, "traceId", filters.traceId);
-      setIfDefined(params, "message", filters.message);
-      setIfDefined(params, "source", filters.source);
-      setIfDefined(params, "startAt", filters.startAt);
-      setIfDefined(params, "endAt", filters.endAt);
-
-      const response = await apiFetch<unknown>(`/app-log/query?${params.toString()}`);
+      const response = await apiFetch<unknown>(`/app-log/query?${query}`);
       return AppLogListResponseSchema.parse(response);
     },
   });
-}
-
-function setIfDefined(params: URLSearchParams, key: string, value: string | undefined): void {
-  if (!value) {
-    return;
-  }
-
-  params.set(key, value);
 }

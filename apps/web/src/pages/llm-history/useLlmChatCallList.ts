@@ -5,6 +5,7 @@ import {
 } from "@kagami/shared";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { buildQueryString } from "@/lib/search-params";
 
 type LlmChatCallListFilters = Omit<LlmChatCallListQuery, "page" | "pageSize">;
 
@@ -16,23 +17,14 @@ export function useLlmChatCallList(
   return useQuery({
     queryKey: ["llm-chat-call", page, pageSize, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
+      const query = buildQueryString({
         page: String(page),
         pageSize: String(pageSize),
+        status: filters.status,
       });
 
-      setIfDefined(params, "status", filters.status);
-
-      const response = await apiFetch<unknown>(`/llm-chat-call/query?${params.toString()}`);
+      const response = await apiFetch<unknown>(`/llm-chat-call/query?${query}`);
       return LlmChatCallListResponseSchema.parse(response);
     },
   });
-}
-
-function setIfDefined(params: URLSearchParams, key: string, value: string | undefined): void {
-  if (!value) {
-    return;
-  }
-
-  params.set(key, value);
 }
