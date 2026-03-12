@@ -40,6 +40,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
     return rows.map(item => ({
       id: item.id,
       requestId: item.requestId,
+      seq: item.seq,
       provider: item.provider,
       model: item.model,
       status: item.status as LlmChatCallItem["status"],
@@ -56,6 +57,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
+          seq: input.seq,
           provider: input.provider,
           model: input.response.model,
           status: "success",
@@ -65,7 +67,11 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
         },
       });
     } catch (error) {
-      this.logRecordFailure(input.requestId, error);
+      this.logRecordFailure({
+        requestId: input.requestId,
+        seq: input.seq,
+        error,
+      });
       throw error;
     }
   }
@@ -75,6 +81,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
+          seq: input.seq,
           provider: input.provider,
           model: input.model,
           status: "failed",
@@ -84,16 +91,21 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
         },
       });
     } catch (error) {
-      this.logRecordFailure(input.requestId, error);
+      this.logRecordFailure({
+        requestId: input.requestId,
+        seq: input.seq,
+        error,
+      });
       throw error;
     }
   }
 
-  private logRecordFailure(requestId: string, error: unknown): void {
+  private logRecordFailure(input: { requestId: string; seq: number; error: unknown }): void {
     logger.error("Failed to record llm chat call", {
       event: "llm.chat_call_record.error",
-      requestId,
-      error: serializeError(error),
+      requestId: input.requestId,
+      seq: input.seq,
+      error: serializeError(input.error),
     });
   }
 }

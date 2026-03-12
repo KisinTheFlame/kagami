@@ -25,6 +25,7 @@ describe("LlmChatCallHandler", () => {
         {
           id: 1,
           requestId: "req-1",
+          seq: 1,
           provider: "openai",
           model: "gpt-test",
           status: "success",

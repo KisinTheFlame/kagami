@@ -64,6 +64,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       const usageConfig = requireUsageConfig(options.usages, usage);
 
       let lastError: unknown;
+      let seq = 0;
       for (const attempt of usageConfig.attempts) {
         for (let currentTry = 0; currentTry < attempt.times; currentTry += 1) {
           try {
@@ -74,6 +75,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               request,
               attempt,
               requestId,
+              seq: (seq += 1),
               recordCall,
             });
           } catch (error) {
@@ -102,6 +104,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
           times: 1,
         },
         requestId: randomUUID(),
+        seq: 1,
         recordCall: chatOptions?.recordCall ?? true,
       });
     },
@@ -115,6 +118,7 @@ async function executeChatAttempt({
   request,
   attempt,
   requestId,
+  seq,
   recordCall,
 }: {
   llmChatCallDao: LlmChatCallDao;
@@ -123,6 +127,7 @@ async function executeChatAttempt({
   request: LlmChatRequest;
   attempt: LlmUsageAttemptRuntimeConfig;
   requestId: string;
+  seq: number;
   recordCall: boolean;
 }): Promise<LlmChatResponsePayload> {
   requireConfiguredModel(providerConfigs, attempt.provider, attempt.model);
@@ -152,6 +157,7 @@ async function executeChatAttempt({
           provider: provider.id,
           model: response.model,
           requestId,
+          seq,
           latencyMs,
           request: requestWithModel,
           response,
@@ -169,6 +175,7 @@ async function executeChatAttempt({
           provider: attempt.provider,
           model: attempt.model,
           requestId,
+          seq,
           latencyMs,
           request: requestWithModel,
           error,

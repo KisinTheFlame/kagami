@@ -226,7 +226,7 @@ describe("createLlmClient", () => {
     } satisfies Partial<BizError>);
   });
 
-  it("should retry next usage attempt after an error and reuse requestId", async () => {
+  it("should retry next usage attempt, reuse requestId, and increment seq", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
     const openaiProvider: LlmProvider = {
       id: "openai",
@@ -302,6 +302,8 @@ describe("createLlmClient", () => {
     const errorRequestId = vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].requestId;
     const successRequestId = vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].requestId;
     expect(errorRequestId).toBe(successRequestId);
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].seq).toBe(1);
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(2);
   });
 
   it("should continue after an unavailable usage attempt", async () => {
@@ -361,8 +363,14 @@ describe("createLlmClient", () => {
     expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0]).toMatchObject({
       provider: "openai",
       model: "gpt-4o-mini",
+      seq: 1,
     });
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0]).toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+      seq: 2,
+    });
   });
 
   it("should throw the last error when all usage attempts fail", async () => {
@@ -523,6 +531,10 @@ describe("createLlmClient", () => {
     expect(deepseekProvider.chat).toHaveBeenCalledTimes(1);
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls.map(call => call[0].seq)).toEqual([
+      1, 2,
+    ]);
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(3);
   });
 
   it("should require explicit usage for chat", async () => {

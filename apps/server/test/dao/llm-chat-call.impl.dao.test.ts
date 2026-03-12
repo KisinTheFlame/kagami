@@ -30,6 +30,7 @@ describe("PrismaLlmChatCallDao", () => {
 
     await dao.recordSuccess({
       requestId: "req-1",
+      seq: 1,
       provider: "openai",
       model: "gpt-test",
       latencyMs: 12,
@@ -44,6 +45,7 @@ describe("PrismaLlmChatCallDao", () => {
     expect(create).toHaveBeenCalledWith({
       data: {
         requestId: "req-1",
+        seq: 1,
         provider: "openai",
         model: "gpt-test",
         status: "success",

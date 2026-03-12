@@ -70,6 +70,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
       <div className="border-b px-5 py-4">
         <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <MetaItem label="Request ID" value={item.requestId} mono />
+          <MetaItem label="Attempt Seq" value={`#${item.seq}`} mono />
           <MetaItem label="Provider" value={item.provider} />
           <MetaItem label="Model" value={item.model} />
           <MetaItem label="状态" value={toStatusLabel(item.status)} />

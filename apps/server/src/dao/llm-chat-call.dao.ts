@@ -5,6 +5,7 @@ export type LlmChatCallStatus = "success" | "failed";
 export type LlmChatCallItem = {
   id: number;
   requestId: string;
+  seq: number;
   provider: string;
   model: string;
   status: LlmChatCallStatus;
@@ -23,6 +24,7 @@ export type QueryLlmChatCallListInput = {
 
 type LlmChatCallBaseInput = {
   requestId: string;
+  seq: number;
   provider: LlmProviderId;
   model: string;
   latencyMs: number;

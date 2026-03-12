@@ -126,6 +126,7 @@ export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
 export const LlmChatCallItemSchema = z.object({
   id: z.number().int().positive(),
   requestId: z.string().min(1),
+  seq: z.number().int().positive(),
   provider: z.string().min(1),
   model: z.string().min(1),
   status: LlmChatCallStatusSchema,
