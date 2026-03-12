@@ -39,6 +39,7 @@ import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.im
 import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.service.js";
 import { DefaultAgentMessageService } from "./service/agent-message.impl.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
+import { NapcatEventPersistenceWriter } from "./service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-message-query.impl.service.js";
@@ -227,28 +228,20 @@ try {
     apiKey: tavilyConfig.apiKey,
   });
   const eventQueue = new InMemoryAgentEventQueue();
-
-  const activeNapcatGatewayService: NapcatGatewayService = new DefaultNapcatGatewayService({
-    wsUrl: bootConfig.napcat.wsUrl,
-    reconnectMs: bootConfig.napcat.reconnectMs,
-    requestTimeoutMs: bootConfig.napcat.requestTimeoutMs,
-    listenGroupId: bootConfig.napcat.listenGroupId,
-    onGroupMessage: event => {
-      eventQueue.enqueue({
-        type: "napcat_group_message",
-        groupId: event.groupId,
-        userId: event.userId,
-        nickname: event.nickname,
-        rawMessage: event.rawMessage,
-        messageId: event.messageId,
-        time: event.time,
-      });
-    },
+  const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
     napcatGroupMessageDao,
     napcatGroupMessageChunkDao,
     groupMessageChunkIndexer,
   });
+
+  const activeNapcatGatewayService: NapcatGatewayService = await DefaultNapcatGatewayService.create(
+    {
+      configManager: activeConfigManager,
+      eventQueue,
+      persistenceWriter: napcatPersistenceWriter,
+    },
+  );
   napcatGatewayService = activeNapcatGatewayService;
 
   const agentMessageService = new DefaultAgentMessageService({
