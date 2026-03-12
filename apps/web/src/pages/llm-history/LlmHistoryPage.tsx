@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,6 +26,7 @@ import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallList } from "./useLlmChatCallList";
 
 const PAGE_SIZE = 20;
+const ALL_STATUS_VALUE = "__all__";
 
 type FilterFormState = {
   status: "" | LlmChatCallStatus;
@@ -76,23 +84,27 @@ export function LlmHistoryPage() {
           className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">状态</span>
-              <select
-                value={formState.status}
-                onChange={event =>
+              <Select
+                value={formState.status || ALL_STATUS_VALUE}
+                onValueChange={value =>
                   setFormState(prev => ({
                     ...prev,
-                    status: event.target.value as FilterFormState["status"],
+                    status: value === ALL_STATUS_VALUE ? "" : (value as FilterFormState["status"]),
                   }))
                 }
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <option value="">全部</option>
-                <option value="success">成功</option>
-                <option value="failed">失败</option>
-              </select>
-            </label>
+                <SelectTrigger aria-label="状态" className="min-w-0 flex-1">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_STATUS_VALUE}>全部</SelectItem>
+                  <SelectItem value="success">成功</SelectItem>
+                  <SelectItem value="failed">失败</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="mt-3 flex items-center gap-2">

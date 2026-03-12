@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -25,6 +32,7 @@ import { useAppLogList } from "./useAppLogList";
 
 const PAGE_SIZE = 20;
 const APP_LOG_LEVELS: AppLogLevel[] = ["debug", "info", "warn", "error", "fatal"];
+const ALL_LEVEL_VALUE = "__all__";
 
 type FilterFormState = {
   level: "" | AppLogLevel;
@@ -80,26 +88,30 @@ export function AppLogHistoryPage() {
           className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">级别</span>
-              <select
-                value={formState.level}
-                onChange={event =>
+              <Select
+                value={formState.level || ALL_LEVEL_VALUE}
+                onValueChange={value =>
                   setFormState(prev => ({
                     ...prev,
-                    level: event.target.value as FilterFormState["level"],
+                    level: value === ALL_LEVEL_VALUE ? "" : (value as FilterFormState["level"]),
                   }))
                 }
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <option value="">全部</option>
-                {APP_LOG_LEVELS.map(level => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger aria-label="级别" className="min-w-0 flex-1">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_LEVEL_VALUE}>全部</SelectItem>
+                  {APP_LOG_LEVELS.map(level => (
+                    <SelectItem key={level} value={level}>
+                      {level}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
