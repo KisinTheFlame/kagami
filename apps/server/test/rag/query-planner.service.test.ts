@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { RagQueryPlannerService } from "../../src/rag/query-planner.service.js";
+import { RagQueryPlannerService } from "../../src/rag/rag-query-planner.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { GroupMessageMemorySearchService } from "../../src/rag/memory-search.service.js";
 import { SearchMemoryTool, ToolCatalog } from "../../src/tools/index.js";
@@ -36,6 +36,7 @@ describe("RagQueryPlannerService", () => {
     const service = new RagQueryPlannerService({
       llmClient,
       plannerTools: createPlannerTools(memorySearchService),
+      systemPromptFactory: () => "system-prompt",
     });
 
     await expect(
@@ -44,7 +45,7 @@ describe("RagQueryPlannerService", () => {
         currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([]);
     expect(memorySearchService.search).not.toHaveBeenCalled();
   });
 
@@ -79,6 +80,7 @@ describe("RagQueryPlannerService", () => {
     const service = new RagQueryPlannerService({
       llmClient,
       plannerTools: createPlannerTools(memorySearchService),
+      systemPromptFactory: () => "system-prompt",
     });
 
     await expect(
@@ -87,7 +89,12 @@ describe("RagQueryPlannerService", () => {
         currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
-    ).resolves.toContain("<memory_history_message>");
+    ).resolves.toEqual([
+      {
+        role: "user",
+        content: "<memory_history_message>\n时间：2026-03-11 10:00:00\n</memory_history_message>",
+      },
+    ]);
     expect(memorySearchService.search).toHaveBeenCalledWith({
       groupId: "123456",
       query: "老话题",
@@ -125,6 +132,7 @@ describe("RagQueryPlannerService", () => {
     const service = new RagQueryPlannerService({
       llmClient,
       plannerTools: createPlannerTools(memorySearchService),
+      systemPromptFactory: () => "system-prompt",
     });
 
     await expect(
@@ -133,7 +141,7 @@ describe("RagQueryPlannerService", () => {
         currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([]);
     expect(memorySearchService.search).not.toHaveBeenCalled();
   });
 
@@ -164,6 +172,7 @@ describe("RagQueryPlannerService", () => {
     const service = new RagQueryPlannerService({
       llmClient,
       plannerTools: createPlannerTools(memorySearchService),
+      systemPromptFactory: () => "system-prompt",
     });
     const currentMessage = "<message>\nA (1):\nhello\n</message>";
 
@@ -173,7 +182,7 @@ describe("RagQueryPlannerService", () => {
         currentMessage,
         contextMessages: [{ role: "user", content: currentMessage }],
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([]);
 
     expect((llmClient.chat as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]?.messages).toEqual([
       { role: "user", content: currentMessage },
@@ -216,7 +225,7 @@ describe("RagQueryPlannerService", () => {
         currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([]);
 
     expect((llmClient.chat as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]?.system).toBe(
       "custom system prompt",

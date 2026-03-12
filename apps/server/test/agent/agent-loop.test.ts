@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agent/agent-loop.js";
-import type { AgentContextManager } from "../../src/agent/context.manager.js";
 import type { AgentEventQueue } from "../../src/agent/event.queue.js";
+import type { AgentContext } from "../../src/context/agent-context.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
 import { ToolCatalog } from "../../src/tools/index.js";
@@ -132,21 +132,20 @@ describe("AgentLoop", () => {
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
 
-    const getSystemPrompt = vi.fn().mockReturnValue("system-prompt");
-    const getMessages = vi.fn().mockReturnValue([]);
-    const getSteps = vi.fn().mockReturnValue(0);
-    const pushUserMessage = vi.fn();
-    const pushGroupMessageEvent = vi.fn().mockResolvedValue(undefined);
-    const pushAssistantMessage = vi.fn().mockReturnValue("done");
-    const pushToolMessage = vi.fn();
-    const contextManager: AgentContextManager = {
-      getSystemPrompt,
-      getMessages,
-      getSteps,
-      pushUserMessage,
-      pushGroupMessageEvent,
-      pushAssistantMessage,
-      pushToolMessage,
+    const getSnapshot = vi.fn().mockResolvedValue({
+      systemPrompt: "system-prompt",
+      messages: [],
+    });
+    const recordWake = vi.fn();
+    const recordEvent = vi.fn().mockResolvedValue(undefined);
+    const recordAssistantTurn = vi.fn();
+    const recordToolResult = vi.fn();
+    const context: AgentContext = {
+      getSnapshot,
+      recordWake,
+      recordEvent,
+      recordAssistantTurn,
+      recordToolResult,
     };
 
     const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
@@ -175,7 +174,7 @@ describe("AgentLoop", () => {
 
     const loop = new AgentLoop({
       llmClient,
-      contextManager,
+      context,
       eventQueue,
       agentTools,
       now,
@@ -185,11 +184,10 @@ describe("AgentLoop", () => {
 
     expect(waitForEvent).toHaveBeenCalledTimes(2);
     expect(drainAll).toHaveBeenCalled();
-    expect(pushUserMessage).toHaveBeenNthCalledWith(
-      1,
-      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
-    );
-    expect(pushGroupMessageEvent).toHaveBeenCalledWith({
+    expect(recordWake).toHaveBeenNthCalledWith(1, {
+      now: new Date("2026-03-09T10:21:00.000Z"),
+    });
+    expect(recordEvent).toHaveBeenCalledWith({
       type: "napcat_group_message",
       groupId: "123456",
       userId: "654321",
@@ -210,7 +208,7 @@ describe("AgentLoop", () => {
         usage: "agent",
       },
     );
-    expect(pushAssistantMessage).toHaveBeenCalledWith(
+    expect(recordAssistantTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "assistant",
         content: "done",
@@ -220,7 +218,7 @@ describe("AgentLoop", () => {
     expect(finishExecute).toHaveBeenCalledWith({}, {});
     expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
-    expect(pushToolMessage).not.toHaveBeenCalled();
+    expect(recordToolResult).not.toHaveBeenCalled();
   });
 
   it("should add a wake reminder each time the loop resumes from sleep", async () => {
@@ -232,14 +230,15 @@ describe("AgentLoop", () => {
     const { agentTools } = createAgentTools();
 
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
-    const contextManager: AgentContextManager = {
-      getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),
-      getMessages: vi.fn().mockReturnValue([]),
-      getSteps: vi.fn().mockReturnValue(0),
-      pushUserMessage: vi.fn(),
-      pushGroupMessageEvent: vi.fn().mockResolvedValue(undefined),
-      pushAssistantMessage: vi.fn().mockReturnValue("done"),
-      pushToolMessage: vi.fn(),
+    const context: AgentContext = {
+      getSnapshot: vi.fn().mockResolvedValue({
+        systemPrompt: "system-prompt",
+        messages: [],
+      }),
+      recordWake: vi.fn(),
+      recordEvent: vi.fn().mockResolvedValue(undefined),
+      recordAssistantTurn: vi.fn(),
+      recordToolResult: vi.fn(),
     };
 
     const eventQueue: AgentEventQueue = {
@@ -259,7 +258,7 @@ describe("AgentLoop", () => {
         chatDirect: vi.fn(),
         listAvailableProviders: vi.fn().mockResolvedValue([]),
       },
-      contextManager,
+      context,
       eventQueue,
       agentTools,
       now,
@@ -267,15 +266,13 @@ describe("AgentLoop", () => {
 
     await expect(loop.run()).rejects.toBe(stopError);
 
-    expect(contextManager.pushUserMessage).toHaveBeenCalledTimes(2);
-    expect(contextManager.pushUserMessage).toHaveBeenNthCalledWith(
-      1,
-      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
-    );
-    expect(contextManager.pushUserMessage).toHaveBeenNthCalledWith(
-      2,
-      "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:22</system_reminder>",
-    );
+    expect(context.recordWake).toHaveBeenCalledTimes(2);
+    expect(context.recordWake).toHaveBeenNthCalledWith(1, {
+      now: new Date("2026-03-09T10:21:00.000Z"),
+    });
+    expect(context.recordWake).toHaveBeenNthCalledWith(2, {
+      now: new Date("2026-03-09T10:22:00.000Z"),
+    });
   });
 
   it("should not carry finish tool calls or responses into later chat context", async () => {
@@ -308,17 +305,18 @@ describe("AgentLoop", () => {
       } satisfies LlmChatResponsePayload);
 
     const messages: LlmMessage[] = [];
-    const contextManager: AgentContextManager = {
-      getSystemPrompt: vi.fn().mockReturnValue("system-prompt"),
-      getMessages: vi.fn(() => messages),
-      getSteps: vi.fn().mockReturnValue(0),
-      pushUserMessage: vi.fn(content => {
+    const context: AgentContext = {
+      getSnapshot: vi.fn(async () => ({
+        systemPrompt: "system-prompt",
+        messages: messages.slice(),
+      })),
+      recordWake: vi.fn(({ now }: { now: Date }) => {
         messages.push({
           role: "user",
-          content,
+          content: `<system_reminder>${now.toISOString()}</system_reminder>`,
         });
       }),
-      pushGroupMessageEvent: vi.fn(async event => {
+      recordEvent: vi.fn(async event => {
         messages.push({
           role: "user",
           content: [
@@ -329,18 +327,18 @@ describe("AgentLoop", () => {
           ].join("\n"),
         });
       }),
-      pushAssistantMessage: vi.fn(message => {
+      recordAssistantTurn: vi.fn(message => {
         messages.push(message);
-        const output = message.content.trim();
-        return output.length > 0 ? output : null;
       }),
-      pushToolMessage: vi.fn((toolCallId, content) => {
-        messages.push({
-          role: "tool",
-          toolCallId,
-          content,
-        });
-      }),
+      recordToolResult: vi.fn(
+        ({ toolCallId, content }: { toolCallId: string; content: string }) => {
+          messages.push({
+            role: "tool",
+            toolCallId,
+            content,
+          });
+        },
+      ),
     };
 
     const eventQueue: AgentEventQueue = {
@@ -385,7 +383,7 @@ describe("AgentLoop", () => {
         chatDirect: vi.fn(),
         listAvailableProviders: vi.fn().mockResolvedValue([]),
       },
-      contextManager,
+      context,
       eventQueue,
       agentTools,
       now,

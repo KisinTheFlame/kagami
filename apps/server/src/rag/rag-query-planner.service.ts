@@ -1,40 +1,33 @@
-import { createAgentSystemPrompt } from "../agent/context.js";
+import { createUserMessage } from "../context/context-message-factory.js";
 import type { LlmClient } from "../llm/client.js";
 import type { LlmMessage } from "../llm/types.js";
-import type { ToolSet } from "../tools/index.js";
+import type { ToolExecutor } from "../tools/index.js";
 import { SEARCH_MEMORY_TOOL_NAME } from "../tools/index.js";
 
 export class RagQueryPlannerService {
   private readonly llmClient: LlmClient;
-  private readonly plannerTools: ToolSet;
-  private readonly systemPrompt: string | (() => Promise<string> | string);
+  private readonly plannerTools: ToolExecutor;
+  private readonly systemPromptFactory: () => Promise<string> | string;
 
   public constructor({
     llmClient,
     plannerTools,
-    systemPrompt,
     systemPromptFactory,
   }: {
     llmClient: LlmClient;
-    plannerTools: ToolSet;
-    systemPrompt?: string;
-    systemPromptFactory?: () => Promise<string> | string;
+    plannerTools: ToolExecutor;
+    systemPromptFactory: () => Promise<string> | string;
   }) {
     this.llmClient = llmClient;
     this.plannerTools = plannerTools;
-    this.systemPrompt =
-      systemPromptFactory ??
-      systemPrompt ??
-      createAgentSystemPrompt({
-        botQQ: "unknown",
-      });
+    this.systemPromptFactory = systemPromptFactory;
   }
 
   public async plan(input: {
     groupId: string;
     currentMessage: string;
     contextMessages: LlmMessage[];
-  }): Promise<string | null> {
+  }): Promise<LlmMessage[]> {
     const lastContextMessage = input.contextMessages.at(-1);
     const hasCurrentMessageAtTail =
       lastContextMessage?.role === "user" && lastContextMessage.content === input.currentMessage;
@@ -50,7 +43,7 @@ export class RagQueryPlannerService {
 
     const firstResponse = await this.llmClient.chat(
       {
-        system: await this.getSystemPrompt(),
+        system: await this.systemPromptFactory(),
         messages: baseMessages,
         tools: this.plannerTools.definitions(),
         toolChoice: { tool_name: SEARCH_MEMORY_TOOL_NAME },
@@ -62,22 +55,14 @@ export class RagQueryPlannerService {
 
     const toolCall = firstResponse.message.toolCalls[0];
     if (!toolCall || toolCall.name !== SEARCH_MEMORY_TOOL_NAME) {
-      return null;
+      return [];
     }
 
     const executionResult = await this.plannerTools.execute(toolCall.name, toolCall.arguments, {
       groupId: input.groupId,
     });
-    const searchResult = executionResult.content;
+    const searchResult = executionResult.content.trim();
 
-    return searchResult.length > 0 ? searchResult : null;
-  }
-
-  private async getSystemPrompt(): Promise<string> {
-    if (typeof this.systemPrompt === "function") {
-      return await this.systemPrompt();
-    }
-
-    return this.systemPrompt;
+    return searchResult.length > 0 ? [createUserMessage(searchResult)] : [];
   }
 }

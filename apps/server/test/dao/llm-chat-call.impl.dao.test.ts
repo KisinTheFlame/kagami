@@ -73,4 +73,68 @@ describe("PrismaLlmChatCallDao", () => {
     expect(create.mock.calls[0]?.[0]?.data.responsePayload).not.toHaveProperty("json");
     expect(create.mock.calls[0]?.[0]?.data.responsePayload).not.toHaveProperty("toolCalls");
   });
+
+  it("should persist response payload together with failed errors", async () => {
+    const create = vi.fn().mockResolvedValue(undefined);
+    const database = {
+      llmChatCall: {
+        create,
+      },
+    } as unknown as Database;
+
+    const dao = new PrismaLlmChatCallDao({ database });
+
+    await dao.recordError({
+      requestId: "req-2",
+      seq: 2,
+      provider: "openai",
+      model: "gpt-test",
+      latencyMs: 34,
+      request: {
+        messages: [],
+        tools: [],
+        toolChoice: "auto",
+      },
+      response: {
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call-1", name: "send_group_message", arguments: { message: "hi" } }],
+        },
+      },
+      error: new Error("invalid tool call"),
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        requestId: "req-2",
+        seq: 2,
+        provider: "openai",
+        model: "gpt-test",
+        status: "failed",
+        requestPayload: {
+          messages: [],
+          tools: [],
+          toolChoice: "auto",
+        },
+        responsePayload: {
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "call-1", name: "send_group_message", arguments: { message: "hi" } }],
+          },
+        },
+        error: {
+          name: "Error",
+          message: "invalid tool call",
+          code: undefined,
+        },
+        latencyMs: 34,
+      },
+    });
+  });
 });

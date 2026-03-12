@@ -1,29 +1,27 @@
-import type { AgentContextManager, AssistantMessage } from "./context.manager.js";
 import type { Event } from "./event.js";
 import type { AgentEventQueue } from "./event.queue.js";
+import type { AgentContext, AssistantMessage } from "../context/agent-context.js";
 import type { LlmClient } from "../llm/client.js";
-import type { ToolSet, ToolSetExecutionResult } from "../tools/index.js";
+import type { ToolExecutor, ToolSetExecutionResult } from "../tools/index.js";
 
 type AgentLoopDeps = {
   llmClient: LlmClient;
-  contextManager: AgentContextManager;
+  context: AgentContext;
   eventQueue: AgentEventQueue;
-  agentTools: ToolSet;
+  agentTools: ToolExecutor;
   now?: () => Date;
 };
 
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
-
 export class AgentLoop {
   private readonly llmClient: LlmClient;
-  private readonly contextManager: AgentContextManager;
+  private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
-  private readonly agentTools: ToolSet;
+  private readonly agentTools: ToolExecutor;
   private readonly now: () => Date;
 
-  public constructor({ llmClient, contextManager, eventQueue, agentTools, now }: AgentLoopDeps) {
+  public constructor({ llmClient, context, eventQueue, agentTools, now }: AgentLoopDeps) {
     this.llmClient = llmClient;
-    this.contextManager = contextManager;
+    this.context = context;
     this.eventQueue = eventQueue;
     this.agentTools = agentTools;
     this.now = now ?? (() => new Date());
@@ -34,18 +32,19 @@ export class AgentLoop {
       const shouldAddWakeReminder = this.eventQueue.size() === 0;
       await this.eventQueue.waitForEvent();
       if (shouldAddWakeReminder) {
-        this.contextManager.pushUserMessage(createWakeReminder(this.now()));
+        this.context.recordWake({ now: this.now() });
       }
 
       while (true) {
         for (const event of this.eventQueue.drainAll()) {
           await this.handleEvent(event);
         }
+        const snapshot = await this.context.getSnapshot();
 
         const completion = await this.llmClient.chat(
           {
-            system: await this.contextManager.getSystemPrompt(),
-            messages: this.contextManager.getMessages(),
+            system: snapshot.systemPrompt,
+            messages: snapshot.messages,
             tools: this.agentTools.definitions(),
             toolChoice: "required",
           },
@@ -56,7 +55,7 @@ export class AgentLoop {
         const assistant = completion.message;
         const persistentAssistantMessage = omitControlToolCalls(assistant, this.agentTools);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
-          this.contextManager.pushAssistantMessage(persistentAssistantMessage);
+          this.context.recordAssistantTurn(persistentAssistantMessage);
         }
 
         let shouldFinishRound = false;
@@ -66,7 +65,10 @@ export class AgentLoop {
             shouldFinishRound = true;
           }
           if (toolResult.kind !== "control" && toolResult.content.length > 0) {
-            this.contextManager.pushToolMessage(toolCall.id, toolResult.content);
+            this.context.recordToolResult({
+              toolCallId: toolCall.id,
+              content: toolResult.content,
+            });
           }
         }
 
@@ -78,7 +80,7 @@ export class AgentLoop {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    await this.contextManager.pushGroupMessageEvent(event);
+    await this.context.recordEvent(event);
   }
 
   private async executeToolCall(
@@ -89,22 +91,10 @@ export class AgentLoop {
   }
 }
 
-function createWakeReminder(now: Date): string {
-  const parts = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: BEIJING_TIME_ZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-
-  return `<system_reminder>当前时间为北京时间 ${values.year} 年 ${values.month} 月 ${values.day} 日 ${values.hour}:${values.minute}</system_reminder>`;
-}
-
-function omitControlToolCalls(message: AssistantMessage, agentTools: ToolSet): AssistantMessage {
+function omitControlToolCalls(
+  message: AssistantMessage,
+  agentTools: ToolExecutor,
+): AssistantMessage {
   return {
     ...message,
     toolCalls: message.toolCalls.filter(

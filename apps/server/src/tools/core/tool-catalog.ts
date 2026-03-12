@@ -1,3 +1,4 @@
+import type { Tool } from "../../llm/types.js";
 import type {
   ToolContext,
   ToolExecutionResult,
@@ -8,6 +9,16 @@ import type {
 export type ToolSetExecutionResult = ToolExecutionResult & {
   kind: ToolKind;
 };
+
+export interface ToolExecutor {
+  definitions(): Tool[];
+  getKind(name: string): ToolKind | null;
+  execute(
+    name: string,
+    argumentsValue: Record<string, unknown>,
+    context: ToolContext,
+  ): Promise<ToolSetExecutionResult>;
+}
 
 export class ToolCatalog {
   private readonly componentsByName: Map<string, ToolComponent>;
@@ -38,7 +49,7 @@ export class ToolCatalog {
   }
 }
 
-export class ToolSet {
+export class ToolSet implements ToolExecutor {
   private readonly componentsByName: Map<string, ToolComponent>;
   private readonly orderedComponents: ToolComponent[];
 
@@ -47,7 +58,7 @@ export class ToolSet {
     this.componentsByName = new Map(components.map(component => [component.name, component]));
   }
 
-  public definitions() {
+  public definitions(): Tool[] {
     return this.orderedComponents.map(component => component.llmTool);
   }
 

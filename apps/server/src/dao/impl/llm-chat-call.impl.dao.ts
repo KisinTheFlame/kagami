@@ -86,6 +86,11 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           model: input.model,
           status: "failed",
           requestPayload: toInputJsonRecord(input.request),
+          ...(input.response
+            ? {
+                responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
+              }
+            : {}),
           error: toInputJsonRecord(serializeError(input.error)),
           latencyMs: input.latencyMs,
         },

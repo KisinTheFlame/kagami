@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AgentLoop } from "./agent/agent-loop.js";
-import { DefaultAgentContextManager } from "./agent/context.impl.manager.js";
-import { createAgentSystemPrompt } from "./agent/context.js";
 import { InMemoryAgentEventQueue } from "./agent/event.impl.queue.js";
 import { DefaultConfigManager } from "./config/config.impl.manager.js";
 import { loadStaticConfig } from "./config/config.loader.js";
+import { DefaultAgentContext } from "./context/default-agent-context.js";
+import { createAgentSystemPrompt } from "./context/system-prompt.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
@@ -31,7 +31,8 @@ import { AppLogger } from "./logger/logger.js";
 import { getLoggerRuntime, initLoggerRuntime, withTraceContext } from "./logger/runtime.js";
 import { GroupMessageChunkIndexer } from "./rag/indexer.service.js";
 import { GroupMessageMemorySearchService } from "./rag/memory-search.service.js";
-import { RagQueryPlannerService } from "./rag/query-planner.service.js";
+import { RagContextEventEnricher } from "./rag/rag-context-event-enricher.js";
+import { RagQueryPlannerService } from "./rag/rag-query-planner.service.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
@@ -266,9 +267,12 @@ try {
     systemPromptFactory: agentSystemPromptFactory,
   });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
-  const contextManager = new DefaultAgentContextManager({
-    systemPromptFactory: agentSystemPromptFactory,
+  const ragContextEventEnricher = new RagContextEventEnricher({
     ragQueryPlanner,
+  });
+  const context = new DefaultAgentContext({
+    systemPromptFactory: agentSystemPromptFactory,
+    eventEnricher: ragContextEventEnricher,
   });
   const agentTools = toolCatalog.pick([
     SEARCH_WEB_TOOL_NAME,
@@ -277,7 +281,7 @@ try {
   ]);
   const agentLoop = new AgentLoop({
     llmClient,
-    contextManager,
+    context,
     eventQueue,
     agentTools,
   });

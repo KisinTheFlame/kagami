@@ -537,6 +537,152 @@ describe("createLlmClient", () => {
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(3);
   });
 
+  it("should reject unauthorized tool calls returned by provider", async () => {
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockResolvedValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "call-1",
+              name: "send_group_message",
+              arguments: {
+                message: "hi",
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const { client } = createClient({
+      llmChatCallDao,
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [
+            {
+              name: "search_memory",
+              parameters: {
+                type: "object",
+                properties: {},
+              },
+            },
+          ],
+          toolChoice: { tool_name: "search_memory" },
+        },
+        {
+          usage: "agent",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "BizError",
+      message: "LLM 返回了未授权的工具调用",
+      meta: {
+        invalidToolNames: ["send_group_message"],
+        allowedToolNames: ["search_memory"],
+      },
+    } satisfies Partial<BizError>);
+
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
+    expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].response).toEqual({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "call-1",
+            name: "send_group_message",
+            arguments: {
+              message: "hi",
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it("should reject tool calls that do not match the explicitly required tool", async () => {
+    const llmChatCallDao = createLlmChatCallDaoMock();
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockResolvedValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "call-1",
+              name: "search_web",
+              arguments: {
+                query: "hello",
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const { client } = createClient({
+      llmChatCallDao,
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [
+            {
+              name: "search_memory",
+              parameters: {
+                type: "object",
+                properties: {},
+              },
+            },
+            {
+              name: "search_web",
+              parameters: {
+                type: "object",
+                properties: {},
+              },
+            },
+          ],
+          toolChoice: { tool_name: "search_memory" },
+        },
+        {
+          usage: "agent",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "BizError",
+      message: "LLM 未按要求调用指定工具",
+      meta: {
+        requiredToolName: "search_memory",
+        mismatchedToolNames: ["search_web"],
+      },
+    } satisfies Partial<BizError>);
+
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
+    expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
+  });
+
   it("should require explicit usage for chat", async () => {
     const { client } = createClient();
 

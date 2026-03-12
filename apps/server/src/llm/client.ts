@@ -9,7 +9,13 @@ import type {
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { BizError } from "../errors/biz-error.js";
 import type { LlmProvider } from "./provider.js";
-import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "./types.js";
+import type {
+  LlmChatRequest,
+  LlmChatResponsePayload,
+  LlmProviderId,
+  LlmToolChoice,
+  LlmUsageId,
+} from "./types.js";
 
 export interface LlmClient {
   chat(request: LlmChatRequest, options: LlmChatOptions): Promise<LlmChatResponsePayload>;
@@ -137,6 +143,7 @@ async function executeChatAttempt({
     model: attempt.model,
   };
   const startedAt = Date.now();
+  let response: LlmChatResponsePayload | null = null;
 
   try {
     if (!provider) {
@@ -148,7 +155,8 @@ async function executeChatAttempt({
       });
     }
 
-    const response = await provider.chat(requestWithModel);
+    response = await provider.chat(requestWithModel);
+    validateToolCalls(requestWithModel, response);
     const latencyMs = Date.now() - startedAt;
 
     if (recordCall) {
@@ -178,6 +186,7 @@ async function executeChatAttempt({
           seq,
           latencyMs,
           request: requestWithModel,
+          ...(response ? { response } : {}),
           error,
         })
         .catch(() => {});
@@ -283,4 +292,56 @@ function requireConfiguredModel(
       model,
     },
   });
+}
+
+function validateToolCalls(request: LlmChatRequest, response: LlmChatResponsePayload): void {
+  if (response.message.toolCalls.length === 0) {
+    return;
+  }
+
+  const allowedToolNames = new Set(request.tools.map(tool => tool.name));
+  const invalidToolNames = response.message.toolCalls
+    .map(toolCall => toolCall.name)
+    .filter(toolName => !allowedToolNames.has(toolName));
+
+  if (invalidToolNames.length > 0) {
+    throw new BizError({
+      message: "LLM 返回了未授权的工具调用",
+      meta: {
+        provider: response.provider,
+        model: response.model,
+        invalidToolNames,
+        allowedToolNames: [...allowedToolNames],
+      },
+    });
+  }
+
+  const requiredToolName = getRequiredToolName(request.toolChoice);
+  if (!requiredToolName) {
+    return;
+  }
+
+  const mismatchedToolNames = response.message.toolCalls
+    .map(toolCall => toolCall.name)
+    .filter(toolName => toolName !== requiredToolName);
+
+  if (mismatchedToolNames.length > 0) {
+    throw new BizError({
+      message: "LLM 未按要求调用指定工具",
+      meta: {
+        provider: response.provider,
+        model: response.model,
+        requiredToolName,
+        mismatchedToolNames,
+      },
+    });
+  }
+}
+
+function getRequiredToolName(toolChoice: LlmToolChoice): string | null {
+  if (toolChoice === "auto" || toolChoice === "none" || toolChoice === "required") {
+    return null;
+  }
+
+  return toolChoice.tool_name;
 }

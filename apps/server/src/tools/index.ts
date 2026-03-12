@@ -1,5 +1,5 @@
 export { ToolCatalog, ToolSet } from "./core/tool-catalog.js";
-export type { ToolSetExecutionResult } from "./core/tool-catalog.js";
+export type { ToolExecutor, ToolSetExecutionResult } from "./core/tool-catalog.js";
 export type {
   ToolComponent,
   ToolContext,

@@ -37,6 +37,7 @@ export type RecordLlmChatCallSuccessInput = LlmChatCallBaseInput & {
 
 export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
   error: unknown;
+  response?: LlmChatResponsePayload;
 };
 
 export interface LlmChatCallDao {

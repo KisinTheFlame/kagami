@@ -17,10 +17,3 @@ export function formatGroupMessagePlainText(input: {
 }): string {
   return [`${input.nickname} (${input.userId}):`, input.rawMessage].join("\n");
 }
-
-export function formatEventToUserMessage(event: Event): string | null {
-  switch (event.type) {
-    case "napcat_group_message":
-      return ["<message>", formatGroupMessagePlainText(event), "</message>"].join("\n");
-  }
-}
