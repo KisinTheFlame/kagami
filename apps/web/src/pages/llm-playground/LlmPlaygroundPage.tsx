@@ -12,6 +12,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCcw, SendHorizontal } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch, apiRequest, type ApiRequestResult } from "@/lib/api";
 
 const DEFAULT_REQUEST_TEMPLATE = JSON.stringify(
@@ -200,25 +207,30 @@ export function LlmPlaygroundPage() {
               className="flex min-h-0 flex-col"
               bodyClassName="flex flex-1 flex-col"
             >
-              <label className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium">模型名称</span>
-                <select
-                  value={selectedModel}
-                  onChange={event => setModel(event.target.value)}
+                <Select
+                  value={selectedModel || undefined}
+                  onValueChange={setModel}
                   disabled={!selectedProvider || selectedProvider.models.length === 0}
-                  className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {selectedProvider ? (
-                    selectedProvider.models.map(providerModel => (
-                      <option key={providerModel} value={providerModel}>
+                  <SelectTrigger
+                    aria-label="模型名称"
+                    className="h-11 rounded-xl disabled:opacity-60"
+                  >
+                    <SelectValue
+                      placeholder={selectedProvider ? "请选择模型" : "请先选择 provider"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedProvider?.models.map(providerModel => (
+                      <SelectItem key={providerModel} value={providerModel}>
                         {providerModel}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">请先选择 provider</option>
-                  )}
-                </select>
-              </label>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
                 <p>当前 provider：{selectedProvider?.id ?? "未选择"}</p>
