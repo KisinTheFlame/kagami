@@ -1,4 +1,4 @@
-import { FileText, FlaskConical, History, MessagesSquare, TestTube2, Webhook } from "lucide-react";
+import { FileText, FlaskConical, History, MessagesSquare, Webhook } from "lucide-react";
 
 export const navItems = [
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
@@ -6,7 +6,6 @@ export const navItems = [
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "群聊消息", icon: MessagesSquare },
-  { to: "/api-lab", label: "后端接口测试台", icon: TestTube2 },
 ] as const;
 
 export function getPageTitle(pathname: string): string {
