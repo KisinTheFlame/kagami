@@ -8,7 +8,11 @@ import type {
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { BizError } from "../errors/biz-error.js";
-import type { LlmProvider } from "./provider.js";
+import {
+  getLlmProviderFailureContext,
+  type LlmProvider,
+  type LlmProviderChatResult,
+} from "./provider.js";
 import type {
   LlmChatRequest,
   LlmChatResponsePayload,
@@ -143,6 +147,7 @@ async function executeChatAttempt({
     model: attempt.model,
   };
   const startedAt = Date.now();
+  let providerResult: LlmProviderChatResult | null = null;
   let response: LlmChatResponsePayload | null = null;
 
   try {
@@ -155,7 +160,8 @@ async function executeChatAttempt({
       });
     }
 
-    response = await provider.chat(requestWithModel);
+    providerResult = await provider.chat(requestWithModel);
+    response = providerResult.response;
     validateToolCalls(requestWithModel, response);
     const latencyMs = Date.now() - startedAt;
 
@@ -169,6 +175,8 @@ async function executeChatAttempt({
           latencyMs,
           request: requestWithModel,
           response,
+          nativeRequestPayload: providerResult.nativeRequestPayload,
+          nativeResponsePayload: providerResult.nativeResponsePayload,
         })
         .catch(() => {});
     }
@@ -176,6 +184,7 @@ async function executeChatAttempt({
     return response;
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
+    const failureContext = getLlmProviderFailureContext(error);
 
     if (recordCall) {
       void llmChatCallDao
@@ -187,6 +196,11 @@ async function executeChatAttempt({
           latencyMs,
           request: requestWithModel,
           ...(response ? { response } : {}),
+          nativeRequestPayload:
+            providerResult?.nativeRequestPayload ?? failureContext?.nativeRequestPayload ?? null,
+          nativeResponsePayload:
+            providerResult?.nativeResponsePayload ?? failureContext?.nativeResponsePayload ?? null,
+          nativeError: failureContext?.nativeError ?? null,
           error,
         })
         .catch(() => {});

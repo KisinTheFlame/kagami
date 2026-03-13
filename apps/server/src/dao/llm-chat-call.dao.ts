@@ -11,7 +11,10 @@ export type LlmChatCallItem = {
   status: LlmChatCallStatus;
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown> | null;
+  nativeRequestPayload: Record<string, unknown> | null;
+  nativeResponsePayload: Record<string, unknown> | null;
   error: Record<string, unknown> | null;
+  nativeError: Record<string, unknown> | null;
   latencyMs: number | null;
   createdAt: Date;
 };
@@ -29,6 +32,9 @@ type LlmChatCallBaseInput = {
   model: string;
   latencyMs: number;
   request: LlmChatRequest;
+  nativeRequestPayload?: Record<string, unknown> | null;
+  nativeResponsePayload?: Record<string, unknown> | null;
+  nativeError?: Record<string, unknown> | null;
 };
 
 export type RecordLlmChatCallSuccessInput = LlmChatCallBaseInput & {

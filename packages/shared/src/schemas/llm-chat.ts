@@ -132,7 +132,10 @@ export const LlmChatCallItemSchema = z.object({
   status: LlmChatCallStatusSchema,
   requestPayload: JsonRecordSchema,
   responsePayload: JsonRecordSchema.nullable(),
+  nativeRequestPayload: JsonRecordSchema.nullable(),
+  nativeResponsePayload: JsonRecordSchema.nullable(),
   error: JsonRecordSchema.nullable(),
+  nativeError: JsonRecordSchema.nullable(),
   latencyMs: z.number().int().nullable(),
   createdAt: z.string().datetime(),
 });

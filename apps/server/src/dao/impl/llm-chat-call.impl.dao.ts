@@ -46,7 +46,10 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       status: item.status as LlmChatCallItem["status"],
       requestPayload: toJsonRecord(item.requestPayload),
       responsePayload: toOptionalJsonRecord(item.responsePayload),
+      nativeRequestPayload: toOptionalJsonRecord(item.nativeRequestPayload),
+      nativeResponsePayload: toOptionalJsonRecord(item.nativeResponsePayload),
       error: toOptionalJsonRecord(item.error),
+      nativeError: toOptionalJsonRecord(item.nativeError),
       latencyMs: item.latencyMs,
       createdAt: item.createdAt,
     }));
@@ -54,6 +57,8 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
 
   public async recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void> {
     try {
+      const nativeRequestPayload = toOptionalInputJsonRecord(input.nativeRequestPayload);
+      const nativeResponsePayload = toOptionalInputJsonRecord(input.nativeResponsePayload);
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
@@ -63,6 +68,8 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           status: "success",
           requestPayload: toInputJsonRecord(input.request),
           responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
+          ...(nativeRequestPayload ? { nativeRequestPayload } : {}),
+          ...(nativeResponsePayload ? { nativeResponsePayload } : {}),
           latencyMs: input.latencyMs,
         },
       });
@@ -78,6 +85,9 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
 
   public async recordError(input: RecordLlmChatCallErrorInput): Promise<void> {
     try {
+      const nativeRequestPayload = toOptionalInputJsonRecord(input.nativeRequestPayload);
+      const nativeResponsePayload = toOptionalInputJsonRecord(input.nativeResponsePayload);
+      const nativeError = toOptionalInputJsonRecord(input.nativeError);
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
@@ -86,12 +96,15 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           model: input.model,
           status: "failed",
           requestPayload: toInputJsonRecord(input.request),
+          ...(nativeRequestPayload ? { nativeRequestPayload } : {}),
           ...(input.response
             ? {
                 responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
               }
             : {}),
+          ...(nativeResponsePayload ? { nativeResponsePayload } : {}),
           error: toInputJsonRecord(serializeError(input.error)),
+          ...(nativeError ? { nativeError } : {}),
           latencyMs: input.latencyMs,
         },
       });
@@ -177,6 +190,14 @@ function toInputJsonRecord(value: unknown): Prisma.InputJsonObject {
   return {
     value: normalized,
   };
+}
+
+function toOptionalInputJsonRecord(value: unknown): Prisma.InputJsonObject | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  return toInputJsonRecord(value);
 }
 
 function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {

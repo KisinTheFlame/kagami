@@ -15,7 +15,10 @@ model LlmChatCall {
   status          String
   requestPayload  Json      @map("request_payload") @db.JsonB
   responsePayload Json?     @map("response_payload") @db.JsonB
+  nativeRequestPayload  Json?     @map("native_request_payload") @db.JsonB
+  nativeResponsePayload Json?     @map("native_response_payload") @db.JsonB
   error           Json?     @db.JsonB
+  nativeError     Json?     @map("native_error") @db.JsonB
   latencyMs       Int?      @map("latency_ms")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 

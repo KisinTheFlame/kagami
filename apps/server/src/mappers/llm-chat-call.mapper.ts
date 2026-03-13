@@ -29,7 +29,10 @@ export function mapLlmChatCallItem(item: LlmChatCallDaoItem): LlmChatCallItem {
     status: item.status,
     requestPayload: item.requestPayload,
     responsePayload: item.responsePayload,
+    nativeRequestPayload: item.nativeRequestPayload,
+    nativeResponsePayload: item.nativeResponsePayload,
     error: item.error,
+    nativeError: item.nativeError,
     latencyMs: item.latencyMs,
     createdAt: item.createdAt.toISOString(),
   };

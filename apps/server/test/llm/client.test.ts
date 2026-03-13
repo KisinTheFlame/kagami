@@ -7,8 +7,12 @@ import type {
 import type { LlmChatCallDao } from "../../src/dao/llm-chat-call.dao.js";
 import { BizError } from "../../src/errors/biz-error.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
-import type { LlmProvider } from "../../src/llm/provider.js";
-import type { LlmProviderId, LlmUsageId } from "../../src/llm/types.js";
+import {
+  attachLlmProviderFailureContext,
+  type LlmProvider,
+  type LlmProviderChatResult,
+} from "../../src/llm/provider.js";
+import type { LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "../../src/llm/types.js";
 
 function createLlmChatCallDaoMock(): LlmChatCallDao {
   return {
@@ -91,6 +95,39 @@ function createClient(params?: {
   };
 }
 
+function createChatResponse(
+  overrides: Partial<LlmChatResponsePayload> = {},
+): LlmChatResponsePayload {
+  return {
+    provider: "openai",
+    model: "gpt-4o-mini",
+    message: {
+      role: "assistant",
+      content: "pong",
+      toolCalls: [],
+    },
+    ...overrides,
+  };
+}
+
+function createProviderChatResult(
+  response: LlmChatResponsePayload,
+  overrides: Partial<LlmProviderChatResult> = {},
+): LlmProviderChatResult {
+  return {
+    response,
+    nativeRequestPayload: {
+      model: response.model,
+      messages: [],
+    },
+    nativeResponsePayload: {
+      id: `native-${response.model}`,
+      model: response.model,
+    },
+    ...overrides,
+  };
+}
+
 describe("createLlmClient", () => {
   it("should list configured providers with the active provider first", async () => {
     const { client } = createClient({
@@ -137,15 +174,9 @@ describe("createLlmClient", () => {
   it("should skip persistence when recordCall is false in direct mode", async () => {
     const provider: LlmProvider = {
       id: "openai",
-      chat: vi.fn().mockResolvedValue({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "pong",
-          toolCalls: [],
-        },
-      }),
+      chat: vi
+        .fn()
+        .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
     };
     const { client, llmChatCallDao } = createClient({
       providers: {
@@ -168,6 +199,110 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
     expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
+  });
+
+  it("should persist native request and response payloads on success", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(createChatResponse({ provider: "openai" }), {
+          nativeRequestPayload: {
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: "ping" }],
+          },
+          nativeResponsePayload: {
+            id: "chatcmpl_test",
+            model: "gpt-4o-mini",
+          },
+        }),
+      ),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await client.chatDirect(
+      {
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      },
+      {
+        providerId: "openai",
+        model: "gpt-4o-mini",
+      },
+    );
+
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nativeRequestPayload: {
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "ping" }],
+        },
+        nativeResponsePayload: {
+          id: "chatcmpl_test",
+          model: "gpt-4o-mini",
+        },
+      }),
+    );
+  });
+
+  it("should persist native failure context when provider throws with native payloads", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockRejectedValue(
+        attachLlmProviderFailureContext(new Error("upstream failed"), {
+          nativeRequestPayload: {
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: "ping" }],
+          },
+          nativeResponsePayload: {
+            id: "response_partial",
+          },
+          nativeError: {
+            status: 500,
+            message: "provider boom",
+          },
+        }),
+      ),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await expect(
+      client.chatDirect(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          providerId: "openai",
+          model: "gpt-4o-mini",
+        },
+      ),
+    ).rejects.toThrow("upstream failed");
+
+    expect(llmChatCallDao.recordError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nativeRequestPayload: {
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "ping" }],
+        },
+        nativeResponsePayload: {
+          id: "response_partial",
+        },
+        nativeError: {
+          status: 500,
+          message: "provider boom",
+        },
+      }),
+    );
   });
 
   it("should reject unavailable providers in direct mode", async () => {
@@ -234,15 +369,19 @@ describe("createLlmClient", () => {
     };
     const deepseekProvider: LlmProvider = {
       id: "deepseek",
-      chat: vi.fn().mockResolvedValue({
-        provider: "deepseek",
-        model: "deepseek-chat",
-        message: {
-          role: "assistant",
-          content: "fallback pong",
-          toolCalls: [],
-        },
-      }),
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "deepseek",
+            model: "deepseek-chat",
+            message: {
+              role: "assistant",
+              content: "fallback pong",
+              toolCalls: [],
+            },
+          }),
+        ),
+      ),
     };
     const { client } = createClient({
       llmChatCallDao,
@@ -304,21 +443,32 @@ describe("createLlmClient", () => {
     expect(errorRequestId).toBe(successRequestId);
     expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].seq).toBe(1);
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(2);
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].nativeRequestPayload).toEqual(
+      {
+        model: "deepseek-chat",
+        messages: [],
+      },
+    );
+    expect(
+      vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].nativeResponsePayload,
+    ).toEqual({
+      id: "native-deepseek-chat",
+      model: "deepseek-chat",
+    });
   });
 
   it("should continue after an unavailable usage attempt", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
     const deepseekProvider: LlmProvider = {
       id: "deepseek",
-      chat: vi.fn().mockResolvedValue({
-        provider: "deepseek",
-        model: "deepseek-chat",
-        message: {
-          role: "assistant",
-          content: "pong",
-          toolCalls: [],
-        },
-      }),
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "deepseek",
+            model: "deepseek-chat",
+          }),
+        ),
+      ),
     };
     const { client } = createClient({
       llmChatCallDao,
@@ -477,15 +627,19 @@ describe("createLlmClient", () => {
     };
     const deepseekProvider: LlmProvider = {
       id: "deepseek",
-      chat: vi.fn().mockResolvedValue({
-        provider: "deepseek",
-        model: "deepseek-chat",
-        message: {
-          role: "assistant",
-          content: "fallback pong",
-          toolCalls: [],
-        },
-      }),
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "deepseek",
+            model: "deepseek-chat",
+            message: {
+              role: "assistant",
+              content: "fallback pong",
+              toolCalls: [],
+            },
+          }),
+        ),
+      ),
     };
     const { client } = createClient({
       llmChatCallDao,
@@ -541,23 +695,26 @@ describe("createLlmClient", () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
     const provider: LlmProvider = {
       id: "openai",
-      chat: vi.fn().mockResolvedValue({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "call-1",
-              name: "send_group_message",
-              arguments: {
-                message: "hi",
-              },
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai",
+            message: {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                {
+                  id: "call-1",
+                  name: "send_group_message",
+                  arguments: {
+                    message: "hi",
+                  },
+                },
+              ],
             },
-          ],
-        },
-      }),
+          }),
+        ),
+      ),
     };
     const { client } = createClient({
       llmChatCallDao,
@@ -613,29 +770,40 @@ describe("createLlmClient", () => {
         ],
       },
     });
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].nativeRequestPayload).toEqual({
+      model: "gpt-4o-mini",
+      messages: [],
+    });
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].nativeResponsePayload).toEqual({
+      id: "native-gpt-4o-mini",
+      model: "gpt-4o-mini",
+    });
   });
 
   it("should reject tool calls that do not match the explicitly required tool", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
     const provider: LlmProvider = {
       id: "openai",
-      chat: vi.fn().mockResolvedValue({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "call-1",
-              name: "search_web",
-              arguments: {
-                query: "hello",
-              },
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai",
+            message: {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                {
+                  id: "call-1",
+                  name: "search_web",
+                  arguments: {
+                    query: "hello",
+                  },
+                },
+              ],
             },
-          ],
-        },
-      }),
+          }),
+        ),
+      ),
     };
     const { client } = createClient({
       llmChatCallDao,

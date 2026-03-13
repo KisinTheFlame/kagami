@@ -1,7 +1,12 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
 import { BizError } from "../../errors/biz-error.js";
-import type { LlmProvider } from "../provider.js";
+import {
+  attachLlmProviderFailureContext,
+  toSerializableLlmNativeRecord,
+  toSerializableLlmNativeRecordOrNull,
+  type LlmProvider,
+} from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
 import type { LlmProviderRuntimeConfig } from "../../config/config.manager.js";
 import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
@@ -20,33 +25,49 @@ export function createOpenAiProvider(
     async chat(request: LlmChatRequest) {
       const model = requireRequestModel(request);
       const payload = toOpenAiChatRequest({ model, request });
-      let completion: ChatCompletion;
+      let completion: ChatCompletion | null = null;
 
       try {
         completion = await client.chat.completions.create(payload, {
           timeout: config.timeoutMs,
         });
       } catch (error) {
-        throw new BizError({
-          message: "LLM 上游服务调用失败",
-          meta: {
-            provider: "openai",
+        throw attachLlmProviderFailureContext(
+          new BizError({
+            message: "LLM 上游服务调用失败",
+            meta: {
+              provider: "openai",
+            },
+            cause: error,
+          }),
+          {
+            nativeRequestPayload: toSerializableLlmNativeRecord(payload),
+            nativeError: toSerializableLlmNativeRecord(error),
           },
-          cause: error,
-        });
+        );
       }
 
-      if (!completion.choices[0]?.message) {
-        throw new BizError({
-          message: "LLM 上游服务调用失败",
-          meta: {
-            provider: "openai",
-            reason: "EMPTY_CHOICES",
+      if (!completion?.choices[0]?.message) {
+        throw attachLlmProviderFailureContext(
+          new BizError({
+            message: "LLM 上游服务调用失败",
+            meta: {
+              provider: "openai",
+              reason: "EMPTY_CHOICES",
+            },
+          }),
+          {
+            nativeRequestPayload: toSerializableLlmNativeRecord(payload),
+            nativeResponsePayload: toSerializableLlmNativeRecordOrNull(completion),
           },
-        });
+        );
       }
 
-      return toLlmChatResponsePayload(completion, "openai");
+      return {
+        response: toLlmChatResponsePayload(completion, "openai"),
+        nativeRequestPayload: toSerializableLlmNativeRecord(payload),
+        nativeResponsePayload: toSerializableLlmNativeRecord(completion),
+      };
     },
   };
 }

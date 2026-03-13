@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getLlmProviderFailureContext } from "../../src/llm/provider.js";
 import { createOpenAiCodexProvider } from "../../src/llm/providers/openai-codex-provider.js";
 
 const tempDirs: string[] = [];
@@ -94,17 +95,47 @@ describe("createOpenAiCodexProvider", () => {
         toolChoice: "none",
       }),
     ).resolves.toEqual({
-      provider: "openai-codex",
-      model: "gpt-5.3-codex",
-      message: {
-        role: "assistant",
-        content: "pong",
-        toolCalls: [],
+      response: {
+        provider: "openai-codex",
+        model: "gpt-5.3-codex",
+        message: {
+          role: "assistant",
+          content: "pong",
+          toolCalls: [],
+        },
+        usage: {
+          promptTokens: 11,
+          completionTokens: 7,
+          totalTokens: 18,
+        },
       },
-      usage: {
-        promptTokens: 11,
-        completionTokens: 7,
-        totalTokens: 18,
+      nativeRequestPayload: {
+        model: "gpt-5.3-codex",
+        instructions: "You are a helpful assistant.",
+        input: [{ role: "user", content: "ping" }],
+        tools: [],
+        tool_choice: "none",
+        stream: true,
+        store: false,
+      },
+      nativeResponsePayload: {
+        type: "response.completed",
+        response: {
+          status: "completed",
+          model: "gpt-5.3-codex",
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "pong" }],
+            },
+          ],
+          usage: {
+            input_tokens: 11,
+            output_tokens: 7,
+            total_tokens: 18,
+          },
+        },
       },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -162,27 +193,36 @@ describe("createOpenAiCodexProvider", () => {
         toolChoice: "required",
       }),
     ).resolves.toEqual({
-      provider: "openai-codex",
-      model: "gpt-5.3-codex",
-      message: {
-        role: "assistant",
-        content: "",
-        toolCalls: [
-          {
-            id: "call_123",
-            name: "add",
-            arguments: {
-              a: 1,
-              b: 2,
+      response: {
+        provider: "openai-codex",
+        model: "gpt-5.3-codex",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "call_123",
+              name: "add",
+              arguments: {
+                a: 1,
+                b: 2,
+              },
             },
-          },
-        ],
+          ],
+        },
+        usage: {
+          promptTokens: 9,
+          completionTokens: 3,
+          totalTokens: 12,
+        },
       },
-      usage: {
-        promptTokens: 9,
-        completionTokens: 3,
-        totalTokens: 12,
-      },
+      nativeRequestPayload: expect.objectContaining({
+        model: "gpt-5.3-codex",
+        tool_choice: "required",
+      }),
+      nativeResponsePayload: expect.objectContaining({
+        type: "response.completed",
+      }),
     });
   });
 
@@ -265,13 +305,106 @@ describe("createOpenAiCodexProvider", () => {
         toolChoice: "none",
       }),
     ).resolves.toMatchObject({
-      provider: "openai-codex",
-      model: "gpt-5.3-codex",
-      message: {
-        role: "assistant",
-        content: "pong",
+      response: {
+        provider: "openai-codex",
+        model: "gpt-5.3-codex",
+        message: {
+          role: "assistant",
+          content: "pong",
+        },
       },
+      nativeResponsePayload: expect.objectContaining({
+        type: "response.completed",
+      }),
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("should expose native error details after repeated unauthorized responses", async () => {
+    expect.assertions(2);
+    const authFilePath = await createAuthFile();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "https://auth.openai.com/oauth/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "fresh-access-token",
+            refresh_token: "fresh-refresh-token",
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+
+      return buildSseResponse(
+        {
+          type: "response.completed",
+          response: {
+            status: "failed",
+            error: {
+              message: "unauthorized",
+            },
+          },
+        },
+        401,
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createOpenAiCodexProvider({
+      authFilePath,
+      baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+      models: ["gpt-5.3-codex"],
+      refreshLeewayMs: 60_000,
+      timeoutMs: 5_000,
+    });
+
+    try {
+      await provider.chat({
+        model: "gpt-5.3-codex",
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      });
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: "BizError",
+        message: "所选 LLM provider 当前不可用",
+        meta: {
+          provider: "openai-codex",
+          reason: "UNAUTHORIZED",
+        },
+      });
+      expect(getLlmProviderFailureContext(error)).toEqual({
+        nativeRequestPayload: {
+          model: "gpt-5.3-codex",
+          instructions: "You are a helpful assistant.",
+          input: [{ role: "user", content: "ping" }],
+          tools: [],
+          tool_choice: "none",
+          stream: true,
+          store: false,
+        },
+        nativeResponsePayload: {
+          type: "response.completed",
+          response: {
+            status: "failed",
+            error: {
+              message: "unauthorized",
+            },
+          },
+        },
+        nativeError: {
+          status: 401,
+          reason: "UNAUTHORIZED",
+          responseText:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"status":"failed","error":{"message":"unauthorized"}}}\n\n',
+        },
+      });
+    }
   });
 });

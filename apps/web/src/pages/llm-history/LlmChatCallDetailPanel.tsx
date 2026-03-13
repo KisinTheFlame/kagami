@@ -214,6 +214,13 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           <JsonPanel title="responsePayload" value={item.responsePayload} />
           <JsonPanel title="error" value={item.error} />
         </section>
+
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold">Native Payload</h3>
+          <JsonPanel title="nativeRequestPayload" value={item.nativeRequestPayload} />
+          <JsonPanel title="nativeResponsePayload" value={item.nativeResponsePayload} />
+          <JsonPanel title="nativeError" value={item.nativeError} />
+        </section>
       </div>
     </div>
   );

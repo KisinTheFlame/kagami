@@ -39,6 +39,14 @@ describe("PrismaLlmChatCallDao", () => {
         tools: [],
         toolChoice: "auto",
       },
+      nativeRequestPayload: {
+        model: "gpt-test",
+        messages: [],
+      },
+      nativeResponsePayload: {
+        id: "native-1",
+        value: "ok",
+      },
       response: responseWithExtraMethods,
     });
 
@@ -65,6 +73,14 @@ describe("PrismaLlmChatCallDao", () => {
           usage: {
             totalTokens: 5,
           },
+        },
+        nativeRequestPayload: {
+          model: "gpt-test",
+          messages: [],
+        },
+        nativeResponsePayload: {
+          id: "native-1",
+          value: "ok",
         },
         latencyMs: 12,
       },
@@ -94,6 +110,17 @@ describe("PrismaLlmChatCallDao", () => {
         messages: [],
         tools: [],
         toolChoice: "auto",
+      },
+      nativeRequestPayload: {
+        model: "gpt-test",
+        messages: [],
+      },
+      nativeResponsePayload: {
+        id: "native-error-response",
+      },
+      nativeError: {
+        status: 400,
+        message: "invalid tool call",
       },
       response: {
         provider: "openai",
@@ -128,10 +155,21 @@ describe("PrismaLlmChatCallDao", () => {
             toolCalls: [{ id: "call-1", name: "send_group_message", arguments: { message: "hi" } }],
           },
         },
+        nativeRequestPayload: {
+          model: "gpt-test",
+          messages: [],
+        },
+        nativeResponsePayload: {
+          id: "native-error-response",
+        },
         error: {
           name: "Error",
           message: "invalid tool call",
           code: undefined,
+        },
+        nativeError: {
+          status: 400,
+          message: "invalid tool call",
         },
         latencyMs: 34,
       },

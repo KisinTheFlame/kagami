@@ -1,4 +1,10 @@
-import type { LlmProvider } from "../provider.js";
+import {
+  attachLlmProviderFailureContext,
+  toSerializableLlmNativeRecord,
+  toSerializableLlmNativeRecordOrNull,
+  type LlmProvider,
+  type LlmProviderChatResult,
+} from "../provider.js";
 import type { LlmChatRequest, LlmChatResponsePayload, LlmToolCall } from "../types.js";
 import { BizError } from "../../errors/biz-error.js";
 import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
@@ -40,7 +46,7 @@ export function createOpenAiCodexProvider(config: OpenAiCodexRuntimeConfig): Llm
     isAvailable: async () => {
       return await authStore.hasCredentials();
     },
-    async chat(request: LlmChatRequest): Promise<LlmChatResponsePayload> {
+    async chat(request: LlmChatRequest): Promise<LlmProviderChatResult> {
       try {
         return await sendCodexRequest({
           config,
@@ -52,13 +58,18 @@ export function createOpenAiCodexProvider(config: OpenAiCodexRuntimeConfig): Llm
           throw error;
         }
 
-        throw new BizError({
-          message: "LLM 上游服务调用失败",
-          meta: {
-            provider: "openai-codex",
+        throw attachLlmProviderFailureContext(
+          new BizError({
+            message: "LLM 上游服务调用失败",
+            meta: {
+              provider: "openai-codex",
+            },
+            cause: error,
+          }),
+          {
+            nativeError: toSerializableLlmNativeRecord(error),
           },
-          cause: error,
-        });
+        );
       }
     },
   };
@@ -68,43 +79,65 @@ async function sendCodexRequest(params: {
   config: OpenAiCodexRuntimeConfig;
   authStore: OpenAiCodexAuthStore;
   request: LlmChatRequest;
-}): Promise<LlmChatResponsePayload> {
+}): Promise<LlmProviderChatResult> {
+  const requestBody = toCodexRequestBody(params.request);
   const initialAuth = await params.authStore.getAuth();
   const initialResponse = await fetchCodexResponse({
     config: params.config,
     auth: initialAuth,
-    request: params.request,
+    requestBody,
   });
 
   if (initialResponse.status !== 401 && initialResponse.status !== 403) {
-    return mapCompletedEvent(initialResponse.completedEvent);
+    return mapCompletedEventResult({
+      requestBody,
+      completedEvent: initialResponse.completedEvent,
+    });
   }
 
   const refreshedAuth = await params.authStore.getAuth({ forceRefresh: true });
   const retriedResponse = await fetchCodexResponse({
     config: params.config,
     auth: refreshedAuth,
-    request: params.request,
+    requestBody,
   });
 
   if (retriedResponse.status === 401 || retriedResponse.status === 403) {
-    throw new BizError({
-      message: "所选 LLM provider 当前不可用",
-      meta: {
-        provider: "openai-codex",
-        reason: "UNAUTHORIZED",
+    throw attachLlmProviderFailureContext(
+      new BizError({
+        message: "所选 LLM provider 当前不可用",
+        meta: {
+          provider: "openai-codex",
+          reason: "UNAUTHORIZED",
+        },
+      }),
+      {
+        nativeRequestPayload: toSerializableLlmNativeRecord(requestBody),
+        nativeResponsePayload: toSerializableLlmNativeRecordOrNull(retriedResponse.completedEvent),
+        nativeError: buildCodexNativeError({
+          status: retriedResponse.status,
+          responseText: retriedResponse.responseText,
+          reason: "UNAUTHORIZED",
+        }),
       },
-    });
+    );
   }
 
-  return mapCompletedEvent(retriedResponse.completedEvent);
+  return mapCompletedEventResult({
+    requestBody,
+    completedEvent: retriedResponse.completedEvent,
+  });
 }
 
 async function fetchCodexResponse(params: {
   config: OpenAiCodexRuntimeConfig;
   auth: Awaited<ReturnType<OpenAiCodexAuthStore["getAuth"]>>;
-  request: LlmChatRequest;
-}): Promise<{ status: number; completedEvent: CodexResponseCompletedEvent }> {
+  requestBody: Record<string, unknown>;
+}): Promise<{
+  status: number;
+  completedEvent: CodexResponseCompletedEvent | null;
+  responseText: string;
+}> {
   let response: Response;
   try {
     response = await fetch(params.config.baseUrl, {
@@ -116,63 +149,79 @@ async function fetchCodexResponse(params: {
         ...(params.auth.accountId ? { "ChatGPT-Account-Id": params.auth.accountId } : {}),
         "User-Agent": "Kagami/1.0",
       },
-      body: JSON.stringify(toCodexRequestBody(params.request)),
+      body: JSON.stringify(params.requestBody),
       signal: AbortSignal.timeout(params.config.timeoutMs),
     });
   } catch (error) {
-    throw new BizError({
-      message: "LLM 上游服务调用失败",
-      meta: {
-        provider: "openai-codex",
+    throw attachLlmProviderFailureContext(
+      new BizError({
+        message: "LLM 上游服务调用失败",
+        meta: {
+          provider: "openai-codex",
+        },
+        cause: error,
+      }),
+      {
+        nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
+        nativeError: toSerializableLlmNativeRecord(error),
       },
-      cause: error,
-    });
+    );
   }
 
   const sseText = await response.text();
   const completedEvent = extractCompletedEvent(sseText);
   if (!completedEvent) {
     if (response.status === 401 || response.status === 403) {
-      return {
-        status: response.status,
-        completedEvent: {
-          type: "response.completed",
-          response: {
-            status: "failed",
-            error: {
-              message: sseText.slice(0, 500),
-            },
-          },
-        },
-      };
+      return { status: response.status, completedEvent: null, responseText: sseText };
     }
 
-    throw new BizError({
-      message: "LLM 上游服务调用失败",
-      meta: {
-        provider: "openai-codex",
-        reason: "INVALID_SSE_RESPONSE",
-        status: response.status,
+    throw attachLlmProviderFailureContext(
+      new BizError({
+        message: "LLM 上游服务调用失败",
+        meta: {
+          provider: "openai-codex",
+          reason: "INVALID_SSE_RESPONSE",
+          status: response.status,
+        },
+      }),
+      {
+        nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
+        nativeError: buildCodexNativeError({
+          status: response.status,
+          responseText: sseText,
+          reason: "INVALID_SSE_RESPONSE",
+        }),
       },
-    });
+    );
   }
 
   if (response.status === 401 || response.status === 403) {
-    return { status: response.status, completedEvent };
+    return { status: response.status, completedEvent, responseText: sseText };
   }
 
   if (!response.ok) {
-    throw new BizError({
-      message: "LLM 上游服务调用失败",
-      meta: {
-        provider: "openai-codex",
-        reason: "HTTP_ERROR",
-        status: response.status,
+    throw attachLlmProviderFailureContext(
+      new BizError({
+        message: "LLM 上游服务调用失败",
+        meta: {
+          provider: "openai-codex",
+          reason: "HTTP_ERROR",
+          status: response.status,
+        },
+      }),
+      {
+        nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
+        nativeResponsePayload: toSerializableLlmNativeRecord(completedEvent),
+        nativeError: buildCodexNativeError({
+          status: response.status,
+          responseText: sseText,
+          reason: "HTTP_ERROR",
+        }),
       },
-    });
+    );
   }
 
-  return { status: response.status, completedEvent };
+  return { status: response.status, completedEvent, responseText: sseText };
 }
 
 function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
@@ -275,6 +324,43 @@ function extractCompletedEvent(sseText: string): CodexResponseCompletedEvent | n
   return null;
 }
 
+function mapCompletedEventResult(input: {
+  requestBody: Record<string, unknown>;
+  completedEvent: CodexResponseCompletedEvent | null;
+}): LlmProviderChatResult {
+  if (!input.completedEvent) {
+    throw attachLlmProviderFailureContext(
+      new BizError({
+        message: "LLM 上游服务调用失败",
+        meta: {
+          provider: "openai-codex",
+          reason: "MISSING_COMPLETED_EVENT",
+        },
+      }),
+      {
+        nativeRequestPayload: toSerializableLlmNativeRecord(input.requestBody),
+      },
+    );
+  }
+
+  try {
+    return {
+      response: mapCompletedEvent(input.completedEvent),
+      nativeRequestPayload: toSerializableLlmNativeRecord(input.requestBody),
+      nativeResponsePayload: toSerializableLlmNativeRecord(input.completedEvent),
+    };
+  } catch (error) {
+    if (error instanceof BizError) {
+      throw attachLlmProviderFailureContext(error, {
+        nativeRequestPayload: toSerializableLlmNativeRecord(input.requestBody),
+        nativeResponsePayload: toSerializableLlmNativeRecord(input.completedEvent),
+      });
+    }
+
+    throw error;
+  }
+}
+
 function mapCompletedEvent(event: CodexResponseCompletedEvent): LlmChatResponsePayload {
   const response = event.response;
   if (!response) {
@@ -371,4 +457,16 @@ function safeParseJson<T>(value: string): T | null {
   } catch {
     return null;
   }
+}
+
+function buildCodexNativeError(input: {
+  status: number;
+  responseText: string;
+  reason: string;
+}): Record<string, unknown> {
+  return {
+    status: input.status,
+    reason: input.reason,
+    responseText: input.responseText.slice(0, 2_000),
+  };
 }
