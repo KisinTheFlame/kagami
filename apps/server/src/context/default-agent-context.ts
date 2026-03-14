@@ -19,6 +19,7 @@ export class DefaultAgentContext implements AgentContext {
   private readonly systemPrompt: string | (() => Promise<string> | string);
   private readonly eventEnricher?: ContextEventEnricher;
   private readonly messages: LlmMessage[] = [];
+  private lastWakeReminderAt: Date | null = null;
 
   public constructor({
     systemPrompt,
@@ -42,7 +43,12 @@ export class DefaultAgentContext implements AgentContext {
   }
 
   public recordWake(input: { now: Date }): void {
+    if (isSameWakeReminderMinute(this.lastWakeReminderAt, input.now)) {
+      return;
+    }
+
     this.messages.push(createWakeReminderMessage(input.now));
+    this.lastWakeReminderAt = new Date(input.now);
   }
 
   public async recordEvent(event: Event): Promise<void> {
@@ -87,4 +93,27 @@ export class DefaultAgentContext implements AgentContext {
 
     return this.systemPrompt;
   }
+}
+
+function isSameWakeReminderMinute(previous: Date | null, current: Date): boolean {
+  if (previous === null) {
+    return false;
+  }
+
+  return createWakeReminderMinuteKey(previous) === createWakeReminderMinuteKey(current);
+}
+
+function createWakeReminderMinuteKey(now: Date): string {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+
+  return [values.year, values.month, values.day, values.hour, values.minute].join("-");
 }
