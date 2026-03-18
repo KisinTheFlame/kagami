@@ -9,6 +9,7 @@ import { DefaultAgentContext } from "./context/default-agent-context.js";
 import { ContextSummaryPlannerService } from "./context/context-summary-planner.service.js";
 import { createAgentSystemPrompt } from "./context/system-prompt.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
+import { PrismaEmbeddingCacheDao } from "./dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "./dao/impl/napcat-event.impl.dao.js";
@@ -17,6 +18,7 @@ import { PrismaNapcatGroupMessageDao } from "./dao/impl/napcat-group-message.imp
 import { BizError } from "./errors/biz-error.js";
 import { toHttpErrorResponse } from "./errors/http-error.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
+import { EmbeddingCacheHandler } from "./handler/embedding-cache.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmHandler } from "./handler/llm.handler.js";
 import { LlmChatCallHandler } from "./handler/llm-chat-call.handler.js";
@@ -37,6 +39,7 @@ import { RagQueryPlannerService } from "./rag/rag-query-planner.service.js";
 import { DbLogSink } from "./logger/sinks/db-sink.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { DefaultAppLogQueryService } from "./service/app-log-query.impl.service.js";
+import { DefaultEmbeddingCacheQueryService } from "./service/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "./service/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.service.js";
 import { DefaultAgentMessageService } from "./service/agent-message.impl.service.js";
@@ -165,6 +168,7 @@ try {
   });
 
   const llmChatCallDao = new PrismaLlmChatCallDao({ database: databaseClient });
+  const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database: databaseClient });
   const napcatEventDao = new PrismaNapcatEventDao({ database: databaseClient });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database: databaseClient });
   const napcatGroupMessageChunkDao = new PrismaNapcatGroupMessageChunkDao({
@@ -172,6 +176,9 @@ try {
   });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
+  });
+  const embeddingCacheQueryService = new DefaultEmbeddingCacheQueryService({
+    embeddingCacheDao,
   });
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
@@ -209,6 +216,7 @@ try {
   const ragConfig = await activeConfigManager.getRagRuntimeConfig();
   const embeddingClient = createEmbeddingClient({
     config: ragConfig.embedding,
+    embeddingCacheDao,
   });
   const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
     chunkDao: napcatGroupMessageChunkDao,
@@ -353,6 +361,7 @@ try {
     new HealthHandler(),
     new LlmHandler({ llmPlaygroundService }),
     new LlmChatCallHandler({ llmChatCallQueryService }),
+    new EmbeddingCacheHandler({ embeddingCacheQueryService }),
     new AppLogHandler({ appLogQueryService }),
     new NapcatEventHandler({ napcatEventQueryService }),
     new NapcatGroupMessageHandler({ napcatGroupMessageQueryService }),

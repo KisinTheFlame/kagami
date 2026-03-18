@@ -28,6 +28,22 @@ model LlmChatCall {
   @@map("llm_chat_call")
 }
 
+model EmbeddingCache {
+  id                  Int      @id @default(autoincrement())
+  provider            String
+  model               String
+  taskType            String   @map("task_type")
+  outputDimensionality Int     @map("output_dimensionality")
+  text                String
+  textHash            String   @map("text_hash")
+  embedding           Float[]
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([provider, model, taskType, outputDimensionality, textHash], map: "embedding_cache_provider_model_task_output_text_hash_uq")
+  @@index([createdAt], map: "embedding_cache_created_at_idx")
+  @@map("embedding_cache")
+}
+
 model AppLog {
   id        Int      @id @default(autoincrement())
   traceId   String   @map("trace_id")
