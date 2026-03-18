@@ -14,8 +14,8 @@ export interface ContextEventEnricher {
 
 export interface AgentContext {
   getSnapshot(): Promise<AgentContextSnapshot>;
-  recordWake(input: { now: Date }): void;
+  recordWake(input: { now: Date }): Promise<void>;
   recordEvent(event: Event): Promise<void>;
-  recordAssistantTurn(message: AssistantMessage): void;
-  recordToolResult(input: { toolCallId: string; content: string }): void;
+  recordAssistantTurn(message: AssistantMessage): Promise<void>;
+  recordToolResult(input: { toolCallId: string; content: string }): Promise<void>;
 }

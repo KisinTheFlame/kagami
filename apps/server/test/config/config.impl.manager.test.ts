@@ -56,6 +56,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       apiKey: gemini-key
@@ -112,6 +116,15 @@ server:
           ],
         },
         ragQueryPlanner: {
+          attempts: [
+            {
+              provider: "openai",
+              model: "gpt-4o-mini",
+              times: 1,
+            },
+          ],
+        },
+        contextSummarizer: {
           attempts: [
             {
               provider: "openai",
@@ -187,6 +200,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      contextSummarizer:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -232,6 +249,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      contextSummarizer:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -284,6 +305,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      contextSummarizer:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -328,6 +353,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      contextSummarizer:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -379,6 +408,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      contextSummarizer:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -423,6 +456,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      contextSummarizer:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -473,6 +510,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      contextSummarizer:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -516,6 +557,10 @@ server:
         provider: deepseek
         model: deepseek-chat
       ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      contextSummarizer:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -565,6 +610,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      contextSummarizer:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -611,6 +660,10 @@ server:
             model: deepseek-chat
             times: 0
       ragQueryPlanner:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      contextSummarizer:
         attempts:
           - provider: deepseek
             model: deepseek-chat

@@ -5,6 +5,7 @@ import type { LlmMessage } from "../llm/types.js";
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 type UserMessage = Extract<LlmMessage, { role: "user" }>;
+const CONVERSATION_SUMMARY_TAG = "conversation_summary";
 
 export function createUserMessage(content: string): UserMessage {
   return {
@@ -27,6 +28,20 @@ export function createWakeReminderMessage(now: Date): UserMessage {
 
   return createUserMessage(
     `<system_reminder>当前时间为北京时间 ${values.year} 年 ${values.month} 月 ${values.day} 日 ${values.hour}:${values.minute}</system_reminder>`,
+  );
+}
+
+export function createConversationSummaryMessage(summary: string): UserMessage {
+  return createUserMessage(
+    [`<${CONVERSATION_SUMMARY_TAG}>`, summary.trim(), `</${CONVERSATION_SUMMARY_TAG}>`].join("\n"),
+  );
+}
+
+export function isConversationSummaryMessage(message: LlmMessage | undefined): boolean {
+  return (
+    message?.role === "user" &&
+    message.content.startsWith(`<${CONVERSATION_SUMMARY_TAG}>`) &&
+    message.content.includes(`</${CONVERSATION_SUMMARY_TAG}>`)
   );
 }
 

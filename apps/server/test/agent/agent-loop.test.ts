@@ -136,10 +136,10 @@ describe("AgentLoop", () => {
       systemPrompt: "system-prompt",
       messages: [],
     });
-    const recordWake = vi.fn();
+    const recordWake = vi.fn().mockResolvedValue(undefined);
     const recordEvent = vi.fn().mockResolvedValue(undefined);
-    const recordAssistantTurn = vi.fn();
-    const recordToolResult = vi.fn();
+    const recordAssistantTurn = vi.fn().mockResolvedValue(undefined);
+    const recordToolResult = vi.fn().mockResolvedValue(undefined);
     const context: AgentContext = {
       getSnapshot,
       recordWake,
@@ -235,10 +235,10 @@ describe("AgentLoop", () => {
         systemPrompt: "system-prompt",
         messages: [],
       }),
-      recordWake: vi.fn(),
+      recordWake: vi.fn().mockResolvedValue(undefined),
       recordEvent: vi.fn().mockResolvedValue(undefined),
-      recordAssistantTurn: vi.fn(),
-      recordToolResult: vi.fn(),
+      recordAssistantTurn: vi.fn().mockResolvedValue(undefined),
+      recordToolResult: vi.fn().mockResolvedValue(undefined),
     };
 
     const eventQueue: AgentEventQueue = {
@@ -310,7 +310,7 @@ describe("AgentLoop", () => {
         systemPrompt: "system-prompt",
         messages: messages.slice(),
       })),
-      recordWake: vi.fn(({ now }: { now: Date }) => {
+      recordWake: vi.fn(async ({ now }: { now: Date }) => {
         messages.push({
           role: "user",
           content: `<system_reminder>${now.toISOString()}</system_reminder>`,
@@ -327,11 +327,11 @@ describe("AgentLoop", () => {
           ].join("\n"),
         });
       }),
-      recordAssistantTurn: vi.fn(message => {
+      recordAssistantTurn: vi.fn(async message => {
         messages.push(message);
       }),
       recordToolResult: vi.fn(
-        ({ toolCallId, content }: { toolCallId: string; content: string }) => {
+        async ({ toolCallId, content }: { toolCallId: string; content: string }) => {
           messages.push({
             role: "tool",
             toolCallId,

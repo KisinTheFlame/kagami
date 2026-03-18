@@ -6,6 +6,7 @@ import { InMemoryAgentEventQueue } from "./agent/event.impl.queue.js";
 import { DefaultConfigManager } from "./config/config.impl.manager.js";
 import { loadStaticConfig } from "./config/config.loader.js";
 import { DefaultAgentContext } from "./context/default-agent-context.js";
+import { ContextSummaryPlannerService } from "./context/context-summary-planner.service.js";
 import { createAgentSystemPrompt } from "./context/system-prompt.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
@@ -54,6 +55,8 @@ import {
   SEND_GROUP_MESSAGE_TOOL_NAME,
   SearchWebTool,
   SendGroupMessageTool,
+  SUMMARY_TOOL_NAME,
+  SummaryTool,
   ToolCatalog,
 } from "./tools/index.js";
 
@@ -260,6 +263,7 @@ try {
     new SearchMemoryTool({
       memorySearchService,
     }),
+    new SummaryTool(),
   ]);
   const ragQueryPlanner = new RagQueryPlannerService({
     llmClient,
@@ -270,15 +274,25 @@ try {
   const ragContextEventEnricher = new RagContextEventEnricher({
     ragQueryPlanner,
   });
-  const context = new DefaultAgentContext({
-    systemPromptFactory: agentSystemPromptFactory,
-    eventEnricher: ragContextEventEnricher,
-  });
-  const agentTools = toolCatalog.pick([
+  const agentVisibleTools = toolCatalog.pick([
     SEARCH_WEB_TOOL_NAME,
     SEND_GROUP_MESSAGE_TOOL_NAME,
     FINISH_TOOL_NAME,
   ]);
+  const summaryPlanner = new ContextSummaryPlannerService({
+    llmClient,
+    summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
+  });
+  const context = new DefaultAgentContext({
+    systemPromptFactory: agentSystemPromptFactory,
+    eventEnricher: ragContextEventEnricher,
+    summaryPlanner,
+    summaryTools: [
+      ...agentVisibleTools.definitions(),
+      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
+    ],
+  });
+  const agentTools = agentVisibleTools;
   const agentLoop = new AgentLoop({
     llmClient,
     context,

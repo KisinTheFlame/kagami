@@ -32,7 +32,7 @@ export class AgentLoop {
       const shouldAddWakeReminder = this.eventQueue.size() === 0;
       await this.eventQueue.waitForEvent();
       if (shouldAddWakeReminder) {
-        this.context.recordWake({ now: this.now() });
+        await this.context.recordWake({ now: this.now() });
       }
 
       while (true) {
@@ -55,7 +55,7 @@ export class AgentLoop {
         const assistant = completion.message;
         const persistentAssistantMessage = omitControlToolCalls(assistant, this.agentTools);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
-          this.context.recordAssistantTurn(persistentAssistantMessage);
+          await this.context.recordAssistantTurn(persistentAssistantMessage);
         }
 
         let shouldFinishRound = false;
@@ -65,7 +65,7 @@ export class AgentLoop {
             shouldFinishRound = true;
           }
           if (toolResult.kind !== "control" && toolResult.content.length > 0) {
-            this.context.recordToolResult({
+            await this.context.recordToolResult({
               toolCallId: toolCall.id,
               content: toolResult.content,
             });

@@ -17,3 +17,4 @@ export {
   SendGroupMessageTool,
 } from "./components/send-group-message/send-group-message.tool.js";
 export { SEARCH_WEB_TOOL_NAME, SearchWebTool } from "./components/search-web/search-web.tool.js";
+export { SUMMARY_TOOL_NAME, SummaryTool } from "./components/summary/summary.tool.js";

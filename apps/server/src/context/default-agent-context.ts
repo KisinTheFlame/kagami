@@ -6,18 +6,39 @@ import type {
   AssistantMessage,
   ContextEventEnricher,
 } from "./agent-context.js";
-import { createMessagesFromEvent, createWakeReminderMessage } from "./context-message-factory.js";
+import type { ContextSummaryPlanner } from "./context-summary-planner.service.js";
+import {
+  createConversationSummaryMessage,
+  createMessagesFromEvent,
+  createWakeReminderMessage,
+} from "./context-message-factory.js";
 import { createAgentSystemPrompt } from "./system-prompt.js";
+
+const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
 
 type DefaultAgentContextOptions = {
   systemPrompt?: string;
   systemPromptFactory?: () => Promise<string> | string;
   eventEnricher?: ContextEventEnricher;
+  summaryPlanner?: ContextSummaryPlanner;
+  summaryTools?: {
+    name: string;
+    description?: string;
+    parameters: { type: "object"; properties: Record<string, unknown> };
+  }[];
+  contextCompactionThreshold?: number;
 };
 
 export class DefaultAgentContext implements AgentContext {
   private readonly systemPrompt: string | (() => Promise<string> | string);
   private readonly eventEnricher?: ContextEventEnricher;
+  private readonly summaryPlanner?: ContextSummaryPlanner;
+  private readonly summaryTools: {
+    name: string;
+    description?: string;
+    parameters: { type: "object"; properties: Record<string, unknown> };
+  }[];
+  private readonly contextCompactionThreshold: number;
   private readonly messages: LlmMessage[] = [];
   private lastWakeReminderAt: Date | null = null;
 
@@ -25,6 +46,9 @@ export class DefaultAgentContext implements AgentContext {
     systemPrompt,
     systemPromptFactory,
     eventEnricher,
+    summaryPlanner,
+    summaryTools,
+    contextCompactionThreshold,
   }: DefaultAgentContextOptions) {
     this.systemPrompt =
       systemPromptFactory ??
@@ -33,6 +57,10 @@ export class DefaultAgentContext implements AgentContext {
         botQQ: "unknown",
       });
     this.eventEnricher = eventEnricher;
+    this.summaryPlanner = summaryPlanner;
+    this.summaryTools = summaryTools ?? [];
+    this.contextCompactionThreshold =
+      contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
   }
 
   public async getSnapshot(): Promise<AgentContextSnapshot> {
@@ -42,13 +70,14 @@ export class DefaultAgentContext implements AgentContext {
     };
   }
 
-  public recordWake(input: { now: Date }): void {
+  public async recordWake(input: { now: Date }): Promise<void> {
     if (isSameWakeReminderMinute(this.lastWakeReminderAt, input.now)) {
       return;
     }
 
     this.messages.push(createWakeReminderMessage(input.now));
     this.lastWakeReminderAt = new Date(input.now);
+    await this.compactIfNeeded();
   }
 
   public async recordEvent(event: Event): Promise<void> {
@@ -60,6 +89,7 @@ export class DefaultAgentContext implements AgentContext {
     this.messages.push(...eventMessages);
 
     if (!this.eventEnricher) {
+      await this.compactIfNeeded();
       return;
     }
 
@@ -68,22 +98,26 @@ export class DefaultAgentContext implements AgentContext {
       snapshot: await this.getSnapshot(),
     });
     if (enrichedMessages.length === 0) {
+      await this.compactIfNeeded();
       return;
     }
 
     this.messages.push(...enrichedMessages);
+    await this.compactIfNeeded();
   }
 
-  public recordAssistantTurn(message: AssistantMessage): void {
+  public async recordAssistantTurn(message: AssistantMessage): Promise<void> {
     this.messages.push(message);
+    await this.compactIfNeeded();
   }
 
-  public recordToolResult(input: { toolCallId: string; content: string }): void {
+  public async recordToolResult(input: { toolCallId: string; content: string }): Promise<void> {
     this.messages.push({
       role: "tool",
       toolCallId: input.toolCallId,
       content: input.content,
     });
+    await this.compactIfNeeded();
   }
 
   private async getSystemPrompt(): Promise<string> {
@@ -92,6 +126,34 @@ export class DefaultAgentContext implements AgentContext {
     }
 
     return this.systemPrompt;
+  }
+
+  private async compactIfNeeded(): Promise<void> {
+    if (!this.summaryPlanner || this.messages.length <= this.contextCompactionThreshold) {
+      return;
+    }
+
+    const splitIndex = Math.floor(this.messages.length / 2);
+    if (splitIndex <= 0 || splitIndex >= this.messages.length) {
+      return;
+    }
+
+    const summary = await this.summaryPlanner.summarize({
+      systemPrompt: await this.getSystemPrompt(),
+      messages: this.messages.slice(0, splitIndex),
+      tools: this.summaryTools,
+    });
+    if (!summary) {
+      return;
+    }
+
+    const recentMessages = this.messages.slice(splitIndex);
+    this.messages.splice(
+      0,
+      this.messages.length,
+      createConversationSummaryMessage(summary),
+      ...recentMessages,
+    );
   }
 }
 
