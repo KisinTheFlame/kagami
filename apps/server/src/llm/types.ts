@@ -1,5 +1,5 @@
 export type LlmProviderId = "deepseek" | "openai" | "openai-codex";
-export type LlmUsageId = "agent" | "ragQueryPlanner" | "contextSummarizer";
+export type LlmUsageId = "agent" | "ragQueryPlanner" | "contextSummarizer" | "vision";
 
 export type JsonSchema = {
   type: "object";
@@ -20,8 +20,22 @@ export type LlmToolCall = {
   arguments: Record<string, unknown>;
 };
 
+export type LlmTextContentPart = {
+  type: "text";
+  text: string;
+};
+
+export type LlmImageContentPart = {
+  type: "image";
+  content: Buffer;
+  mimeType: string;
+  filename?: string;
+};
+
+export type LlmContentPart = LlmTextContentPart | LlmImageContentPart;
+
 export type LlmMessage =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string | LlmContentPart[] }
   | { role: "assistant"; content: string; toolCalls: LlmToolCall[] }
   | { role: "tool"; toolCallId: string; content: string };
 
@@ -29,6 +43,12 @@ export type LlmUsage = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+};
+
+export type LlmImageInput = {
+  content: Buffer;
+  mimeType: string;
+  filename?: string;
 };
 
 export type LlmChatRequest = {

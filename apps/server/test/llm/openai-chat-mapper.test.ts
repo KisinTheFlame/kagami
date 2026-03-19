@@ -1,7 +1,60 @@
 import { describe, expect, it } from "vitest";
 import type { ChatCompletion } from "openai/resources/chat/completions";
-import { toLlmChatResponsePayload } from "../../src/llm/mappers/openai-chat-mapper.js";
+import {
+  toLlmChatResponsePayload,
+  toOpenAiChatRequest,
+} from "../../src/llm/mappers/openai-chat-mapper.js";
 import { z } from "zod";
+
+describe("toOpenAiChatRequest", () => {
+  it("should map multimodal user content to OpenAI chat content parts", () => {
+    const payload = toOpenAiChatRequest({
+      model: "gpt-4o-mini",
+      request: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "请描述图片内容",
+              },
+              {
+                type: "image",
+                content: Buffer.from("hello"),
+                mimeType: "image/png",
+                filename: "hello.png",
+              },
+            ],
+          },
+        ],
+        tools: [],
+        toolChoice: "none",
+      },
+    });
+
+    expect(payload).toEqual({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "请描述图片内容",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: "data:image/png;base64,aGVsbG8=",
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+});
 
 describe("toLlmChatResponsePayload", () => {
   it("should map OpenAI completion to serializable payload only", () => {

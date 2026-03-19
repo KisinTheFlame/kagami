@@ -54,6 +54,15 @@ function createUsageConfig(
         },
       ],
     },
+    vision: {
+      attempts: [
+        {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          times: 1,
+        },
+      ],
+    },
     ...overrides,
   };
 }
@@ -898,6 +907,297 @@ describe("createLlmClient", () => {
         },
       ),
     ).rejects.toThrow("requires model");
+  });
+
+  it("should support image content in chat and persist only image metadata", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai",
+            message: {
+              role: "assistant",
+              content: "图片中是一只猫。",
+              toolCalls: [],
+            },
+          }),
+          {
+            nativeRequestPayload: {
+              model: "gpt-4o-mini",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "请描述图片内容" },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ),
+      ),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "请描述图片内容",
+                },
+                {
+                  type: "image",
+                  content: Buffer.from("image-bytes"),
+                  mimeType: "image/png",
+                  filename: "cat.png",
+                },
+              ],
+            },
+          ],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          usage: "vision",
+        },
+      ),
+    ).resolves.toEqual({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      message: {
+        role: "assistant",
+        content: "图片中是一只猫。",
+        toolCalls: [],
+      },
+    });
+
+    expect(provider.chat).toHaveBeenCalledWith({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "请描述图片内容",
+            },
+            {
+              type: "image",
+              content: Buffer.from("image-bytes"),
+              mimeType: "image/png",
+              filename: "cat.png",
+            },
+          ],
+        },
+      ],
+      tools: [],
+      toolChoice: "none",
+    });
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: {
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "请描述图片内容",
+                },
+                {
+                  type: "image",
+                  mimeType: "image/png",
+                  filename: "cat.png",
+                  sizeBytes: Buffer.from("image-bytes").byteLength,
+                },
+              ],
+            },
+          ],
+          tools: [],
+          toolChoice: "none",
+        },
+        response: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          message: {
+            role: "assistant",
+            content: "图片中是一只猫。",
+            toolCalls: [],
+          },
+        },
+      }),
+    );
+  });
+
+  it("should reject image content when the selected model does not support vision", async () => {
+    const provider: LlmProvider = {
+      id: "deepseek",
+      chat: vi.fn(),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        deepseek: provider,
+      },
+      usages: createUsageConfig({
+        vision: {
+          attempts: [
+            {
+              provider: "deepseek",
+              model: "deepseek-chat",
+              times: 1,
+            },
+          ],
+        },
+      }),
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "describe image",
+                },
+                {
+                  type: "image",
+                  content: Buffer.from("image-bytes"),
+                  mimeType: "image/jpeg",
+                },
+              ],
+            },
+          ],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          usage: "vision",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "BizError",
+      message: "当前模型不支持图片输入",
+      meta: {
+        model: "deepseek-chat",
+        reason: "VISION_UNSUPPORTED",
+      },
+    } satisfies Partial<BizError>);
+
+    expect(provider.chat).not.toHaveBeenCalled();
+    expect(llmChatCallDao.recordError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "deepseek-chat",
+        request: {
+          model: "deepseek-chat",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "describe image",
+                },
+                {
+                  type: "image",
+                  mimeType: "image/jpeg",
+                  filename: undefined,
+                  sizeBytes: Buffer.from("image-bytes").byteLength,
+                },
+              ],
+            },
+          ],
+          tools: [],
+          toolChoice: "none",
+        },
+      }),
+    );
+  });
+
+  it("should reject image content when model capability is unknown", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi.fn(),
+    };
+    const providerConfigs = createProviderConfigs();
+    providerConfigs.openai = {
+      ...providerConfigs.openai,
+      models: ["gpt-unknown-vision"],
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        openai: provider,
+      },
+      providerConfigs,
+      usages: createUsageConfig({
+        vision: {
+          attempts: [
+            {
+              provider: "openai",
+              model: "gpt-unknown-vision",
+              times: 1,
+            },
+          ],
+        },
+      }),
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "describe image",
+                },
+                {
+                  type: "image",
+                  content: Buffer.from("image-bytes"),
+                  mimeType: "image/png",
+                },
+              ],
+            },
+          ],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          usage: "vision",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "BizError",
+      message: "当前模型未声明图片输入能力",
+      meta: {
+        model: "gpt-unknown-vision",
+        reason: "MODEL_CAPABILITY_UNKNOWN",
+      },
+    } satisfies Partial<BizError>);
+
+    expect(provider.chat).not.toHaveBeenCalled();
+    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
   });
 
   it("should require explicit usage for listAvailableProviders", async () => {

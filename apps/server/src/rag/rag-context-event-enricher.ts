@@ -18,7 +18,7 @@ export class RagContextEventEnricher implements ContextEventEnricher {
     }
 
     const currentMessage = createMessagesFromEvent(input.event).at(-1)?.content;
-    if (!currentMessage) {
+    if (!currentMessage || typeof currentMessage !== "string") {
       return [];
     }
 

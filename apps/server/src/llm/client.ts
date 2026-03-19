@@ -8,12 +8,14 @@ import type {
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { BizError } from "../errors/biz-error.js";
+import { getLlmModelCapabilities } from "./model-capabilities.js";
 import {
   getLlmProviderFailureContext,
   type LlmProvider,
   type LlmProviderChatResult,
 } from "./provider.js";
 import type {
+  LlmContentPart,
   LlmChatRequest,
   LlmChatResponsePayload,
   LlmProviderId,
@@ -151,6 +153,11 @@ async function executeChatAttempt({
   let response: LlmChatResponsePayload | null = null;
 
   try {
+    validateModelInputSupport({
+      request,
+      model: attempt.model,
+    });
+
     if (!provider) {
       throw new BizError({
         message: "所选 LLM provider 当前不可用",
@@ -173,8 +180,8 @@ async function executeChatAttempt({
           requestId,
           seq,
           latencyMs,
-          request: requestWithModel,
-          response,
+          request: toRecordableChatRequest(requestWithModel),
+          response: toRecordableChatResponse(response),
           nativeRequestPayload: providerResult.nativeRequestPayload,
           nativeResponsePayload: providerResult.nativeResponsePayload,
         })
@@ -194,8 +201,8 @@ async function executeChatAttempt({
           requestId,
           seq,
           latencyMs,
-          request: requestWithModel,
-          ...(response ? { response } : {}),
+          request: toRecordableChatRequest(requestWithModel),
+          ...(response ? { response: toRecordableChatResponse(response) } : {}),
           nativeRequestPayload:
             providerResult?.nativeRequestPayload ?? failureContext?.nativeRequestPayload ?? null,
           nativeResponsePayload:
@@ -260,6 +267,97 @@ function requireUsage(usage: LlmUsageId | undefined): LlmUsageId {
   }
 
   return usage;
+}
+
+function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknown> {
+  return {
+    ...(request.system ? { system: request.system } : {}),
+    model: request.model,
+    messages: request.messages.map(message => {
+      if (message.role === "user") {
+        return {
+          role: "user",
+          content:
+            typeof message.content === "string"
+              ? message.content
+              : message.content.map(part => toRecordableContentPart(part)),
+        };
+      }
+
+      if (message.role === "assistant") {
+        return {
+          role: "assistant",
+          content: message.content,
+          toolCalls: message.toolCalls,
+        };
+      }
+
+      return {
+        role: "tool",
+        toolCallId: message.toolCallId,
+        content: message.content,
+      };
+    }),
+    tools: request.tools,
+    toolChoice: request.toolChoice,
+  };
+}
+
+function toRecordableContentPart(part: LlmContentPart): Record<string, unknown> {
+  if (part.type === "text") {
+    return part;
+  }
+
+  return {
+    type: "image",
+    mimeType: part.mimeType,
+    filename: part.filename,
+    sizeBytes: part.content.byteLength,
+  };
+}
+
+function toRecordableChatResponse(response: LlmChatResponsePayload): Record<string, unknown> {
+  return {
+    provider: response.provider,
+    model: response.model,
+    message: response.message,
+    ...(response.usage ? { usage: response.usage } : {}),
+  };
+}
+
+function validateModelInputSupport(input: { request: LlmChatRequest; model: string }): void {
+  const hasImageInput = input.request.messages.some(message => {
+    return (
+      message.role === "user" &&
+      Array.isArray(message.content) &&
+      message.content.some(part => part.type === "image")
+    );
+  });
+
+  if (!hasImageInput) {
+    return;
+  }
+
+  const capabilities = getLlmModelCapabilities(input.model);
+  if (!capabilities) {
+    throw new BizError({
+      message: "当前模型未声明图片输入能力",
+      meta: {
+        model: input.model,
+        reason: "MODEL_CAPABILITY_UNKNOWN",
+      },
+    });
+  }
+
+  if (!capabilities.supportsImageInput) {
+    throw new BizError({
+      message: "当前模型不支持图片输入",
+      meta: {
+        model: input.model,
+        reason: "VISION_UNSUPPORTED",
+      },
+    });
+  }
 }
 
 function requireUsageConfig(

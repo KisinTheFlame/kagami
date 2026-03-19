@@ -72,7 +72,7 @@ export function createOpenAiProvider(
   };
 }
 
-function requireRequestModel(request: LlmChatRequest): string {
+function requireRequestModel(request: { model?: string }): string {
   if (!request.model) {
     throw new Error("OpenAI provider requires an explicit model");
   }

@@ -38,8 +38,11 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
 }
 
 export function isConversationSummaryMessage(message: LlmMessage | undefined): boolean {
+  if (message?.role !== "user" || typeof message.content !== "string") {
+    return false;
+  }
+
   return (
-    message?.role === "user" &&
     message.content.startsWith(`<${CONVERSATION_SUMMARY_TAG}>`) &&
     message.content.includes(`</${CONVERSATION_SUMMARY_TAG}>`)
   );

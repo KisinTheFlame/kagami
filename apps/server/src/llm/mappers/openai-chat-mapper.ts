@@ -1,11 +1,13 @@
 import type {
   ChatCompletion,
+  ChatCompletionContentPart,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
 import type {
+  LlmContentPart,
   LlmChatRequest,
   LlmChatResponsePayload,
   LlmMessage,
@@ -28,7 +30,11 @@ export function toOpenAiChatRequest({
 
   for (const msg of request.messages) {
     if (msg.role === "user") {
-      messages.push({ role: "user", content: msg.content });
+      messages.push({
+        role: "user",
+        content:
+          typeof msg.content === "string" ? msg.content : msg.content.map(toOpenAiUserContentPart),
+      });
     } else if (msg.role === "assistant") {
       messages.push({
         role: "assistant",
@@ -66,6 +72,22 @@ export function toOpenAiChatRequest({
     model,
     messages,
     ...(tools && { tools, tool_choice: toolChoice }),
+  };
+}
+
+function toOpenAiUserContentPart(part: LlmContentPart): ChatCompletionContentPart {
+  if (part.type === "text") {
+    return {
+      type: "text",
+      text: part.text,
+    };
+  }
+
+  return {
+    type: "image_url",
+    image_url: {
+      url: `data:${part.mimeType};base64,${part.content.toString("base64")}`,
+    },
   };
 }
 

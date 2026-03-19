@@ -1,4 +1,4 @@
-import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "../llm/types.js";
+import type { LlmProviderId } from "../llm/types.js";
 
 export type LlmChatCallStatus = "success" | "failed";
 
@@ -31,19 +31,19 @@ type LlmChatCallBaseInput = {
   provider: LlmProviderId;
   model: string;
   latencyMs: number;
-  request: LlmChatRequest;
+  request: Record<string, unknown>;
   nativeRequestPayload?: Record<string, unknown> | null;
   nativeResponsePayload?: Record<string, unknown> | null;
   nativeError?: Record<string, unknown> | null;
 };
 
 export type RecordLlmChatCallSuccessInput = LlmChatCallBaseInput & {
-  response: LlmChatResponsePayload;
+  response: Record<string, unknown>;
 };
 
 export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
   error: unknown;
-  response?: LlmChatResponsePayload;
+  response?: Record<string, unknown>;
 };
 
 export interface LlmChatCallDao {

@@ -64,10 +64,10 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           requestId: input.requestId,
           seq: input.seq,
           provider: input.provider,
-          model: input.response.model,
+          model: input.model,
           status: "success",
           requestPayload: toInputJsonRecord(input.request),
-          responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
+          responsePayload: toInputJsonRecord(input.response),
           ...(nativeRequestPayload ? { nativeRequestPayload } : {}),
           ...(nativeResponsePayload ? { nativeResponsePayload } : {}),
           latencyMs: input.latencyMs,
@@ -99,7 +99,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           ...(nativeRequestPayload ? { nativeRequestPayload } : {}),
           ...(input.response
             ? {
-                responsePayload: toInputJsonRecord(toResponsePayloadRecord(input.response)),
+                responsePayload: toInputJsonRecord(input.response),
               }
             : {}),
           ...(nativeResponsePayload ? { nativeResponsePayload } : {}),
@@ -140,17 +140,6 @@ function serializeError(error: unknown): Record<string, unknown> {
   return {
     name: "UnknownError",
     message: typeof error === "string" ? error : "Unknown error",
-  };
-}
-
-function toResponsePayloadRecord(
-  response: RecordLlmChatCallSuccessInput["response"],
-): Record<string, unknown> {
-  return {
-    provider: response.provider,
-    model: response.model,
-    message: response.message,
-    ...(response.usage ? { usage: response.usage } : {}),
   };
 }
 
@@ -210,7 +199,7 @@ function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
         return currentValue.toString();
       }
       if (typeof currentValue === "function" || typeof currentValue === "symbol") {
-        return String(currentValue);
+        return undefined;
       }
       return currentValue;
     });

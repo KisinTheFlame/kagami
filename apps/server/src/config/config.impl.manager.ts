@@ -76,6 +76,13 @@ export class DefaultConfigManager implements ConfigManager {
             times: attempt.times,
           })),
         },
+        vision: {
+          attempts: llmUsages.vision.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
+        },
       },
     };
 
