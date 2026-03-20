@@ -8,6 +8,12 @@ server:
     listenGroupId: "123456"
   llm:
     timeoutMs: 45000
+    codexAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /auth/callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 60000
     providers:
       deepseek:
         apiKey: ""
@@ -20,11 +26,9 @@ server:
         models:
           - gpt-4o-mini
       openaiCodex:
-        authFilePath: ~/.codex/auth.json
         baseUrl: https://chatgpt.com/backend-api/codex/responses
         models:
           - gpt-5.3-codex
-        refreshLeewayMs: 60000
     usages:
       agent:
         attempts:

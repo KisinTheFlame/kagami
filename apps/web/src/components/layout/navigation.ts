@@ -1,6 +1,15 @@
-import { Database, FileText, FlaskConical, History, MessagesSquare, Webhook } from "lucide-react";
+import {
+  Database,
+  FileText,
+  FlaskConical,
+  History,
+  KeyRound,
+  MessagesSquare,
+  Webhook,
+} from "lucide-react";
 
 export const navItems = [
+  { to: "/codex-auth", label: "Codex 登录", icon: KeyRound },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
   { to: "/embedding-cache-history", label: "Embedding 缓存", icon: Database },

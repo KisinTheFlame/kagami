@@ -118,3 +118,36 @@ model NapcatGroupMessageChunk {
   @@index([sourceMessageId], map: "napcat_group_message_chunk_source_message_id_idx")
   @@map("napcat_group_message_chunk")
 }
+
+model CodexAuthSession {
+  id            Int      @id @default(autoincrement())
+  provider      String
+  accountId     String?  @map("account_id")
+  email         String?
+  accessToken   String?  @map("access_token")
+  refreshToken  String?  @map("refresh_token")
+  idToken       String?  @map("id_token")
+  expiresAt     DateTime? @map("expires_at") @db.Timestamptz(6)
+  lastRefreshAt DateTime? @map("last_refresh_at") @db.Timestamptz(6)
+  status        String
+  lastError     String?  @map("last_error")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([provider], map: "codex_auth_session_provider_uq")
+  @@index([status, updatedAt], map: "codex_auth_session_status_updated_at_idx")
+  @@map("codex_auth_session")
+}
+
+model CodexOAuthState {
+  id          Int       @id @default(autoincrement())
+  state       String    @unique(map: "codex_oauth_state_state_uq")
+  codeVerifier String   @map("code_verifier")
+  redirectUri String    @map("redirect_uri")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "codex_oauth_state_expires_at_idx")
+  @@map("codex_oauth_state")
+}

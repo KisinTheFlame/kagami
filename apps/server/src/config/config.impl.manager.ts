@@ -1,6 +1,7 @@
 import type {
   BootConfig,
   BotProfileConfig,
+  CodexAuthRuntimeConfig,
   ConfigManager,
   RagRuntimeConfig,
   LlmRuntimeConfig,
@@ -15,6 +16,7 @@ type DefaultConfigManagerOptions = {
 export class DefaultConfigManager implements ConfigManager {
   private readonly bootConfig: BootConfig;
   private readonly llmRuntimeConfig: LlmRuntimeConfig;
+  private readonly codexAuthRuntimeConfig: CodexAuthRuntimeConfig;
   private readonly ragRuntimeConfig: RagRuntimeConfig;
   private readonly tavilyConfig: TavilyConfig;
   private readonly botProfileConfig: BotProfileConfig;
@@ -48,10 +50,8 @@ export class DefaultConfigManager implements ConfigManager {
         timeoutMs: config.server.llm.timeoutMs,
       },
       openaiCodex: {
-        authFilePath: config.server.llm.providers.openaiCodex.authFilePath,
         baseUrl: config.server.llm.providers.openaiCodex.baseUrl,
         models: config.server.llm.providers.openaiCodex.models,
-        refreshLeewayMs: config.server.llm.providers.openaiCodex.refreshLeewayMs,
         timeoutMs: config.server.llm.timeoutMs,
       },
       usages: {
@@ -86,6 +86,15 @@ export class DefaultConfigManager implements ConfigManager {
       },
     };
 
+    this.codexAuthRuntimeConfig = {
+      enabled: config.server.llm.codexAuth.enabled,
+      publicBaseUrl: config.server.llm.codexAuth.publicBaseUrl,
+      oauthRedirectPath: config.server.llm.codexAuth.oauthRedirectPath,
+      oauthStateTtlMs: config.server.llm.codexAuth.oauthStateTtlMs,
+      refreshLeewayMs: config.server.llm.codexAuth.refreshLeewayMs,
+      timeoutMs: config.server.llm.timeoutMs,
+    };
+
     this.ragRuntimeConfig = {
       embedding: {
         provider: config.server.rag.embedding.provider,
@@ -114,6 +123,10 @@ export class DefaultConfigManager implements ConfigManager {
 
   public async getLlmRuntimeConfig(): Promise<LlmRuntimeConfig> {
     return this.llmRuntimeConfig;
+  }
+
+  public async getCodexAuthRuntimeConfig(): Promise<CodexAuthRuntimeConfig> {
+    return this.codexAuthRuntimeConfig;
   }
 
   public async getRagRuntimeConfig(): Promise<RagRuntimeConfig> {

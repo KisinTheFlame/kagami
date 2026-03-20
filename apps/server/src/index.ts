@@ -8,7 +8,9 @@ import { loadStaticConfig } from "./config/config.loader.js";
 import { DefaultAgentContext } from "./context/default-agent-context.js";
 import { ContextSummaryPlannerService } from "./context/context-summary-planner.service.js";
 import { createAgentSystemPrompt } from "./context/system-prompt.js";
+import { CodexAuthCallbackServer } from "./codex-auth/callback-server.js";
 import { closeDb, createDbClient, type Database } from "./db/client.js";
+import { PrismaCodexAuthDao } from "./dao/impl/codex-auth.impl.dao.js";
 import { PrismaEmbeddingCacheDao } from "./dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "./dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "./dao/impl/log.impl.dao.js";
@@ -18,6 +20,7 @@ import { PrismaNapcatGroupMessageDao } from "./dao/impl/napcat-group-message.imp
 import { BizError } from "./errors/biz-error.js";
 import { toHttpErrorResponse } from "./errors/http-error.js";
 import { AppLogHandler } from "./handler/app-log.handler.js";
+import { CodexAuthHandler } from "./handler/codex-auth.handler.js";
 import { EmbeddingCacheHandler } from "./handler/embedding-cache.handler.js";
 import { HealthHandler } from "./handler/health.handler.js";
 import { LlmHandler } from "./handler/llm.handler.js";
@@ -28,6 +31,7 @@ import { NapcatHandler } from "./handler/napcat.handler.js";
 import { createLlmClient } from "./llm/client.js";
 import { createEmbeddingClient } from "./llm/embedding/client.js";
 import { createDeepSeekProvider } from "./llm/providers/deepseek-provider.js";
+import { OpenAiCodexAuthStore } from "./llm/providers/openai-codex-auth.js";
 import { createOpenAiCodexProvider } from "./llm/providers/openai-codex-provider.js";
 import { createOpenAiProvider } from "./llm/providers/openai-provider.js";
 import { AppLogger } from "./logger/logger.js";
@@ -49,6 +53,7 @@ import { DefaultNapcatImageMessageAnalyzer } from "./service/napcat-gateway/imag
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-message-query.impl.service.js";
+import { DefaultCodexAuthService } from "./service/codex-auth.impl.service.js";
 import { TavilyWebSearchService } from "./service/tavily-web-search.impl.service.js";
 import {
   FINISH_TOOL_NAME,
@@ -77,6 +82,7 @@ const logger = new AppLogger({ source: "bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
+let codexAuthCallbackServer: CodexAuthCallbackServer | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
@@ -117,6 +123,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       await napcatGatewayService.stop();
       logger.info("Napcat gateway closed", {
         event: "server.shutdown.napcat_closed",
+      });
+    }
+
+    if (codexAuthCallbackServer) {
+      await codexAuthCallbackServer.stop();
+      logger.info("Codex auth callback server closed", {
+        event: "server.shutdown.codex_auth_callback_closed",
       });
     }
 
@@ -170,6 +183,7 @@ try {
   });
 
   const llmChatCallDao = new PrismaLlmChatCallDao({ database: databaseClient });
+  const codexAuthDao = new PrismaCodexAuthDao({ database: databaseClient });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database: databaseClient });
   const napcatEventDao = new PrismaNapcatEventDao({ database: databaseClient });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database: databaseClient });
@@ -189,6 +203,19 @@ try {
   const napcatGroupMessageQueryService = new DefaultNapcatGroupMessageQueryService({
     napcatGroupMessageDao,
   });
+  const codexAuthConfig = await activeConfigManager.getCodexAuthRuntimeConfig();
+  const codexAuthService = new DefaultCodexAuthService({
+    codexAuthDao,
+    config: codexAuthConfig,
+  });
+  const activeCodexAuthCallbackServer = new CodexAuthCallbackServer({
+    codexAuthService,
+  });
+  await activeCodexAuthCallbackServer.start();
+  codexAuthCallbackServer = activeCodexAuthCallbackServer;
+  const codexAuthStore = new OpenAiCodexAuthStore({
+    codexAuthService,
+  });
   const llmConfig = await activeConfigManager.getLlmRuntimeConfig();
   const llmProviders = {
     deepseek: llmConfig.deepseek.apiKey
@@ -203,7 +230,10 @@ try {
           apiKey: llmConfig.openai.apiKey,
         })
       : undefined,
-    "openai-codex": createOpenAiCodexProvider(llmConfig.openaiCodex),
+    "openai-codex": createOpenAiCodexProvider({
+      config: llmConfig.openaiCodex,
+      authStore: codexAuthStore,
+    }),
   };
   const llmClient = createLlmClient({
     llmChatCallDao,
@@ -368,6 +398,7 @@ try {
 
   for (const handler of [
     new HealthHandler(),
+    new CodexAuthHandler({ codexAuthService }),
     new LlmHandler({ llmPlaygroundService }),
     new LlmChatCallHandler({ llmChatCallQueryService }),
     new EmbeddingCacheHandler({ embeddingCacheQueryService }),

@@ -85,10 +85,8 @@ function createProviderConfigs(): Record<
       timeoutMs: 45_000,
     },
     "openai-codex": {
-      authFilePath: "~/.codex/auth.json",
       baseUrl: "https://chatgpt.com/backend-api/codex/responses",
       models: ["gpt-5.3-codex"],
-      refreshLeewayMs: 60_000,
       timeoutMs: 45_000,
     },
   };

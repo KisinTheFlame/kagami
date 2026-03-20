@@ -43,19 +43,20 @@ type CodexResponseCompletedEvent = {
   };
 };
 
-export function createOpenAiCodexProvider(config: OpenAiCodexRuntimeConfig): LlmProvider {
-  const authStore = new OpenAiCodexAuthStore(config);
-
+export function createOpenAiCodexProvider(input: {
+  config: OpenAiCodexRuntimeConfig;
+  authStore: OpenAiCodexAuthStore;
+}): LlmProvider {
   return {
     id: "openai-codex",
     isAvailable: async () => {
-      return await authStore.hasCredentials();
+      return await input.authStore.hasCredentials();
     },
     async chat(request: LlmChatRequest): Promise<LlmProviderChatResult> {
       try {
         return await sendCodexRequest({
-          config,
-          authStore,
+          config: input.config,
+          authStore: input.authStore,
           request,
         });
       } catch (error) {

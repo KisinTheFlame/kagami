@@ -34,6 +34,8 @@ server:
     listenGroupId: "123456"
   llm:
     timeoutMs: 15000
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
     providers:
       deepseek:
         apiKey: ""
@@ -103,10 +105,8 @@ server:
         timeoutMs: 15000,
       },
       openaiCodex: {
-        authFilePath: "~/.codex/auth.json",
         baseUrl: "https://chatgpt.com/backend-api/codex/responses",
         models: ["gpt-5.3-codex"],
-        refreshLeewayMs: 60_000,
         timeoutMs: 15000,
       },
       usages: {
@@ -147,6 +147,15 @@ server:
           ],
         },
       },
+    });
+
+    await expect(manager.getCodexAuthRuntimeConfig()).resolves.toEqual({
+      enabled: true,
+      publicBaseUrl: "http://localhost:20004",
+      oauthRedirectPath: "/auth/callback",
+      oauthStateTtlMs: 600_000,
+      refreshLeewayMs: 60_000,
+      timeoutMs: 15000,
     });
 
     await expect(manager.getRagRuntimeConfig()).resolves.toEqual({
@@ -194,6 +203,8 @@ server:
     requestTimeoutMs: 10000
     listenGroupId: "123456"
   llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
     providers:
       deepseek:
         models:
@@ -250,6 +261,8 @@ server:
     requestTimeoutMs: 10000
     listenGroupId: "123456"
   llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
     providers:
       deepseek:
         models:

@@ -19,22 +19,28 @@ server:
     requestTimeoutMs: 10000
     listenGroupId: "123456"
   llm:
-    activeProvider: deepseek
     timeoutMs: 45000
+    codexAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /auth/callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 60000
     providers:
       deepseek:
         apiKey: ""
         baseUrl: https://api.deepseek.com
-        chatModel: deepseek-chat
+        models:
+          - deepseek-chat
       openai:
         apiKey: ""
         baseUrl: https://api.openai.com/v1
-        chatModel: gpt-4o-mini
+        models:
+          - gpt-4o-mini
       openaiCodex:
-        authFilePath: ~/.codex/auth.json
         baseUrl: https://chatgpt.com/backend-api/codex/responses
-        chatModel: gpt-5.3-codex
-        refreshLeewayMs: 60000
+        models:
+          - gpt-5.3-codex
   tavily:
     apiKey: ""
   bot:
@@ -45,10 +51,10 @@ server:
 
 - `server.databaseUrl`、Napcat 连接信息和 `server.bot.qq` 为必填项。
 - `server.port` 默认值为 `20003`。
-- `server.llm.activeProvider` 默认值为 `deepseek`，`server.llm.timeoutMs` 默认值为 `45000`。
-- `server.llm.providers.deepseek.baseUrl` 和 `chatModel` 分别默认到 `https://api.deepseek.com`、`deepseek-chat`。
-- `server.llm.providers.openai.baseUrl` 和 `chatModel` 为空字符串时，会分别回退到 `https://api.openai.com/v1`、`gpt-4o-mini`。
-- `server.llm.providers.openaiCodex` 默认复用本机 `~/.codex/auth.json` 的 ChatGPT/Codex 登录态，并在服务端自动刷新票据。
+- `server.llm.timeoutMs` 默认值为 `45000`。
+- `server.llm.providers.deepseek.baseUrl` 默认到 `https://api.deepseek.com`。
+- `server.llm.providers.openai.baseUrl` 为空字符串时，会回退到 `https://api.openai.com/v1`。
+- `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。
 - `server.llm.providers.*.apiKey` 与 `server.tavily.apiKey` 为空字符串时视为未配置。
 
 ## PM2 部署

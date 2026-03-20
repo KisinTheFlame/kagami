@@ -21,9 +21,16 @@ export type LlmProviderRuntimeConfig = {
 };
 
 export type OpenAiCodexRuntimeConfig = {
-  authFilePath: string;
   baseUrl: string;
   models: string[];
+  timeoutMs: number;
+};
+
+export type CodexAuthRuntimeConfig = {
+  enabled: boolean;
+  publicBaseUrl: string;
+  oauthRedirectPath: string;
+  oauthStateTtlMs: number;
   refreshLeewayMs: number;
   timeoutMs: number;
 };
@@ -76,6 +83,7 @@ export type BotProfileConfig = {
 export interface ConfigManager {
   getBootConfig(): Promise<BootConfig>;
   getLlmRuntimeConfig(): Promise<LlmRuntimeConfig>;
+  getCodexAuthRuntimeConfig(): Promise<CodexAuthRuntimeConfig>;
   getRagRuntimeConfig(): Promise<RagRuntimeConfig>;
   getTavilyConfig(): Promise<TavilyConfig>;
   getBotProfileConfig(): Promise<BotProfileConfig>;

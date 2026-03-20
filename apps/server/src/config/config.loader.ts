@@ -12,8 +12,11 @@ const DEFAULT_PORT = 20003;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_OPENAI_CODEX_AUTH_FILE_PATH = "~/.codex/auth.json";
 const DEFAULT_OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/responses";
+const DEFAULT_CODEX_AUTH_ENABLED = true;
+const DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
+const DEFAULT_CODEX_AUTH_REDIRECT_PATH = "/auth/callback";
+const DEFAULT_CODEX_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
@@ -76,6 +79,15 @@ const StaticConfigFileSchema = z.object({
     }),
     llm: z.object({
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
+      codexAuth: z
+        .object({
+          enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),
+          publicBaseUrl: UrlSchema.default(DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL),
+          oauthRedirectPath: z.string().trim().min(1).default(DEFAULT_CODEX_AUTH_REDIRECT_PATH),
+          oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CODEX_AUTH_STATE_TTL_MS),
+          refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
+        })
+        .default({}),
       providers: z.object({
         deepseek: z.object({
           apiKey: OptionalNonEmptyStringSchema,
@@ -88,10 +100,8 @@ const StaticConfigFileSchema = z.object({
           models: NonEmptyStringArraySchema,
         }),
         openaiCodex: z.object({
-          authFilePath: z.string().trim().min(1).default(DEFAULT_OPENAI_CODEX_AUTH_FILE_PATH),
           baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
           models: NonEmptyStringArraySchema,
-          refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
         }),
       }),
       usages: z

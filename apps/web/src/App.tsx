@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLogHistoryPage } from "@/pages/app-log-history/AppLogHistoryPage";
+import { CodexAuthPage } from "@/pages/codex-auth/CodexAuthPage";
 import { EmbeddingCacheHistoryPage } from "@/pages/embedding-cache-history/EmbeddingCacheHistoryPage";
 import { LlmHistoryPage } from "@/pages/llm-history/LlmHistoryPage";
 import { LlmPlaygroundPage } from "@/pages/llm-playground/LlmPlaygroundPage";
@@ -13,6 +14,7 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/llm-history" replace />} />
+          <Route path="/codex-auth" element={<CodexAuthPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />
