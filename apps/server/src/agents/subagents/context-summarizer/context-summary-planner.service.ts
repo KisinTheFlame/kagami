@@ -1,15 +1,11 @@
-import type { LlmClient } from "../llm/client.js";
-import type { LlmMessage, Tool } from "../llm/types.js";
-import type { ToolExecutor } from "../tools/index.js";
-import { SUMMARY_TOOL_NAME } from "../tools/index.js";
-import { createContextSummarizerSystemPrompt } from "./context-summary-prompt.js";
+import type { LlmClient } from "../../../llm/client.js";
+import type { LlmMessage, Tool } from "../../../llm/types.js";
+import type { ToolExecutor } from "../../../tools/index.js";
+import { SUMMARY_TOOL_NAME } from "../../../tools/index.js";
+import { createContextSummarizerSystemPrompt } from "./system-prompt.js";
 
 export interface ContextSummaryPlanner {
-  summarize(input: {
-    systemPrompt: string;
-    messages: LlmMessage[];
-    tools: Tool[];
-  }): Promise<string | null>;
+  summarize(input: { messages: LlmMessage[]; tools: Tool[] }): Promise<string | null>;
 }
 
 export class ContextSummaryPlannerService implements ContextSummaryPlanner {
@@ -27,14 +23,10 @@ export class ContextSummaryPlannerService implements ContextSummaryPlanner {
     this.summaryToolExecutor = summaryToolExecutor;
   }
 
-  public async summarize(input: {
-    systemPrompt: string;
-    messages: LlmMessage[];
-    tools: Tool[];
-  }): Promise<string | null> {
+  public async summarize(input: { messages: LlmMessage[]; tools: Tool[] }): Promise<string | null> {
     const response = await this.llmClient.chat(
       {
-        system: createContextSummarizerSystemPrompt(input.systemPrompt),
+        system: createContextSummarizerSystemPrompt(),
         messages: input.messages,
         tools: input.tools,
         toolChoice: { tool_name: SUMMARY_TOOL_NAME },

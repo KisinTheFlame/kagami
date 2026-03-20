@@ -1,0 +1,223 @@
+import type { AgentContext, AssistantMessage } from "../../context/agent-context.js";
+import {
+  createConversationSummaryMessage,
+  createMessagesFromEvent,
+  createWakeReminderMessage,
+} from "../../context/context-message-factory.js";
+import type { Event } from "../../event/event.js";
+import type { AgentEventQueue } from "../../event/event.queue.js";
+import type { LlmClient } from "../../llm/client.js";
+import type { Tool } from "../../llm/types.js";
+import type { ToolExecutor, ToolSetExecutionResult } from "../../tools/index.js";
+import type { ContextSummaryPlanner } from "../subagents/context-summarizer/context-summary-planner.service.js";
+import type { RagContextEventEnricher } from "../subagents/rag/rag-context-event-enricher.js";
+
+type AgentLoopDeps = {
+  llmClient: LlmClient;
+  context: AgentContext;
+  eventQueue: AgentEventQueue;
+  agentTools: ToolExecutor;
+  ragContextEventEnricher?: RagContextEventEnricher;
+  summaryPlanner?: ContextSummaryPlanner;
+  summaryTools?: Tool[];
+  contextCompactionThreshold?: number;
+  now?: () => Date;
+};
+
+const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
+
+export class AgentLoop {
+  private readonly llmClient: LlmClient;
+  private readonly context: AgentContext;
+  private readonly eventQueue: AgentEventQueue;
+  private readonly agentTools: ToolExecutor;
+  private readonly ragContextEventEnricher?: RagContextEventEnricher;
+  private readonly summaryPlanner?: ContextSummaryPlanner;
+  private readonly summaryTools: Tool[];
+  private readonly contextCompactionThreshold: number;
+  private readonly now: () => Date;
+  private lastWakeReminderAt: Date | null = null;
+
+  public constructor({
+    llmClient,
+    context,
+    eventQueue,
+    agentTools,
+    ragContextEventEnricher,
+    summaryPlanner,
+    summaryTools,
+    contextCompactionThreshold,
+    now,
+  }: AgentLoopDeps) {
+    this.llmClient = llmClient;
+    this.context = context;
+    this.eventQueue = eventQueue;
+    this.agentTools = agentTools;
+    this.ragContextEventEnricher = ragContextEventEnricher;
+    this.summaryPlanner = summaryPlanner;
+    this.summaryTools = summaryTools ?? [];
+    this.contextCompactionThreshold =
+      contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
+    this.now = now ?? (() => new Date());
+  }
+
+  public async run(): Promise<void> {
+    while (true) {
+      const shouldAddWakeReminder = this.eventQueue.size() === 0;
+      await this.eventQueue.waitForEvent();
+      if (shouldAddWakeReminder) {
+        await this.appendWakeReminderIfNeeded(this.now());
+      }
+
+      while (true) {
+        const events = this.eventQueue.drainAll();
+        if (events.length > 0) {
+          await this.handleEvents(events);
+        }
+        const snapshot = await this.context.getSnapshot();
+
+        const completion = await this.llmClient.chat(
+          {
+            system: snapshot.systemPrompt,
+            messages: snapshot.messages,
+            tools: this.agentTools.definitions(),
+            toolChoice: "required",
+          },
+          {
+            usage: "agent",
+          },
+        );
+        const assistant = completion.message;
+        const persistentAssistantMessage = omitControlToolCalls(assistant, this.agentTools);
+        if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
+          await this.context.appendAssistantTurn(persistentAssistantMessage);
+          await this.compactContextIfNeeded();
+        }
+
+        let shouldFinishRound = false;
+        for (const toolCall of assistant.toolCalls) {
+          const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments);
+          if (toolResult.signal === "finish_round") {
+            shouldFinishRound = true;
+          }
+          if (toolResult.kind !== "control" && toolResult.content.length > 0) {
+            await this.context.appendToolResult({
+              toolCallId: toolCall.id,
+              content: toolResult.content,
+            });
+            await this.compactContextIfNeeded();
+          }
+        }
+
+        if (shouldFinishRound && this.eventQueue.size() === 0) {
+          break;
+        }
+      }
+    }
+  }
+
+  private async handleEvents(events: Event[]): Promise<void> {
+    const eventMessages = events.flatMap(event => createMessagesFromEvent(event));
+    if (eventMessages.length > 0) {
+      await this.context.appendMessages(eventMessages);
+    }
+
+    if (this.ragContextEventEnricher) {
+      const snapshot = await this.context.getSnapshot();
+      const enrichedMessages = await this.ragContextEventEnricher.enrichAfterEvents({
+        events,
+        snapshot,
+      });
+      if (enrichedMessages.length > 0) {
+        await this.context.appendMessages(enrichedMessages);
+      }
+    }
+
+    await this.compactContextIfNeeded();
+  }
+
+  private async executeToolCall(
+    toolName: string,
+    argumentsValue: Record<string, unknown>,
+  ): Promise<ToolSetExecutionResult> {
+    return await this.agentTools.execute(toolName, argumentsValue, {});
+  }
+
+  private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
+    if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {
+      return;
+    }
+
+    await this.context.appendMessages([createWakeReminderMessage(now)]);
+    this.lastWakeReminderAt = new Date(now);
+    await this.compactContextIfNeeded();
+  }
+
+  private async compactContextIfNeeded(): Promise<void> {
+    if (!this.summaryPlanner) {
+      return;
+    }
+
+    const snapshot = await this.context.getSnapshot();
+    if (snapshot.messages.length <= this.contextCompactionThreshold) {
+      return;
+    }
+
+    const splitIndex = Math.floor(snapshot.messages.length / 2);
+    if (splitIndex <= 0 || splitIndex >= snapshot.messages.length) {
+      return;
+    }
+
+    const summary = await this.summaryPlanner.summarize({
+      messages: snapshot.messages.slice(0, splitIndex),
+      tools: this.summaryTools,
+    });
+    if (!summary) {
+      return;
+    }
+
+    await this.context.replaceMessages([
+      createConversationSummaryMessage(summary),
+      ...snapshot.messages.slice(splitIndex),
+    ]);
+  }
+}
+
+function omitControlToolCalls(
+  message: AssistantMessage,
+  agentTools: ToolExecutor,
+): AssistantMessage {
+  return {
+    ...message,
+    toolCalls: message.toolCalls.filter(
+      toolCall => agentTools.getKind(toolCall.name) !== "control",
+    ),
+  };
+}
+
+function shouldPersistAssistantMessage(message: AssistantMessage): boolean {
+  return message.content.trim().length > 0 || message.toolCalls.length > 0;
+}
+
+function isSameWakeReminderMinute(previous: Date | null, current: Date): boolean {
+  if (previous === null) {
+    return false;
+  }
+
+  return createWakeReminderMinuteKey(previous) === createWakeReminderMinuteKey(current);
+}
+
+function createWakeReminderMinuteKey(now: Date): string {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+
+  return [values.year, values.month, values.day, values.hour, values.minute].join("-");
+}

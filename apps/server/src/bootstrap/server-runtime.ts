@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { AgentLoop } from "../agent/agent-loop.js";
-import { InMemoryAgentEventQueue } from "../agent/event.impl.queue.js";
+import { AgentLoop, createAgentSystemPrompt } from "../agents/main-engine/index.js";
+import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
+import {
+  createRagSystemPrompt,
+  RagContextEventEnricher,
+  RagQueryPlannerService,
+} from "../agents/subagents/rag/index.js";
+import { VisionAgent } from "../agents/subagents/vision/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
 import { DefaultAgentContext } from "../context/default-agent-context.js";
-import { ContextSummaryPlannerService } from "../context/context-summary-planner.service.js";
-import { createAgentSystemPrompt } from "../context/system-prompt.js";
 import { CodexAuthCallbackServer } from "../codex-auth/callback-server.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaCodexAuthDao } from "../dao/impl/codex-auth.impl.dao.js";
@@ -38,10 +42,9 @@ import { AppLogger } from "../logger/logger.js";
 import { initLoggerRuntime, withTraceContext } from "../logger/runtime.js";
 import { DbLogSink } from "../logger/sinks/db-sink.js";
 import { StdoutLogSink } from "../logger/sinks/stdout-sink.js";
+import { InMemoryAgentEventQueue } from "../event/event.impl.queue.js";
 import { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import { GroupMessageMemorySearchService } from "../rag/memory-search.service.js";
-import { RagContextEventEnricher } from "../rag/rag-context-event-enricher.js";
-import { RagQueryPlannerService } from "../rag/rag-query-planner.service.js";
 import { DefaultAgentMessageService } from "../service/agent-message.impl.service.js";
 import { DefaultAppLogQueryService } from "../service/app-log-query.impl.service.js";
 import { DefaultCodexAuthService } from "../service/codex-auth.impl.service.js";
@@ -68,7 +71,6 @@ import {
   SummaryTool,
   ToolCatalog,
 } from "../tools/index.js";
-import { VisionAgent } from "../vision/index.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -239,7 +241,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const ragQueryPlanner = new RagQueryPlannerService({
     llmClient,
     plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
-    systemPromptFactory: agentSystemPromptFactory,
+    systemPromptFactory: createRagSystemPrompt,
   });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
   const ragContextEventEnricher = new RagContextEventEnricher({
@@ -256,18 +258,18 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const context = new DefaultAgentContext({
     systemPromptFactory: agentSystemPromptFactory,
-    eventEnricher: ragContextEventEnricher,
-    summaryPlanner,
-    summaryTools: [
-      ...agentVisibleTools.definitions(),
-      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
-    ],
   });
   const agentLoop = new AgentLoop({
     llmClient,
     context,
     eventQueue,
     agentTools: agentVisibleTools,
+    ragContextEventEnricher,
+    summaryPlanner,
+    summaryTools: [
+      ...agentVisibleTools.definitions(),
+      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
+    ],
   });
 
   const app = createServerApp({

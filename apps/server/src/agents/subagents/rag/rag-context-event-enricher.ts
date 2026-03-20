@@ -1,18 +1,18 @@
-import { AppLogger } from "../logger/logger.js";
-import type { Event, NapcatGroupMessageEvent } from "../agent/event.js";
-import type { ContextEventEnricher } from "../context/agent-context.js";
+import type { AgentContextSnapshot } from "../../../context/agent-context.js";
+import type { Event, NapcatGroupMessageEvent } from "../../../event/event.js";
+import { AppLogger } from "../../../logger/logger.js";
 import type { RagQueryPlannerService } from "./rag-query-planner.service.js";
 
 const logger = new AppLogger({ source: "rag.context-enricher" });
 
-export class RagContextEventEnricher implements ContextEventEnricher {
+export class RagContextEventEnricher {
   private readonly ragQueryPlanner: RagQueryPlannerService;
 
   public constructor({ ragQueryPlanner }: { ragQueryPlanner: RagQueryPlannerService }) {
     this.ragQueryPlanner = ragQueryPlanner;
   }
 
-  public async enrichAfterEvents(input: Parameters<ContextEventEnricher["enrichAfterEvents"]>[0]) {
+  public async enrichAfterEvents(input: { events: Event[]; snapshot: AgentContextSnapshot }) {
     const lastGroupMessageEvent = findLastGroupMessageEvent(input.events);
     if (!lastGroupMessageEvent) {
       return [];

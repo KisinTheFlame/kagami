@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { AgentLoop } from "../../src/agent/agent-loop.js";
-import type { AgentEventQueue } from "../../src/agent/event.queue.js";
-import type { AgentContext } from "../../src/context/agent-context.js";
+import { AgentLoop } from "../../src/agents/main-engine/agent-loop.js";
+import type { RagContextEventEnricher } from "../../src/agents/subagents/rag/rag-context-event-enricher.js";
+import { DefaultAgentContext } from "../../src/context/default-agent-context.js";
+import {
+  createConversationSummaryMessage,
+  createWakeReminderMessage,
+} from "../../src/context/context-message-factory.js";
+import type { AgentEventQueue } from "../../src/event/event.queue.js";
 import type { LlmClient } from "../../src/llm/client.js";
-import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
+import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 import { ToolCatalog } from "../../src/tools/index.js";
 import type { ToolComponent, ToolSet } from "../../src/tools/index.js";
 
@@ -131,24 +136,9 @@ describe("AgentLoop", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
-
-    const getSnapshot = vi.fn().mockResolvedValue({
-      systemPrompt: "system-prompt",
-      messages: [],
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
     });
-    const recordWake = vi.fn().mockResolvedValue(undefined);
-    const recordEvent = vi.fn().mockResolvedValue(undefined);
-    const recordEvents = vi.fn().mockResolvedValue(undefined);
-    const recordAssistantTurn = vi.fn().mockResolvedValue(undefined);
-    const recordToolResult = vi.fn().mockResolvedValue(undefined);
-    const context: AgentContext = {
-      getSnapshot,
-      recordWake,
-      recordEvent,
-      recordEvents,
-      recordAssistantTurn,
-      recordToolResult,
-    };
 
     const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
     const drainAll = vi
@@ -165,12 +155,10 @@ describe("AgentLoop", () => {
         },
       ])
       .mockReturnValue([]);
-    const size = vi.fn().mockReturnValue(0);
-    const enqueue = vi.fn().mockReturnValue(1);
     const eventQueue: AgentEventQueue = {
-      enqueue,
+      enqueue: vi.fn().mockReturnValue(1),
       drainAll,
-      size,
+      size: vi.fn().mockReturnValue(0),
       waitForEvent,
     };
 
@@ -184,28 +172,17 @@ describe("AgentLoop", () => {
 
     await expect(loop.run()).rejects.toBe(stopError);
 
-    expect(waitForEvent).toHaveBeenCalledTimes(2);
-    expect(drainAll).toHaveBeenCalled();
-    expect(recordWake).toHaveBeenNthCalledWith(1, {
-      now: new Date("2026-03-09T10:21:00.000Z"),
-    });
-    expect(recordEvents).toHaveBeenCalledWith([
-      {
-        type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "hello",
-        messageId: 1001,
-        time: 1710000000,
-      },
-    ]);
-    expect(recordEvent).not.toHaveBeenCalled();
     expect(chat).toHaveBeenCalledTimes(1);
     expect(chat).toHaveBeenCalledWith(
       {
         system: "system-prompt",
-        messages: [],
+        messages: [
+          createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+          {
+            role: "user",
+            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+          },
+        ],
         tools: agentTools.definitions(),
         toolChoice: "required",
       },
@@ -213,17 +190,24 @@ describe("AgentLoop", () => {
         usage: "agent",
       },
     );
-    expect(recordAssistantTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "assistant",
-        content: "done",
-        toolCalls: [],
-      }),
-    );
     expect(finishExecute).toHaveBeenCalledWith({}, {});
     expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
-    expect(recordToolResult).not.toHaveBeenCalled();
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+        },
+        {
+          role: "assistant",
+          content: "done",
+          toolCalls: [],
+        },
+      ],
+    });
   });
 
   it("should add a wake reminder each time the loop resumes from sleep", async () => {
@@ -233,19 +217,9 @@ describe("AgentLoop", () => {
       .mockReturnValueOnce(new Date("2026-03-09T10:21:00.000Z"))
       .mockReturnValueOnce(new Date("2026-03-09T10:22:00.000Z"));
     const { agentTools } = createAgentTools();
-
-    const chat = vi.fn().mockResolvedValue(createLlmResponse());
-    const context: AgentContext = {
-      getSnapshot: vi.fn().mockResolvedValue({
-        systemPrompt: "system-prompt",
-        messages: [],
-      }),
-      recordWake: vi.fn().mockResolvedValue(undefined),
-      recordEvent: vi.fn().mockResolvedValue(undefined),
-      recordEvents: vi.fn().mockResolvedValue(undefined),
-      recordAssistantTurn: vi.fn().mockResolvedValue(undefined),
-      recordToolResult: vi.fn().mockResolvedValue(undefined),
-    };
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
 
     const eventQueue: AgentEventQueue = {
       enqueue: vi.fn().mockReturnValue(1),
@@ -260,7 +234,7 @@ describe("AgentLoop", () => {
 
     const loop = new AgentLoop({
       llmClient: {
-        chat,
+        chat: vi.fn().mockResolvedValue(createLlmResponse()),
         chatDirect: vi.fn(),
         listAvailableProviders: vi.fn().mockResolvedValue([]),
       },
@@ -272,13 +246,13 @@ describe("AgentLoop", () => {
 
     await expect(loop.run()).rejects.toBe(stopError);
 
-    expect(context.recordWake).toHaveBeenCalledTimes(2);
-    expect(context.recordWake).toHaveBeenNthCalledWith(1, {
-      now: new Date("2026-03-09T10:21:00.000Z"),
-    });
-    expect(context.recordWake).toHaveBeenNthCalledWith(2, {
-      now: new Date("2026-03-09T10:22:00.000Z"),
-    });
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages).toEqual(
+      expect.arrayContaining([
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        createWakeReminderMessage(new Date("2026-03-09T10:22:00.000Z")),
+      ]),
+    );
   });
 
   it("should not carry finish tool calls or responses into later chat context", async () => {
@@ -310,56 +284,9 @@ describe("AgentLoop", () => {
         },
       } satisfies LlmChatResponsePayload);
 
-    const messages: LlmMessage[] = [];
-    const context: AgentContext = {
-      getSnapshot: vi.fn(async () => ({
-        systemPrompt: "system-prompt",
-        messages: messages.slice(),
-      })),
-      recordWake: vi.fn(async ({ now }: { now: Date }) => {
-        messages.push({
-          role: "user",
-          content: `<system_reminder>${now.toISOString()}</system_reminder>`,
-        });
-      }),
-      recordEvent: vi.fn(async event => {
-        messages.push({
-          role: "user",
-          content: [
-            "<message>",
-            `${event.nickname} (${event.userId}):`,
-            event.rawMessage,
-            "</message>",
-          ].join("\n"),
-        });
-      }),
-      recordEvents: vi.fn(async events => {
-        for (const event of events) {
-          messages.push({
-            role: "user",
-            content: [
-              "<message>",
-              `${event.nickname} (${event.userId}):`,
-              event.rawMessage,
-              "</message>",
-            ].join("\n"),
-          });
-        }
-      }),
-      recordAssistantTurn: vi.fn(async message => {
-        messages.push(message);
-      }),
-      recordToolResult: vi.fn(
-        async ({ toolCallId, content }: { toolCallId: string; content: string }) => {
-          messages.push({
-            role: "tool",
-            toolCallId,
-            content,
-          });
-        },
-      ),
-    };
-
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
     const eventQueue: AgentEventQueue = {
       enqueue: vi.fn().mockReturnValue(1),
       drainAll: vi
@@ -437,6 +364,119 @@ describe("AgentLoop", () => {
           content: "",
         },
       ]),
+    );
+  });
+
+  it("should enrich and compact context inside the loop instead of inside context", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const chat = vi.fn().mockResolvedValue({
+      provider: "openai",
+      model: "gpt-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "finish-1", name: "finish", arguments: {} }],
+      },
+    } satisfies LlmChatResponsePayload);
+    const llmClient: LlmClient = {
+      chat,
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const ragContextEventEnricher = {
+      enrichAfterEvents: vi.fn().mockResolvedValue([
+        {
+          role: "user",
+          content: "<memory_history_message>\n时间：2026-03-11 10:00:00\n</memory_history_message>",
+        },
+      ]),
+    } as const;
+    const summaryPlanner = {
+      summarize: vi.fn().mockResolvedValue("累计摘要"),
+    };
+    const { agentTools } = createAgentTools();
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      drainAll: vi
+        .fn()
+        .mockReturnValueOnce([
+          {
+            type: "napcat_group_message",
+            groupId: "123456",
+            userId: "654321",
+            nickname: "测试昵称",
+            rawMessage: "hello",
+            messageId: 1001,
+            time: 1710000000,
+          },
+        ])
+        .mockReturnValue([]),
+      size: vi.fn().mockReturnValue(0),
+      waitForEvent: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError),
+    };
+
+    const loop = new AgentLoop({
+      llmClient,
+      context,
+      eventQueue,
+      agentTools,
+      ragContextEventEnricher: ragContextEventEnricher as unknown as RagContextEventEnricher,
+      summaryPlanner,
+      summaryTools: [],
+      contextCompactionThreshold: 1,
+      now: () => new Date("2026-03-09T10:21:00.000Z"),
+    });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(ragContextEventEnricher.enrichAfterEvents).toHaveBeenCalledWith({
+      events: [
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "hello",
+          messageId: 1001,
+          time: 1710000000,
+        },
+      ],
+      snapshot: {
+        systemPrompt: "system-prompt",
+        messages: [
+          createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+          {
+            role: "user",
+            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+          },
+        ],
+      },
+    });
+    expect(summaryPlanner.summarize).toHaveBeenCalledWith({
+      messages: [createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z"))],
+      tools: [],
+    });
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          createConversationSummaryMessage("累计摘要"),
+          {
+            role: "user",
+            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+          },
+          {
+            role: "user",
+            content:
+              "<memory_history_message>\n时间：2026-03-11 10:00:00\n</memory_history_message>",
+          },
+        ],
+      }),
+      {
+        usage: "agent",
+      },
     );
   });
 });

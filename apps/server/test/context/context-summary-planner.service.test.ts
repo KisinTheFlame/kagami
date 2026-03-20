@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmClient } from "../../src/llm/client.js";
-import { ContextSummaryPlannerService } from "../../src/context/context-summary-planner.service.js";
+import { ContextSummaryPlannerService } from "../../src/agents/subagents/context-summarizer/context-summary-planner.service.js";
 import { SUMMARY_TOOL_NAME, SummaryTool, ToolCatalog } from "../../src/tools/index.js";
 
 describe("ContextSummaryPlannerService", () => {
@@ -34,7 +34,6 @@ describe("ContextSummaryPlannerService", () => {
 
     await expect(
       planner.summarize({
-        systemPrompt: "base-system",
         messages: [{ role: "user", content: "旧消息" }],
         tools: [
           {
@@ -86,7 +85,6 @@ describe("ContextSummaryPlannerService", () => {
 
     await expect(
       planner.summarize({
-        systemPrompt: "base-system",
         messages: [],
         tools: [{ name: SUMMARY_TOOL_NAME, parameters: { type: "object", properties: {} } }],
       }),

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { RagContextEventEnricher } from "../../src/rag/rag-context-event-enricher.js";
-import type { RagQueryPlannerService } from "../../src/rag/rag-query-planner.service.js";
+import { RagContextEventEnricher } from "../../src/agents/subagents/rag/rag-context-event-enricher.js";
+import type { RagQueryPlannerService } from "../../src/agents/subagents/rag/rag-query-planner.service.js";
 
 describe("RagContextEventEnricher", () => {
   it("should enrich only napcat group message events", async () => {

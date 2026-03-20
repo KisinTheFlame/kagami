@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { AgentEventQueue } from "../agent/event.queue.js";
 import type { ConfigManager, NapcatBootConfig } from "../config/config.manager.js";
 import { BizError } from "../errors/biz-error.js";
+import type { AgentEventQueue } from "../event/event.queue.js";
 import { AppLogger } from "../logger/logger.js";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";

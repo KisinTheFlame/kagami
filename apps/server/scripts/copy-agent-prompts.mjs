@@ -1,11 +1,34 @@
-import { cpSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const serverDir = resolve(scriptDir, "..");
-const sourceDir = resolve(serverDir, "src/context/prompts");
-const targetDir = resolve(serverDir, "dist/context/prompts");
+const sourceRootDir = resolve(serverDir, "src/agents");
+const targetRootDir = resolve(serverDir, "dist/agents");
 
-mkdirSync(targetDir, { recursive: true });
-cpSync(sourceDir, targetDir, { recursive: true });
+copyPromptDirectories(sourceRootDir);
+
+function copyPromptDirectories(currentDir) {
+  if (!existsSync(currentDir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(currentDir)) {
+    const sourcePath = join(currentDir, entry);
+    const stats = statSync(sourcePath);
+    if (!stats.isDirectory()) {
+      continue;
+    }
+
+    if (entry === "prompts") {
+      const relativePath = relative(sourceRootDir, sourcePath);
+      const targetPath = join(targetRootDir, relativePath);
+      mkdirSync(targetPath, { recursive: true });
+      cpSync(sourcePath, targetPath, { recursive: true });
+      continue;
+    }
+
+    copyPromptDirectories(sourcePath);
+  }
+}

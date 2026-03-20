@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { RagQueryPlannerService } from "../../src/rag/rag-query-planner.service.js";
+import { RagQueryPlannerService } from "../../src/agents/subagents/rag/rag-query-planner.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { GroupMessageMemorySearchService } from "../../src/rag/memory-search.service.js";
 import { SearchMemoryTool, ToolCatalog } from "../../src/tools/index.js";

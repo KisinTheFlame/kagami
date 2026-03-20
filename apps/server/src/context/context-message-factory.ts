@@ -1,5 +1,5 @@
-import type { Event } from "../agent/event.js";
-import { formatGroupMessagePlainText } from "../agent/event.js";
+import type { Event } from "../event/event.js";
+import { formatGroupMessagePlainText } from "../event/event.js";
 import type { LlmMessage } from "../llm/types.js";
 
 const BEIJING_TIME_ZONE = "Asia/Shanghai";

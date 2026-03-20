@@ -1,5 +1,6 @@
-import type { LlmClient } from "../llm/client.js";
-import { BizError } from "../errors/biz-error.js";
+import type { LlmClient } from "../../../llm/client.js";
+import { BizError } from "../../../errors/biz-error.js";
+import { createVisionSystemPrompt } from "./system-prompt.js";
 
 type VisionAgentDeps = {
   llmClient: LlmClient;
@@ -23,15 +24,6 @@ export type AnalyzeImageResult = {
   };
 };
 
-const DEFAULT_VISION_PROMPT = [
-  "请把这张图片转成适合聊天上下文的一小段中文文本。",
-  "只输出最终描述，不要标题、不要分点、不要 Markdown、不要补充说明、不要提出后续建议。",
-  "优先保留最影响理解上下文的信息：主体、动作、场景、可见文字、数字、时间、地点、关键界面信息。",
-  "如果是截图或界面，提炼最关键的页面内容，不要把每个按钮和布局都详细列出来。",
-  "控制在 1 段内，尽量简洁；通常 1 到 3 句即可。",
-  "不要编造未出现的内容，不确定时省略或用简短措辞说明。",
-].join("\n");
-
 export class VisionAgent {
   private readonly llmClient: LlmClient;
 
@@ -42,7 +34,7 @@ export class VisionAgent {
   public async analyzeImage(input: AnalyzeImageInput): Promise<AnalyzeImageResult> {
     validateAnalyzeImageInput(input);
 
-    const prompt = input.prompt?.trim().length ? input.prompt.trim() : DEFAULT_VISION_PROMPT;
+    const prompt = input.prompt?.trim().length ? input.prompt.trim() : createVisionSystemPrompt();
     const response = await this.llmClient.chat(
       {
         messages: [

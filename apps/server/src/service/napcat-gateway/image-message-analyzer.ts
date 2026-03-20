@@ -1,6 +1,6 @@
 import { AppLogger } from "../../logger/logger.js";
 import type { NapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
-import type { VisionAgent } from "../../vision/index.js";
+import type { VisionAgent } from "../../agents/subagents/vision/index.js";
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 

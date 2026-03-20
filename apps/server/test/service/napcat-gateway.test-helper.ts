@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { AgentEventQueue } from "../../src/agent/event.queue.js";
+import type { AgentEventQueue } from "../../src/event/event.queue.js";
 import type { ConfigManager } from "../../src/config/config.manager.js";
 import type { NapcatEventDao } from "../../src/dao/napcat-event.dao.js";
 import type { NapcatGroupMessageChunkDao } from "../../src/dao/napcat-group-message-chunk.dao.js";

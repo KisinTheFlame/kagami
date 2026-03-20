@@ -1,5 +1,5 @@
 import { AppLogger } from "../../logger/logger.js";
-import type { AgentEventQueue } from "../../agent/event.queue.js";
+import type { AgentEventQueue } from "../../event/event.queue.js";
 import type { NapcatGroupMessageEvent } from "../napcat-gateway.service.js";
 import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,

@@ -1,4 +1,4 @@
-import { formatGroupMessagePlainText } from "../../agent/event.js";
+import { formatGroupMessagePlainText } from "../../event/event.js";
 import type { NapcatEventDao } from "../../dao/napcat-event.dao.js";
 import type { NapcatGroupMessageChunkDao } from "../../dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../../dao/napcat-group-message.dao.js";
