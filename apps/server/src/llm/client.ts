@@ -8,7 +8,6 @@ import type {
 } from "../config/config.manager.js";
 import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
 import { BizError } from "../errors/biz-error.js";
-import { getLlmModelCapabilities } from "./model-capabilities.js";
 import {
   getLlmProviderFailureContext,
   type LlmProvider,
@@ -153,11 +152,6 @@ async function executeChatAttempt({
   let response: LlmChatResponsePayload | null = null;
 
   try {
-    validateModelInputSupport({
-      request,
-      model: attempt.model,
-    });
-
     if (!provider) {
       throw new BizError({
         message: "所选 LLM provider 当前不可用",
@@ -323,41 +317,6 @@ function toRecordableChatResponse(response: LlmChatResponsePayload): Record<stri
     message: response.message,
     ...(response.usage ? { usage: response.usage } : {}),
   };
-}
-
-function validateModelInputSupport(input: { request: LlmChatRequest; model: string }): void {
-  const hasImageInput = input.request.messages.some(message => {
-    return (
-      message.role === "user" &&
-      Array.isArray(message.content) &&
-      message.content.some(part => part.type === "image")
-    );
-  });
-
-  if (!hasImageInput) {
-    return;
-  }
-
-  const capabilities = getLlmModelCapabilities(input.model);
-  if (!capabilities) {
-    throw new BizError({
-      message: "当前模型未声明图片输入能力",
-      meta: {
-        model: input.model,
-        reason: "MODEL_CAPABILITY_UNKNOWN",
-      },
-    });
-  }
-
-  if (!capabilities.supportsImageInput) {
-    throw new BizError({
-      message: "当前模型不支持图片输入",
-      meta: {
-        model: input.model,
-        reason: "VISION_UNSUPPORTED",
-      },
-    });
-  }
 }
 
 function requireUsageConfig(

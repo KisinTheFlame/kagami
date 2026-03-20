@@ -1044,10 +1044,22 @@ describe("createLlmClient", () => {
     );
   });
 
-  it("should reject image content when the selected model does not support vision", async () => {
+  it("should forward image content to the configured provider without local capability checks", async () => {
     const provider: LlmProvider = {
       id: "deepseek",
-      chat: vi.fn(),
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "deepseek",
+            model: "deepseek-chat",
+            message: {
+              role: "assistant",
+              content: "received",
+              toolCalls: [],
+            },
+          }),
+        ),
+      ),
     };
     const { client, llmChatCallDao } = createClient({
       providers: {
@@ -1066,6 +1078,8 @@ describe("createLlmClient", () => {
       }),
     });
 
+    const imageBytes = Buffer.from("image-bytes");
+
     await expect(
       client.chat(
         {
@@ -1079,7 +1093,7 @@ describe("createLlmClient", () => {
                 },
                 {
                   type: "image",
-                  content: Buffer.from("image-bytes"),
+                  content: imageBytes,
                   mimeType: "image/jpeg",
                 },
               ],
@@ -1092,17 +1106,36 @@ describe("createLlmClient", () => {
           usage: "vision",
         },
       ),
-    ).rejects.toMatchObject({
-      name: "BizError",
-      message: "当前模型不支持图片输入",
-      meta: {
-        model: "deepseek-chat",
-        reason: "VISION_UNSUPPORTED",
+    ).resolves.toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+      message: {
+        content: "received",
       },
-    } satisfies Partial<BizError>);
+    });
 
-    expect(provider.chat).not.toHaveBeenCalled();
-    expect(llmChatCallDao.recordError).toHaveBeenCalledWith(
+    expect(provider.chat).toHaveBeenCalledWith({
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "describe image",
+            },
+            {
+              type: "image",
+              content: imageBytes,
+              mimeType: "image/jpeg",
+            },
+          ],
+        },
+      ],
+      tools: [],
+      toolChoice: "none",
+    });
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "deepseek-chat",
         request: {
@@ -1119,7 +1152,7 @@ describe("createLlmClient", () => {
                   type: "image",
                   mimeType: "image/jpeg",
                   filename: undefined,
-                  sizeBytes: Buffer.from("image-bytes").byteLength,
+                  sizeBytes: imageBytes.byteLength,
                 },
               ],
             },
@@ -1129,12 +1162,25 @@ describe("createLlmClient", () => {
         },
       }),
     );
+    expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
   });
 
-  it("should reject image content when model capability is unknown", async () => {
+  it("should allow image content for models that are only configured locally", async () => {
     const provider: LlmProvider = {
       id: "openai",
-      chat: vi.fn(),
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai",
+            model: "gpt-unknown-vision",
+            message: {
+              role: "assistant",
+              content: "received",
+              toolCalls: [],
+            },
+          }),
+        ),
+      ),
     };
     const providerConfigs = createProviderConfigs();
     providerConfigs.openai = {
@@ -1159,6 +1205,8 @@ describe("createLlmClient", () => {
       }),
     });
 
+    const imageBytes = Buffer.from("image-bytes");
+
     await expect(
       client.chat(
         {
@@ -1172,7 +1220,7 @@ describe("createLlmClient", () => {
                 },
                 {
                   type: "image",
-                  content: Buffer.from("image-bytes"),
+                  content: imageBytes,
                   mimeType: "image/png",
                 },
               ],
@@ -1185,17 +1233,37 @@ describe("createLlmClient", () => {
           usage: "vision",
         },
       ),
-    ).rejects.toMatchObject({
-      name: "BizError",
-      message: "当前模型未声明图片输入能力",
-      meta: {
-        model: "gpt-unknown-vision",
-        reason: "MODEL_CAPABILITY_UNKNOWN",
+    ).resolves.toMatchObject({
+      provider: "openai",
+      model: "gpt-unknown-vision",
+      message: {
+        content: "received",
       },
-    } satisfies Partial<BizError>);
+    });
 
-    expect(provider.chat).not.toHaveBeenCalled();
-    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
+    expect(provider.chat).toHaveBeenCalledWith({
+      model: "gpt-unknown-vision",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "describe image",
+            },
+            {
+              type: "image",
+              content: imageBytes,
+              mimeType: "image/png",
+            },
+          ],
+        },
+      ],
+      tools: [],
+      toolChoice: "none",
+    });
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+    expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
   });
 
   it("should require explicit usage for listAvailableProviders", async () => {
