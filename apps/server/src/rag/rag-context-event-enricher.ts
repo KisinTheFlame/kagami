@@ -1,6 +1,6 @@
 import { AppLogger } from "../logger/logger.js";
+import type { Event, NapcatGroupMessageEvent } from "../agent/event.js";
 import type { ContextEventEnricher } from "../context/agent-context.js";
-import { createMessagesFromEvent } from "../context/context-message-factory.js";
 import type { RagQueryPlannerService } from "./rag-query-planner.service.js";
 
 const logger = new AppLogger({ source: "rag.context-enricher" });
@@ -12,27 +12,22 @@ export class RagContextEventEnricher implements ContextEventEnricher {
     this.ragQueryPlanner = ragQueryPlanner;
   }
 
-  public async enrichAfterEvent(input: Parameters<ContextEventEnricher["enrichAfterEvent"]>[0]) {
-    if (input.event.type !== "napcat_group_message") {
-      return [];
-    }
-
-    const currentMessage = createMessagesFromEvent(input.event).at(-1)?.content;
-    if (!currentMessage || typeof currentMessage !== "string") {
+  public async enrichAfterEvents(input: Parameters<ContextEventEnricher["enrichAfterEvents"]>[0]) {
+    const lastGroupMessageEvent = findLastGroupMessageEvent(input.events);
+    if (!lastGroupMessageEvent) {
       return [];
     }
 
     try {
       return await this.ragQueryPlanner.plan({
-        groupId: input.event.groupId,
-        currentMessage,
+        groupId: lastGroupMessageEvent.groupId,
         contextMessages: input.snapshot.messages,
       });
     } catch (error) {
       try {
         logger.warn("Failed to enrich context from RAG planner", {
           event: "rag.context_enricher.failed",
-          groupId: input.event.groupId,
+          groupId: lastGroupMessageEvent.groupId,
           error: error instanceof Error ? error.message : String(error),
         });
       } catch {
@@ -41,4 +36,15 @@ export class RagContextEventEnricher implements ContextEventEnricher {
       return [];
     }
   }
+}
+
+function findLastGroupMessageEvent(events: Event[]): NapcatGroupMessageEvent | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type === "napcat_group_message") {
+      return event;
+    }
+  }
+
+  return null;
 }

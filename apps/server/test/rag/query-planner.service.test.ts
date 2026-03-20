@@ -42,7 +42,6 @@ describe("RagQueryPlannerService", () => {
     await expect(
       service.plan({
         groupId: "123456",
-        currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
     ).resolves.toEqual([]);
@@ -86,7 +85,6 @@ describe("RagQueryPlannerService", () => {
     await expect(
       service.plan({
         groupId: "123456",
-        currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
     ).resolves.toEqual([
@@ -138,14 +136,13 @@ describe("RagQueryPlannerService", () => {
     await expect(
       service.plan({
         groupId: "123456",
-        currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
     ).resolves.toEqual([]);
     expect(memorySearchService.search).not.toHaveBeenCalled();
   });
 
-  it("should not duplicate the current message when it is already the last context message", async () => {
+  it("should pass the full context through to the planner chat", async () => {
     const llmClient: LlmClient = {
       chat: vi.fn().mockResolvedValue({
         provider: "openai",
@@ -174,19 +171,21 @@ describe("RagQueryPlannerService", () => {
       plannerTools: createPlannerTools(memorySearchService),
       systemPromptFactory: () => "system-prompt",
     });
-    const currentMessage = "<message>\nA (1):\nhello\n</message>";
+    const contextMessages = [
+      { role: "user", content: "<message>\nA (1):\nhello\n</message>" },
+      { role: "user", content: "<message>\nB (2):\nworld\n</message>" },
+    ] as const;
 
     await expect(
       service.plan({
         groupId: "123456",
-        currentMessage,
-        contextMessages: [{ role: "user", content: currentMessage }],
+        contextMessages: [...contextMessages],
       }),
     ).resolves.toEqual([]);
 
-    expect((llmClient.chat as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]?.messages).toEqual([
-      { role: "user", content: currentMessage },
-    ]);
+    expect((llmClient.chat as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]?.messages).toEqual(
+      contextMessages,
+    );
   });
 
   it("should use the provided system prompt factory", async () => {
@@ -222,7 +221,6 @@ describe("RagQueryPlannerService", () => {
     await expect(
       service.plan({
         groupId: "123456",
-        currentMessage: "<message>\nA (1):\nhello\n</message>",
         contextMessages: [],
       }),
     ).resolves.toEqual([]);

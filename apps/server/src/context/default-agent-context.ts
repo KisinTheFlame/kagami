@@ -81,7 +81,11 @@ export class DefaultAgentContext implements AgentContext {
   }
 
   public async recordEvent(event: Event): Promise<void> {
-    const eventMessages = createMessagesFromEvent(event);
+    await this.recordEvents([event]);
+  }
+
+  public async recordEvents(events: Event[]): Promise<void> {
+    const eventMessages = events.flatMap(event => createMessagesFromEvent(event));
     if (eventMessages.length === 0) {
       return;
     }
@@ -93,8 +97,8 @@ export class DefaultAgentContext implements AgentContext {
       return;
     }
 
-    const enrichedMessages = await this.eventEnricher.enrichAfterEvent({
-      event,
+    const enrichedMessages = await this.eventEnricher.enrichAfterEvents({
+      events,
       snapshot: await this.getSnapshot(),
     });
     if (enrichedMessages.length === 0) {

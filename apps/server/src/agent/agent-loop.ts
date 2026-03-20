@@ -36,8 +36,9 @@ export class AgentLoop {
       }
 
       while (true) {
-        for (const event of this.eventQueue.drainAll()) {
-          await this.handleEvent(event);
+        const events = this.eventQueue.drainAll();
+        if (events.length > 0) {
+          await this.handleEvents(events);
         }
         const snapshot = await this.context.getSnapshot();
 
@@ -79,8 +80,8 @@ export class AgentLoop {
     }
   }
 
-  private async handleEvent(event: Event): Promise<void> {
-    await this.context.recordEvent(event);
+  private async handleEvents(events: Event[]): Promise<void> {
+    await this.context.recordEvents(events);
   }
 
   private async executeToolCall(

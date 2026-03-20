@@ -138,12 +138,14 @@ describe("AgentLoop", () => {
     });
     const recordWake = vi.fn().mockResolvedValue(undefined);
     const recordEvent = vi.fn().mockResolvedValue(undefined);
+    const recordEvents = vi.fn().mockResolvedValue(undefined);
     const recordAssistantTurn = vi.fn().mockResolvedValue(undefined);
     const recordToolResult = vi.fn().mockResolvedValue(undefined);
     const context: AgentContext = {
       getSnapshot,
       recordWake,
       recordEvent,
+      recordEvents,
       recordAssistantTurn,
       recordToolResult,
     };
@@ -187,15 +189,18 @@ describe("AgentLoop", () => {
     expect(recordWake).toHaveBeenNthCalledWith(1, {
       now: new Date("2026-03-09T10:21:00.000Z"),
     });
-    expect(recordEvent).toHaveBeenCalledWith({
-      type: "napcat_group_message",
-      groupId: "123456",
-      userId: "654321",
-      nickname: "测试昵称",
-      rawMessage: "hello",
-      messageId: 1001,
-      time: 1710000000,
-    });
+    expect(recordEvents).toHaveBeenCalledWith([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "hello",
+        messageId: 1001,
+        time: 1710000000,
+      },
+    ]);
+    expect(recordEvent).not.toHaveBeenCalled();
     expect(chat).toHaveBeenCalledTimes(1);
     expect(chat).toHaveBeenCalledWith(
       {
@@ -237,6 +242,7 @@ describe("AgentLoop", () => {
       }),
       recordWake: vi.fn().mockResolvedValue(undefined),
       recordEvent: vi.fn().mockResolvedValue(undefined),
+      recordEvents: vi.fn().mockResolvedValue(undefined),
       recordAssistantTurn: vi.fn().mockResolvedValue(undefined),
       recordToolResult: vi.fn().mockResolvedValue(undefined),
     };
@@ -326,6 +332,19 @@ describe("AgentLoop", () => {
             "</message>",
           ].join("\n"),
         });
+      }),
+      recordEvents: vi.fn(async events => {
+        for (const event of events) {
+          messages.push({
+            role: "user",
+            content: [
+              "<message>",
+              `${event.nickname} (${event.userId}):`,
+              event.rawMessage,
+              "</message>",
+            ].join("\n"),
+          });
+        }
       }),
       recordAssistantTurn: vi.fn(async message => {
         messages.push(message);

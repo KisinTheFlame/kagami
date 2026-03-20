@@ -17,16 +17,18 @@ describe("RagContextEventEnricher", () => {
     });
 
     await expect(
-      enricher.enrichAfterEvent({
-        event: {
-          type: "napcat_group_message",
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "hello",
-          messageId: 1001,
-          time: 1710000000,
-        },
+      enricher.enrichAfterEvents({
+        events: [
+          {
+            type: "napcat_group_message",
+            groupId: "123456",
+            userId: "654321",
+            nickname: "测试昵称",
+            rawMessage: "hello",
+            messageId: 1001,
+            time: 1710000000,
+          },
+        ],
         snapshot: {
           systemPrompt: "system-prompt",
           messages: [
@@ -45,7 +47,6 @@ describe("RagContextEventEnricher", () => {
     ]);
     expect(ragQueryPlanner.plan).toHaveBeenCalledWith({
       groupId: "123456",
-      currentMessage: ["<message>", "测试昵称 (654321):", "hello", "</message>"].join("\n"),
       contextMessages: [
         {
           role: "user",
@@ -64,16 +65,18 @@ describe("RagContextEventEnricher", () => {
     });
 
     await expect(
-      enricher.enrichAfterEvent({
-        event: {
-          type: "napcat_group_message",
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "hello",
-          messageId: 1001,
-          time: 1710000000,
-        },
+      enricher.enrichAfterEvents({
+        events: [
+          {
+            type: "napcat_group_message",
+            groupId: "123456",
+            userId: "654321",
+            nickname: "测试昵称",
+            rawMessage: "hello",
+            messageId: 1001,
+            time: 1710000000,
+          },
+        ],
         snapshot: {
           systemPrompt: "system-prompt",
           messages: [
@@ -85,5 +88,48 @@ describe("RagContextEventEnricher", () => {
         },
       }),
     ).resolves.toEqual([]);
+  });
+
+  it("should use the last group message event in the batch", async () => {
+    const ragQueryPlanner = {
+      plan: vi.fn().mockResolvedValue([]),
+    } as unknown as RagQueryPlannerService;
+    const enricher = new RagContextEventEnricher({
+      ragQueryPlanner,
+    });
+
+    await expect(
+      enricher.enrichAfterEvents({
+        events: [
+          {
+            type: "napcat_group_message",
+            groupId: "group-1",
+            userId: "u1",
+            nickname: "A",
+            rawMessage: "first",
+            messageId: 1001,
+            time: 1710000000,
+          },
+          {
+            type: "napcat_group_message",
+            groupId: "group-2",
+            userId: "u2",
+            nickname: "B",
+            rawMessage: "second",
+            messageId: 1002,
+            time: 1710000001,
+          },
+        ],
+        snapshot: {
+          systemPrompt: "system-prompt",
+          messages: [],
+        },
+      }),
+    ).resolves.toEqual([]);
+
+    expect(ragQueryPlanner.plan).toHaveBeenCalledWith({
+      groupId: "group-2",
+      contextMessages: [],
+    });
   });
 });

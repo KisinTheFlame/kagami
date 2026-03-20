@@ -25,26 +25,12 @@ export class RagQueryPlannerService {
 
   public async plan(input: {
     groupId: string;
-    currentMessage: string;
     contextMessages: LlmMessage[];
   }): Promise<LlmMessage[]> {
-    const lastContextMessage = input.contextMessages.at(-1);
-    const hasCurrentMessageAtTail =
-      lastContextMessage?.role === "user" && lastContextMessage.content === input.currentMessage;
-    const baseMessages: LlmMessage[] = hasCurrentMessageAtTail
-      ? input.contextMessages
-      : [
-          ...input.contextMessages,
-          {
-            role: "user",
-            content: input.currentMessage,
-          },
-        ];
-
     const firstResponse = await this.llmClient.chat(
       {
         system: await this.systemPromptFactory(),
-        messages: baseMessages,
+        messages: input.contextMessages,
         tools: this.plannerTools.definitions(),
         toolChoice: { tool_name: SEARCH_MEMORY_TOOL_NAME },
       },

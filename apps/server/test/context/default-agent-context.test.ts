@@ -25,7 +25,7 @@ describe("DefaultAgentContext", () => {
 
   it("should insert enriched messages after the current group message", async () => {
     const eventEnricher = {
-      enrichAfterEvent: vi.fn().mockResolvedValue([
+      enrichAfterEvents: vi.fn().mockResolvedValue([
         {
           role: "user",
           content: [
@@ -66,16 +66,18 @@ describe("DefaultAgentContext", () => {
         ].join("\n"),
       },
     ]);
-    expect(eventEnricher.enrichAfterEvent).toHaveBeenCalledWith({
-      event: {
-        type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "hello",
-        messageId: 1001,
-        time: 1710000000,
-      },
+    expect(eventEnricher.enrichAfterEvents).toHaveBeenCalledWith({
+      events: [
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "hello",
+          messageId: 1001,
+          time: 1710000000,
+        },
+      ],
       snapshot: {
         systemPrompt: "system-prompt",
         messages: [
@@ -85,6 +87,122 @@ describe("DefaultAgentContext", () => {
           },
         ],
       },
+    });
+  });
+
+  it("should enrich a batch of group messages only once after all messages are recorded", async () => {
+    const eventEnricher = {
+      enrichAfterEvents: vi.fn().mockResolvedValue([
+        {
+          role: "user",
+          content: "<memory_history_message>\n批量补充\n</memory_history_message>",
+        },
+      ]),
+    };
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+      eventEnricher,
+    });
+
+    await context.recordEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "1",
+        nickname: "A",
+        rawMessage: "first",
+        messageId: 1001,
+        time: 1710000000,
+      },
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "2",
+        nickname: "B",
+        rawMessage: "second",
+        messageId: 1002,
+        time: 1710000001,
+      },
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "3",
+        nickname: "C",
+        rawMessage: "third",
+        messageId: 1003,
+        time: 1710000002,
+      },
+    ]);
+
+    expect(eventEnricher.enrichAfterEvents).toHaveBeenCalledTimes(1);
+    expect(eventEnricher.enrichAfterEvents).toHaveBeenCalledWith({
+      events: [
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "1",
+          nickname: "A",
+          rawMessage: "first",
+          messageId: 1001,
+          time: 1710000000,
+        },
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "2",
+          nickname: "B",
+          rawMessage: "second",
+          messageId: 1002,
+          time: 1710000001,
+        },
+        {
+          type: "napcat_group_message",
+          groupId: "123456",
+          userId: "3",
+          nickname: "C",
+          rawMessage: "third",
+          messageId: 1003,
+          time: 1710000002,
+        },
+      ],
+      snapshot: {
+        systemPrompt: "system-prompt",
+        messages: [
+          {
+            role: "user",
+            content: ["<message>", "A (1):", "first", "</message>"].join("\n"),
+          },
+          {
+            role: "user",
+            content: ["<message>", "B (2):", "second", "</message>"].join("\n"),
+          },
+          {
+            role: "user",
+            content: ["<message>", "C (3):", "third", "</message>"].join("\n"),
+          },
+        ],
+      },
+    });
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: ["<message>", "A (1):", "first", "</message>"].join("\n"),
+        },
+        {
+          role: "user",
+          content: ["<message>", "B (2):", "second", "</message>"].join("\n"),
+        },
+        {
+          role: "user",
+          content: ["<message>", "C (3):", "third", "</message>"].join("\n"),
+        },
+        {
+          role: "user",
+          content: "<memory_history_message>\n批量补充\n</memory_history_message>",
+        },
+      ],
     });
   });
 

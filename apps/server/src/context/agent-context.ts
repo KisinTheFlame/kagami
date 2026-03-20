@@ -9,13 +9,17 @@ export type AgentContextSnapshot = {
 };
 
 export interface ContextEventEnricher {
-  enrichAfterEvent(input: { event: Event; snapshot: AgentContextSnapshot }): Promise<LlmMessage[]>;
+  enrichAfterEvents(input: {
+    events: Event[];
+    snapshot: AgentContextSnapshot;
+  }): Promise<LlmMessage[]>;
 }
 
 export interface AgentContext {
   getSnapshot(): Promise<AgentContextSnapshot>;
   recordWake(input: { now: Date }): Promise<void>;
   recordEvent(event: Event): Promise<void>;
+  recordEvents(events: Event[]): Promise<void>;
   recordAssistantTurn(message: AssistantMessage): Promise<void>;
   recordToolResult(input: { toolCallId: string; content: string }): Promise<void>;
 }
