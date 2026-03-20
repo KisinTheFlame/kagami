@@ -5,7 +5,12 @@ import {
   type LlmProvider,
   type LlmProviderChatResult,
 } from "../provider.js";
-import type { LlmChatRequest, LlmChatResponsePayload, LlmToolCall } from "../types.js";
+import type {
+  LlmChatRequest,
+  LlmChatResponsePayload,
+  LlmContentPart,
+  LlmToolCall,
+} from "../types.js";
 import { BizError } from "../../errors/biz-error.js";
 import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
@@ -231,7 +236,9 @@ function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
     if (message.role === "user") {
       input.push({
         role: "user",
-        content: message.content,
+        content: Array.isArray(message.content)
+          ? message.content.map(toCodexInputContentPart)
+          : message.content,
       });
       continue;
     }
@@ -284,6 +291,20 @@ function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
           },
     stream: true,
     store: false,
+  };
+}
+
+function toCodexInputContentPart(part: LlmContentPart): Record<string, unknown> {
+  if (part.type === "text") {
+    return {
+      type: "input_text",
+      text: part.text,
+    };
+  }
+
+  return {
+    type: "input_image",
+    image_url: `data:${part.mimeType};base64,${part.content.toString("base64")}`,
   };
 }
 

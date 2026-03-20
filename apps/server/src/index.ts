@@ -45,6 +45,7 @@ import { DefaultLlmPlaygroundService } from "./service/llm-playground.impl.servi
 import { DefaultAgentMessageService } from "./service/agent-message.impl.service.js";
 import { DefaultNapcatEventQueryService } from "./service/napcat-event-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "./service/napcat-gateway/event-persistence-writer.js";
+import { DefaultNapcatImageMessageAnalyzer } from "./service/napcat-gateway/image-message-analyzer.js";
 import { DefaultNapcatGatewayService } from "./service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "./service/napcat-group-message-query.impl.service.js";
@@ -62,6 +63,7 @@ import {
   SummaryTool,
   ToolCatalog,
 } from "./tools/index.js";
+import { VisionAgent } from "./vision/index.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -229,6 +231,12 @@ try {
     chunkDao: napcatGroupMessageChunkDao,
     groupMessageDao: napcatGroupMessageDao,
   });
+  const visionAgent = new VisionAgent({
+    llmClient,
+  });
+  const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
+    visionAgent,
+  });
   const agentSystemPromptFactory = async () => {
     const botProfile = await activeConfigManager.getBotProfileConfig();
     return createAgentSystemPrompt({
@@ -252,6 +260,7 @@ try {
       configManager: activeConfigManager,
       eventQueue,
       persistenceWriter: napcatPersistenceWriter,
+      imageMessageAnalyzer,
     },
   );
   napcatGatewayService = activeNapcatGatewayService;

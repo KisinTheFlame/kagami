@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
+  type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
   type NapcatReceiveTextSegment,
 } from "../../schema/napcat-segment.js";
@@ -164,6 +165,41 @@ export function canRenderTextOrAtSegment(segment: NapcatReceiveTextOrAtSegment):
   }
 
   return formatAtSegment(segment) !== null;
+}
+
+export function formatImageSegmentText(text: string): string {
+  return text.trim().length > 0 ? `[图片: ${text.trim()}]` : "[图片]";
+}
+
+export function replaceImageSegmentsInRawMessage(
+  rawMessage: string,
+  imageSegments: Array<{
+    segment: NapcatReceiveImageSegment;
+    renderedText: string;
+  }>,
+): string {
+  let nextMessage = rawMessage;
+
+  for (const { segment, renderedText } of imageSegments) {
+    const urlPattern = new RegExp(
+      `\\[CQ:image,file=[^\\]]*url=${escapeRegExp(segment.data.url)}[^\\]]*\\]`,
+    );
+
+    if (urlPattern.test(nextMessage)) {
+      nextMessage = nextMessage.replace(urlPattern, renderedText);
+      continue;
+    }
+
+    const filePattern = new RegExp(
+      `\\[CQ:image,file=${escapeRegExp(segment.data.file)}(?:,[^\\]]*)?\\]`,
+    );
+    if (filePattern.test(nextMessage)) {
+      nextMessage = nextMessage.replace(filePattern, renderedText);
+      continue;
+    }
+  }
+
+  return nextMessage;
 }
 
 export function replaceAtSegmentsInRawMessage(

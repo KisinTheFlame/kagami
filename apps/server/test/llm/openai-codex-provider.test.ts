@@ -226,6 +226,93 @@ describe("createOpenAiCodexProvider", () => {
     });
   });
 
+  it("should map multimodal user content to Responses API input items", async () => {
+    const authFilePath = await createAuthFile();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        input?: Array<{ role?: string; content?: unknown }>;
+      };
+
+      expect(body.input).toEqual([
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Describe this image",
+            },
+            {
+              type: "input_image",
+              image_url: "data:image/png;base64,aW1hZ2U=",
+            },
+          ],
+        },
+      ]);
+
+      return buildSseResponse({
+        type: "response.completed",
+        response: {
+          status: "completed",
+          model: "gpt-5.4",
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "图片里有一只猫。" }],
+            },
+          ],
+          usage: {
+            input_tokens: 12,
+            output_tokens: 6,
+            total_tokens: 18,
+          },
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createOpenAiCodexProvider({
+      authFilePath,
+      baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+      models: ["gpt-5.4"],
+      refreshLeewayMs: 60_000,
+      timeoutMs: 5_000,
+    });
+
+    await expect(
+      provider.chat({
+        model: "gpt-5.4",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Describe this image",
+              },
+              {
+                type: "image",
+                content: Buffer.from("image"),
+                mimeType: "image/png",
+              },
+            ],
+          },
+        ],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      response: {
+        provider: "openai-codex",
+        model: "gpt-5.4",
+        message: {
+          role: "assistant",
+          content: "图片里有一只猫。",
+        },
+      },
+    });
+  });
+
   it("should retry with a refreshed token after a 401 response", async () => {
     const authFilePath = await createAuthFile();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

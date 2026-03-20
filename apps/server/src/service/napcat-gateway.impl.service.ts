@@ -2,8 +2,10 @@ import { z } from "zod";
 import type { AgentEventQueue } from "../agent/event.queue.js";
 import type { ConfigManager, NapcatBootConfig } from "../config/config.manager.js";
 import { BizError } from "../errors/biz-error.js";
+import { AppLogger } from "../logger/logger.js";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
+import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
 import type { WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
@@ -17,6 +19,7 @@ type CreateNapcatGatewayOptions = {
   configManager: ConfigManager;
   eventQueue: AgentEventQueue;
   persistenceWriter: NapcatGatewayPersistenceWriter;
+  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -24,10 +27,26 @@ type NapcatGatewayOptions = {
   config: NapcatBootConfig;
   eventQueue: AgentEventQueue;
   persistenceWriter: NapcatGatewayPersistenceWriter;
+  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
 const MessageIdSchema = z.number().int().positive();
+const logger = new AppLogger({ source: "service.napcat-gateway" });
+
+type OrderedPostTypeEventResult =
+  | {
+      kind: "processed";
+      normalizedEvent: Awaited<
+        ReturnType<NapcatGroupMessageProcessor["process"]>
+      >["normalizedEvent"];
+      groupMessageEvent: Awaited<
+        ReturnType<NapcatGroupMessageProcessor["process"]>
+      >["groupMessageEvent"];
+    }
+  | {
+      kind: "failed";
+    };
 
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly transport: NapcatGatewayTransport;
@@ -36,6 +55,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     configManager,
     eventQueue,
     persistenceWriter,
+    imageMessageAnalyzer,
     createWebSocket,
   }: CreateNapcatGatewayOptions): Promise<DefaultNapcatGatewayService> {
     const bootConfig = await configManager.getBootConfig();
@@ -44,6 +64,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       config: bootConfig.napcat,
       eventQueue,
       persistenceWriter,
+      imageMessageAnalyzer,
       createWebSocket,
     });
   }
@@ -52,6 +73,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     config,
     eventQueue,
     persistenceWriter,
+    imageMessageAnalyzer,
     createWebSocket,
   }: NapcatGatewayOptions) {
     const transport = new NapcatGatewayTransport({
@@ -67,18 +89,62 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       listenGroupId: config.listenGroupId,
       actionRequester: transport,
       eventQueue,
+      imageMessageAnalyzer,
     });
+    let nextSequence = 0;
+    let nextFlushSequence = 0;
+    const completedResults = new Map<number, OrderedPostTypeEventResult>();
+
+    const flushCompletedResults = (): void => {
+      while (completedResults.has(nextFlushSequence)) {
+        const result = completedResults.get(nextFlushSequence);
+        completedResults.delete(nextFlushSequence);
+        nextFlushSequence += 1;
+
+        if (!result || result.kind !== "processed") {
+          continue;
+        }
+
+        if (result.groupMessageEvent) {
+          groupMessageProcessor.publishGroupMessageEvent(result.groupMessageEvent);
+          persistenceWriter.persistGroupMessage(
+            result.groupMessageEvent,
+            result.normalizedEvent.eventTime,
+          );
+        }
+        persistenceWriter.persistEvent(result.normalizedEvent);
+      }
+    };
+
     const inboundMessageRouter = new NapcatGatewayInboundMessageRouter({
       resolveActionResponse: response => {
         transport.resolveActionResponse(response);
       },
       handlePostTypeEvent: async eventPayload => {
-        const { normalizedEvent, groupMessageEvent } =
-          await groupMessageProcessor.handle(eventPayload);
-        if (groupMessageEvent) {
-          persistenceWriter.persistGroupMessage(groupMessageEvent, normalizedEvent.eventTime);
-        }
-        persistenceWriter.persistEvent(normalizedEvent);
+        const sequence = nextSequence;
+        nextSequence += 1;
+
+        void groupMessageProcessor
+          .process(eventPayload)
+          .then(result => {
+            completedResults.set(sequence, {
+              kind: "processed",
+              normalizedEvent: result.normalizedEvent,
+              groupMessageEvent: result.groupMessageEvent,
+            });
+            flushCompletedResults();
+          })
+          .catch(() => {
+            logger.error("Failed to process ordered NapCat post type event", {
+              event: "napcat.gateway.post_type_event_handle_failed",
+              postType: eventPayload.post_type,
+              messageType: eventPayload.message_type,
+            });
+            completedResults.set(sequence, {
+              kind: "failed",
+            });
+            flushCompletedResults();
+          });
       },
     });
 

@@ -117,12 +117,21 @@ describe("NapcatEventPersistenceWriter", () => {
       expect.objectContaining({
         groupId: "987654",
         messageId: 9988,
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "hello group",
+            },
+          },
+        ],
       }),
     );
     expect(napcatGroupMessageChunkDao.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         groupId: "987654",
         status: "pending",
+        content: "测试群名片 (123456):\nhello group",
       }),
     );
     expect(groupMessageChunkIndexer.enqueue).toHaveBeenCalledWith(101);

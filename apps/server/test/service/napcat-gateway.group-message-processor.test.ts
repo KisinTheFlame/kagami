@@ -5,8 +5,14 @@ import { createAgentEventQueue, initTestLogger } from "./napcat-gateway.test-hel
 describe("NapcatGroupMessageProcessor", () => {
   let logs = initTestLogger();
 
+  const imageMessageAnalyzer = {
+    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 一只橘猫趴在键盘上]"),
+  };
+
   beforeEach(() => {
     logs = initTestLogger();
+    imageMessageAnalyzer.analyzeImageSegment.mockClear();
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 一只橘猫趴在键盘上]");
   });
 
   afterEach(() => {
@@ -25,6 +31,7 @@ describe("NapcatGroupMessageProcessor", () => {
       listenGroupId: "987654",
       actionRequester,
       eventQueue,
+      imageMessageAnalyzer,
     });
 
     const result = await processor.handle({
@@ -91,6 +98,7 @@ describe("NapcatGroupMessageProcessor", () => {
       listenGroupId: "987654",
       actionRequester,
       eventQueue,
+      imageMessageAnalyzer,
     });
 
     const payload = {
@@ -159,6 +167,7 @@ describe("NapcatGroupMessageProcessor", () => {
         request: vi.fn(),
       },
       eventQueue,
+      imageMessageAnalyzer,
     });
 
     const result = await processor.handle({
@@ -188,6 +197,7 @@ describe("NapcatGroupMessageProcessor", () => {
         request: vi.fn(),
       },
       eventQueue,
+      imageMessageAnalyzer,
     });
 
     await expect(
@@ -214,5 +224,97 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(
       logs.some(log => log.metadata.event === "napcat.gateway.group_message_publish_failed"),
     ).toBe(true);
+  });
+
+  it("should render image segments into rawMessage", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupId: "987654",
+      actionRequester: {
+        request: vi.fn(),
+      },
+      eventQueue,
+      imageMessageAnalyzer,
+    });
+
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "你看这个[CQ:image,file=abc.jpg,url=https://example.com/cat.jpg]",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "你看这个",
+          },
+        },
+        {
+          type: "image",
+          data: {
+            summary: "图片",
+            file: "abc.jpg",
+            sub_type: 0,
+            url: "https://example.com/cat.jpg",
+            file_size: "100",
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(imageMessageAnalyzer.analyzeImageSegment).toHaveBeenCalledTimes(1);
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawMessage: "你看这个[图片: 一只橘猫趴在键盘上]",
+      }),
+    );
+  });
+
+  it("should fallback to placeholder when image analysis fails", async () => {
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupId: "987654",
+      actionRequester: {
+        request: vi.fn(),
+      },
+      eventQueue,
+      imageMessageAnalyzer,
+    });
+
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "[CQ:image,file=failed.png,url=https://example.com/failed.png]",
+      message: [
+        {
+          type: "image",
+          data: {
+            summary: "图片",
+            file: "failed.png",
+            sub_type: 0,
+            url: "https://example.com/failed.png",
+            file_size: "100",
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawMessage: "[图片]",
+      }),
+    );
   });
 });

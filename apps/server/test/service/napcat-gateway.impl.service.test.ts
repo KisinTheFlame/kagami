@@ -12,11 +12,27 @@ import {
   waitOneTick,
 } from "./napcat-gateway.test-helper.js";
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe("DefaultNapcatGatewayService", () => {
   let logs = initTestLogger();
+  const imageMessageAnalyzer = {
+    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 屏幕截图，包含错误提示]"),
+  };
 
   beforeEach(() => {
     logs = initTestLogger();
+    imageMessageAnalyzer.analyzeImageSegment.mockClear();
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 屏幕截图，包含错误提示]");
   });
 
   afterEach(() => {
@@ -30,6 +46,7 @@ describe("DefaultNapcatGatewayService", () => {
       configManager,
       eventQueue: createAgentEventQueue(),
       persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -75,6 +92,7 @@ describe("DefaultNapcatGatewayService", () => {
       configManager: createConfigManager(),
       eventQueue,
       persistenceWriter,
+      imageMessageAnalyzer,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -152,6 +170,7 @@ describe("DefaultNapcatGatewayService", () => {
       configManager: createConfigManager(),
       eventQueue: createAgentEventQueue(),
       persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -191,6 +210,7 @@ describe("DefaultNapcatGatewayService", () => {
       persistenceWriter: new NapcatEventPersistenceWriter({
         napcatEventDao,
       }),
+      imageMessageAnalyzer,
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -223,6 +243,103 @@ describe("DefaultNapcatGatewayService", () => {
     await waitOneTick();
 
     expect(napcatEventDao.insert).not.toHaveBeenCalled();
+    await gateway.stop();
+  });
+
+  it("should preserve incoming event order while image analysis runs concurrently", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const firstImageAnalysis = createDeferred<string>();
+    const orderedImageAnalyzer = {
+      analyzeImageSegment: vi.fn().mockImplementation(() => firstImageAnalysis.promise),
+    };
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      eventQueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer: orderedImageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1001,
+        raw_message: "[CQ:image,file=a.png,url=https://example.com/a.png]",
+        message: [
+          {
+            type: "image",
+            data: {
+              summary: "图片",
+              file: "a.png",
+              sub_type: 0,
+              url: "https://example.com/a.png",
+              file_size: "100",
+            },
+          },
+        ],
+        sender: {
+          card: "测试群名片",
+        },
+      }),
+    );
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 1002,
+        raw_message: "later",
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "later",
+            },
+          },
+        ],
+        sender: {
+          card: "测试群名片",
+        },
+      }),
+    );
+
+    await waitOneTick();
+    expect(eventQueue.enqueue).not.toHaveBeenCalled();
+
+    firstImageAnalysis.resolve("[图片: 第一张图]");
+    await waitOneTick();
+
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        messageId: 1001,
+        rawMessage: "[图片: 第一张图]",
+      }),
+    );
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        messageId: 1002,
+        rawMessage: "later",
+      }),
+    );
+
     await gateway.stop();
   });
 });

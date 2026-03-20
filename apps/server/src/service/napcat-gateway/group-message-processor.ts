@@ -10,6 +10,7 @@ import {
   isTextOrAtSegment,
   parseMessageSegments,
   replaceAtSegmentsInRawMessage,
+  replaceImageSegmentsInRawMessage,
   toEventTime,
   toNullableNumber,
   toNullablePositiveInt,
@@ -20,6 +21,8 @@ import {
   type NapcatGatewayPostTypeEventPayload,
   type NapcatReceiveMessageSegment,
 } from "./shared.js";
+import { isNapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
+import type { NapcatImageMessageAnalyzer } from "./image-message-analyzer.js";
 
 type GroupMemberDisplayNameCacheEntry = {
   displayName: string;
@@ -34,6 +37,7 @@ type NapcatGroupMessageProcessorOptions = {
   listenGroupId: string;
   actionRequester: NapcatActionRequester;
   eventQueue: AgentEventQueue;
+  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
@@ -42,6 +46,7 @@ export class NapcatGroupMessageProcessor {
   private readonly listenGroupId: string;
   private readonly actionRequester: NapcatActionRequester;
   private readonly eventQueue: AgentEventQueue;
+  private readonly imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   private readonly groupMemberDisplayNameCache = new Map<
     string,
     GroupMemberDisplayNameCacheEntry
@@ -51,13 +56,28 @@ export class NapcatGroupMessageProcessor {
     listenGroupId,
     actionRequester,
     eventQueue,
+    imageMessageAnalyzer,
   }: NapcatGroupMessageProcessorOptions) {
     this.listenGroupId = listenGroupId;
     this.actionRequester = actionRequester;
     this.eventQueue = eventQueue;
+    this.imageMessageAnalyzer = imageMessageAnalyzer;
   }
 
   public async handle(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
+    normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
+    groupMessageEvent: NapcatGroupMessageEvent | null;
+  }> {
+    const result = await this.process(eventPayload);
+    const { groupMessageEvent } = result;
+    if (groupMessageEvent) {
+      this.publishGroupMessage(groupMessageEvent);
+    }
+
+    return result;
+  }
+
+  public async process(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
     groupMessageEvent: NapcatGroupMessageEvent | null;
   }> {
@@ -65,14 +85,15 @@ export class NapcatGroupMessageProcessor {
     this.logPrivateMessage(normalizedEvent);
 
     const groupMessageEvent = this.toGroupMessageEvent(normalizedEvent);
-    if (groupMessageEvent) {
-      this.publishGroupMessage(groupMessageEvent);
-    }
 
     return {
       normalizedEvent,
       groupMessageEvent,
     };
+  }
+
+  public publishGroupMessageEvent(event: NapcatGroupMessageEvent): void {
+    this.publishGroupMessage(event);
   }
 
   private async normalize(
@@ -196,15 +217,24 @@ export class NapcatGroupMessageProcessor {
       groupId,
       messageSegments,
     });
+    const renderedImageSegments = await this.renderImageSegments(hydratedSegments);
 
     if (
-      hydratedSegments.every(isTextOrAtSegment) &&
-      hydratedSegments.every(canRenderTextOrAtSegment)
+      hydratedSegments.every(segment => isTextOrAtSegment(segment) || segment.type === "image") &&
+      hydratedSegments.every(
+        segment =>
+          (isTextOrAtSegment(segment) && canRenderTextOrAtSegment(segment)) ||
+          segment.type === "image",
+      )
     ) {
       return hydratedSegments
         .map(segment => {
           if (segment.type === "text") {
             return segment.data.text;
+          }
+
+          if (segment.type === "image") {
+            return renderedImageSegments.get(segment) ?? "[图片]";
           }
 
           return formatAtSegment(segment) ?? "";
@@ -216,7 +246,37 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    return replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments);
+    return replaceImageSegmentsInRawMessage(
+      replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments),
+      hydratedSegments.filter(isNapcatReceiveImageSegment).map(segment => ({
+        segment,
+        renderedText: renderedImageSegments.get(segment) ?? "[图片]",
+      })),
+    );
+  }
+
+  private async renderImageSegments(
+    messageSegments: NapcatReceiveMessageSegment[],
+  ): Promise<Map<NapcatReceiveMessageSegment, string>> {
+    const imageEntries = await Promise.all(
+      messageSegments.map(async segment => {
+        if (!isNapcatReceiveImageSegment(segment)) {
+          return null;
+        }
+
+        const renderedText = await this.imageMessageAnalyzer.analyzeImageSegment(segment);
+        return [segment, renderedText] as const;
+      }),
+    );
+
+    return new Map(
+      imageEntries.filter(
+        (
+          entry,
+        ): entry is readonly [Extract<NapcatReceiveMessageSegment, { type: "image" }>, string] =>
+          entry !== null,
+      ),
+    );
   }
 
   private async hydrateAtSegmentNames({

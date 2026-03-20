@@ -1,8 +1,12 @@
-import type { LlmChatCallItem, LlmRequestMessage } from "@kagami/shared";
+import type { LlmChatCallItem } from "@kagami/shared";
 import { useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
+import {
+  parseLlmChatCallDetail,
+  type ParsedLlmRequestMessage,
+  type ParsedLlmUserContentPart,
+} from "./llm-chat-call-detail-parser";
 
 type LlmChatCallDetailPanelProps = {
   item: LlmChatCallItem | null;
@@ -15,7 +19,7 @@ type InputEntry =
     }
   | {
       type: "message";
-      message: LlmRequestMessage;
+      message: ParsedLlmRequestMessage;
       originalIndex: number;
     };
 
@@ -226,10 +230,10 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
   );
 }
 
-function MessageCard({ message, index }: { message: LlmRequestMessage; index: number }) {
+function MessageCard({ message, index }: { message: ParsedLlmRequestMessage; index: number }) {
   const title = `消息 #${index + 1}`;
   const preview = buildMessagePreview({
-    content: message.content,
+    content: renderMessageContent(message.content),
     toolCalls: message.role === "assistant" ? message.toolCalls : [],
   });
 
@@ -239,7 +243,7 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
         <Badge variant="secondary">{message.role}</Badge>
       </div>
       <MessageContent
-        content={message.content}
+        content={renderMessageContent(message.content)}
         emptyHint={
           message.role === "assistant" && message.toolCalls.length > 0
             ? "该消息仅包含工具调用。"
@@ -267,6 +271,28 @@ function MessageContent({ content, emptyHint }: { content: string; emptyHint?: s
   }
 
   return <pre className="whitespace-pre-wrap break-words text-xs leading-6">{content}</pre>;
+}
+
+function renderMessageContent(content: ParsedLlmRequestMessage["content"]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  return content.map(renderUserContentPart).join("\n");
+}
+
+function renderUserContentPart(part: ParsedLlmUserContentPart): string {
+  if (part.type === "text") {
+    return part.text;
+  }
+
+  const segments = [
+    part.mimeType,
+    part.filename ? `filename=${part.filename}` : null,
+    typeof part.sizeBytes === "number" ? `size=${formatBytes(part.sizeBytes)}` : null,
+  ].filter(Boolean);
+
+  return segments.length > 0 ? `[图片] ${segments.join(" | ")}` : "[图片]";
 }
 
 function ToolCallsList({
@@ -419,4 +445,16 @@ function safeStringify(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

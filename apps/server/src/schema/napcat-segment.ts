@@ -410,6 +410,12 @@ export type NapcatReceiveImageSegment = {
       };
 };
 
+export function isNapcatReceiveImageSegment(
+  segment: NapcatReceiveMessageSegment,
+): segment is NapcatReceiveImageSegment {
+  return segment.type === "image";
+}
+
 export type NapcatReceiveFileSegment = {
   type: "file";
   data: {

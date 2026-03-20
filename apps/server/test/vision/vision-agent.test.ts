@@ -71,7 +71,7 @@ describe("VisionAgent", () => {
     if (!promptPart || promptPart.type !== "text") {
       throw new Error("expected first content part to be text");
     }
-    expect(promptPart.text).toContain("请完整描述这张图片中可见的所有重要信息。");
+    expect(promptPart.text).toContain("请把这张图片转成适合聊天上下文的一小段中文文本。");
   });
 
   it("should forward a custom prompt after trimming", async () => {
