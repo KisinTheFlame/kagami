@@ -1,6 +1,11 @@
 import type { Event } from "../event/event.js";
 import { formatGroupMessagePlainText } from "../event/event.js";
 import type { LlmMessage } from "../llm/types.js";
+import {
+  formatAtSegment,
+  formatImageSegmentText,
+  type NapcatReceiveMessageSegment,
+} from "../service/napcat-gateway/shared.js";
 
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
@@ -53,10 +58,72 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
     case "napcat_group_message":
       return [
         createUserMessage(
-          ["<message>", formatGroupMessagePlainText(event), "</message>"].join("\n"),
+          ["<message>", renderGroupMessagePlainText(event), "</message>"].join("\n"),
         ),
       ];
     default:
       return [];
+  }
+}
+
+export function renderGroupMessagePlainText(input: {
+  nickname: string;
+  userId: string;
+  rawMessage: string;
+  messageSegments?: NapcatReceiveMessageSegment[];
+}): string {
+  const renderedMessage = renderGroupMessageBody(input);
+  return formatGroupMessagePlainText({
+    nickname: input.nickname,
+    userId: input.userId,
+    rawMessage: renderedMessage,
+  });
+}
+
+function renderGroupMessageBody(input: {
+  rawMessage: string;
+  messageSegments?: NapcatReceiveMessageSegment[];
+}): string {
+  const segments = input.messageSegments ?? [];
+  if (segments.length === 0) {
+    return input.rawMessage;
+  }
+
+  const rendered = segments.map(renderSegmentText).join("").trim();
+  return rendered.length > 0 ? rendered : input.rawMessage;
+}
+
+function renderSegmentText(segment: NapcatReceiveMessageSegment): string {
+  switch (segment.type) {
+    case "text":
+      return segment.data.text;
+    case "at":
+      return formatAtSegment(segment) ?? `@${segment.data.qq}`;
+    case "image":
+      return formatImageSegmentText(segment.data.summary);
+    case "reply":
+      return "[reply]";
+    case "face":
+      return "[face]";
+    case "forward":
+      return "[forward]";
+    case "file":
+      return "[file]";
+    case "json":
+      return "[json]";
+    case "markdown":
+      return "[markdown]";
+    case "poke":
+      return "[poke]";
+    case "record":
+      return "[record]";
+    case "rps":
+      return "[rps]";
+    case "dice":
+      return "[dice]";
+    case "video":
+      return "[video]";
+    default:
+      return "[segment]";
   }
 }

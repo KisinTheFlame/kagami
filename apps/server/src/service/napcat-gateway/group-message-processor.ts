@@ -103,7 +103,10 @@ export class NapcatGroupMessageProcessor {
     const selfId = toNullableId(eventPayload.self_id);
     const groupId = toNullableId(eventPayload.group_id);
     const payload = eventPayload as unknown as Record<string, unknown>;
-    const rawMessage = await this.extractFormattedRawMessage({ payload, groupId });
+    const { rawMessage, messageSegments } = await this.normalizeMessageContent({
+      payload,
+      groupId,
+    });
 
     return {
       postType: eventPayload.post_type,
@@ -114,6 +117,7 @@ export class NapcatGroupMessageProcessor {
       groupId,
       nickname: extractSenderNickname(payload),
       rawMessage,
+      messageSegments,
       messageId: toNullablePositiveInt(eventPayload.message_id),
       time: toNullablePositiveInt(eventPayload.time),
       eventTime: toEventTime(eventPayload.time),
@@ -164,6 +168,7 @@ export class NapcatGroupMessageProcessor {
       userId: event.userId,
       nickname: event.nickname,
       rawMessage: event.rawMessage,
+      messageSegments: event.messageSegments,
       messageId: event.messageId,
       time: event.time,
       payload: event.payload,
@@ -178,6 +183,7 @@ export class NapcatGroupMessageProcessor {
         userId: event.userId,
         nickname: event.nickname,
         rawMessage: event.rawMessage,
+        messageSegments: event.messageSegments,
         messageId: event.messageId,
         time: event.time,
       });
@@ -199,18 +205,24 @@ export class NapcatGroupMessageProcessor {
     }
   }
 
-  private async extractFormattedRawMessage({
+  private async normalizeMessageContent({
     payload,
     groupId,
   }: {
     payload: Record<string, unknown>;
     groupId: string | null;
-  }): Promise<string | null> {
+  }): Promise<{
+    rawMessage: string | null;
+    messageSegments: NapcatReceiveMessageSegment[];
+  }> {
     const rawMessage = toNullableString(payload.raw_message);
     const messageSegments = parseMessageSegments(payload.message);
 
     if (!messageSegments || messageSegments.length === 0) {
-      return rawMessage;
+      return {
+        rawMessage,
+        messageSegments: [],
+      };
     }
 
     const hydratedSegments = await this.hydrateAtSegmentNames({
@@ -218,6 +230,10 @@ export class NapcatGroupMessageProcessor {
       messageSegments,
     });
     const renderedImageSegments = await this.renderImageSegments(hydratedSegments);
+    const normalizedSegments = this.hydrateImageSegmentSummaries({
+      messageSegments: hydratedSegments,
+      renderedImageSegments,
+    });
 
     if (
       hydratedSegments.every(segment => isTextOrAtSegment(segment) || segment.type === "image") &&
@@ -227,7 +243,7 @@ export class NapcatGroupMessageProcessor {
           segment.type === "image",
       )
     ) {
-      return hydratedSegments
+      const renderedMessage = hydratedSegments
         .map(segment => {
           if (segment.type === "text") {
             return segment.data.text;
@@ -240,19 +256,30 @@ export class NapcatGroupMessageProcessor {
           return formatAtSegment(segment) ?? "";
         })
         .join("");
+
+      return {
+        rawMessage: renderedMessage,
+        messageSegments: normalizedSegments,
+      };
     }
 
     if (!rawMessage) {
-      return null;
+      return {
+        rawMessage: null,
+        messageSegments: normalizedSegments,
+      };
     }
 
-    return replaceImageSegmentsInRawMessage(
-      replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments),
-      hydratedSegments.filter(isNapcatReceiveImageSegment).map(segment => ({
-        segment,
-        renderedText: renderedImageSegments.get(segment) ?? "[图片]",
-      })),
-    );
+    return {
+      rawMessage: replaceImageSegmentsInRawMessage(
+        replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments),
+        hydratedSegments.filter(isNapcatReceiveImageSegment).map(segment => ({
+          segment,
+          renderedText: renderedImageSegments.get(segment) ?? "[图片]",
+        })),
+      ),
+      messageSegments: normalizedSegments,
+    };
   }
 
   private async renderImageSegments(
@@ -277,6 +304,34 @@ export class NapcatGroupMessageProcessor {
           entry !== null,
       ),
     );
+  }
+
+  private hydrateImageSegmentSummaries({
+    messageSegments,
+    renderedImageSegments,
+  }: {
+    messageSegments: NapcatReceiveMessageSegment[];
+    renderedImageSegments: Map<NapcatReceiveMessageSegment, string>;
+  }): NapcatReceiveMessageSegment[] {
+    return messageSegments.map(segment => {
+      if (!isNapcatReceiveImageSegment(segment)) {
+        return segment;
+      }
+
+      const renderedText = renderedImageSegments.get(segment);
+      const description = extractImageDescription(renderedText);
+      if (!description) {
+        return segment;
+      }
+
+      return {
+        ...segment,
+        data: {
+          ...segment.data,
+          summary: description,
+        },
+      };
+    });
   }
 
   private async hydrateAtSegmentNames({
@@ -375,4 +430,13 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
   }
+}
+
+function extractImageDescription(renderedText: string | undefined): string | null {
+  if (!renderedText) {
+    return null;
+  }
+
+  const matched = /^\[图片: (.+)\]$/u.exec(renderedText.trim());
+  return matched?.[1]?.trim() || null;
 }

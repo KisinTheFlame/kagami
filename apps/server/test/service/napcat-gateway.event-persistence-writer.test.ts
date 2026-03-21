@@ -31,6 +31,7 @@ describe("NapcatEventPersistenceWriter", () => {
       groupId: null,
       nickname: null,
       rawMessage: "hi",
+      messageSegments: [],
       messageId: 9988,
       time: 1710000000,
       eventTime: new Date(1710000000 * 1000),
@@ -66,6 +67,7 @@ describe("NapcatEventPersistenceWriter", () => {
       groupId: null,
       nickname: null,
       rawMessage: null,
+      messageSegments: [],
       messageId: null,
       time: null,
       eventTime: null,
@@ -96,6 +98,14 @@ describe("NapcatEventPersistenceWriter", () => {
         userId: "123456",
         nickname: "测试群名片",
         rawMessage: "hello group",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "hello group",
+            },
+          },
+        ],
         messageId: 9988,
         time: 1710000000,
         payload: {
@@ -153,6 +163,7 @@ describe("NapcatEventPersistenceWriter", () => {
       groupId: null,
       nickname: null,
       rawMessage: "hi",
+      messageSegments: [],
       messageId: 9988,
       time: 1710000000,
       eventTime: new Date(1710000000 * 1000),

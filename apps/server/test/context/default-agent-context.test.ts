@@ -63,6 +63,113 @@ describe("DefaultAgentContext", () => {
     });
   });
 
+  it("should render structured group message events into snapshot messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "hello",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "hello structured",
+            },
+          },
+        ],
+        messageId: 1001,
+        time: 1710000000,
+      },
+    ]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\nhello structured\n</message>",
+        },
+      ],
+    });
+  });
+
+  it("should fallback to rawMessage when structured segments are empty", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "raw fallback",
+        messageSegments: [],
+        messageId: 1001,
+        time: 1710000000,
+      },
+    ]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\nraw fallback\n</message>",
+        },
+      ],
+    });
+  });
+
+  it("should render at segments without name by using qq instead of unknown", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "[CQ:at,qq=714457117] hi",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "714457117",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hi",
+            },
+          },
+        ],
+        messageId: 1002,
+        time: 1710000001,
+      },
+    ]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\n@714457117 hi\n</message>",
+        },
+      ],
+    });
+  });
+
   it("should replace messages when external compaction finishes", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",

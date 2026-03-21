@@ -152,6 +152,21 @@ describe("DefaultNapcatGatewayService", () => {
       expect.objectContaining({
         type: "napcat_group_message",
         rawMessage: "{@测试成员(10001)} hello group",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+              name: "测试成员",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hello group",
+            },
+          },
+        ],
       }),
     );
     expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
@@ -330,6 +345,18 @@ describe("DefaultNapcatGatewayService", () => {
       expect.objectContaining({
         messageId: 1001,
         rawMessage: "[图片: 第一张图]",
+        messageSegments: [
+          {
+            type: "image",
+            data: {
+              summary: "第一张图",
+              file: "a.png",
+              sub_type: 0,
+              url: "https://example.com/a.png",
+              file_size: "100",
+            },
+          },
+        ],
       }),
     );
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
@@ -337,6 +364,14 @@ describe("DefaultNapcatGatewayService", () => {
       expect.objectContaining({
         messageId: 1002,
         rawMessage: "later",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "later",
+            },
+          },
+        ],
       }),
     );
 

@@ -25,6 +25,7 @@ export type NapcatGatewayNormalizedPostTypeEvent = {
   groupId: string | null;
   nickname: string | null;
   rawMessage: string | null;
+  messageSegments: NapcatReceiveMessageSegment[];
   messageId: number | null;
   time: number | null;
   eventTime: Date | null;

@@ -74,12 +74,42 @@ describe("NapcatGroupMessageProcessor", () => {
       userId: "123456",
       nickname: "测试群名片",
       rawMessage: "{@测试成员(10001)} hello group",
+      messageSegments: [
+        {
+          type: "at",
+          data: {
+            qq: "10001",
+            name: "测试成员",
+          },
+        },
+        {
+          type: "text",
+          data: {
+            text: " hello group",
+          },
+        },
+      ],
       messageId: 9988,
       time: 1710000000,
     });
     expect(result.groupMessageEvent).toEqual(
       expect.objectContaining({
         rawMessage: "{@测试成员(10001)} hello group",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+              name: "测试成员",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hello group",
+            },
+          },
+        ],
       }),
     );
   });
@@ -155,6 +185,21 @@ describe("NapcatGroupMessageProcessor", () => {
       expect.objectContaining({
         type: "napcat_group_message",
         rawMessage: "{@缓存昵称(10001)} again",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+              name: "缓存昵称",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " again",
+            },
+          },
+        ],
       }),
     );
   });
@@ -216,6 +261,7 @@ describe("NapcatGroupMessageProcessor", () => {
       expect.objectContaining({
         groupMessageEvent: expect.objectContaining({
           rawMessage: "hello",
+          messageSegments: [],
         }),
       }),
     );
@@ -271,6 +317,24 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         rawMessage: "你看这个[图片: 一只橘猫趴在键盘上]",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "你看这个",
+            },
+          },
+          {
+            type: "image",
+            data: {
+              summary: "一只橘猫趴在键盘上",
+              file: "abc.jpg",
+              sub_type: 0,
+              url: "https://example.com/cat.jpg",
+              file_size: "100",
+            },
+          },
+        ],
       }),
     );
   });
@@ -314,6 +378,18 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         rawMessage: "[图片]",
+        messageSegments: [
+          {
+            type: "image",
+            data: {
+              summary: "图片",
+              file: "failed.png",
+              sub_type: 0,
+              url: "https://example.com/failed.png",
+              file_size: "100",
+            },
+          },
+        ],
       }),
     );
   });

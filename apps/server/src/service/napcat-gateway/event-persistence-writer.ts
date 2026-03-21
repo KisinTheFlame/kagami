@@ -7,7 +7,6 @@ import type { GroupMessageChunkIndexer } from "../../rag/indexer.service.js";
 import type { NapcatGroupMessageEvent } from "../napcat-gateway.service.js";
 import {
   BLOCKED_NAPCAT_EVENT_POST_TYPES,
-  toStoredMessageSegments,
   type NapcatGatewayNormalizedPostTypeEvent,
 } from "./shared.js";
 
@@ -84,7 +83,7 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
         userId: event.userId,
         nickname: event.nickname,
         messageId: event.messageId,
-        message: toStoredMessageSegments(event.payload.message),
+        message: event.messageSegments,
         eventTime,
         payload: event.payload,
       })
