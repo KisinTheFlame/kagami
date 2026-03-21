@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 export const navItems = [
+  { to: "/claude-code-auth", label: "Claude Code 登录", icon: KeyRound },
   { to: "/codex-auth", label: "Codex 登录", icon: KeyRound },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },

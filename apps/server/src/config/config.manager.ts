@@ -35,6 +35,15 @@ export type CodexAuthRuntimeConfig = {
   timeoutMs: number;
 };
 
+export type ClaudeCodeAuthRuntimeConfig = {
+  enabled: boolean;
+  publicBaseUrl: string;
+  oauthRedirectPath: string;
+  oauthStateTtlMs: number;
+  refreshLeewayMs: number;
+  timeoutMs: number;
+};
+
 export type LlmUsageAttemptRuntimeConfig = {
   provider: LlmProviderId;
   model: string;
@@ -50,6 +59,7 @@ export type LlmRuntimeConfig = {
   deepseek: LlmProviderRuntimeConfig;
   openai: LlmProviderRuntimeConfig;
   openaiCodex: OpenAiCodexRuntimeConfig;
+  claudeCode: LlmProviderRuntimeConfig;
   usages: Record<LlmUsageId, LlmUsageRuntimeConfig>;
 };
 
@@ -84,6 +94,7 @@ export interface ConfigManager {
   getBootConfig(): Promise<BootConfig>;
   getLlmRuntimeConfig(): Promise<LlmRuntimeConfig>;
   getCodexAuthRuntimeConfig(): Promise<CodexAuthRuntimeConfig>;
+  getClaudeCodeAuthRuntimeConfig(): Promise<ClaudeCodeAuthRuntimeConfig>;
   getRagRuntimeConfig(): Promise<RagRuntimeConfig>;
   getTavilyConfig(): Promise<TavilyConfig>;
   getBotProfileConfig(): Promise<BotProfileConfig>;

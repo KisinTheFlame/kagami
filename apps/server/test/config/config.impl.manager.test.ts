@@ -36,6 +36,8 @@ server:
     timeoutMs: 15000
     codexAuth:
       publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
     providers:
       deepseek:
         apiKey: ""
@@ -48,6 +50,9 @@ server:
       openaiCodex:
         models:
           - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
     usages:
       agent:
         attempts:
@@ -109,6 +114,12 @@ server:
         models: ["gpt-5.3-codex"],
         timeoutMs: 15000,
       },
+      claudeCode: {
+        apiKey: undefined,
+        baseUrl: "https://api.anthropic.com",
+        models: ["claude-sonnet-4-20250514"],
+        timeoutMs: 15000,
+      },
       usages: {
         agent: {
           attempts: [
@@ -153,6 +164,15 @@ server:
       enabled: true,
       publicBaseUrl: "http://localhost:20004",
       oauthRedirectPath: "/auth/callback",
+      oauthStateTtlMs: 600_000,
+      refreshLeewayMs: 60_000,
+      timeoutMs: 15000,
+    });
+
+    await expect(manager.getClaudeCodeAuthRuntimeConfig()).resolves.toEqual({
+      enabled: true,
+      publicBaseUrl: "http://localhost:20004",
+      oauthRedirectPath: "/callback",
       oauthStateTtlMs: 600_000,
       refreshLeewayMs: 60_000,
       timeoutMs: 15000,
@@ -205,6 +225,8 @@ server:
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
     providers:
       deepseek:
         models:
@@ -215,6 +237,9 @@ server:
       openaiCodex:
         models:
           - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
     usages:
       agent:
         attempts:

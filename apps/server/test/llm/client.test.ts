@@ -89,6 +89,12 @@ function createProviderConfigs(): Record<
       models: ["gpt-5.3-codex"],
       timeoutMs: 45_000,
     },
+    "claude-code": {
+      apiKey: undefined,
+      baseUrl: "https://api.anthropic.com",
+      models: ["claude-sonnet-4-20250514"],
+      timeoutMs: 45_000,
+    },
   };
 }
 
@@ -161,6 +167,10 @@ describe("createLlmClient", () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           chat: vi.fn(),
         },
+        "claude-code": {
+          id: "claude-code",
+          chat: vi.fn(),
+        },
       },
       usages: createUsageConfig({
         agent: {
@@ -179,6 +189,10 @@ describe("createLlmClient", () => {
       {
         id: "openai",
         models: ["gpt-4o-mini", "gpt-5.4"],
+      },
+      {
+        id: "claude-code",
+        models: ["claude-sonnet-4-20250514"],
       },
       {
         id: "deepseek",

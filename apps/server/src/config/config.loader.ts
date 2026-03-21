@@ -13,11 +13,18 @@ const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/responses";
+const DEFAULT_CLAUDE_CODE_BASE_URL = "https://api.anthropic.com";
+const DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-4-20250514";
 const DEFAULT_CODEX_AUTH_ENABLED = true;
 const DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CODEX_AUTH_REDIRECT_PATH = "/auth/callback";
 const DEFAULT_CODEX_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
+const DEFAULT_CLAUDE_CODE_AUTH_ENABLED = true;
+const DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
+const DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH = "/callback";
+const DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS = 60_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
@@ -53,7 +60,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
   return value;
 }, z.string().trim().min(1).optional());
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
-const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex"] satisfies [
+const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-code"] satisfies [
   LlmProviderId,
   ...LlmProviderId[],
 ]);
@@ -88,6 +95,19 @@ const StaticConfigFileSchema = z.object({
           refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
         })
         .default({}),
+      claudeCodeAuth: z
+        .object({
+          enabled: z.boolean().default(DEFAULT_CLAUDE_CODE_AUTH_ENABLED),
+          publicBaseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL),
+          oauthRedirectPath: z
+            .string()
+            .trim()
+            .min(1)
+            .default(DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH),
+          oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS),
+          refreshLeewayMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS),
+        })
+        .default({}),
       providers: z.object({
         deepseek: z.object({
           apiKey: OptionalNonEmptyStringSchema,
@@ -103,6 +123,14 @@ const StaticConfigFileSchema = z.object({
           baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
           models: NonEmptyStringArraySchema,
         }),
+        claudeCode: z
+          .object({
+            baseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_BASE_URL),
+            models: NonEmptyStringArraySchema,
+          })
+          .default({
+            models: [DEFAULT_CLAUDE_CODE_MODEL],
+          }),
       }),
       usages: z
         .object({

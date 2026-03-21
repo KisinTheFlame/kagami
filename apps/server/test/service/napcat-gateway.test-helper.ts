@@ -114,6 +114,7 @@ export function createConfigManager(): ConfigManager {
     }),
     getLlmRuntimeConfig: vi.fn(),
     getCodexAuthRuntimeConfig: vi.fn(),
+    getClaudeCodeAuthRuntimeConfig: vi.fn(),
     getRagRuntimeConfig: vi.fn(),
     getTavilyConfig: vi.fn(),
     getBotProfileConfig: vi.fn(),

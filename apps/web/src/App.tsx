@@ -5,6 +5,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 const CodexAuthPage = lazy(() =>
   import("@/pages/codex-auth/CodexAuthPage").then(module => ({ default: module.CodexAuthPage })),
 );
+const ClaudeCodeAuthPage = lazy(() =>
+  import("@/pages/claude-code-auth/ClaudeCodeAuthPage").then(module => ({
+    default: module.ClaudeCodeAuthPage,
+  })),
+);
 const LlmPlaygroundPage = lazy(() =>
   import("@/pages/llm-playground/LlmPlaygroundPage").then(module => ({
     default: module.LlmPlaygroundPage,
@@ -43,6 +48,7 @@ function App() {
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<Navigate to="/llm-history" replace />} />
+            <Route path="/claude-code-auth" element={<ClaudeCodeAuthPage />} />
             <Route path="/codex-auth" element={<CodexAuthPage />} />
             <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
             <Route path="/llm-history" element={<LlmHistoryPage />} />

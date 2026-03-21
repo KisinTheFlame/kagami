@@ -14,6 +14,12 @@ server:
       oauthRedirectPath: /auth/callback
       oauthStateTtlMs: 600000
       refreshLeewayMs: 60000
+    claudeCodeAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 60000
     providers:
       deepseek:
         apiKey: ""
@@ -29,6 +35,10 @@ server:
         baseUrl: https://chatgpt.com/backend-api/codex/responses
         models:
           - gpt-5.3-codex
+      claudeCode:
+        baseUrl: https://api.anthropic.com
+        models:
+          - claude-sonnet-4-20250514
     usages:
       agent:
         attempts:

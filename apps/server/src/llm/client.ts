@@ -218,7 +218,7 @@ async function listAvailableProviders(
 ): Promise<LlmProviderOption[]> {
   const preferredProvider = usageConfig.attempts[0]?.provider;
   const availability = await Promise.all(
-    (["deepseek", "openai", "openai-codex"] as const).map(async providerId => {
+    (["deepseek", "openai", "openai-codex", "claude-code"] as const).map(async providerId => {
       const provider = providers[providerId];
       if (!provider) {
         return null;

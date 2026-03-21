@@ -1,5 +1,6 @@
 export * from "./app-log.js";
 export * from "./base.js";
+export * from "./claude-code-auth.js";
 export * from "./codex-auth.js";
 export * from "./embedding-cache.js";
 export * from "./health.js";

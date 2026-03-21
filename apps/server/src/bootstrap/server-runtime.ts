@@ -11,9 +11,11 @@ import {
 import { VisionAgent } from "../agents/subagents/vision/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
+import { ClaudeCodeAuthCallbackServer } from "../claude-code-auth/callback-server.js";
 import { DefaultAgentContext } from "../context/default-agent-context.js";
 import { CodexAuthCallbackServer } from "../codex-auth/callback-server.js";
 import { createDbClient, type Database } from "../db/client.js";
+import { PrismaClaudeCodeAuthDao } from "../dao/impl/claude-code-auth.impl.dao.js";
 import { PrismaCodexAuthDao } from "../dao/impl/codex-auth.impl.dao.js";
 import { PrismaEmbeddingCacheDao } from "../dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../dao/impl/llm-chat-call.impl.dao.js";
@@ -24,6 +26,7 @@ import { PrismaNapcatGroupMessageDao } from "../dao/impl/napcat-group-message.im
 import { BizError } from "../errors/biz-error.js";
 import { toHttpErrorResponse } from "../errors/http-error.js";
 import { AppLogHandler } from "../handler/app-log.handler.js";
+import { ClaudeCodeAuthHandler } from "../handler/claude-code-auth.handler.js";
 import { CodexAuthHandler } from "../handler/codex-auth.handler.js";
 import { EmbeddingCacheHandler } from "../handler/embedding-cache.handler.js";
 import { HealthHandler } from "../handler/health.handler.js";
@@ -35,6 +38,8 @@ import { NapcatHandler } from "../handler/napcat.handler.js";
 import { createLlmClient } from "../llm/client.js";
 import { createEmbeddingClient } from "../llm/embedding/client.js";
 import { createDeepSeekProvider } from "../llm/providers/deepseek-provider.js";
+import { ClaudeCodeAuthStore } from "../llm/providers/claude-code-auth.js";
+import { createClaudeCodeProvider } from "../llm/providers/claude-code-provider.js";
 import { OpenAiCodexAuthStore } from "../llm/providers/openai-codex-auth.js";
 import { createOpenAiCodexProvider } from "../llm/providers/openai-codex-provider.js";
 import { createOpenAiProvider } from "../llm/providers/openai-provider.js";
@@ -47,6 +52,7 @@ import { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import { GroupMessageMemorySearchService } from "../rag/memory-search.service.js";
 import { DefaultAgentMessageService } from "../service/agent-message.impl.service.js";
 import { DefaultAppLogQueryService } from "../service/app-log-query.impl.service.js";
+import { DefaultClaudeCodeAuthService } from "../service/claude-code-auth.impl.service.js";
 import { DefaultCodexAuthService } from "../service/codex-auth.impl.service.js";
 import { DefaultEmbeddingCacheQueryService } from "../service/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../service/llm-chat-call-query.impl.service.js";
@@ -83,6 +89,7 @@ export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
   napcatGatewayService: NapcatGatewayService;
+  claudeCodeAuthCallbackServer: ClaudeCodeAuthCallbackServer;
   codexAuthCallbackServer: CodexAuthCallbackServer;
   agentLoop: AgentLoop;
   port: number;
@@ -110,6 +117,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
+  const claudeCodeAuthDao = new PrismaClaudeCodeAuthDao({ database });
   const codexAuthDao = new PrismaCodexAuthDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
@@ -131,6 +139,15 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGroupMessageDao,
   });
 
+  const claudeCodeAuthConfig = await configManager.getClaudeCodeAuthRuntimeConfig();
+  const claudeCodeAuthCallbackServer = new ClaudeCodeAuthCallbackServer();
+  const claudeCodeAuthService = new DefaultClaudeCodeAuthService({
+    claudeCodeAuthDao,
+    config: claudeCodeAuthConfig,
+    callbackServer: claudeCodeAuthCallbackServer,
+  });
+  claudeCodeAuthCallbackServer.setAuthService(claudeCodeAuthService);
+
   const codexAuthConfig = await configManager.getCodexAuthRuntimeConfig();
   const codexAuthService = new DefaultCodexAuthService({
     codexAuthDao,
@@ -141,6 +158,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   await codexAuthCallbackServer.start();
 
+  const claudeCodeAuthStore = new ClaudeCodeAuthStore({
+    claudeCodeAuthService,
+  });
   const codexAuthStore = new OpenAiCodexAuthStore({
     codexAuthService,
   });
@@ -162,6 +182,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       config: llmConfig.openaiCodex,
       authStore: codexAuthStore,
     }),
+    "claude-code": createClaudeCodeProvider({
+      config: llmConfig.claudeCode,
+      authStore: claudeCodeAuthStore,
+    }),
   };
   const llmClient = createLlmClient({
     llmChatCallDao,
@@ -170,6 +194,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       deepseek: llmConfig.deepseek,
       openai: llmConfig.openai,
       "openai-codex": llmConfig.openaiCodex,
+      "claude-code": llmConfig.claudeCode,
     },
     usages: llmConfig.usages,
   });
@@ -275,6 +300,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
+      new ClaudeCodeAuthHandler({ claudeCodeAuthService }),
       new CodexAuthHandler({ codexAuthService }),
       new LlmHandler({ llmPlaygroundService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
@@ -290,6 +316,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     app,
     database,
     napcatGatewayService,
+    claudeCodeAuthCallbackServer,
     codexAuthCallbackServer,
     agentLoop,
     port: bootConfig.port,

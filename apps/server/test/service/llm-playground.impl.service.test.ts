@@ -9,8 +9,8 @@ describe("DefaultLlmPlaygroundService", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([
         {
-          id: "openai-codex",
-          models: ["gpt-5.3-codex"],
+          id: "claude-code",
+          models: ["claude-sonnet-4-20250514"],
         },
       ]),
     };
@@ -20,8 +20,8 @@ describe("DefaultLlmPlaygroundService", () => {
     await expect(service.listProviders()).resolves.toEqual({
       providers: [
         {
-          id: "openai-codex",
-          models: ["gpt-5.3-codex"],
+          id: "claude-code",
+          models: ["claude-sonnet-4-20250514"],
         },
       ],
     });

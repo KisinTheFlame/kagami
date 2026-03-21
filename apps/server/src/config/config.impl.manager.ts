@@ -1,6 +1,7 @@
 import type {
   BootConfig,
   BotProfileConfig,
+  ClaudeCodeAuthRuntimeConfig,
   CodexAuthRuntimeConfig,
   ConfigManager,
   RagRuntimeConfig,
@@ -17,6 +18,7 @@ export class DefaultConfigManager implements ConfigManager {
   private readonly bootConfig: BootConfig;
   private readonly llmRuntimeConfig: LlmRuntimeConfig;
   private readonly codexAuthRuntimeConfig: CodexAuthRuntimeConfig;
+  private readonly claudeCodeAuthRuntimeConfig: ClaudeCodeAuthRuntimeConfig;
   private readonly ragRuntimeConfig: RagRuntimeConfig;
   private readonly tavilyConfig: TavilyConfig;
   private readonly botProfileConfig: BotProfileConfig;
@@ -52,6 +54,12 @@ export class DefaultConfigManager implements ConfigManager {
       openaiCodex: {
         baseUrl: config.server.llm.providers.openaiCodex.baseUrl,
         models: config.server.llm.providers.openaiCodex.models,
+        timeoutMs: config.server.llm.timeoutMs,
+      },
+      claudeCode: {
+        apiKey: undefined,
+        baseUrl: config.server.llm.providers.claudeCode.baseUrl,
+        models: config.server.llm.providers.claudeCode.models,
         timeoutMs: config.server.llm.timeoutMs,
       },
       usages: {
@@ -95,6 +103,15 @@ export class DefaultConfigManager implements ConfigManager {
       timeoutMs: config.server.llm.timeoutMs,
     };
 
+    this.claudeCodeAuthRuntimeConfig = {
+      enabled: config.server.llm.claudeCodeAuth.enabled,
+      publicBaseUrl: config.server.llm.claudeCodeAuth.publicBaseUrl,
+      oauthRedirectPath: config.server.llm.claudeCodeAuth.oauthRedirectPath,
+      oauthStateTtlMs: config.server.llm.claudeCodeAuth.oauthStateTtlMs,
+      refreshLeewayMs: config.server.llm.claudeCodeAuth.refreshLeewayMs,
+      timeoutMs: config.server.llm.timeoutMs,
+    };
+
     this.ragRuntimeConfig = {
       embedding: {
         provider: config.server.rag.embedding.provider,
@@ -127,6 +144,10 @@ export class DefaultConfigManager implements ConfigManager {
 
   public async getCodexAuthRuntimeConfig(): Promise<CodexAuthRuntimeConfig> {
     return this.codexAuthRuntimeConfig;
+  }
+
+  public async getClaudeCodeAuthRuntimeConfig(): Promise<ClaudeCodeAuthRuntimeConfig> {
+    return this.claudeCodeAuthRuntimeConfig;
   }
 
   public async getRagRuntimeConfig(): Promise<RagRuntimeConfig> {

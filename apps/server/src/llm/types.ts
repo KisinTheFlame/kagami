@@ -1,4 +1,4 @@
-export type LlmProviderId = "deepseek" | "openai" | "openai-codex";
+export type LlmProviderId = "deepseek" | "openai" | "openai-codex" | "claude-code";
 export type LlmUsageId = "agent" | "ragQueryPlanner" | "contextSummarizer" | "vision";
 
 export type JsonSchema = {

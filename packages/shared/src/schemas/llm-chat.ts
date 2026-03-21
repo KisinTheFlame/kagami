@@ -6,7 +6,7 @@ import {
   parseOptionalStringInput,
 } from "./base.js";
 
-export const LlmProviderIdSchema = z.enum(["deepseek", "openai", "openai-codex"]);
+export const LlmProviderIdSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-code"]);
 
 export type LlmProviderId = z.infer<typeof LlmProviderIdSchema>;
 
