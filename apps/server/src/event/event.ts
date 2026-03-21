@@ -1,9 +1,12 @@
+import type { NapcatReceiveMessageSegment } from "../service/napcat-gateway/shared.js";
+
 export type NapcatGroupMessageEvent = {
   type: "napcat_group_message";
   groupId: string;
   userId: string;
   nickname: string;
   rawMessage: string;
+  messageSegments: NapcatReceiveMessageSegment[];
   messageId: number | null;
   time: number | null;
 };

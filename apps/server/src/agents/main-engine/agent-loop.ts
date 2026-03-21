@@ -1,7 +1,6 @@
 import type { AgentContext, AssistantMessage } from "../../context/agent-context.js";
 import {
   createConversationSummaryMessage,
-  createMessagesFromEvent,
   createWakeReminderMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
@@ -69,13 +68,20 @@ export class AgentLoop {
         await this.appendWakeReminderIfNeeded(this.now());
       }
 
+      let hasActiveRound = false;
+      let currentGroupId: string | null = null;
+
       while (true) {
         const events = this.eventQueue.drainAll();
         if (events.length > 0) {
+          hasActiveRound = true;
+          currentGroupId = extractCurrentGroupId(events, currentGroupId);
           await this.handleEvents(events);
+        } else if (!hasActiveRound) {
+          break;
         }
-        const snapshot = await this.context.getSnapshot();
 
+        const snapshot = await this.context.getSnapshot();
         const completion = await this.llmClient.chat(
           {
             system: snapshot.systemPrompt,
@@ -96,11 +102,13 @@ export class AgentLoop {
 
         let shouldFinishRound = false;
         for (const toolCall of assistant.toolCalls) {
-          const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments);
+          const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
+            groupId: currentGroupId ?? undefined,
+          });
           if (toolResult.signal === "finish_round") {
             shouldFinishRound = true;
           }
-          if (toolResult.kind !== "control" && toolResult.content.length > 0) {
+          if (toolResult.content.length > 0) {
             await this.context.appendToolResult({
               toolCallId: toolCall.id,
               content: toolResult.content,
@@ -117,10 +125,7 @@ export class AgentLoop {
   }
 
   private async handleEvents(events: Event[]): Promise<void> {
-    const eventMessages = events.flatMap(event => createMessagesFromEvent(event));
-    if (eventMessages.length > 0) {
-      await this.context.appendMessages(eventMessages);
-    }
+    await this.context.appendEvents(events);
 
     if (this.ragContextEventEnricher) {
       const snapshot = await this.context.getSnapshot();
@@ -139,8 +144,11 @@ export class AgentLoop {
   private async executeToolCall(
     toolName: string,
     argumentsValue: Record<string, unknown>,
+    context: {
+      groupId?: string;
+    },
   ): Promise<ToolSetExecutionResult> {
-    return await this.agentTools.execute(toolName, argumentsValue, {});
+    return await this.agentTools.execute(toolName, argumentsValue, context);
   }
 
   private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
@@ -220,4 +228,15 @@ function createWakeReminderMinuteKey(now: Date): string {
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
 
   return [values.year, values.month, values.day, values.hour, values.minute].join("-");
+}
+
+function extractCurrentGroupId(events: Event[], fallback: string | null): string | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "napcat_group_message") {
+      return event.groupId;
+    }
+  }
+
+  return fallback;
 }

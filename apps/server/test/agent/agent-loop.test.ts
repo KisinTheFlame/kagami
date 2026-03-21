@@ -59,54 +59,36 @@ function createAgentTools(overrides?: {
     {
       name: "search_web",
       description: "search",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      parameters: { type: "object", properties: {} },
       kind: "business",
       llmTool: {
         name: "search_web",
         description: "search",
-        parameters: {
-          type: "object",
-          properties: {},
-        },
+        parameters: { type: "object", properties: {} },
       },
       execute: searchWebExecute,
     },
     {
       name: "send_group_message",
       description: "send",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      parameters: { type: "object", properties: {} },
       kind: "business",
       llmTool: {
         name: "send_group_message",
         description: "send",
-        parameters: {
-          type: "object",
-          properties: {},
-        },
+        parameters: { type: "object", properties: {} },
       },
       execute: sendGroupMessageExecute,
     },
     {
       name: "finish",
       description: "finish",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      parameters: { type: "object", properties: {} },
       kind: "control",
       llmTool: {
         name: "finish",
         description: "finish",
-        parameters: {
-          type: "object",
-          properties: {},
-        },
+        parameters: { type: "object", properties: {} },
       },
       execute: finishExecute,
     },
@@ -117,6 +99,36 @@ function createAgentTools(overrides?: {
     finishExecute,
     searchWebExecute,
     sendGroupMessageExecute,
+  };
+}
+
+function createGroupEvent(
+  message: string,
+  overrides?: Partial<{
+    groupId: string;
+    userId: string;
+    nickname: string;
+    messageId: number | null;
+    time: number | null;
+    messageSegments: Array<{ type: "text"; data: { text: string } }>;
+  }>,
+) {
+  return {
+    type: "napcat_group_message" as const,
+    groupId: overrides?.groupId ?? "123456",
+    userId: overrides?.userId ?? "654321",
+    nickname: overrides?.nickname ?? "测试昵称",
+    rawMessage: message,
+    messageSegments: overrides?.messageSegments ?? [
+      {
+        type: "text" as const,
+        data: {
+          text: message,
+        },
+      },
+    ],
+    messageId: overrides?.messageId ?? 1001,
+    time: overrides?.time ?? 1710000000,
   };
 }
 
@@ -143,17 +155,7 @@ describe("AgentLoop", () => {
     const waitForEvent = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
     const drainAll = vi
       .fn()
-      .mockReturnValueOnce([
-        {
-          type: "napcat_group_message",
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "hello",
-          messageId: 1001,
-          time: 1710000000,
-        },
-      ])
+      .mockReturnValueOnce([createGroupEvent("hello world")])
       .mockReturnValue([]);
     const eventQueue: AgentEventQueue = {
       enqueue: vi.fn().mockReturnValue(1),
@@ -180,7 +182,7 @@ describe("AgentLoop", () => {
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
           },
         ],
         tools: agentTools.definitions(),
@@ -190,7 +192,12 @@ describe("AgentLoop", () => {
         usage: "agent",
       },
     );
-    expect(finishExecute).toHaveBeenCalledWith({}, {});
+    expect(finishExecute).toHaveBeenCalledWith(
+      {},
+      {
+        groupId: "123456",
+      },
+    );
     expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sendGroupMessageExecute).not.toHaveBeenCalled();
     await expect(context.getSnapshot()).resolves.toEqual({
@@ -199,7 +206,7 @@ describe("AgentLoop", () => {
         createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+          content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
         },
         {
           role: "assistant",
@@ -291,30 +298,14 @@ describe("AgentLoop", () => {
       enqueue: vi.fn().mockReturnValue(1),
       drainAll: vi
         .fn()
+        .mockReturnValueOnce([createGroupEvent("hello world")])
         .mockReturnValueOnce([
-          {
-            type: "napcat_group_message",
-            groupId: "123456",
-            userId: "654321",
-            nickname: "测试昵称",
-            rawMessage: "hello",
-            messageId: 1001,
-            time: 1710000000,
-          },
-        ])
-        .mockReturnValueOnce([])
-        .mockReturnValueOnce([
-          {
-            type: "napcat_group_message",
-            groupId: "123456",
-            userId: "654321",
-            nickname: "测试昵称",
-            rawMessage: "world",
+          createGroupEvent("world wide", {
             messageId: 1002,
             time: 1710000001,
-          },
+          }),
         ])
-        .mockReturnValueOnce([]),
+        .mockReturnValue([]),
       size: vi.fn().mockReturnValue(0),
       waitForEvent: vi
         .fn()
@@ -402,17 +393,7 @@ describe("AgentLoop", () => {
       enqueue: vi.fn().mockReturnValue(1),
       drainAll: vi
         .fn()
-        .mockReturnValueOnce([
-          {
-            type: "napcat_group_message",
-            groupId: "123456",
-            userId: "654321",
-            nickname: "测试昵称",
-            rawMessage: "hello",
-            messageId: 1001,
-            time: 1710000000,
-          },
-        ])
+        .mockReturnValueOnce([createGroupEvent("hello world")])
         .mockReturnValue([]),
       size: vi.fn().mockReturnValue(0),
       waitForEvent: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError),
@@ -433,24 +414,14 @@ describe("AgentLoop", () => {
     await expect(loop.run()).rejects.toBe(stopError);
 
     expect(ragContextEventEnricher.enrichAfterEvents).toHaveBeenCalledWith({
-      events: [
-        {
-          type: "napcat_group_message",
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "hello",
-          messageId: 1001,
-          time: 1710000000,
-        },
-      ],
+      events: [createGroupEvent("hello world")],
       snapshot: {
         systemPrompt: "system-prompt",
         messages: [
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
           },
         ],
       },
@@ -465,7 +436,7 @@ describe("AgentLoop", () => {
           createConversationSummaryMessage("累计摘要"),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
           },
           {
             role: "user",

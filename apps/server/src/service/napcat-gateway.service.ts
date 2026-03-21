@@ -1,3 +1,4 @@
+import type { NapcatReceiveMessageSegment } from "./napcat-gateway/shared.js";
 import type { NapcatSendGroupMessageRequest, NapcatSendGroupMessageResponse } from "@kagami/shared";
 
 export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
@@ -8,6 +9,7 @@ export type NapcatGroupMessageEvent = {
   userId: string;
   nickname: string;
   rawMessage: string;
+  messageSegments: NapcatReceiveMessageSegment[];
   messageId: number | null;
   time: number | null;
   payload: Record<string, unknown>;

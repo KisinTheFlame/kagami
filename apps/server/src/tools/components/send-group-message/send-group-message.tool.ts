@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AgentMessageService } from "../../../service/agent-message.service.js";
-import { ZodToolComponent, type ToolKind } from "../../core/tool-component.js";
+import { ZodToolComponent, type ToolContext, type ToolKind } from "../../core/tool-component.js";
 
 export const SEND_GROUP_MESSAGE_TOOL_NAME = "send_group_message";
 
@@ -31,7 +31,9 @@ export class SendGroupMessageTool extends ZodToolComponent<typeof SendGroupMessa
 
   protected async executeTyped(
     input: z.infer<typeof SendGroupMessageArgumentsSchema>,
+    context: ToolContext,
   ): Promise<string> {
+    void context;
     const result = await this.agentMessageService.sendGroupMessage(input);
     return JSON.stringify({
       ok: true,

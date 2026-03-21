@@ -13,6 +13,7 @@ describe("InMemoryAgentEventQueue", () => {
       userId: "20002",
       nickname: "测试昵称",
       rawMessage: "hello",
+      messageSegments: [],
       messageId: 30003,
       time: 1710000000,
     });
@@ -26,6 +27,7 @@ describe("InMemoryAgentEventQueue", () => {
         userId: "20002",
         nickname: "测试昵称",
         rawMessage: "hello",
+        messageSegments: [],
         messageId: 30003,
         time: 1710000000,
       },
@@ -42,6 +44,7 @@ describe("InMemoryAgentEventQueue", () => {
       userId: "20002",
       nickname: "测试昵称",
       rawMessage: "already-queued",
+      messageSegments: [],
       messageId: 30003,
       time: 1710000000,
     });
@@ -59,6 +62,7 @@ describe("InMemoryAgentEventQueue", () => {
       userId: "20002",
       nickname: "测试昵称",
       rawMessage: "later",
+      messageSegments: [],
       messageId: 30003,
       time: 1710000000,
     });
@@ -71,6 +75,7 @@ describe("InMemoryAgentEventQueue", () => {
         userId: "20002",
         nickname: "测试昵称",
         rawMessage: "later",
+        messageSegments: [],
         messageId: 30003,
         time: 1710000000,
       },
