@@ -91,6 +91,27 @@ export class DefaultConfigManager implements ConfigManager {
             times: attempt.times,
           })),
         },
+        replyThought: {
+          attempts: llmUsages.replyThought.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
+        },
+        replyReview: {
+          attempts: llmUsages.replyReview.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
+        },
+        replyWriter: {
+          attempts: llmUsages.replyWriter.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
+        },
       },
     };
 

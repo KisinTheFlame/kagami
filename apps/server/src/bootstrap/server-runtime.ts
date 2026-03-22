@@ -4,6 +4,12 @@ import { z } from "zod";
 import { AgentLoop, createAgentSystemPrompt } from "../agents/main-engine/index.js";
 import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
 import {
+  ReplyThoughtTool,
+  ReviewReplyStrategyTool,
+  TrySendMessageService,
+  WriteReplyMessageTool,
+} from "../agents/subagents/reply-sender/index.js";
+import {
   createRagSystemPrompt,
   RagContextEventEnricher,
   RagQueryPlannerService,
@@ -70,12 +76,13 @@ import {
   SEARCH_MEMORY_TOOL_NAME,
   SEARCH_WEB_TOOL_NAME,
   SearchMemoryTool,
-  SEND_GROUP_MESSAGE_TOOL_NAME,
   SearchWebTool,
   SendGroupMessageTool,
   SUMMARY_TOOL_NAME,
   SummaryTool,
   ToolCatalog,
+  TRY_SEND_MESSAGE_TOOL_NAME,
+  TrySendMessageTool,
 } from "../tools/index.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -250,12 +257,27 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     targetGroupId: bootConfig.napcat.listenGroupId,
   });
+  const replySenderToolCatalog = new ToolCatalog([
+    new ReplyThoughtTool(),
+    new ReviewReplyStrategyTool(),
+    new WriteReplyMessageTool(),
+  ]);
+  const trySendMessageService = new TrySendMessageService({
+    llmClient,
+    agentMessageService,
+    replyThoughtTools: replySenderToolCatalog.pick(["reply_thought"]),
+    replyReviewTools: replySenderToolCatalog.pick(["review_reply_strategy"]),
+    replyWriterTools: replySenderToolCatalog.pick(["write_reply_message"]),
+  });
   const toolCatalog = new ToolCatalog([
     new SearchWebTool({
       webSearchService,
     }),
     new SendGroupMessageTool({
       agentMessageService,
+    }),
+    new TrySendMessageTool({
+      trySendMessageService,
     }),
     new FinishTool(),
     new SearchMemoryTool({
@@ -274,7 +296,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const agentVisibleTools = toolCatalog.pick([
     SEARCH_WEB_TOOL_NAME,
-    SEND_GROUP_MESSAGE_TOOL_NAME,
+    TRY_SEND_MESSAGE_TOOL_NAME,
     FINISH_TOOL_NAME,
   ]);
   const summaryPlanner = new ContextSummaryPlannerService({

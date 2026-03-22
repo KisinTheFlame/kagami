@@ -1,11 +1,13 @@
 import { z } from "zod";
-import type { JsonSchema, Tool } from "../../llm/types.js";
+import type { JsonSchema, LlmMessage, Tool } from "../../llm/types.js";
 
 export type ToolKind = "business" | "control";
 export type ToolSignal = "continue" | "finish_round";
 
 export type ToolContext = {
   groupId?: string;
+  systemPrompt?: string;
+  messages?: LlmMessage[];
 };
 
 export type ToolExecutionResult = {

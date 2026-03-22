@@ -104,6 +104,8 @@ export class AgentLoop {
         for (const toolCall of assistant.toolCalls) {
           const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
             groupId: currentGroupId ?? undefined,
+            systemPrompt: snapshot.systemPrompt,
+            messages: snapshot.messages,
           });
           if (toolResult.signal === "finish_round") {
             shouldFinishRound = true;
@@ -114,6 +116,9 @@ export class AgentLoop {
               content: toolResult.content,
             });
             await this.compactContextIfNeeded();
+          }
+          if (shouldFinishRound) {
+            break;
           }
         }
 
@@ -146,6 +151,8 @@ export class AgentLoop {
     argumentsValue: Record<string, unknown>,
     context: {
       groupId?: string;
+      systemPrompt?: string;
+      messages?: import("../../llm/types.js").LlmMessage[];
     },
   ): Promise<ToolSetExecutionResult> {
     return await this.agentTools.execute(toolName, argumentsValue, context);

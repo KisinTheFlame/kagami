@@ -138,6 +138,9 @@ const StaticConfigFileSchema = z.object({
           ragQueryPlanner: LlmUsageConfigSchema,
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
+          replyThought: LlmUsageConfigSchema.optional(),
+          replyReview: LlmUsageConfigSchema.optional(),
+          replyWriter: LlmUsageConfigSchema.optional(),
         })
         .strict(),
     }),
@@ -239,6 +242,9 @@ function normalizeLlmUsages(
     ragQueryPlanner: normalizeUsageConfig(input.usages.ragQueryPlanner),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
+    replyThought: normalizeUsageConfig(input.usages.replyThought ?? input.usages.agent),
+    replyReview: normalizeUsageConfig(input.usages.replyReview ?? input.usages.agent),
+    replyWriter: normalizeUsageConfig(input.usages.replyWriter ?? input.usages.agent),
   };
 }
 

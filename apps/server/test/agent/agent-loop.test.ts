@@ -29,12 +29,12 @@ function createLlmResponse(): LlmChatResponsePayload {
 function createAgentTools(overrides?: {
   finishExecute?: ReturnType<typeof vi.fn>;
   searchWebExecute?: ReturnType<typeof vi.fn>;
-  sendGroupMessageExecute?: ReturnType<typeof vi.fn>;
+  trySendMessageExecute?: ReturnType<typeof vi.fn>;
 }): {
   agentTools: ToolSet;
   finishExecute: ReturnType<typeof vi.fn>;
   searchWebExecute: ReturnType<typeof vi.fn>;
-  sendGroupMessageExecute: ReturnType<typeof vi.fn>;
+  trySendMessageExecute: ReturnType<typeof vi.fn>;
 } {
   const finishExecute =
     overrides?.finishExecute ??
@@ -48,11 +48,11 @@ function createAgentTools(overrides?: {
       content: "",
       signal: "continue",
     });
-  const sendGroupMessageExecute =
-    overrides?.sendGroupMessageExecute ??
+  const trySendMessageExecute =
+    overrides?.trySendMessageExecute ??
     vi.fn().mockResolvedValue({
       content: "",
-      signal: "continue",
+      signal: "finish_round",
     });
 
   const components: ToolComponent[] = [
@@ -69,16 +69,16 @@ function createAgentTools(overrides?: {
       execute: searchWebExecute,
     },
     {
-      name: "send_group_message",
+      name: "try_send_message",
       description: "send",
       parameters: { type: "object", properties: {} },
       kind: "business",
       llmTool: {
-        name: "send_group_message",
+        name: "try_send_message",
         description: "send",
         parameters: { type: "object", properties: {} },
       },
-      execute: sendGroupMessageExecute,
+      execute: trySendMessageExecute,
     },
     {
       name: "finish",
@@ -95,10 +95,10 @@ function createAgentTools(overrides?: {
   ];
 
   return {
-    agentTools: new ToolCatalog(components).pick(["search_web", "send_group_message", "finish"]),
+    agentTools: new ToolCatalog(components).pick(["search_web", "try_send_message", "finish"]),
     finishExecute,
     searchWebExecute,
-    sendGroupMessageExecute,
+    trySendMessageExecute,
   };
 }
 
@@ -136,11 +136,12 @@ describe("AgentLoop", () => {
   it("should consume queue events and execute one enabled tool round", async () => {
     const stopError = new StopLoopError("stop-loop");
     const now = vi.fn().mockReturnValue(new Date("2026-03-09T10:21:00.000Z"));
-    const { agentTools, finishExecute, searchWebExecute, sendGroupMessageExecute } =
-      createAgentTools({
+    const { agentTools, finishExecute, searchWebExecute, trySendMessageExecute } = createAgentTools(
+      {
         searchWebExecute: vi.fn(),
-        sendGroupMessageExecute: vi.fn(),
-      });
+        trySendMessageExecute: vi.fn(),
+      },
+    );
 
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
@@ -196,10 +197,18 @@ describe("AgentLoop", () => {
       {},
       {
         groupId: "123456",
+        systemPrompt: "system-prompt",
+        messages: [
+          createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+          {
+            role: "user",
+            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+          },
+        ],
       },
     );
     expect(searchWebExecute).not.toHaveBeenCalled();
-    expect(sendGroupMessageExecute).not.toHaveBeenCalled();
+    expect(trySendMessageExecute).not.toHaveBeenCalled();
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
       messages: [
@@ -449,5 +458,118 @@ describe("AgentLoop", () => {
         usage: "agent",
       },
     );
+  });
+
+  it("should stop executing later tool calls after a finish_round signal", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const trySendMessageExecute = vi.fn().mockResolvedValue({
+      content: JSON.stringify({
+        sent: false,
+      }),
+      signal: "finish_round",
+    });
+    const searchWebExecute = vi.fn().mockResolvedValue({
+      content: "should-not-run",
+      signal: "continue",
+    });
+    const { agentTools } = createAgentTools({
+      trySendMessageExecute,
+      searchWebExecute,
+    });
+    const chat = vi.fn().mockResolvedValue({
+      provider: "openai",
+      model: "gpt-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "try-send-1",
+            name: "try_send_message",
+            arguments: {},
+          },
+          {
+            id: "search-1",
+            name: "search_web",
+            arguments: {},
+          },
+        ],
+      },
+    } satisfies LlmChatResponsePayload);
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      drainAll: vi
+        .fn()
+        .mockReturnValueOnce([createGroupEvent("hello world")])
+        .mockReturnValue([]),
+      size: vi.fn().mockReturnValue(0),
+      waitForEvent: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError),
+    };
+
+    const loop = new AgentLoop({
+      llmClient: {
+        chat,
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context,
+      eventQueue,
+      agentTools,
+      now: () => new Date("2026-03-09T10:21:00.000Z"),
+    });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(trySendMessageExecute).toHaveBeenCalledWith(
+      {},
+      {
+        groupId: "123456",
+        systemPrompt: "system-prompt",
+        messages: [
+          createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+          {
+            role: "user",
+            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+          },
+        ],
+      },
+    );
+    expect(searchWebExecute).not.toHaveBeenCalled();
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+        },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "try-send-1",
+              name: "try_send_message",
+              arguments: {},
+            },
+            {
+              id: "search-1",
+              name: "search_web",
+              arguments: {},
+            },
+          ],
+        },
+        {
+          role: "tool",
+          toolCallId: "try-send-1",
+          content: JSON.stringify({
+            sent: false,
+          }),
+        },
+      ],
+    });
   });
 });
