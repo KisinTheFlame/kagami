@@ -20,7 +20,7 @@ export function toHttpErrorResponse(error: unknown): HttpErrorResponse {
 
   if (error instanceof BizError) {
     return {
-      statusCode: 500,
+      statusCode: error.statusCode,
       body: {
         message: error.message,
       },

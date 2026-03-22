@@ -25,6 +25,7 @@ describe("LlmHandler", () => {
     });
     const llmPlaygroundService: LlmPlaygroundService = {
       listProviders,
+      listPlaygroundTools: vi.fn(),
       chat: vi.fn(),
     };
 
@@ -48,6 +49,49 @@ describe("LlmHandler", () => {
     expect(listProviders).toHaveBeenCalledTimes(1);
   });
 
+  it("should list playground tool definitions", async () => {
+    const listPlaygroundTools = vi.fn().mockResolvedValue({
+      tools: [
+        {
+          name: "finish",
+          description: "done",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+    });
+    const llmPlaygroundService: LlmPlaygroundService = {
+      listProviders: vi.fn(),
+      listPlaygroundTools,
+      chat: vi.fn(),
+    };
+
+    const handler = new LlmHandler({ llmPlaygroundService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/llm/playground-tools",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      tools: [
+        {
+          name: "finish",
+          description: "done",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+    });
+    expect(listPlaygroundTools).toHaveBeenCalledTimes(1);
+  });
+
   it("should execute a chat playground request", async () => {
     const chat = vi.fn().mockResolvedValue({
       provider: "claude-code",
@@ -63,6 +107,7 @@ describe("LlmHandler", () => {
     });
     const llmPlaygroundService: LlmPlaygroundService = {
       listProviders: vi.fn(),
+      listPlaygroundTools: vi.fn(),
       chat,
     };
 
@@ -72,11 +117,9 @@ describe("LlmHandler", () => {
     const payload = {
       provider: "claude-code",
       model: "claude-sonnet-4-20250514",
-      request: {
-        messages: [{ role: "user", content: "ping" }],
-        tools: [],
-        toolChoice: "none",
-      },
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
     };
 
     const response = await app.inject({

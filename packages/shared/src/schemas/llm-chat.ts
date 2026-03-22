@@ -20,6 +20,21 @@ export const LlmToolCallPayloadSchema = z
 
 export type LlmToolCallPayload = z.infer<typeof LlmToolCallPayloadSchema>;
 
+export const LlmToolDefinitionSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    parameters: z
+      .object({
+        type: z.literal("object"),
+        properties: JsonRecordSchema,
+      })
+      .strict(),
+  })
+  .strict();
+
+export type LlmToolDefinition = z.infer<typeof LlmToolDefinitionSchema>;
+
 export const LlmRequestMessageSchema = z.discriminatedUnion("role", [
   z
     .object({
@@ -49,20 +64,7 @@ export const LlmChatRequestPayloadSchema = z
   .object({
     system: z.string().optional(),
     messages: z.array(LlmRequestMessageSchema),
-    tools: z.array(
-      z
-        .object({
-          name: z.string().min(1),
-          description: z.string().optional(),
-          parameters: z
-            .object({
-              type: z.literal("object"),
-              properties: JsonRecordSchema,
-            })
-            .strict(),
-        })
-        .strict(),
-    ),
+    tools: z.array(LlmToolDefinitionSchema),
     toolChoice: z.union([
       z.literal("required"),
       z.literal("auto"),
@@ -165,11 +167,79 @@ export const LlmProviderListResponseSchema = z
 
 export type LlmProviderListResponse = z.infer<typeof LlmProviderListResponseSchema>;
 
+export const PlaygroundTextContentPartSchema = z
+  .object({
+    type: z.literal("text"),
+    text: z.string(),
+  })
+  .strict();
+
+export const PlaygroundImageContentPartSchema = z
+  .object({
+    type: z.literal("image"),
+    fileName: z.string().min(1).optional(),
+    mimeType: z.string().min(1),
+    dataUrl: z.string().min(1),
+  })
+  .strict();
+
+export const PlaygroundContentPartSchema = z.discriminatedUnion("type", [
+  PlaygroundTextContentPartSchema,
+  PlaygroundImageContentPartSchema,
+]);
+
+export type PlaygroundContentPart = z.infer<typeof PlaygroundContentPartSchema>;
+
+export const PlaygroundMessageSchema = z.discriminatedUnion("role", [
+  z
+    .object({
+      role: z.literal("user"),
+      content: z.union([z.string(), z.array(PlaygroundContentPartSchema)]),
+    })
+    .strict(),
+  z
+    .object({
+      role: z.literal("assistant"),
+      content: z.string(),
+      toolCalls: z.array(LlmToolCallPayloadSchema),
+    })
+    .strict(),
+  z
+    .object({
+      role: z.literal("tool"),
+      toolCallId: z.string().min(1),
+      content: z.string(),
+    })
+    .strict(),
+]);
+
+export type PlaygroundMessage = z.infer<typeof PlaygroundMessageSchema>;
+
+export const LlmPlaygroundToolListResponseSchema = z
+  .object({
+    tools: z.array(LlmToolDefinitionSchema),
+  })
+  .strict();
+
+export type LlmPlaygroundToolListResponse = z.infer<typeof LlmPlaygroundToolListResponseSchema>;
+
 export const LlmPlaygroundChatRequestSchema = z
   .object({
     provider: LlmProviderIdSchema,
     model: z.string().min(1),
-    request: LlmChatRequestPayloadSchema,
+    system: z.string().optional(),
+    messages: z.array(PlaygroundMessageSchema),
+    tools: z.array(LlmToolDefinitionSchema),
+    toolChoice: z.union([
+      z.literal("required"),
+      z.literal("auto"),
+      z.literal("none"),
+      z
+        .object({
+          tool_name: z.string().min(1),
+        })
+        .strict(),
+    ]),
   })
   .strict();
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   LlmPlaygroundChatRequestSchema,
   LlmPlaygroundChatResponseSchema,
+  LlmPlaygroundToolListResponseSchema,
   LlmProviderListResponseSchema,
 } from "@kagami/shared";
 import { z } from "zod";
@@ -30,6 +31,16 @@ export class LlmHandler {
       responseSchema: LlmProviderListResponseSchema,
       execute: () => {
         return this.llmPlaygroundService.listProviders();
+      },
+    });
+
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/playground-tools`,
+      querySchema: EmptyQuerySchema,
+      responseSchema: LlmPlaygroundToolListResponseSchema,
+      execute: () => {
+        return this.llmPlaygroundService.listPlaygroundTools();
       },
     });
 

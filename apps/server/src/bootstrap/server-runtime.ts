@@ -75,6 +75,7 @@ import {
   FinishTool,
   SEARCH_MEMORY_TOOL_NAME,
   SEARCH_WEB_TOOL_NAME,
+  SEND_GROUP_MESSAGE_TOOL_NAME,
   SearchMemoryTool,
   SearchWebTool,
   SendGroupMessageTool,
@@ -290,7 +291,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
     systemPromptFactory: createRagSystemPrompt,
   });
-  const llmPlaygroundService = new DefaultLlmPlaygroundService({ llmClient });
   const ragContextEventEnricher = new RagContextEventEnricher({
     ragQueryPlanner,
   });
@@ -299,6 +299,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     TRY_SEND_MESSAGE_TOOL_NAME,
     FINISH_TOOL_NAME,
   ]);
+  const llmPlaygroundService = new DefaultLlmPlaygroundService({
+    llmClient,
+    playgroundToolDefinitions: toolCatalog
+      .pick([
+        SEARCH_WEB_TOOL_NAME,
+        TRY_SEND_MESSAGE_TOOL_NAME,
+        FINISH_TOOL_NAME,
+        SEARCH_MEMORY_TOOL_NAME,
+        SUMMARY_TOOL_NAME,
+        SEND_GROUP_MESSAGE_TOOL_NAME,
+      ])
+      .definitions(),
+  });
   const summaryPlanner = new ContextSummaryPlannerService({
     llmClient,
     summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
