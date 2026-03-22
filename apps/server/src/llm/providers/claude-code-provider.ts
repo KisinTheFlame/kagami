@@ -8,27 +8,53 @@ import {
 import type {
   JsonSchema,
   LlmChatRequest,
-  LlmContentPart,
   LlmChatResponsePayload,
+  LlmContentPart,
 } from "../types.js";
 import { BizError } from "../../errors/biz-error.js";
 import type { LlmProviderRuntimeConfig } from "../../config/config.manager.js";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
-const ANTHROPIC_BETA = "oauth-2025-04-20";
+const ANTHROPIC_BETA = [
+  "claude-code-20250219",
+  "oauth-2025-04-20",
+  "interleaved-thinking-2025-05-14",
+  "context-management-2025-06-27",
+  "prompt-caching-scope-2026-01-05",
+  "effort-2025-11-24",
+].join(",");
+const CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.76 (external, sdk-cli)";
+const CLAUDE_CODE_SDK_PROMPT = "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
+const CLAUDE_CODE_BILLING_HEADER =
+  "x-anthropic-billing-header: cc_version=2.1.76.b57; cc_entrypoint=sdk-cli; cch=00000;";
 const DEFAULT_MAX_TOKENS = 4096;
+const CLAUDE_4_MAX_TOKENS = 32000;
+const CLAUDE_4_THINKING_BUDGET = 1024;
+
+type ClaudeSystemBlock = {
+  type: "text";
+  text: string;
+  cache_control?: {
+    type: "ephemeral";
+    ttl: "1h";
+  };
+};
 
 type ClaudeMessageRequestBody = {
   model: string;
   max_tokens: number;
-  system?: string;
+  stream: true;
+  system: ClaudeSystemBlock[];
   messages: Array<{
     role: "user" | "assistant";
     content: Array<Record<string, unknown>>;
   }>;
   tools?: Array<Record<string, unknown>>;
   tool_choice?: Record<string, unknown>;
+  thinking?: Record<string, unknown>;
+  output_config?: Record<string, unknown>;
+  context_management?: Record<string, unknown>;
 };
 
 type ClaudeMessageRequest = ClaudeMessageRequestBody["messages"][number];
@@ -165,7 +191,7 @@ async function fetchClaudeCodeResponse(params: {
   let response: Response;
 
   try {
-    response = await fetch(`${baseUrl}/v1/messages`, {
+    response = await fetch(`${baseUrl}/v1/messages?beta=true`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${params.auth.accessToken}`,
@@ -174,8 +200,17 @@ async function fetchClaudeCodeResponse(params: {
         "Anthropic-Version": ANTHROPIC_VERSION,
         "Anthropic-Beta": ANTHROPIC_BETA,
         "Anthropic-Dangerous-Direct-Browser-Access": "true",
-        "User-Agent": "claude-cli/2.1.63 (external, cli)",
+        "User-Agent": CLAUDE_CODE_USER_AGENT,
         "X-App": "cli",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Runtime-Version": process.version,
+        "X-Stainless-Package-Version": "0.74.0",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Arch": toClaudeCodeRuntimeArch(),
+        "X-Stainless-OS": toClaudeCodeRuntimeOs(),
+        "X-Stainless-Timeout": String(Math.max(1, Math.trunc(params.config.timeoutMs / 1000))),
+        Connection: "keep-alive",
       },
       body: JSON.stringify(params.requestBody),
       signal: AbortSignal.timeout(params.config.timeoutMs),
@@ -197,7 +232,7 @@ async function fetchClaudeCodeResponse(params: {
   }
 
   const responseText = await response.text();
-  const responsePayload = safeParseClaudeMessageResponse(responseText);
+  const responsePayload = parseClaudeMessageResponse(responseText);
 
   if (response.status === 401 || response.status === 403) {
     return {
@@ -262,11 +297,16 @@ function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestB
   const model = requireRequestModel(request);
   const toolsEnabled = request.tools.length > 0 && request.toolChoice !== "none";
   const toolChoice = toClaudeToolChoice(request.toolChoice);
+  const thinkingConfig = toClaudeThinkingConfig({
+    model,
+    toolChoice: request.toolChoice,
+  });
 
   return {
     model,
-    max_tokens: DEFAULT_MAX_TOKENS,
-    ...(request.system ? { system: request.system } : {}),
+    stream: true,
+    max_tokens: resolveClaudeMaxTokens(model),
+    system: toClaudeSystemBlocks(request.system),
     messages: request.messages.flatMap<ClaudeMessageRequest>(message => {
       if (message.role === "user") {
         return [
@@ -320,6 +360,7 @@ function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestB
         },
       ];
     }),
+    ...(thinkingConfig ? thinkingConfig : {}),
     ...(toolsEnabled
       ? {
           tools: request.tools.map(tool => ({
@@ -331,6 +372,32 @@ function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestB
         }
       : {}),
   };
+}
+
+function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
+  const blocks: ClaudeSystemBlock[] = [
+    {
+      type: "text",
+      text: CLAUDE_CODE_BILLING_HEADER,
+    },
+    {
+      type: "text",
+      text: CLAUDE_CODE_SDK_PROMPT,
+      cache_control: {
+        type: "ephemeral",
+        ttl: "1h",
+      },
+    },
+  ];
+
+  if (system) {
+    blocks.push({
+      type: "text",
+      text: system,
+    });
+  }
+
+  return blocks;
 }
 
 function toClaudeUserContentPart(part: LlmContentPart): Record<string, unknown> {
@@ -381,6 +448,71 @@ function toClaudeToolChoice(
     type: "tool",
     name: toolChoice.tool_name,
   };
+}
+
+function toClaudeThinkingConfig(input: {
+  model: string;
+  toolChoice: LlmChatRequest["toolChoice"];
+}): Record<string, unknown> | null {
+  if (forcesToolUse(input.toolChoice)) {
+    return {
+      thinking: {
+        type: "disabled",
+      },
+    };
+  }
+
+  if (isClaudeAdaptiveModel(input.model)) {
+    return {
+      thinking: {
+        type: "adaptive",
+      },
+      output_config: {
+        effort: "medium",
+      },
+      context_management: {
+        edits: [
+          {
+            type: "clear_thinking_20251015",
+            keep: "all",
+          },
+        ],
+      },
+    };
+  }
+
+  if (isClaude4Model(input.model)) {
+    return {
+      thinking: {
+        type: "enabled",
+        budget_tokens: CLAUDE_4_THINKING_BUDGET,
+      },
+    };
+  }
+
+  return null;
+}
+
+function resolveClaudeMaxTokens(model: string): number {
+  if (isClaude4Model(model)) {
+    return CLAUDE_4_MAX_TOKENS;
+  }
+
+  return DEFAULT_MAX_TOKENS;
+}
+
+function isClaudeAdaptiveModel(model: string): boolean {
+  return model.startsWith("claude-sonnet-4-6") || model.startsWith("claude-opus-4-6");
+}
+
+function isClaude4Model(model: string): boolean {
+  return model.startsWith("claude-sonnet-4-") || model.startsWith("claude-opus-4-");
+}
+
+function forcesToolUse(toolChoice: LlmChatRequest["toolChoice"]): boolean {
+  return (
+    toolChoice === "required" || (isRecord(toolChoice) && typeof toolChoice.tool_name === "string")
+  );
 }
 
 function mapClaudeMessageResult(input: {
@@ -466,12 +598,188 @@ function buildClaudeCodeNativeError(input: {
   };
 }
 
-function safeParseClaudeMessageResponse(value: string): ClaudeMessageResponse | null {
+function parseClaudeMessageResponse(value: string): ClaudeMessageResponse | null {
+  const parsedStream = parseClaudeStreamResponse(value);
+  if (parsedStream) {
+    return parsedStream;
+  }
+
   try {
     return JSON.parse(value) as ClaudeMessageResponse;
   } catch {
     return null;
   }
+}
+
+function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null {
+  if (!value.startsWith("event:")) {
+    return null;
+  }
+
+  const streamBlocks: Array<
+    | { kind: "ignored" }
+    | { kind: "text"; block: { type: "text"; text: string } }
+    | {
+        kind: "tool_use";
+        block: { type: "tool_use"; id?: string; name?: string; input?: Record<string, unknown> };
+        partialJson: string;
+      }
+  > = [];
+  let model: string | undefined;
+  let inputTokens: number | undefined;
+  let outputTokens: number | undefined;
+
+  for (const chunk of value.split("\n\n")) {
+    const lines = chunk
+      .split("\n")
+      .map(line => line.trimEnd())
+      .filter(line => line.length > 0);
+    if (lines.length === 0) {
+      continue;
+    }
+
+    const dataLine = lines.find(line => line.startsWith("data:"));
+    if (!dataLine) {
+      continue;
+    }
+
+    const dataJson = dataLine.slice("data:".length).trim();
+    if (!dataJson.startsWith("{")) {
+      continue;
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(dataJson) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+
+    if (parsed.type === "message_start") {
+      const message = isRecord(parsed.message) ? parsed.message : null;
+      if (message && typeof message.model === "string") {
+        model = message.model;
+      }
+      const usage = message && isRecord(message.usage) ? message.usage : null;
+      if (usage && typeof usage.input_tokens === "number") {
+        inputTokens = usage.input_tokens;
+      }
+      if (usage && typeof usage.output_tokens === "number") {
+        outputTokens = usage.output_tokens;
+      }
+      continue;
+    }
+
+    if (parsed.type === "content_block_start") {
+      const index = typeof parsed.index === "number" ? parsed.index : -1;
+      const contentBlock = isRecord(parsed.content_block) ? parsed.content_block : null;
+      if (index < 0 || !contentBlock) {
+        continue;
+      }
+
+      if (contentBlock.type === "text") {
+        streamBlocks[index] = {
+          kind: "text",
+          block: {
+            type: "text",
+            text: typeof contentBlock.text === "string" ? contentBlock.text : "",
+          },
+        };
+        continue;
+      }
+
+      if (contentBlock.type === "tool_use") {
+        streamBlocks[index] = {
+          kind: "tool_use",
+          block: {
+            type: "tool_use",
+            ...(typeof contentBlock.id === "string" ? { id: contentBlock.id } : {}),
+            ...(typeof contentBlock.name === "string" ? { name: contentBlock.name } : {}),
+            ...(isRecord(contentBlock.input) ? { input: contentBlock.input } : {}),
+          },
+          partialJson: "",
+        };
+        continue;
+      }
+
+      streamBlocks[index] = { kind: "ignored" };
+      continue;
+    }
+
+    if (parsed.type === "content_block_delta") {
+      const index = typeof parsed.index === "number" ? parsed.index : -1;
+      const streamBlock = index >= 0 ? streamBlocks[index] : undefined;
+      const delta = isRecord(parsed.delta) ? parsed.delta : null;
+      if (!streamBlock || !delta) {
+        continue;
+      }
+
+      if (streamBlock.kind === "text" && delta.type === "text_delta") {
+        streamBlock.block.text += typeof delta.text === "string" ? delta.text : "";
+        continue;
+      }
+
+      if (streamBlock.kind === "tool_use" && delta.type === "input_json_delta") {
+        streamBlock.partialJson += typeof delta.partial_json === "string" ? delta.partial_json : "";
+      }
+      continue;
+    }
+
+    if (parsed.type === "content_block_stop") {
+      const index = typeof parsed.index === "number" ? parsed.index : -1;
+      const streamBlock = index >= 0 ? streamBlocks[index] : undefined;
+      if (!streamBlock || streamBlock.kind !== "tool_use" || streamBlock.partialJson.length === 0) {
+        continue;
+      }
+
+      try {
+        const parsedInput = JSON.parse(streamBlock.partialJson) as unknown;
+        if (isRecord(parsedInput)) {
+          streamBlock.block.input = parsedInput;
+        }
+      } catch {
+        streamBlock.block.input = {};
+      }
+      continue;
+    }
+
+    if (parsed.type === "message_delta") {
+      const usage = isRecord(parsed.usage) ? parsed.usage : null;
+      if (usage && typeof usage.input_tokens === "number") {
+        inputTokens = usage.input_tokens;
+      }
+      if (usage && typeof usage.output_tokens === "number") {
+        outputTokens = usage.output_tokens;
+      }
+    }
+  }
+
+  const content = streamBlocks.flatMap(block => {
+    if (!block || block.kind === "ignored") {
+      return [];
+    }
+
+    return [block.block];
+  });
+
+  if (content.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "message",
+    role: "assistant",
+    ...(model ? { model } : {}),
+    content,
+    ...(inputTokens !== undefined || outputTokens !== undefined
+      ? {
+          usage: {
+            ...(inputTokens !== undefined ? { input_tokens: inputTokens } : {}),
+            ...(outputTokens !== undefined ? { output_tokens: outputTokens } : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 function requireRequestModel(request: { model?: string }): string {
@@ -484,4 +792,21 @@ function requireRequestModel(request: { model?: string }): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toClaudeCodeRuntimeArch(): string {
+  return process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : process.arch;
+}
+
+function toClaudeCodeRuntimeOs(): string {
+  switch (process.platform) {
+    case "darwin":
+      return "MacOS";
+    case "linux":
+      return "Linux";
+    case "win32":
+      return "Windows";
+    default:
+      return process.platform;
+  }
 }

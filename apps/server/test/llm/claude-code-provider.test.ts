@@ -29,39 +29,168 @@ function createAuthStore(): ClaudeCodeAuthStore {
   });
 }
 
+function createSseResponse(events: unknown[]): string {
+  return events.map(event => `event: message\ndata: ${JSON.stringify(event)}\n\n`).join("");
+}
+
+function createTextMessageSse(input: {
+  model: string;
+  text: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}): string {
+  return createSseResponse([
+    {
+      type: "message_start",
+      message: {
+        id: "msg_123",
+        type: "message",
+        role: "assistant",
+        model: input.model,
+        usage: {
+          input_tokens: input.inputTokens ?? 11,
+          output_tokens: 0,
+        },
+      },
+    },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: {
+        type: "text",
+        text: "",
+      },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: {
+        type: "text_delta",
+        text: input.text,
+      },
+    },
+    {
+      type: "content_block_stop",
+      index: 0,
+    },
+    {
+      type: "message_delta",
+      delta: {
+        stop_reason: "end_turn",
+      },
+      usage: {
+        output_tokens: input.outputTokens ?? 7,
+      },
+    },
+    {
+      type: "message_stop",
+    },
+  ]);
+}
+
+function createToolUseSse(input: {
+  model: string;
+  toolId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+}): string {
+  return createSseResponse([
+    {
+      type: "message_start",
+      message: {
+        type: "message",
+        role: "assistant",
+        model: input.model,
+        usage: {
+          input_tokens: 9,
+          output_tokens: 0,
+        },
+      },
+    },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: {
+        type: "tool_use",
+        id: input.toolId,
+        name: input.toolName,
+      },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: {
+        type: "input_json_delta",
+        partial_json: JSON.stringify(input.toolInput),
+      },
+    },
+    {
+      type: "content_block_stop",
+      index: 0,
+    },
+    {
+      type: "message_delta",
+      usage: {
+        output_tokens: 3,
+      },
+    },
+    {
+      type: "message_stop",
+    },
+  ]);
+}
+
 describe("createClaudeCodeProvider", () => {
-  it("should map a final assistant message from the Claude response", async () => {
+  it("should map a final assistant message from the Claude stream response", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      expect(body.model).toBe("claude-sonnet-4-20250514");
-      expect(body.max_tokens).toBe(4096);
+      const system = body.system as Array<Record<string, unknown>>;
 
-      return new Response(
-        JSON.stringify({
-          id: "msg_123",
-          type: "message",
-          role: "assistant",
-          model: "claude-sonnet-4-20250514",
-          content: [{ type: "text", text: "pong" }],
-          usage: {
-            input_tokens: 11,
-            output_tokens: 7,
-          },
-        }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
+      expect(body.model).toBe("claude-sonnet-4-6");
+      expect(body.stream).toBe(true);
+      expect(body.max_tokens).toBe(32000);
+      expect(system[0]?.text).toMatch(/^x-anthropic-billing-header:/);
+      expect(system[1]).toEqual({
+        type: "text",
+        text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+        cache_control: {
+          type: "ephemeral",
+          ttl: "1h",
         },
-      );
+      });
+      expect(system[2]?.text).toBe("你是一个测试助手。");
+      expect(body.thinking).toEqual({
+        type: "adaptive",
+      });
+      expect(body.output_config).toEqual({
+        effort: "medium",
+      });
+      expect(body.context_management).toEqual({
+        edits: [
+          {
+            type: "clear_thinking_20251015",
+            keep: "all",
+          },
+        ],
+      });
+      expect(init?.headers).toMatchObject({
+        Accept: "application/json",
+        "Anthropic-Version": "2023-06-01",
+      });
+
+      return new Response(createTextMessageSse({ model: "claude-sonnet-4-6", text: "pong" }), {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream",
+        },
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
       config: {
         baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
+        models: ["claude-sonnet-4-6"],
         timeoutMs: 5_000,
       },
       authStore: createAuthStore(),
@@ -69,7 +198,8 @@ describe("createClaudeCodeProvider", () => {
 
     await expect(
       provider.chat({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
+        system: "你是一个测试助手。",
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",
@@ -77,7 +207,7 @@ describe("createClaudeCodeProvider", () => {
     ).resolves.toEqual({
       response: {
         provider: "claude-code",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         message: {
           role: "assistant",
           content: "pong",
@@ -90,8 +220,41 @@ describe("createClaudeCodeProvider", () => {
         },
       },
       nativeRequestPayload: {
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
+        model: "claude-sonnet-4-6",
+        stream: true,
+        max_tokens: 32000,
+        system: [
+          {
+            type: "text",
+            text: expect.stringMatching(/^x-anthropic-billing-header:/),
+          },
+          {
+            type: "text",
+            text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+            cache_control: {
+              type: "ephemeral",
+              ttl: "1h",
+            },
+          },
+          {
+            type: "text",
+            text: "你是一个测试助手。",
+          },
+        ],
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "medium",
+        },
+        context_management: {
+          edits: [
+            {
+              type: "clear_thinking_20251015",
+              keep: "all",
+            },
+          ],
+        },
         messages: [
           {
             role: "user",
@@ -105,10 +268,9 @@ describe("createClaudeCodeProvider", () => {
         ],
       },
       nativeResponsePayload: {
-        id: "msg_123",
         type: "message",
         role: "assistant",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         content: [{ type: "text", text: "pong" }],
         usage: {
           input_tokens: 11,
@@ -118,35 +280,31 @@ describe("createClaudeCodeProvider", () => {
     });
   });
 
-  it("should map tool calls from the Claude response", async () => {
+  it("should disable thinking when tool_choice forces tool use", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+        expect(body.thinking).toEqual({
+          type: "disabled",
+        });
+        expect(body.output_config).toBeUndefined();
+        expect(body.tool_choice).toEqual({
+          type: "any",
+        });
+
         return new Response(
-          JSON.stringify({
-            type: "message",
-            role: "assistant",
-            model: "claude-sonnet-4-20250514",
-            content: [
-              {
-                type: "tool_use",
-                id: "toolu_123",
-                name: "add",
-                input: {
-                  a: 1,
-                  b: 2,
-                },
-              },
-            ],
-            usage: {
-              input_tokens: 9,
-              output_tokens: 3,
-            },
+          createToolUseSse({
+            model: "claude-sonnet-4-6",
+            toolId: "toolu_123",
+            toolName: "add",
+            toolInput: { a: 1, b: 2 },
           }),
           {
             status: 200,
             headers: {
-              "content-type": "application/json",
+              "content-type": "text/event-stream",
             },
           },
         );
@@ -156,7 +314,7 @@ describe("createClaudeCodeProvider", () => {
     const provider = createClaudeCodeProvider({
       config: {
         baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
+        models: ["claude-sonnet-4-6"],
         timeoutMs: 5_000,
       },
       authStore: createAuthStore(),
@@ -164,7 +322,7 @@ describe("createClaudeCodeProvider", () => {
 
     await expect(
       provider.chat({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         messages: [{ role: "user", content: "ping" }],
         tools: [
           {
@@ -181,7 +339,7 @@ describe("createClaudeCodeProvider", () => {
     ).resolves.toEqual({
       response: {
         provider: "claude-code",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         message: {
           role: "assistant",
           content: "",
@@ -203,13 +361,27 @@ describe("createClaudeCodeProvider", () => {
         },
       },
       nativeRequestPayload: expect.objectContaining({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         tool_choice: {
           type: "any",
+        },
+        thinking: {
+          type: "disabled",
         },
       }),
       nativeResponsePayload: expect.objectContaining({
         type: "message",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_123",
+            name: "add",
+            input: {
+              a: 1,
+              b: 2,
+            },
+          },
+        ],
       }),
     });
   });
@@ -241,20 +413,16 @@ describe("createClaudeCodeProvider", () => {
       ]);
 
       return new Response(
-        JSON.stringify({
-          type: "message",
-          role: "assistant",
-          model: "claude-sonnet-4-20250514",
-          content: [{ type: "text", text: "图片里有一只猫。" }],
-          usage: {
-            input_tokens: 12,
-            output_tokens: 6,
-          },
+        createTextMessageSse({
+          model: "claude-sonnet-4-5-20250929",
+          text: "图片里有一只猫。",
+          inputTokens: 12,
+          outputTokens: 6,
         }),
         {
           status: 200,
           headers: {
-            "content-type": "application/json",
+            "content-type": "text/event-stream",
           },
         },
       );
@@ -264,7 +432,7 @@ describe("createClaudeCodeProvider", () => {
     const provider = createClaudeCodeProvider({
       config: {
         baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
+        models: ["claude-sonnet-4-5-20250929"],
         timeoutMs: 5_000,
       },
       authStore: createAuthStore(),
@@ -272,7 +440,7 @@ describe("createClaudeCodeProvider", () => {
 
     await expect(
       provider.chat({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         messages: [
           {
             role: "user",
@@ -295,9 +463,16 @@ describe("createClaudeCodeProvider", () => {
     ).resolves.toMatchObject({
       response: {
         provider: "claude-code",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         message: {
           content: "图片里有一只猫。",
+        },
+      },
+      nativeRequestPayload: {
+        model: "claude-sonnet-4-5-20250929",
+        thinking: {
+          type: "enabled",
+          budget_tokens: 1024,
         },
       },
     });
@@ -352,27 +527,19 @@ describe("createClaudeCodeProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            type: "message",
-            role: "assistant",
-            model: "claude-sonnet-4-20250514",
-            content: [{ type: "text", text: "pong" }],
-          }),
-          {
-            status: 200,
-            headers: {
-              "content-type": "application/json",
-            },
+        new Response(createTextMessageSse({ model: "claude-sonnet-4-6", text: "pong" }), {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream",
           },
-        ),
+        }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
       config: {
         baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
+        models: ["claude-sonnet-4-6"],
         timeoutMs: 5_000,
       },
       authStore,
@@ -380,7 +547,7 @@ describe("createClaudeCodeProvider", () => {
 
     await expect(
       provider.chat({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",
@@ -450,7 +617,7 @@ describe("createClaudeCodeProvider", () => {
     const provider = createClaudeCodeProvider({
       config: {
         baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
+        models: ["claude-sonnet-4-6"],
         timeoutMs: 5_000,
       },
       authStore,
@@ -458,7 +625,7 @@ describe("createClaudeCodeProvider", () => {
 
     await provider
       .chat({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         messages: [{ role: "user", content: "ping" }],
         tools: [],
         toolChoice: "none",
@@ -469,7 +636,7 @@ describe("createClaudeCodeProvider", () => {
         });
         expect(getLlmProviderFailureContext(error)).toMatchObject({
           nativeRequestPayload: {
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
           },
           nativeError: {
             reason: "UNAUTHORIZED",
