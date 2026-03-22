@@ -38,6 +38,16 @@ const NapcatGroupMessageHistoryPage = lazy(() =>
     default: module.NapcatGroupMessageHistoryPage,
   })),
 );
+const LoopRunDetailPage = lazy(() =>
+  import("@/pages/loop-run-detail/LoopRunDetailPage").then(module => ({
+    default: module.LoopRunDetailPage,
+  })),
+);
+const LoopRunListPage = lazy(() =>
+  import("@/pages/loop-run-list/LoopRunListPage").then(module => ({
+    default: module.LoopRunListPage,
+  })),
+);
 
 function App() {
   return (
@@ -59,6 +69,8 @@ function App() {
               path="/napcat-group-message-history"
               element={<NapcatGroupMessageHistoryPage />}
             />
+            <Route path="/loop-runs" element={<LoopRunListPage />} />
+            <Route path="/loop-runs/:id" element={<LoopRunDetailPage />} />
           </Route>
         </Routes>
       </Suspense>

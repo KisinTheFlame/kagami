@@ -10,6 +10,7 @@ import type { Tool } from "../../llm/types.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "../../tools/index.js";
 import type { ContextSummaryPlanner } from "../subagents/context-summarizer/context-summary-planner.service.js";
 import type { RagContextEventEnricher } from "../subagents/rag/rag-context-event-enricher.js";
+import type { LoopRunRecorder } from "../../service/loop-run-recorder.service.js";
 
 type AgentLoopDeps = {
   llmClient: LlmClient;
@@ -21,6 +22,7 @@ type AgentLoopDeps = {
   summaryTools?: Tool[];
   contextCompactionThreshold?: number;
   now?: () => Date;
+  loopRunRecorder?: LoopRunRecorder;
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
@@ -35,6 +37,7 @@ export class AgentLoop {
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
   private readonly now: () => Date;
+  private readonly loopRunRecorder?: LoopRunRecorder;
   private lastWakeReminderAt: Date | null = null;
 
   public constructor({
@@ -47,6 +50,7 @@ export class AgentLoop {
     summaryTools,
     contextCompactionThreshold,
     now,
+    loopRunRecorder,
   }: AgentLoopDeps) {
     this.llmClient = llmClient;
     this.context = context;
@@ -58,6 +62,7 @@ export class AgentLoop {
     this.contextCompactionThreshold =
       contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
     this.now = now ?? (() => new Date());
+    this.loopRunRecorder = loopRunRecorder;
   }
 
   public async run(): Promise<void> {
@@ -70,29 +75,66 @@ export class AgentLoop {
 
       let hasActiveRound = false;
       let currentGroupId: string | null = null;
+      let currentLoopRunId: string | null = null;
+      let currentLoopStartedAt: Date | null = null;
+      let currentStepSeq = 1;
 
       while (true) {
         const events = this.eventQueue.drainAll();
         if (events.length > 0) {
           hasActiveRound = true;
           currentGroupId = extractCurrentGroupId(events, currentGroupId);
+          if (!currentLoopRunId) {
+            const triggerEvent = extractLatestGroupMessageEvent(events);
+            if (triggerEvent && this.loopRunRecorder) {
+              currentLoopStartedAt = this.now();
+              currentLoopRunId = await this.loopRunRecorder.startRun({
+                event: triggerEvent,
+                startedAt: currentLoopStartedAt,
+              });
+            }
+          }
           await this.handleEvents(events);
         } else if (!hasActiveRound) {
           break;
         }
 
         const snapshot = await this.context.getSnapshot();
-        const completion = await this.llmClient.chat(
-          {
-            system: snapshot.systemPrompt,
-            messages: snapshot.messages,
-            tools: this.agentTools.definitions(),
-            toolChoice: "required",
-          },
-          {
-            usage: "agent",
-          },
-        );
+        let completion;
+        try {
+          completion = await this.llmClient.chat(
+            {
+              system: snapshot.systemPrompt,
+              messages: snapshot.messages,
+              tools: this.agentTools.definitions(),
+              toolChoice: "required",
+            },
+            {
+              usage: "agent",
+              loopRunId: currentLoopRunId ?? undefined,
+              onSettled: async observation => {
+                if (!currentLoopRunId || !this.loopRunRecorder) {
+                  return;
+                }
+
+                await this.loopRunRecorder.recordLlmCall({
+                  loopRunId: currentLoopRunId,
+                  seq: currentStepSeq,
+                  observation,
+                });
+                currentStepSeq += 1;
+              },
+            },
+          );
+        } catch (error) {
+          await this.failCurrentLoopRun({
+            loopRunId: currentLoopRunId,
+            loopStartedAt: currentLoopStartedAt,
+            stepSeq: currentStepSeq,
+            error,
+          });
+          throw error;
+        }
         const assistant = completion.message;
         const persistentAssistantMessage = omitControlToolCalls(assistant, this.agentTools);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
@@ -102,11 +144,35 @@ export class AgentLoop {
 
         let shouldFinishRound = false;
         for (const toolCall of assistant.toolCalls) {
+          const toolStartedAt = this.now();
+          if (currentLoopRunId && this.loopRunRecorder) {
+            await this.loopRunRecorder.recordToolCall({
+              loopRunId: currentLoopRunId,
+              seq: currentStepSeq,
+              toolName: toolCall.name,
+              toolCallId: toolCall.id,
+              argumentsValue: toolCall.arguments,
+              startedAt: toolStartedAt,
+            });
+            currentStepSeq += 1;
+          }
           const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
             groupId: currentGroupId ?? undefined,
             systemPrompt: snapshot.systemPrompt,
             messages: snapshot.messages,
           });
+          if (currentLoopRunId && this.loopRunRecorder) {
+            await this.loopRunRecorder.recordToolResult({
+              loopRunId: currentLoopRunId,
+              seq: currentStepSeq,
+              toolName: toolCall.name,
+              toolCallId: toolCall.id,
+              result: toolResult,
+              startedAt: toolStartedAt,
+              finishedAt: this.now(),
+            });
+            currentStepSeq += 1;
+          }
           if (toolResult.signal === "finish_round") {
             shouldFinishRound = true;
           }
@@ -123,6 +189,15 @@ export class AgentLoop {
         }
 
         if (shouldFinishRound && this.eventQueue.size() === 0) {
+          await this.finishCurrentLoopRun({
+            loopRunId: currentLoopRunId,
+            loopStartedAt: currentLoopStartedAt,
+            stepSeq: currentStepSeq,
+            outcome: {
+              reason: "finish_round",
+              groupId: currentGroupId,
+            },
+          });
           break;
         }
       }
@@ -196,6 +271,46 @@ export class AgentLoop {
       ...snapshot.messages.slice(splitIndex),
     ]);
   }
+
+  private async finishCurrentLoopRun(input: {
+    loopRunId: string | null;
+    loopStartedAt: Date | null;
+    stepSeq: number;
+    outcome: Record<string, unknown>;
+  }): Promise<void> {
+    if (!input.loopRunId || !input.loopStartedAt || !this.loopRunRecorder) {
+      return;
+    }
+
+    await this.loopRunRecorder.finishRun({
+      loopRunId: input.loopRunId,
+      status: "success",
+      startedAt: input.loopStartedAt,
+      finishedAt: this.now(),
+      outcome: input.outcome,
+      seq: input.stepSeq,
+    });
+  }
+
+  private async failCurrentLoopRun(input: {
+    loopRunId: string | null;
+    loopStartedAt: Date | null;
+    stepSeq: number;
+    error: unknown;
+  }): Promise<void> {
+    if (!input.loopRunId || !input.loopStartedAt || !this.loopRunRecorder) {
+      return;
+    }
+
+    await this.loopRunRecorder.finishRun({
+      loopRunId: input.loopRunId,
+      status: "failed",
+      startedAt: input.loopStartedAt,
+      finishedAt: this.now(),
+      outcome: serializeUnknownError(input.error),
+      seq: input.stepSeq,
+    });
+  }
 }
 
 function omitControlToolCalls(
@@ -246,4 +361,32 @@ function extractCurrentGroupId(events: Event[], fallback: string | null): string
   }
 
   return fallback;
+}
+
+function extractLatestGroupMessageEvent(events: Event[]): Event | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "napcat_group_message") {
+      return event;
+    }
+  }
+
+  return null;
+}
+
+function serializeUnknownError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      code:
+        typeof (error as Error & { code?: unknown }).code === "string"
+          ? (error as Error & { code?: string }).code
+          : undefined,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "Unknown error",
+  };
 }

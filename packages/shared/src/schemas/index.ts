@@ -5,6 +5,7 @@ export * from "./codex-auth.js";
 export * from "./embedding-cache.js";
 export * from "./health.js";
 export * from "./llm-chat.js";
+export * from "./loop-run.js";
 export * from "./napcat-event.js";
 export * from "./napcat-group-message.js";
 export * from "./napcat-message.js";

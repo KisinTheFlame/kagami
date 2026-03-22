@@ -41,16 +41,34 @@ type CreateLlmClientOptions = {
 export type LlmChatOptions = {
   usage: LlmUsageId;
   recordCall?: boolean;
+  loopRunId?: string;
+  onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 };
 
 export type LlmChatDirectOptions = {
   providerId: LlmProviderId;
   model: string;
   recordCall?: boolean;
+  loopRunId?: string;
+  onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 };
 
 export type LlmListAvailableProvidersOptions = {
   usage: LlmUsageId;
+};
+
+export type LlmChatObservation = {
+  requestId: string;
+  loopRunId: string | null;
+  provider: LlmProviderId;
+  model: string;
+  request: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  error: Record<string, unknown> | null;
+  latencyMs: number;
+  startedAt: Date;
+  finishedAt: Date;
+  status: "success" | "failed";
 };
 
 export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
@@ -88,6 +106,8 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               requestId,
               seq: (seq += 1),
               recordCall,
+              loopRunId: chatOptions?.loopRunId,
+              onSettled: chatOptions?.onSettled,
             });
           } catch (error) {
             lastError = error;
@@ -117,6 +137,8 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
         requestId: randomUUID(),
         seq: 1,
         recordCall: chatOptions?.recordCall ?? true,
+        loopRunId: chatOptions?.loopRunId,
+        onSettled: chatOptions?.onSettled,
       });
     },
   };
@@ -131,6 +153,8 @@ async function executeChatAttempt({
   requestId,
   seq,
   recordCall,
+  loopRunId,
+  onSettled,
 }: {
   llmChatCallDao: LlmChatCallDao;
   providers: Partial<Record<LlmProviderId, LlmProvider>>;
@@ -140,6 +164,8 @@ async function executeChatAttempt({
   requestId: string;
   seq: number;
   recordCall: boolean;
+  loopRunId?: string;
+  onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 }): Promise<LlmChatResponsePayload> {
   requireConfiguredModel(providerConfigs, attempt.provider, attempt.model);
   const provider = providers[attempt.provider];
@@ -148,6 +174,7 @@ async function executeChatAttempt({
     model: attempt.model,
   };
   const startedAt = Date.now();
+  const startedAtDate = new Date();
   let providerResult: LlmProviderChatResult | null = null;
   let response: LlmChatResponsePayload | null = null;
 
@@ -172,6 +199,7 @@ async function executeChatAttempt({
           provider: provider.id,
           model: response.model,
           requestId,
+          loopRunId,
           seq,
           latencyMs,
           request: toRecordableChatRequest(requestWithModel),
@@ -182,10 +210,28 @@ async function executeChatAttempt({
         .catch(() => {});
     }
 
+    if (onSettled) {
+      await onSettled({
+        requestId,
+        loopRunId: loopRunId ?? null,
+        provider: provider.id,
+        model: response.model,
+        request: toRecordableChatRequest(requestWithModel),
+        response: toRecordableChatResponse(response),
+        error: null,
+        latencyMs,
+        startedAt: startedAtDate,
+        finishedAt: new Date(),
+        status: "success",
+      });
+    }
+
     return response;
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
+    const finishedAt = new Date();
     const failureContext = getLlmProviderFailureContext(error);
+    const serializedError = serializeChatError(error);
 
     if (recordCall) {
       void llmChatCallDao
@@ -193,6 +239,7 @@ async function executeChatAttempt({
           provider: attempt.provider,
           model: attempt.model,
           requestId,
+          loopRunId,
           seq,
           latencyMs,
           request: toRecordableChatRequest(requestWithModel),
@@ -207,8 +254,42 @@ async function executeChatAttempt({
         .catch(() => {});
     }
 
+    if (onSettled) {
+      await onSettled({
+        requestId,
+        loopRunId: loopRunId ?? null,
+        provider: attempt.provider,
+        model: attempt.model,
+        request: toRecordableChatRequest(requestWithModel),
+        response: response ? toRecordableChatResponse(response) : null,
+        error: serializedError,
+        latencyMs,
+        startedAt: startedAtDate,
+        finishedAt,
+        status: "failed",
+      });
+    }
+
     throw error;
   }
+}
+
+function serializeChatError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      code:
+        typeof (error as Error & { code?: unknown }).code === "string"
+          ? (error as Error & { code?: string }).code
+          : undefined,
+    };
+  }
+
+  return {
+    name: "UnknownError",
+    message: typeof error === "string" ? error : "Unknown error",
+  };
 }
 
 async function listAvailableProviders(

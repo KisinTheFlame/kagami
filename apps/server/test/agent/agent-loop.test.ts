@@ -11,6 +11,7 @@ import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 import { ToolCatalog } from "../../src/tools/index.js";
 import type { ToolComponent, ToolSet } from "../../src/tools/index.js";
+import type { LoopRunRecorder } from "../../src/service/loop-run-recorder.service.js";
 
 class StopLoopError extends Error {}
 
@@ -189,9 +190,9 @@ describe("AgentLoop", () => {
         tools: agentTools.definitions(),
         toolChoice: "required",
       },
-      {
+      expect.objectContaining({
         usage: "agent",
-      },
+      }),
     );
     expect(finishExecute).toHaveBeenCalledWith(
       {},
@@ -269,6 +270,132 @@ describe("AgentLoop", () => {
         createWakeReminderMessage(new Date("2026-03-09T10:22:00.000Z")),
       ]),
     );
+  });
+
+  it("should record loop run timeline for main agent loop", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date("2026-03-23T01:00:00.000Z"))
+      .mockReturnValueOnce(new Date("2026-03-23T01:00:01.000Z"))
+      .mockReturnValueOnce(new Date("2026-03-23T01:00:02.000Z"))
+      .mockReturnValueOnce(new Date("2026-03-23T01:00:03.000Z"))
+      .mockReturnValue(new Date("2026-03-23T01:00:03.000Z"));
+    const { agentTools } = createAgentTools({
+      finishExecute: vi.fn().mockResolvedValue({
+        content: JSON.stringify({ ok: true }),
+        signal: "finish_round",
+      }),
+    });
+    const loopRunRecorder = {
+      startRun: vi.fn().mockResolvedValue("loop-1"),
+      recordLlmCall: vi.fn().mockResolvedValue(undefined),
+      recordToolCall: vi.fn().mockResolvedValue(undefined),
+      recordToolResult: vi.fn().mockResolvedValue(undefined),
+      finishRun: vi.fn().mockResolvedValue(undefined),
+    } as unknown as LoopRunRecorder;
+
+    const llmClient: LlmClient = {
+      chat: vi.fn(async (_request, options) => {
+        await options.onSettled?.({
+          requestId: "req-1",
+          loopRunId: "loop-1",
+          provider: "openai",
+          model: "gpt-test",
+          request: {
+            messages: [],
+            tools: [],
+            toolChoice: "required",
+          },
+          response: {
+            provider: "openai",
+            model: "gpt-test",
+            message: {
+              role: "assistant",
+              content: "done",
+              toolCalls: [{ id: "tool-call-1", name: "finish", arguments: {} }],
+            },
+          },
+          error: null,
+          latencyMs: 1000,
+          startedAt: new Date("2026-03-23T01:00:00.000Z"),
+          finishedAt: new Date("2026-03-23T01:00:01.000Z"),
+          status: "success",
+        });
+
+        return createLlmResponse();
+      }),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      drainAll: vi
+        .fn()
+        .mockReturnValueOnce([createGroupEvent("hello world")])
+        .mockReturnValue([]),
+      size: vi.fn().mockReturnValue(0),
+      waitForEvent: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError),
+    };
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    const loop = new AgentLoop({
+      llmClient,
+      context,
+      eventQueue,
+      agentTools,
+      now,
+      loopRunRecorder,
+    });
+
+    await expect(loop.run()).rejects.toBe(stopError);
+
+    expect(loopRunRecorder.startRun).toHaveBeenCalledWith({
+      event: expect.objectContaining({
+        rawMessage: "hello world",
+      }),
+      startedAt: new Date("2026-03-23T01:00:01.000Z"),
+    });
+    expect(loopRunRecorder.recordLlmCall).toHaveBeenCalledWith({
+      loopRunId: "loop-1",
+      seq: 1,
+      observation: expect.objectContaining({
+        requestId: "req-1",
+        status: "success",
+      }),
+    });
+    expect(loopRunRecorder.recordToolCall).toHaveBeenCalledWith({
+      loopRunId: "loop-1",
+      seq: 2,
+      toolName: "finish",
+      toolCallId: "tool-call-1",
+      argumentsValue: {},
+      startedAt: new Date("2026-03-23T01:00:02.000Z"),
+    });
+    expect(loopRunRecorder.recordToolResult).toHaveBeenCalledWith({
+      loopRunId: "loop-1",
+      seq: 3,
+      toolName: "finish",
+      toolCallId: "tool-call-1",
+      result: expect.objectContaining({
+        signal: "finish_round",
+      }),
+      startedAt: new Date("2026-03-23T01:00:02.000Z"),
+      finishedAt: new Date("2026-03-23T01:00:03.000Z"),
+    });
+    expect(loopRunRecorder.finishRun).toHaveBeenCalledWith({
+      loopRunId: "loop-1",
+      status: "success",
+      startedAt: new Date("2026-03-23T01:00:01.000Z"),
+      finishedAt: new Date("2026-03-23T01:00:03.000Z"),
+      outcome: {
+        reason: "finish_round",
+        groupId: "123456",
+      },
+      seq: 4,
+    });
   });
 
   it("should not carry finish tool calls or responses into later chat context", async () => {
@@ -454,9 +581,9 @@ describe("AgentLoop", () => {
           },
         ],
       }),
-      {
+      expect.objectContaining({
         usage: "agent",
-      },
+      }),
     );
   });
 

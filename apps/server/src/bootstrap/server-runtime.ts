@@ -25,6 +25,7 @@ import { PrismaClaudeCodeAuthDao } from "../dao/impl/claude-code-auth.impl.dao.j
 import { PrismaCodexAuthDao } from "../dao/impl/codex-auth.impl.dao.js";
 import { PrismaEmbeddingCacheDao } from "../dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../dao/impl/llm-chat-call.impl.dao.js";
+import { PrismaLoopRunDao } from "../dao/impl/loop-run.impl.dao.js";
 import { PrismaLogDao } from "../dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "../dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatGroupMessageChunkDao } from "../dao/impl/napcat-group-message-chunk.impl.dao.js";
@@ -38,6 +39,7 @@ import { EmbeddingCacheHandler } from "../handler/embedding-cache.handler.js";
 import { HealthHandler } from "../handler/health.handler.js";
 import { LlmHandler } from "../handler/llm.handler.js";
 import { LlmChatCallHandler } from "../handler/llm-chat-call.handler.js";
+import { LoopRunHandler } from "../handler/loop-run.handler.js";
 import { NapcatEventHandler } from "../handler/napcat-event.handler.js";
 import { NapcatGroupMessageHandler } from "../handler/napcat-group-message.handler.js";
 import { NapcatHandler } from "../handler/napcat.handler.js";
@@ -63,6 +65,8 @@ import { DefaultCodexAuthService } from "../service/codex-auth.impl.service.js";
 import { DefaultEmbeddingCacheQueryService } from "../service/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../service/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "../service/llm-playground.impl.service.js";
+import { DefaultLoopRunQueryService } from "../service/loop-run-query.impl.service.js";
+import { LoopRunRecorder } from "../service/loop-run-recorder.service.js";
 import { NapcatEventPersistenceWriter } from "../service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../service/napcat-gateway/image-message-analyzer.js";
 import { DefaultNapcatGatewayService } from "../service/napcat-gateway.impl.service.js";
@@ -125,6 +129,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
+  const loopRunDao = new PrismaLoopRunDao({ database });
   const claudeCodeAuthDao = new PrismaClaudeCodeAuthDao({ database });
   const codexAuthDao = new PrismaCodexAuthDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
@@ -140,6 +145,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     embeddingCacheDao,
   });
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
+  const loopRunQueryService = new DefaultLoopRunQueryService({ loopRunDao });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
     napcatEventDao,
   });
@@ -319,6 +325,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const context = new DefaultAgentContext({
     systemPromptFactory: agentSystemPromptFactory,
   });
+  const loopRunRecorder = new LoopRunRecorder({
+    loopRunDao,
+  });
   const agentLoop = new AgentLoop({
     llmClient,
     context,
@@ -330,6 +339,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       ...agentVisibleTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
     ],
+    loopRunRecorder,
   });
 
   const app = createServerApp({
@@ -339,6 +349,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new CodexAuthHandler({ codexAuthService }),
       new LlmHandler({ llmPlaygroundService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
+      new LoopRunHandler({ loopRunQueryService }),
       new EmbeddingCacheHandler({ embeddingCacheQueryService }),
       new AppLogHandler({ appLogQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
