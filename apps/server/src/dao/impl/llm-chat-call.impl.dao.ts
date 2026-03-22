@@ -224,11 +224,9 @@ function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
 }
 
 function toWhereInput(input: QueryLlmChatCallListInput): Prisma.LlmChatCallWhereInput {
-  if (!input.status) {
-    return {};
-  }
-
   return {
-    status: input.status,
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.status ? { status: input.status } : {}),
   };
 }

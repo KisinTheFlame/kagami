@@ -1,4 +1,9 @@
-import { type LlmChatCallItem, type LlmChatCallStatus } from "@kagami/shared";
+import {
+  LlmProviderListResponseSchema,
+  type LlmChatCallItem,
+  type LlmChatCallStatus,
+} from "@kagami/shared";
+import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Badge } from "@/components/ui/badge";
@@ -20,19 +25,33 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
+import { apiFetch } from "@/lib/api";
+import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
 import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallList } from "./useLlmChatCallList";
 
 const PAGE_SIZE = 20;
+const ALL_PROVIDER_VALUE = "__all_provider__";
+const ALL_MODEL_VALUE = "__all_model__";
 const ALL_STATUS_VALUE = "__all__";
+const EMPTY_PROVIDERS: Array<{ id: string; models: string[] }> = [];
 
 type FilterFormState = {
+  provider: string;
+  model: string;
   status: "" | LlmChatCallStatus;
 };
 
 export function LlmHistoryPage() {
+  const providersQuery = useQuery({
+    queryKey: ["llm-providers"],
+    queryFn: async () => {
+      const response = await apiFetch<unknown>("/llm/providers");
+      return LlmProviderListResponseSchema.parse(response);
+    },
+  });
   const {
     isMobile,
     page,
@@ -56,6 +75,14 @@ export function LlmHistoryPage() {
     },
   });
   const { data, isLoading, isError, refetch } = useLlmChatCallList(page, PAGE_SIZE, filters);
+  const providerOptions = providersQuery.data?.providers ?? EMPTY_PROVIDERS;
+  const modelOptions = useMemo(() => {
+    if (formState.provider) {
+      return providerOptions.find(provider => provider.id === formState.provider)?.models ?? [];
+    }
+
+    return [...new Set(providerOptions.flatMap(provider => provider.models))];
+  }, [formState.provider, providerOptions]);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rows = useMemo(
@@ -76,6 +103,19 @@ export function LlmHistoryPage() {
     submitFilters();
   }
 
+  function handleProviderChange(value: string): void {
+    const nextProvider = value === ALL_PROVIDER_VALUE ? "" : value;
+    const nextModelOptions = nextProvider
+      ? (providerOptions.find(provider => provider.id === nextProvider)?.models ?? [])
+      : [...new Set(providerOptions.flatMap(provider => provider.models))];
+
+    setFormState(prev => ({
+      ...prev,
+      provider: nextProvider,
+      model: nextModelOptions.includes(prev.model) ? prev.model : "",
+    }));
+  }
+
   return (
     <HistoryListPageLayout
       filterForm={
@@ -84,6 +124,75 @@ export function LlmHistoryPage() {
           className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+                Provider
+              </span>
+              <Select
+                value={formState.provider || ALL_PROVIDER_VALUE}
+                onValueChange={handleProviderChange}
+                disabled={providersQuery.isLoading || providersQuery.isError}
+              >
+                <SelectTrigger aria-label="Provider" className="min-w-0 flex-1">
+                  <SelectValue
+                    placeholder={
+                      providersQuery.isLoading
+                        ? "正在加载 provider"
+                        : providersQuery.isError
+                          ? "加载 provider 失败"
+                          : "全部"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_PROVIDER_VALUE}>全部</SelectItem>
+                  {providerOptions.map(provider => (
+                    <SelectItem key={provider.id} value={provider.id}>
+                      {provider.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">Model</span>
+              <Select
+                value={formState.model || ALL_MODEL_VALUE}
+                onValueChange={value =>
+                  setFormState(prev => ({
+                    ...prev,
+                    model: value === ALL_MODEL_VALUE ? "" : value,
+                  }))
+                }
+                disabled={
+                  providersQuery.isLoading || providersQuery.isError || modelOptions.length === 0
+                }
+              >
+                <SelectTrigger aria-label="Model" className="min-w-0 flex-1">
+                  <SelectValue
+                    placeholder={
+                      providersQuery.isLoading
+                        ? "正在加载 model"
+                        : providersQuery.isError
+                          ? "加载 model 失败"
+                          : modelOptions.length === 0
+                            ? "暂无可选 model"
+                            : "全部"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_MODEL_VALUE}>全部</SelectItem>
+                  {modelOptions.map(model => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">状态</span>
               <Select
@@ -211,20 +320,30 @@ export function LlmHistoryPage() {
   );
 }
 
-function parseFilters(params: URLSearchParams): { status: LlmChatCallStatus | undefined } {
+function parseFilters(params: URLSearchParams): {
+  provider: string | undefined;
+  model: string | undefined;
+  status: LlmChatCallStatus | undefined;
+} {
   return {
+    provider: normalizeOptionalText(params.get("provider")),
+    model: normalizeOptionalText(params.get("model")),
     status: parseStatus(params.get("status")),
   };
 }
 
 function toFormState(params: URLSearchParams): FilterFormState {
   return {
+    provider: params.get("provider") ?? "",
+    model: params.get("model") ?? "",
     status: parseStatus(params.get("status")) ?? "",
   };
 }
 
 function buildSearchParams(formState: FilterFormState): URLSearchParams {
   const nextParams = new URLSearchParams();
+  setIfNonEmpty(nextParams, "provider", formState.provider);
+  setIfNonEmpty(nextParams, "model", formState.model);
   if (formState.status) {
     nextParams.set("status", formState.status);
   }
@@ -233,7 +352,11 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
 }
 
 function createEmptyFormState(): FilterFormState {
-  return { status: "" };
+  return {
+    provider: "",
+    model: "",
+    status: "",
+  };
 }
 
 function parseStatus(value: string | null): LlmChatCallStatus | undefined {

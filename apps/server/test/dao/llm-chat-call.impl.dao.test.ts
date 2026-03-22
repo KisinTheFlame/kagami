@@ -175,4 +175,51 @@ describe("PrismaLlmChatCallDao", () => {
       },
     });
   });
+
+  it("should pass provider and model filters to prisma where clause", async () => {
+    const count = vi.fn().mockResolvedValue(0);
+    const findMany = vi.fn().mockResolvedValue([]);
+    const database = {
+      llmChatCall: {
+        count,
+        findMany,
+      },
+    } as unknown as Database;
+
+    const dao = new PrismaLlmChatCallDao({ database });
+
+    await dao.countByQuery({
+      page: 1,
+      pageSize: 20,
+      provider: "openai",
+      model: "gpt-5.4",
+      status: "success",
+    });
+
+    await dao.listPage({
+      page: 2,
+      pageSize: 10,
+      provider: "openai",
+      model: "gpt-5.4",
+      status: "failed",
+    });
+
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        provider: "openai",
+        model: "gpt-5.4",
+        status: "success",
+      },
+    });
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        provider: "openai",
+        model: "gpt-5.4",
+        status: "failed",
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 10,
+      skip: 10,
+    });
+  });
 });

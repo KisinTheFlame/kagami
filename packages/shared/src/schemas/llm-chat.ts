@@ -118,6 +118,8 @@ export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);
 export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
 
 export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
+  provider: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+  model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
 });
 

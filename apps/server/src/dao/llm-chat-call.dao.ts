@@ -22,6 +22,8 @@ export type LlmChatCallItem = {
 export type QueryLlmChatCallListInput = {
   page: number;
   pageSize: number;
+  provider?: string;
+  model?: string;
   status?: LlmChatCallStatus;
 };
 

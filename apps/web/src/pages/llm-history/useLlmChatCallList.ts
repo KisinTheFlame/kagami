@@ -20,6 +20,8 @@ export function useLlmChatCallList(
       const query = buildQueryString({
         page: String(page),
         pageSize: String(pageSize),
+        provider: filters.provider,
+        model: filters.model,
         status: filters.status,
       });
 

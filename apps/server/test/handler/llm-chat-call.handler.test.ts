@@ -93,4 +93,36 @@ describe("LlmChatCallHandler", () => {
       }),
     );
   });
+
+  it("should pass provider and model filters to query service", async () => {
+    const queryList = vi.fn().mockResolvedValue({
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        total: 0,
+      },
+      items: [],
+    });
+    const llmChatCallQueryService: LlmChatCallQueryService = {
+      queryList,
+    };
+
+    const handler = new LlmChatCallHandler({ llmChatCallQueryService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/llm-chat-call/query?page=1&pageSize=20&provider=openai&model=gpt-5.4",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(queryList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 1,
+        pageSize: 20,
+        provider: "openai",
+        model: "gpt-5.4",
+      }),
+    );
+  });
 });
