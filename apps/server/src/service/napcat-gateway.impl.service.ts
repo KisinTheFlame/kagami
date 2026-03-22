@@ -7,7 +7,7 @@ import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-pers
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
-import type { WebSocketLike } from "./napcat-gateway/shared.js";
+import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
   NapcatGatewayService,
@@ -163,16 +163,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     groupId,
     message,
   }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
+    const messageSegments = parseOutgoingMessageSegments(message);
     const data = await this.transport.request("send_group_msg", {
       group_id: groupId,
-      message: [
-        {
-          type: "text",
-          data: {
-            text: message,
-          },
-        },
-      ],
+      message: messageSegments,
     });
 
     const messageIdResult = MessageIdSchema.safeParse(data?.message_id);

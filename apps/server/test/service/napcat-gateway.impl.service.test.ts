@@ -62,7 +62,21 @@ describe("DefaultNapcatGatewayService", () => {
       groupId: "987654",
       message: "hello group",
     });
-    const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      params: {
+        message: unknown;
+      };
+    };
+
+    expect(sentPayload.params.message).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "hello group",
+        },
+      },
+    ]);
 
     socket.emitMessage(
       JSON.stringify({
@@ -77,6 +91,66 @@ describe("DefaultNapcatGatewayService", () => {
     );
 
     await expect(sendPromise).resolves.toEqual({ messageId: 9528 });
+    await gateway.stop();
+  });
+
+  it("should send mention segments parsed from outgoing message text", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      eventQueue: createAgentEventQueue(),
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    const sendPromise = gateway.sendGroupMessage({
+      groupId: "987654",
+      message: "{@闻震(870853294)} hi",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      params: {
+        message: unknown;
+      };
+    };
+
+    expect(sentPayload.params.message).toEqual([
+      {
+        type: "at",
+        data: {
+          qq: "870853294",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: " hi",
+        },
+      },
+    ]);
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          message_id: 9529,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(sendPromise).resolves.toEqual({ messageId: 9529 });
     await gateway.stop();
   });
 

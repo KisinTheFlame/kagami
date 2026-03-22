@@ -48,6 +48,10 @@ function createReplySenderService(params?: {
 }
 
 describe("TrySendMessageService", () => {
+  it("should include mention syntax guidance in reply writer reminder", () => {
+    expect(createReplyWriterReminderMessage("短一点").content).toContain("使用 `{@昵称(qq)}` 格式");
+  });
+
   it("should return sent=false when review rejects the strategy", async () => {
     const chat = vi
       .fn()
@@ -267,7 +271,7 @@ describe("TrySendMessageService", () => {
               properties: {
                 message: {
                   type: "string",
-                  description: "最终要发送的群消息文本。",
+                  description: "最终要发送的群消息文本；如需提及成员，使用 `{@昵称(qq)}`。",
                 },
               },
             },

@@ -17,7 +17,7 @@ export class WriteReplyMessageTool extends ZodToolComponent<
     properties: {
       message: {
         type: "string",
-        description: "最终要发送的群消息文本。",
+        description: "最终要发送的群消息文本；如需提及成员，使用 `{@昵称(qq)}`。",
       },
     },
   } as const;

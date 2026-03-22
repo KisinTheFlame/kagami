@@ -86,6 +86,7 @@ export function createReplyWriterReminderMessage(reviewThought: string): UserMes
       "你将根据上面的 <reply_thought> 与下面的审核意见，写出最终要发送的群消息。",
       "只输出最终消息内容对应的 tool 参数，不要解释，不要复述思考过程。",
       "保持自然、简短、像群友即时发言。",
+      "如果要 @ 某个群成员，使用 `{@昵称(qq)}` 格式；不要写成普通 `@昵称`。",
       `<review_thought>\n${reviewThought.trim()}\n</review_thought>`,
       "</system_reminder>",
     ].join("\n"),

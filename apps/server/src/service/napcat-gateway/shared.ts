@@ -1,5 +1,8 @@
 import { z } from "zod";
 import {
+  type NapcatSendAtSegment,
+  type NapcatSendMessageSegment,
+  type NapcatSendTextSegment,
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
   type NapcatReceiveImageSegment,
@@ -238,6 +241,44 @@ export function replaceAtSegmentsInRawMessage(
   return nextMessage;
 }
 
+export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {
+  const mentionPattern = /\{@([^{}()\n]+)\((\d+|all)\)\}/g;
+  const segments: Array<NapcatSendTextSegment | NapcatSendAtSegment> = [];
+  let lastIndex = 0;
+
+  for (const match of message.matchAll(mentionPattern)) {
+    const fullMatch = match[0];
+    const nickname = match[1];
+    const qq = match[2];
+    const index = match.index;
+    if (index === undefined || nickname.trim().length === 0) {
+      continue;
+    }
+
+    if (index > lastIndex) {
+      segments.push(createOutgoingTextSegment(message.slice(lastIndex, index)));
+    }
+
+    segments.push({
+      type: "at",
+      data: {
+        qq,
+      },
+    });
+    lastIndex = index + fullMatch.length;
+  }
+
+  if (lastIndex < message.length) {
+    segments.push(createOutgoingTextSegment(message.slice(lastIndex)));
+  }
+
+  if (segments.length === 0) {
+    return [createOutgoingTextSegment(message)];
+  }
+
+  return segments;
+}
+
 export function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
   const qq = segment.data.qq;
   const name = toNullableString(segment.data.name) ?? (qq === "all" ? "全体成员" : null);
@@ -278,4 +319,13 @@ export function extractDisplayNameFromGroupMemberInfo(
 
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createOutgoingTextSegment(text: string): NapcatSendTextSegment {
+  return {
+    type: "text",
+    data: {
+      text,
+    },
+  };
 }
