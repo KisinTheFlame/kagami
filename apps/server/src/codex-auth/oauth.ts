@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
 import { BizError } from "../errors/biz-error.js";
+import type { PkcePair } from "../auth/shared/pkce.js";
 import type { CodexAuthRuntimeConfig } from "../config/config.manager.js";
 import type { CodexTokenResponse } from "./types.js";
+export { createPkcePair } from "../auth/shared/pkce.js";
 
 const CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize";
 const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
@@ -14,23 +15,7 @@ type JwtClaims = {
   };
 };
 
-export type CodexPkcePair = {
-  state: string;
-  codeVerifier: string;
-  codeChallenge: string;
-};
-
-export function createPkcePair(): CodexPkcePair {
-  const state = randomBytes(24).toString("hex");
-  const codeVerifier = randomBytes(48).toString("base64url");
-  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-
-  return {
-    state,
-    codeVerifier,
-    codeChallenge,
-  };
-}
+export type CodexPkcePair = PkcePair;
 
 export function buildCodexAuthorizeUrl(input: {
   redirectUri: string;

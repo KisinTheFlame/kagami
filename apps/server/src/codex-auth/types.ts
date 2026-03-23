@@ -1,52 +1,17 @@
-export type CodexAuthStatus =
-  | "active"
-  | "expired"
-  | "refresh_failed"
-  | "logged_out"
-  | "unavailable";
+import type {
+  OAuthProviderAuth,
+  OAuthSessionRecord,
+  OAuthStateRecord,
+  OAuthStatus,
+  OAuthTokenResponse,
+} from "../auth/shared/types.js";
 
-export type CodexAuthSessionRecord = {
-  id: number;
-  provider: "openai-codex";
-  accountId: string | null;
-  email: string | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  idToken: string | null;
-  expiresAt: Date | null;
-  lastRefreshAt: Date | null;
-  status: Exclude<CodexAuthStatus, "unavailable">;
-  lastError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+export type CodexAuthStatus = OAuthStatus;
 
-export type CodexOAuthStateRecord = {
-  id: number;
-  state: string;
-  codeVerifier: string;
-  redirectUri: string;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
-};
+export type CodexAuthSessionRecord = OAuthSessionRecord<"openai-codex">;
 
-export type CodexProviderAuth = {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  accountId?: string;
-  email?: string;
-  lastRefresh: string;
-  expiresAt: number;
-};
+export type CodexOAuthStateRecord = OAuthStateRecord;
 
-export type CodexTokenResponse = {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  accountId?: string;
-  email?: string;
-  expiresAt: Date;
-  lastRefreshAt: Date;
-};
+export type CodexProviderAuth = OAuthProviderAuth;
+
+export type CodexTokenResponse = OAuthTokenResponse;

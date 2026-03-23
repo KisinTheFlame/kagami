@@ -1,52 +1,17 @@
-export type ClaudeCodeAuthStatus =
-  | "active"
-  | "expired"
-  | "refresh_failed"
-  | "logged_out"
-  | "unavailable";
+import type {
+  OAuthProviderAuth,
+  OAuthSessionRecord,
+  OAuthStateRecord,
+  OAuthStatus,
+  OAuthTokenResponse,
+} from "../auth/shared/types.js";
 
-export type ClaudeCodeAuthSessionRecord = {
-  id: number;
-  provider: "claude-code";
-  accountId: string | null;
-  email: string | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  idToken: string | null;
-  expiresAt: Date | null;
-  lastRefreshAt: Date | null;
-  status: Exclude<ClaudeCodeAuthStatus, "unavailable">;
-  lastError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+export type ClaudeCodeAuthStatus = OAuthStatus;
 
-export type ClaudeCodeOAuthStateRecord = {
-  id: number;
-  state: string;
-  codeVerifier: string;
-  redirectUri: string;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
-};
+export type ClaudeCodeAuthSessionRecord = OAuthSessionRecord<"claude-code">;
 
-export type ClaudeCodeProviderAuth = {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  accountId?: string;
-  email?: string;
-  lastRefresh: string;
-  expiresAt: number;
-};
+export type ClaudeCodeOAuthStateRecord = OAuthStateRecord;
 
-export type ClaudeCodeTokenResponse = {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  accountId?: string;
-  email?: string;
-  expiresAt: Date;
-  lastRefreshAt: Date;
-};
+export type ClaudeCodeProviderAuth = OAuthProviderAuth;
+
+export type ClaudeCodeTokenResponse = OAuthTokenResponse;

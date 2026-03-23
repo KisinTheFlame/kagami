@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
+import { createOAuthRuntimeBundle } from "./auth-runtime.js";
 import {
   AgentLoop,
   MultiGroupAgentRuntimeManager,
@@ -158,28 +159,38 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const claudeCodeAuthConfig = await configManager.getClaudeCodeAuthRuntimeConfig();
-  const claudeCodeAuthCallbackServer = new ClaudeCodeAuthCallbackServer();
-  const claudeCodeAuthService = new DefaultClaudeCodeAuthService({
-    claudeCodeAuthDao,
-    config: claudeCodeAuthConfig,
-    callbackServer: claudeCodeAuthCallbackServer,
+  const claudeCodeAuthRuntime = createOAuthRuntimeBundle({
+    callbackServer: new ClaudeCodeAuthCallbackServer(),
+    createService: callbackServer =>
+      new DefaultClaudeCodeAuthService({
+        claudeCodeAuthDao,
+        config: claudeCodeAuthConfig,
+        callbackServer,
+      }),
+    bindService: (callbackServer, service) => {
+      callbackServer.setAuthService(service);
+    },
   });
-  claudeCodeAuthCallbackServer.setAuthService(claudeCodeAuthService);
 
   const codexAuthConfig = await configManager.getCodexAuthRuntimeConfig();
-  const codexAuthCallbackServer = new CodexAuthCallbackServer();
-  const codexAuthService = new DefaultCodexAuthService({
-    codexAuthDao,
-    config: codexAuthConfig,
-    callbackServer: codexAuthCallbackServer,
+  const codexAuthRuntime = createOAuthRuntimeBundle({
+    callbackServer: new CodexAuthCallbackServer(),
+    createService: callbackServer =>
+      new DefaultCodexAuthService({
+        codexAuthDao,
+        config: codexAuthConfig,
+        callbackServer,
+      }),
+    bindService: (callbackServer, service) => {
+      callbackServer.setAuthService(service);
+    },
   });
-  codexAuthCallbackServer.setAuthService(codexAuthService);
 
   const claudeCodeAuthStore = new ClaudeCodeAuthStore({
-    claudeCodeAuthService,
+    claudeCodeAuthService: claudeCodeAuthRuntime.service,
   });
   const codexAuthStore = new OpenAiCodexAuthStore({
-    codexAuthService,
+    codexAuthService: codexAuthRuntime.service,
   });
   const llmConfig = await configManager.getLlmRuntimeConfig();
   const llmProviders = {
@@ -371,8 +382,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
-      new ClaudeCodeAuthHandler({ claudeCodeAuthService }),
-      new CodexAuthHandler({ codexAuthService }),
+      new ClaudeCodeAuthHandler({ claudeCodeAuthService: claudeCodeAuthRuntime.service }),
+      new CodexAuthHandler({ codexAuthService: codexAuthRuntime.service }),
       new LlmHandler({ llmPlaygroundService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new LoopRunHandler({ loopRunQueryService }),
@@ -388,8 +399,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     app,
     database,
     napcatGatewayService,
-    claudeCodeAuthCallbackServer,
-    codexAuthCallbackServer,
+    claudeCodeAuthCallbackServer: claudeCodeAuthRuntime.callbackServer,
+    codexAuthCallbackServer: codexAuthRuntime.callbackServer,
     agentRuntimeManager,
     port: bootConfig.port,
     listenGroupIds: bootConfig.napcat.listenGroupIds,

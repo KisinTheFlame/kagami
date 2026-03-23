@@ -1,9 +1,6 @@
 import type { Database } from "../../db/client.js";
-import type {
-  ClaudeCodeAuthDao,
-  CreateClaudeCodeOAuthStateInput,
-  UpsertClaudeCodeAuthSessionInput,
-} from "../claude-code-auth.dao.js";
+import { createPrismaOAuthDao } from "../../auth/shared/dao.js";
+import type { ClaudeCodeAuthDao } from "../claude-code-auth.dao.js";
 import type {
   ClaudeCodeAuthSessionRecord,
   ClaudeCodeOAuthStateRecord,
@@ -14,111 +11,39 @@ type PrismaClaudeCodeAuthDaoDeps = {
 };
 
 export class PrismaClaudeCodeAuthDao implements ClaudeCodeAuthDao {
-  private readonly database: Database;
+  private readonly dao: ClaudeCodeAuthDao;
 
   public constructor({ database }: PrismaClaudeCodeAuthDaoDeps) {
-    this.database = database;
+    this.dao = createPrismaOAuthDao({
+      sessionTable: database.claudeCodeAuthSession,
+      stateTable: database.claudeCodeOAuthState,
+      mapSessionRow: toSessionRecord,
+      mapStateRow: toOAuthStateRecord,
+    });
   }
 
   public async findSession(provider: "claude-code"): Promise<ClaudeCodeAuthSessionRecord | null> {
-    const row = await this.database.claudeCodeAuthSession.findUnique({
-      where: {
-        provider,
-      },
-    });
-
-    return row ? toSessionRecord(row) : null;
+    return await this.dao.findSession(provider);
   }
 
-  public async upsertSession(
-    input: UpsertClaudeCodeAuthSessionInput,
-  ): Promise<ClaudeCodeAuthSessionRecord> {
-    const row = await this.database.claudeCodeAuthSession.upsert({
-      where: {
-        provider: input.provider,
-      },
-      update: {
-        accountId: input.accountId,
-        email: input.email,
-        accessToken: input.accessToken,
-        refreshToken: input.refreshToken,
-        idToken: input.idToken,
-        expiresAt: input.expiresAt,
-        lastRefreshAt: input.lastRefreshAt,
-        status: input.status,
-        lastError: input.lastError,
-        updatedAt: new Date(),
-      },
-      create: {
-        provider: input.provider,
-        accountId: input.accountId,
-        email: input.email,
-        accessToken: input.accessToken,
-        refreshToken: input.refreshToken,
-        idToken: input.idToken,
-        expiresAt: input.expiresAt,
-        lastRefreshAt: input.lastRefreshAt,
-        status: input.status,
-        lastError: input.lastError,
-      },
-    });
-
-    return toSessionRecord(row);
+  public async upsertSession(input: Parameters<ClaudeCodeAuthDao["upsertSession"]>[0]) {
+    return await this.dao.upsertSession(input);
   }
 
-  public async createOAuthState(
-    input: CreateClaudeCodeOAuthStateInput,
-  ): Promise<ClaudeCodeOAuthStateRecord> {
-    const row = await this.database.claudeCodeOAuthState.create({
-      data: {
-        state: input.state,
-        codeVerifier: input.codeVerifier,
-        redirectUri: input.redirectUri,
-        expiresAt: input.expiresAt,
-      },
-    });
-
-    return toOAuthStateRecord(row);
+  public async createOAuthState(input: Parameters<ClaudeCodeAuthDao["createOAuthState"]>[0]) {
+    return await this.dao.createOAuthState(input);
   }
 
   public async findOAuthState(state: string): Promise<ClaudeCodeOAuthStateRecord | null> {
-    const row = await this.database.claudeCodeOAuthState.findUnique({
-      where: {
-        state,
-      },
-    });
-
-    return row ? toOAuthStateRecord(row) : null;
+    return await this.dao.findOAuthState(state);
   }
 
   public async markOAuthStateUsed(state: string, usedAt: Date): Promise<void> {
-    await this.database.claudeCodeOAuthState.update({
-      where: {
-        state,
-      },
-      data: {
-        usedAt,
-      },
-    });
+    await this.dao.markOAuthStateUsed(state, usedAt);
   }
 
   public async deleteExpiredOAuthStates(before: Date): Promise<void> {
-    await this.database.claudeCodeOAuthState.deleteMany({
-      where: {
-        OR: [
-          {
-            expiresAt: {
-              lt: before,
-            },
-          },
-          {
-            usedAt: {
-              not: null,
-            },
-          },
-        ],
-      },
-    });
+    await this.dao.deleteExpiredOAuthStates(before);
   }
 }
 

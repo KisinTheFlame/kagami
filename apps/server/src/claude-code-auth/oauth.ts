@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
 import { BizError } from "../errors/biz-error.js";
+import type { PkcePair } from "../auth/shared/pkce.js";
 import type { ClaudeCodeAuthRuntimeConfig } from "../config/config.manager.js";
 import type { ClaudeCodeTokenResponse } from "./types.js";
+export { createPkcePair } from "../auth/shared/pkce.js";
 
 const CLAUDE_CODE_AUTH_URL = "https://claude.ai/oauth/authorize";
 const CLAUDE_CODE_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token";
@@ -17,23 +18,7 @@ type ClaudeCodeOAuthTokenApiResponse = {
   };
 };
 
-export type ClaudeCodePkcePair = {
-  state: string;
-  codeVerifier: string;
-  codeChallenge: string;
-};
-
-export function createPkcePair(): ClaudeCodePkcePair {
-  const state = randomBytes(24).toString("hex");
-  const codeVerifier = randomBytes(48).toString("base64url");
-  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-
-  return {
-    state,
-    codeVerifier,
-    codeChallenge,
-  };
-}
+export type ClaudeCodePkcePair = PkcePair;
 
 export function buildClaudeCodeAuthorizeUrl(input: {
   redirectUri: string;
