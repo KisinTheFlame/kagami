@@ -7,7 +7,7 @@ import type {
 } from "@kagami/shared";
 import { BizError } from "../errors/biz-error.js";
 import type { CodexAuthRuntimeConfig } from "../config/config.manager.js";
-import { getCodexAuthCallbackUrl } from "../codex-auth/callback-server.js";
+import { CodexAuthCallbackServer, getCodexAuthCallbackUrl } from "../codex-auth/callback-server.js";
 import type { CodexAuthDao } from "../dao/codex-auth.dao.js";
 import {
   buildCodexAuthorizeUrl,
@@ -33,6 +33,7 @@ import type {
 type DefaultCodexAuthServiceDeps = {
   codexAuthDao: CodexAuthDao;
   config: CodexAuthRuntimeConfig;
+  callbackServer: CodexAuthCallbackServer;
   secretStore?: CodexAuthSecretStore;
 };
 
@@ -42,11 +43,18 @@ const refreshPromises = new Map<string, Promise<CodexProviderAuth>>();
 export class DefaultCodexAuthService implements CodexAuthService {
   private readonly codexAuthDao: CodexAuthDao;
   private readonly config: CodexAuthRuntimeConfig;
+  private readonly callbackServer: CodexAuthCallbackServer;
   private readonly secretStore: CodexAuthSecretStore;
 
-  public constructor({ codexAuthDao, config, secretStore }: DefaultCodexAuthServiceDeps) {
+  public constructor({
+    codexAuthDao,
+    config,
+    callbackServer,
+    secretStore,
+  }: DefaultCodexAuthServiceDeps) {
     this.codexAuthDao = codexAuthDao;
     this.config = config;
+    this.callbackServer = callbackServer;
     this.secretStore = secretStore ?? new PlainTextCodexAuthSecretStore();
   }
 
@@ -57,26 +65,33 @@ export class DefaultCodexAuthService implements CodexAuthService {
 
   public async createLoginUrl(): Promise<CodexAuthLoginUrlResponse> {
     this.assertEnabled();
-    await this.codexAuthDao.deleteExpiredOAuthStates(new Date());
+    await this.callbackServer.beginAuthorizationWindow(this.config.oauthStateTtlMs);
 
-    const pkce = createPkcePair();
-    const redirectUri = this.getRedirectUri();
-    const expiresAt = new Date(Date.now() + this.config.oauthStateTtlMs);
-    await this.codexAuthDao.createOAuthState({
-      state: pkce.state,
-      codeVerifier: pkce.codeVerifier,
-      redirectUri,
-      expiresAt,
-    });
+    try {
+      await this.codexAuthDao.deleteExpiredOAuthStates(new Date());
 
-    return {
-      loginUrl: buildCodexAuthorizeUrl({
-        redirectUri,
+      const pkce = createPkcePair();
+      const redirectUri = this.getRedirectUri();
+      const expiresAt = new Date(Date.now() + this.config.oauthStateTtlMs);
+      await this.codexAuthDao.createOAuthState({
         state: pkce.state,
-        codeChallenge: pkce.codeChallenge,
-      }),
-      expiresAt: expiresAt.toISOString(),
-    };
+        codeVerifier: pkce.codeVerifier,
+        redirectUri,
+        expiresAt,
+      });
+
+      return {
+        loginUrl: buildCodexAuthorizeUrl({
+          redirectUri,
+          state: pkce.state,
+          codeChallenge: pkce.codeChallenge,
+        }),
+        expiresAt: expiresAt.toISOString(),
+      };
+    } catch (error) {
+      await this.callbackServer.stop().catch(() => {});
+      throw error;
+    }
   }
 
   public async handleCallback(

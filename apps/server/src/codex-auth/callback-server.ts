@@ -4,16 +4,16 @@ import type { CodexAuthService } from "../service/codex-auth.service.js";
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PORT = 1455;
-
-type CodexAuthCallbackServerDeps = {
-  codexAuthService: CodexAuthService;
-};
+const CALLBACK_PATH = "/auth/callback";
 
 export class CodexAuthCallbackServer {
-  private readonly codexAuthService: CodexAuthService;
+  private codexAuthService: CodexAuthService | null = null;
   private server: Server | null = null;
+  private stopTimer: NodeJS.Timeout | null = null;
 
-  public constructor({ codexAuthService }: CodexAuthCallbackServerDeps) {
+  public constructor() {}
+
+  public setAuthService(codexAuthService: CodexAuthService): void {
     this.codexAuthService = codexAuthService;
   }
 
@@ -22,9 +22,19 @@ export class CodexAuthCallbackServer {
       return;
     }
 
+    const authService = this.codexAuthService;
+    if (!authService) {
+      throw new BizError({
+        message: "Codex 回调服务未绑定认证服务",
+        meta: {
+          reason: "CALLBACK_SERVER_SERVICE_UNBOUND",
+        },
+      });
+    }
+
     const server = createServer(async (request, response) => {
-      const url = new URL(request.url ?? "/", "http://localhost:1455");
-      if (request.method !== "GET" || url.pathname !== "/auth/callback") {
+      const url = new URL(request.url ?? "/", `http://localhost:${CALLBACK_PORT}`);
+      if (request.method !== "GET" || url.pathname !== CALLBACK_PATH) {
         response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         response.end("Not found");
         return;
@@ -35,11 +45,14 @@ export class CodexAuthCallbackServer {
       if (!code || !state) {
         response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
         response.end("Missing code or state");
+        queueMicrotask(() => {
+          void this.stop();
+        });
         return;
       }
 
       try {
-        const result = await this.codexAuthService.handleCallback({ code, state });
+        const result = await authService.handleCallback({ code, state });
         response.writeHead(302, {
           Location: result.redirectUrl,
         });
@@ -48,6 +61,10 @@ export class CodexAuthCallbackServer {
         const message = error instanceof Error ? error.message : "Callback failed";
         response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
         response.end(message);
+      } finally {
+        queueMicrotask(() => {
+          void this.stop();
+        });
       }
     });
 
@@ -71,7 +88,14 @@ export class CodexAuthCallbackServer {
     this.server = server;
   }
 
+  public async beginAuthorizationWindow(ttlMs: number): Promise<void> {
+    await this.start();
+    this.resetStopTimer(ttlMs);
+  }
+
   public async stop(): Promise<void> {
+    this.clearStopTimer();
+
     if (!this.server) {
       return;
     }
@@ -88,6 +112,23 @@ export class CodexAuthCallbackServer {
         resolve();
       });
     });
+  }
+
+  private resetStopTimer(ttlMs: number): void {
+    this.clearStopTimer();
+    this.stopTimer = setTimeout(() => {
+      this.stopTimer = null;
+      void this.stop();
+    }, ttlMs);
+  }
+
+  private clearStopTimer(): void {
+    if (!this.stopTimer) {
+      return;
+    }
+
+    clearTimeout(this.stopTimer);
+    this.stopTimer = null;
   }
 }
 

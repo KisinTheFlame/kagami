@@ -167,14 +167,13 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   claudeCodeAuthCallbackServer.setAuthService(claudeCodeAuthService);
 
   const codexAuthConfig = await configManager.getCodexAuthRuntimeConfig();
+  const codexAuthCallbackServer = new CodexAuthCallbackServer();
   const codexAuthService = new DefaultCodexAuthService({
     codexAuthDao,
     config: codexAuthConfig,
+    callbackServer: codexAuthCallbackServer,
   });
-  const codexAuthCallbackServer = new CodexAuthCallbackServer({
-    codexAuthService,
-  });
-  await codexAuthCallbackServer.start();
+  codexAuthCallbackServer.setAuthService(codexAuthService);
 
   const claudeCodeAuthStore = new ClaudeCodeAuthStore({
     claudeCodeAuthService,

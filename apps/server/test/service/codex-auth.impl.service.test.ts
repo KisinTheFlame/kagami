@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { CodexAuthCallbackServer } from "../../src/codex-auth/callback-server.js";
 import { DefaultCodexAuthService } from "../../src/service/codex-auth.impl.service.js";
 import type { CodexAuthDao } from "../../src/dao/codex-auth.dao.js";
 import type { CodexAuthSessionRecord, CodexOAuthStateRecord } from "../../src/codex-auth/types.js";
@@ -64,12 +65,14 @@ describe("DefaultCodexAuthService", () => {
       usedAt: null,
       ...input,
     }));
+    const callbackServer = createCallbackServer();
     const dao = createDao({
       createOAuthState,
     });
     const service = new DefaultCodexAuthService({
       codexAuthDao: dao,
       config: baseConfig,
+      callbackServer: callbackServer.instance,
     });
 
     const result = await service.createLoginUrl();
@@ -82,6 +85,30 @@ describe("DefaultCodexAuthService", () => {
     expect(createOAuthState.mock.calls[0]?.[0].redirectUri).toBe(
       "http://localhost:1455/auth/callback",
     );
+    expect(callbackServer.beginAuthorizationWindow).toHaveBeenCalledWith(
+      baseConfig.oauthStateTtlMs,
+    );
+    expect(callbackServer.beginAuthorizationWindow.mock.invocationCallOrder[0]).toBeLessThan(
+      createOAuthState.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+  });
+
+  it("should stop callback server when login url creation fails", async () => {
+    const callbackServer = createCallbackServer();
+    const dao = createDao({
+      deleteExpiredOAuthStates: vi.fn().mockRejectedValue(new Error("db unavailable")),
+    });
+    const service = new DefaultCodexAuthService({
+      codexAuthDao: dao,
+      config: baseConfig,
+      callbackServer: callbackServer.instance,
+    });
+
+    await expect(service.createLoginUrl()).rejects.toThrow("db unavailable");
+    expect(callbackServer.beginAuthorizationWindow).toHaveBeenCalledWith(
+      baseConfig.oauthStateTtlMs,
+    );
+    expect(callbackServer.stop).toHaveBeenCalledTimes(1);
   });
 
   it("should exchange a valid callback and persist an active session", async () => {
@@ -135,6 +162,7 @@ describe("DefaultCodexAuthService", () => {
     const service = new DefaultCodexAuthService({
       codexAuthDao: dao,
       config: baseConfig,
+      callbackServer: createCallbackServer().instance,
     });
 
     const result = await service.handleCallback({
@@ -157,6 +185,7 @@ describe("DefaultCodexAuthService", () => {
     const service = new DefaultCodexAuthService({
       codexAuthDao: createDao(),
       config: baseConfig,
+      callbackServer: createCallbackServer().instance,
     });
 
     const result = await service.handleCallback({
@@ -214,6 +243,7 @@ describe("DefaultCodexAuthService", () => {
     const service = new DefaultCodexAuthService({
       codexAuthDao: dao,
       config: baseConfig,
+      callbackServer: createCallbackServer().instance,
     });
 
     const auth = await service.getAuth();
@@ -261,6 +291,7 @@ describe("DefaultCodexAuthService", () => {
     const service = new DefaultCodexAuthService({
       codexAuthDao: dao,
       config: baseConfig,
+      callbackServer: createCallbackServer().instance,
     });
 
     await expect(service.getAuth({ forceRefresh: true })).rejects.toMatchObject({
@@ -279,3 +310,24 @@ describe("DefaultCodexAuthService", () => {
     });
   });
 });
+
+function createCallbackServer(): {
+  instance: CodexAuthCallbackServer;
+  beginAuthorizationWindow: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+} {
+  const start = vi.fn().mockResolvedValue(undefined);
+  const beginAuthorizationWindow = vi.fn().mockResolvedValue(undefined);
+  const stop = vi.fn().mockResolvedValue(undefined);
+
+  return {
+    instance: {
+      setAuthService: vi.fn(),
+      start,
+      beginAuthorizationWindow,
+      stop,
+    } as unknown as CodexAuthCallbackServer,
+    beginAuthorizationWindow,
+    stop,
+  };
+}
