@@ -1,7 +1,13 @@
 import type { LlmChatCallItem } from "@kagami/shared";
+import { FlaskConical } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  buildPlaygroundImportDraftFromHistory,
+  type PlaygroundImportLocationState,
+} from "@/pages/llm-playground/playground-import";
 import {
   parseLlmChatCallDetail,
   type ParsedLlmRequestMessage,
@@ -24,8 +30,19 @@ type InputEntry =
     };
 
 export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
+  const navigate = useNavigate();
   const [inputOrder, setInputOrder] = useState<"asc" | "desc">("desc");
   const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
+  const importDraft = useMemo(() => {
+    if (item === null || !parsed?.request) {
+      return null;
+    }
+
+    return buildPlaygroundImportDraftFromHistory({
+      item,
+      request: parsed.request,
+    });
+  }, [item, parsed]);
   const orderedInputEntries = useMemo(() => {
     if (!parsed?.request) {
       return [] as InputEntry[];
@@ -80,6 +97,25 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           <MetaItem label="状态" value={toStatusLabel(item.status)} />
           <MetaItem label="延迟" value={item.latencyMs === null ? "—" : `${item.latencyMs} ms`} />
           <MetaItem label="时间" value={formatDate(item.createdAt)} />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() =>
+              importDraft
+                ? navigate("/llm-playground", {
+                    state: {
+                      playgroundImport: importDraft,
+                    } satisfies PlaygroundImportLocationState,
+                  })
+                : undefined
+            }
+            disabled={importDraft === null}
+          >
+            <FlaskConical className="mr-2 h-4 w-4" />
+            导入到 Playground
+          </Button>
         </div>
 
         {parsed.hasSchemaError ? (

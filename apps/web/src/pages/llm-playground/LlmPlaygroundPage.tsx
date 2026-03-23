@@ -21,7 +21,8 @@ import {
   SendHorizontal,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -31,6 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch, apiRequest, type ApiRequestResult } from "@/lib/api";
+import {
+  getPlaygroundImportDraftFromLocationState,
+  resolvePlaygroundImportDraft,
+} from "./playground-import";
 
 type PlaygroundResult = {
   payload: LlmPlaygroundChatRequest;
@@ -107,6 +112,8 @@ const EMPTY_PROVIDERS: LlmProviderOption[] = [];
 const EMPTY_TOOL_LIBRARY: LlmToolDefinition[] = [];
 
 export function LlmPlaygroundPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedProviderId, setSelectedProviderId] = useState<LlmProviderOption["id"] | "">("");
   const [model, setModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -140,6 +147,10 @@ export function LlmPlaygroundPage() {
 
   const providers = providersQuery.data?.providers ?? EMPTY_PROVIDERS;
   const toolLibrary = toolLibraryQuery.data?.tools ?? EMPTY_TOOL_LIBRARY;
+  const incomingImportDraft = useMemo(
+    () => getPlaygroundImportDraftFromLocationState(location.state),
+    [location.state],
+  );
 
   const effectiveProviderId = selectedProviderId || providers[0]?.id || "";
   const selectedProvider = useMemo(
@@ -215,6 +226,65 @@ export function LlmPlaygroundPage() {
     },
   });
 
+  const applyImportedDraft = useEffectEvent(
+    (draft: typeof incomingImportDraft, availableProviders: LlmProviderOption[]) => {
+      if (draft === null) {
+        return;
+      }
+
+      const resolvedImport = resolvePlaygroundImportDraft({
+        draft,
+        providers: availableProviders,
+      });
+
+      setSelectedProviderId(resolvedImport.selectedProviderId);
+      setModel(resolvedImport.selectedModel);
+      setSystemPrompt(resolvedImport.payload.system ?? "");
+      setMessages(resolvedImport.payload.messages.map(playgroundMessageToEditor));
+      setTools(resolvedImport.payload.tools.map(toolDefinitionToEditor));
+
+      if (
+        resolvedImport.payload.toolChoice === "auto" ||
+        resolvedImport.payload.toolChoice === "none"
+      ) {
+        setToolChoiceMode(resolvedImport.payload.toolChoice);
+        setSelectedToolNameForChoice("");
+      } else if (resolvedImport.payload.toolChoice === "required") {
+        setToolChoiceMode("required");
+        setSelectedToolNameForChoice("");
+      } else {
+        setToolChoiceMode("tool");
+        setSelectedToolNameForChoice(resolvedImport.payload.toolChoice.tool_name);
+      }
+
+      setEditorError(null);
+      setResponseError(null);
+      setLastPayload(null);
+      setLastResponse(null);
+      setLastParsedResponse(null);
+    },
+  );
+
+  useEffect(() => {
+    if (incomingImportDraft === null || providersQuery.isLoading) {
+      return;
+    }
+
+    applyImportedDraft(incomingImportDraft, providers);
+
+    void navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [
+    incomingImportDraft,
+    location.pathname,
+    location.search,
+    navigate,
+    providers,
+    providersQuery.isLoading,
+  ]);
+
   function handleProviderChange(nextProviderId: string): void {
     setSelectedProviderId(nextProviderId as LlmProviderOption["id"]);
     const nextProvider = providers.find(provider => provider.id === nextProviderId);
@@ -228,6 +298,10 @@ export function LlmPlaygroundPage() {
     setToolChoiceMode("none");
     setSelectedToolNameForChoice("");
     setEditorError(null);
+    setResponseError(null);
+    setLastPayload(null);
+    setLastResponse(null);
+    setLastParsedResponse(null);
   }
 
   function handleAddMessage(role: EditorRole): void {
@@ -1907,6 +1981,59 @@ function toolDefinitionToEditor(tool: LlmToolDefinition): EditorTool {
         rawSchema: objectSchema,
       };
     }),
+  };
+}
+
+function playgroundMessageToEditor(message: PlaygroundMessage): EditorMessage {
+  if (message.role === "user") {
+    if (typeof message.content === "string") {
+      return {
+        id: createEditorId(),
+        role: "user",
+        parts: [createTextPart(message.content)],
+      };
+    }
+
+    return {
+      id: createEditorId(),
+      role: "user",
+      parts: message.content.map(playgroundContentPartToEditor),
+    };
+  }
+
+  if (message.role === "assistant") {
+    return {
+      id: createEditorId(),
+      role: "assistant",
+      content: message.content,
+      toolCalls: message.toolCalls.map(toolCall => ({
+        id: createEditorId(),
+        toolCallId: toolCall.id,
+        name: toolCall.name,
+        argumentsText: formatJson(toolCall.arguments),
+      })),
+    };
+  }
+
+  return {
+    id: createEditorId(),
+    role: "tool",
+    toolCallId: message.toolCallId,
+    content: message.content,
+  };
+}
+
+function playgroundContentPartToEditor(part: PlaygroundContentPart): EditorContentPart {
+  if (part.type === "text") {
+    return createTextPart(part.text);
+  }
+
+  return {
+    id: createEditorId(),
+    type: "image",
+    fileName: part.fileName ?? "",
+    mimeType: part.mimeType,
+    dataUrl: part.dataUrl,
   };
 }
 
