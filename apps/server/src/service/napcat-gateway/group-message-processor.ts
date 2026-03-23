@@ -1,5 +1,5 @@
 import { AppLogger } from "../../logger/logger.js";
-import type { AgentEventQueue } from "../../event/event.queue.js";
+import type { Event } from "../../event/event.js";
 import type { NapcatGroupMessageEvent } from "../napcat-gateway.service.js";
 import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
@@ -34,18 +34,18 @@ type NapcatActionRequester = {
 };
 
 type NapcatGroupMessageProcessorOptions = {
-  listenGroupId: string;
+  listenGroupIds: string[];
   actionRequester: NapcatActionRequester;
-  eventQueue: AgentEventQueue;
+  enqueueGroupMessageEvent: (event: Event) => number;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 
 export class NapcatGroupMessageProcessor {
-  private readonly listenGroupId: string;
+  private readonly listenGroupIds: Set<string>;
   private readonly actionRequester: NapcatActionRequester;
-  private readonly eventQueue: AgentEventQueue;
+  private readonly enqueueGroupMessageEvent: (event: Event) => number;
   private readonly imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   private readonly groupMemberDisplayNameCache = new Map<
     string,
@@ -53,14 +53,14 @@ export class NapcatGroupMessageProcessor {
   >();
 
   public constructor({
-    listenGroupId,
+    listenGroupIds,
     actionRequester,
-    eventQueue,
+    enqueueGroupMessageEvent,
     imageMessageAnalyzer,
   }: NapcatGroupMessageProcessorOptions) {
-    this.listenGroupId = listenGroupId;
+    this.listenGroupIds = new Set(listenGroupIds);
     this.actionRequester = actionRequester;
-    this.eventQueue = eventQueue;
+    this.enqueueGroupMessageEvent = enqueueGroupMessageEvent;
     this.imageMessageAnalyzer = imageMessageAnalyzer;
   }
 
@@ -147,7 +147,7 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    if (!event.groupId || event.groupId !== this.listenGroupId) {
+    if (!event.groupId || !this.listenGroupIds.has(event.groupId)) {
       return null;
     }
 
@@ -177,7 +177,7 @@ export class NapcatGroupMessageProcessor {
 
   private publishGroupMessage(event: NapcatGroupMessageEvent): void {
     try {
-      const result = this.eventQueue.enqueue({
+      const result = this.enqueueGroupMessageEvent({
         type: "napcat_group_message",
         groupId: event.groupId,
         userId: event.userId,

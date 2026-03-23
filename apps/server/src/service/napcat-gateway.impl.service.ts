@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ConfigManager, NapcatBootConfig } from "../config/config.manager.js";
 import { BizError } from "../errors/biz-error.js";
-import type { AgentEventQueue } from "../event/event.queue.js";
+import type { Event } from "../event/event.js";
 import { AppLogger } from "../logger/logger.js";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
@@ -17,7 +17,7 @@ import type {
 
 type CreateNapcatGatewayOptions = {
   configManager: ConfigManager;
-  eventQueue: AgentEventQueue;
+  enqueueGroupMessageEvent: (event: Event) => number;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
@@ -25,7 +25,7 @@ type CreateNapcatGatewayOptions = {
 
 type NapcatGatewayOptions = {
   config: NapcatBootConfig;
-  eventQueue: AgentEventQueue;
+  enqueueGroupMessageEvent: (event: Event) => number;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
@@ -53,7 +53,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
   public static async create({
     configManager,
-    eventQueue,
+    enqueueGroupMessageEvent,
     persistenceWriter,
     imageMessageAnalyzer,
     createWebSocket,
@@ -62,7 +62,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     return new DefaultNapcatGatewayService({
       config: bootConfig.napcat,
-      eventQueue,
+      enqueueGroupMessageEvent,
       persistenceWriter,
       imageMessageAnalyzer,
       createWebSocket,
@@ -71,7 +71,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
   private constructor({
     config,
-    eventQueue,
+    enqueueGroupMessageEvent,
     persistenceWriter,
     imageMessageAnalyzer,
     createWebSocket,
@@ -86,9 +86,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       },
     });
     const groupMessageProcessor = new NapcatGroupMessageProcessor({
-      listenGroupId: config.listenGroupId,
+      listenGroupIds: config.listenGroupIds,
       actionRequester: transport,
-      eventQueue,
+      enqueueGroupMessageEvent,
       imageMessageAnalyzer,
     });
     let nextSequence = 0;

@@ -82,7 +82,7 @@ const StaticConfigFileSchema = z.object({
       wsUrl: UrlSchema,
       reconnectMs: PositiveIntSchema,
       requestTimeoutMs: PositiveIntSchema,
-      listenGroupId: StringLikeSchema,
+      listenGroupIds: z.array(StringLikeSchema).min(1),
     }),
     llm: z.object({
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),

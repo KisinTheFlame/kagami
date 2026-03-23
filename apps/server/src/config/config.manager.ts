@@ -4,7 +4,7 @@ export type NapcatBootConfig = {
   wsUrl: string;
   reconnectMs: number;
   requestTimeoutMs: number;
-  listenGroupId: string;
+  listenGroupIds: string[];
 };
 
 export type BootConfig = {

@@ -130,12 +130,12 @@ try {
     port: runtime.port,
     pid: process.pid,
     providers,
-    listenGroupId: runtime.listenGroupId,
+    listenGroupIds: runtime.listenGroupIds,
     hasTavilyApiKey: runtime.hasTavilyApiKey,
     traceRuntimeEnabled: true,
   });
 
-  void runtime.agentLoop.run().catch(error => {
+  void runtime.agentRuntimeManager.run().catch(error => {
     logger.errorWithCause("Agent loop crashed", error, {
       event: "agent.loop.crashed",
     });

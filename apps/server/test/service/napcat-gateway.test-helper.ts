@@ -109,7 +109,7 @@ export function createConfigManager(): ConfigManager {
         wsUrl: "ws://napcat:3001/",
         reconnectMs: 3000,
         requestTimeoutMs: 10000,
-        listenGroupId: "987654",
+        listenGroupIds: ["987654"],
       },
     }),
     getLlmRuntimeConfig: vi.fn(),

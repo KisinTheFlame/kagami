@@ -33,7 +33,7 @@ export class DefaultConfigManager implements ConfigManager {
         wsUrl: config.server.napcat.wsUrl,
         reconnectMs: config.server.napcat.reconnectMs,
         requestTimeoutMs: config.server.napcat.requestTimeoutMs,
-        listenGroupId: config.server.napcat.listenGroupId,
+        listenGroupIds: config.server.napcat.listenGroupIds,
       },
     };
 

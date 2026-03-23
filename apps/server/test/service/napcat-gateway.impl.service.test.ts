@@ -44,7 +44,7 @@ describe("DefaultNapcatGatewayService", () => {
     const configManager = createConfigManager();
     const gateway = await DefaultNapcatGatewayService.create({
       configManager,
-      eventQueue: createAgentEventQueue(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
       createWebSocket: () => {
@@ -98,7 +98,7 @@ describe("DefaultNapcatGatewayService", () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
-      eventQueue: createAgentEventQueue(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
       createWebSocket: () => {
@@ -164,7 +164,7 @@ describe("DefaultNapcatGatewayService", () => {
     });
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       persistenceWriter,
       imageMessageAnalyzer,
       createWebSocket: () => {
@@ -257,7 +257,7 @@ describe("DefaultNapcatGatewayService", () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
-      eventQueue: createAgentEventQueue(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
       createWebSocket: () => {
@@ -295,7 +295,7 @@ describe("DefaultNapcatGatewayService", () => {
     const napcatEventDao = createNapcatEventDao();
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
-      eventQueue: createAgentEventQueue(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({
         napcatEventDao,
       }),
@@ -344,7 +344,7 @@ describe("DefaultNapcatGatewayService", () => {
     };
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer: orderedImageAnalyzer,
       createWebSocket: () => {

@@ -31,7 +31,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     timeoutMs: 15000
     codexAuth:
@@ -91,7 +92,7 @@ server:
         wsUrl: "wss://example.com/napcat",
         reconnectMs: 3000,
         requestTimeoutMs: 10000,
-        listenGroupId: "123456",
+        listenGroupIds: ["123456"],
       },
     });
 
@@ -248,7 +249,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -303,6 +305,133 @@ server:
     } satisfies Partial<BizError>);
   });
 
+  it("should reject empty listen group list", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds: []
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      ragQueryPlanner:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.napcat.listenGroupIds",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should reject blank group id in listen group list", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - ""
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      ragQueryPlanner:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.napcat.listenGroupIds.0",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
   it("should fail when required config is missing", async () => {
     const configPath = await writeConfigFile(`
 server:
@@ -311,7 +440,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -369,7 +499,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -426,7 +557,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -481,7 +613,8 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -536,7 +669,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -591,7 +725,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -646,7 +781,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -701,7 +837,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:
@@ -755,7 +892,8 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     providers:
       deepseek:

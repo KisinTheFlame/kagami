@@ -28,9 +28,9 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester,
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -125,9 +125,9 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester,
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -207,11 +207,11 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore bot self group message events", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -237,11 +237,11 @@ describe("NapcatGroupMessageProcessor", () => {
       throw new Error("publish failed");
     });
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -275,11 +275,11 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should render image segments into rawMessage", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -343,11 +343,11 @@ describe("NapcatGroupMessageProcessor", () => {
     imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
-      eventQueue,
+      enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
     });
 
@@ -390,6 +390,56 @@ describe("NapcatGroupMessageProcessor", () => {
             },
           },
         ],
+      }),
+    );
+  });
+
+  it("should publish events for each listened group independently", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654", "123456"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      imageMessageAnalyzer,
+    });
+
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "first group",
+      sender: {
+        card: "测试群名片",
+      },
+    });
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "123456",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "second group",
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        groupId: "987654",
+        rawMessage: "first group",
+      }),
+    );
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        groupId: "123456",
+        rawMessage: "second group",
       }),
     );
   });

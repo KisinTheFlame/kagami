@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { AgentLoop, createAgentSystemPrompt } from "../agents/main-engine/index.js";
+import {
+  AgentLoop,
+  MultiGroupAgentRuntimeManager,
+  createAgentSystemPrompt,
+} from "../agents/main-engine/index.js";
 import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
 import {
   ReplyThoughtTool,
@@ -103,9 +107,9 @@ export type ServerRuntime = {
   napcatGatewayService: NapcatGatewayService;
   claudeCodeAuthCallbackServer: ClaudeCodeAuthCallbackServer;
   codexAuthCallbackServer: CodexAuthCallbackServer;
-  agentLoop: AgentLoop;
+  agentRuntimeManager: MultiGroupAgentRuntimeManager;
   port: number;
-  listenGroupId: string;
+  listenGroupIds: string[];
   hasTavilyApiKey: boolean;
   listAvailableAgentProviders: () => Promise<
     Awaited<ReturnType<ReturnType<typeof createLlmClient>["listAvailableProviders"]>>
@@ -246,68 +250,114 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const webSearchService = new TavilyWebSearchService({
     apiKey: tavilyConfig.apiKey,
   });
-  const eventQueue = new InMemoryAgentEventQueue();
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
     napcatGroupMessageDao,
     napcatGroupMessageChunkDao,
     groupMessageChunkIndexer,
   });
+  let agentRuntimeManager: MultiGroupAgentRuntimeManager | null = null;
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
     configManager,
-    eventQueue,
+    enqueueGroupMessageEvent: event => {
+      if (!agentRuntimeManager) {
+        throw new Error("Agent runtime manager is not initialized");
+      }
+
+      return agentRuntimeManager.enqueue(event);
+    },
     persistenceWriter: napcatPersistenceWriter,
     imageMessageAnalyzer,
   });
 
-  const agentMessageService = new DefaultAgentMessageService({
-    napcatGatewayService,
-    targetGroupId: bootConfig.napcat.listenGroupId,
-  });
   const replySenderToolCatalog = new ToolCatalog([
     new ReplyThoughtTool(),
     new ReviewReplyStrategyTool(),
     new WriteReplyMessageTool(),
   ]);
-  const trySendMessageService = new TrySendMessageService({
-    llmClient,
-    agentMessageService,
-    replyThoughtTools: replySenderToolCatalog.pick(["reply_thought"]),
-    replyReviewTools: replySenderToolCatalog.pick(["review_reply_strategy"]),
-    replyWriterTools: replySenderToolCatalog.pick(["write_reply_message"]),
+  const loopRunRecorder = new LoopRunRecorder({
+    loopRunDao,
   });
-  const toolCatalog = new ToolCatalog([
-    new SearchWebTool({
-      webSearchService,
-    }),
-    new SendGroupMessageTool({
+  const groupRuntimes = bootConfig.napcat.listenGroupIds.map(groupId => {
+    const eventQueue = new InMemoryAgentEventQueue();
+    const agentMessageService = new DefaultAgentMessageService({
+      napcatGatewayService,
+      targetGroupId: groupId,
+    });
+    const trySendMessageService = new TrySendMessageService({
+      llmClient,
       agentMessageService,
-    }),
-    new TrySendMessageTool({
-      trySendMessageService,
-    }),
-    new FinishTool(),
-    new SearchMemoryTool({
-      memorySearchService,
-    }),
-    new SummaryTool(),
-  ]);
-  const ragQueryPlanner = new RagQueryPlannerService({
-    llmClient,
-    plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
-    systemPromptFactory: createRagSystemPrompt,
+      replyThoughtTools: replySenderToolCatalog.pick(["reply_thought"]),
+      replyReviewTools: replySenderToolCatalog.pick(["review_reply_strategy"]),
+      replyWriterTools: replySenderToolCatalog.pick(["write_reply_message"]),
+    });
+    const toolCatalog = new ToolCatalog([
+      new SearchWebTool({
+        webSearchService,
+      }),
+      new SendGroupMessageTool({
+        agentMessageService,
+      }),
+      new TrySendMessageTool({
+        trySendMessageService,
+      }),
+      new FinishTool(),
+      new SearchMemoryTool({
+        memorySearchService,
+      }),
+      new SummaryTool(),
+    ]);
+    const ragQueryPlanner = new RagQueryPlannerService({
+      llmClient,
+      plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
+      systemPromptFactory: createRagSystemPrompt,
+    });
+    const ragContextEventEnricher = new RagContextEventEnricher({
+      ragQueryPlanner,
+    });
+    const agentVisibleTools = toolCatalog.pick([
+      SEARCH_WEB_TOOL_NAME,
+      TRY_SEND_MESSAGE_TOOL_NAME,
+      FINISH_TOOL_NAME,
+    ]);
+    const summaryPlanner = new ContextSummaryPlannerService({
+      llmClient,
+      summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
+    });
+    const context = new DefaultAgentContext({
+      systemPromptFactory: agentSystemPromptFactory,
+    });
+    const agentLoop = new AgentLoop({
+      llmClient,
+      context,
+      eventQueue,
+      agentTools: agentVisibleTools,
+      ragContextEventEnricher,
+      summaryPlanner,
+      summaryTools: [
+        ...agentVisibleTools.definitions(),
+        ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
+      ],
+      loopRunRecorder,
+    });
+
+    return {
+      groupId,
+      eventQueue,
+      agentLoop,
+      toolCatalog,
+    };
   });
-  const ragContextEventEnricher = new RagContextEventEnricher({
-    ragQueryPlanner,
+  agentRuntimeManager = new MultiGroupAgentRuntimeManager({
+    runtimes: groupRuntimes.map(({ groupId, eventQueue, agentLoop }) => ({
+      groupId,
+      eventQueue,
+      agentLoop,
+    })),
   });
-  const agentVisibleTools = toolCatalog.pick([
-    SEARCH_WEB_TOOL_NAME,
-    TRY_SEND_MESSAGE_TOOL_NAME,
-    FINISH_TOOL_NAME,
-  ]);
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
     llmClient,
-    playgroundToolDefinitions: toolCatalog
+    playgroundToolDefinitions: groupRuntimes[0].toolCatalog
       .pick([
         SEARCH_WEB_TOOL_NAME,
         TRY_SEND_MESSAGE_TOOL_NAME,
@@ -317,29 +367,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         SEND_GROUP_MESSAGE_TOOL_NAME,
       ])
       .definitions(),
-  });
-  const summaryPlanner = new ContextSummaryPlannerService({
-    llmClient,
-    summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
-  });
-  const context = new DefaultAgentContext({
-    systemPromptFactory: agentSystemPromptFactory,
-  });
-  const loopRunRecorder = new LoopRunRecorder({
-    loopRunDao,
-  });
-  const agentLoop = new AgentLoop({
-    llmClient,
-    context,
-    eventQueue,
-    agentTools: agentVisibleTools,
-    ragContextEventEnricher,
-    summaryPlanner,
-    summaryTools: [
-      ...agentVisibleTools.definitions(),
-      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
-    ],
-    loopRunRecorder,
   });
 
   const app = createServerApp({
@@ -364,9 +391,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     claudeCodeAuthCallbackServer,
     codexAuthCallbackServer,
-    agentLoop,
+    agentRuntimeManager,
     port: bootConfig.port,
-    listenGroupId: bootConfig.napcat.listenGroupId,
+    listenGroupIds: bootConfig.napcat.listenGroupIds,
     hasTavilyApiKey: Boolean(tavilyConfig.apiKey),
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
