@@ -133,6 +133,7 @@ export const LlmChatCallItemSchema = z.object({
   seq: z.number().int().positive(),
   provider: z.string().min(1),
   model: z.string().min(1),
+  extension: JsonRecordSchema.nullable(),
   status: LlmChatCallStatusSchema,
   requestPayload: JsonRecordSchema,
   responsePayload: JsonRecordSchema.nullable(),

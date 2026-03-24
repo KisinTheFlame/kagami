@@ -294,6 +294,12 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
+        model: "gpt-4o-mini",
+        extension: {
+          metadata: {
+            actualModel: "gpt-4o-mini",
+          },
+        },
         nativeRequestPayload: {
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: "ping" }],
@@ -347,6 +353,7 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordError).toHaveBeenCalledWith(
       expect.objectContaining({
+        extension: null,
         nativeRequestPayload: {
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: "ping" }],
@@ -506,6 +513,11 @@ describe("createLlmClient", () => {
         messages: [],
       },
     );
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].extension).toEqual({
+      metadata: {
+        actualModel: "deepseek-chat",
+      },
+    });
     expect(
       vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].nativeResponsePayload,
     ).toEqual({
@@ -576,6 +588,11 @@ describe("createLlmClient", () => {
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0]).toMatchObject({
       provider: "deepseek",
       model: "deepseek-chat",
+      extension: {
+        metadata: {
+          actualModel: "deepseek-chat",
+        },
+      },
       seq: 2,
     });
   });
@@ -835,6 +852,11 @@ describe("createLlmClient", () => {
       id: "native-gpt-4o-mini",
       model: "gpt-4o-mini",
     });
+    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].extension).toEqual({
+      metadata: {
+        actualModel: "gpt-4o-mini",
+      },
+    });
   });
 
   it("should reject tool calls that do not match the explicitly required tool", async () => {
@@ -1050,6 +1072,11 @@ describe("createLlmClient", () => {
     });
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
+        extension: {
+          metadata: {
+            actualModel: "gpt-4o-mini",
+          },
+        },
         request: {
           model: "gpt-4o-mini",
           messages: [
@@ -1179,6 +1206,11 @@ describe("createLlmClient", () => {
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "deepseek-chat",
+        extension: {
+          metadata: {
+            actualModel: "deepseek-chat",
+          },
+        },
         request: {
           model: "deepseek-chat",
           messages: [
@@ -1305,6 +1337,80 @@ describe("createLlmClient", () => {
     });
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
     expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
+  });
+
+  it("should persist configured model and extension actualModel when provider returns versioned model", async () => {
+    const provider: LlmProvider = {
+      id: "openai-codex",
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai-codex",
+            model: "gpt-5.4-mini-2026-03-17",
+          }),
+          {
+            nativeRequestPayload: {
+              model: "gpt-5.4-mini",
+              messages: [],
+            },
+            nativeResponsePayload: {
+              id: "resp_1",
+              model: "gpt-5.4-mini-2026-03-17",
+            },
+          },
+        ),
+      ),
+    };
+    const providerConfigs = createProviderConfigs();
+    providerConfigs["openai-codex"] = {
+      ...providerConfigs["openai-codex"],
+      models: ["gpt-5.4-mini"],
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: {
+        "openai-codex": provider,
+      },
+      providerConfigs,
+      usages: createUsageConfig({
+        agent: {
+          attempts: [
+            {
+              provider: "openai-codex",
+              model: "gpt-5.4-mini",
+              times: 1,
+            },
+          ],
+        },
+      }),
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          usage: "agent",
+        },
+      ),
+    ).resolves.toMatchObject({
+      provider: "openai-codex",
+      model: "gpt-5.4-mini-2026-03-17",
+    });
+
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "openai-codex",
+        model: "gpt-5.4-mini",
+        extension: {
+          metadata: {
+            actualModel: "gpt-5.4-mini-2026-03-17",
+          },
+        },
+      }),
+    );
   });
 
   it("should require explicit usage for listAvailableProviders", async () => {

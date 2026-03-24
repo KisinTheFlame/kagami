@@ -44,6 +44,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       seq: item.seq,
       provider: item.provider,
       model: item.model,
+      extension: toOptionalJsonRecord(item.extension),
       status: item.status as LlmChatCallItem["status"],
       requestPayload: toJsonRecord(item.requestPayload),
       responsePayload: toOptionalJsonRecord(item.responsePayload),
@@ -58,6 +59,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
 
   public async recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void> {
     try {
+      const extension = toOptionalInputJsonRecord(input.extension);
       const nativeRequestPayload = toOptionalInputJsonRecord(input.nativeRequestPayload);
       const nativeResponsePayload = toOptionalInputJsonRecord(input.nativeResponsePayload);
       await this.database.llmChatCall.create({
@@ -67,6 +69,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           seq: input.seq,
           provider: input.provider,
           model: input.model,
+          ...(extension ? { extension } : {}),
           status: "success",
           requestPayload: toInputJsonRecord(input.request),
           responsePayload: toInputJsonRecord(input.response),
@@ -87,6 +90,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
 
   public async recordError(input: RecordLlmChatCallErrorInput): Promise<void> {
     try {
+      const extension = toOptionalInputJsonRecord(input.extension);
       const nativeRequestPayload = toOptionalInputJsonRecord(input.nativeRequestPayload);
       const nativeResponsePayload = toOptionalInputJsonRecord(input.nativeResponsePayload);
       const nativeError = toOptionalInputJsonRecord(input.nativeError);
@@ -97,6 +101,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           seq: input.seq,
           provider: input.provider,
           model: input.model,
+          ...(extension ? { extension } : {}),
           status: "failed",
           requestPayload: toInputJsonRecord(input.request),
           ...(nativeRequestPayload ? { nativeRequestPayload } : {}),

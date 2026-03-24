@@ -94,6 +94,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
           <MetaItem label="Attempt Seq" value={`#${item.seq}`} mono />
           <MetaItem label="Provider" value={item.provider} />
           <MetaItem label="Model" value={item.model} />
+          <MetaItem label="实际 Model" value={readActualModel(item.extension) ?? "—"} />
           <MetaItem label="状态" value={toStatusLabel(item.status)} />
           <MetaItem label="延迟" value={item.latencyMs === null ? "—" : `${item.latencyMs} ms`} />
           <MetaItem label="时间" value={formatDate(item.createdAt)} />
@@ -264,6 +265,25 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
       </div>
     </div>
   );
+}
+
+function readActualModel(extension: Record<string, unknown> | null): string | null {
+  if (!extension) {
+    return null;
+  }
+
+  const metadata = extension.metadata;
+  if (!isRecord(metadata)) {
+    return null;
+  }
+
+  return typeof metadata.actualModel === "string" && metadata.actualModel.trim().length > 0
+    ? metadata.actualModel
+    : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function MessageCard({ message, index }: { message: ParsedLlmRequestMessage; index: number }) {

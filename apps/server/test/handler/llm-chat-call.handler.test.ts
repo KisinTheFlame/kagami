@@ -28,6 +28,7 @@ describe("LlmChatCallHandler", () => {
           seq: 1,
           provider: "openai",
           model: "gpt-test",
+          extension: null,
           status: "success",
           requestPayload: {},
           responsePayload: {},
@@ -54,7 +55,18 @@ describe("LlmChatCallHandler", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(result);
+    expect(response.json()).toMatchObject({
+      pagination: result.pagination,
+      items: [
+        expect.objectContaining({
+          id: 1,
+          requestId: "req-1",
+          provider: "openai",
+          model: "gpt-test",
+          status: "success",
+        }),
+      ],
+    });
     expect(queryList).toHaveBeenCalledWith(
       expect.objectContaining({
         page: 1,

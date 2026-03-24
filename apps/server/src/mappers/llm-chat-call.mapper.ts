@@ -26,6 +26,7 @@ export function mapLlmChatCallItem(item: LlmChatCallDaoItem): LlmChatCallItem {
     seq: item.seq,
     provider: item.provider,
     model: item.model,
+    extension: item.extension,
     status: item.status,
     requestPayload: item.requestPayload,
     responsePayload: item.responsePayload,

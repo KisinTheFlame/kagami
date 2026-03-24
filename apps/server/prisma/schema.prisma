@@ -13,6 +13,7 @@ model LlmChatCall {
   seq             Int       @default(1)
   provider        String
   model           String
+  extension       Json?     @db.JsonB
   status          String
   requestPayload  Json      @map("request_payload") @db.JsonB
   responsePayload Json?     @map("response_payload") @db.JsonB

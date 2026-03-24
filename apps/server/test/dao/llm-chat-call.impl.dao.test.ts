@@ -33,6 +33,11 @@ describe("PrismaLlmChatCallDao", () => {
       seq: 1,
       provider: "openai",
       model: "gpt-test",
+      extension: {
+        metadata: {
+          actualModel: "gpt-test-2026-03-17",
+        },
+      },
       latencyMs: 12,
       request: {
         messages: [],
@@ -56,6 +61,11 @@ describe("PrismaLlmChatCallDao", () => {
         seq: 1,
         provider: "openai",
         model: "gpt-test",
+        extension: {
+          metadata: {
+            actualModel: "gpt-test-2026-03-17",
+          },
+        },
         status: "success",
         requestPayload: {
           messages: [],
@@ -105,6 +115,11 @@ describe("PrismaLlmChatCallDao", () => {
       seq: 2,
       provider: "openai",
       model: "gpt-test",
+      extension: {
+        metadata: {
+          actualModel: "gpt-test-2026-03-17",
+        },
+      },
       latencyMs: 34,
       request: {
         messages: [],
@@ -140,6 +155,11 @@ describe("PrismaLlmChatCallDao", () => {
         seq: 2,
         provider: "openai",
         model: "gpt-test",
+        extension: {
+          metadata: {
+            actualModel: "gpt-test-2026-03-17",
+          },
+        },
         status: "failed",
         requestPayload: {
           messages: [],
@@ -221,5 +241,53 @@ describe("PrismaLlmChatCallDao", () => {
       take: 10,
       skip: 10,
     });
+  });
+
+  it("should map extension when listing rows", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 1,
+        requestId: "req-1",
+        loopRunId: null,
+        seq: 1,
+        provider: "openai",
+        model: "gpt-test",
+        extension: {
+          metadata: {
+            actualModel: "gpt-test-2026-03-17",
+          },
+        },
+        status: "success",
+        requestPayload: {},
+        responsePayload: {},
+        nativeRequestPayload: null,
+        nativeResponsePayload: null,
+        error: null,
+        nativeError: null,
+        latencyMs: 10,
+        createdAt: new Date("2026-03-24T00:00:00.000Z"),
+      },
+    ]);
+    const database = {
+      llmChatCall: {
+        findMany,
+      },
+    } as unknown as Database;
+
+    const dao = new PrismaLlmChatCallDao({ database });
+    const rows = await dao.listPage({
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        extension: {
+          metadata: {
+            actualModel: "gpt-test-2026-03-17",
+          },
+        },
+      }),
+    ]);
   });
 });

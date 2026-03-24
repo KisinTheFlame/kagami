@@ -197,7 +197,10 @@ async function executeChatAttempt({
       void llmChatCallDao
         .recordSuccess({
           provider: provider.id,
-          model: response.model,
+          model: attempt.model,
+          extension: buildExtension({
+            actualModel: response.model,
+          }),
           requestId,
           loopRunId,
           seq,
@@ -234,10 +237,20 @@ async function executeChatAttempt({
     const serializedError = serializeChatError(error);
 
     if (recordCall) {
+      const actualModel =
+        getActualModelFromResponse(response) ??
+        getActualModelFromPayload(providerResult?.nativeResponsePayload) ??
+        getActualModelFromPayload(failureContext?.nativeResponsePayload);
       void llmChatCallDao
         .recordError({
           provider: attempt.provider,
           model: attempt.model,
+          extension:
+            actualModel === undefined
+              ? null
+              : buildExtension({
+                  actualModel,
+                }),
           requestId,
           loopRunId,
           seq,
@@ -290,6 +303,34 @@ function serializeChatError(error: unknown): Record<string, unknown> {
     name: "UnknownError",
     message: typeof error === "string" ? error : "Unknown error",
   };
+}
+
+function buildExtension(input: { actualModel: string }): Record<string, unknown> {
+  return {
+    metadata: {
+      actualModel: input.actualModel,
+    },
+  };
+}
+
+function getActualModelFromResponse(response: LlmChatResponsePayload | null): string | undefined {
+  if (!response) {
+    return undefined;
+  }
+
+  return response.model;
+}
+
+function getActualModelFromPayload(
+  payload: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!payload) {
+    return undefined;
+  }
+
+  return typeof payload.model === "string" && payload.model.trim().length > 0
+    ? payload.model
+    : undefined;
 }
 
 async function listAvailableProviders(

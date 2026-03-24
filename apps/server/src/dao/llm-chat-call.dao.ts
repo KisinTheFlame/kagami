@@ -9,6 +9,7 @@ export type LlmChatCallItem = {
   seq: number;
   provider: string;
   model: string;
+  extension: Record<string, unknown> | null;
   status: LlmChatCallStatus;
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown> | null;
@@ -34,6 +35,7 @@ type LlmChatCallBaseInput = {
   seq: number;
   provider: LlmProviderId;
   model: string;
+  extension?: Record<string, unknown> | null;
   latencyMs: number;
   request: Record<string, unknown>;
   nativeRequestPayload?: Record<string, unknown> | null;
