@@ -525,6 +525,8 @@ function UsageLimitCard({
   secondaryText: string;
 }) {
   const normalizedPercent = usedPercent === null ? null : clampPercent(usedPercent);
+  const remainingPercent =
+    normalizedPercent === null ? null : clampPercent(100 - normalizedPercent);
   const displayPrimaryText =
     primaryText ??
     (normalizedPercent === null
@@ -551,7 +553,7 @@ function UsageLimitCard({
         <div
           className={`h-full rounded-full transition-[width] ${getUsageBarClass(normalizedPercent)}`}
           style={{
-            width: `${normalizedPercent ?? 0}%`,
+            width: `${remainingPercent ?? 0}%`,
           }}
         />
       </div>
