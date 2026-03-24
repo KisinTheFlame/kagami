@@ -5,7 +5,8 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     timeoutMs: 45000
     codexAuth:
@@ -45,6 +46,14 @@ server:
           - provider: deepseek
             model: deepseek-chat
       ragQueryPlanner:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
         attempts:
           - provider: openai
             model: gpt-4o-mini

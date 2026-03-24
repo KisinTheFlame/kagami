@@ -17,13 +17,20 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
   llm:
     timeoutMs: 45000
     codexAuth:
       enabled: true
       publicBaseUrl: http://localhost:20004
       oauthRedirectPath: /auth/callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 60000
+    claudeCodeAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /callback
       oauthStateTtlMs: 600000
       refreshLeewayMs: 60000
     providers:
@@ -41,6 +48,36 @@ server:
         baseUrl: https://chatgpt.com/backend-api/codex/responses
         models:
           - gpt-5.3-codex
+      claudeCode:
+        baseUrl: https://api.anthropic.com
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      ragQueryPlanner:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      provider: google
+      apiKey: your-gemini-api-key
+      baseUrl: https://generativelanguage.googleapis.com
+      model: gemini-embedding-001
+      outputDimensionality: 768
+    retrieval:
+      topK: 3
   tavily:
     apiKey: ""
   bot:
@@ -49,12 +86,16 @@ server:
 
 ## 配置约定
 
-- `server.databaseUrl`、Napcat 连接信息和 `server.bot.qq` 为必填项。
+- `server.databaseUrl`、Napcat 连接信息、`server.bot.qq`、`server.rag.embedding.apiKey` 与 `server.tavily.apiKey` 为必填项。
 - `server.port` 默认值为 `20003`。
 - `server.llm.timeoutMs` 默认值为 `45000`。
+- `server.napcat.listenGroupIds` 为字符串数组，至少包含一个群号。
 - `server.llm.providers.deepseek.baseUrl` 默认到 `https://api.deepseek.com`。
 - `server.llm.providers.openai.baseUrl` 为空字符串时，会回退到 `https://api.openai.com/v1`。
 - `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。
+- `server.llm.claudeCodeAuth` 负责 Claude Code OAuth 登录和自动刷新。
+- `server.llm.usages` 需要为 `agent`、`ragQueryPlanner`、`contextSummarizer`、`vision` 提供模型尝试链路；`replyThought`、`replyReview`、`replyWriter` 未配置时会回退到 `agent`。
+- `server.rag.embedding` 用于向量化，当前固定使用 Google Gemini Embedding。
 - `server.llm.providers.*.apiKey` 与 `server.tavily.apiKey` 为空字符串时视为未配置。
 
 ## PM2 部署
