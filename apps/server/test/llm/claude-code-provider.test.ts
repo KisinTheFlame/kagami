@@ -25,6 +25,7 @@ function createAuthStore(): ClaudeCodeAuthStore {
       handleCallback: vi.fn(),
       logout: vi.fn(),
       refresh: vi.fn(),
+      getUsageLimits: vi.fn(),
     },
   });
 }
@@ -157,12 +158,14 @@ describe("createClaudeCodeProvider", () => {
       expect(system[1]).toEqual({
         type: "text",
         text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+      });
+      expect(system[2]).toEqual({
+        type: "text",
+        text: "你是一个测试助手。",
         cache_control: {
           type: "ephemeral",
-          ttl: "1h",
         },
       });
-      expect(system[2]?.text).toBe("你是一个测试助手。");
       expect(body.thinking).toEqual({
         type: "adaptive",
       });
@@ -243,14 +246,13 @@ describe("createClaudeCodeProvider", () => {
           {
             type: "text",
             text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
-            cache_control: {
-              type: "ephemeral",
-              ttl: "1h",
-            },
           },
           {
             type: "text",
             text: "你是一个测试助手。",
+            cache_control: {
+              type: "ephemeral",
+            },
           },
         ],
         thinking: {
@@ -519,6 +521,7 @@ describe("createClaudeCodeProvider", () => {
         handleCallback: vi.fn(),
         logout: vi.fn(),
         refresh: vi.fn(),
+        getUsageLimits: vi.fn(),
       },
     });
 
@@ -605,6 +608,7 @@ describe("createClaudeCodeProvider", () => {
         handleCallback: vi.fn(),
         logout: vi.fn(),
         refresh: vi.fn(),
+        getUsageLimits: vi.fn(),
       },
     });
 

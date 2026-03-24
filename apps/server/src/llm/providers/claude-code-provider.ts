@@ -37,7 +37,7 @@ type ClaudeSystemBlock = {
   text: string;
   cache_control?: {
     type: "ephemeral";
-    ttl: "1h";
+    ttl?: "1h";
   };
 };
 
@@ -384,10 +384,6 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
     {
       type: "text",
       text: CLAUDE_CODE_SDK_PROMPT,
-      cache_control: {
-        type: "ephemeral",
-        ttl: "1h",
-      },
     },
   ];
 
@@ -396,6 +392,13 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
       type: "text",
       text: system,
     });
+  }
+
+  const lastBlock = blocks.at(-1);
+  if (lastBlock) {
+    lastBlock.cache_control = {
+      type: "ephemeral",
+    };
   }
 
   return blocks;
