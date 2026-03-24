@@ -11,6 +11,7 @@ const baseConfig = {
   oauthStateTtlMs: 600_000,
   refreshLeewayMs: 60_000,
   timeoutMs: 5_000,
+  binaryPath: "codex",
 } as const;
 
 function createDao(overrides?: Partial<CodexAuthDao>): CodexAuthDao {
@@ -58,6 +59,31 @@ function createOAuthStateRecord(overrides?: Partial<CodexOAuthStateRecord>): Cod
 }
 
 describe("DefaultCodexAuthService", () => {
+  it("should return usage limits from the bound provider", async () => {
+    const service = new DefaultCodexAuthService({
+      codexAuthDao: createDao(),
+      config: baseConfig,
+      callbackServer: createCallbackServer().instance,
+    });
+    service.setUsageLimitsProvider(() => ({
+      primary: {
+        usedPercent: 35,
+        windowDurationMins: 300,
+        resetsAt: 1_774_400_000_000,
+      },
+      secondary: null,
+    }));
+
+    await expect(service.getUsageLimits()).resolves.toEqual({
+      primary: {
+        usedPercent: 35,
+        windowDurationMins: 300,
+        resetsAt: 1_774_400_000_000,
+      },
+      secondary: null,
+    });
+  });
+
   it("should create a login url and persist OAuth state", async () => {
     const createOAuthState = vi.fn(async input => ({
       id: 1,
@@ -170,7 +196,7 @@ describe("DefaultCodexAuthService", () => {
       state: oauthState.state,
     });
 
-    expect(result.redirectUrl).toBe("http://localhost:20004/codex-auth?result=success");
+    expect(result.redirectUrl).toBe("http://localhost:20004/auth/codex?result=success");
     expect(upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "openai-codex",
@@ -193,7 +219,7 @@ describe("DefaultCodexAuthService", () => {
       state: "missing-state",
     });
 
-    expect(result.redirectUrl).toContain("http://localhost:20004/codex-auth?result=error");
+    expect(result.redirectUrl).toContain("http://localhost:20004/auth/codex?result=error");
     expect(result.redirectUrl).toContain(encodeURIComponent("登录状态无效或已失效"));
   });
 

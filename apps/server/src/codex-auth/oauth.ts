@@ -42,7 +42,7 @@ export async function exchangeCodeForTokens(input: {
   code: string;
   codeVerifier: string;
   redirectUri: string;
-  config: CodexAuthRuntimeConfig;
+  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
 }): Promise<CodexTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -61,7 +61,7 @@ export async function exchangeCodeForTokens(input: {
 
 export async function refreshCodexTokens(input: {
   refreshToken: string;
-  config: CodexAuthRuntimeConfig;
+  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
 }): Promise<CodexTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -79,7 +79,7 @@ export async function refreshCodexTokens(input: {
 
 async function requestCodexTokens(input: {
   body: URLSearchParams;
-  config: CodexAuthRuntimeConfig;
+  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
   unavailableReason: string;
 }): Promise<CodexTokenResponse> {
   let response: Response;

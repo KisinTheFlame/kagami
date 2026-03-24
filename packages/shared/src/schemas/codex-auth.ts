@@ -60,3 +60,22 @@ export const CodexAuthRefreshResponseSchema = z
   .strict();
 
 export type CodexAuthRefreshResponse = z.infer<typeof CodexAuthRefreshResponseSchema>;
+
+export const CodexUsageLimitWindowSchema = z
+  .object({
+    usedPercent: z.number(),
+    windowDurationMins: z.number().int().nonnegative(),
+    resetsAt: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type CodexUsageLimitWindow = z.infer<typeof CodexUsageLimitWindowSchema>;
+
+export const CodexUsageLimitsResponseSchema = z
+  .object({
+    primary: CodexUsageLimitWindowSchema.nullable(),
+    secondary: CodexUsageLimitWindowSchema.nullable(),
+  })
+  .strict();
+
+export type CodexUsageLimitsResponse = z.infer<typeof CodexUsageLimitsResponseSchema>;

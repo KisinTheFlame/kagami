@@ -4,6 +4,7 @@ import {
   ClaudeCodeAuthLogoutResponseSchema,
   ClaudeCodeAuthRefreshResponseSchema,
   ClaudeCodeAuthStatusResponseSchema,
+  ClaudeCodeUsageLimitsResponseSchema,
 } from "@kagami/shared";
 import { z } from "zod";
 import type { ClaudeCodeAuthService } from "../service/claude-code-auth.service.js";
@@ -61,6 +62,14 @@ export class ClaudeCodeAuthHandler {
       bodySchema: EmptyBodySchema,
       responseSchema: ClaudeCodeAuthRefreshResponseSchema,
       execute: () => this.claudeCodeAuthService.refresh(),
+    });
+
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/usage-limits`,
+      querySchema: EmptyQuerySchema,
+      responseSchema: ClaudeCodeUsageLimitsResponseSchema,
+      execute: () => this.claudeCodeAuthService.getUsageLimits(),
     });
 
     app.get(`${this.prefix}/callback`, async (request, reply) => {

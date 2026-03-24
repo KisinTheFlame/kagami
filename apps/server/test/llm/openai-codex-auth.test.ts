@@ -23,6 +23,7 @@ describe("OpenAiCodexAuthStore", () => {
       handleCallback: vi.fn(),
       logout: vi.fn(),
       refresh: vi.fn(),
+      getUsageLimits: vi.fn(),
     };
 
     const store = new OpenAiCodexAuthStore({

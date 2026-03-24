@@ -3,6 +3,7 @@ import type {
   CodexAuthLogoutResponse,
   CodexAuthRefreshResponse,
   CodexAuthStatusResponse,
+  CodexUsageLimitsResponse,
 } from "@kagami/shared";
 import { SharedOAuthServiceCore } from "../auth/shared/service.js";
 import type { OAuthProviderAuth } from "../auth/shared/types.js";
@@ -38,6 +39,10 @@ type DefaultCodexAuthServiceDeps = {
 };
 
 const PROVIDER_ID = "openai-codex";
+const EMPTY_USAGE_LIMITS: CodexUsageLimitsResponse = {
+  primary: null,
+  secondary: null,
+};
 
 export class DefaultCodexAuthService implements CodexAuthService {
   private readonly core: SharedOAuthServiceCore<
@@ -49,6 +54,9 @@ export class DefaultCodexAuthService implements CodexAuthService {
     CodexProviderAuth,
     CodexTokenResponse
   >;
+  private usageLimitsProvider:
+    | (() => Promise<CodexUsageLimitsResponse> | CodexUsageLimitsResponse)
+    | null = null;
 
   public constructor({
     codexAuthDao,
@@ -104,12 +112,26 @@ export class DefaultCodexAuthService implements CodexAuthService {
     return await this.core.refresh();
   }
 
+  public async getUsageLimits(): Promise<CodexUsageLimitsResponse> {
+    if (!this.usageLimitsProvider) {
+      return EMPTY_USAGE_LIMITS;
+    }
+
+    return await this.usageLimitsProvider();
+  }
+
   public async hasCredentials(): Promise<boolean> {
     return await this.core.hasCredentials();
   }
 
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<CodexProviderAuth> {
     return await this.core.getAuth(options);
+  }
+
+  public setUsageLimitsProvider(
+    provider: () => Promise<CodexUsageLimitsResponse> | CodexUsageLimitsResponse,
+  ): void {
+    this.usageLimitsProvider = provider;
   }
 }
 

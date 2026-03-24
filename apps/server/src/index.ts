@@ -5,6 +5,7 @@ import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { buildServerRuntime } from "./bootstrap/server-runtime.js";
 import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
+import type { AuthUsageCacheManager } from "./service/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthCallbackServer } from "./claude-code-auth/callback-server.js";
 import { CodexAuthCallbackServer } from "./codex-auth/callback-server.js";
 
@@ -21,6 +22,7 @@ let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
 let claudeCodeAuthCallbackServer: ClaudeCodeAuthCallbackServer | null = null;
 let codexAuthCallbackServer: CodexAuthCallbackServer | null = null;
+let authUsageCacheManager: AuthUsageCacheManager | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
@@ -78,6 +80,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
+    if (authUsageCacheManager) {
+      authUsageCacheManager.close();
+      logger.info("Auth usage cache manager closed", {
+        event: "server.shutdown.auth_usage_cache_closed",
+      });
+    }
+
     if (database) {
       logger.info("Database client closing", {
         event: "server.shutdown.db_closing",
@@ -117,6 +126,7 @@ try {
   napcatGatewayService = runtime.napcatGatewayService;
   claudeCodeAuthCallbackServer = runtime.claudeCodeAuthCallbackServer;
   codexAuthCallbackServer = runtime.codexAuthCallbackServer;
+  authUsageCacheManager = runtime.authUsageCacheManager;
   port = runtime.port;
 
   await runtime.napcatGatewayService.start();

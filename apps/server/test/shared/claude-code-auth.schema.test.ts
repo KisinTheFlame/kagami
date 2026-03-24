@@ -2,6 +2,7 @@ import {
   ClaudeCodeAuthLoginUrlResponseSchema,
   ClaudeCodeAuthRefreshResponseSchema,
   ClaudeCodeAuthStatusResponseSchema,
+  ClaudeCodeUsageLimitsResponseSchema,
 } from "@kagami/shared";
 import { describe, expect, it } from "vitest";
 
@@ -47,5 +48,41 @@ describe("claude code auth schemas", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("should parse usage limit responses", () => {
+    const result = ClaudeCodeUsageLimitsResponseSchema.parse({
+      five_hour: {
+        utilization: 42,
+        resets_at: "2026-03-25T12:00:00.000Z",
+      },
+      seven_day: {
+        utilization: 61,
+        resets_at: null,
+      },
+      extra_usage: {
+        is_enabled: true,
+        monthly_limit: 100,
+        used_credits: 12.5,
+        utilization: 12.5,
+      },
+    });
+
+    expect(result.five_hour?.utilization).toBe(42);
+    expect(result.extra_usage?.is_enabled).toBe(true);
+  });
+
+  it("should parse empty usage limit responses", () => {
+    const result = ClaudeCodeUsageLimitsResponseSchema.parse({
+      five_hour: null,
+      seven_day: null,
+      extra_usage: null,
+    });
+
+    expect(result).toEqual({
+      five_hour: null,
+      seven_day: null,
+      extra_usage: null,
+    });
   });
 });

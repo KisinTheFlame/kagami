@@ -15,6 +15,7 @@ server:
       oauthRedirectPath: /auth/callback
       oauthStateTtlMs: 600000
       refreshLeewayMs: 60000
+      binaryPath: codex
     claudeCodeAuth:
       enabled: true
       publicBaseUrl: http://localhost:20004

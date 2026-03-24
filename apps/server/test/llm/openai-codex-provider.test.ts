@@ -34,6 +34,7 @@ function createAuthStore(): OpenAiCodexAuthStore {
       handleCallback: vi.fn(),
       logout: vi.fn(),
       refresh: vi.fn(),
+      getUsageLimits: vi.fn(),
     },
   });
 }
@@ -342,6 +343,7 @@ describe("createOpenAiCodexProvider", () => {
         handleCallback: vi.fn(),
         logout: vi.fn(),
         refresh: vi.fn(),
+        getUsageLimits: vi.fn(),
       },
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -449,6 +451,7 @@ describe("createOpenAiCodexProvider", () => {
         handleCallback: vi.fn(),
         logout: vi.fn(),
         refresh: vi.fn(),
+        getUsageLimits: vi.fn(),
       },
     });
     const fetchMock = vi.fn(async () => {

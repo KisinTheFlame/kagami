@@ -65,6 +65,31 @@ function createOAuthStateRecord(
 }
 
 describe("DefaultClaudeCodeAuthService", () => {
+  it("should return usage limits from the bound provider", async () => {
+    const service = new DefaultClaudeCodeAuthService({
+      claudeCodeAuthDao: createDao(),
+      config: baseConfig,
+      callbackServer: createCallbackServer(),
+    });
+    service.setUsageLimitsProvider(() => ({
+      five_hour: {
+        utilization: 28,
+        resets_at: "2026-03-25T12:00:00.000Z",
+      },
+      seven_day: null,
+      extra_usage: null,
+    }));
+
+    await expect(service.getUsageLimits()).resolves.toEqual({
+      five_hour: {
+        utilization: 28,
+        resets_at: "2026-03-25T12:00:00.000Z",
+      },
+      seven_day: null,
+      extra_usage: null,
+    });
+  });
+
   it("should create a login url and persist OAuth state", async () => {
     const createOAuthState = vi.fn(async input => ({
       id: 1,
@@ -140,7 +165,7 @@ describe("DefaultClaudeCodeAuthService", () => {
       state: oauthState.state,
     });
 
-    expect(result.redirectUrl).toBe("http://localhost:20004/claude-code-auth?result=success");
+    expect(result.redirectUrl).toBe("http://localhost:20004/auth/claude-code?result=success");
     expect(upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "claude-code",
@@ -163,7 +188,7 @@ describe("DefaultClaudeCodeAuthService", () => {
       state: "missing-state",
     });
 
-    expect(result.redirectUrl).toContain("http://localhost:20004/claude-code-auth?result=error");
+    expect(result.redirectUrl).toContain("http://localhost:20004/auth/claude-code?result=error");
     expect(result.redirectUrl).toContain(encodeURIComponent("登录状态无效或已失效"));
   });
 

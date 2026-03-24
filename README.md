@@ -27,6 +27,7 @@ server:
       oauthRedirectPath: /auth/callback
       oauthStateTtlMs: 600000
       refreshLeewayMs: 60000
+      binaryPath: codex
     claudeCodeAuth:
       enabled: true
       publicBaseUrl: http://localhost:20004
@@ -92,7 +93,7 @@ server:
 - `server.napcat.listenGroupIds` 为字符串数组，至少包含一个群号。
 - `server.llm.providers.deepseek.baseUrl` 默认到 `https://api.deepseek.com`。
 - `server.llm.providers.openai.baseUrl` 为空字符串时，会回退到 `https://api.openai.com/v1`。
-- `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。
+- `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。`binaryPath` 用于指定服务端拉起 `codex app-server` 时使用的 CLI 路径，默认值为 `codex`。
 - `server.llm.claudeCodeAuth` 负责 Claude Code OAuth 登录和自动刷新。
 - `server.llm.usages` 需要为 `agent`、`ragQueryPlanner`、`contextSummarizer`、`vision` 提供模型尝试链路；`replyThought`、`replyReview`、`replyWriter` 未配置时会回退到 `agent`。
 - `server.rag.embedding` 用于向量化，当前固定使用 Google Gemini Embedding。

@@ -151,6 +151,7 @@ function createAuthService(): CodexAuthService {
     }),
     logout: vi.fn(),
     refresh: vi.fn(),
+    getUsageLimits: vi.fn(),
     hasCredentials: vi.fn(),
     getAuth: vi.fn(),
   };

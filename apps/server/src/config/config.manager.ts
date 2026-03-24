@@ -33,6 +33,7 @@ export type CodexAuthRuntimeConfig = {
   oauthStateTtlMs: number;
   refreshLeewayMs: number;
   timeoutMs: number;
+  binaryPath: string;
 };
 
 export type ClaudeCodeAuthRuntimeConfig = {

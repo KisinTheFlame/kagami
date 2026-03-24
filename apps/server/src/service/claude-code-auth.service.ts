@@ -3,6 +3,7 @@ import type {
   ClaudeCodeAuthLogoutResponse,
   ClaudeCodeAuthRefreshResponse,
   ClaudeCodeAuthStatusResponse,
+  ClaudeCodeUsageLimitsResponse,
 } from "@kagami/shared";
 import type { ClaudeCodeProviderAuth } from "../claude-code-auth/types.js";
 
@@ -23,6 +24,7 @@ export interface ClaudeCodeAuthService {
   ): Promise<HandleClaudeCodeAuthCallbackResult>;
   logout(): Promise<ClaudeCodeAuthLogoutResponse>;
   refresh(): Promise<ClaudeCodeAuthRefreshResponse>;
+  getUsageLimits(): Promise<ClaudeCodeUsageLimitsResponse>;
   hasCredentials(): Promise<boolean>;
   getAuth(options?: { forceRefresh?: boolean }): Promise<ClaudeCodeProviderAuth>;
 }

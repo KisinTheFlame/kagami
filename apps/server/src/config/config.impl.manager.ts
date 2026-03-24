@@ -122,6 +122,7 @@ export class DefaultConfigManager implements ConfigManager {
       oauthStateTtlMs: config.server.llm.codexAuth.oauthStateTtlMs,
       refreshLeewayMs: config.server.llm.codexAuth.refreshLeewayMs,
       timeoutMs: config.server.llm.timeoutMs,
+      binaryPath: config.server.llm.codexAuth.binaryPath,
     };
 
     this.claudeCodeAuthRuntimeConfig = {

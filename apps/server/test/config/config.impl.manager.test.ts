@@ -195,6 +195,7 @@ server:
       oauthStateTtlMs: 600_000,
       refreshLeewayMs: 60_000,
       timeoutMs: 15000,
+      binaryPath: "codex",
     });
 
     await expect(manager.getClaudeCodeAuthRuntimeConfig()).resolves.toEqual({

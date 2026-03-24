@@ -4,6 +4,7 @@ import {
   CodexAuthLogoutResponseSchema,
   CodexAuthRefreshResponseSchema,
   CodexAuthStatusResponseSchema,
+  CodexUsageLimitsResponseSchema,
 } from "@kagami/shared";
 import { z } from "zod";
 import type { CodexAuthService } from "../service/codex-auth.service.js";
@@ -61,6 +62,14 @@ export class CodexAuthHandler {
       bodySchema: EmptyBodySchema,
       responseSchema: CodexAuthRefreshResponseSchema,
       execute: () => this.codexAuthService.refresh(),
+    });
+
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/usage-limits`,
+      querySchema: EmptyQuerySchema,
+      responseSchema: CodexUsageLimitsResponseSchema,
+      execute: () => this.codexAuthService.getUsageLimits(),
     });
 
     app.get(`${this.prefix}/callback`, async (request, reply) => {

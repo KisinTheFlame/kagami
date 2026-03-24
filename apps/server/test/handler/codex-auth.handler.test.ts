@@ -33,7 +33,7 @@ describe("CodexAuthHandler", () => {
         expiresAt: "2026-03-20T00:10:00.000Z",
       }),
       handleCallback: vi.fn().mockResolvedValue({
-        redirectUrl: "http://localhost:20004/codex-auth?result=success",
+        redirectUrl: "http://localhost:20004/auth/codex?result=success",
       }),
       logout: vi.fn().mockResolvedValue({
         success: true,
@@ -50,6 +50,14 @@ describe("CodexAuthHandler", () => {
           lastRefreshAt: "2026-03-20T00:30:00.000Z",
           lastError: null,
         },
+      }),
+      getUsageLimits: vi.fn().mockResolvedValue({
+        primary: {
+          usedPercent: 44,
+          windowDurationMins: 300,
+          resetsAt: 1_774_400_000_000,
+        },
+        secondary: null,
       }),
       hasCredentials: vi.fn(),
       getAuth: vi.fn(),
@@ -84,13 +92,19 @@ describe("CodexAuthHandler", () => {
     });
     expect(refreshResponse.statusCode).toBe(200);
 
+    const usageLimitsResponse = await app.inject({
+      method: "GET",
+      url: "/codex-auth/usage-limits",
+    });
+    expect(usageLimitsResponse.statusCode).toBe(200);
+
     const callbackResponse = await app.inject({
       method: "GET",
       url: "/codex-auth/callback?code=code-123&state=state-123",
     });
     expect(callbackResponse.statusCode).toBe(302);
     expect(callbackResponse.headers.location).toBe(
-      "http://localhost:20004/codex-auth?result=success",
+      "http://localhost:20004/auth/codex?result=success",
     );
   });
 });

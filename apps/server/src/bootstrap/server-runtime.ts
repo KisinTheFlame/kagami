@@ -61,6 +61,7 @@ import { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import { GroupMessageMemorySearchService } from "../rag/memory-search.service.js";
 import { DefaultAgentMessageService } from "../service/agent-message.impl.service.js";
 import { DefaultAppLogQueryService } from "../service/app-log-query.impl.service.js";
+import { AuthUsageCacheManager } from "../service/auth-usage-cache.impl.service.js";
 import { DefaultClaudeCodeAuthService } from "../service/claude-code-auth.impl.service.js";
 import { DefaultCodexAuthService } from "../service/codex-auth.impl.service.js";
 import { DefaultEmbeddingCacheQueryService } from "../service/embedding-cache-query.impl.service.js";
@@ -104,6 +105,7 @@ export type ServerRuntime = {
   napcatGatewayService: NapcatGatewayService;
   claudeCodeAuthCallbackServer: ClaudeCodeAuthCallbackServer;
   codexAuthCallbackServer: CodexAuthCallbackServer;
+  authUsageCacheManager: AuthUsageCacheManager;
   agentRuntimeManager: MultiGroupAgentRuntimeManager;
   port: number;
   listenGroupIds: string[];
@@ -181,6 +183,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       callbackServer.setAuthService(service);
     },
   });
+
+  const authUsageCacheManager = new AuthUsageCacheManager({
+    claudeCodeAuthService: claudeCodeAuthRuntime.service,
+    codexAuthService: codexAuthRuntime.service,
+    codexBinaryPath: codexAuthConfig.binaryPath,
+  });
+  claudeCodeAuthRuntime.service.setUsageLimitsProvider(() =>
+    authUsageCacheManager.getClaudeCodeUsageLimits(),
+  );
+  codexAuthRuntime.service.setUsageLimitsProvider(() =>
+    authUsageCacheManager.getCodexUsageLimits(),
+  );
+  authUsageCacheManager.start();
 
   const claudeCodeAuthStore = new ClaudeCodeAuthStore({
     claudeCodeAuthService: claudeCodeAuthRuntime.service,
@@ -397,6 +412,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     claudeCodeAuthCallbackServer: claudeCodeAuthRuntime.callbackServer,
     codexAuthCallbackServer: codexAuthRuntime.callbackServer,
+    authUsageCacheManager,
     agentRuntimeManager,
     port: bootConfig.port,
     listenGroupIds: bootConfig.napcat.listenGroupIds,

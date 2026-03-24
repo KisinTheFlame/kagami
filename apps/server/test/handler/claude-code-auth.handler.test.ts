@@ -33,7 +33,7 @@ describe("ClaudeCodeAuthHandler", () => {
         expiresAt: "2026-03-20T00:10:00.000Z",
       }),
       handleCallback: vi.fn().mockResolvedValue({
-        redirectUrl: "http://localhost:20004/claude-code-auth?result=success",
+        redirectUrl: "http://localhost:20004/auth/claude-code?result=success",
       }),
       logout: vi.fn().mockResolvedValue({
         success: true,
@@ -50,6 +50,14 @@ describe("ClaudeCodeAuthHandler", () => {
           lastRefreshAt: "2026-03-20T00:30:00.000Z",
           lastError: null,
         },
+      }),
+      getUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: {
+          utilization: 32,
+          resets_at: "2026-03-20T03:00:00.000Z",
+        },
+        seven_day: null,
+        extra_usage: null,
       }),
       hasCredentials: vi.fn(),
       getAuth: vi.fn(),
@@ -84,13 +92,19 @@ describe("ClaudeCodeAuthHandler", () => {
     });
     expect(refreshResponse.statusCode).toBe(200);
 
+    const usageLimitsResponse = await app.inject({
+      method: "GET",
+      url: "/claude-code-auth/usage-limits",
+    });
+    expect(usageLimitsResponse.statusCode).toBe(200);
+
     const callbackResponse = await app.inject({
       method: "GET",
       url: "/claude-code-auth/callback?code=code-123&state=state-123",
     });
     expect(callbackResponse.statusCode).toBe(302);
     expect(callbackResponse.headers.location).toBe(
-      "http://localhost:20004/claude-code-auth?result=success",
+      "http://localhost:20004/auth/claude-code?result=success",
     );
   });
 });

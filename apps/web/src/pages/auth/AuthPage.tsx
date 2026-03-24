@@ -2,13 +2,15 @@ import {
   ClaudeCodeAuthLoginUrlResponseSchema,
   ClaudeCodeAuthRefreshResponseSchema,
   ClaudeCodeAuthStatusResponseSchema,
+  ClaudeCodeUsageLimitsResponseSchema,
   CodexAuthLoginUrlResponseSchema,
   CodexAuthRefreshResponseSchema,
   CodexAuthStatusResponseSchema,
+  CodexUsageLimitsResponseSchema,
 } from "@kagami/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactElement, useMemo } from "react";
 import { Navigate, NavLink, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { apiFetch, apiRequest } from "@/lib/api";
@@ -28,6 +30,16 @@ type AuthStatusResponse = {
   } | null;
 };
 
+type AuthUsageLimitsData =
+  | {
+      provider: "codex";
+      limits: ReturnType<typeof CodexUsageLimitsResponseSchema.parse>;
+    }
+  | {
+      provider: "claude-code";
+      limits: ReturnType<typeof ClaudeCodeUsageLimitsResponseSchema.parse>;
+    };
+
 type AuthProviderConfig = {
   key: AuthProvider;
   label: string;
@@ -42,6 +54,7 @@ type AuthProviderConfig = {
   parseStatusResponse: (value: unknown) => AuthStatusResponse;
   parseLoginUrlResponse: (value: unknown) => { loginUrl: string; expiresAt: string };
   parseRefreshResponse: (value: unknown) => unknown;
+  parseUsageLimitsResponse: (value: unknown) => AuthUsageLimitsData;
 };
 
 const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
@@ -76,6 +89,10 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     },
     parseLoginUrlResponse: value => CodexAuthLoginUrlResponseSchema.parse(value),
     parseRefreshResponse: value => CodexAuthRefreshResponseSchema.parse(value),
+    parseUsageLimitsResponse: value => ({
+      provider: "codex",
+      limits: CodexUsageLimitsResponseSchema.parse(value),
+    }),
   },
   "claude-code": {
     key: "claude-code",
@@ -108,6 +125,10 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     },
     parseLoginUrlResponse: value => ClaudeCodeAuthLoginUrlResponseSchema.parse(value),
     parseRefreshResponse: value => ClaudeCodeAuthRefreshResponseSchema.parse(value),
+    parseUsageLimitsResponse: value => ({
+      provider: "claude-code",
+      limits: ClaudeCodeUsageLimitsResponseSchema.parse(value),
+    }),
   },
 };
 
@@ -129,6 +150,14 @@ export function AuthPage() {
     queryFn: async () => {
       const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/status`);
       return providerConfig.parseStatusResponse(response);
+    },
+  });
+
+  const usageLimitsQuery = useQuery({
+    queryKey: ["auth-usage-limits", providerConfig.key],
+    queryFn: async () => {
+      const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/usage-limits`);
+      return providerConfig.parseUsageLimitsResponse(response);
     },
   });
 
@@ -162,9 +191,14 @@ export function AuthPage() {
       return providerConfig.parseRefreshResponse(response.body);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["auth-status", providerConfig.key],
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["auth-status", providerConfig.key],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["auth-usage-limits", providerConfig.key],
+        }),
+      ]);
     },
   });
 
@@ -179,9 +213,14 @@ export function AuthPage() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["auth-status", providerConfig.key],
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["auth-status", providerConfig.key],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["auth-usage-limits", providerConfig.key],
+        }),
+      ]);
     },
   });
 
@@ -346,8 +385,187 @@ export function AuthPage() {
             </div>
           </article>
         </section>
+
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">额度</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                展示当前 {providerConfig.label} 登录账号的额度快照。
+              </p>
+            </div>
+          </div>
+
+          {usageLimitsQuery.isLoading ? (
+            <p className="mt-6 text-sm text-slate-500">正在读取 {providerConfig.label} 额度...</p>
+          ) : usageLimitsQuery.isError ? (
+            <p className="mt-6 text-sm text-rose-600">{usageLimitsQuery.error.message}</p>
+          ) : usageLimitsQuery.data ? (
+            <div className="mt-6">
+              <UsageLimitsPanel data={usageLimitsQuery.data} />
+            </div>
+          ) : (
+            <p className="mt-6 text-sm text-slate-500">暂无额度信息。</p>
+          )}
+        </section>
       </div>
     </div>
+  );
+}
+
+function UsageLimitsPanel({ data }: { data: AuthUsageLimitsData }) {
+  if (data.provider === "claude-code") {
+    return <ClaudeUsageLimitsPanel limits={data.limits} />;
+  }
+
+  return <CodexUsageLimitsPanel limits={data.limits} />;
+}
+
+function ClaudeUsageLimitsPanel({
+  limits,
+}: {
+  limits: ReturnType<typeof ClaudeCodeUsageLimitsResponseSchema.parse>;
+}) {
+  const items: ReactElement[] = [];
+
+  if (limits.five_hour) {
+    items.push(
+      <UsageLimitCard
+        key="five-hour"
+        title="5 小时额度"
+        usedPercent={limits.five_hour.utilization}
+        secondaryText={buildUsageDetailText({
+          usedPercent: limits.five_hour.utilization,
+          resetAt: limits.five_hour.resets_at,
+        })}
+      />,
+    );
+  }
+
+  if (limits.seven_day) {
+    items.push(
+      <UsageLimitCard
+        key="seven-day"
+        title="7 天额度"
+        usedPercent={limits.seven_day.utilization}
+        secondaryText={buildUsageDetailText({
+          usedPercent: limits.seven_day.utilization,
+          resetAt: limits.seven_day.resets_at,
+        })}
+      />,
+    );
+  }
+
+  if (limits.extra_usage?.is_enabled) {
+    items.push(
+      <UsageLimitCard
+        key="extra-usage"
+        title="Extra Usage"
+        usedPercent={limits.extra_usage.utilization}
+        primaryText={
+          limits.extra_usage.utilization === null
+            ? "额度已启用"
+            : `剩余 ${formatRemainingPercent(limits.extra_usage.utilization)}`
+        }
+        secondaryText={`已用 $${limits.extra_usage.used_credits.toFixed(2)} / $${limits.extra_usage.monthly_limit}`}
+      />,
+    );
+  }
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-500">暂无额度信息。</p>;
+  }
+
+  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{items}</div>;
+}
+
+function CodexUsageLimitsPanel({
+  limits,
+}: {
+  limits: ReturnType<typeof CodexUsageLimitsResponseSchema.parse>;
+}) {
+  const items: ReactElement[] = [];
+
+  if (limits.primary) {
+    items.push(
+      <UsageLimitCard
+        key="primary"
+        title={`${formatWindowDuration(limits.primary.windowDurationMins)} 窗口`}
+        usedPercent={limits.primary.usedPercent}
+        secondaryText={buildUsageDetailText({
+          usedPercent: limits.primary.usedPercent,
+          resetAt: limits.primary.resetsAt,
+        })}
+      />,
+    );
+  }
+
+  if (limits.secondary) {
+    items.push(
+      <UsageLimitCard
+        key="secondary"
+        title={`${formatWindowDuration(limits.secondary.windowDurationMins)} 窗口`}
+        usedPercent={limits.secondary.usedPercent}
+        secondaryText={buildUsageDetailText({
+          usedPercent: limits.secondary.usedPercent,
+          resetAt: limits.secondary.resetsAt,
+        })}
+      />,
+    );
+  }
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-500">暂无额度信息。</p>;
+  }
+
+  return <div className="grid gap-4 md:grid-cols-2">{items}</div>;
+}
+
+function UsageLimitCard({
+  title,
+  usedPercent,
+  primaryText,
+  secondaryText,
+}: {
+  title: string;
+  usedPercent: number | null;
+  primaryText?: string;
+  secondaryText: string;
+}) {
+  const normalizedPercent = usedPercent === null ? null : clampPercent(usedPercent);
+  const displayPrimaryText =
+    primaryText ??
+    (normalizedPercent === null
+      ? "暂无百分比信息"
+      : `剩余 ${formatRemainingPercent(normalizedPercent)}`);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+            {displayPrimaryText}
+          </p>
+        </div>
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getUsageToneClass(normalizedPercent)}`}
+        >
+          {normalizedPercent === null ? "未知" : `已用 ${formatPercent(normalizedPercent)}`}
+        </span>
+      </div>
+
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full rounded-full transition-[width] ${getUsageBarClass(normalizedPercent)}`}
+          style={{
+            width: `${normalizedPercent ?? 0}%`,
+          }}
+        />
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-slate-600">{secondaryText}</p>
+    </article>
   );
 }
 
@@ -418,4 +636,100 @@ function formatDateTime(value: string | null | undefined): string {
 
 function formatApiError(status: number, statusText: string): string {
   return `API error ${status}: ${statusText}`;
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(value, 100));
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value)}%`;
+}
+
+function formatRemainingPercent(value: number): string {
+  return formatPercent(100 - clampPercent(value));
+}
+
+function buildUsageDetailText(input: {
+  usedPercent: number;
+  resetAt: number | string | null;
+}): string {
+  const parts = [`已用 ${formatPercent(clampPercent(input.usedPercent))}`];
+  const resetText = formatResetAt(input.resetAt);
+  if (resetText) {
+    parts.push(`重置时间 ${resetText}`);
+  }
+  return parts.join(" · ");
+}
+
+function formatResetAt(value: number | string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const date =
+    typeof value === "number"
+      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
+      : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatWindowDuration(minutes: number): string {
+  if (minutes >= 24 * 60 && minutes % (24 * 60) === 0) {
+    return `${minutes / (24 * 60)} 天`;
+  }
+
+  if (minutes >= 60 && minutes % 60 === 0) {
+    return `${minutes / 60} 小时`;
+  }
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours} 小时 ${remainingMinutes} 分钟`;
+  }
+
+  return `${minutes} 分钟`;
+}
+
+function getUsageBarClass(usedPercent: number | null): string {
+  if (usedPercent === null) {
+    return "bg-slate-300";
+  }
+
+  if (usedPercent >= 80) {
+    return "bg-rose-500";
+  }
+
+  if (usedPercent >= 50) {
+    return "bg-amber-500";
+  }
+
+  return "bg-emerald-500";
+}
+
+function getUsageToneClass(usedPercent: number | null): string {
+  if (usedPercent === null) {
+    return "bg-slate-100 text-slate-600";
+  }
+
+  if (usedPercent >= 80) {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (usedPercent >= 50) {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-emerald-100 text-emerald-700";
 }

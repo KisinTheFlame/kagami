@@ -20,6 +20,7 @@ const DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CODEX_AUTH_REDIRECT_PATH = "/auth/callback";
 const DEFAULT_CODEX_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
+const DEFAULT_CODEX_AUTH_BINARY_PATH = "codex";
 const DEFAULT_CLAUDE_CODE_AUTH_ENABLED = true;
 const DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH = "/callback";
@@ -93,6 +94,7 @@ const StaticConfigFileSchema = z.object({
           oauthRedirectPath: z.string().trim().min(1).default(DEFAULT_CODEX_AUTH_REDIRECT_PATH),
           oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CODEX_AUTH_STATE_TTL_MS),
           refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
+          binaryPath: NonEmptyStringSchema.default(DEFAULT_CODEX_AUTH_BINARY_PATH),
         })
         .default({}),
       claudeCodeAuth: z

@@ -60,3 +60,33 @@ export const ClaudeCodeAuthRefreshResponseSchema = z
   .strict();
 
 export type ClaudeCodeAuthRefreshResponse = z.infer<typeof ClaudeCodeAuthRefreshResponseSchema>;
+
+export const ClaudeCodeUsageLimitWindowSchema = z
+  .object({
+    utilization: z.number(),
+    resets_at: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export type ClaudeCodeUsageLimitWindow = z.infer<typeof ClaudeCodeUsageLimitWindowSchema>;
+
+export const ClaudeCodeExtraUsageSchema = z
+  .object({
+    is_enabled: z.boolean(),
+    monthly_limit: z.number(),
+    used_credits: z.number(),
+    utilization: z.number().nullable(),
+  })
+  .strict();
+
+export type ClaudeCodeExtraUsage = z.infer<typeof ClaudeCodeExtraUsageSchema>;
+
+export const ClaudeCodeUsageLimitsResponseSchema = z
+  .object({
+    five_hour: ClaudeCodeUsageLimitWindowSchema.nullable(),
+    seven_day: ClaudeCodeUsageLimitWindowSchema.nullable(),
+    extra_usage: ClaudeCodeExtraUsageSchema.nullable(),
+  })
+  .strict();
+
+export type ClaudeCodeUsageLimitsResponse = z.infer<typeof ClaudeCodeUsageLimitsResponseSchema>;

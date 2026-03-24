@@ -3,6 +3,7 @@ import type {
   ClaudeCodeAuthLogoutResponse,
   ClaudeCodeAuthRefreshResponse,
   ClaudeCodeAuthStatusResponse,
+  ClaudeCodeUsageLimitsResponse,
 } from "@kagami/shared";
 import { SharedOAuthServiceCore } from "../auth/shared/service.js";
 import type { OAuthProviderAuth } from "../auth/shared/types.js";
@@ -41,6 +42,11 @@ type DefaultClaudeCodeAuthServiceDeps = {
 };
 
 const PROVIDER_ID = "claude-code";
+const EMPTY_USAGE_LIMITS: ClaudeCodeUsageLimitsResponse = {
+  five_hour: null,
+  seven_day: null,
+  extra_usage: null,
+};
 
 export class DefaultClaudeCodeAuthService implements ClaudeCodeAuthService {
   private readonly core: SharedOAuthServiceCore<
@@ -52,6 +58,9 @@ export class DefaultClaudeCodeAuthService implements ClaudeCodeAuthService {
     ClaudeCodeProviderAuth,
     ClaudeCodeTokenResponse
   >;
+  private usageLimitsProvider:
+    | (() => Promise<ClaudeCodeUsageLimitsResponse> | ClaudeCodeUsageLimitsResponse)
+    | null = null;
 
   public constructor({
     claudeCodeAuthDao,
@@ -108,12 +117,26 @@ export class DefaultClaudeCodeAuthService implements ClaudeCodeAuthService {
     return await this.core.refresh();
   }
 
+  public async getUsageLimits(): Promise<ClaudeCodeUsageLimitsResponse> {
+    if (!this.usageLimitsProvider) {
+      return EMPTY_USAGE_LIMITS;
+    }
+
+    return await this.usageLimitsProvider();
+  }
+
   public async hasCredentials(): Promise<boolean> {
     return await this.core.hasCredentials();
   }
 
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<ClaudeCodeProviderAuth> {
     return await this.core.getAuth(options);
+  }
+
+  public setUsageLimitsProvider(
+    provider: () => Promise<ClaudeCodeUsageLimitsResponse> | ClaudeCodeUsageLimitsResponse,
+  ): void {
+    this.usageLimitsProvider = provider;
   }
 }
 
