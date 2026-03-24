@@ -467,7 +467,7 @@ function ClaudeUsageLimitsPanel({
             ? "额度已启用"
             : `剩余 ${formatRemainingPercent(limits.extra_usage.utilization)}`
         }
-        secondaryText={`已用 $${limits.extra_usage.used_credits.toFixed(2)} / $${limits.extra_usage.monthly_limit}`}
+        secondaryText={`已用 ${formatUsdAmount(limits.extra_usage.used_credits)} / ${formatUsdAmount(limits.extra_usage.monthly_limit)}`}
       />,
     );
   }
@@ -700,6 +700,14 @@ function formatWindowDuration(minutes: number): string {
   }
 
   return `${minutes} 分钟`;
+}
+
+function formatUsdAmount(value: number | null): string {
+  if (value === null) {
+    return "未知";
+  }
+
+  return `$${value.toFixed(2)}`;
 }
 
 function getUsageBarClass(usedPercent: number | null): string {

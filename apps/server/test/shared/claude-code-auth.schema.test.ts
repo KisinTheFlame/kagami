@@ -54,7 +54,7 @@ describe("claude code auth schemas", () => {
     const result = ClaudeCodeUsageLimitsResponseSchema.parse({
       five_hour: {
         utilization: 42,
-        resets_at: "2026-03-25T12:00:00.000Z",
+        resets_at: "2026-03-25T12:00:00.000+00:00",
       },
       seven_day: {
         utilization: 61,
@@ -70,6 +70,32 @@ describe("claude code auth schemas", () => {
 
     expect(result.five_hour?.utilization).toBe(42);
     expect(result.extra_usage?.is_enabled).toBe(true);
+  });
+
+  it("should parse disabled extra usage responses from Anthropic", () => {
+    const result = ClaudeCodeUsageLimitsResponseSchema.parse({
+      five_hour: {
+        utilization: 0,
+        resets_at: "2026-03-25T12:00:00.000+00:00",
+      },
+      seven_day: {
+        utilization: 4,
+        resets_at: "2026-03-28T14:00:00.377349+00:00",
+      },
+      extra_usage: {
+        is_enabled: false,
+        monthly_limit: null,
+        used_credits: null,
+        utilization: null,
+      },
+    });
+
+    expect(result.extra_usage).toEqual({
+      is_enabled: false,
+      monthly_limit: null,
+      used_credits: null,
+      utilization: null,
+    });
   });
 
   it("should parse empty usage limit responses", () => {

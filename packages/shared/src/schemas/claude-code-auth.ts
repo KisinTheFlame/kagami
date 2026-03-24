@@ -64,7 +64,7 @@ export type ClaudeCodeAuthRefreshResponse = z.infer<typeof ClaudeCodeAuthRefresh
 export const ClaudeCodeUsageLimitWindowSchema = z
   .object({
     utilization: z.number(),
-    resets_at: z.string().datetime().nullable(),
+    resets_at: z.string().datetime({ offset: true }).nullable(),
   })
   .strict();
 
@@ -73,8 +73,8 @@ export type ClaudeCodeUsageLimitWindow = z.infer<typeof ClaudeCodeUsageLimitWind
 export const ClaudeCodeExtraUsageSchema = z
   .object({
     is_enabled: z.boolean(),
-    monthly_limit: z.number(),
-    used_credits: z.number(),
+    monthly_limit: z.number().nullable(),
+    used_credits: z.number().nullable(),
     utilization: z.number().nullable(),
   })
   .strict();
