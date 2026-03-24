@@ -1,4 +1,7 @@
 import {
+  ClaudeCodeAuthLoginUrlResponseSchema,
+  ClaudeCodeAuthRefreshResponseSchema,
+  ClaudeCodeAuthStatusResponseSchema,
   CodexAuthLoginUrlResponseSchema,
   CodexAuthRefreshResponseSchema,
   CodexAuthStatusResponseSchema,
@@ -6,27 +9,132 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
 import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, NavLink, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { apiFetch, apiRequest } from "@/lib/api";
 
-export function CodexAuthPage() {
-  const queryClient = useQueryClient();
+type AuthProvider = "codex" | "claude-code";
+type AuthStatus = "active" | "expired" | "refresh_failed" | "logged_out" | "unavailable";
+
+type AuthStatusResponse = {
+  status: AuthStatus;
+  isLoggedIn: boolean;
+  session: {
+    accountId: string | null;
+    email: string | null;
+    expiresAt: string | null;
+    lastRefreshAt: string | null;
+    lastError: string | null;
+  } | null;
+};
+
+type AuthProviderConfig = {
+  key: AuthProvider;
+  label: string;
+  badge: string;
+  title: string;
+  description: string;
+  actionDescription: string;
+  endpointPrefix: "/codex-auth" | "/claude-code-auth";
+  backgroundClassName: string;
+  successMessage: string;
+  errorMessage: string;
+  parseStatusResponse: (value: unknown) => AuthStatusResponse;
+  parseLoginUrlResponse: (value: unknown) => { loginUrl: string; expiresAt: string };
+  parseRefreshResponse: (value: unknown) => unknown;
+};
+
+const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
+  codex: {
+    key: "codex",
+    label: "Codex",
+    badge: "Codex 内置登录",
+    title: "管理 Codex 登录状态",
+    description:
+      "这里负责登录、刷新和登出，不承担 LLM 调试功能。当前页面会直接读取服务端维护的 Codex 票据状态。",
+    actionDescription: "首版按单账号设计。登录会跳转到 OpenAI 的授权页，成功后回到当前管理页。",
+    endpointPrefix: "/codex-auth",
+    backgroundClassName:
+      "bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.10),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
+    successMessage: "Codex 登录已完成。",
+    errorMessage: "Codex 登录失败。",
+    parseStatusResponse: value => {
+      const parsed = CodexAuthStatusResponseSchema.parse(value);
+      return {
+        status: parsed.status,
+        isLoggedIn: parsed.isLoggedIn,
+        session: parsed.session
+          ? {
+              accountId: parsed.session.accountId,
+              email: parsed.session.email,
+              expiresAt: parsed.session.expiresAt,
+              lastRefreshAt: parsed.session.lastRefreshAt,
+              lastError: parsed.session.lastError,
+            }
+          : null,
+      };
+    },
+    parseLoginUrlResponse: value => CodexAuthLoginUrlResponseSchema.parse(value),
+    parseRefreshResponse: value => CodexAuthRefreshResponseSchema.parse(value),
+  },
+  "claude-code": {
+    key: "claude-code",
+    label: "Claude Code",
+    badge: "Claude Code 内置登录",
+    title: "管理 Claude Code 登录状态",
+    description:
+      "这里负责登录、刷新和登出，不承担 LLM 调试功能。当前页面会直接读取服务端维护的 Claude Code 票据状态。",
+    actionDescription: "首版按单账号设计。登录会跳转到 Anthropic 的授权页，成功后回到当前管理页。",
+    endpointPrefix: "/claude-code-auth",
+    backgroundClassName:
+      "bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.12),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
+    successMessage: "Claude Code 登录已完成。",
+    errorMessage: "Claude Code 登录失败。",
+    parseStatusResponse: value => {
+      const parsed = ClaudeCodeAuthStatusResponseSchema.parse(value);
+      return {
+        status: parsed.status,
+        isLoggedIn: parsed.isLoggedIn,
+        session: parsed.session
+          ? {
+              accountId: parsed.session.accountId,
+              email: parsed.session.email,
+              expiresAt: parsed.session.expiresAt,
+              lastRefreshAt: parsed.session.lastRefreshAt,
+              lastError: parsed.session.lastError,
+            }
+          : null,
+      };
+    },
+    parseLoginUrlResponse: value => ClaudeCodeAuthLoginUrlResponseSchema.parse(value),
+    parseRefreshResponse: value => ClaudeCodeAuthRefreshResponseSchema.parse(value),
+  },
+};
+
+const providerOrder: AuthProvider[] = ["codex", "claude-code"];
+
+export function AuthPage() {
+  const { provider } = useParams<{ provider?: string }>();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const providerValue = provider ?? "";
+  const providerKey: AuthProvider = isAuthProvider(providerValue) ? providerValue : "codex";
+  const providerConfig = providerConfigs[providerKey];
+  const shouldRedirect = provider !== providerKey;
   const result = searchParams.get("result");
   const message = searchParams.get("message");
 
   const statusQuery = useQuery({
-    queryKey: ["codex-auth-status"],
+    queryKey: ["auth-status", providerConfig.key],
     queryFn: async () => {
-      const response = await apiFetch<unknown>("/codex-auth/status");
-      return CodexAuthStatusResponseSchema.parse(response);
+      const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/status`);
+      return providerConfig.parseStatusResponse(response);
     },
   });
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/codex-auth/login-url", {
+      const response = await apiRequest(`${providerConfig.endpointPrefix}/login-url`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -34,7 +142,7 @@ export function CodexAuthPage() {
         throw new Error(formatApiError(response.status, response.statusText));
       }
 
-      return CodexAuthLoginUrlResponseSchema.parse(response.body);
+      return providerConfig.parseLoginUrlResponse(response.body);
     },
     onSuccess: data => {
       window.location.assign(data.loginUrl);
@@ -43,7 +151,7 @@ export function CodexAuthPage() {
 
   const refreshMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/codex-auth/refresh", {
+      const response = await apiRequest(`${providerConfig.endpointPrefix}/refresh`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -51,18 +159,18 @@ export function CodexAuthPage() {
         throw new Error(formatApiError(response.status, response.statusText));
       }
 
-      return CodexAuthRefreshResponseSchema.parse(response.body);
+      return providerConfig.parseRefreshResponse(response.body);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["codex-auth-status"],
+        queryKey: ["auth-status", providerConfig.key],
       });
     },
   });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/codex-auth/logout", {
+      const response = await apiRequest(`${providerConfig.endpointPrefix}/logout`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -72,7 +180,7 @@ export function CodexAuthPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["codex-auth-status"],
+        queryKey: ["auth-status", providerConfig.key],
       });
     },
   });
@@ -87,30 +195,57 @@ export function CodexAuthPage() {
     }
     return "neutral";
   }, [statusQuery.data?.status]);
+
   const statusData = statusQuery.data ?? null;
 
+  if (shouldRedirect) {
+    return <Navigate to="/auth/codex" replace />;
+  }
+
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.10),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))] p-3 md:p-6">
+    <div
+      className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto p-3 md:p-6 ${providerConfig.backgroundClassName}`}
+    >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                <KeyRound className="h-3.5 w-3.5" />
-                Codex 内置登录
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  {providerConfig.badge}
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                    {providerConfig.title}
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    {providerConfig.description}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                  管理 Codex 登录状态
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  这里负责登录、刷新和登出，不承担 LLM 调试功能。当前页面会直接读取服务端维护的
-                  Codex 票据状态。
-                </p>
-              </div>
+
+              <StatusChip status={statusQuery.data?.status ?? "unavailable"} tone={statusTone} />
             </div>
 
-            <StatusChip status={statusQuery.data?.status ?? "unavailable"} tone={statusTone} />
+            <div className="inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1 sm:w-auto">
+              {providerOrder.map(item => (
+                <NavLink
+                  key={item}
+                  to={`/auth/${item}`}
+                  className={({ isActive }) =>
+                    [
+                      "inline-flex min-w-[8.5rem] items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:bg-white/70 hover:text-slate-900",
+                    ].join(" ")
+                  }
+                >
+                  {providerConfigs[item].label}
+                </NavLink>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -122,7 +257,9 @@ export function CodexAuthPage() {
                 : "border-amber-200 bg-amber-50 text-amber-800"
             }`}
           >
-            {result === "success" ? "Codex 登录已完成。" : (message ?? "Codex 登录失败。")}
+            {result === "success"
+              ? providerConfig.successMessage
+              : (message ?? providerConfig.errorMessage)}
           </section>
         ) : null}
 
@@ -141,7 +278,9 @@ export function CodexAuthPage() {
             </div>
 
             {statusQuery.isLoading ? (
-              <p className="mt-6 text-sm text-slate-500">正在读取 Codex 登录状态...</p>
+              <p className="mt-6 text-sm text-slate-500">
+                正在读取 {providerConfig.label} 登录状态...
+              </p>
             ) : statusQuery.isError ? (
               <p className="mt-6 text-sm text-rose-600">{statusQuery.error.message}</p>
             ) : (
@@ -164,9 +303,7 @@ export function CodexAuthPage() {
 
           <article className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">操作</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              首版按单账号设计。登录会跳转到 OpenAI 的授权页，成功后回到当前管理页。
-            </p>
+            <p className="mt-1 text-sm text-slate-500">{providerConfig.actionDescription}</p>
 
             <div className="mt-6 flex flex-col gap-3">
               <Button
@@ -212,6 +349,10 @@ export function CodexAuthPage() {
       </div>
     </div>
   );
+}
+
+function isAuthProvider(value: string): value is AuthProvider {
+  return value === "codex" || value === "claude-code";
 }
 
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {

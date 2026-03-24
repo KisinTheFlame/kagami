@@ -63,7 +63,7 @@ export class DefaultCodexAuthService implements CodexAuthService {
       secretStore: secretStore ?? new PlainTextCodexAuthSecretStore(),
       providerId: PROVIDER_ID,
       displayName: "Codex",
-      managementPath: "/codex-auth",
+      managementPath: "/auth/codex",
       protocolAdapter: {
         buildAuthorizeUrl: buildCodexAuthorizeUrl,
         exchangeCodeForTokens: input =>

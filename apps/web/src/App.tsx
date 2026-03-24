@@ -2,13 +2,8 @@ import { Suspense, lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 
-const CodexAuthPage = lazy(() =>
-  import("@/pages/codex-auth/CodexAuthPage").then(module => ({ default: module.CodexAuthPage })),
-);
-const ClaudeCodeAuthPage = lazy(() =>
-  import("@/pages/claude-code-auth/ClaudeCodeAuthPage").then(module => ({
-    default: module.ClaudeCodeAuthPage,
-  })),
+const AuthPage = lazy(() =>
+  import("@/pages/auth/AuthPage").then(module => ({ default: module.AuthPage })),
 );
 const LlmPlaygroundPage = lazy(() =>
   import("@/pages/llm-playground/LlmPlaygroundPage").then(module => ({
@@ -58,8 +53,8 @@ function App() {
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<Navigate to="/llm-history" replace />} />
-            <Route path="/claude-code-auth" element={<ClaudeCodeAuthPage />} />
-            <Route path="/codex-auth" element={<CodexAuthPage />} />
+            <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
+            <Route path="/auth/:provider" element={<AuthPage />} />
             <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
             <Route path="/llm-history" element={<LlmHistoryPage />} />
             <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />

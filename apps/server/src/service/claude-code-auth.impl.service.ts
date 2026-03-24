@@ -66,7 +66,7 @@ export class DefaultClaudeCodeAuthService implements ClaudeCodeAuthService {
       secretStore: secretStore ?? new PlainTextClaudeCodeAuthSecretStore(),
       providerId: PROVIDER_ID,
       displayName: "Claude Code",
-      managementPath: "/claude-code-auth",
+      managementPath: "/auth/claude-code",
       protocolAdapter: {
         buildAuthorizeUrl: buildClaudeCodeAuthorizeUrl,
         exchangeCodeForTokens: input =>
