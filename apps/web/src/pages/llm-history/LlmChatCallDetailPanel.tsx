@@ -161,7 +161,9 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
                   <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
                     promptTokens: {parsed.response.usage.promptTokens ?? "—"} | completionTokens:{" "}
                     {parsed.response.usage.completionTokens ?? "—"} | totalTokens:{" "}
-                    {parsed.response.usage.totalTokens ?? "—"}
+                    {parsed.response.usage.totalTokens ?? "—"} | cacheHitTokens:{" "}
+                    {parsed.response.usage.cacheHitTokens ?? "—"} | cacheMissTokens:{" "}
+                    {parsed.response.usage.cacheMissTokens ?? "—"}
                   </div>
                 ) : null}
               </>

@@ -282,7 +282,7 @@ function renderTimelineSummary(item: LoopRunTimelineItem) {
               [
                 "Usage",
                 item.usage
-                  ? `prompt=${getUsageNumber(item.usage, "promptTokens")} completion=${getUsageNumber(item.usage, "completionTokens")} total=${getUsageNumber(item.usage, "totalTokens")}`
+                  ? `prompt=${getUsageNumber(item.usage, "promptTokens")} completion=${getUsageNumber(item.usage, "completionTokens")} total=${getUsageNumber(item.usage, "totalTokens")} cacheHit=${getUsageNumber(item.usage, "cacheHitTokens")} cacheMiss=${getUsageNumber(item.usage, "cacheMissTokens")}`
                   : "—",
               ],
               ["错误", item.error ? truncateText(stringifyJson(item.error), 120) : "—"],

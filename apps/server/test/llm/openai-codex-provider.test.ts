@@ -62,6 +62,9 @@ describe("createOpenAiCodexProvider", () => {
             input_tokens: 11,
             output_tokens: 7,
             total_tokens: 18,
+            input_tokens_details: {
+              cached_tokens: 4,
+            },
           },
         },
       });
@@ -97,6 +100,8 @@ describe("createOpenAiCodexProvider", () => {
           promptTokens: 11,
           completionTokens: 7,
           totalTokens: 18,
+          cacheHitTokens: 4,
+          cacheMissTokens: 7,
         },
       },
       nativeRequestPayload: {
@@ -124,6 +129,9 @@ describe("createOpenAiCodexProvider", () => {
             input_tokens: 11,
             output_tokens: 7,
             total_tokens: 18,
+            input_tokens_details: {
+              cached_tokens: 4,
+            },
           },
         },
       },
@@ -151,6 +159,9 @@ describe("createOpenAiCodexProvider", () => {
             input_tokens: 9,
             output_tokens: 3,
             total_tokens: 12,
+            input_tokens_details: {
+              cached_tokens: 2,
+            },
           },
         },
       });
@@ -204,6 +215,8 @@ describe("createOpenAiCodexProvider", () => {
           promptTokens: 9,
           completionTokens: 3,
           totalTokens: 12,
+          cacheHitTokens: 2,
+          cacheMissTokens: 7,
         },
       },
       nativeRequestPayload: expect.objectContaining({

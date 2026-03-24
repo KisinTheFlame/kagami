@@ -816,6 +816,14 @@ export function LlmPlaygroundPage() {
                                   label="totalTokens"
                                   value={String(lastParsedResponse.usage.totalTokens ?? "—")}
                                 />
+                                <MetaItem
+                                  label="cacheHitTokens"
+                                  value={String(lastParsedResponse.usage.cacheHitTokens ?? "—")}
+                                />
+                                <MetaItem
+                                  label="cacheMissTokens"
+                                  value={String(lastParsedResponse.usage.cacheMissTokens ?? "—")}
+                                />
                               </div>
                             ) : (
                               <p className="mt-3 text-sm text-muted-foreground">

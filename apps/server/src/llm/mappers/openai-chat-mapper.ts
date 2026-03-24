@@ -10,10 +10,22 @@ import type {
   LlmContentPart,
   LlmChatRequest,
   LlmChatResponsePayload,
+  LlmUsage,
   LlmMessage,
   LlmProviderId,
   LlmToolCall,
 } from "../types.js";
+
+type OpenAiStyleUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
+};
 
 export function toOpenAiChatRequest({
   model,
@@ -115,12 +127,25 @@ export function toLlmChatResponsePayload(
     provider,
     model: completion.model,
     message,
-    usage: completion.usage
-      ? {
-          promptTokens: completion.usage.prompt_tokens,
-          completionTokens: completion.usage.completion_tokens,
-          totalTokens: completion.usage.total_tokens,
-        }
-      : undefined,
+    usage: completion.usage ? toLlmUsage(completion.usage as OpenAiStyleUsage) : undefined,
+  };
+}
+
+function toLlmUsage(usage: OpenAiStyleUsage): LlmUsage {
+  const promptTokens = usage.prompt_tokens;
+  const cacheHitTokens =
+    usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens ?? undefined;
+  const cacheMissTokens =
+    usage.prompt_cache_miss_tokens ??
+    (typeof promptTokens === "number" && typeof cacheHitTokens === "number"
+      ? Math.max(promptTokens - cacheHitTokens, 0)
+      : undefined);
+
+  return {
+    promptTokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens,
+    ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
+    ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
   };
 }

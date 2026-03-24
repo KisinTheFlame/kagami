@@ -39,6 +39,9 @@ type CodexResponseCompletedEvent = {
       input_tokens?: number;
       output_tokens?: number;
       total_tokens?: number;
+      input_tokens_details?: {
+        cached_tokens?: number;
+      };
     };
   };
 };
@@ -449,6 +452,20 @@ function mapCompletedEvent(event: CodexResponseCompletedEvent): LlmChatResponseP
           promptTokens: response.usage.input_tokens,
           completionTokens: response.usage.output_tokens,
           totalTokens: response.usage.total_tokens,
+          ...(typeof response.usage.input_tokens_details?.cached_tokens === "number"
+            ? {
+                cacheHitTokens: response.usage.input_tokens_details.cached_tokens,
+                ...(typeof response.usage.input_tokens === "number"
+                  ? {
+                      cacheMissTokens: Math.max(
+                        response.usage.input_tokens -
+                          response.usage.input_tokens_details.cached_tokens,
+                        0,
+                      ),
+                    }
+                  : {}),
+              }
+            : {}),
         }
       : undefined,
   };

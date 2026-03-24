@@ -97,6 +97,8 @@ export const LlmChatResponsePayloadSchema = z
         promptTokens: z.number().int().nonnegative().optional(),
         completionTokens: z.number().int().nonnegative().optional(),
         totalTokens: z.number().int().nonnegative().optional(),
+        cacheHitTokens: z.number().int().nonnegative().optional(),
+        cacheMissTokens: z.number().int().nonnegative().optional(),
       })
       .strict()
       .optional(),

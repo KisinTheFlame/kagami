@@ -38,6 +38,7 @@ function createTextMessageSse(input: {
   text: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadInputTokens?: number;
 }): string {
   return createSseResponse([
     {
@@ -50,6 +51,9 @@ function createTextMessageSse(input: {
         usage: {
           input_tokens: input.inputTokens ?? 11,
           output_tokens: 0,
+          ...(input.cacheReadInputTokens !== undefined
+            ? { cache_read_input_tokens: input.cacheReadInputTokens }
+            : {}),
         },
       },
     },
@@ -178,12 +182,19 @@ describe("createClaudeCodeProvider", () => {
         "Anthropic-Version": "2023-06-01",
       });
 
-      return new Response(createTextMessageSse({ model: "claude-sonnet-4-6", text: "pong" }), {
-        status: 200,
-        headers: {
-          "content-type": "text/event-stream",
+      return new Response(
+        createTextMessageSse({
+          model: "claude-sonnet-4-6",
+          text: "pong",
+          cacheReadInputTokens: 6,
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream",
+          },
         },
-      });
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -217,6 +228,7 @@ describe("createClaudeCodeProvider", () => {
           promptTokens: 11,
           completionTokens: 7,
           totalTokens: 18,
+          cacheHitTokens: 6,
         },
       },
       nativeRequestPayload: {
@@ -275,6 +287,7 @@ describe("createClaudeCodeProvider", () => {
         usage: {
           input_tokens: 11,
           output_tokens: 7,
+          cache_read_input_tokens: 6,
         },
       },
     });

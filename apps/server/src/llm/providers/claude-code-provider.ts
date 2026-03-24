@@ -79,6 +79,7 @@ type ClaudeMessageResponse = {
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
+    cache_read_input_tokens?: number;
   };
   error?: {
     type?: string;
@@ -549,6 +550,9 @@ function mapClaudeMessageResult(input: {
               totalTokens:
                 (input.responsePayload.usage.input_tokens ?? 0) +
                 (input.responsePayload.usage.output_tokens ?? 0),
+              ...(typeof input.responsePayload.usage.cache_read_input_tokens === "number"
+                ? { cacheHitTokens: input.responsePayload.usage.cache_read_input_tokens }
+                : {}),
             },
           }
         : {}),
@@ -628,6 +632,7 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
   let model: string | undefined;
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
+  let cacheReadInputTokens: number | undefined;
 
   for (const chunk of value.split("\n\n")) {
     const lines = chunk
@@ -666,6 +671,9 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       }
       if (usage && typeof usage.output_tokens === "number") {
         outputTokens = usage.output_tokens;
+      }
+      if (usage && typeof usage.cache_read_input_tokens === "number") {
+        cacheReadInputTokens = usage.cache_read_input_tokens;
       }
       continue;
     }
@@ -751,6 +759,9 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       if (usage && typeof usage.output_tokens === "number") {
         outputTokens = usage.output_tokens;
       }
+      if (usage && typeof usage.cache_read_input_tokens === "number") {
+        cacheReadInputTokens = usage.cache_read_input_tokens;
+      }
     }
   }
 
@@ -771,11 +782,16 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
     role: "assistant",
     ...(model ? { model } : {}),
     content,
-    ...(inputTokens !== undefined || outputTokens !== undefined
+    ...(inputTokens !== undefined ||
+    outputTokens !== undefined ||
+    cacheReadInputTokens !== undefined
       ? {
           usage: {
             ...(inputTokens !== undefined ? { input_tokens: inputTokens } : {}),
             ...(outputTokens !== undefined ? { output_tokens: outputTokens } : {}),
+            ...(cacheReadInputTokens !== undefined
+              ? { cache_read_input_tokens: cacheReadInputTokens }
+              : {}),
           },
         }
       : {}),

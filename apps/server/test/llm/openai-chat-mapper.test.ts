@@ -91,6 +91,9 @@ describe("toLlmChatResponsePayload", () => {
         prompt_tokens: 11,
         completion_tokens: 7,
         total_tokens: 18,
+        prompt_tokens_details: {
+          cached_tokens: 5,
+        },
       },
     } as ChatCompletion;
 
@@ -116,11 +119,60 @@ describe("toLlmChatResponsePayload", () => {
         promptTokens: 11,
         completionTokens: 7,
         totalTokens: 18,
+        cacheHitTokens: 5,
+        cacheMissTokens: 6,
       },
     });
     expect(payload).not.toHaveProperty("text");
     expect(payload).not.toHaveProperty("json");
     expect(payload).not.toHaveProperty("toolCalls");
+  });
+
+  it("should map DeepSeek cache hit and miss tokens directly", () => {
+    const completion = {
+      id: "chatcmpl-2",
+      object: "chat.completion",
+      created: 1710000001,
+      model: "deepseek-chat",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          logprobs: null,
+          message: {
+            role: "assistant",
+            content: "pong",
+            refusal: null,
+            annotations: [],
+            audio: null,
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 20,
+        completion_tokens: 6,
+        total_tokens: 26,
+        prompt_cache_hit_tokens: 12,
+        prompt_cache_miss_tokens: 8,
+      },
+    } as ChatCompletion;
+
+    expect(toLlmChatResponsePayload(completion, "deepseek")).toEqual({
+      provider: "deepseek",
+      model: "deepseek-chat",
+      message: {
+        role: "assistant",
+        content: "pong",
+        toolCalls: [],
+      },
+      usage: {
+        promptTokens: 20,
+        completionTokens: 6,
+        totalTokens: 26,
+        cacheHitTokens: 12,
+        cacheMissTokens: 8,
+      },
+    });
   });
 });
 

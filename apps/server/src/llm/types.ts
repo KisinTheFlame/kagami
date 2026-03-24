@@ -50,6 +50,8 @@ export type LlmUsage = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  cacheHitTokens?: number;
+  cacheMissTokens?: number;
 };
 
 export type LlmImageInput = {
