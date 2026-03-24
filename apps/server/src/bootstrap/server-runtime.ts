@@ -14,7 +14,6 @@ import {
   TrySendMessageService,
   WriteReplyMessageTool,
 } from "../agents/subagents/reply-sender/index.js";
-import { RagContextEventEnricher, RagQueryPlannerService } from "../agents/subagents/rag/index.js";
 import { VisionAgent } from "../agents/subagents/vision/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
@@ -58,7 +57,6 @@ import { DbLogSink } from "../logger/sinks/db-sink.js";
 import { StdoutLogSink } from "../logger/sinks/stdout-sink.js";
 import { InMemoryAgentEventQueue } from "../event/event.impl.queue.js";
 import { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
-import { GroupMessageMemorySearchService } from "../rag/memory-search.service.js";
 import { DefaultAgentMessageService } from "../service/agent-message.impl.service.js";
 import { DefaultAppLogQueryService } from "../service/app-log-query.impl.service.js";
 import { AuthUsageCacheManager } from "../service/auth-usage-cache.impl.service.js";
@@ -79,10 +77,8 @@ import { TavilyWebSearchService } from "../service/tavily-web-search.impl.servic
 import {
   FINISH_TOOL_NAME,
   FinishTool,
-  SEARCH_MEMORY_TOOL_NAME,
   SEARCH_WEB_TOOL_NAME,
   SEND_GROUP_MESSAGE_TOOL_NAME,
-  SearchMemoryTool,
   SearchWebTool,
   SendGroupMessageTool,
   SUMMARY_TOOL_NAME,
@@ -248,12 +244,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     embeddingClient,
     outputDimensionality: ragConfig.embedding.outputDimensionality,
   });
-  const memorySearchService = new GroupMessageMemorySearchService({
-    config: ragConfig,
-    embeddingClient,
-    chunkDao: napcatGroupMessageChunkDao,
-    groupMessageDao: napcatGroupMessageDao,
-  });
   const visionAgent = new VisionAgent({
     llmClient,
   });
@@ -323,19 +313,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         trySendMessageService,
       }),
       new FinishTool(),
-      new SearchMemoryTool({
-        memorySearchService,
-      }),
       new SummaryTool(),
     ]);
-    const ragQueryPlanner = new RagQueryPlannerService({
-      llmClient,
-      plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
-      systemPromptFactory: agentSystemPromptFactory,
-    });
-    const ragContextEventEnricher = new RagContextEventEnricher({
-      ragQueryPlanner,
-    });
     const agentVisibleTools = toolCatalog.pick([
       SEARCH_WEB_TOOL_NAME,
       TRY_SEND_MESSAGE_TOOL_NAME,
@@ -353,7 +332,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       context,
       eventQueue,
       agentTools: agentVisibleTools,
-      ragContextEventEnricher,
       summaryPlanner,
       summaryTools: [
         ...agentVisibleTools.definitions(),
@@ -383,7 +361,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         SEARCH_WEB_TOOL_NAME,
         TRY_SEND_MESSAGE_TOOL_NAME,
         FINISH_TOOL_NAME,
-        SEARCH_MEMORY_TOOL_NAME,
         SUMMARY_TOOL_NAME,
         SEND_GROUP_MESSAGE_TOOL_NAME,
       ])

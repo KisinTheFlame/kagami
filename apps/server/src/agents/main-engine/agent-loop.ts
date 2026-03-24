@@ -9,7 +9,6 @@ import type { LlmClient } from "../../llm/client.js";
 import type { Tool } from "../../llm/types.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "../../tools/index.js";
 import type { ContextSummaryPlanner } from "../subagents/context-summarizer/context-summary-planner.service.js";
-import type { RagContextEventEnricher } from "../subagents/rag/rag-context-event-enricher.js";
 import type { LoopRunRecorder } from "../../service/loop-run-recorder.service.js";
 
 type AgentLoopDeps = {
@@ -17,7 +16,6 @@ type AgentLoopDeps = {
   context: AgentContext;
   eventQueue: AgentEventQueue;
   agentTools: ToolExecutor;
-  ragContextEventEnricher?: RagContextEventEnricher;
   summaryPlanner?: ContextSummaryPlanner;
   summaryTools?: Tool[];
   contextCompactionThreshold?: number;
@@ -32,7 +30,6 @@ export class AgentLoop {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly agentTools: ToolExecutor;
-  private readonly ragContextEventEnricher?: RagContextEventEnricher;
   private readonly summaryPlanner?: ContextSummaryPlanner;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
@@ -45,7 +42,6 @@ export class AgentLoop {
     context,
     eventQueue,
     agentTools,
-    ragContextEventEnricher,
     summaryPlanner,
     summaryTools,
     contextCompactionThreshold,
@@ -56,7 +52,6 @@ export class AgentLoop {
     this.context = context;
     this.eventQueue = eventQueue;
     this.agentTools = agentTools;
-    this.ragContextEventEnricher = ragContextEventEnricher;
     this.summaryPlanner = summaryPlanner;
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionThreshold =
@@ -206,18 +201,6 @@ export class AgentLoop {
 
   private async handleEvents(events: Event[]): Promise<void> {
     await this.context.appendEvents(events);
-
-    if (this.ragContextEventEnricher) {
-      const snapshot = await this.context.getSnapshot();
-      const enrichedMessages = await this.ragContextEventEnricher.enrichAfterEvents({
-        events,
-        snapshot,
-      });
-      if (enrichedMessages.length > 0) {
-        await this.context.appendMessages(enrichedMessages);
-      }
-    }
-
     await this.compactContextIfNeeded();
   }
 

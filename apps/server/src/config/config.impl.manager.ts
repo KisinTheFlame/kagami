@@ -70,13 +70,6 @@ export class DefaultConfigManager implements ConfigManager {
             times: attempt.times,
           })),
         },
-        ragQueryPlanner: {
-          attempts: llmUsages.ragQueryPlanner.attempts.map(attempt => ({
-            provider: attempt.provider,
-            model: attempt.model,
-            times: attempt.times,
-          })),
-        },
         contextSummarizer: {
           attempts: llmUsages.contextSummarizer.attempts.map(attempt => ({
             provider: attempt.provider,

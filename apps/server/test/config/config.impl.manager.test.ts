@@ -60,10 +60,6 @@ server:
           - provider: openai
             model: gpt-4o-mini
             times: 2
-      ragQueryPlanner:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       contextSummarizer:
         attempts:
           - provider: openai
@@ -128,15 +124,6 @@ server:
               provider: "openai",
               model: "gpt-4o-mini",
               times: 2,
-            },
-          ],
-        },
-        ragQueryPlanner: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 1,
             },
           ],
         },
@@ -275,10 +262,6 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -335,10 +318,6 @@ server:
           - claude-sonnet-4-20250514
     usages:
       agent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
-      ragQueryPlanner:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -402,10 +381,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      ragQueryPlanner:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       contextSummarizer:
         attempts:
           - provider: openai
@@ -458,10 +433,6 @@ server:
           - gpt-5.3-codex
     usages:
       agent:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
-      ragQueryPlanner:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -519,10 +490,6 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -572,10 +539,6 @@ server:
           - gpt-5.3-codex
     usages:
       agent:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
-      ragQueryPlanner:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -632,10 +595,6 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -685,10 +644,6 @@ server:
           - gpt-5.3-codex
     usages:
       agent:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
-      ragQueryPlanner:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -744,10 +699,6 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -799,10 +750,6 @@ server:
       agent:
         provider: deepseek
         model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -854,10 +801,6 @@ server:
     usages:
       agent:
         attempts: []
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek
@@ -912,10 +855,6 @@ server:
           - provider: deepseek
             model: deepseek-chat
             times: 0
-      ragQueryPlanner:
-        attempts:
-          - provider: deepseek
-            model: deepseek-chat
       contextSummarizer:
         attempts:
           - provider: deepseek

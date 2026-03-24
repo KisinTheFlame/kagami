@@ -137,7 +137,6 @@ const StaticConfigFileSchema = z.object({
       usages: z
         .object({
           agent: LlmUsageConfigSchema,
-          ragQueryPlanner: LlmUsageConfigSchema,
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
           replyThought: LlmUsageConfigSchema.optional(),
@@ -241,7 +240,6 @@ function normalizeLlmUsages(
 ): Record<LlmUsageId, LlmUsageRuntimeConfig> {
   return {
     agent: normalizeUsageConfig(input.usages.agent),
-    ragQueryPlanner: normalizeUsageConfig(input.usages.ragQueryPlanner),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
     replyThought: normalizeUsageConfig(input.usages.replyThought ?? input.usages.agent),

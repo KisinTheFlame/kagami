@@ -46,10 +46,6 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
-      ragQueryPlanner:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       contextSummarizer:
         attempts:
           - provider: openai

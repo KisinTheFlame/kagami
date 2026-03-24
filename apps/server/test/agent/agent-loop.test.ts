@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agents/main-engine/agent-loop.js";
-import type { RagContextEventEnricher } from "../../src/agents/subagents/rag/rag-context-event-enricher.js";
 import { DefaultAgentContext } from "../../src/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
@@ -513,14 +512,6 @@ describe("AgentLoop", () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const ragContextEventEnricher = {
-      enrichAfterEvents: vi.fn().mockResolvedValue([
-        {
-          role: "user",
-          content: "<memory_history_message>\n时间：2026-03-11 10:00:00\n</memory_history_message>",
-        },
-      ]),
-    } as const;
     const summaryPlanner = {
       summarize: vi.fn().mockResolvedValue("累计摘要"),
     };
@@ -540,7 +531,6 @@ describe("AgentLoop", () => {
       context,
       eventQueue,
       agentTools,
-      ragContextEventEnricher: ragContextEventEnricher as unknown as RagContextEventEnricher,
       summaryPlanner,
       summaryTools: [],
       contextCompactionThreshold: 1,
@@ -549,19 +539,6 @@ describe("AgentLoop", () => {
 
     await expect(loop.run()).rejects.toBe(stopError);
 
-    expect(ragContextEventEnricher.enrichAfterEvents).toHaveBeenCalledWith({
-      events: [createGroupEvent("hello world")],
-      snapshot: {
-        systemPrompt: "system-prompt",
-        messages: [
-          createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
-          {
-            role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
-          },
-        ],
-      },
-    });
     expect(summaryPlanner.summarize).toHaveBeenCalledWith({
       messages: [createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z"))],
       tools: [],
@@ -573,11 +550,6 @@ describe("AgentLoop", () => {
           {
             role: "user",
             content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
-          },
-          {
-            role: "user",
-            content:
-              "<memory_history_message>\n时间：2026-03-11 10:00:00\n</memory_history_message>",
           },
         ],
       }),
