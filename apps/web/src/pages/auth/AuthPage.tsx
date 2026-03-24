@@ -45,7 +45,6 @@ type AuthProviderConfig = {
   label: string;
   badge: string;
   title: string;
-  description: string;
   actionDescription: string;
   endpointPrefix: "/codex-auth" | "/claude-code-auth";
   backgroundClassName: string;
@@ -63,8 +62,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     label: "Codex",
     badge: "Codex 内置登录",
     title: "管理 Codex 登录状态",
-    description:
-      "这里负责登录、刷新和登出，不承担 LLM 调试功能。当前页面会直接读取服务端维护的 Codex 票据状态。",
     actionDescription: "首版按单账号设计。登录会跳转到 OpenAI 的授权页，成功后回到当前管理页。",
     endpointPrefix: "/codex-auth",
     backgroundClassName:
@@ -99,8 +96,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     label: "Claude Code",
     badge: "Claude Code 内置登录",
     title: "管理 Claude Code 登录状态",
-    description:
-      "这里负责登录、刷新和登出，不承担 LLM 调试功能。当前页面会直接读取服务端维护的 Claude Code 票据状态。",
     actionDescription: "首版按单账号设计。登录会跳转到 Anthropic 的授权页，成功后回到当前管理页。",
     endpointPrefix: "/claude-code-auth",
     backgroundClassName:
@@ -258,9 +253,6 @@ export function AuthPage() {
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                     {providerConfig.title}
                   </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    {providerConfig.description}
-                  </p>
                 </div>
               </div>
 
@@ -476,7 +468,7 @@ function ClaudeUsageLimitsPanel({
     return <p className="text-sm text-slate-500">暂无额度信息。</p>;
   }
 
-  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{items}</div>;
+  return <div className={getUsageGridClassName(items.length)}>{items}</div>;
 }
 
 function CodexUsageLimitsPanel({
@@ -518,7 +510,7 @@ function CodexUsageLimitsPanel({
     return <p className="text-sm text-slate-500">暂无额度信息。</p>;
   }
 
-  return <div className="grid gap-4 md:grid-cols-2">{items}</div>;
+  return <div className={getUsageGridClassName(items.length)}>{items}</div>;
 }
 
 function UsageLimitCard({
@@ -708,6 +700,14 @@ function formatUsdAmount(value: number | null): string {
   }
 
   return `$${value.toFixed(2)}`;
+}
+
+function getUsageGridClassName(itemCount: number): string {
+  if (itemCount >= 3) {
+    return "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
+  }
+
+  return "grid gap-4 md:grid-cols-2";
 }
 
 function getUsageBarClass(usedPercent: number | null): string {
