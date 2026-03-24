@@ -30,7 +30,7 @@ export class RagQueryPlannerService {
     const firstResponse = await this.llmClient.chat(
       {
         system: await this.systemPromptFactory(),
-        messages: input.contextMessages,
+        messages: [...input.contextMessages, createRagPlannerReminderMessage()],
         tools: this.plannerTools.definitions(),
         toolChoice: { tool_name: SEARCH_MEMORY_TOOL_NAME },
       },
@@ -51,4 +51,16 @@ export class RagQueryPlannerService {
 
     return searchResult.length > 0 ? [createUserMessage(searchResult)] : [];
   }
+}
+
+function createRagPlannerReminderMessage(): LlmMessage {
+  return createUserMessage(
+    [
+      "<system_reminder>",
+      "你当前处于 RAG 检索规划子流程。",
+      `你只能调用 ${SEARCH_MEMORY_TOOL_NAME}，目标是基于当前上下文提炼检索意图并发起一次尽量有效的记忆检索。`,
+      "不要回复用户，不要延伸成主流程决策，不要输出最终结论；只需为这次检索选择最合适的查询参数。",
+      "</system_reminder>",
+    ].join("\n"),
+  );
 }

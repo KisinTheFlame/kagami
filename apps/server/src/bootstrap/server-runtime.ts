@@ -14,11 +14,7 @@ import {
   TrySendMessageService,
   WriteReplyMessageTool,
 } from "../agents/subagents/reply-sender/index.js";
-import {
-  createRagSystemPrompt,
-  RagContextEventEnricher,
-  RagQueryPlannerService,
-} from "../agents/subagents/rag/index.js";
+import { RagContextEventEnricher, RagQueryPlannerService } from "../agents/subagents/rag/index.js";
 import { VisionAgent } from "../agents/subagents/vision/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
@@ -320,7 +316,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     const ragQueryPlanner = new RagQueryPlannerService({
       llmClient,
       plannerTools: toolCatalog.pick([SEARCH_MEMORY_TOOL_NAME]),
-      systemPromptFactory: createRagSystemPrompt,
+      systemPromptFactory: agentSystemPromptFactory,
     });
     const ragContextEventEnricher = new RagContextEventEnricher({
       ragQueryPlanner,
