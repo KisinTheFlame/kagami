@@ -60,6 +60,7 @@ describe("ClaudeCodeAuthHandler", () => {
         extra_usage: null,
       }),
       hasCredentials: vi.fn(),
+      getAuthWithoutRefresh: vi.fn(),
       getAuth: vi.fn(),
     };
 

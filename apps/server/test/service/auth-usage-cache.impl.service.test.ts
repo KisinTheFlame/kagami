@@ -43,9 +43,11 @@ describe("AuthUsageCacheManager", () => {
       secondary: null,
     } satisfies CodexUsageLimitsResponse);
 
+    const claudeCodeAuthService = createClaudeCodeAuthService();
+    const codexAuthService = createCodexAuthService();
     const manager = new AuthUsageCacheManager({
-      claudeCodeAuthService: createClaudeCodeAuthService(),
-      codexAuthService: createCodexAuthService(),
+      claudeCodeAuthService,
+      codexAuthService,
       codexBinaryPath: "codex",
       fetchClaudeUsageLimits: claudeFetch,
       fetchCodexUsageLimits: codexFetch,
@@ -70,6 +72,8 @@ describe("AuthUsageCacheManager", () => {
     );
     expect(claudeFetch).toHaveBeenCalledTimes(1);
     expect(codexFetch).toHaveBeenCalledTimes(1);
+    expect(claudeCodeAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
+    expect(codexAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(60_000);
 
@@ -95,7 +99,7 @@ describe("AuthUsageCacheManager", () => {
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService: createClaudeCodeAuthService(),
       codexAuthService: createCodexAuthService({
-        hasCredentials: vi.fn().mockResolvedValue(false),
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
       }),
       codexBinaryPath: "codex",
       fetchClaudeUsageLimits: claudeFetch,
@@ -122,7 +126,18 @@ describe("AuthUsageCacheManager", () => {
   });
 
   it("should clear a cache when credentials become unavailable", async () => {
-    const hasCredentials = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const getAuthWithoutRefresh = vi
+      .fn()
+      .mockResolvedValueOnce({
+        accessToken: "codex-access-token",
+        refreshToken: "codex-refresh-token",
+        idToken: "codex-id-token",
+        accountId: "acct_123",
+        email: "codex@example.com",
+        lastRefresh: "2026-03-25T00:00:00.000Z",
+        expiresAt: Date.now() + 60_000,
+      })
+      .mockRejectedValueOnce(new Error("missing auth"));
     const codexFetch = vi.fn().mockResolvedValue({
       primary: {
         usedPercent: 50,
@@ -134,10 +149,10 @@ describe("AuthUsageCacheManager", () => {
 
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService: createClaudeCodeAuthService({
-        hasCredentials: vi.fn().mockResolvedValue(false),
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
       }),
       codexAuthService: createCodexAuthService({
-        hasCredentials,
+        getAuthWithoutRefresh,
       }),
       codexBinaryPath: "codex",
       fetchClaudeUsageLimits: vi.fn(),
@@ -307,6 +322,14 @@ function createClaudeCodeAuthService(
     refresh: vi.fn(),
     getUsageLimits: vi.fn().mockResolvedValue(EMPTY_CLAUDE_CODE_USAGE_LIMITS),
     hasCredentials: vi.fn().mockResolvedValue(true),
+    getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+      accessToken: "claude-access-token",
+      refreshToken: "claude-refresh-token",
+      accountId: "user_123",
+      email: "claude@example.com",
+      lastRefresh: "2026-03-25T00:00:00.000Z",
+      expiresAt: Date.now() + 60_000,
+    }),
     getAuth: vi.fn().mockResolvedValue({
       accessToken: "claude-access-token",
       refreshToken: "claude-refresh-token",
@@ -328,6 +351,15 @@ function createCodexAuthService(overrides?: Partial<CodexAuthService>): CodexAut
     refresh: vi.fn(),
     getUsageLimits: vi.fn().mockResolvedValue(EMPTY_CODEX_USAGE_LIMITS),
     hasCredentials: vi.fn().mockResolvedValue(true),
+    getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+      accessToken: "codex-access-token",
+      refreshToken: "codex-refresh-token",
+      idToken: "codex-id-token",
+      accountId: "acct_123",
+      email: "codex@example.com",
+      lastRefresh: "2026-03-25T00:00:00.000Z",
+      expiresAt: Date.now() + 60_000,
+    }),
     getAuth: vi.fn().mockResolvedValue({
       accessToken: "codex-access-token",
       refreshToken: "codex-refresh-token",

@@ -124,12 +124,14 @@ export class AuthUsageCacheManager {
 
     this.isRefreshingClaudeCode = true;
     try {
-      if (!(await this.claudeCodeAuthService.hasCredentials())) {
+      let auth: ClaudeCodeProviderAuth;
+      try {
+        auth = await this.claudeCodeAuthService.getAuthWithoutRefresh();
+      } catch {
         this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
         return;
       }
 
-      const auth = await this.claudeCodeAuthService.getAuth();
       this.claudeCodeUsageLimits = await this.fetchClaudeUsageLimits(auth);
     } catch (error) {
       logger.warn("Failed to refresh Claude Code usage limits", {
@@ -148,12 +150,14 @@ export class AuthUsageCacheManager {
 
     this.isRefreshingCodex = true;
     try {
-      if (!(await this.codexAuthService.hasCredentials())) {
+      let auth: CodexProviderAuth;
+      try {
+        auth = await this.codexAuthService.getAuthWithoutRefresh();
+      } catch {
         this.codexUsageLimits = EMPTY_CODEX_USAGE_LIMITS;
         return;
       }
 
-      const auth = await this.codexAuthService.getAuth();
       this.codexUsageLimits = await this.fetchCodexUsageLimits({
         auth,
         binaryPath: this.codexBinaryPath,

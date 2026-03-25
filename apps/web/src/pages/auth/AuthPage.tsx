@@ -17,6 +17,7 @@ import { apiFetch, apiRequest } from "@/lib/api";
 
 type AuthProvider = "codex" | "claude-code";
 type AuthStatus = "active" | "expired" | "refresh_failed" | "logged_out" | "unavailable";
+type PrimaryAuthStatus = Exclude<AuthStatus, "refresh_failed">;
 
 type AuthStatusResponse = {
   status: AuthStatus;
@@ -220,17 +221,19 @@ export function AuthPage() {
   });
 
   const statusTone = useMemo(() => {
-    const status = statusQuery.data?.status;
+    const status = getPrimaryStatus(statusQuery.data);
     if (status === "active") {
       return "success";
     }
-    if (status === "expired" || status === "refresh_failed") {
+    if (status === "expired") {
       return "warning";
     }
     return "neutral";
-  }, [statusQuery.data?.status]);
+  }, [statusQuery.data]);
 
   const statusData = statusQuery.data ?? null;
+  const primaryStatus = getPrimaryStatus(statusData);
+  const warningMessage = getStatusWarningMessage(statusData);
 
   if (shouldRedirect) {
     return <Navigate to="/auth/codex" replace />;
@@ -256,7 +259,7 @@ export function AuthPage() {
                 </div>
               </div>
 
-              <StatusChip status={statusQuery.data?.status ?? "unavailable"} tone={statusTone} />
+              <StatusChip status={primaryStatus} tone={statusTone} />
             </div>
 
             <div className="inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1 sm:w-auto">
@@ -315,20 +318,27 @@ export function AuthPage() {
             ) : statusQuery.isError ? (
               <p className="mt-6 text-sm text-rose-600">{statusQuery.error.message}</p>
             ) : (
-              <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                <InfoCard label="登录状态" value={toStatusLabel(statusData!.status)} />
-                <InfoCard label="账号 ID" value={statusData!.session?.accountId ?? "未登录"} />
-                <InfoCard label="邮箱" value={statusData!.session?.email ?? "未记录"} />
-                <InfoCard
-                  label="Access Token 过期时间"
-                  value={formatDateTime(statusData!.session?.expiresAt)}
-                />
-                <InfoCard
-                  label="最后刷新时间"
-                  value={formatDateTime(statusData!.session?.lastRefreshAt)}
-                />
-                <InfoCard label="最近错误" value={statusData!.session?.lastError ?? "无"} />
-              </dl>
+              <>
+                {warningMessage ? (
+                  <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {warningMessage}
+                  </p>
+                ) : null}
+                <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <InfoCard label="登录状态" value={toStatusLabel(primaryStatus)} />
+                  <InfoCard label="账号 ID" value={statusData!.session?.accountId ?? "未登录"} />
+                  <InfoCard label="邮箱" value={statusData!.session?.email ?? "未记录"} />
+                  <InfoCard
+                    label="Access Token 过期时间"
+                    value={formatDateTime(statusData!.session?.expiresAt)}
+                  />
+                  <InfoCard
+                    label="最后刷新时间"
+                    value={formatDateTime(statusData!.session?.lastRefreshAt)}
+                  />
+                  <InfoCard label="最近刷新错误" value={statusData!.session?.lastError ?? "无"} />
+                </dl>
+              </>
             )}
           </article>
 
@@ -600,12 +610,51 @@ function toStatusLabel(status: string): string {
     case "expired":
       return "已过期";
     case "refresh_failed":
-      return "刷新失败";
+      return "已登录";
     case "logged_out":
       return "已登出";
     default:
       return "不可用";
   }
+}
+
+function getPrimaryStatus(statusData: AuthStatusResponse | null | undefined): PrimaryAuthStatus {
+  const status = statusData?.status;
+  if (!statusData || !status) {
+    return "unavailable";
+  }
+
+  if (status !== "refresh_failed") {
+    return status;
+  }
+
+  if (!statusData.session?.expiresAt) {
+    return "unavailable";
+  }
+
+  const expiresAt = new Date(statusData.session.expiresAt);
+  if (Number.isNaN(expiresAt.getTime())) {
+    return "unavailable";
+  }
+
+  return expiresAt.getTime() <= Date.now() ? "expired" : "active";
+}
+
+function getStatusWarningMessage(statusData: AuthStatusResponse | null | undefined): string | null {
+  if (!statusData?.session?.lastError) {
+    return null;
+  }
+
+  const primaryStatus = getPrimaryStatus(statusData);
+  if (primaryStatus !== "active" && primaryStatus !== "expired") {
+    return null;
+  }
+
+  if (primaryStatus === "active") {
+    return `最近一次后台刷新失败，但当前登录仍可用：${statusData.session.lastError}`;
+  }
+
+  return `最近一次后台刷新失败，当前 Access Token 已过期：${statusData.session.lastError}`;
 }
 
 function formatDateTime(value: string | null | undefined): string {

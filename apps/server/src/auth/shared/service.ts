@@ -194,7 +194,7 @@ export class SharedOAuthServiceCore<
         redirectUri: oauthState.redirectUri,
         config: this.config,
       });
-      await this.persistTokenResponse(tokens, "active", null);
+      await this.persistTokenResponse(tokens);
       await this.dao.markOAuthStateUsed(oauthState.state, new Date());
 
       return {
@@ -272,6 +272,22 @@ export class SharedOAuthServiceCore<
     return session.status === "active" || session.status === "expired";
   }
 
+  public async getAuthWithoutRefresh(): Promise<TProviderAuth> {
+    this.assertEnabled();
+    const session = await this.peekSession();
+    if (!session || !session.refreshToken || !session.accessToken || !session.expiresAt) {
+      throw new BizError({
+        message: `${this.displayName} 登录状态不可用`,
+        meta: {
+          provider: this.providerId,
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
+    }
+
+    return await this.toProviderAuth(session);
+  }
+
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<TProviderAuth> {
     this.assertEnabled();
     const session = await this.loadSession();
@@ -302,18 +318,19 @@ export class SharedOAuthServiceCore<
     }
   }
 
+  private async peekSession(): Promise<TSession | null> {
+    return await this.dao.findSession(this.providerId);
+  }
+
   private async loadSession(): Promise<TSession | null> {
-    const session = await this.dao.findSession(this.providerId);
+    const session = await this.peekSession();
     if (!session) {
       return null;
     }
 
-    if (
-      session.status === "active" &&
-      session.expiresAt &&
-      session.expiresAt.getTime() <= Date.now()
-    ) {
-      return await this.persistSessionStatus(session, "expired", session.lastError);
+    const normalizedStatus = this.resolveSessionStatus(session);
+    if (normalizedStatus !== session.status) {
+      return await this.persistSessionStatus(session, normalizedStatus, session.lastError);
     }
 
     return session;
@@ -344,12 +361,13 @@ export class SharedOAuthServiceCore<
         refreshToken: decodedRefreshToken,
         config: this.config,
       });
-      const nextSession = await this.persistTokenResponse(refreshed, "active", null);
+      const nextSession = await this.persistTokenResponse(refreshed);
       return await this.toProviderAuth(nextSession);
     } catch (error) {
+      const fallbackStatus = this.resolveSessionStatus(session);
       await this.persistSessionStatus(
         session,
-        "refresh_failed",
+        fallbackStatus,
         error instanceof Error ? error.message : "票据刷新失败",
       );
       throw new BizError({
@@ -363,11 +381,7 @@ export class SharedOAuthServiceCore<
     }
   }
 
-  private async persistTokenResponse(
-    tokens: TTokenResponse,
-    status: "active" | "refresh_failed",
-    lastError: string | null,
-  ): Promise<TSession> {
+  private async persistTokenResponse(tokens: TTokenResponse): Promise<TSession> {
     return await this.dao.upsertSession({
       provider: this.providerId,
       accountId: tokens.accountId ?? null,
@@ -377,8 +391,8 @@ export class SharedOAuthServiceCore<
       idToken: tokens.idToken ? await this.secretStore.encode(tokens.idToken) : null,
       expiresAt: tokens.expiresAt,
       lastRefreshAt: tokens.lastRefreshAt,
-      status,
-      lastError,
+      status: "active",
+      lastError: null,
     });
   }
 
@@ -447,5 +461,23 @@ export class SharedOAuthServiceCore<
         reason: "AUTH_DISABLED",
       },
     });
+  }
+
+  private resolveSessionStatus(
+    session: TSession,
+  ): Exclude<OAuthStatus, "refresh_failed" | "unavailable"> {
+    if (session.status === "logged_out") {
+      return "logged_out";
+    }
+
+    if (!session.accessToken || !session.refreshToken || !session.expiresAt) {
+      return "logged_out";
+    }
+
+    if (session.expiresAt.getTime() <= Date.now()) {
+      return "expired";
+    }
+
+    return "active";
   }
 }

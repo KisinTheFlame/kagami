@@ -24,6 +24,7 @@ describe("OpenAiCodexAuthStore", () => {
       logout: vi.fn(),
       refresh: vi.fn(),
       getUsageLimits: vi.fn(),
+      getAuthWithoutRefresh: vi.fn(),
     };
 
     const store = new OpenAiCodexAuthStore({

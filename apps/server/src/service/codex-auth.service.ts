@@ -24,5 +24,6 @@ export interface CodexAuthService {
   refresh(): Promise<CodexAuthRefreshResponse>;
   getUsageLimits(): Promise<CodexUsageLimitsResponse>;
   hasCredentials(): Promise<boolean>;
+  getAuthWithoutRefresh(): Promise<CodexProviderAuth>;
   getAuth(options?: { forceRefresh?: boolean }): Promise<CodexProviderAuth>;
 }

@@ -26,5 +26,6 @@ export interface ClaudeCodeAuthService {
   refresh(): Promise<ClaudeCodeAuthRefreshResponse>;
   getUsageLimits(): Promise<ClaudeCodeUsageLimitsResponse>;
   hasCredentials(): Promise<boolean>;
+  getAuthWithoutRefresh(): Promise<ClaudeCodeProviderAuth>;
   getAuth(options?: { forceRefresh?: boolean }): Promise<ClaudeCodeProviderAuth>;
 }

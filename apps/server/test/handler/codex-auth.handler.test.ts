@@ -60,6 +60,7 @@ describe("CodexAuthHandler", () => {
         secondary: null,
       }),
       hasCredentials: vi.fn(),
+      getAuthWithoutRefresh: vi.fn(),
       getAuth: vi.fn(),
     };
 

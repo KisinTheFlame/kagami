@@ -124,6 +124,10 @@ export class DefaultCodexAuthService implements CodexAuthService {
     return await this.core.hasCredentials();
   }
 
+  public async getAuthWithoutRefresh(): Promise<CodexProviderAuth> {
+    return await this.core.getAuthWithoutRefresh();
+  }
+
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<CodexProviderAuth> {
     return await this.core.getAuth(options);
   }

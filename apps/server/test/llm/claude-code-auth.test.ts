@@ -17,6 +17,7 @@ describe("ClaudeCodeAuthStore", () => {
       logout: vi.fn(),
       refresh: vi.fn(),
       getUsageLimits: vi.fn(),
+      getAuthWithoutRefresh: vi.fn(),
     };
 
     const store = new ClaudeCodeAuthStore({

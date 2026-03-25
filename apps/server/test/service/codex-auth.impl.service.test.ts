@@ -285,7 +285,7 @@ describe("DefaultCodexAuthService", () => {
     );
   });
 
-  it("should mark refresh failures and logout state", async () => {
+  it("should preserve an available status when refresh fails and still support logout", async () => {
     const staleSession = createSession({
       expiresAt: new Date(Date.now() - 1_000),
     });
@@ -325,7 +325,8 @@ describe("DefaultCodexAuthService", () => {
     });
     expect(upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: "refresh_failed",
+        status: "expired",
+        lastError: "Codex 登录当前不可用",
       }),
     );
 
@@ -334,6 +335,34 @@ describe("DefaultCodexAuthService", () => {
       success: true,
       status: "logged_out",
     });
+  });
+
+  it("should read cached auth without refreshing or mutating status", async () => {
+    const session = createSession({
+      status: "refresh_failed",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      accessToken: "cached-access",
+      refreshToken: "cached-refresh",
+    });
+    const dao = createDao({
+      findSession: vi.fn().mockResolvedValue(session),
+      upsertSession: vi.fn(),
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new DefaultCodexAuthService({
+      codexAuthDao: dao,
+      config: baseConfig,
+      callbackServer: createCallbackServer().instance,
+    });
+
+    await expect(service.getAuthWithoutRefresh()).resolves.toMatchObject({
+      accessToken: "cached-access",
+      refreshToken: "cached-refresh",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(dao.upsertSession).not.toHaveBeenCalled();
   });
 });
 

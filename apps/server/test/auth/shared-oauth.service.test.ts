@@ -92,6 +92,74 @@ describe("SharedOAuthServiceCore", () => {
     expect(result.redirectUrl).toContain("/auth?result=error");
     expect(result.redirectUrl).toContain(encodeURIComponent("登录回调已被处理"));
   });
+
+  it("should keep an active status and record the refresh error when automatic refresh fails", async () => {
+    const expiringSession = createSession({
+      expiresAt: new Date(Date.now() + 5_000),
+      accessToken: "encoded-stale-access",
+      refreshToken: "encoded-stale-refresh",
+    });
+    const upsertSession = vi.fn(async input =>
+      createSession({
+        ...expiringSession,
+        accessToken: input.accessToken,
+        refreshToken: input.refreshToken,
+        idToken: input.idToken,
+        expiresAt: input.expiresAt,
+        lastRefreshAt: input.lastRefreshAt,
+        status: input.status,
+        lastError: input.lastError,
+      }),
+    );
+    const core = createCore({
+      dao: createDao({
+        findSession: vi.fn().mockResolvedValue(expiringSession),
+        upsertSession,
+      }),
+      secretStore: {
+        encode: vi.fn(async value => `encoded-${value}`),
+        decode: vi.fn(async value => value.replace(/^encoded-/, "")),
+      },
+      refreshTokens: vi.fn(async () => {
+        throw new Error("refresh failed");
+      }),
+    });
+
+    await expect(core.getAuth()).rejects.toMatchObject({
+      message: "Test OAuth 登录状态不可用",
+    });
+    expect(upsertSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "active",
+        lastError: "refresh failed",
+      }),
+    );
+  });
+
+  it("should normalize refresh_failed sessions to an available status in getStatus", async () => {
+    const core = createCore({
+      dao: createDao({
+        findSession: vi.fn().mockResolvedValue(
+          createSession({
+            status: "refresh_failed",
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          }),
+        ),
+        upsertSession: vi.fn(async input =>
+          createSession({
+            status: input.status,
+            lastError: input.lastError,
+            expiresAt: input.expiresAt,
+          }),
+        ),
+      }),
+    });
+
+    await expect(core.getStatus()).resolves.toMatchObject({
+      status: "active",
+      isLoggedIn: true,
+    });
+  });
 });
 
 function createCore(input?: {

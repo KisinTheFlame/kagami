@@ -26,6 +26,7 @@ function createAuthStore(): ClaudeCodeAuthStore {
       logout: vi.fn(),
       refresh: vi.fn(),
       getUsageLimits: vi.fn(),
+      getAuthWithoutRefresh: vi.fn(),
     },
   });
 }
@@ -522,6 +523,7 @@ describe("createClaudeCodeProvider", () => {
         logout: vi.fn(),
         refresh: vi.fn(),
         getUsageLimits: vi.fn(),
+        getAuthWithoutRefresh: vi.fn(),
       },
     });
 
@@ -609,6 +611,7 @@ describe("createClaudeCodeProvider", () => {
         logout: vi.fn(),
         refresh: vi.fn(),
         getUsageLimits: vi.fn(),
+        getAuthWithoutRefresh: vi.fn(),
       },
     });
 

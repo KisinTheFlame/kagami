@@ -129,6 +129,10 @@ export class DefaultClaudeCodeAuthService implements ClaudeCodeAuthService {
     return await this.core.hasCredentials();
   }
 
+  public async getAuthWithoutRefresh(): Promise<ClaudeCodeProviderAuth> {
+    return await this.core.getAuthWithoutRefresh();
+  }
+
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<ClaudeCodeProviderAuth> {
     return await this.core.getAuth(options);
   }
