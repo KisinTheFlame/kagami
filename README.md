@@ -66,6 +66,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      replyDecider:
+        attempts:
+          - provider: claude-code
+            model: claude-sonnet-4-20250514
   rag:
     embedding:
       provider: google
@@ -91,7 +95,7 @@ server:
 - `server.llm.providers.openai.baseUrl` 为空字符串时，会回退到 `https://api.openai.com/v1`。
 - `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。`binaryPath` 用于指定服务端拉起 `codex app-server` 时使用的 CLI 路径，默认值为 `codex`。
 - `server.llm.claudeCodeAuth` 负责 Claude Code OAuth 登录和自动刷新。
-- `server.llm.usages` 需要为 `agent`、`contextSummarizer`、`vision` 提供模型尝试链路；`replyThought`、`replyReview`、`replyWriter` 未配置时会回退到 `agent`。
+- `server.llm.usages` 需要为 `agent`、`contextSummarizer`、`vision` 提供模型尝试链路；`replyDecider` 未配置时会回退到 `agent`。
 - `server.rag.embedding` 用于向量化，当前固定使用 Google Gemini Embedding。
 - `server.llm.providers.*.apiKey` 与 `server.tavily.apiKey` 为空字符串时视为未配置。
 

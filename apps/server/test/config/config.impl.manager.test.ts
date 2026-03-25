@@ -145,25 +145,7 @@ server:
             },
           ],
         },
-        replyThought: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 2,
-            },
-          ],
-        },
-        replyReview: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 2,
-            },
-          ],
-        },
-        replyWriter: {
+        replyDecider: {
           attempts: [
             {
               provider: "openai",

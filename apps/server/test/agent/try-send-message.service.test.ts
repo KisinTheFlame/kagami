@@ -1,16 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  ReplyThoughtTool,
-  ReviewReplyStrategyTool,
+  DecideReplyTool,
   TrySendMessageService,
-  WriteReplyMessageTool,
 } from "../../src/agents/subagents/reply-sender/index.js";
-import {
-  createReplyThoughtMessage,
-  createReplyThoughtReminderMessage,
-  createReplyReviewReminderMessage,
-  createReplyWriterReminderMessage,
-} from "../../src/context/context-message-factory.js";
+import { createReplyDecisionReminderMessage } from "../../src/context/context-message-factory.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 import { ToolCatalog } from "../../src/tools/index.js";
@@ -28,19 +21,13 @@ function createReplySenderService(params?: {
   const agentMessageService = {
     sendGroupMessage: params?.sendGroupMessage ?? vi.fn().mockResolvedValue({ messageId: 9527 }),
   };
-  const toolCatalog = new ToolCatalog([
-    new ReplyThoughtTool(),
-    new ReviewReplyStrategyTool(),
-    new WriteReplyMessageTool(),
-  ]);
+  const toolCatalog = new ToolCatalog([new DecideReplyTool()]);
 
   return {
     service: new TrySendMessageService({
       llmClient,
       agentMessageService,
-      replyThoughtTools: toolCatalog.pick(["reply_thought"]),
-      replyReviewTools: toolCatalog.pick(["review_reply_strategy"]),
-      replyWriterTools: toolCatalog.pick(["write_reply_message"]),
+      replyDecisionTools: toolCatalog.pick(["decide_reply"]),
     }),
     chat,
     agentMessageService,
@@ -48,48 +35,29 @@ function createReplySenderService(params?: {
 }
 
 describe("TrySendMessageService", () => {
-  it("should include mention syntax guidance in reply writer reminder", () => {
-    expect(createReplyWriterReminderMessage("短一点").content).toContain("使用 `{@昵称(qq)}` 格式");
+  it("should include mention syntax guidance in reply decision reminder", () => {
+    expect(createReplyDecisionReminderMessage().content).toContain("使用 `{@昵称(qq)}` 格式");
   });
 
-  it("should return sent=false when review rejects the strategy", async () => {
-    const chat = vi
-      .fn()
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "thought-1",
-              name: "reply_thought",
-              arguments: {
-                thought: "这次不如先别回，但如果要回可以接梗。",
-              },
+  it("should return sent=false when decider rejects sending", async () => {
+    const chat = vi.fn().mockResolvedValue({
+      provider: "claude-code",
+      model: "claude-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "decide-1",
+            name: "decide_reply",
+            arguments: {
+              shouldSend: false,
+              message: "",
             },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "review-1",
-              name: "review_reply_strategy",
-              arguments: {
-                approve: false,
-                thought: "这会儿插话有点硬。",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload);
+          },
+        ],
+      },
+    } satisfies LlmChatResponsePayload);
     const { service, agentMessageService } = createReplySenderService({ chat });
 
     await expect(
@@ -101,9 +69,8 @@ describe("TrySendMessageService", () => {
       sent: false,
     });
 
-    expect(chat).toHaveBeenCalledTimes(2);
-    expect(chat).toHaveBeenNthCalledWith(
-      1,
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledWith(
       {
         system: "system-prompt",
         messages: [
@@ -111,128 +78,55 @@ describe("TrySendMessageService", () => {
             role: "user",
             content: "hello",
           },
-          createReplyThoughtReminderMessage(),
+          createReplyDecisionReminderMessage(),
         ],
         tools: [
           {
-            name: "reply_thought",
-            description: "写下这次是否值得回复、最值得接的点，以及一个简短的回复方向提示。",
+            name: "decide_reply",
+            description: "最终裁决这次是否发送群消息；若发送，则同时给出最终要发送的文本。",
             parameters: {
               type: "object",
               properties: {
-                thought: {
-                  type: "string",
-                  description: "本次回复思考，需包含是否该回复、回复角度和简短草稿提示。",
-                },
-              },
-            },
-          },
-        ],
-        toolChoice: {
-          tool_name: "reply_thought",
-        },
-      },
-      {
-        usage: "replyThought",
-      },
-    );
-    expect(chat).toHaveBeenNthCalledWith(
-      2,
-      {
-        system: "system-prompt",
-        messages: [
-          {
-            role: "user",
-            content: "hello",
-          },
-          createReplyThoughtMessage("这次不如先别回，但如果要回可以接梗。"),
-          createReplyReviewReminderMessage(),
-        ],
-        tools: [
-          {
-            name: "review_reply_strategy",
-            description: "审核当前回复策略是否值得执行，并给出简短审核意见。",
-            parameters: {
-              type: "object",
-              properties: {
-                approve: {
+                shouldSend: {
                   type: "boolean",
-                  description: "当前回复策略是否值得执行。",
+                  description: "这次是否应该真的发送群消息。",
                 },
-                thought: {
+                message: {
                   type: "string",
-                  description: "简短审核意见；通过时可写成最终写作约束。",
+                  description: "最终要发送的群消息文本；不发送时传空字符串。",
                 },
               },
             },
           },
         ],
-        toolChoice: {
-          tool_name: "review_reply_strategy",
-        },
+        toolChoice: "required",
       },
       {
-        usage: "replyReview",
+        usage: "replyDecider",
       },
     );
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
   });
 
-  it("should write and send a final message after approval", async () => {
-    const chat = vi
-      .fn()
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "thought-1",
-              name: "reply_thought",
-              arguments: {
-                thought: "可以接刚才那个吐槽，方向是轻轻阴阳一句。",
-              },
+  it("should send the final message after decider approves", async () => {
+    const chat = vi.fn().mockResolvedValue({
+      provider: "claude-code",
+      model: "claude-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "decide-1",
+            name: "decide_reply",
+            arguments: {
+              shouldSend: true,
+              message: "你这波属实有点典了",
             },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "review-1",
-              name: "review_reply_strategy",
-              arguments: {
-                approve: true,
-                thought: "短一点，顺着梗接，不要像解释。",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "writer-1",
-              name: "write_reply_message",
-              arguments: {
-                message: "你这波属实有点典了",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload);
+          },
+        ],
+      },
+    } satisfies LlmChatResponsePayload);
     const sendGroupMessage = vi.fn().mockResolvedValue({ messageId: 9527 });
     const { service } = createReplySenderService({
       chat,
@@ -250,8 +144,7 @@ describe("TrySendMessageService", () => {
       messageId: 9527,
     });
 
-    expect(chat).toHaveBeenNthCalledWith(
-      3,
+    expect(chat).toHaveBeenCalledWith(
       {
         system: "system-prompt",
         messages: [
@@ -259,34 +152,68 @@ describe("TrySendMessageService", () => {
             role: "user",
             content: "hello",
           },
-          createReplyThoughtMessage("可以接刚才那个吐槽，方向是轻轻阴阳一句。"),
-          createReplyWriterReminderMessage("短一点，顺着梗接，不要像解释。"),
+          createReplyDecisionReminderMessage(),
         ],
         tools: [
           {
-            name: "write_reply_message",
-            description: "写出本次要发送到群里的最终文本消息。",
+            name: "decide_reply",
+            description: "最终裁决这次是否发送群消息；若发送，则同时给出最终要发送的文本。",
             parameters: {
               type: "object",
               properties: {
+                shouldSend: {
+                  type: "boolean",
+                  description: "这次是否应该真的发送群消息。",
+                },
                 message: {
                   type: "string",
-                  description: "最终要发送的群消息文本；如需提及成员，使用 `{@昵称(qq)}`。",
+                  description: "最终要发送的群消息文本；不发送时传空字符串。",
                 },
               },
             },
           },
         ],
-        toolChoice: {
-          tool_name: "write_reply_message",
-        },
+        toolChoice: "required",
       },
       {
-        usage: "replyWriter",
+        usage: "replyDecider",
       },
     );
     expect(sendGroupMessage).toHaveBeenCalledWith({
       message: "你这波属实有点典了",
     });
+  });
+
+  it("should return sent=false when decider requests send but message is empty", async () => {
+    const chat = vi.fn().mockResolvedValue({
+      provider: "claude-code",
+      model: "claude-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "decide-1",
+            name: "decide_reply",
+            arguments: {
+              shouldSend: true,
+              message: "  ",
+            },
+          },
+        ],
+      },
+    } satisfies LlmChatResponsePayload);
+    const { service, agentMessageService } = createReplySenderService({ chat });
+
+    await expect(
+      service.trySend({
+        systemPrompt: "system-prompt",
+        contextMessages: [{ role: "user", content: "hello" }],
+      }),
+    ).resolves.toEqual({
+      sent: false,
+    });
+
+    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
   });
 });

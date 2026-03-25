@@ -54,25 +54,7 @@ function createUsageConfig(
         },
       ],
     },
-    replyThought: {
-      attempts: [
-        {
-          provider: "openai",
-          model: "gpt-4o-mini",
-          times: 1,
-        },
-      ],
-    },
-    replyReview: {
-      attempts: [
-        {
-          provider: "openai",
-          model: "gpt-4o-mini",
-          times: 1,
-        },
-      ],
-    },
-    replyWriter: {
+    replyDecider: {
       attempts: [
         {
           provider: "openai",

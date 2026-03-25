@@ -8,12 +8,7 @@ import {
   createAgentSystemPrompt,
 } from "../agents/main-engine/index.js";
 import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
-import {
-  ReplyThoughtTool,
-  ReviewReplyStrategyTool,
-  TrySendMessageService,
-  WriteReplyMessageTool,
-} from "../agents/subagents/reply-sender/index.js";
+import { DecideReplyTool, TrySendMessageService } from "../agents/subagents/reply-sender/index.js";
 import { VisionAgent } from "../agents/subagents/vision/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
@@ -281,11 +276,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     imageMessageAnalyzer,
   });
 
-  const replySenderToolCatalog = new ToolCatalog([
-    new ReplyThoughtTool(),
-    new ReviewReplyStrategyTool(),
-    new WriteReplyMessageTool(),
-  ]);
+  const replySenderToolCatalog = new ToolCatalog([new DecideReplyTool()]);
   const loopRunRecorder = new LoopRunRecorder({
     loopRunDao,
   });
@@ -298,9 +289,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     const trySendMessageService = new TrySendMessageService({
       llmClient,
       agentMessageService,
-      replyThoughtTools: replySenderToolCatalog.pick(["reply_thought"]),
-      replyReviewTools: replySenderToolCatalog.pick(["review_reply_strategy"]),
-      replyWriterTools: replySenderToolCatalog.pick(["write_reply_message"]),
+      replyDecisionTools: replySenderToolCatalog.pick(["decide_reply"]),
     });
     const toolCatalog = new ToolCatalog([
       new SearchWebTool({

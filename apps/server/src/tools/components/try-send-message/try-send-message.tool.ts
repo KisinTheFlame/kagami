@@ -14,7 +14,7 @@ const TrySendMessageArgumentsSchema = z.object({});
 export class TrySendMessageTool extends ZodToolComponent<typeof TrySendMessageArgumentsSchema> {
   public readonly name = TRY_SEND_MESSAGE_TOOL_NAME;
   public readonly description =
-    "尝试发送一条群消息。工具会在内部完成回复思考、策略审核和文案编写，并在结束当前轮次前决定是否真的发送。";
+    "提交一次发言申请。工具会在内部由强模型最终决定是否真的发送以及发送内容，并在结束当前轮次前返回结果。";
   public readonly parameters = {
     type: "object",
     properties: {},

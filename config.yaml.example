@@ -54,6 +54,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      replyDecider:
+        attempts:
+          - provider: claude-code
+            model: claude-sonnet-4-20250514
   rag:
     embedding:
       provider: google

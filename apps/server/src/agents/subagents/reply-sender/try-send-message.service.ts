@@ -1,21 +1,14 @@
 import { z } from "zod";
-import {
-  createReplyReviewReminderMessage,
-  createReplyThoughtMessage,
-  createReplyThoughtReminderMessage,
-  createReplyWriterReminderMessage,
-} from "../../../context/context-message-factory.js";
+import { createReplyDecisionReminderMessage } from "../../../context/context-message-factory.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage } from "../../../llm/types.js";
 import type { AgentMessageService } from "../../../service/agent-message.service.js";
 import type { ToolExecutor } from "../../../tools/index.js";
-import { REVIEW_REPLY_STRATEGY_TOOL_NAME } from "./review-reply-strategy.tool.js";
-import { REPLY_THOUGHT_TOOL_NAME } from "./reply-thought.tool.js";
-import { WRITE_REPLY_MESSAGE_TOOL_NAME } from "./write-reply-message.tool.js";
+import { DECIDE_REPLY_TOOL_NAME } from "./decide-reply.tool.js";
 
-const ReviewReplyStrategyResultSchema = z.object({
-  approve: z.boolean(),
-  thought: z.string().trim().min(1),
+const ReplyDecisionResultSchema = z.object({
+  shouldSend: z.boolean(),
+  message: z.string().trim(),
 });
 
 export type TrySendMessageInput = {
@@ -36,51 +29,30 @@ export type TrySendMessageResult =
 export class TrySendMessageService {
   private readonly llmClient: LlmClient;
   private readonly agentMessageService: AgentMessageService;
-  private readonly replyThoughtTools: ToolExecutor;
-  private readonly replyReviewTools: ToolExecutor;
-  private readonly replyWriterTools: ToolExecutor;
+  private readonly replyDecisionTools: ToolExecutor;
 
   public constructor({
     llmClient,
     agentMessageService,
-    replyThoughtTools,
-    replyReviewTools,
-    replyWriterTools,
+    replyDecisionTools,
   }: {
     llmClient: LlmClient;
     agentMessageService: AgentMessageService;
-    replyThoughtTools: ToolExecutor;
-    replyReviewTools: ToolExecutor;
-    replyWriterTools: ToolExecutor;
+    replyDecisionTools: ToolExecutor;
   }) {
     this.llmClient = llmClient;
     this.agentMessageService = agentMessageService;
-    this.replyThoughtTools = replyThoughtTools;
-    this.replyReviewTools = replyReviewTools;
-    this.replyWriterTools = replyWriterTools;
+    this.replyDecisionTools = replyDecisionTools;
   }
 
   public async trySend(input: TrySendMessageInput): Promise<TrySendMessageResult> {
-    const thought = await this.generateReplyThought(input);
-    if (!thought) {
+    const decision = await this.decideReply(input);
+    if (!decision?.shouldSend) {
       return { sent: false };
     }
 
-    const baseMessages = [...input.contextMessages, createReplyThoughtMessage(thought)];
-    const reviewResult = await this.reviewReplyStrategy({
-      systemPrompt: input.systemPrompt,
-      contextMessages: baseMessages,
-    });
-    if (!reviewResult?.approve) {
-      return { sent: false };
-    }
-
-    const message = await this.writeReplyMessage({
-      systemPrompt: input.systemPrompt,
-      contextMessages: baseMessages,
-      reviewThought: reviewResult.thought,
-    });
-    if (!message) {
+    const message = decision.message.trim();
+    if (message.length === 0) {
       return { sent: false };
     }
 
@@ -92,100 +64,41 @@ export class TrySendMessageService {
     };
   }
 
-  private async generateReplyThought(input: TrySendMessageInput): Promise<string | null> {
+  private async decideReply(
+    input: TrySendMessageInput,
+  ): Promise<z.infer<typeof ReplyDecisionResultSchema> | null> {
     const response = await this.llmClient.chat(
       {
         system: input.systemPrompt,
-        messages: [...input.contextMessages, createReplyThoughtReminderMessage()],
-        tools: this.replyThoughtTools.definitions(),
-        toolChoice: { tool_name: REPLY_THOUGHT_TOOL_NAME },
+        messages: [...input.contextMessages, createReplyDecisionReminderMessage()],
+        tools: this.replyDecisionTools.definitions(),
+        toolChoice: "required",
       },
       {
-        usage: "replyThought",
+        usage: "replyDecider",
       },
     );
 
     const toolCall = response.message.toolCalls[0];
-    if (!toolCall || toolCall.name !== REPLY_THOUGHT_TOOL_NAME) {
+    if (!toolCall || toolCall.name !== DECIDE_REPLY_TOOL_NAME) {
       return null;
     }
 
-    const executionResult = await this.replyThoughtTools.execute(
+    const executionResult = await this.replyDecisionTools.execute(
       toolCall.name,
       toolCall.arguments,
       {},
     );
-    const thought = executionResult.content.trim();
-    return thought.length > 0 ? thought : null;
-  }
-
-  private async reviewReplyStrategy(input: {
-    systemPrompt: string;
-    contextMessages: LlmMessage[];
-  }): Promise<z.infer<typeof ReviewReplyStrategyResultSchema> | null> {
-    const response = await this.llmClient.chat(
-      {
-        system: input.systemPrompt,
-        messages: [...input.contextMessages, createReplyReviewReminderMessage()],
-        tools: this.replyReviewTools.definitions(),
-        toolChoice: { tool_name: REVIEW_REPLY_STRATEGY_TOOL_NAME },
-      },
-      {
-        usage: "replyReview",
-      },
-    );
-
-    const toolCall = response.message.toolCalls[0];
-    if (!toolCall || toolCall.name !== REVIEW_REPLY_STRATEGY_TOOL_NAME) {
-      return null;
-    }
-
-    const executionResult = await this.replyReviewTools.execute(
-      toolCall.name,
-      toolCall.arguments,
-      {},
-    );
-    const parsed = safeParseReviewResult(executionResult.content);
+    const parsed = safeParseDecisionResult(executionResult.content);
     return parsed?.success ? parsed.data : null;
-  }
-
-  private async writeReplyMessage(input: {
-    systemPrompt: string;
-    contextMessages: LlmMessage[];
-    reviewThought: string;
-  }): Promise<string | null> {
-    const response = await this.llmClient.chat(
-      {
-        system: input.systemPrompt,
-        messages: [...input.contextMessages, createReplyWriterReminderMessage(input.reviewThought)],
-        tools: this.replyWriterTools.definitions(),
-        toolChoice: { tool_name: WRITE_REPLY_MESSAGE_TOOL_NAME },
-      },
-      {
-        usage: "replyWriter",
-      },
-    );
-
-    const toolCall = response.message.toolCalls[0];
-    if (!toolCall || toolCall.name !== WRITE_REPLY_MESSAGE_TOOL_NAME) {
-      return null;
-    }
-
-    const executionResult = await this.replyWriterTools.execute(
-      toolCall.name,
-      toolCall.arguments,
-      {},
-    );
-    const message = executionResult.content.trim();
-    return message.length > 0 ? message : null;
   }
 }
 
-function safeParseReviewResult(
+function safeParseDecisionResult(
   value: string,
-): z.SafeParseReturnType<unknown, z.infer<typeof ReviewReplyStrategyResultSchema>> | null {
+): z.SafeParseReturnType<unknown, z.infer<typeof ReplyDecisionResultSchema>> | null {
   try {
-    return ReviewReplyStrategyResultSchema.safeParse(JSON.parse(value) as unknown);
+    return ReplyDecisionResultSchema.safeParse(JSON.parse(value) as unknown);
   } catch {
     return null;
   }

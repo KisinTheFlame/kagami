@@ -1,11 +1,5 @@
 export type LlmProviderId = "deepseek" | "openai" | "openai-codex" | "claude-code";
-export type LlmUsageId =
-  | "agent"
-  | "contextSummarizer"
-  | "vision"
-  | "replyThought"
-  | "replyReview"
-  | "replyWriter";
+export type LlmUsageId = "agent" | "contextSummarizer" | "vision" | "replyDecider";
 
 export type JsonSchema = {
   type: "object";

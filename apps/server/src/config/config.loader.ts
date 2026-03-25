@@ -139,9 +139,7 @@ const StaticConfigFileSchema = z.object({
           agent: LlmUsageConfigSchema,
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
-          replyThought: LlmUsageConfigSchema.optional(),
-          replyReview: LlmUsageConfigSchema.optional(),
-          replyWriter: LlmUsageConfigSchema.optional(),
+          replyDecider: LlmUsageConfigSchema.optional(),
         })
         .strict(),
     }),
@@ -242,9 +240,7 @@ function normalizeLlmUsages(
     agent: normalizeUsageConfig(input.usages.agent),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
-    replyThought: normalizeUsageConfig(input.usages.replyThought ?? input.usages.agent),
-    replyReview: normalizeUsageConfig(input.usages.replyReview ?? input.usages.agent),
-    replyWriter: normalizeUsageConfig(input.usages.replyWriter ?? input.usages.agent),
+    replyDecider: normalizeUsageConfig(input.usages.replyDecider ?? input.usages.agent),
   };
 }
 
