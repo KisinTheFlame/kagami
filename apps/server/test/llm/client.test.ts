@@ -776,14 +776,14 @@ describe("createLlmClient", () => {
           messages: [{ role: "user", content: "ping" }],
           tools: [
             {
-              name: "search_memory",
+              name: "search_web",
               parameters: {
                 type: "object",
                 properties: {},
               },
             },
           ],
-          toolChoice: { tool_name: "search_memory" },
+          toolChoice: { tool_name: "search_web" },
         },
         {
           usage: "agent",
@@ -794,7 +794,7 @@ describe("createLlmClient", () => {
       message: "LLM 返回了未授权的工具调用",
       meta: {
         invalidToolNames: ["send_group_message"],
-        allowedToolNames: ["search_memory"],
+        allowedToolNames: ["search_web"],
       },
     } satisfies Partial<BizError>);
 
@@ -846,10 +846,8 @@ describe("createLlmClient", () => {
               toolCalls: [
                 {
                   id: "call-1",
-                  name: "search_web",
-                  arguments: {
-                    query: "hello",
-                  },
+                  name: "finish",
+                  arguments: {},
                 },
               ],
             },
@@ -870,7 +868,7 @@ describe("createLlmClient", () => {
           messages: [{ role: "user", content: "ping" }],
           tools: [
             {
-              name: "search_memory",
+              name: "finish",
               parameters: {
                 type: "object",
                 properties: {},
@@ -884,7 +882,7 @@ describe("createLlmClient", () => {
               },
             },
           ],
-          toolChoice: { tool_name: "search_memory" },
+          toolChoice: { tool_name: "search_web" },
         },
         {
           usage: "agent",
@@ -894,8 +892,8 @@ describe("createLlmClient", () => {
       name: "BizError",
       message: "LLM 未按要求调用指定工具",
       meta: {
-        requiredToolName: "search_memory",
-        mismatchedToolNames: ["search_web"],
+        requiredToolName: "search_web",
+        mismatchedToolNames: ["finish"],
       },
     } satisfies Partial<BizError>);
 
