@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 
@@ -47,28 +47,21 @@ const LoopRunListPage = lazy(() =>
 function App() {
   return (
     <BrowserRouter>
-      <Suspense
-        fallback={<div className="flex flex-1 items-center justify-center text-sm">加载中...</div>}
-      >
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/llm-history" replace />} />
-            <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
-            <Route path="/auth/:provider" element={<AuthPage />} />
-            <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
-            <Route path="/llm-history" element={<LlmHistoryPage />} />
-            <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />
-            <Route path="/app-log-history" element={<AppLogHistoryPage />} />
-            <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
-            <Route
-              path="/napcat-group-message-history"
-              element={<NapcatGroupMessageHistoryPage />}
-            />
-            <Route path="/loop-runs" element={<LoopRunListPage />} />
-            <Route path="/loop-runs/:id" element={<LoopRunDetailPage />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<Navigate to="/llm-history" replace />} />
+          <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
+          <Route path="/auth/:provider" element={<AuthPage />} />
+          <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
+          <Route path="/llm-history" element={<LlmHistoryPage />} />
+          <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />
+          <Route path="/app-log-history" element={<AppLogHistoryPage />} />
+          <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
+          <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
+          <Route path="/loop-runs" element={<LoopRunListPage />} />
+          <Route path="/loop-runs/:id" element={<LoopRunDetailPage />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }
