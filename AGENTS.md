@@ -145,6 +145,7 @@ Zod 本身也从此包再导出（`export { z } from "zod"`），业务代码统
 ### 环境变量
 
 后端启动时通过 `apps/server/src/config/config.loader.ts` 读取并校验根目录 `config.yaml`。
+当涉及配置项 schema 变更时，必须同步更新现有 `config.yaml` 中的对应配置，确保其与最新 schema 保持一致并能通过校验。
 `config.yaml` 的关键配置分区包括：
 
 - `server.databaseUrl`、`server.port`
