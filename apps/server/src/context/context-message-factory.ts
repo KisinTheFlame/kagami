@@ -42,24 +42,6 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
   );
 }
 
-export function createReplyDecisionReminderMessage(): UserMessage {
-  return createUserMessage(
-    [
-      "<system_reminder>",
-      "你正在对主 agent 提交的发言申请做最终裁决。",
-      "默认倾向是不发送。只有当现在发出去明显比沉默更自然时，才把 shouldSend 设为 true。",
-      "申请不等于必须发送；即使主 agent 想接，也要由你最终判断是否真的该发。",
-      "只有在这些情况明显成立时，才值得发送：被直接 @ 或点名；最近 1 到 3 条里有非常顺手的梗；存在一句话就能自然接上的明确切口；不说反而显得奇怪。",
-      "如果更像主动找话题、需要解释超过两句、只是重复别人刚说过的话、或只是轻微改写现成观点，就应倾向不发。",
-      "若 shouldSend=true，message 必须是最终要发送的群消息，保持自然、简短、像群友即时发言。",
-      "若 shouldSend=false，message 传空字符串。",
-      "如果要 @ 某个群成员，使用 `{@昵称(qq)}` 格式；不要写成普通 `@昵称`。",
-      "不要解释，不要复述思考过程，只通过工具参数给出最终裁决结果。",
-      "</system_reminder>",
-    ].join("\n"),
-  );
-}
-
 export function createWebSearchReminderMessage(question: string): UserMessage {
   return createUserMessage(
     [

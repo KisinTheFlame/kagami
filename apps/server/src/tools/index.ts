@@ -9,12 +9,8 @@ export type {
 } from "./core/tool-component.js";
 export { FINISH_TOOL_NAME, FinishTool } from "./components/finish/finish.tool.js";
 export {
-  SEND_GROUP_MESSAGE_TOOL_NAME,
-  SendGroupMessageTool,
-} from "./components/send-group-message/send-group-message.tool.js";
+  SEND_MESSAGE_TOOL_NAME,
+  SendMessageTool,
+} from "./components/send-message/send-message.tool.js";
 export { SEARCH_WEB_TOOL_NAME, SearchWebTool } from "./components/search-web/search-web.tool.js";
 export { SUMMARY_TOOL_NAME, SummaryTool } from "./components/summary/summary.tool.js";
-export {
-  TRY_SEND_MESSAGE_TOOL_NAME,
-  TrySendMessageTool,
-} from "./components/try-send-message/try-send-message.tool.js";

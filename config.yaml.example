@@ -40,12 +40,12 @@ server:
       claudeCode:
         baseUrl: https://api.anthropic.com
         models:
-          - claude-sonnet-4-20250514
+          - claude-sonnet-4-6
     usages:
       agent:
         attempts:
-          - provider: deepseek
-            model: deepseek-chat
+          - provider: claude-code
+            model: claude-sonnet-4-6
       contextSummarizer:
         attempts:
           - provider: openai
@@ -54,10 +54,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      replyDecider:
-        attempts:
-          - provider: claude-code
-            model: claude-sonnet-4-20250514
       webSearchAgent:
         attempts:
           - provider: openai

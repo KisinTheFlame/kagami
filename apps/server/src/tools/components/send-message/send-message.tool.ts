@@ -2,14 +2,14 @@ import { z } from "zod";
 import type { AgentMessageService } from "../../../service/agent-message.service.js";
 import { ZodToolComponent, type ToolContext, type ToolKind } from "../../core/tool-component.js";
 
-export const SEND_GROUP_MESSAGE_TOOL_NAME = "send_group_message";
+export const SEND_MESSAGE_TOOL_NAME = "send_message";
 
-const SendGroupMessageArgumentsSchema = z.object({
+const SendMessageArgumentsSchema = z.object({
   message: z.string().trim().min(1),
 });
 
-export class SendGroupMessageTool extends ZodToolComponent<typeof SendGroupMessageArgumentsSchema> {
-  public readonly name = SEND_GROUP_MESSAGE_TOOL_NAME;
+export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgumentsSchema> {
+  public readonly name = SEND_MESSAGE_TOOL_NAME;
   public readonly description = "向当前监听的 QQ 群发送一条文本消息。";
   public readonly parameters = {
     type: "object",
@@ -21,7 +21,7 @@ export class SendGroupMessageTool extends ZodToolComponent<typeof SendGroupMessa
     },
   } as const;
   public readonly kind: ToolKind = "business";
-  protected readonly inputSchema = SendGroupMessageArgumentsSchema;
+  protected readonly inputSchema = SendMessageArgumentsSchema;
   private readonly agentMessageService: AgentMessageService;
 
   public constructor({ agentMessageService }: { agentMessageService: AgentMessageService }) {
@@ -30,7 +30,7 @@ export class SendGroupMessageTool extends ZodToolComponent<typeof SendGroupMessa
   }
 
   protected async executeTyped(
-    input: z.infer<typeof SendGroupMessageArgumentsSchema>,
+    input: z.infer<typeof SendMessageArgumentsSchema>,
     context: ToolContext,
   ): Promise<string> {
     void context;

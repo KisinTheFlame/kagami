@@ -36,7 +36,7 @@ describe("ToolCatalog", () => {
   it("should pick tools in requested order", () => {
     const catalog = new ToolCatalog([
       createToolComponent("search_web"),
-      createToolComponent("send_group_message"),
+      createToolComponent("send_message"),
       createToolComponent("finish"),
     ]);
 

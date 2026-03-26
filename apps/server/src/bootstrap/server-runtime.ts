@@ -8,7 +8,6 @@ import {
   createAgentSystemPrompt,
 } from "../agents/main-engine/index.js";
 import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
-import { DecideReplyTool, TrySendMessageService } from "../agents/subagents/reply-sender/index.js";
 import { VisionAgent } from "../agents/subagents/vision/index.js";
 import {
   FINALIZE_WEB_SEARCH_TOOL_NAME,
@@ -80,14 +79,12 @@ import {
   FINISH_TOOL_NAME,
   FinishTool,
   SEARCH_WEB_TOOL_NAME,
-  SEND_GROUP_MESSAGE_TOOL_NAME,
+  SEND_MESSAGE_TOOL_NAME,
   SearchWebTool,
-  SendGroupMessageTool,
+  SendMessageTool,
   SUMMARY_TOOL_NAME,
   SummaryTool,
   ToolCatalog,
-  TRY_SEND_MESSAGE_TOOL_NAME,
-  TrySendMessageTool,
 } from "../tools/index.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -296,7 +293,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     imageMessageAnalyzer,
   });
 
-  const replySenderToolCatalog = new ToolCatalog([new DecideReplyTool()]);
   const loopRunRecorder = new LoopRunRecorder({
     loopRunDao,
   });
@@ -306,27 +302,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       napcatGatewayService,
       targetGroupId: groupId,
     });
-    const trySendMessageService = new TrySendMessageService({
-      llmClient,
-      agentMessageService,
-      replyDecisionTools: replySenderToolCatalog.pick(["decide_reply"]),
-    });
     const toolCatalog = new ToolCatalog([
       new SearchWebTool({
         webSearchAgent,
       }),
-      new SendGroupMessageTool({
+      new SendMessageTool({
         agentMessageService,
-      }),
-      new TrySendMessageTool({
-        trySendMessageService,
       }),
       new FinishTool(),
       new SummaryTool(),
     ]);
     const agentVisibleTools = toolCatalog.pick([
       SEARCH_WEB_TOOL_NAME,
-      TRY_SEND_MESSAGE_TOOL_NAME,
+      SEND_MESSAGE_TOOL_NAME,
       FINISH_TOOL_NAME,
     ]);
     const summaryPlanner = new ContextSummaryPlannerService({
@@ -366,13 +354,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
     llmClient,
     playgroundToolDefinitions: groupRuntimes[0].toolCatalog
-      .pick([
-        SEARCH_WEB_TOOL_NAME,
-        TRY_SEND_MESSAGE_TOOL_NAME,
-        FINISH_TOOL_NAME,
-        SUMMARY_TOOL_NAME,
-        SEND_GROUP_MESSAGE_TOOL_NAME,
-      ])
+      .pick([SEARCH_WEB_TOOL_NAME, SEND_MESSAGE_TOOL_NAME, FINISH_TOOL_NAME, SUMMARY_TOOL_NAME])
       .definitions(),
   });
 

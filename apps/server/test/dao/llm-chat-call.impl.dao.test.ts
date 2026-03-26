@@ -143,7 +143,7 @@ describe("PrismaLlmChatCallDao", () => {
         message: {
           role: "assistant",
           content: "",
-          toolCalls: [{ id: "call-1", name: "send_group_message", arguments: { message: "hi" } }],
+          toolCalls: [{ id: "call-1", name: "send_message", arguments: { message: "hi" } }],
         },
       },
       error: new Error("invalid tool call"),
@@ -172,7 +172,7 @@ describe("PrismaLlmChatCallDao", () => {
           message: {
             role: "assistant",
             content: "",
-            toolCalls: [{ id: "call-1", name: "send_group_message", arguments: { message: "hi" } }],
+            toolCalls: [{ id: "call-1", name: "send_message", arguments: { message: "hi" } }],
           },
         },
         nativeRequestPayload: {

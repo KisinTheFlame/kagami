@@ -84,13 +84,6 @@ export class DefaultConfigManager implements ConfigManager {
             times: attempt.times,
           })),
         },
-        replyDecider: {
-          attempts: llmUsages.replyDecider.attempts.map(attempt => ({
-            provider: attempt.provider,
-            model: attempt.model,
-            times: attempt.times,
-          })),
-        },
         webSearchAgent: {
           attempts: llmUsages.webSearchAgent.attempts.map(attempt => ({
             provider: attempt.provider,

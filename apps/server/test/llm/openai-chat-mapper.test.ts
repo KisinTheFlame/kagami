@@ -79,7 +79,7 @@ describe("toLlmChatResponsePayload", () => {
                 id: "call-1",
                 type: "function",
                 function: {
-                  name: "send_group_message",
+                  name: "send_message",
                   arguments: '{"message":"hello"}',
                 },
               },
@@ -108,7 +108,7 @@ describe("toLlmChatResponsePayload", () => {
         toolCalls: [
           {
             id: "call-1",
-            name: "send_group_message",
+            name: "send_message",
             arguments: {
               message: "hello",
             },

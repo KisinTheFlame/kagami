@@ -149,15 +149,6 @@ server:
             },
           ],
         },
-        replyDecider: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 2,
-            },
-          ],
-        },
         webSearchAgent: {
           attempts: [
             {

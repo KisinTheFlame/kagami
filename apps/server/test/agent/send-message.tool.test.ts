@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { SendGroupMessageTool } from "../../src/tools/index.js";
+import { SendMessageTool } from "../../src/tools/index.js";
 
-describe("send_group_message tool", () => {
+describe("send_message tool", () => {
   it("should send message by injected gateway function", async () => {
     const agentMessageService = {
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 9527 }),
     };
-    const tool = new SendGroupMessageTool({ agentMessageService });
+    const tool = new SendMessageTool({ agentMessageService });
 
     const result = await tool.execute(
       {
@@ -15,7 +15,7 @@ describe("send_group_message tool", () => {
       {},
     );
 
-    expect(tool.name).toBe("send_group_message");
+    expect(tool.name).toBe("send_message");
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
       message: "hello group",
     });
@@ -32,7 +32,7 @@ describe("send_group_message tool", () => {
     const agentMessageService = {
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
     };
-    const tool = new SendGroupMessageTool({ agentMessageService });
+    const tool = new SendMessageTool({ agentMessageService });
 
     const result = await tool.execute(
       {

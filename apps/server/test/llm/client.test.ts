@@ -54,15 +54,6 @@ function createUsageConfig(
         },
       ],
     },
-    replyDecider: {
-      attempts: [
-        {
-          provider: "openai",
-          model: "gpt-4o-mini",
-          times: 1,
-        },
-      ],
-    },
     webSearchAgent: {
       attempts: [
         {
@@ -761,7 +752,7 @@ describe("createLlmClient", () => {
               toolCalls: [
                 {
                   id: "call-1",
-                  name: "send_group_message",
+                  name: "send_message",
                   arguments: {
                     message: "hi",
                   },
@@ -802,7 +793,7 @@ describe("createLlmClient", () => {
       name: "BizError",
       message: "LLM 返回了未授权的工具调用",
       meta: {
-        invalidToolNames: ["send_group_message"],
+        invalidToolNames: ["send_message"],
         allowedToolNames: ["search_web"],
       },
     } satisfies Partial<BizError>);
@@ -818,7 +809,7 @@ describe("createLlmClient", () => {
         toolCalls: [
           {
             id: "call-1",
-            name: "send_group_message",
+            name: "send_message",
             arguments: {
               message: "hi",
             },

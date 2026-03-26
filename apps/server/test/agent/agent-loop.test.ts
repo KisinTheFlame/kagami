@@ -29,12 +29,12 @@ function createLlmResponse(): LlmChatResponsePayload {
 function createAgentTools(overrides?: {
   finishExecute?: ReturnType<typeof vi.fn>;
   searchWebExecute?: ReturnType<typeof vi.fn>;
-  trySendMessageExecute?: ReturnType<typeof vi.fn>;
+  sendMessageExecute?: ReturnType<typeof vi.fn>;
 }): {
   agentTools: ToolSet;
   finishExecute: ReturnType<typeof vi.fn>;
   searchWebExecute: ReturnType<typeof vi.fn>;
-  trySendMessageExecute: ReturnType<typeof vi.fn>;
+  sendMessageExecute: ReturnType<typeof vi.fn>;
 } {
   const finishExecute =
     overrides?.finishExecute ??
@@ -48,11 +48,11 @@ function createAgentTools(overrides?: {
       content: "",
       signal: "continue",
     });
-  const trySendMessageExecute =
-    overrides?.trySendMessageExecute ??
+  const sendMessageExecute =
+    overrides?.sendMessageExecute ??
     vi.fn().mockResolvedValue({
       content: "",
-      signal: "finish_round",
+      signal: "continue",
     });
 
   const components: ToolComponent[] = [
@@ -69,16 +69,16 @@ function createAgentTools(overrides?: {
       execute: searchWebExecute,
     },
     {
-      name: "try_send_message",
+      name: "send_message",
       description: "send",
       parameters: { type: "object", properties: {} },
       kind: "business",
       llmTool: {
-        name: "try_send_message",
+        name: "send_message",
         description: "send",
         parameters: { type: "object", properties: {} },
       },
-      execute: trySendMessageExecute,
+      execute: sendMessageExecute,
     },
     {
       name: "finish",
@@ -95,10 +95,10 @@ function createAgentTools(overrides?: {
   ];
 
   return {
-    agentTools: new ToolCatalog(components).pick(["search_web", "try_send_message", "finish"]),
+    agentTools: new ToolCatalog(components).pick(["search_web", "send_message", "finish"]),
     finishExecute,
     searchWebExecute,
-    trySendMessageExecute,
+    sendMessageExecute,
   };
 }
 
@@ -136,12 +136,10 @@ describe("AgentLoop", () => {
   it("should consume queue events and execute one enabled tool round", async () => {
     const stopError = new StopLoopError("stop-loop");
     const now = vi.fn().mockReturnValue(new Date("2026-03-09T10:21:00.000Z"));
-    const { agentTools, finishExecute, searchWebExecute, trySendMessageExecute } = createAgentTools(
-      {
-        searchWebExecute: vi.fn(),
-        trySendMessageExecute: vi.fn(),
-      },
-    );
+    const { agentTools, finishExecute, searchWebExecute, sendMessageExecute } = createAgentTools({
+      searchWebExecute: vi.fn(),
+      sendMessageExecute: vi.fn(),
+    });
 
     const chat = vi.fn().mockResolvedValue(createLlmResponse());
     const llmClient: LlmClient = {
@@ -208,7 +206,7 @@ describe("AgentLoop", () => {
       },
     );
     expect(searchWebExecute).not.toHaveBeenCalled();
-    expect(trySendMessageExecute).not.toHaveBeenCalled();
+    expect(sendMessageExecute).not.toHaveBeenCalled();
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
       messages: [
@@ -561,19 +559,17 @@ describe("AgentLoop", () => {
 
   it("should stop executing later tool calls after a finish_round signal", async () => {
     const stopError = new StopLoopError("stop-loop");
-    const trySendMessageExecute = vi.fn().mockResolvedValue({
-      content: JSON.stringify({
-        sent: false,
-      }),
+    const searchWebExecute = vi.fn().mockResolvedValue({
+      content: "done",
       signal: "finish_round",
     });
-    const searchWebExecute = vi.fn().mockResolvedValue({
+    const sendMessageExecute = vi.fn().mockResolvedValue({
       content: "should-not-run",
       signal: "continue",
     });
     const { agentTools } = createAgentTools({
-      trySendMessageExecute,
       searchWebExecute,
+      sendMessageExecute,
     });
     const chat = vi.fn().mockResolvedValue({
       provider: "openai",
@@ -583,14 +579,14 @@ describe("AgentLoop", () => {
         content: "",
         toolCalls: [
           {
-            id: "try-send-1",
-            name: "try_send_message",
-            arguments: {},
-          },
-          {
             id: "search-1",
             name: "search_web",
             arguments: {},
+          },
+          {
+            id: "send-1",
+            name: "send_message",
+            arguments: { message: "hi" },
           },
         ],
       },
@@ -622,7 +618,7 @@ describe("AgentLoop", () => {
 
     await expect(loop.run()).rejects.toBe(stopError);
 
-    expect(trySendMessageExecute).toHaveBeenCalledWith(
+    expect(searchWebExecute).toHaveBeenCalledWith(
       {},
       {
         groupId: "123456",
@@ -636,7 +632,7 @@ describe("AgentLoop", () => {
         ],
       },
     );
-    expect(searchWebExecute).not.toHaveBeenCalled();
+    expect(sendMessageExecute).not.toHaveBeenCalled();
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
       messages: [
@@ -650,23 +646,21 @@ describe("AgentLoop", () => {
           content: "",
           toolCalls: [
             {
-              id: "try-send-1",
-              name: "try_send_message",
-              arguments: {},
-            },
-            {
               id: "search-1",
               name: "search_web",
               arguments: {},
+            },
+            {
+              id: "send-1",
+              name: "send_message",
+              arguments: { message: "hi" },
             },
           ],
         },
         {
           role: "tool",
-          toolCallId: "try-send-1",
-          content: JSON.stringify({
-            sent: false,
-          }),
+          toolCallId: "search-1",
+          content: "done",
         },
       ],
     });
