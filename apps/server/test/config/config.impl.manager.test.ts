@@ -68,6 +68,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       apiKey: gemini-key
@@ -151,6 +155,15 @@ server:
               provider: "openai",
               model: "gpt-4o-mini",
               times: 2,
+            },
+          ],
+        },
+        webSearchAgent: {
+          attempts: [
+            {
+              provider: "openai",
+              model: "gpt-4o-mini",
+              times: 1,
             },
           ],
         },
@@ -252,6 +265,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      webSearchAgent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -308,6 +325,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -371,6 +392,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       apiKey: gemini-key
@@ -426,6 +451,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      webSearchAgent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -440,6 +469,66 @@ server:
       message: "配置值不合法",
       meta: {
         key: "server.databaseUrl",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should fail when webSearchAgent usage is missing", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.usages.webSearchAgent",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -477,6 +566,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       vision:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      webSearchAgent:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -529,6 +622,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       vision:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      webSearchAgent:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -585,6 +682,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      webSearchAgent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -634,6 +735,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       vision:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      webSearchAgent:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -689,6 +794,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      webSearchAgent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -737,6 +846,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       vision:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      webSearchAgent:
         attempts:
           - provider: deepseek
             model: deepseek-chat
@@ -791,6 +904,10 @@ server:
         attempts:
           - provider: deepseek
             model: deepseek-chat
+      webSearchAgent:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
   rag:
     embedding:
       apiKey: gemini-key
@@ -842,6 +959,10 @@ server:
           - provider: deepseek
             model: deepseek-chat
       vision:
+        attempts:
+          - provider: deepseek
+            model: deepseek-chat
+      webSearchAgent:
         attempts:
           - provider: deepseek
             model: deepseek-chat

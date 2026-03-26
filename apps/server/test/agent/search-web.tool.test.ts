@@ -2,91 +2,72 @@ import { describe, expect, it, vi } from "vitest";
 import { SearchWebTool } from "../../src/tools/index.js";
 
 describe("search_web tool", () => {
-  it("should call injected web search service and return simplified agent output", async () => {
-    const webSearchService = {
-      search: vi.fn().mockResolvedValue({
-        query: "OpenAI latest news",
-        answer: "Found recent coverage.",
-        responseTime: 0.42,
-        results: [
-          {
-            title: "OpenAI News",
-            url: "https://example.com/openai-news",
-            content: "Recent news summary",
-            score: 0.91,
-          },
-          {
-            title: "Another Source",
-            url: "https://news.example.com/openai",
-            content: "Another summary",
-            score: 0.8,
-            publishedDate: "2026-03-08",
-          },
-          {
-            title: "Third Source",
-            url: "https://third.example.com/openai",
-            content: "Third summary",
-            score: 0.7,
-          },
-          {
-            title: "Fourth Source",
-            url: "https://fourth.example.com/openai",
-            content: "Fourth summary",
-            score: 0.6,
-          },
-        ],
-      }),
+  it("should fork current context into injected web search agent and return summary text", async () => {
+    const webSearchAgent = {
+      search: vi.fn().mockResolvedValue("这是给主 Agent 的摘要结果。"),
     };
-    const tool = new SearchWebTool({ webSearchService });
+    const tool = new SearchWebTool({ webSearchAgent });
+    const contextMessages = [{ role: "user" as const, content: "群里有人在问 OpenAI 最近动态" }];
 
     const result = await tool.execute(
       {
-        query: "  OpenAI latest news  ",
-        topic: "news",
-        timeRange: "week",
+        question: "  OpenAI latest news  ",
       },
-      {},
+      {
+        systemPrompt: "main-system-prompt",
+        messages: contextMessages,
+      },
     );
 
     expect(tool.name).toBe("search_web");
-    expect(webSearchService.search).toHaveBeenCalledWith({
-      query: "OpenAI latest news",
-      topic: "news",
-      timeRange: "week",
+    expect(webSearchAgent.search).toHaveBeenCalledWith({
+      question: "OpenAI latest news",
+      systemPrompt: "main-system-prompt",
+      contextMessages,
     });
     expect(result.signal).toBe("continue");
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      query: "OpenAI latest news",
-      answer: "Found recent coverage.",
-      sources: expect.arrayContaining([
-        {
-          title: "OpenAI News",
-          content: "Recent news summary",
-        },
-      ]),
-    });
-    expect(JSON.parse(result.content).sources).toHaveLength(3);
+    expect(result.content).toBe("这是给主 Agent 的摘要结果。");
   });
 
-  it("should reject empty query", async () => {
-    const webSearchService = {
+  it("should reject empty question", async () => {
+    const webSearchAgent = {
       search: vi.fn(),
     };
-    const tool = new SearchWebTool({ webSearchService });
+    const tool = new SearchWebTool({ webSearchAgent });
 
     const result = await tool.execute(
       {
-        query: "   ",
+        question: "   ",
       },
       {},
     );
 
-    expect(webSearchService.search).not.toHaveBeenCalled();
+    expect(webSearchAgent.search).not.toHaveBeenCalled();
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVALID_ARGUMENTS",
+    });
+  });
+
+  it("should return context unavailable error when tool context is missing", async () => {
+    const webSearchAgent = {
+      search: vi.fn(),
+    };
+    const tool = new SearchWebTool({ webSearchAgent });
+
+    const result = await tool.execute(
+      {
+        question: "OpenAI latest news",
+      },
+      {},
+    );
+
+    expect(webSearchAgent.search).not.toHaveBeenCalled();
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      error: "CONTEXT_UNAVAILABLE",
     });
   });
 });

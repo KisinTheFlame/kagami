@@ -58,6 +58,10 @@ server:
         attempts:
           - provider: claude-code
             model: claude-sonnet-4-20250514
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   rag:
     embedding:
       provider: google

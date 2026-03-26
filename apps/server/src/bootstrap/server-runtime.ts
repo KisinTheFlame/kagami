@@ -10,6 +10,13 @@ import {
 import { ContextSummaryPlannerService } from "../agents/subagents/context-summarizer/index.js";
 import { DecideReplyTool, TrySendMessageService } from "../agents/subagents/reply-sender/index.js";
 import { VisionAgent } from "../agents/subagents/vision/index.js";
+import {
+  FINALIZE_WEB_SEARCH_TOOL_NAME,
+  FinalizeWebSearchTool,
+  SEARCH_WEB_RAW_TOOL_NAME,
+  SearchWebRawTool,
+  WebSearchAgent,
+} from "../agents/subagents/web-search/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
 import { ClaudeCodeAuthCallbackServer } from "../claude-code-auth/callback-server.js";
@@ -256,6 +263,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const webSearchService = new TavilyWebSearchService({
     apiKey: tavilyConfig.apiKey,
   });
+  const webSearchInternalToolCatalog = new ToolCatalog([
+    new SearchWebRawTool({
+      webSearchService,
+    }),
+    new FinalizeWebSearchTool(),
+  ]);
+  const webSearchAgent = new WebSearchAgent({
+    llmClient,
+    searchTools: webSearchInternalToolCatalog.pick([
+      SEARCH_WEB_RAW_TOOL_NAME,
+      FINALIZE_WEB_SEARCH_TOOL_NAME,
+    ]),
+  });
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
     napcatGroupMessageDao,
@@ -293,7 +313,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     });
     const toolCatalog = new ToolCatalog([
       new SearchWebTool({
-        webSearchService,
+        webSearchAgent,
       }),
       new SendGroupMessageTool({
         agentMessageService,

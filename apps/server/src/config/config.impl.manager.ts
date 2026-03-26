@@ -4,8 +4,8 @@ import type {
   ClaudeCodeAuthRuntimeConfig,
   CodexAuthRuntimeConfig,
   ConfigManager,
-  RagRuntimeConfig,
   LlmRuntimeConfig,
+  RagRuntimeConfig,
   TavilyConfig,
 } from "./config.manager.js";
 import type { StaticConfig } from "./config.loader.js";
@@ -86,6 +86,13 @@ export class DefaultConfigManager implements ConfigManager {
         },
         replyDecider: {
           attempts: llmUsages.replyDecider.attempts.map(attempt => ({
+            provider: attempt.provider,
+            model: attempt.model,
+            times: attempt.times,
+          })),
+        },
+        webSearchAgent: {
+          attempts: llmUsages.webSearchAgent.attempts.map(attempt => ({
             provider: attempt.provider,
             model: attempt.model,
             times: attempt.times,
