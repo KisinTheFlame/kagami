@@ -222,6 +222,14 @@ describe("NapcatGroupMessageProcessor", () => {
       user_id: 123456,
       self_id: 123456,
       raw_message: "hello",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello",
+          },
+        },
+      ],
       sender: {
         card: "测试群名片",
       },
@@ -253,6 +261,14 @@ describe("NapcatGroupMessageProcessor", () => {
         user_id: 123456,
         self_id: 654321,
         raw_message: "hello",
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "hello",
+            },
+          },
+        ],
         sender: {
           card: "测试群名片",
         },
@@ -261,7 +277,14 @@ describe("NapcatGroupMessageProcessor", () => {
       expect.objectContaining({
         groupMessageEvent: expect.objectContaining({
           rawMessage: "hello",
-          messageSegments: [],
+          messageSegments: [
+            {
+              type: "text",
+              data: {
+                text: "hello",
+              },
+            },
+          ],
         }),
       }),
     );
@@ -339,6 +362,61 @@ describe("NapcatGroupMessageProcessor", () => {
     );
   });
 
+  it("should ignore face segments when rendering rawMessage", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      imageMessageAnalyzer,
+    });
+
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "前[CQ:face,id=66]后",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "前",
+          },
+        },
+        {
+          type: "face",
+          data: {
+            id: "66",
+            raw: {
+              faceIndex: 66,
+            },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+        {
+          type: "text",
+          data: {
+            text: "后",
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawMessage: "前后",
+      }),
+    );
+  });
+
   it("should fallback to placeholder when image analysis fails", async () => {
     imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
     const eventQueue = createAgentEventQueue();
@@ -412,6 +490,14 @@ describe("NapcatGroupMessageProcessor", () => {
       user_id: 123456,
       self_id: 654321,
       raw_message: "first group",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "first group",
+          },
+        },
+      ],
       sender: {
         card: "测试群名片",
       },
@@ -423,6 +509,14 @@ describe("NapcatGroupMessageProcessor", () => {
       user_id: 123456,
       self_id: 654321,
       raw_message: "second group",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "second group",
+          },
+        },
+      ],
       sender: {
         card: "测试群名片",
       },
@@ -440,6 +534,67 @@ describe("NapcatGroupMessageProcessor", () => {
       expect.objectContaining({
         groupId: "123456",
         rawMessage: "second group",
+      }),
+    );
+  });
+
+  it("should keep group messages when only unsupported segments are present", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      imageMessageAnalyzer,
+    });
+
+    const result = await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "[CQ:face,id=66]",
+      message: [
+        {
+          type: "face",
+          data: {
+            id: "66",
+            raw: {
+              faceIndex: 66,
+            },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(result.groupMessageEvent).toEqual(
+      expect.objectContaining({
+        rawMessage: "",
+        messageSegments: [
+          {
+            type: "face",
+            data: {
+              id: "66",
+              raw: {
+                faceIndex: 66,
+              },
+              resultId: null,
+              chainCount: null,
+            },
+          },
+        ],
+      }),
+    );
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawMessage: "",
       }),
     );
   });

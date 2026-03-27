@@ -86,6 +86,23 @@ describe("NapCat segment schemas", () => {
           chainCount: null,
         },
       },
+      {
+        type: "face",
+        data: {
+          id: "319",
+          raw: {
+            faceIndex: 319,
+            faceText: "/比心",
+            faceType: 2,
+            packId: null,
+            msgType: null,
+            imageType: null,
+            chainCount: null,
+          },
+          resultId: null,
+          chainCount: null,
+        },
+      },
       { type: "reply", data: { id: "9988" } },
       { type: "video", data: { file: "v", url: "https://example.com/v.mp4", file_size: "1" } },
       { type: "record", data: { file: "r", file_size: "1" } },

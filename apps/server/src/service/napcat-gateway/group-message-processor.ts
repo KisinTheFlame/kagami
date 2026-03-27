@@ -3,14 +3,10 @@ import type { Event } from "../../event/event.js";
 import type { NapcatGroupMessageEvent } from "../napcat-gateway.service.js";
 import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
-  canRenderTextOrAtSegment,
   extractDisplayNameFromGroupMemberInfo,
   extractSenderNickname,
-  formatAtSegment,
-  isTextOrAtSegment,
   parseMessageSegments,
-  replaceAtSegmentsInRawMessage,
-  replaceImageSegmentsInRawMessage,
+  renderSupportedMessageSegments,
   toEventTime,
   toNullableNumber,
   toNullablePositiveInt,
@@ -151,7 +147,7 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    if (!event.rawMessage) {
+    if (event.rawMessage === null) {
       return null;
     }
 
@@ -215,12 +211,11 @@ export class NapcatGroupMessageProcessor {
     rawMessage: string | null;
     messageSegments: NapcatReceiveMessageSegment[];
   }> {
-    const rawMessage = toNullableString(payload.raw_message);
     const messageSegments = parseMessageSegments(payload.message);
 
     if (!messageSegments || messageSegments.length === 0) {
       return {
-        rawMessage,
+        rawMessage: null,
         messageSegments: [],
       };
     }
@@ -234,50 +229,12 @@ export class NapcatGroupMessageProcessor {
       messageSegments: hydratedSegments,
       renderedImageSegments,
     });
-
-    if (
-      hydratedSegments.every(segment => isTextOrAtSegment(segment) || segment.type === "image") &&
-      hydratedSegments.every(
-        segment =>
-          (isTextOrAtSegment(segment) && canRenderTextOrAtSegment(segment)) ||
-          segment.type === "image",
-      )
-    ) {
-      const renderedMessage = hydratedSegments
-        .map(segment => {
-          if (segment.type === "text") {
-            return segment.data.text;
-          }
-
-          if (segment.type === "image") {
-            return renderedImageSegments.get(segment) ?? "[图片]";
-          }
-
-          return formatAtSegment(segment) ?? "";
-        })
-        .join("");
-
-      return {
-        rawMessage: renderedMessage,
-        messageSegments: normalizedSegments,
-      };
-    }
-
-    if (!rawMessage) {
-      return {
-        rawMessage: null,
-        messageSegments: normalizedSegments,
-      };
-    }
+    const renderedMessage = renderSupportedMessageSegments(hydratedSegments, {
+      renderImageSegment: segment => renderedImageSegments.get(segment) ?? "[图片]",
+    });
 
     return {
-      rawMessage: replaceImageSegmentsInRawMessage(
-        replaceAtSegmentsInRawMessage(rawMessage, hydratedSegments),
-        hydratedSegments.filter(isNapcatReceiveImageSegment).map(segment => ({
-          segment,
-          renderedText: renderedImageSegments.get(segment) ?? "[图片]",
-        })),
-      ),
+      rawMessage: renderedMessage,
       messageSegments: normalizedSegments,
     };
   }

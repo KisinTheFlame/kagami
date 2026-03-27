@@ -99,7 +99,7 @@ describe("DefaultAgentContext", () => {
     });
   });
 
-  it("should fallback to rawMessage when structured segments are empty", async () => {
+  it("should ignore group message events when structured segments are empty", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -119,10 +119,99 @@ describe("DefaultAgentContext", () => {
 
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
+      messages: [],
+    });
+  });
+
+  it("should ignore face segments in rendered snapshot messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "前[CQ:face,id=66]后",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "前",
+            },
+          },
+          {
+            type: "face",
+            data: {
+              id: "66",
+              raw: {
+                faceIndex: 66,
+              },
+              resultId: null,
+              chainCount: null,
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: "后",
+            },
+          },
+        ],
+        messageId: 1002,
+        time: 1710000001,
+      },
+    ]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
       messages: [
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nraw fallback\n</message>",
+          content: "<message>\n测试昵称 (654321):\n前后\n</message>",
+        },
+      ],
+    });
+  });
+
+  it("should keep group message events when only unsupported segments are present", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendEvents([
+      {
+        type: "napcat_group_message",
+        groupId: "123456",
+        userId: "654321",
+        nickname: "测试昵称",
+        rawMessage: "",
+        messageSegments: [
+          {
+            type: "face",
+            data: {
+              id: "66",
+              raw: {
+                faceIndex: 66,
+              },
+              resultId: null,
+              chainCount: null,
+            },
+          },
+        ],
+        messageId: 1003,
+        time: 1710000002,
+      },
+    ]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "<message>\n测试昵称 (654321):\n\n</message>",
         },
       ],
     });
@@ -154,8 +243,8 @@ describe("DefaultAgentContext", () => {
             },
           },
         ],
-        messageId: 1002,
-        time: 1710000001,
+        messageId: 1004,
+        time: 1710000003,
       },
     ]);
 

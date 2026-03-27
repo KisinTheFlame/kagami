@@ -2,7 +2,7 @@ import type { JsonValue } from "@kagami/shared";
 
 const SEGMENT_LABELS: Record<string, string> = {
   dice: "[dice]",
-  face: "[face]",
+  face: "",
   file: "[file]",
   forward: "[forward]",
   image: "[image]",
@@ -21,8 +21,7 @@ export function renderNapcatMessagePreview(message: JsonValue): string {
   }
 
   try {
-    const rendered = message.map(renderSegmentPreview).join("");
-    return rendered.length > 0 ? rendered : safeStringify(message);
+    return message.map(renderSegmentPreview).join("");
   } catch {
     return safeStringify(message);
   }

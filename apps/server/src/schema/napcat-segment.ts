@@ -448,29 +448,29 @@ export type NapcatReceiveRPSSegment = {
 };
 
 type NapcatReceiveFaceRaw = {
-  faceIndex?: number;
-  faceText?: string;
-  faceType?: number;
-  packId?: string;
-  stickerId?: string;
-  sourceType?: number;
-  stickerType?: number;
-  resultId?: string;
-  surpriseId?: string;
-  randomType?: number;
-  imageType?: number;
-  pokeType?: number;
-  spokeSummary?: string;
-  doubleHit?: number;
-  vaspokeId?: number;
-  vaspokeName?: string;
-  vaspokeMinver?: number;
-  pokeStrength?: number;
-  msgType?: number;
-  faceBubbleCount?: number;
-  oldVersionStr?: string;
-  pokeFlag?: number;
-  chainCount?: number;
+  faceIndex?: number | null;
+  faceText?: string | null;
+  faceType?: number | null;
+  packId?: string | null;
+  stickerId?: string | null;
+  sourceType?: number | null;
+  stickerType?: number | null;
+  resultId?: string | null;
+  surpriseId?: string | null;
+  randomType?: number | null;
+  imageType?: number | null;
+  pokeType?: number | null;
+  spokeSummary?: string | null;
+  doubleHit?: number | null;
+  vaspokeId?: number | null;
+  vaspokeName?: string | null;
+  vaspokeMinver?: number | null;
+  pokeStrength?: number | null;
+  msgType?: number | null;
+  faceBubbleCount?: number | null;
+  oldVersionStr?: string | null;
+  pokeFlag?: number | null;
+  chainCount?: number | null;
 };
 
 export type NapcatReceiveFaceSegment = {
@@ -615,29 +615,29 @@ export const NapcatReceiveRPSSegmentSchema: z.ZodType<NapcatReceiveRPSSegment> =
 
 const NapcatReceiveFaceRawSchema: z.ZodType<NapcatReceiveFaceRaw> = z
   .object({
-    faceIndex: z.number().optional(),
-    faceText: z.string().optional(),
-    faceType: z.number().optional(),
-    packId: z.string().optional(),
-    stickerId: z.string().optional(),
-    sourceType: z.number().optional(),
-    stickerType: z.number().optional(),
-    resultId: z.string().optional(),
-    surpriseId: z.string().optional(),
-    randomType: z.number().optional(),
-    imageType: z.number().optional(),
-    pokeType: z.number().optional(),
-    spokeSummary: z.string().optional(),
-    doubleHit: z.number().optional(),
-    vaspokeId: z.number().optional(),
-    vaspokeName: z.string().optional(),
-    vaspokeMinver: z.number().optional(),
-    pokeStrength: z.number().optional(),
-    msgType: z.number().optional(),
-    faceBubbleCount: z.number().optional(),
-    oldVersionStr: z.string().optional(),
-    pokeFlag: z.number().optional(),
-    chainCount: z.number().optional(),
+    faceIndex: z.number().nullable().optional(),
+    faceText: z.string().nullable().optional(),
+    faceType: z.number().nullable().optional(),
+    packId: z.string().nullable().optional(),
+    stickerId: z.string().nullable().optional(),
+    sourceType: z.number().nullable().optional(),
+    stickerType: z.number().nullable().optional(),
+    resultId: z.string().nullable().optional(),
+    surpriseId: z.string().nullable().optional(),
+    randomType: z.number().nullable().optional(),
+    imageType: z.number().nullable().optional(),
+    pokeType: z.number().nullable().optional(),
+    spokeSummary: z.string().nullable().optional(),
+    doubleHit: z.number().nullable().optional(),
+    vaspokeId: z.number().nullable().optional(),
+    vaspokeName: z.string().nullable().optional(),
+    vaspokeMinver: z.number().nullable().optional(),
+    pokeStrength: z.number().nullable().optional(),
+    msgType: z.number().nullable().optional(),
+    faceBubbleCount: z.number().nullable().optional(),
+    oldVersionStr: z.string().nullable().optional(),
+    pokeFlag: z.number().nullable().optional(),
+    chainCount: z.number().nullable().optional(),
   })
   .passthrough();
 

@@ -2,8 +2,7 @@ import type { Event } from "../event/event.js";
 import { formatGroupMessagePlainText } from "../event/event.js";
 import type { LlmMessage } from "../llm/types.js";
 import {
-  formatAtSegment,
-  formatImageSegmentText,
+  renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
 } from "../service/napcat-gateway/shared.js";
 
@@ -61,6 +60,10 @@ export function createWebSearchReminderMessage(question: string): UserMessage {
 export function createMessagesFromEvent(event: Event): UserMessage[] {
   switch (event.type) {
     case "napcat_group_message":
+      if ((event.messageSegments?.length ?? 0) === 0) {
+        return [];
+      }
+
       return [
         createUserMessage(
           ["<message>", renderGroupMessagePlainText(event), "</message>"].join("\n"),
@@ -91,44 +94,9 @@ function renderGroupMessageBody(input: {
 }): string {
   const segments = input.messageSegments ?? [];
   if (segments.length === 0) {
-    return input.rawMessage;
+    return "";
   }
 
-  const rendered = segments.map(renderSegmentText).join("").trim();
-  return rendered.length > 0 ? rendered : input.rawMessage;
-}
-
-function renderSegmentText(segment: NapcatReceiveMessageSegment): string {
-  switch (segment.type) {
-    case "text":
-      return segment.data.text;
-    case "at":
-      return formatAtSegment(segment) ?? `@${segment.data.qq}`;
-    case "image":
-      return formatImageSegmentText(segment.data.summary);
-    case "reply":
-      return "[reply]";
-    case "face":
-      return "[face]";
-    case "forward":
-      return "[forward]";
-    case "file":
-      return "[file]";
-    case "json":
-      return "[json]";
-    case "markdown":
-      return "[markdown]";
-    case "poke":
-      return "[poke]";
-    case "record":
-      return "[record]";
-    case "rps":
-      return "[rps]";
-    case "dice":
-      return "[dice]";
-    case "video":
-      return "[video]";
-    default:
-      return "[segment]";
-  }
+  const rendered = renderSupportedMessageSegments(segments);
+  return rendered;
 }

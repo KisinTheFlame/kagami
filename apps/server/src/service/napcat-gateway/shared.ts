@@ -157,88 +157,38 @@ export function toStoredMessageSegments(value: unknown): NapcatReceiveMessageSeg
   return parseMessageSegments(value) ?? [];
 }
 
-export function isTextOrAtSegment(
-  segment: NapcatReceiveMessageSegment,
-): segment is NapcatReceiveTextOrAtSegment {
-  return segment.type === "text" || segment.type === "at";
-}
-
-export function canRenderTextOrAtSegment(segment: NapcatReceiveTextOrAtSegment): boolean {
-  if (segment.type === "text") {
-    return true;
-  }
-
-  return formatAtSegment(segment) !== null;
-}
-
 export function formatImageSegmentText(text: string): string {
   return text.trim().length > 0 ? `[图片: ${text.trim()}]` : "[图片]";
 }
 
-export function replaceImageSegmentsInRawMessage(
-  rawMessage: string,
-  imageSegments: Array<{
-    segment: NapcatReceiveImageSegment;
-    renderedText: string;
-  }>,
-): string {
-  let nextMessage = rawMessage;
-
-  for (const { segment, renderedText } of imageSegments) {
-    const urlPattern = new RegExp(
-      `\\[CQ:image,file=[^\\]]*url=${escapeRegExp(segment.data.url)}[^\\]]*\\]`,
-    );
-
-    if (urlPattern.test(nextMessage)) {
-      nextMessage = nextMessage.replace(urlPattern, renderedText);
-      continue;
-    }
-
-    const filePattern = new RegExp(
-      `\\[CQ:image,file=${escapeRegExp(segment.data.file)}(?:,[^\\]]*)?\\]`,
-    );
-    if (filePattern.test(nextMessage)) {
-      nextMessage = nextMessage.replace(filePattern, renderedText);
-      continue;
-    }
-  }
-
-  return nextMessage;
-}
-
-export function replaceAtSegmentsInRawMessage(
-  rawMessage: string,
+export function renderSupportedMessageSegments(
   messageSegments: NapcatReceiveMessageSegment[],
+  options?: {
+    renderAtSegment?: (segment: NapcatReceiveAtSegment) => string;
+    renderImageSegment?: (segment: NapcatReceiveImageSegment) => string;
+  },
 ): string {
-  let nextMessage = rawMessage;
+  return messageSegments
+    .map(segment => {
+      if (segment.type === "text") {
+        return segment.data.text;
+      }
 
-  for (const segment of messageSegments) {
-    if (segment.type !== "at") {
-      continue;
-    }
+      if (segment.type === "at") {
+        return (
+          options?.renderAtSegment?.(segment) ?? formatAtSegment(segment) ?? `@${segment.data.qq}`
+        );
+      }
 
-    const formattedAt = formatAtSegment(segment);
-    if (!formattedAt) {
-      continue;
-    }
+      if (segment.type === "image") {
+        return (
+          options?.renderImageSegment?.(segment) ?? formatImageSegmentText(segment.data.summary)
+        );
+      }
 
-    const cqAtPattern = new RegExp(`\\[CQ:at,qq=${escapeRegExp(segment.data.qq)}(?:,[^\\]]*)?\\]`);
-
-    if (cqAtPattern.test(nextMessage)) {
-      nextMessage = nextMessage.replace(cqAtPattern, formattedAt);
-      continue;
-    }
-
-    const atName = toNullableString(segment.data.name);
-    if (!atName) {
-      continue;
-    }
-
-    const plainAtPattern = new RegExp(`@${escapeRegExp(atName)}`);
-    nextMessage = nextMessage.replace(plainAtPattern, formattedAt);
-  }
-
-  return nextMessage;
+      return "";
+    })
+    .join("");
 }
 
 export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {
@@ -315,10 +265,6 @@ export function extractDisplayNameFromGroupMemberInfo(
   }
 
   return toNullableString(data.nickname);
-}
-
-export function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function createOutgoingTextSegment(text: string): NapcatSendTextSegment {
