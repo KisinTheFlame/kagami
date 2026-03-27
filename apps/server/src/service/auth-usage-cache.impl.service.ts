@@ -4,11 +4,16 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  type AuthUsageTrendWindow,
   ClaudeCodeUsageLimitsResponseSchema,
   type ClaudeCodeUsageLimitsResponse,
   CodexUsageLimitsResponseSchema,
   type CodexUsageLimitsResponse,
 } from "@kagami/shared";
+import type {
+  AuthUsageSnapshotDao,
+  InsertAuthUsageSnapshotInput,
+} from "../dao/auth-usage-snapshot.dao.js";
 import type { ClaudeCodeProviderAuth } from "../claude-code-auth/types.js";
 import type { CodexProviderAuth } from "../codex-auth/types.js";
 import { AppLogger } from "../logger/logger.js";
@@ -36,6 +41,7 @@ type AuthUsageCacheManagerDeps = {
   claudeCodeAuthService: ClaudeCodeAuthService;
   codexAuthService: CodexAuthService;
   codexBinaryPath: string;
+  authUsageSnapshotDao?: AuthUsageSnapshotDao;
   refreshIntervalMs?: number;
   fetchClaudeUsageLimits?: (auth: ClaudeCodeProviderAuth) => Promise<ClaudeCodeUsageLimitsResponse>;
   fetchCodexUsageLimits?: (
@@ -53,6 +59,7 @@ export class AuthUsageCacheManager {
   private readonly claudeCodeAuthService: ClaudeCodeAuthService;
   private readonly codexAuthService: CodexAuthService;
   private readonly codexBinaryPath: string;
+  private readonly authUsageSnapshotDao: AuthUsageSnapshotDao | null;
   private readonly refreshIntervalMs: number;
   private readonly fetchClaudeUsageLimits: (
     auth: ClaudeCodeProviderAuth,
@@ -70,6 +77,7 @@ export class AuthUsageCacheManager {
     claudeCodeAuthService,
     codexAuthService,
     codexBinaryPath,
+    authUsageSnapshotDao,
     refreshIntervalMs,
     fetchClaudeUsageLimits,
     fetchCodexUsageLimits,
@@ -77,6 +85,7 @@ export class AuthUsageCacheManager {
     this.claudeCodeAuthService = claudeCodeAuthService;
     this.codexAuthService = codexAuthService;
     this.codexBinaryPath = codexBinaryPath;
+    this.authUsageSnapshotDao = authUsageSnapshotDao ?? null;
     this.refreshIntervalMs = refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
     this.fetchClaudeUsageLimits = fetchClaudeUsageLimits ?? fetchClaudeCodeUsageLimitsFromApi;
     this.fetchCodexUsageLimits = fetchCodexUsageLimits ?? fetchCodexUsageLimitsViaAppServer;
@@ -132,7 +141,13 @@ export class AuthUsageCacheManager {
         return;
       }
 
+      const capturedAt = new Date();
       this.claudeCodeUsageLimits = await this.fetchClaudeUsageLimits(auth);
+      await this.recordClaudeCodeSnapshots({
+        auth,
+        limits: this.claudeCodeUsageLimits,
+        capturedAt,
+      });
     } catch (error) {
       logger.warn("Failed to refresh Claude Code usage limits", {
         event: "auth_usage_cache.claude_code_refresh_failed",
@@ -158,9 +173,15 @@ export class AuthUsageCacheManager {
         return;
       }
 
+      const capturedAt = new Date();
       this.codexUsageLimits = await this.fetchCodexUsageLimits({
         auth,
         binaryPath: this.codexBinaryPath,
+      });
+      await this.recordCodexSnapshots({
+        auth,
+        limits: this.codexUsageLimits,
+        capturedAt,
       });
     } catch (error) {
       logger.warn("Failed to refresh Codex usage limits", {
@@ -171,6 +192,119 @@ export class AuthUsageCacheManager {
       this.isRefreshingCodex = false;
     }
   }
+
+  private async recordClaudeCodeSnapshots(input: {
+    auth: ClaudeCodeProviderAuth;
+    limits: ClaudeCodeUsageLimitsResponse;
+    capturedAt: Date;
+  }): Promise<void> {
+    if (!this.authUsageSnapshotDao) {
+      return;
+    }
+
+    if (!input.auth.accountId) {
+      logger.warn("Skip recording Claude Code usage trend without account id", {
+        event: "auth_usage_cache.claude_code_snapshot_skipped",
+      });
+      return;
+    }
+
+    const items: InsertAuthUsageSnapshotInput[] = [];
+    if (input.limits.five_hour) {
+      items.push({
+        provider: "claude-code",
+        accountId: input.auth.accountId,
+        windowKey: "five_hour",
+        remainingPercent: toRemainingPercent(input.limits.five_hour.utilization),
+        resetAt: toOptionalDate(input.limits.five_hour.resets_at),
+        capturedAt: input.capturedAt,
+      });
+    }
+    if (input.limits.seven_day) {
+      items.push({
+        provider: "claude-code",
+        accountId: input.auth.accountId,
+        windowKey: "seven_day",
+        remainingPercent: toRemainingPercent(input.limits.seven_day.utilization),
+        resetAt: toOptionalDate(input.limits.seven_day.resets_at),
+        capturedAt: input.capturedAt,
+      });
+    }
+
+    await this.authUsageSnapshotDao.insertBatch(items);
+  }
+
+  private async recordCodexSnapshots(input: {
+    auth: CodexProviderAuth;
+    limits: CodexUsageLimitsResponse;
+    capturedAt: Date;
+  }): Promise<void> {
+    if (!this.authUsageSnapshotDao) {
+      return;
+    }
+
+    if (!input.auth.accountId) {
+      logger.warn("Skip recording Codex usage trend without account id", {
+        event: "auth_usage_cache.codex_snapshot_skipped",
+      });
+      return;
+    }
+
+    const items: InsertAuthUsageSnapshotInput[] = [];
+    for (const window of [input.limits.primary, input.limits.secondary]) {
+      if (!window) {
+        continue;
+      }
+
+      const windowKey = mapCodexWindowKey(window.windowDurationMins);
+      if (!windowKey) {
+        logger.warn("Skip unsupported Codex usage window", {
+          event: "auth_usage_cache.codex_snapshot_window_unsupported",
+          windowDurationMins: window.windowDurationMins,
+        });
+        continue;
+      }
+
+      items.push({
+        provider: "openai-codex",
+        accountId: input.auth.accountId,
+        windowKey,
+        remainingPercent: toRemainingPercent(window.usedPercent),
+        resetAt: toOptionalDate(window.resetsAt),
+        capturedAt: input.capturedAt,
+      });
+    }
+
+    await this.authUsageSnapshotDao.insertBatch(items);
+  }
+}
+
+function mapCodexWindowKey(windowDurationMins: number): AuthUsageTrendWindow | null {
+  if (windowDurationMins === 300) {
+    return "five_hour";
+  }
+
+  if (windowDurationMins === 10_080) {
+    return "seven_day";
+  }
+
+  return null;
+}
+
+function toOptionalDate(value: number | string | null): Date | null {
+  if (value === null) {
+    return null;
+  }
+
+  const date =
+    typeof value === "number"
+      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
+      : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toRemainingPercent(usedPercent: number): number {
+  return Math.max(0, Math.min(100, 100 - usedPercent));
 }
 
 export async function fetchClaudeCodeUsageLimitsFromApi(

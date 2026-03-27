@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
+  AuthUsageTrendQuerySchema,
+  AuthUsageTrendResponseSchema,
   CodexAuthLoginUrlResponseSchema,
   CodexAuthLogoutResponseSchema,
   CodexAuthRefreshResponseSchema,
@@ -8,10 +10,12 @@ import {
 } from "@kagami/shared";
 import { z } from "zod";
 import type { CodexAuthService } from "../service/codex-auth.service.js";
+import type { AuthUsageTrendQueryService } from "../service/auth-usage-trend-query.service.js";
 import { registerCommandRoute, registerQueryRoute } from "./route.helper.js";
 
 type CodexAuthHandlerDeps = {
   codexAuthService: CodexAuthService;
+  authUsageTrendQueryService: AuthUsageTrendQueryService;
 };
 
 const EmptyBodySchema = z.object({}).strict();
@@ -26,9 +30,11 @@ const CallbackQuerySchema = z
 export class CodexAuthHandler {
   public readonly prefix = "/codex-auth";
   private readonly codexAuthService: CodexAuthService;
+  private readonly authUsageTrendQueryService: AuthUsageTrendQueryService;
 
-  public constructor({ codexAuthService }: CodexAuthHandlerDeps) {
+  public constructor({ codexAuthService, authUsageTrendQueryService }: CodexAuthHandlerDeps) {
     this.codexAuthService = codexAuthService;
+    this.authUsageTrendQueryService = authUsageTrendQueryService;
   }
 
   public register(app: FastifyInstance): void {
@@ -70,6 +76,21 @@ export class CodexAuthHandler {
       querySchema: EmptyQuerySchema,
       responseSchema: CodexUsageLimitsResponseSchema,
       execute: () => this.codexAuthService.getUsageLimits(),
+    });
+
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/usage-trend`,
+      querySchema: AuthUsageTrendQuerySchema,
+      responseSchema: AuthUsageTrendResponseSchema,
+      execute: async ({ query }) => {
+        const status = await this.codexAuthService.getStatus();
+        return await this.authUsageTrendQueryService.query({
+          provider: "openai-codex",
+          accountId: status.session?.accountId ?? null,
+          range: query.range,
+        });
+      },
     });
 
     app.get(`${this.prefix}/callback`, async (request, reply) => {

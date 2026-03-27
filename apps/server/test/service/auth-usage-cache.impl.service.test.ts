@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeCodeUsageLimitsResponse, CodexUsageLimitsResponse } from "@kagami/shared";
+import type { AuthUsageSnapshotDao } from "../../src/dao/auth-usage-snapshot.dao.js";
 import {
   AuthUsageCacheManager,
   EMPTY_CLAUDE_CODE_USAGE_LIMITS,
@@ -45,10 +46,12 @@ describe("AuthUsageCacheManager", () => {
 
     const claudeCodeAuthService = createClaudeCodeAuthService();
     const codexAuthService = createCodexAuthService();
+    const authUsageSnapshotDao = createAuthUsageSnapshotDao();
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService,
       codexAuthService,
       codexBinaryPath: "codex",
+      authUsageSnapshotDao,
       fetchClaudeUsageLimits: claudeFetch,
       fetchCodexUsageLimits: codexFetch,
     });
@@ -74,6 +77,29 @@ describe("AuthUsageCacheManager", () => {
     expect(codexFetch).toHaveBeenCalledTimes(1);
     expect(claudeCodeAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
     expect(codexAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
+    expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledTimes(2);
+    expect(authUsageSnapshotDao.insertBatch).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "claude-code",
+          accountId: "user_123",
+          windowKey: "five_hour",
+          remainingPercent: 75,
+        }),
+      ]),
+    );
+    expect(authUsageSnapshotDao.insertBatch).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "openai-codex",
+          accountId: "acct_123",
+          windowKey: "five_hour",
+          remainingPercent: 56,
+        }),
+      ]),
+    );
 
     await vi.advanceTimersByTimeAsync(60_000);
 
@@ -170,6 +196,55 @@ describe("AuthUsageCacheManager", () => {
 
     await manager.refreshAll();
     expect(await manager.getCodexUsageLimits()).toEqual(EMPTY_CODEX_USAGE_LIMITS);
+  });
+
+  it("should skip snapshot writes when account id is missing", async () => {
+    const authUsageSnapshotDao = createAuthUsageSnapshotDao();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+          accessToken: "claude-access-token",
+          refreshToken: "claude-refresh-token",
+          accountId: undefined,
+          email: "claude@example.com",
+          lastRefresh: "2026-03-25T00:00:00.000Z",
+          expiresAt: Date.now() + 60_000,
+        }),
+      }),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+          accessToken: "codex-access-token",
+          refreshToken: "codex-refresh-token",
+          idToken: "codex-id-token",
+          accountId: undefined,
+          email: "codex@example.com",
+          lastRefresh: "2026-03-25T00:00:00.000Z",
+          expiresAt: Date.now() + 60_000,
+        }),
+      }),
+      codexBinaryPath: "codex",
+      authUsageSnapshotDao,
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: {
+          utilization: 19,
+          resets_at: "2026-03-25T12:00:00.000Z",
+        },
+        seven_day: null,
+        extra_usage: null,
+      }),
+      fetchCodexUsageLimits: vi.fn().mockResolvedValue({
+        primary: {
+          usedPercent: 52,
+          windowDurationMins: 300,
+          resetsAt: 1_774_400_000_000,
+        },
+        secondary: null,
+      }),
+    });
+
+    await manager.refreshAll();
+
+    expect(authUsageSnapshotDao.insertBatch).not.toHaveBeenCalled();
   });
 });
 
@@ -369,6 +444,16 @@ function createCodexAuthService(overrides?: Partial<CodexAuthService>): CodexAut
       lastRefresh: "2026-03-25T00:00:00.000Z",
       expiresAt: Date.now() + 60_000,
     }),
+    ...overrides,
+  };
+}
+
+function createAuthUsageSnapshotDao(
+  overrides?: Partial<AuthUsageSnapshotDao>,
+): AuthUsageSnapshotDao {
+  return {
+    insertBatch: vi.fn().mockResolvedValue(undefined),
+    listByRange: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
+  AuthUsageTrendQuerySchema,
+  AuthUsageTrendResponseSchema,
   ClaudeCodeAuthLoginUrlResponseSchema,
   ClaudeCodeAuthLogoutResponseSchema,
   ClaudeCodeAuthRefreshResponseSchema,
@@ -8,10 +10,12 @@ import {
 } from "@kagami/shared";
 import { z } from "zod";
 import type { ClaudeCodeAuthService } from "../service/claude-code-auth.service.js";
+import type { AuthUsageTrendQueryService } from "../service/auth-usage-trend-query.service.js";
 import { registerCommandRoute, registerQueryRoute } from "./route.helper.js";
 
 type ClaudeCodeAuthHandlerDeps = {
   claudeCodeAuthService: ClaudeCodeAuthService;
+  authUsageTrendQueryService: AuthUsageTrendQueryService;
 };
 
 const EmptyBodySchema = z.object({}).strict();
@@ -26,9 +30,14 @@ const CallbackQuerySchema = z
 export class ClaudeCodeAuthHandler {
   public readonly prefix = "/claude-code-auth";
   private readonly claudeCodeAuthService: ClaudeCodeAuthService;
+  private readonly authUsageTrendQueryService: AuthUsageTrendQueryService;
 
-  public constructor({ claudeCodeAuthService }: ClaudeCodeAuthHandlerDeps) {
+  public constructor({
+    claudeCodeAuthService,
+    authUsageTrendQueryService,
+  }: ClaudeCodeAuthHandlerDeps) {
     this.claudeCodeAuthService = claudeCodeAuthService;
+    this.authUsageTrendQueryService = authUsageTrendQueryService;
   }
 
   public register(app: FastifyInstance): void {
@@ -70,6 +79,21 @@ export class ClaudeCodeAuthHandler {
       querySchema: EmptyQuerySchema,
       responseSchema: ClaudeCodeUsageLimitsResponseSchema,
       execute: () => this.claudeCodeAuthService.getUsageLimits(),
+    });
+
+    registerQueryRoute({
+      app,
+      path: `${this.prefix}/usage-trend`,
+      querySchema: AuthUsageTrendQuerySchema,
+      responseSchema: AuthUsageTrendResponseSchema,
+      execute: async ({ query }) => {
+        const status = await this.claudeCodeAuthService.getStatus();
+        return await this.authUsageTrendQueryService.query({
+          provider: "claude-code",
+          accountId: status.session?.accountId ?? null,
+          range: query.range,
+        });
+      },
     });
 
     app.get(`${this.prefix}/callback`, async (request, reply) => {

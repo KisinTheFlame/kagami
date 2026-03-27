@@ -225,3 +225,18 @@ model ClaudeCodeOAuthState {
   @@index([expiresAt], map: "claude_code_oauth_state_expires_at_idx")
   @@map("claude_code_oauth_state")
 }
+
+model AuthUsageSnapshot {
+  id               Int       @id @default(autoincrement())
+  provider         String
+  accountId        String    @map("account_id")
+  windowKey        String    @map("window_key")
+  remainingPercent Float     @map("remaining_percent")
+  resetAt          DateTime? @map("reset_at") @db.Timestamptz(6)
+  capturedAt       DateTime  @default(now()) @map("captured_at") @db.Timestamptz(6)
+
+  @@index([provider, accountId, capturedAt], map: "auth_usage_snapshot_provider_account_captured_at_idx")
+  @@index([provider, accountId, windowKey, capturedAt], map: "auth_usage_snapshot_provider_account_window_captured_at_idx")
+  @@index([capturedAt], map: "auth_usage_snapshot_captured_at_idx")
+  @@map("auth_usage_snapshot")
+}

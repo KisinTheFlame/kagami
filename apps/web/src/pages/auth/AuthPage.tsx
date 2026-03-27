@@ -1,4 +1,7 @@
 import {
+  AuthUsageTrendResponseSchema,
+  type AuthUsageTrendRange,
+  type AuthUsageTrendResponse,
   ClaudeCodeAuthLoginUrlResponseSchema,
   ClaudeCodeAuthRefreshResponseSchema,
   ClaudeCodeAuthStatusResponseSchema,
@@ -10,10 +13,19 @@ import {
 } from "@kagami/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
-import { type ReactElement, useMemo } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { Navigate, NavLink, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { apiFetch, apiRequest } from "@/lib/api";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 type AuthProvider = "codex" | "claude-code";
 type AuthStatus = "active" | "expired" | "refresh_failed" | "logged_out" | "unavailable";
@@ -41,6 +53,14 @@ type AuthUsageLimitsData =
       limits: ReturnType<typeof ClaudeCodeUsageLimitsResponseSchema.parse>;
     };
 
+type AuthUsageTrendData = AuthUsageTrendResponse;
+
+type TrendChartRow = {
+  capturedAt: string;
+  five_hour: number | null;
+  seven_day: number | null;
+};
+
 type AuthProviderConfig = {
   key: AuthProvider;
   label: string;
@@ -51,6 +71,10 @@ type AuthProviderConfig = {
   backgroundClassName: string;
   successMessage: string;
   errorMessage: string;
+  trendColors: {
+    fiveHour: string;
+    sevenDay: string;
+  };
   parseStatusResponse: (value: unknown) => AuthStatusResponse;
   parseLoginUrlResponse: (value: unknown) => { loginUrl: string; expiresAt: string };
   parseRefreshResponse: (value: unknown) => unknown;
@@ -69,6 +93,10 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
       "bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.10),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
     successMessage: "Codex 登录已完成。",
     errorMessage: "Codex 登录失败。",
+    trendColors: {
+      fiveHour: "#16a34a",
+      sevenDay: "#2563eb",
+    },
     parseStatusResponse: value => {
       const parsed = CodexAuthStatusResponseSchema.parse(value);
       return {
@@ -103,6 +131,10 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
       "bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.12),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
     successMessage: "Claude Code 登录已完成。",
     errorMessage: "Claude Code 登录失败。",
+    trendColors: {
+      fiveHour: "#f59e0b",
+      sevenDay: "#0ea5e9",
+    },
     parseStatusResponse: value => {
       const parsed = ClaudeCodeAuthStatusResponseSchema.parse(value);
       return {
@@ -134,6 +166,7 @@ export function AuthPage() {
   const { provider } = useParams<{ provider?: string }>();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const [trendRange, setTrendRange] = useState<AuthUsageTrendRange>("24h");
   const providerValue = provider ?? "";
   const providerKey: AuthProvider = isAuthProvider(providerValue) ? providerValue : "codex";
   const providerConfig = providerConfigs[providerKey];
@@ -154,6 +187,15 @@ export function AuthPage() {
     queryFn: async () => {
       const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/usage-limits`);
       return providerConfig.parseUsageLimitsResponse(response);
+    },
+  });
+  const usageTrendQuery = useQuery({
+    queryKey: ["auth-usage-trend", providerConfig.key, trendRange],
+    queryFn: async () => {
+      const response = await apiFetch<unknown>(
+        `${providerConfig.endpointPrefix}/usage-trend?range=${trendRange}`,
+      );
+      return AuthUsageTrendResponseSchema.parse(response);
     },
   });
 
@@ -194,6 +236,9 @@ export function AuthPage() {
         queryClient.invalidateQueries({
           queryKey: ["auth-usage-limits", providerConfig.key],
         }),
+        queryClient.invalidateQueries({
+          queryKey: ["auth-usage-trend", providerConfig.key],
+        }),
       ]);
     },
   });
@@ -215,6 +260,9 @@ export function AuthPage() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["auth-usage-limits", providerConfig.key],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["auth-usage-trend", providerConfig.key],
         }),
       ]);
     },
@@ -409,6 +457,50 @@ export function AuthPage() {
           ) : (
             <p className="mt-6 text-sm text-slate-500">暂无额度信息。</p>
           )}
+
+          <div className="mt-8 border-t border-slate-200/80 pt-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">剩余额度趋势</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  按分钟采样记录当前账号的 5 小时与 7 天剩余额度变化。
+                </p>
+              </div>
+
+              <div className="inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1 md:w-auto">
+                {(["24h", "7d"] as const).map(range => (
+                  <Button
+                    key={range}
+                    type="button"
+                    size="sm"
+                    variant={trendRange === range ? "default" : "ghost"}
+                    className="rounded-xl"
+                    onClick={() => setTrendRange(range)}
+                  >
+                    {range === "24h" ? "24 小时" : "7 天"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {usageTrendQuery.isLoading ? (
+              <p className="mt-6 text-sm text-slate-500">正在读取趋势数据...</p>
+            ) : usageTrendQuery.isError ? (
+              <p className="mt-6 text-sm text-rose-600">{usageTrendQuery.error.message}</p>
+            ) : usageTrendQuery.data ? (
+              <div className="mt-6">
+                <UsageTrendPanel
+                  data={usageTrendQuery.data}
+                  providerConfig={providerConfig}
+                  providerKey={providerKey}
+                />
+              </div>
+            ) : (
+              <p className="mt-6 text-sm text-slate-500">
+                暂无趋势数据，历史数据会从部署后开始积累。
+              </p>
+            )}
+          </div>
         </section>
       </div>
     </div>
@@ -479,6 +571,121 @@ function ClaudeUsageLimitsPanel({
   }
 
   return <div className={getUsageGridClassName(items.length)}>{items}</div>;
+}
+
+function UsageTrendPanel({
+  data,
+  providerConfig,
+  providerKey,
+}: {
+  data: AuthUsageTrendData;
+  providerConfig: AuthProviderConfig;
+  providerKey: AuthProvider;
+}) {
+  const chartData = useMemo(() => buildTrendChartData(data), [data]);
+  const hasPoints = chartData.some(item => item.five_hour !== null || item.seven_day !== null);
+  const chartConfig = useMemo(
+    () =>
+      ({
+        five_hour: {
+          label: "5 小时",
+          color: providerConfig.trendColors.fiveHour,
+        },
+        seven_day: {
+          label: "7 天",
+          color: providerConfig.trendColors.sevenDay,
+        },
+      }) satisfies ChartConfig,
+    [providerConfig.trendColors.fiveHour, providerConfig.trendColors.sevenDay],
+  );
+
+  if (!hasPoints) {
+    return (
+      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-sm text-slate-500">
+        暂无趋势数据，历史数据会从部署后开始积累。
+      </p>
+    );
+  }
+
+  const gradientPrefix = `usage-trend-${providerKey}`;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:p-5">
+      <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <AreaChart
+          accessibilityLayer
+          data={chartData}
+          margin={{ left: 12, right: 12, top: 8, bottom: 8 }}
+        >
+          <defs>
+            <linearGradient id={`${gradientPrefix}-five-hour`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--color-five_hour)" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="var(--color-five_hour)" stopOpacity={0.04} />
+            </linearGradient>
+            <linearGradient id={`${gradientPrefix}-seven-day`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--color-seven_day)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="var(--color-seven_day)" stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} />
+          <XAxis
+            dataKey="capturedAt"
+            tickLine={false}
+            axisLine={false}
+            minTickGap={24}
+            tickFormatter={value => formatTrendAxisTick(value, data.range)}
+          />
+          <YAxis
+            domain={[0, 100]}
+            tickLine={false}
+            axisLine={false}
+            width={40}
+            tickFormatter={value => `${value}%`}
+          />
+          <ChartTooltip
+            cursor={false}
+            content={
+              <ChartTooltipContent
+                indicator="line"
+                labelFormatter={value => formatTrendTooltipLabel(String(value), data.range)}
+                formatter={(value, name, item) => (
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div
+                        className="h-2.5 w-2.5 rounded-[2px]"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span>{getTrendWindowLabel(String(name))}</span>
+                    </div>
+                    <span className="font-mono font-medium tabular-nums text-foreground">
+                      {formatPercent(Number(value))}
+                    </span>
+                  </div>
+                )}
+              />
+            }
+          />
+          <ChartLegend content={<ChartLegendContent />} />
+          <Area
+            type="monotone"
+            dataKey="five_hour"
+            stroke="var(--color-five_hour)"
+            fill={`url(#${gradientPrefix}-five-hour)`}
+            strokeWidth={2}
+            connectNulls
+          />
+          <Area
+            type="monotone"
+            dataKey="seven_day"
+            stroke="var(--color-seven_day)"
+            fill={`url(#${gradientPrefix}-seven-day)`}
+            strokeWidth={2}
+            connectNulls
+          />
+        </AreaChart>
+      </ChartContainer>
+    </div>
+  );
 }
 
 function CodexUsageLimitsPanel({
@@ -791,4 +998,75 @@ function getUsageToneClass(usedPercent: number | null): string {
   }
 
   return "bg-emerald-100 text-emerald-700";
+}
+
+function buildTrendChartData(data: AuthUsageTrendData): TrendChartRow[] {
+  const rows = new Map<string, TrendChartRow>();
+
+  for (const series of data.series) {
+    for (const point of series.points) {
+      const existing =
+        rows.get(point.capturedAt) ??
+        ({
+          capturedAt: point.capturedAt,
+          five_hour: null,
+          seven_day: null,
+        } satisfies TrendChartRow);
+
+      existing[series.windowKey] = point.remainingPercent;
+      rows.set(point.capturedAt, existing);
+    }
+  }
+
+  return [...rows.values()].sort(
+    (left, right) => new Date(left.capturedAt).getTime() - new Date(right.capturedAt).getTime(),
+  );
+}
+
+function formatTrendAxisTick(value: string, range: AuthUsageTrendRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    ...(range === "24h"
+      ? {
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      : {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+        }),
+  }).format(date);
+}
+
+function formatTrendTooltipLabel(value: string, range: AuthUsageTrendRange): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(range === "7d" ? {} : { second: "2-digit" }),
+  }).format(date);
+}
+
+function getTrendWindowLabel(value: string): string {
+  if (value === "five_hour") {
+    return "5 小时";
+  }
+
+  if (value === "seven_day") {
+    return "7 天";
+  }
+
+  return value;
 }

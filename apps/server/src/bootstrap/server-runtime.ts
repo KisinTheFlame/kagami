@@ -24,6 +24,7 @@ import { CodexAuthCallbackServer } from "../codex-auth/callback-server.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaClaudeCodeAuthDao } from "../dao/impl/claude-code-auth.impl.dao.js";
 import { PrismaCodexAuthDao } from "../dao/impl/codex-auth.impl.dao.js";
+import { PrismaAuthUsageSnapshotDao } from "../dao/impl/auth-usage-snapshot.impl.dao.js";
 import { PrismaEmbeddingCacheDao } from "../dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLoopRunDao } from "../dao/impl/loop-run.impl.dao.js";
@@ -61,6 +62,7 @@ import { GroupMessageChunkIndexer } from "../rag/indexer.service.js";
 import { DefaultAgentMessageService } from "../service/agent-message.impl.service.js";
 import { DefaultAppLogQueryService } from "../service/app-log-query.impl.service.js";
 import { AuthUsageCacheManager } from "../service/auth-usage-cache.impl.service.js";
+import { DefaultAuthUsageTrendQueryService } from "../service/auth-usage-trend-query.impl.service.js";
 import { DefaultClaudeCodeAuthService } from "../service/claude-code-auth.impl.service.js";
 import { DefaultCodexAuthService } from "../service/codex-auth.impl.service.js";
 import { DefaultEmbeddingCacheQueryService } from "../service/embedding-cache-query.impl.service.js";
@@ -130,6 +132,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const loopRunDao = new PrismaLoopRunDao({ database });
   const claudeCodeAuthDao = new PrismaClaudeCodeAuthDao({ database });
   const codexAuthDao = new PrismaCodexAuthDao({ database });
+  const authUsageSnapshotDao = new PrismaAuthUsageSnapshotDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database });
@@ -149,6 +152,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const napcatGroupMessageQueryService = new DefaultNapcatGroupMessageQueryService({
     napcatGroupMessageDao,
+  });
+  const authUsageTrendQueryService = new DefaultAuthUsageTrendQueryService({
+    authUsageSnapshotDao,
   });
 
   const claudeCodeAuthConfig = await configManager.getClaudeCodeAuthRuntimeConfig();
@@ -183,6 +189,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     claudeCodeAuthService: claudeCodeAuthRuntime.service,
     codexAuthService: codexAuthRuntime.service,
     codexBinaryPath: codexAuthConfig.binaryPath,
+    authUsageSnapshotDao,
   });
   claudeCodeAuthRuntime.service.setUsageLimitsProvider(() =>
     authUsageCacheManager.getClaudeCodeUsageLimits(),
@@ -361,8 +368,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
-      new ClaudeCodeAuthHandler({ claudeCodeAuthService: claudeCodeAuthRuntime.service }),
-      new CodexAuthHandler({ codexAuthService: codexAuthRuntime.service }),
+      new ClaudeCodeAuthHandler({
+        claudeCodeAuthService: claudeCodeAuthRuntime.service,
+        authUsageTrendQueryService,
+      }),
+      new CodexAuthHandler({
+        codexAuthService: codexAuthRuntime.service,
+        authUsageTrendQueryService,
+      }),
       new LlmHandler({ llmPlaygroundService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new LoopRunHandler({ loopRunQueryService }),

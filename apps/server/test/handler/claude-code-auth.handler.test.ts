@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeCodeAuthHandler } from "../../src/handler/claude-code-auth.handler.js";
+import type { AuthUsageTrendQueryService } from "../../src/service/auth-usage-trend-query.service.js";
 import type { ClaudeCodeAuthService } from "../../src/service/claude-code-auth.service.js";
 
 describe("ClaudeCodeAuthHandler", () => {
@@ -63,8 +64,28 @@ describe("ClaudeCodeAuthHandler", () => {
       getAuthWithoutRefresh: vi.fn(),
       getAuth: vi.fn(),
     };
+    const authUsageTrendQueryService: AuthUsageTrendQueryService = {
+      query: vi.fn().mockResolvedValue({
+        range: "24h",
+        series: [
+          {
+            windowKey: "five_hour",
+            label: "5 小时",
+            points: [],
+          },
+          {
+            windowKey: "seven_day",
+            label: "7 天",
+            points: [],
+          },
+        ],
+      }),
+    };
 
-    new ClaudeCodeAuthHandler({ claudeCodeAuthService }).register(app);
+    new ClaudeCodeAuthHandler({
+      claudeCodeAuthService,
+      authUsageTrendQueryService,
+    }).register(app);
 
     const statusResponse = await app.inject({
       method: "GET",
@@ -98,6 +119,17 @@ describe("ClaudeCodeAuthHandler", () => {
       url: "/claude-code-auth/usage-limits",
     });
     expect(usageLimitsResponse.statusCode).toBe(200);
+
+    const usageTrendResponse = await app.inject({
+      method: "GET",
+      url: "/claude-code-auth/usage-trend?range=24h",
+    });
+    expect(usageTrendResponse.statusCode).toBe(200);
+    expect(authUsageTrendQueryService.query).toHaveBeenCalledWith({
+      provider: "claude-code",
+      accountId: "user_123",
+      range: "24h",
+    });
 
     const callbackResponse = await app.inject({
       method: "GET",

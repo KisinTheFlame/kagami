@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodexAuthHandler } from "../../src/handler/codex-auth.handler.js";
+import type { AuthUsageTrendQueryService } from "../../src/service/auth-usage-trend-query.service.js";
 import type { CodexAuthService } from "../../src/service/codex-auth.service.js";
 
 describe("CodexAuthHandler", () => {
@@ -63,8 +64,25 @@ describe("CodexAuthHandler", () => {
       getAuthWithoutRefresh: vi.fn(),
       getAuth: vi.fn(),
     };
+    const authUsageTrendQueryService: AuthUsageTrendQueryService = {
+      query: vi.fn().mockResolvedValue({
+        range: "24h",
+        series: [
+          {
+            windowKey: "five_hour",
+            label: "5 小时",
+            points: [],
+          },
+          {
+            windowKey: "seven_day",
+            label: "7 天",
+            points: [],
+          },
+        ],
+      }),
+    };
 
-    new CodexAuthHandler({ codexAuthService }).register(app);
+    new CodexAuthHandler({ codexAuthService, authUsageTrendQueryService }).register(app);
 
     const statusResponse = await app.inject({
       method: "GET",
@@ -98,6 +116,17 @@ describe("CodexAuthHandler", () => {
       url: "/codex-auth/usage-limits",
     });
     expect(usageLimitsResponse.statusCode).toBe(200);
+
+    const usageTrendResponse = await app.inject({
+      method: "GET",
+      url: "/codex-auth/usage-trend?range=24h",
+    });
+    expect(usageTrendResponse.statusCode).toBe(200);
+    expect(authUsageTrendQueryService.query).toHaveBeenCalledWith({
+      provider: "openai-codex",
+      accountId: "acct_123",
+      range: "24h",
+    });
 
     const callbackResponse = await app.inject({
       method: "GET",
