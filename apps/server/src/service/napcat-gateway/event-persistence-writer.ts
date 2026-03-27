@@ -58,7 +58,6 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
         subType: event.subType,
         userId: event.userId,
         groupId: event.groupId,
-        rawMessage: event.rawMessage,
         eventTime: event.eventTime,
         payload: event.payload,
       })

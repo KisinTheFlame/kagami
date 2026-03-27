@@ -32,13 +32,6 @@ export function NapcatEventDetailPanel({ item }: NapcatEventDetailPanelProps) {
 
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <section className="space-y-2">
-          <h3 className="text-base font-semibold">Raw Message</h3>
-          <pre className="whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
-            {item.rawMessage ?? "—"}
-          </pre>
-        </section>
-
-        <section className="space-y-2">
           <h3 className="text-base font-semibold">Payload (JSON)</h3>
           <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
             {safeStringify(item.payload)}

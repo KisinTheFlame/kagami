@@ -18,7 +18,7 @@ import {
   normalizeOptionalText,
   setIfNonEmpty,
 } from "@/lib/search-params";
-import { cn, truncateText } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { NapcatEventDetailPanel } from "./NapcatEventDetailPanel";
 import { useNapcatEventList } from "./useNapcatEventList";
 
@@ -28,7 +28,6 @@ type FilterFormState = {
   postType: string;
   messageType: string;
   userId: string;
-  keyword: string;
   startAtLocal: string;
   endAtLocal: string;
 };
@@ -120,18 +119,6 @@ export function NapcatEventHistoryPage() {
 
             <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
-                关键词
-              </span>
-              <input
-                value={formState.keyword}
-                onChange={event => setFormState(prev => ({ ...prev, keyword: event.target.value }))}
-                placeholder="匹配 raw_message"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
-              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
                 开始时间
               </span>
               <input
@@ -178,7 +165,7 @@ export function NapcatEventHistoryPage() {
                 <TableHead className="w-[120px]">Post Type</TableHead>
                 <TableHead className="w-[120px]">Message Type</TableHead>
                 <TableHead className="w-[180px]">User ID</TableHead>
-                <TableHead>Raw Message</TableHead>
+                <TableHead className="w-[180px]">Group ID</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -212,7 +199,9 @@ export function NapcatEventHistoryPage() {
                     <TableCell className="truncate font-mono text-xs text-muted-foreground">
                       {item.userId ?? "—"}
                     </TableCell>
-                    <TableCell className="truncate text-sm">{item.rawMessage ?? "—"}</TableCell>
+                    <TableCell className="truncate font-mono text-xs text-muted-foreground">
+                      {item.groupId ?? "—"}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -264,7 +253,6 @@ function parseFilters(params: URLSearchParams) {
     postType: normalizeOptionalText(params.get("postType")),
     messageType: normalizeOptionalText(params.get("messageType")),
     userId: normalizeOptionalText(params.get("userId")),
-    keyword: normalizeOptionalText(params.get("keyword")),
     startAt: normalizeOptionalText(params.get("startAt")),
     endAt: normalizeOptionalText(params.get("endAt")),
   };
@@ -275,7 +263,6 @@ function toFormState(params: URLSearchParams): FilterFormState {
     postType: params.get("postType") ?? "",
     messageType: params.get("messageType") ?? "",
     userId: params.get("userId") ?? "",
-    keyword: params.get("keyword") ?? "",
     startAtLocal: isoToLocalDateTime(params.get("startAt")),
     endAtLocal: isoToLocalDateTime(params.get("endAt")),
   };
@@ -287,7 +274,6 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
   setIfNonEmpty(nextParams, "postType", formState.postType);
   setIfNonEmpty(nextParams, "messageType", formState.messageType);
   setIfNonEmpty(nextParams, "userId", formState.userId);
-  setIfNonEmpty(nextParams, "keyword", formState.keyword);
 
   const startAt = localDateTimeToIso(formState.startAtLocal);
   const endAt = localDateTimeToIso(formState.endAtLocal);
@@ -307,7 +293,6 @@ function createEmptyFormState(): FilterFormState {
     postType: "",
     messageType: "",
     userId: "",
-    keyword: "",
     startAtLocal: "",
     endAtLocal: "",
   };
@@ -353,7 +338,7 @@ function NapcatEventMobileCard({
         </span>
       </div>
 
-      <p className="mt-3 text-sm text-foreground">{truncateText(item.rawMessage ?? "—", 140)}</p>
+      <p className="mt-3 font-mono text-xs text-muted-foreground">{item.groupId ?? "—"}</p>
       <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
     </MobileSelectCard>
   );

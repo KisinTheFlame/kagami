@@ -19,7 +19,6 @@ export class DefaultNapcatEventQueryService implements NapcatEventQueryService {
       postType: query.postType,
       messageType: query.messageType,
       userId: query.userId,
-      keyword: query.keyword,
       startAt: query.startAt,
       endAt: query.endAt,
     };

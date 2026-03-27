@@ -27,7 +27,6 @@ export class PrismaNapcatEventDao implements NapcatEventDao {
         subType: item.subType,
         userId: item.userId,
         groupId: item.groupId,
-        rawMessage: item.rawMessage,
         eventTime: item.eventTime,
         payload: toInputJsonObject(item.payload),
         createdAt: item.createdAt,
@@ -58,7 +57,6 @@ export class PrismaNapcatEventDao implements NapcatEventDao {
       subType: item.subType,
       userId: item.userId,
       groupId: item.groupId,
-      rawMessage: item.rawMessage,
       eventTime: item.eventTime,
       payload: toJsonRecord(item.payload),
       createdAt: item.createdAt,
@@ -77,12 +75,6 @@ function buildWhereInput(input: QueryNapcatEventListFilterInput): Prisma.NapcatE
   }
   if (input.userId) {
     where.userId = input.userId;
-  }
-  if (input.keyword) {
-    where.rawMessage = {
-      contains: input.keyword,
-      mode: "insensitive",
-    };
   }
 
   const createdAt: Prisma.DateTimeFilter = {};

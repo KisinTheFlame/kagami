@@ -6,7 +6,6 @@ export type InsertNapcatEventItem = {
   subType: string | null;
   userId: string | null;
   groupId: string | null;
-  rawMessage: string | null;
   eventTime: Date | null;
   payload: Record<string, unknown>;
   createdAt?: Date;
@@ -19,7 +18,6 @@ export type NapcatEventItem = {
   subType: string | null;
   userId: string | null;
   groupId: string | null;
-  rawMessage: string | null;
   eventTime: Date | null;
   payload: Record<string, unknown>;
   createdAt: Date;

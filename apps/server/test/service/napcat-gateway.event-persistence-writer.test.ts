@@ -47,9 +47,12 @@ describe("NapcatEventPersistenceWriter", () => {
         messageType: "private",
         subType: "friend",
         userId: "123456",
-        rawMessage: "hi",
+        payload: {
+          post_type: "message",
+        },
       }),
     );
+    expect(napcatEventDao.insert.mock.calls[0]?.[0]).not.toHaveProperty("rawMessage");
   });
 
   it("should not persist blocked post_type events", async () => {

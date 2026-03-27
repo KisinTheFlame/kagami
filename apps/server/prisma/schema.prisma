@@ -107,7 +107,6 @@ model NapcatEvent {
   subType     String?   @map("sub_type")
   userId      String?   @map("user_id")
   groupId     String?   @map("group_id")
-  rawMessage  String?   @map("raw_message")
   eventTime   DateTime? @map("event_time") @db.Timestamptz(6)
   payload     Json      @db.JsonB
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

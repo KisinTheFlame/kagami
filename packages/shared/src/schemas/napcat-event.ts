@@ -10,7 +10,6 @@ export const NapcatEventListQuerySchema = PaginationQuerySchema.extend({
   postType: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   messageType: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   userId: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  keyword: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   startAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
   endAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
 }).superRefine((value, ctx) => {
@@ -36,7 +35,6 @@ export const NapcatEventItemSchema = z.object({
   subType: z.string().nullable(),
   userId: z.string().nullable(),
   groupId: z.string().nullable(),
-  rawMessage: z.string().nullable(),
   eventTime: z.string().datetime().nullable(),
   payload: JsonRecordSchema,
   createdAt: z.string().datetime(),

@@ -27,7 +27,6 @@ function mapNapcatEventItem(item: NapcatEventDaoItem): NapcatEventItem {
     subType: item.subType,
     userId: item.userId,
     groupId: item.groupId,
-    rawMessage: item.rawMessage,
     eventTime: item.eventTime ? item.eventTime.toISOString() : null,
     payload: item.payload,
     createdAt: item.createdAt.toISOString(),

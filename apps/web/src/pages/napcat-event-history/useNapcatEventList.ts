@@ -19,7 +19,6 @@ export function useNapcatEventList(
         postType: filters.postType,
         messageType: filters.messageType,
         userId: filters.userId,
-        keyword: filters.keyword,
         startAt: filters.startAt,
         endAt: filters.endAt,
       });
