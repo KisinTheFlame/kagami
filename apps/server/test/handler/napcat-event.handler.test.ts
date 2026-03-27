@@ -29,7 +29,7 @@ describe("NapcatEventHandler", () => {
           subType: "friend",
           userId: "123456",
           groupId: null,
-          rawMessage: "hello",
+          rawMessage: "",
           eventTime: new Date().toISOString(),
           payload: {
             post_type: "message",
