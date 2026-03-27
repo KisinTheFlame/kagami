@@ -1,66 +1,64 @@
 # 指示
 
-## 项目简介
+## 项目定位
 
-Kagami 是一个基于 pnpm Monorepo 的全栈 TypeScript 项目，包含三个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含三个工作空间包：
 
-- `apps/server` — Fastify 后端服务（`@kagami/server`）
-- `apps/web` — React 前端应用（`@kagami/web`）
-- `packages/shared` — 前后端共享的类型与工具（`@kagami/shared`）
+- `apps/server`：Fastify 后端服务（`@kagami/server`）
+- `apps/web`：React 前端管理台（`@kagami/web`）
+- `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
+
+workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `apps/*` 与 `packages/*`。
+
+## 硬约束
+
+- 除非任务明确要求，否则默认在仓库根目录执行命令。
+- 数据库相关命令统一读取仓库根目录 `config.yaml` 中的 `server.databaseUrl`。
+- 修改配置 schema 时，必须同步更新：
+  - `apps/server/src/config/config.loader.ts`
+  - `config.yaml`
+  - `config.yaml.example`
+- 提交前至少执行：
+
+```sh
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm format
+```
+
+需保证全部成功。
 
 ## 常用命令
 
-### 构建部署
+### 根目录命令
 
 ```bash
-pnpm build # 构建所有包（顺序执行，shared → server/web）
+pnpm build # 按 workspace 依赖拓扑构建所有包
 pnpm typecheck # 对所有包执行 TypeScript 类型检查
-pnpm test # 运行各包测试（仅执行声明了 test 脚本的包）
-pnpm app:deploy # 标准发布链路：build -> prisma migrate deploy -> PM2 reload
-```
-
-### 代码质量
-
-```bash
+pnpm test # 运行声明了 test 脚本的包
 pnpm lint # ESLint 检查
 pnpm lint:fix # ESLint 自动修复
 pnpm format # Prettier 格式检查
 pnpm format:write # Prettier 自动格式化
+pnpm app:deploy # build -> prisma migrate deploy -> PM2 reload/startOrReload -> pm2 save
 ```
 
-### 数据库（在仓库根目录执行，直接连接 config.yaml 中的数据库）
-
-```bash
-pnpm db:migrate:dev -- --name <migration_name> # 在本机数据库生成迁移（create-only，落盘到仓库）
-pnpm db:migrate:deploy # 部署/上线时应用已有迁移
-pnpm db:migrate:status # 查看迁移状态
-pnpm db:migrate:reset # 重置数据库（危险）
-pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
-```
-
-约束：数据库相关命令统一读取仓库根目录 `config.yaml` 中的 `server.databaseUrl`。
-
-数据库变更流程：
-
-1. 修改 `apps/server/prisma/schema.prisma`。
-2. 在本地执行 `pnpm db:migrate:dev -- --name <migration_name>`（脚本会自动补上 `--create-only`，使用 `config.yaml` 指向的数据库生成新迁移）。
-3. 提交 `prisma/migrations/*` 与 schema 变更。
-4. 通过 `pnpm db:migrate:deploy`（或 `pnpm app:deploy` 内置步骤）将迁移应用到目标数据库。
-
-已有数据库接入 Prisma Migrate（基线）：
-
-1. 如果数据库结构已与当前 schema 对齐，先执行  
-   `pnpm db:migrate:resolve -- --applied <baseline_migration_id>`  
-   避免重复建表。
-2. 后续按标准流程使用 `db:migrate:dev`（生成）和 `db:migrate:deploy`（应用）。
-
-### 针对单个包执行命令
+### 单包命令
 
 ```bash
 pnpm --filter @kagami/server <script>
 pnpm --filter @kagami/web <script>
 pnpm --filter @kagami/shared <script>
 ```
+
+### 当前开发现状
+
+- 当前仓库没有统一的根目录 `pnpm dev` 脚本。
+- `apps/server` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
+- `apps/web` 当前提供 `build`、`typecheck` 脚本。
+- `packages/shared` 当前提供 `build`、`typecheck` 脚本。
+- 因此前后端联调时，需要按实际情况分别启动或补充本地开发脚本，不要假设仓库已经内置一键 dev 流程。
 
 ### 测试
 
@@ -70,18 +68,48 @@ pnpm --filter @kagami/server test # 运行后端 Vitest
 pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 ```
 
-## 开发规约
+补充说明：
 
-每次开发完成后，执行：
+- 当前只有 `@kagami/server` 声明了测试脚本。
 
-```sh
-pnpm build # 构建所有包（顺序执行，shared → server/web）
-pnpm typecheck # 对所有包执行 TypeScript 类型检查
-pnpm lint # ESLint 检查
-pnpm format # Prettier 格式检查
+## 数据库与配置
+
+### 数据库迁移
+
+```bash
+pnpm db:migrate:dev -- --name <migration_name> # 生成迁移（脚本会自动补上 --create-only）
+pnpm db:migrate:deploy # 部署/上线时应用已有迁移
+pnpm db:migrate:status # 查看迁移状态
+pnpm db:migrate:reset # 重置数据库（危险）
+pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 ```
 
-需保证均成功。
+数据库变更流程：
+
+1. 修改 `apps/server/prisma/schema.prisma`。
+2. 在仓库根目录执行 `pnpm db:migrate:dev -- --name <migration_name>`。
+3. 提交 schema 变更和 `apps/server/prisma/migrations/*`。
+4. 在目标环境执行 `pnpm db:migrate:deploy`，或通过 `pnpm app:deploy` 一并完成。
+
+已有数据库接入 Prisma Migrate（基线）：
+
+1. 如果数据库结构已与当前 schema 对齐，先执行 `pnpm db:migrate:resolve -- --applied <baseline_migration_id>`。
+2. 后续再按标准流程使用 `db:migrate:dev` 和 `db:migrate:deploy`。
+
+### 配置文件
+
+- 后端启动时通过 `apps/server/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
+- `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
+- 关键配置分区包括：
+  - `server.databaseUrl`、`server.port`
+  - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`、`server.napcat.listenGroupIds`
+  - `server.llm.timeoutMs`
+  - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
+  - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
+  - `server.llm.usages.agent`、`contextSummarizer`、`vision`、`webSearchAgent`
+  - `server.rag.embedding`、`server.rag.retrieval`
+  - `server.tavily.apiKey`
+  - `server.bot.qq`
 
 ## 代码规范
 
@@ -89,75 +117,103 @@ pnpm format # Prettier 格式检查
 
 - 双引号（`singleQuote: false`）
 - 分号（`semi: true`）
-- 缩进 2 空格
+- 缩进 2 空格（`tabWidth: 2`，`useTabs: false`）
 - 行宽 100 字符
 - 尾逗号（`trailingComma: "all"`）
 
 ### TypeScript
 
-所有包继承 `tsconfig.base.json`，开启 `strict: true`。
+- 所有包继承 `tsconfig.base.json`，开启 `strict: true`。
+- 后端与 shared 使用 `module: NodeNext`、`moduleResolution: NodeNext`。
+- 前端应用使用 `moduleResolution: Bundler`。
+- 前端额外开启 `noUnusedLocals` 与 `noUnusedParameters`。
 
-- 后端使用 `moduleResolution: NodeNext`
-- 前端使用 `moduleResolution: Bundler`
-- 前端额外开启 `noUnusedLocals` 和 `noUnusedParameters`
+路径别名现状：
 
-路径别名：
-
-- `@kagami/shared` 在前后端均映射到 `packages/shared/src/index.ts`（开发时直接引用源码）
-- 前端额外有 `@/*` 映射到 `apps/web/src/*`
+- 后端 `apps/server/tsconfig.json` 为 `@kagami/shared` 和 `@kagami/shared/*` 配置了源码路径映射。
+- 前端显式配置了 `@/* -> apps/web/src/*`。
+- 不要假设前端也单独声明了 `@kagami/shared` 的源码路径别名；它当前通过 workspace 依赖使用该包。
 
 ### ESLint
 
 - 忽略 `dist/`、`build/`、`node_modules/`、`prisma/generated/`
-- 前端应用应用 `react-hooks` 和 `react-refresh` 规则
+- 前端应用启用 `react-hooks` 和 `react-refresh` 规则
 
-## 架构要点
+### Shared 包约定
 
-### 后端服务（@kagami/server）
+- `packages/shared` 主要承载前后端共用的 Zod Schema、响应模型和工具函数。
+- 当前 `@kagami/shared` 入口未再导出 `z`；如果需要直接定义 Zod schema，按现状应从 `zod` 导入。
 
-后端采用事件驱动的 agent 循环架构，核心模块分布如下：
+## 架构概览
 
-- `agents/main-engine/` — 主 agent 循环、多群运行时管理、主系统提示词
-- `agents/subagents/` — 子 agent 能力，当前包含 `rag`、`vision`、`context-summarizer`、`reply-sender`
-- `auth/`、`codex-auth/`、`claude-code-auth/` — OAuth 登录状态、回调服务与认证流程
-- `bootstrap/` — 运行时装配与依赖初始化入口
-- `context/`、`event/` — 上下文聚合、事件抽象与处理链路
-- `dao/` — 数据访问层接口，实现在 `dao/impl/`（DAO 模式）
-- `db/` — Prisma 客户端
-- `handler/` — Fastify 路由注册（各模块一个 handler）
-- `llm/` — LLM 客户端封装、provider 适配（DeepSeek / OpenAI / OpenAI Codex / Claude Code）、类型与错误定义
-- `rag/` — 检索增强相关能力
-- `service/` — 领域服务与 Napcat 网关实现
-- `tools/` — Agent 可调用工具与工具组件
+### 后端（`@kagami/server`）
 
-构造函数统一使用对象参数风格（`{ dep1, dep2 }`）。
+后端采用事件驱动的 agent 循环架构，主要目录如下（非穷举）：
 
-### 共享库（@kagami/shared）
+- `agents/main-engine/`：主 agent 循环、多群运行时管理、主系统提示词
+- `agents/subagents/`：子 agent 能力，当前包含 `context-summarizer`、`rag`、`reply-sender`、`vision`、`web-search`
+- `auth/`、`codex-auth/`、`claude-code-auth/`：OAuth 登录状态、回调服务与认证流程
+- `bootstrap/`：运行时装配与依赖初始化入口
+- `config/`：静态配置加载、运行时配置管理
+- `context/`、`event/`：上下文聚合、事件抽象与处理链路
+- `dao/`：数据访问层接口，实现在 `dao/impl/`
+- `db/`：Prisma 客户端
+- `handler/`：Fastify 路由注册
+- `llm/`：LLM 客户端封装、provider 适配、embedding、类型与错误定义
+- `rag/`：检索增强相关能力
+- `service/`：领域服务与外部能力接入，当前可见 `napcat-gateway/`、`news-feed/`
+- `tools/`：Agent 可调用工具、工具组件与核心抽象
+- `schema/`、`mappers/`、`errors/`、`logger/`：辅助建模、映射、错误和日志能力
 
-`packages/shared` 是前后端共用 Zod Schema 和工具函数的核心。
-Zod 本身也从此包再导出（`export { z } from "zod"`），业务代码统一从 `@kagami/shared` 导入 Zod。
+后端代码约定：
 
-### 前端 API 代理
+- 构造函数统一使用对象参数风格（`{ dep1, dep2 }`）。
 
-生产环境中，PM2 托管的 Node 静态服务会将 `/api/*` 请求代理到后端 `http://localhost:20003/*`。
-当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中添加 `server.proxy`。
+后端当前对外接口大致分为：
 
-### 环境变量
+- 健康检查：`/health`
+- LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
+- OAuth 与配额：`/codex-auth/*`、`/claude-code-auth/*`
+- Loop Run：`/loop-run/query`、`/loop-run/:id`
+- Napcat 相关历史与事件查询
+- App Log、Embedding Cache、LLM 调用历史等后台查询接口
 
-后端启动时通过 `apps/server/src/config/config.loader.ts` 读取并校验根目录 `config.yaml`。
-当涉及配置项 schema 变更时，必须同步更新现有 `config.yaml` 中的对应配置，确保其与最新 schema 保持一致并能通过校验。
-`config.yaml` 的关键配置分区包括：
+### 前端（`@kagami/web`）
 
-- `server.databaseUrl`、`server.port`
-- `server.napcat.wsUrl`、`server.napcat.listenGroupIds`
-- `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
-- `server.llm.providers.*` 与 `server.llm.usages.*`
-- `server.rag.embedding`、`server.rag.retrieval`
-- `server.tavily.apiKey`、`server.bot.qq`
+前端是一个 React 管理台，使用 `react-router-dom`，当前主要页面包括：
 
-### PM2 部署
+- `/auth/:provider`：认证管理页
+- `/llm-playground`：LLM Playground
+- `/llm-history`：LLM 调用历史
+- `/embedding-cache-history`：Embedding 缓存历史
+- `/app-log-history`：应用日志历史
+- `/napcat-event-history`：Napcat 事件历史
+- `/napcat-group-message-history`：群消息历史
+- `/loop-runs` 与 `/loop-runs/:id`：Loop 链路列表与详情
+
+补充说明：
+
+- 页面组件当前按业务域组织在 `apps/web/src/pages/*`。
+- 布局组件位于 `apps/web/src/components/layout/*`。
+- 当前 Vite 配置仅提供 `@ -> apps/web/src` 别名，没有内置开发代理。
+
+### 共享包（`@kagami/shared`）
+
+- 共享包用于承载前后端共用的 schema、DTO、工具函数。
+- 后端接口 schema 与前端消费模型尽量优先收敛到该包，避免重复定义。
+
+## 部署说明
+
+### 前端代理与静态托管
+
+- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并将 `/api/*` 代理到 `http://localhost:20003/*`。
+- 该静态服务还暴露 `/health`。
+- 当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中补充 `server.proxy`。
+
+### PM2
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
-- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 **20003**。
-- 前端（`kagami-web`）：单进程 Node 静态服务托管 `apps/web/dist`，默认监听 **20004**，并代理 `/api/*`。
-- PostgreSQL 与 napcat 作为宿主机外部依赖运行，`config.yaml` 中应使用 `localhost` 地址访问。
+- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。
+- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
+- `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
+- PostgreSQL 与 Napcat 作为宿主机外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。

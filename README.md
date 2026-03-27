@@ -1,107 +1,153 @@
 # Kagami
 
-Kagami 是一个基于 `pnpm` Monorepo 的 QQ 群聊机器人，后端运行配置统一来自仓库根目录的 `config.yaml`。
+Kagami 是一个基于 `pnpm` workspace 的全栈 TypeScript Monorepo，当前包含三个工作空间包：
+
+- `apps/server`：Fastify 后端服务（`@kagami/server`）
+- `apps/web`：React 前端管理台（`@kagami/web`）
+- `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
+
+后端运行配置统一来自仓库根目录 `config.yaml`。
+
+## 仓库结构
+
+```text
+apps/
+  server/   Fastify 后端、Prisma、Agent 运行时
+  web/      React 管理台
+packages/
+  shared/   前后端共享 schema / DTO / utils
+```
+
+## 常用命令
+
+在仓库根目录执行：
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm lint:fix
+pnpm format
+pnpm format:write
+pnpm app:deploy
+```
+
+单包执行：
+
+```bash
+pnpm --filter @kagami/server <script>
+pnpm --filter @kagami/web <script>
+pnpm --filter @kagami/shared <script>
+```
+
+补充说明：
+
+- 当前仓库没有统一的根目录 `pnpm dev` 脚本。
+- 当前只有 `@kagami/server` 声明了测试脚本。
 
 ## 配置方式
 
-- 在仓库根目录提供真实的 `config.yaml`，字段结构参考 `config.yaml.example`。
+- 在仓库根目录提供真实的 `config.yaml`。
+- 字段结构参考 [config.yaml.example](/Users/kisin/Workspace/kagami/config.yaml.example)。
 - 服务启动时会一次性读取并校验 `config.yaml`；修改配置后需要重启服务生效。
 
-配置结构：
+关键配置分区：
 
-```yaml
-server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
-  port: 20003
-  napcat:
-    wsUrl: ws://localhost:6099
-    reconnectMs: 3000
-    requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
-  llm:
-    timeoutMs: 45000
-    codexAuth:
-      enabled: true
-      publicBaseUrl: http://localhost:20004
-      oauthRedirectPath: /auth/callback
-      oauthStateTtlMs: 600000
-      refreshLeewayMs: 60000
-      binaryPath: codex
-    claudeCodeAuth:
-      enabled: true
-      publicBaseUrl: http://localhost:20004
-      oauthRedirectPath: /callback
-      oauthStateTtlMs: 600000
-      refreshLeewayMs: 60000
-    providers:
-      deepseek:
-        apiKey: ""
-        baseUrl: https://api.deepseek.com
-        models:
-          - deepseek-chat
-      openai:
-        apiKey: ""
-        baseUrl: https://api.openai.com/v1
-        models:
-          - gpt-4o-mini
-      openaiCodex:
-        baseUrl: https://chatgpt.com/backend-api/codex/responses
-        models:
-          - gpt-5.3-codex
-      claudeCode:
-        baseUrl: https://api.anthropic.com
-        models:
-          - claude-sonnet-4-6
-    usages:
-      agent:
-        attempts:
-          - provider: claude-code
-            model: claude-sonnet-4-6
-      contextSummarizer:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
-      vision:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
-  rag:
-    embedding:
-      provider: google
-      apiKey: your-gemini-api-key
-      baseUrl: https://generativelanguage.googleapis.com
-      model: gemini-embedding-001
-      outputDimensionality: 768
-    retrieval:
-      topK: 3
-  tavily:
-    apiKey: ""
-  bot:
-    qq: "10001"
+- `server.databaseUrl`、`server.port`
+- `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`、`server.napcat.listenGroupIds`
+- `server.llm.timeoutMs`
+- `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
+- `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
+- `server.llm.usages.agent`、`contextSummarizer`、`vision`、`webSearchAgent`
+- `server.rag.embedding`、`server.rag.retrieval`
+- `server.tavily.apiKey`
+- `server.bot.qq`
+
+配置约定：
+
+- 数据库相关命令统一读取 `config.yaml` 中的 `server.databaseUrl`。
+- 修改配置 schema 时，必须同步更新：
+  - `apps/server/src/config/config.loader.ts`
+  - `config.yaml`
+  - `config.yaml.example`
+- `server.llm.usages` 需要完整提供 `agent`、`contextSummarizer`、`vision`、`webSearchAgent` 四组尝试链路。
+
+## 数据库迁移
+
+在仓库根目录执行：
+
+```bash
+pnpm db:migrate:dev -- --name <migration_name>
+pnpm db:migrate:deploy
+pnpm db:migrate:status
+pnpm db:migrate:reset
+pnpm db:migrate:resolve -- --applied <migration_id>
 ```
 
-## 配置约定
+说明：
 
-- `server.databaseUrl`、Napcat 连接信息、`server.bot.qq`、`server.rag.embedding.apiKey` 与 `server.tavily.apiKey` 为必填项。
-- `server.port` 默认值为 `20003`。
-- `server.llm.timeoutMs` 默认值为 `45000`。
-- `server.napcat.listenGroupIds` 为字符串数组，至少包含一个群号。
-- `server.llm.providers.deepseek.baseUrl` 默认到 `https://api.deepseek.com`。
-- `server.llm.providers.openai.baseUrl` 为空字符串时，会回退到 `https://api.openai.com/v1`。
-- `server.llm.codexAuth` 负责 Kagami 内置的 Codex 登录和自动刷新；OpenAI OAuth 会先回调到本机 `localhost:1455`，再由本地回调服务跳回 `publicBaseUrl` 对应的管理页。`binaryPath` 用于指定服务端拉起 `codex app-server` 时使用的 CLI 路径，默认值为 `codex`。
-- `server.llm.claudeCodeAuth` 负责 Claude Code OAuth 登录和自动刷新。
-- `server.llm.usages` 需要为 `agent`、`contextSummarizer`、`vision`、`webSearchAgent` 提供模型尝试链路。
-- `server.rag.embedding` 用于向量化，当前固定使用 Google Gemini Embedding。
-- `server.llm.providers.*.apiKey` 与 `server.tavily.apiKey` 为空字符串时视为未配置。
+- `db:migrate:dev` 会自动补上 `--create-only`，只生成迁移文件，不直接改库结构。
+- 标准流程是：修改 `apps/server/prisma/schema.prisma` -> 生成迁移 -> 提交 schema 与 migration -> 在目标环境执行 `db:migrate:deploy`。
 
-## PM2 部署
+## 架构概览
 
-- 确保宿主机已运行 PostgreSQL（`localhost:5432`）和 Napcat（示例：`localhost:6099`）。
-- 执行 `pnpm app:deploy` 会完成构建、Prisma 迁移，并通过 PM2 启动或重载 `kagami-server` 与 `kagami-web`。
-- PM2 入口为根目录 [ecosystem.config.cjs](/Users/kisin/Workspace/kagami/ecosystem.config.cjs)。
-- 前端静态服务默认监听 `20004`，并将 `/api/*` 代理到 `http://localhost:20003/*`。
+### 后端
+
+后端采用事件驱动的 agent 循环架构，主要目录包括：
+
+- `agents/main-engine/`：主 agent 循环、多群运行时管理、主系统提示词
+- `agents/subagents/`：子 agent 能力，当前包含 `context-summarizer`、`rag`、`reply-sender`、`vision`、`web-search`
+- `auth/`、`codex-auth/`、`claude-code-auth/`：OAuth 登录状态、回调服务与认证流程
+- `bootstrap/`：运行时装配与依赖初始化入口
+- `config/`：静态配置加载、运行时配置管理
+- `context/`、`event/`：上下文聚合、事件抽象与处理链路
+- `dao/`、`db/`、`handler/`、`llm/`、`rag/`、`service/`、`tools/`
+
+当前主要接口分组包括：
+
+- `/health`
+- `/llm/*`
+- `/codex-auth/*`
+- `/claude-code-auth/*`
+- `/loop-run/*`
+- Napcat 相关历史与事件接口
+- App Log、Embedding Cache、LLM 调用历史等后台查询接口
+
+### 前端
+
+前端是一个 React 管理台，当前主要页面包括：
+
+- `/auth/:provider`
+- `/llm-playground`
+- `/llm-history`
+- `/embedding-cache-history`
+- `/app-log-history`
+- `/napcat-event-history`
+- `/napcat-group-message-history`
+- `/loop-runs`
+- `/loop-runs/:id`
+
+补充说明：
+
+- 页面组件按业务域组织在 `apps/web/src/pages/*`。
+- 当前 Vite 配置仅提供 `@ -> apps/web/src` 别名，没有内置开发代理。
+
+### Shared
+
+- `packages/shared` 用于承载前后端共用的 schema、DTO、工具函数。
+- 当前 `@kagami/shared` 入口未再导出 `z`；需要定义 Zod schema 时请直接从 `zod` 导入。
+
+## 部署
+
+- PM2 配置文件位于 [ecosystem.config.cjs](/Users/kisin/Workspace/kagami/ecosystem.config.cjs)。
+- 后端服务 `kagami-server` 运行 `apps/server/dist/index.js`，默认监听 `20003`。
+- 前端服务 `kagami-web` 运行 `scripts/web-server.mjs`，默认监听 `20004`。
+- 前端静态服务会提供 `apps/web/dist`，并将 `/api/*` 代理到 `http://localhost:20003/*`。
+- 执行 `pnpm app:deploy` 会完成构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
+
+部署前提：
+
+- 宿主机需提供 PostgreSQL。
+- 宿主机需提供 Napcat。
+- `config.yaml` 中通常使用 `localhost` 地址访问这些外部依赖。
