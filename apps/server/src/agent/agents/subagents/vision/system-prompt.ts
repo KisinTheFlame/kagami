@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readServerStaticText } from "../../../../common/runtime/read-static-text.js";
 
-const rawSystemPrompt = readFileSync(new URL("./prompts/system.txt", import.meta.url), "utf8");
+const rawSystemPrompt = readServerStaticText(import.meta.url, "vision-system.txt");
 
 export function createVisionSystemPrompt(): string {
   return rawSystemPrompt.trim();

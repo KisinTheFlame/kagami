@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readServerStaticText } from "../../../../common/runtime/read-static-text.js";
 
-const rawSummarizerPrompt = readFileSync(
-  new URL("./prompts/system.txt", import.meta.url),
-  "utf8",
+const rawSummarizerPrompt = readServerStaticText(
+  import.meta.url,
+  "context-summarizer-system.txt",
 ).trim();
 
 export function createContextSummarizerSystemPrompt(): string {

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import Handlebars from "handlebars";
+import { readServerStaticText } from "../../../common/runtime/read-static-text.js";
 
-const rawSystemPrompt = readFileSync(new URL("./prompts/system.txt", import.meta.url), "utf8");
+const rawSystemPrompt = readServerStaticText(import.meta.url, "main-engine-system.txt");
 const compileSystemPrompt = Handlebars.compile(rawSystemPrompt);
 
 export function createAgentSystemPrompt({ botQQ }: { botQQ: string }): string {
