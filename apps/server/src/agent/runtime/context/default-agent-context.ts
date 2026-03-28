@@ -34,6 +34,17 @@ export class DefaultAgentContext implements AgentContext {
     };
   }
 
+  public async fork(): Promise<AgentContext> {
+    const snapshot = await this.getSnapshot();
+    const forkedContext = new DefaultAgentContext({
+      systemPrompt: snapshot.systemPrompt,
+    });
+
+    await forkedContext.appendMessages(cloneMessages(snapshot.messages));
+
+    return forkedContext;
+  }
+
   public async appendEvents(events: Event[]): Promise<void> {
     if (events.length === 0) {
       return;
@@ -91,4 +102,8 @@ function renderContextItemToMessages(item: ContextItem): LlmMessage[] {
   }
 
   return createMessagesFromEvent(item.event);
+}
+
+function cloneMessages(messages: LlmMessage[]): LlmMessage[] {
+  return structuredClone(messages);
 }

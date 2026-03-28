@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
@@ -308,6 +308,97 @@ describe("DefaultAgentContext", () => {
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
       messages: [createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z"))],
+    });
+  });
+
+  it("should fork current snapshot into an isolated child context", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendMessages([
+      createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+      {
+        role: "user",
+        content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
+      },
+    ]);
+
+    const forkedContext = await context.fork();
+
+    await expect(forkedContext.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
+        },
+      ],
+    });
+
+    await forkedContext.appendToolResult({
+      toolCallId: "tool-1",
+      content: "forked-tool-result",
+    });
+    await context.appendMessages([
+      {
+        role: "assistant",
+        content: "parent-reply",
+        toolCalls: [],
+      },
+    ]);
+
+    await expect(forkedContext.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
+        },
+        {
+          role: "tool",
+          toolCallId: "tool-1",
+          content: "forked-tool-result",
+        },
+      ],
+    });
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
+        },
+        {
+          role: "assistant",
+          content: "parent-reply",
+          toolCalls: [],
+        },
+      ],
+    });
+  });
+
+  it("should capture the resolved system prompt value when forking", async () => {
+    const systemPromptFactory = vi
+      .fn<() => string>()
+      .mockReturnValueOnce("system-prompt-v1")
+      .mockReturnValue("system-prompt-v2");
+    const context = new DefaultAgentContext({
+      systemPromptFactory,
+    });
+
+    const forkedContext = await context.fork();
+
+    await expect(forkedContext.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt-v1",
+      messages: [],
+    });
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt-v2",
+      messages: [],
     });
   });
 });

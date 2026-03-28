@@ -226,7 +226,12 @@ export class RootAgentRuntime {
       messages?: import("../../../llm/types.js").LlmMessage[];
     },
   ): Promise<ToolSetExecutionResult> {
-    return await this.tools.execute(toolName, argumentsValue, context);
+    const toolContext = {
+      ...context,
+      agentContext: this.context,
+    };
+
+    return await this.tools.execute(toolName, argumentsValue, toolContext);
   }
   private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
     if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {

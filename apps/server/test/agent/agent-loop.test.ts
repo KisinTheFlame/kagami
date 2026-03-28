@@ -193,8 +193,9 @@ describe("AgentLoop", () => {
     );
     expect(finishExecute).toHaveBeenCalledWith(
       {},
-      {
+      expect.objectContaining({
         groupId: "123456",
+        agentContext: context,
         systemPrompt: "system-prompt",
         messages: [
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
@@ -203,7 +204,7 @@ describe("AgentLoop", () => {
             content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
-      },
+      }),
     );
     expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sendMessageExecute).not.toHaveBeenCalled();
@@ -620,8 +621,9 @@ describe("AgentLoop", () => {
 
     expect(searchWebExecute).toHaveBeenCalledWith(
       {},
-      {
+      expect.objectContaining({
         groupId: "123456",
+        agentContext: context,
         systemPrompt: "system-prompt",
         messages: [
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
@@ -630,7 +632,7 @@ describe("AgentLoop", () => {
             content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
-      },
+      }),
     );
     expect(sendMessageExecute).not.toHaveBeenCalled();
     await expect(context.getSnapshot()).resolves.toEqual({

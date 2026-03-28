@@ -6,6 +6,7 @@ import {
   type ToolKind,
 } from "@kagami/agent-runtime";
 import type { LlmMessage } from "../../../../llm/types.js";
+import type { AgentContext } from "../../../runtime/context/agent-context.js";
 import type { WebSearchTaskInput } from "../task-agent/web-search-task-agent.js";
 
 type WebSearchTaskAgentLike =
@@ -20,7 +21,11 @@ const SearchWebArgumentsSchema = z.object({
   question: z.string().trim().min(1),
 });
 
-export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema> {
+type SearchWebToolContext = ToolContext<LlmMessage> & {
+  agentContext?: AgentContext;
+};
+
+export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema, LlmMessage> {
   public readonly name = SEARCH_WEB_TOOL_NAME;
   public readonly description =
     "把一个自然语言问题交给网页搜索子 Agent，让它自行拆词、多次检索并返回摘要。";
@@ -51,12 +56,22 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
 
   protected async executeTyped(
     input: z.infer<typeof SearchWebArgumentsSchema>,
-    context: ToolContext,
+    context: ToolContext<LlmMessage>,
   ): Promise<string> {
-    const systemPrompt = context.systemPrompt?.trim();
-    const contextMessages = context.messages;
+    const agentContext = (context as SearchWebToolContext).agentContext;
 
-    if (!systemPrompt || !contextMessages) {
+    if (!agentContext) {
+      return JSON.stringify({
+        ok: false,
+        error: "CONTEXT_UNAVAILABLE",
+      });
+    }
+
+    const forkedContext = await agentContext.fork();
+    const snapshot = await forkedContext.getSnapshot();
+    const systemPrompt = snapshot.systemPrompt.trim();
+
+    if (!systemPrompt) {
       return JSON.stringify({
         ok: false,
         error: "CONTEXT_UNAVAILABLE",
@@ -66,7 +81,7 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
     const taskInput = {
       question: input.question,
       systemPrompt,
-      contextMessages: contextMessages as LlmMessage[],
+      contextMessages: snapshot.messages,
     };
 
     if ("invoke" in this.webSearchTaskAgent) {

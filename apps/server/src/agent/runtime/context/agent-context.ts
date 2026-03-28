@@ -19,6 +19,7 @@ export type AgentContextSnapshot = {
 
 export interface AgentContext {
   getSnapshot(): Promise<AgentContextSnapshot>;
+  fork(): Promise<AgentContext>;
   appendEvents(events: Event[]): Promise<void>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   appendAssistantTurn(message: AssistantMessage): Promise<void>;
