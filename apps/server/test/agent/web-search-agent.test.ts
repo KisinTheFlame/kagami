@@ -8,7 +8,7 @@ import {
   SearchWebRawTool,
 } from "../../src/agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { WebSearchTaskAgent as WebSearchAgent } from "../../src/agent/capabilities/web-search/task-agent/web-search-task-agent.js";
-import { createWebSearchReminderMessage } from "../../src/agent/runtime/context/context-message-factory.js";
+import { createWebSearchInstructionMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 import { ToolCatalog } from "@kagami/agent-runtime";
@@ -120,7 +120,7 @@ describe("WebSearchAgent", () => {
             role: "user",
             content: "群里有人问 OpenAI 最近怎么了",
           },
-          createWebSearchReminderMessage("OpenAI 最近有什么新动态？"),
+          createWebSearchInstructionMessage("OpenAI 最近有什么新动态？"),
         ],
         toolChoice: "required",
         tools: expect.arrayContaining([

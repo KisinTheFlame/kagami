@@ -1,4 +1,4 @@
-import { createWebSearchReminderMessage } from "../../../runtime/context/context-message-factory.js";
+import { createWebSearchInstructionMessage } from "../../../runtime/context/context-message-factory.js";
 import { TaskAgentRuntime, type TaskAgentInvoker, type ToolExecutor } from "@kagami/agent-runtime";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage } from "../../../../llm/types.js";
@@ -47,7 +47,7 @@ export class WebSearchTaskAgent
 
     return {
       systemPrompt,
-      messages: [...input.contextMessages, createWebSearchReminderMessage(question)],
+      messages: [...input.contextMessages, createWebSearchInstructionMessage(question)],
       usage: "webSearchAgent",
     };
   }
