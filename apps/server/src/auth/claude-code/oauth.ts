@@ -1,12 +1,16 @@
 import { BizError } from "../../common/errors/biz-error.js";
+import type { Config } from "../../config/config.loader.js";
 import type { PkcePair } from "../shared/pkce.js";
-import type { ClaudeCodeAuthRuntimeConfig } from "../../config/config.manager.js";
 import type { ClaudeCodeTokenResponse } from "./types.js";
 export { createPkcePair } from "../shared/pkce.js";
 
 const CLAUDE_CODE_AUTH_URL = "https://claude.ai/oauth/authorize";
 const CLAUDE_CODE_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token";
 const CLAUDE_CODE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+
+type ClaudeCodeAuthConfig = Config["server"]["llm"]["claudeCodeAuth"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
 
 type ClaudeCodeOAuthTokenApiResponse = {
   access_token?: string;
@@ -44,7 +48,7 @@ export async function exchangeCodeForTokens(input: {
   state: string;
   codeVerifier: string;
   redirectUri: string;
-  config: ClaudeCodeAuthRuntimeConfig;
+  config: ClaudeCodeAuthConfig;
 }): Promise<ClaudeCodeTokenResponse> {
   const { code, state: callbackState } = parseCodeAndState(input.code);
   const payload: Record<string, string> = {
@@ -65,7 +69,7 @@ export async function exchangeCodeForTokens(input: {
 
 export async function refreshClaudeCodeTokens(input: {
   refreshToken: string;
-  config: ClaudeCodeAuthRuntimeConfig;
+  config: ClaudeCodeAuthConfig;
 }): Promise<ClaudeCodeTokenResponse> {
   return requestClaudeCodeTokens({
     payload: {
@@ -80,7 +84,7 @@ export async function refreshClaudeCodeTokens(input: {
 
 async function requestClaudeCodeTokens(input: {
   payload: Record<string, string>;
-  config: ClaudeCodeAuthRuntimeConfig;
+  config: ClaudeCodeAuthConfig;
   unavailableReason: string;
 }): Promise<ClaudeCodeTokenResponse> {
   let response: Response;

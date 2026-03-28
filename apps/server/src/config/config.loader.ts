@@ -6,7 +6,6 @@ import { parse } from "yaml";
 import { z } from "zod";
 import { BizError } from "../common/errors/biz-error.js";
 import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
-import type { LlmUsageAttemptRuntimeConfig, LlmUsageRuntimeConfig } from "./config.manager.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
@@ -75,7 +74,7 @@ const LlmUsageConfigSchema = z.object({
   attempts: z.array(LlmUsageAttemptConfigSchema).min(1),
 });
 
-const StaticConfigFileSchema = z.object({
+const ConfigSchema = z.object({
   server: z.object({
     databaseUrl: UrlSchema,
     port: PositiveIntSchema.default(DEFAULT_PORT),
@@ -168,15 +167,23 @@ const StaticConfigFileSchema = z.object({
   }),
 });
 
-export type StaticConfig = z.infer<typeof StaticConfigFileSchema>;
+type LlmUsageAttemptConfig = {
+  provider: LlmProviderId;
+  model: string;
+  times: number;
+};
+
+type LlmUsageConfig = {
+  attempts: LlmUsageAttemptConfig[];
+};
+
+export type Config = z.infer<typeof ConfigSchema>;
 
 type LoadStaticConfigOptions = {
   configPath?: string;
 };
 
-export async function loadStaticConfig(
-  options: LoadStaticConfigOptions = {},
-): Promise<StaticConfig> {
+export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): Promise<Config> {
   const configPath = options.configPath ?? resolveConfigPath();
 
   let fileContent: string;
@@ -207,7 +214,7 @@ export async function loadStaticConfig(
     });
   }
 
-  const parsedConfig = StaticConfigFileSchema.safeParse(parsedYaml);
+  const parsedConfig = ConfigSchema.safeParse(parsedYaml);
   if (!parsedConfig.success) {
     const issue = parsedConfig.error.issues[0];
     const key = issue?.path.length ? issue.path.join(".") : configPath;
@@ -233,9 +240,7 @@ export async function loadStaticConfig(
   };
 }
 
-function normalizeLlmUsages(
-  input: StaticConfig["server"]["llm"],
-): Record<LlmUsageId, LlmUsageRuntimeConfig> {
+function normalizeLlmUsages(input: Config["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
   return {
     agent: normalizeUsageConfig(input.usages.agent),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
@@ -244,17 +249,15 @@ function normalizeLlmUsages(
   };
 }
 
-function normalizeUsageConfig(
-  value: StaticConfig["server"]["llm"]["usages"]["agent"],
-): LlmUsageRuntimeConfig {
+function normalizeUsageConfig(value: Config["server"]["llm"]["usages"]["agent"]): LlmUsageConfig {
   return {
     attempts: value.attempts.map(attempt => normalizeUsageAttempt(attempt)),
   };
 }
 
 function normalizeUsageAttempt(
-  value: StaticConfig["server"]["llm"]["usages"]["agent"]["attempts"][number],
-): LlmUsageAttemptRuntimeConfig {
+  value: Config["server"]["llm"]["usages"]["agent"]["attempts"][number],
+): LlmUsageAttemptConfig {
   return {
     provider: value.provider,
     model: value.model,

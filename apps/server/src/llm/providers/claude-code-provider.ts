@@ -12,7 +12,7 @@ import type {
   LlmContentPart,
 } from "../types.js";
 import { BizError } from "../../common/errors/biz-error.js";
-import type { LlmProviderRuntimeConfig } from "../../config/config.manager.js";
+import type { Config } from "../../config/config.loader.js";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -31,6 +31,10 @@ const CLAUDE_CODE_BILLING_HEADER =
 const DEFAULT_MAX_TOKENS = 4096;
 const CLAUDE_4_MAX_TOKENS = 32000;
 const CLAUDE_4_THINKING_BUDGET = 1024;
+
+type LlmProviderConfig = Config["server"]["llm"]["providers"]["deepseek"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
 
 type ClaudeSystemBlock = {
   type: "text";
@@ -88,7 +92,7 @@ type ClaudeMessageResponse = {
 };
 
 export function createClaudeCodeProvider(input: {
-  config: LlmProviderRuntimeConfig;
+  config: LlmProviderConfig;
   authStore: ClaudeCodeAuthStore;
 }): LlmProvider {
   return {
@@ -126,7 +130,7 @@ export function createClaudeCodeProvider(input: {
 }
 
 async function sendClaudeCodeRequest(params: {
-  config: LlmProviderRuntimeConfig;
+  config: LlmProviderConfig;
   authStore: ClaudeCodeAuthStore;
   request: LlmChatRequest;
 }): Promise<LlmProviderChatResult> {
@@ -180,7 +184,7 @@ async function sendClaudeCodeRequest(params: {
 }
 
 async function fetchClaudeCodeResponse(params: {
-  config: LlmProviderRuntimeConfig;
+  config: LlmProviderConfig;
   auth: Awaited<ReturnType<ClaudeCodeAuthStore["getAuth"]>>;
   requestBody: ClaudeMessageRequestBody;
 }): Promise<{

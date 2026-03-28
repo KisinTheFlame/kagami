@@ -102,14 +102,14 @@ export type ServerRuntime = {
 };
 
 export async function buildServerRuntime(): Promise<ServerRuntime> {
-  const staticConfig = await loadStaticConfig();
+  const loadedConfig = await loadStaticConfig();
   const configManager = new DefaultConfigManager({
-    config: staticConfig,
+    config: loadedConfig,
   });
+  const config = await configManager.config();
 
-  const bootConfig = await configManager.getBootConfig();
   const database = createDbClient({
-    databaseUrl: bootConfig.databaseUrl,
+    databaseUrl: config.server.databaseUrl,
   });
 
   const logDao = new PrismaLogDao({ database });
@@ -150,26 +150,43 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const codexAuthStore = new OpenAiCodexAuthStore({
     codexAuthService: authModule.authServices.codex,
   });
-  const llmConfig = await configManager.getLlmRuntimeConfig();
+  const llmTimeoutMs = config.server.llm.timeoutMs;
+  const deepseekConfig = {
+    ...config.server.llm.providers.deepseek,
+    timeoutMs: llmTimeoutMs,
+  };
+  const openAiConfig = {
+    ...config.server.llm.providers.openai,
+    timeoutMs: llmTimeoutMs,
+  };
+  const openAiCodexConfig = {
+    ...config.server.llm.providers.openaiCodex,
+    timeoutMs: llmTimeoutMs,
+  };
+  const claudeCodeConfig = {
+    apiKey: undefined,
+    ...config.server.llm.providers.claudeCode,
+    timeoutMs: llmTimeoutMs,
+  };
   const llmProviders = {
-    deepseek: llmConfig.deepseek.apiKey
+    deepseek: deepseekConfig.apiKey
       ? createDeepSeekProvider({
-          ...llmConfig.deepseek,
-          apiKey: llmConfig.deepseek.apiKey,
+          ...deepseekConfig,
+          apiKey: deepseekConfig.apiKey,
         })
       : undefined,
-    openai: llmConfig.openai.apiKey
+    openai: openAiConfig.apiKey
       ? createOpenAiProvider({
-          ...llmConfig.openai,
-          apiKey: llmConfig.openai.apiKey,
+          ...openAiConfig,
+          apiKey: openAiConfig.apiKey,
         })
       : undefined,
     "openai-codex": createOpenAiCodexProvider({
-      config: llmConfig.openaiCodex,
+      config: openAiCodexConfig,
       authStore: codexAuthStore,
     }),
     "claude-code": createClaudeCodeProvider({
-      config: llmConfig.claudeCode,
+      config: claudeCodeConfig,
       authStore: claudeCodeAuthStore,
     }),
   };
@@ -177,23 +194,22 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     llmChatCallDao,
     providers: llmProviders,
     providerConfigs: {
-      deepseek: llmConfig.deepseek,
-      openai: llmConfig.openai,
-      "openai-codex": llmConfig.openaiCodex,
-      "claude-code": llmConfig.claudeCode,
+      deepseek: deepseekConfig,
+      openai: openAiConfig,
+      "openai-codex": openAiCodexConfig,
+      "claude-code": claudeCodeConfig,
     },
-    usages: llmConfig.usages,
+    usages: config.server.llm.usages,
   });
 
-  const ragConfig = await configManager.getRagRuntimeConfig();
   const embeddingClient = createEmbeddingClient({
-    config: ragConfig.embedding,
+    config: config.server.rag.embedding,
     embeddingCacheDao,
   });
   const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
     chunkDao: napcatGroupMessageChunkDao,
     embeddingClient,
-    outputDimensionality: ragConfig.embedding.outputDimensionality,
+    outputDimensionality: config.server.rag.embedding.outputDimensionality,
   });
   const visionAgent = new VisionAgent({
     llmClient,
@@ -202,15 +218,13 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     visionAgent,
   });
   const agentSystemPromptFactory = async () => {
-    const botProfile = await configManager.getBotProfileConfig();
     return createAgentSystemPrompt({
-      botQQ: botProfile.botQQ,
+      botQQ: config.server.bot.qq,
     });
   };
 
-  const tavilyConfig = await configManager.getTavilyConfig();
   const webSearchService = new TavilyWebSearchService({
-    apiKey: tavilyConfig.apiKey,
+    apiKey: config.server.tavily.apiKey,
   });
   const webSearchInternalToolCatalog = new ToolCatalog([
     new SearchWebRawTool({
@@ -248,7 +262,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const loopRunRecorder = new LoopRunRecorder({
     loopRunDao,
   });
-  const groupRuntimes = bootConfig.napcat.listenGroupIds.map(groupId => {
+  const groupRuntimes = config.server.napcat.listenGroupIds.map(groupId => {
     const eventQueue = new InMemoryAgentEventQueue();
     const agentMessageService = new DefaultAgentMessageService({
       napcatGatewayService,
@@ -332,9 +346,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     callbackServers: authModule.callbackServers,
     authUsageCacheManager: authModule.authUsageCacheManager,
     agentRuntimeManager,
-    port: bootConfig.port,
-    listenGroupIds: bootConfig.napcat.listenGroupIds,
-    hasTavilyApiKey: Boolean(tavilyConfig.apiKey),
+    port: config.server.port,
+    listenGroupIds: config.server.napcat.listenGroupIds,
+    hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },

@@ -1,16 +1,18 @@
 import { createHash } from "node:crypto";
-import type { RagEmbeddingRuntimeConfig } from "../../config/config.manager.js";
+import type { Config } from "../../config/config.loader.js";
 import type { EmbeddingCacheDao } from "../dao/embedding-cache.dao.js";
 import { createGeminiEmbeddingProvider } from "./providers/gemini-provider.js";
 import type { EmbeddingProvider } from "./provider.js";
 import type { EmbeddingRequest, EmbeddingResponse } from "./types.js";
+
+type RagEmbeddingConfig = Config["server"]["rag"]["embedding"];
 
 export interface EmbeddingClient {
   embed(request: EmbeddingRequest): Promise<EmbeddingResponse>;
 }
 
 type CreateEmbeddingClientOptions = {
-  config: RagEmbeddingRuntimeConfig;
+  config: RagEmbeddingConfig;
   provider?: EmbeddingProvider;
   embeddingCacheDao?: EmbeddingCacheDao;
 };
@@ -75,7 +77,7 @@ export function createEmbeddingClient(options: CreateEmbeddingClientOptions): Em
 function resolveEmbeddingRequest(input: {
   request: EmbeddingRequest;
   provider: EmbeddingProvider;
-  config: RagEmbeddingRuntimeConfig;
+  config: RagEmbeddingConfig;
 }): {
   provider: EmbeddingProvider["id"];
   model: string;

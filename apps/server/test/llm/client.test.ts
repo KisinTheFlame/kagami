@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  LlmProviderRuntimeConfig,
-  LlmUsageRuntimeConfig,
-  OpenAiCodexRuntimeConfig,
-} from "../../src/config/config.manager.js";
+import type { Config } from "../../src/config/config.loader.js";
 import type { LlmChatCallDao } from "../../src/llm/dao/llm-chat-call.dao.js";
 import { BizError } from "../../src/common/errors/biz-error.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
@@ -13,6 +9,19 @@ import {
   type LlmProviderChatResult,
 } from "../../src/llm/provider.js";
 import type { LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "../../src/llm/types.js";
+
+type LlmProviderConfig = {
+  apiKey?: string;
+  baseUrl: string;
+  models: string[];
+  timeoutMs: number;
+};
+
+type OpenAiCodexConfig = Config["server"]["llm"]["providers"]["openaiCodex"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
+
+type LlmUsageConfig = Config["server"]["llm"]["usages"]["agent"];
 
 function createLlmChatCallDaoMock(): LlmChatCallDao {
   return {
@@ -24,8 +33,8 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
 }
 
 function createUsageConfig(
-  overrides: Partial<Record<LlmUsageId, LlmUsageRuntimeConfig>> = {},
-): Record<LlmUsageId, LlmUsageRuntimeConfig> {
+  overrides: Partial<Record<LlmUsageId, LlmUsageConfig>> = {},
+): Record<LlmUsageId, LlmUsageConfig> {
   return {
     agent: {
       attempts: [
@@ -67,10 +76,7 @@ function createUsageConfig(
   };
 }
 
-function createProviderConfigs(): Record<
-  LlmProviderId,
-  LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig
-> {
+function createProviderConfigs(): Record<LlmProviderId, LlmProviderConfig | OpenAiCodexConfig> {
   return {
     deepseek: {
       apiKey: undefined,
@@ -101,8 +107,8 @@ function createProviderConfigs(): Record<
 function createClient(params?: {
   llmChatCallDao?: LlmChatCallDao;
   providers?: Partial<Record<LlmProviderId, LlmProvider>>;
-  providerConfigs?: Record<LlmProviderId, LlmProviderRuntimeConfig | OpenAiCodexRuntimeConfig>;
-  usages?: Record<LlmUsageId, LlmUsageRuntimeConfig>;
+  providerConfigs?: Record<LlmProviderId, LlmProviderConfig | OpenAiCodexConfig>;
+  usages?: Record<LlmUsageId, LlmUsageConfig>;
 }): { client: LlmClient; llmChatCallDao: LlmChatCallDao } {
   const llmChatCallDao = params?.llmChatCallDao ?? createLlmChatCallDaoMock();
 

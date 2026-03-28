@@ -43,12 +43,17 @@ export async function createAuthModule({
   database,
   configManager,
 }: AuthModuleDeps): Promise<AuthModule> {
+  const config = await configManager.config();
+  const llmConfig = config.server.llm;
   const authUsageSnapshotDao = new PrismaAuthUsageSnapshotDao({ database });
   const authUsageTrendQueryService = new DefaultAuthUsageTrendQueryService({
     authUsageSnapshotDao,
   });
 
-  const codexConfig = await configManager.getCodexAuthRuntimeConfig();
+  const codexConfig = {
+    ...llmConfig.codexAuth,
+    timeoutMs: llmConfig.timeoutMs,
+  };
   const codexCallbackServer = new SharedOAuthCallbackServer<OAuthAuthService>({
     host: "127.0.0.1",
     port: 1455,
@@ -90,7 +95,10 @@ export async function createAuthModule({
   });
   codexCallbackServer.setAuthService(codexAuthService);
 
-  const claudeCodeConfig = await configManager.getClaudeCodeAuthRuntimeConfig();
+  const claudeCodeConfig = {
+    ...llmConfig.claudeCodeAuth,
+    timeoutMs: llmConfig.timeoutMs,
+  };
   const claudeCodeCallbackServer = new SharedOAuthCallbackServer<OAuthAuthService>({
     host: "127.0.0.1",
     port: 54545,

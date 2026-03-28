@@ -1,12 +1,16 @@
 import { BizError } from "../../common/errors/biz-error.js";
+import type { Config } from "../../config/config.loader.js";
 import type { PkcePair } from "../shared/pkce.js";
-import type { CodexAuthRuntimeConfig } from "../../config/config.manager.js";
 import type { CodexTokenResponse } from "./types.js";
 export { createPkcePair } from "../shared/pkce.js";
 
 const CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize";
 const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+
+type CodexAuthConfig = Config["server"]["llm"]["codexAuth"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
 
 type JwtClaims = {
   email?: string;
@@ -42,7 +46,7 @@ export async function exchangeCodeForTokens(input: {
   code: string;
   codeVerifier: string;
   redirectUri: string;
-  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
+  config: Pick<CodexAuthConfig, "timeoutMs">;
 }): Promise<CodexTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -61,7 +65,7 @@ export async function exchangeCodeForTokens(input: {
 
 export async function refreshCodexTokens(input: {
   refreshToken: string;
-  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
+  config: Pick<CodexAuthConfig, "timeoutMs">;
 }): Promise<CodexTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -79,7 +83,7 @@ export async function refreshCodexTokens(input: {
 
 async function requestCodexTokens(input: {
   body: URLSearchParams;
-  config: Pick<CodexAuthRuntimeConfig, "timeoutMs">;
+  config: Pick<CodexAuthConfig, "timeoutMs">;
   unavailableReason: string;
 }): Promise<CodexTokenResponse> {
   let response: Response;

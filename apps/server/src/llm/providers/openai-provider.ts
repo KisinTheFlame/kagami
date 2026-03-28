@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
 import { BizError } from "../../common/errors/biz-error.js";
+import type { Config } from "../../config/config.loader.js";
 import {
   attachLlmProviderFailureContext,
   toSerializableLlmNativeRecord,
@@ -8,12 +9,13 @@ import {
   type LlmProvider,
 } from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
-import type { LlmProviderRuntimeConfig } from "../../config/config.manager.js";
 import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
 
-export function createOpenAiProvider(
-  config: LlmProviderRuntimeConfig & { apiKey: string },
-): LlmProvider {
+type LlmProviderConfig = Config["server"]["llm"]["providers"]["openai"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
+
+export function createOpenAiProvider(config: LlmProviderConfig & { apiKey: string }): LlmProvider {
   const client = new OpenAI({
     apiKey: config.apiKey,
     baseURL: config.baseUrl,

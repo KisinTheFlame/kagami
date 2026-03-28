@@ -12,10 +12,14 @@ import type {
   LlmToolCall,
 } from "../types.js";
 import { BizError } from "../../common/errors/biz-error.js";
-import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
+import type { Config } from "../../config/config.loader.js";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
 
 const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
+
+type OpenAiCodexConfig = Config["server"]["llm"]["providers"]["openaiCodex"] & {
+  timeoutMs: Config["server"]["llm"]["timeoutMs"];
+};
 
 type CodexResponseCompletedEvent = {
   type: "response.completed";
@@ -47,7 +51,7 @@ type CodexResponseCompletedEvent = {
 };
 
 export function createOpenAiCodexProvider(input: {
-  config: OpenAiCodexRuntimeConfig;
+  config: OpenAiCodexConfig;
   authStore: OpenAiCodexAuthStore;
 }): LlmProvider {
   return {
@@ -85,7 +89,7 @@ export function createOpenAiCodexProvider(input: {
 }
 
 async function sendCodexRequest(params: {
-  config: OpenAiCodexRuntimeConfig;
+  config: OpenAiCodexConfig;
   authStore: OpenAiCodexAuthStore;
   request: LlmChatRequest;
 }): Promise<LlmProviderChatResult> {
@@ -139,7 +143,7 @@ async function sendCodexRequest(params: {
 }
 
 async function fetchCodexResponse(params: {
-  config: OpenAiCodexRuntimeConfig;
+  config: OpenAiCodexConfig;
   auth: Awaited<ReturnType<OpenAiCodexAuthStore["getAuth"]>>;
   requestBody: Record<string, unknown>;
 }): Promise<{

@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { RagEmbeddingRuntimeConfig } from "../../src/config/config.manager.js";
+import type { Config } from "../../src/config/config.loader.js";
 import type { EmbeddingCacheDao } from "../../src/llm/dao/embedding-cache.dao.js";
 import { createEmbeddingClient } from "../../src/llm/embedding/client.js";
 import type { EmbeddingProvider } from "../../src/llm/embedding/provider.js";
 
-const defaultConfig: RagEmbeddingRuntimeConfig = {
+type RagEmbeddingConfig = Config["server"]["rag"]["embedding"];
+
+const defaultConfig: RagEmbeddingConfig = {
   provider: "google",
   apiKey: "key",
   baseUrl: "https://generativelanguage.googleapis.com",

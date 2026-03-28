@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ConfigManager, NapcatBootConfig } from "../../config/config.manager.js";
+import type { ConfigManager } from "../../config/config.manager.js";
+import type { Config } from "../../config/config.loader.js";
 import { BizError } from "../../common/errors/biz-error.js";
 import { AppLogger } from "../../logger/logger.js";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
@@ -24,7 +25,7 @@ type CreateNapcatGatewayOptions = {
 };
 
 type NapcatGatewayOptions = {
-  config: NapcatBootConfig;
+  config: Config["server"]["napcat"];
   enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
@@ -58,10 +59,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     imageMessageAnalyzer,
     createWebSocket,
   }: CreateNapcatGatewayOptions): Promise<DefaultNapcatGatewayService> {
-    const bootConfig = await configManager.getBootConfig();
+    const config = await configManager.config();
 
     return new DefaultNapcatGatewayService({
-      config: bootConfig.napcat,
+      config: config.server.napcat,
       enqueueGroupMessageEvent,
       persistenceWriter,
       imageMessageAnalyzer,

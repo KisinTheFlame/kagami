@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("Static config loading", () => {
-  it("should parse config.yaml and map it to runtime configs", async () => {
+  it("should parse config.yaml and expose the full normalized config", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -81,124 +81,95 @@ server:
     qq: "10001"
 `);
 
+    const config = await loadStaticConfig({ configPath });
     const manager = new DefaultConfigManager({
-      config: await loadStaticConfig({ configPath }),
+      config,
     });
 
-    await expect(manager.getBootConfig()).resolves.toEqual({
-      databaseUrl: "postgresql://user:password@localhost:5432/kagami",
-      port: 3100,
-      napcat: {
-        wsUrl: "wss://example.com/napcat",
-        reconnectMs: 3000,
-        requestTimeoutMs: 10000,
-        listenGroupIds: ["123456"],
-      },
-    });
-
-    await expect(manager.getLlmRuntimeConfig()).resolves.toEqual({
-      timeoutMs: 15000,
-      deepseek: {
-        apiKey: undefined,
-        baseUrl: "https://api.deepseek.com",
-        models: ["deepseek-chat"],
-        timeoutMs: 15000,
-      },
-      openai: {
-        apiKey: "openai-key",
-        baseUrl: "https://api.openai.com/v1",
-        models: ["gpt-4o-mini"],
-        timeoutMs: 15000,
-      },
-      openaiCodex: {
-        baseUrl: "https://chatgpt.com/backend-api/codex/responses",
-        models: ["gpt-5.3-codex"],
-        timeoutMs: 15000,
-      },
-      claudeCode: {
-        apiKey: undefined,
-        baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-20250514"],
-        timeoutMs: 15000,
-      },
-      usages: {
-        agent: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 2,
-            },
-          ],
+    await expect(manager.config()).resolves.toEqual({
+      server: {
+        databaseUrl: "postgresql://user:password@localhost:5432/kagami",
+        port: 3100,
+        napcat: {
+          wsUrl: "wss://example.com/napcat",
+          reconnectMs: 3000,
+          requestTimeoutMs: 10000,
+          listenGroupIds: ["123456"],
         },
-        contextSummarizer: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 1,
+        llm: {
+          timeoutMs: 15000,
+          codexAuth: {
+            enabled: true,
+            publicBaseUrl: "http://localhost:20004",
+            oauthRedirectPath: "/auth/callback",
+            oauthStateTtlMs: 600_000,
+            refreshLeewayMs: 60_000,
+            binaryPath: "codex",
+          },
+          claudeCodeAuth: {
+            enabled: true,
+            publicBaseUrl: "http://localhost:20004",
+            oauthRedirectPath: "/callback",
+            oauthStateTtlMs: 600_000,
+            refreshLeewayMs: 60_000,
+          },
+          providers: {
+            deepseek: {
+              apiKey: undefined,
+              baseUrl: "https://api.deepseek.com",
+              models: ["deepseek-chat"],
             },
-          ],
+            openai: {
+              apiKey: "openai-key",
+              baseUrl: "https://api.openai.com/v1",
+              models: ["gpt-4o-mini"],
+            },
+            openaiCodex: {
+              baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+              models: ["gpt-5.3-codex"],
+            },
+            claudeCode: {
+              baseUrl: "https://api.anthropic.com",
+              models: ["claude-sonnet-4-20250514"],
+            },
+          },
+          usages: {
+            agent: {
+              attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 2 }],
+            },
+            contextSummarizer: {
+              attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+            },
+            vision: {
+              attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+            },
+            webSearchAgent: {
+              attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+            },
+          },
         },
-        vision: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 1,
-            },
-          ],
+        rag: {
+          embedding: {
+            provider: "google",
+            apiKey: "gemini-key",
+            baseUrl: "https://generativelanguage.googleapis.com",
+            model: "gemini-embedding-001",
+            outputDimensionality: 768,
+          },
+          retrieval: {
+            topK: 3,
+          },
         },
-        webSearchAgent: {
-          attempts: [
-            {
-              provider: "openai",
-              model: "gpt-4o-mini",
-              times: 1,
-            },
-          ],
+        tavily: {
+          apiKey: "tavily-key",
+        },
+        bot: {
+          qq: "10001",
         },
       },
     });
 
-    await expect(manager.getCodexAuthRuntimeConfig()).resolves.toEqual({
-      enabled: true,
-      publicBaseUrl: "http://localhost:20004",
-      oauthRedirectPath: "/auth/callback",
-      oauthStateTtlMs: 600_000,
-      refreshLeewayMs: 60_000,
-      timeoutMs: 15000,
-      binaryPath: "codex",
-    });
-
-    await expect(manager.getClaudeCodeAuthRuntimeConfig()).resolves.toEqual({
-      enabled: true,
-      publicBaseUrl: "http://localhost:20004",
-      oauthRedirectPath: "/callback",
-      oauthStateTtlMs: 600_000,
-      refreshLeewayMs: 60_000,
-      timeoutMs: 15000,
-    });
-
-    await expect(manager.getRagRuntimeConfig()).resolves.toEqual({
-      embedding: {
-        provider: "google",
-        apiKey: "gemini-key",
-        baseUrl: "https://generativelanguage.googleapis.com",
-        model: "gemini-embedding-001",
-        outputDimensionality: 768,
-      },
-      retrieval: {
-        topK: 3,
-      },
-    });
-
-    await expect(manager.getTavilyConfig()).resolves.toEqual({
-      apiKey: "tavily-key",
-    });
-    await expect(manager.getBotProfileConfig()).resolves.toEqual({
-      botQQ: "10001",
-    });
+    await expect(manager.config()).resolves.toBe(config);
   });
 
   it("should fail fast when config.yaml is missing", async () => {
@@ -690,8 +661,10 @@ server:
       config: await loadStaticConfig({ configPath }),
     });
 
-    await expect(manager.getBootConfig()).resolves.toMatchObject({
-      port: 20003,
+    await expect(manager.config()).resolves.toMatchObject({
+      server: {
+        port: 20003,
+      },
     });
   });
 

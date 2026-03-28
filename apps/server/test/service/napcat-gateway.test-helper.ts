@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import type { AgentEventQueue } from "../../src/agent/event/event.queue.js";
 import type { ConfigManager } from "../../src/config/config.manager.js";
+import type { Config } from "../../src/config/config.loader.js";
 import type { NapcatEventDao } from "../../src/napcat/dao/napcat-event.dao.js";
 import type { NapcatGroupMessageChunkDao } from "../../src/napcat/dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../../src/napcat/dao/napcat-group-message.dao.js";
@@ -101,8 +102,8 @@ export function createNapcatGroupMessageChunkDao(): NapcatGroupMessageChunkDao &
 }
 
 export function createConfigManager(): ConfigManager {
-  return {
-    getBootConfig: vi.fn().mockResolvedValue({
+  const config: Config = {
+    server: {
       databaseUrl: "postgresql://localhost:5432/kagami",
       port: 20003,
       napcat: {
@@ -111,13 +112,81 @@ export function createConfigManager(): ConfigManager {
         requestTimeoutMs: 10000,
         listenGroupIds: ["987654"],
       },
-    }),
-    getLlmRuntimeConfig: vi.fn(),
-    getCodexAuthRuntimeConfig: vi.fn(),
-    getClaudeCodeAuthRuntimeConfig: vi.fn(),
-    getRagRuntimeConfig: vi.fn(),
-    getTavilyConfig: vi.fn(),
-    getBotProfileConfig: vi.fn(),
+      llm: {
+        timeoutMs: 45_000,
+        codexAuth: {
+          enabled: true,
+          publicBaseUrl: "http://localhost:20004",
+          oauthRedirectPath: "/auth/callback",
+          oauthStateTtlMs: 600_000,
+          refreshLeewayMs: 60_000,
+          binaryPath: "codex",
+        },
+        claudeCodeAuth: {
+          enabled: true,
+          publicBaseUrl: "http://localhost:20004",
+          oauthRedirectPath: "/callback",
+          oauthStateTtlMs: 600_000,
+          refreshLeewayMs: 60_000,
+        },
+        providers: {
+          deepseek: {
+            apiKey: undefined,
+            baseUrl: "https://api.deepseek.com",
+            models: ["deepseek-chat"],
+          },
+          openai: {
+            apiKey: undefined,
+            baseUrl: "https://api.openai.com/v1",
+            models: ["gpt-4o-mini"],
+          },
+          openaiCodex: {
+            baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+            models: ["gpt-5.4"],
+          },
+          claudeCode: {
+            baseUrl: "https://api.anthropic.com",
+            models: ["claude-sonnet-4-20250514"],
+          },
+        },
+        usages: {
+          agent: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
+          contextSummarizer: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
+          vision: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
+          webSearchAgent: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
+        },
+      },
+      rag: {
+        embedding: {
+          provider: "google",
+          apiKey: "gemini-key",
+          baseUrl: "https://generativelanguage.googleapis.com",
+          model: "gemini-embedding-001",
+          outputDimensionality: 768,
+        },
+        retrieval: {
+          topK: 3,
+        },
+      },
+      tavily: {
+        apiKey: "tavily-key",
+      },
+      bot: {
+        qq: "10001",
+      },
+    },
+  };
+
+  return {
+    config: vi.fn().mockResolvedValue(config),
   };
 }
 
