@@ -28,6 +28,7 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn(),
         getRecentGroupMessages,
       },
       rootAgentRuntime: {
@@ -63,6 +64,7 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn(),
         getRecentGroupMessages,
       },
       rootAgentRuntime: {
@@ -85,6 +87,7 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn(),
         getRecentGroupMessages,
       },
       rootAgentRuntime: {

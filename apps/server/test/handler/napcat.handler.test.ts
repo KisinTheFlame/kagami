@@ -39,6 +39,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
@@ -49,6 +50,7 @@ describe("NapcatHandler", () => {
       method: "POST",
       url: "/napcat/group/send",
       payload: {
+        groupId: "1122334455",
         message: "hello group",
       },
     });
@@ -56,6 +58,7 @@ describe("NapcatHandler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ messageId: 654321 });
     expect(sendGroupMessage).toHaveBeenCalledWith({
+      groupId: "1122334455",
       message: "hello group",
     });
   });
@@ -66,6 +69,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
@@ -76,6 +80,7 @@ describe("NapcatHandler", () => {
       method: "POST",
       url: "/napcat/group/send",
       payload: {
+        groupId: "1122334455",
         message: "",
       },
     });
@@ -94,32 +99,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
-      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
-    };
-
-    const handler = new NapcatHandler({ napcatGatewayService });
-    handler.register(app);
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/napcat/group/send",
-      payload: {
-        message: "hello",
-      },
-    });
-
-    expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({
-      message: "NapCat 请求发送失败",
-    });
-  });
-
-  it("should return 400 when legacy groupId is still provided", async () => {
-    const sendGroupMessage = vi.fn();
-    const napcatGatewayService: NapcatGatewayService = {
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-      sendGroupMessage,
+      getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
@@ -131,6 +111,33 @@ describe("NapcatHandler", () => {
       url: "/napcat/group/send",
       payload: {
         groupId: "1122334455",
+        message: "hello",
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      message: "NapCat 请求发送失败",
+    });
+  });
+
+  it("should return 400 when groupId is missing", async () => {
+    const sendGroupMessage = vi.fn();
+    const napcatGatewayService: NapcatGatewayService = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      sendGroupMessage,
+      getGroupInfo: vi.fn(),
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+    };
+
+    const handler = new NapcatHandler({ napcatGatewayService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/napcat/group/send",
+      payload: {
         message: "hello group",
       },
     });
@@ -144,6 +151,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 

@@ -10,6 +10,8 @@ import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-mess
 import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
+  NapcatGetGroupInfoInput,
+  NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
   NapcatGatewayService,
   NapcatGroupMessageEvent,
@@ -35,9 +37,18 @@ type NapcatGatewayOptions = {
 
 const MessageIdSchema = z.number().int().positive();
 const PositiveIntSchema = z.number().int().positive();
+const NonNegativeIntSchema = z.number().int().nonnegative();
 const NonEmptyStringSchema = z.string().min(1);
 const GroupMessageHistoryResponseSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())),
+});
+const GroupInfoResponseSchema = z.object({
+  group_all_shut: z.union([z.boolean(), NonNegativeIntSchema]),
+  group_remark: z.string().optional().default(""),
+  group_id: z.union([NonEmptyStringSchema, PositiveIntSchema]).transform(value => String(value)),
+  group_name: NonEmptyStringSchema,
+  member_count: NonNegativeIntSchema,
+  max_member_count: NonNegativeIntSchema,
 });
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 
@@ -56,7 +67,6 @@ type OrderedPostTypeEventResult =
     };
 
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
-  private readonly listenGroupId: string;
   private readonly transport: NapcatGatewayTransport;
   private readonly groupMessageProcessor: NapcatGroupMessageProcessor;
 
@@ -85,7 +95,6 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     imageMessageAnalyzer,
     createWebSocket,
   }: NapcatGatewayOptions) {
-    this.listenGroupId = config.listenGroupId;
     const transport = new NapcatGatewayTransport({
       wsUrl: config.wsUrl,
       reconnectMs: config.reconnectMs,
@@ -96,7 +105,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       },
     });
     const groupMessageProcessor = new NapcatGroupMessageProcessor({
-      listenGroupId: config.listenGroupId,
+      listenGroupIds: config.listenGroupIds,
       actionRequester: transport,
       enqueueGroupMessageEvent,
       imageMessageAnalyzer,
@@ -171,11 +180,12 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   }
 
   public async sendGroupMessage({
+    groupId,
     message,
   }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
     const messageSegments = parseOutgoingMessageSegments(message);
     const data = await this.transport.request("send_group_msg", {
-      group_id: this.listenGroupId,
+      group_id: groupId,
       message: messageSegments,
     });
 
@@ -191,6 +201,43 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     return {
       messageId: messageIdResult.data,
+    };
+  }
+
+  public async getGroupInfo({
+    groupId,
+  }: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
+    if (!groupIdResult.success) {
+      throw new BizError({
+        message: "groupId 必须是非空字符串",
+        meta: {
+          reason: "INVALID_GROUP_ID",
+        },
+      });
+    }
+
+    const data = await this.transport.request("get_group_info", {
+      group_id: groupIdResult.data,
+    });
+
+    const groupInfoResult = GroupInfoResponseSchema.safeParse(data ?? {});
+    if (!groupInfoResult.success) {
+      throw new BizError({
+        message: "NapCat 返回的群信息结构无效",
+        meta: {
+          reason: "INVALID_GROUP_INFO_RESPONSE",
+        },
+      });
+    }
+
+    return {
+      groupId: groupInfoResult.data.group_id,
+      groupName: groupInfoResult.data.group_name,
+      memberCount: groupInfoResult.data.member_count,
+      maxMemberCount: groupInfoResult.data.max_member_count,
+      groupRemark: groupInfoResult.data.group_remark,
+      groupAllShut: Boolean(groupInfoResult.data.group_all_shut),
     };
   }
 

@@ -6,6 +6,17 @@ import {
 
 export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
 export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
+export type NapcatGetGroupInfoInput = {
+  groupId: string;
+};
+export type NapcatGetGroupInfoResult = {
+  groupId: string;
+  groupName: string;
+  memberCount: number;
+  maxMemberCount: number;
+  groupRemark: string;
+  groupAllShut: boolean;
+};
 
 export type NapcatGroupMessageData = {
   groupId: string;
@@ -30,6 +41,7 @@ export interface NapcatGatewayService {
   start(): Promise<void>;
   stop(): Promise<void>;
   sendGroupMessage(input: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult>;
+  getGroupInfo(input: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult>;
   getRecentGroupMessages(input: {
     groupId: string;
     count: number;

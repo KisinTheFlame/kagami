@@ -67,15 +67,18 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
+      groupId: "123456",
       message: "hello group",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
       params: {
+        group_id: string;
         message: unknown;
       };
     };
 
+    expect(sentPayload.params.group_id).toBe("123456");
     expect(sentPayload.params.message).toEqual([
       {
         type: "text",
@@ -121,15 +124,18 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
+      groupId: "123456",
       message: "{@闻震(870853294)} hi",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
       echo: string;
       params: {
+        group_id: string;
         message: unknown;
       };
     };
 
+    expect(sentPayload.params.group_id).toBe("123456");
     expect(sentPayload.params.message).toEqual([
       {
         type: "at",
@@ -321,6 +327,7 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
+      groupId: "123456",
       message: "hello",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
@@ -610,6 +617,152 @@ describe("DefaultNapcatGatewayService", () => {
         time: 1710000001,
       },
     ]);
+
+    await gateway.stop();
+  });
+
+  it("should fetch group info and normalize it into project shape", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const groupInfoPromise = gateway.getGroupInfo({
+      groupId: "987654",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      action: string;
+      params: Record<string, unknown>;
+    };
+
+    expect(sentPayload.action).toBe("get_group_info");
+    expect(sentPayload.params).toEqual({
+      group_id: "987654",
+    });
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          group_all_shut: 1,
+          group_remark: "",
+          group_id: 987654,
+          group_name: "测试群",
+          member_count: 42,
+          max_member_count: 200,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(groupInfoPromise).resolves.toEqual({
+      groupId: "987654",
+      groupName: "测试群",
+      memberCount: 42,
+      maxMemberCount: 200,
+      groupRemark: "",
+      groupAllShut: true,
+    });
+
+    await gateway.stop();
+  });
+
+  it("should reject getGroupInfo when groupId is empty", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    await expect(
+      gateway.getGroupInfo({
+        groupId: "",
+      }),
+    ).rejects.toMatchObject({
+      message: "groupId 必须是非空字符串",
+      meta: {
+        reason: "INVALID_GROUP_ID",
+      },
+    });
+    expect(socket.sentPayloads).toHaveLength(0);
+
+    await gateway.stop();
+  });
+
+  it("should reject getGroupInfo when NapCat group info response is invalid", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const groupInfoPromise = gateway.getGroupInfo({
+      groupId: "987654",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          group_all_shut: 0,
+          group_remark: "",
+          group_id: 987654,
+          member_count: 42,
+          max_member_count: 200,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(groupInfoPromise).rejects.toMatchObject({
+      message: "NapCat 返回的群信息结构无效",
+      meta: {
+        reason: "INVALID_GROUP_INFO_RESPONSE",
+      },
+    });
 
     await gateway.stop();
   });
