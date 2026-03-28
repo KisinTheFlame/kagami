@@ -8,7 +8,10 @@ export class DefaultAgentMessageService implements AgentMessageService {
     this.napcatGatewayService = napcatGatewayService;
   }
 
-  public async sendGroupMessage(input: { message: string }): Promise<{ messageId: number }> {
+  public async sendGroupMessage(input: {
+    groupId: string;
+    message: string;
+  }): Promise<{ messageId: number }> {
     return await this.napcatGatewayService.sendGroupMessage(input);
   }
 }

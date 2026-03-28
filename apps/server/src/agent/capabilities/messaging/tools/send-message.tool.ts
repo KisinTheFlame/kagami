@@ -8,6 +8,10 @@ const SendMessageArgumentsSchema = z.object({
   message: z.string().trim().min(1),
 });
 
+type SendMessageToolContext = ToolContext & {
+  groupId?: string;
+};
+
 export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgumentsSchema> {
   public readonly name = SEND_MESSAGE_TOOL_NAME;
   public readonly description = "向当前监听的 QQ 群发送一条文本消息。";
@@ -33,10 +37,21 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     input: z.infer<typeof SendMessageArgumentsSchema>,
     context: ToolContext,
   ): Promise<string> {
-    void context;
-    const result = await this.agentMessageService.sendGroupMessage(input);
+    const groupId = (context as SendMessageToolContext).groupId;
+    if (!groupId) {
+      return JSON.stringify({
+        ok: false,
+        error: "GROUP_CONTEXT_UNAVAILABLE",
+      });
+    }
+
+    const result = await this.agentMessageService.sendGroupMessage({
+      groupId,
+      message: input.message,
+    });
     return JSON.stringify({
       ok: true,
+      groupId,
       messageId: result.messageId,
     });
   }

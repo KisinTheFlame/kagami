@@ -2,7 +2,6 @@ import type { Event } from "./event.js";
 
 export interface AgentEventQueue {
   enqueue(event: Event): number;
-  drainAll(): Event[];
+  dequeue(): Event | null;
   size(): number;
-  waitForEvent(): Promise<void>;
 }

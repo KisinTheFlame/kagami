@@ -124,6 +124,7 @@ describe("NapCat segment schemas", () => {
 
   it("should allow group send plain text message only", () => {
     const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
+      groupId: "112233",
       message: "hello",
     });
 
@@ -132,6 +133,7 @@ describe("NapCat segment schemas", () => {
 
   it("should reject non string group send message", () => {
     const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
+      groupId: "112233",
       message: [
         {
           type: "text",
@@ -147,7 +149,6 @@ describe("NapCat segment schemas", () => {
 
   it("should reject legacy groupId in group send payload", () => {
     const parsed = NapcatSendGroupMessageRequestSchema.safeParse({
-      groupId: "112233",
       message: "hello",
     });
 

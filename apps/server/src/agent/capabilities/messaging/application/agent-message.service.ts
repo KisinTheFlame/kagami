@@ -1,3 +1,3 @@
 export interface AgentMessageService {
-  sendGroupMessage(input: { message: string }): Promise<{ messageId: number }>;
+  sendGroupMessage(input: { groupId: string; message: string }): Promise<{ messageId: number }>;
 }

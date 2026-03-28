@@ -35,7 +35,7 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
@@ -133,7 +133,7 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
@@ -214,7 +214,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore bot self group message events", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -249,7 +249,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore realtime message_sent group events", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -287,7 +287,7 @@ describe("NapcatGroupMessageProcessor", () => {
       throw new Error("publish failed");
     });
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -340,7 +340,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should render image segments into rawMessage", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -407,7 +407,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore face segments when rendering rawMessage", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -463,7 +463,7 @@ describe("NapcatGroupMessageProcessor", () => {
     imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -517,7 +517,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore group messages from other groups", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -577,7 +577,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should keep group messages when only unsupported segments are present", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -637,7 +637,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
   it("should log payload and skip reasons when malformed history messages are skipped", async () => {
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -675,7 +675,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
   it("should keep self sent message_sent history messages in context payloads", async () => {
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupId: "987654",
+      listenGroupIds: ["987654"],
       actionRequester: {
         request: vi.fn(),
       },

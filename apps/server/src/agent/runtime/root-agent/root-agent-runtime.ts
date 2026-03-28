@@ -9,6 +9,7 @@ import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { Tool } from "../../../llm/types.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
+import type { RootAgentSessionController } from "./session/root-agent-session.js";
 
 type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
@@ -23,6 +24,9 @@ type RootAgentRuntimeDeps = {
   llmClient: LlmClient;
   context: AgentContext;
   eventQueue: AgentEventQueue;
+  session: RootAgentSessionController;
+  portalTools?: ToolExecutor;
+  groupTools?: ToolExecutor;
   tools?: ToolExecutor;
   agentTools?: ToolExecutor;
   contextSummaryOperation?: ContextSummaryLike;
@@ -30,6 +34,7 @@ type RootAgentRuntimeDeps = {
   summaryTools?: Tool[];
   contextCompactionThreshold?: number;
   now?: () => Date;
+  sleep?: (ms: number) => Promise<void>;
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
@@ -38,17 +43,24 @@ export class RootAgentRuntime {
   private readonly llmClient: LlmClient;
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
-  private readonly tools: ToolExecutor;
+  private readonly session: RootAgentSessionController;
+  private readonly portalTools: ToolExecutor;
+  private readonly groupTools: ToolExecutor;
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
   private readonly now: () => Date;
+  private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
+  private initialized = false;
 
   public constructor({
     llmClient,
     context,
     eventQueue,
+    session,
+    portalTools,
+    groupTools,
     tools,
     agentTools,
     contextSummaryOperation,
@@ -56,99 +68,126 @@ export class RootAgentRuntime {
     summaryTools,
     contextCompactionThreshold,
     now,
+    sleep,
   }: RootAgentRuntimeDeps) {
     this.llmClient = llmClient;
     this.context = context;
     this.eventQueue = eventQueue;
-    this.tools = tools ?? agentTools ?? failMissingTools();
+    this.session = session;
+    this.portalTools = portalTools ?? tools ?? agentTools ?? failMissingTools();
+    this.groupTools = groupTools ?? tools ?? agentTools ?? failMissingTools();
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionThreshold =
       contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
     this.now = now ?? (() => new Date());
+    this.sleep = sleep ?? createSleep;
+  }
+
+  public async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    await this.session.initializeContext();
+    await this.compactContextIfNeeded();
+    this.initialized = true;
   }
 
   public async run(): Promise<void> {
+    await this.initialize();
+    let shouldRunRound = true;
+
     while (true) {
-      const shouldAddWakeReminder = this.eventQueue.size() === 0;
-      await this.eventQueue.waitForEvent();
-      if (shouldAddWakeReminder) {
-        await this.appendWakeReminderIfNeeded(this.now());
+      const consumeResult = await this.consumePendingEvents();
+      shouldRunRound = shouldRunRound || consumeResult.shouldTriggerRound;
+
+      if (!shouldRunRound) {
+        await this.sleep(10);
+        continue;
+      }
+      shouldRunRound = false;
+
+      await this.appendWakeReminderIfNeeded(this.now());
+
+      const snapshot = await this.context.getSnapshot();
+      const activeTools = this.getActiveTools();
+      const completion = await this.llmClient.chat(
+        {
+          system: snapshot.systemPrompt,
+          messages: snapshot.messages,
+          tools: activeTools.definitions(),
+          toolChoice: "required",
+        },
+        {
+          usage: "agent",
+        },
+      );
+      const assistant = completion.message;
+      const persistentAssistantMessage = omitControlToolCalls(assistant, activeTools);
+      if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
+        await this.context.appendAssistantTurn(persistentAssistantMessage);
+        await this.compactContextIfNeeded();
       }
 
-      let hasActiveRound = false;
-      let currentGroupId: string | null = null;
-
-      while (true) {
-        const events = this.eventQueue.drainAll();
-        if (events.length > 0) {
-          hasActiveRound = true;
-          currentGroupId = extractCurrentGroupId(events, currentGroupId);
-          await this.handleEvents(events);
-        } else if (!hasActiveRound) {
-          break;
-        }
-
-        const snapshot = await this.context.getSnapshot();
-        const completion = await this.llmClient.chat(
-          {
-            system: snapshot.systemPrompt,
-            messages: snapshot.messages,
-            tools: this.tools.definitions(),
-            toolChoice: "required",
-          },
-          {
-            usage: "agent",
-          },
-        );
-        const assistant = completion.message;
-        const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
-        if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
-          await this.context.appendAssistantTurn(persistentAssistantMessage);
+      let sleepMs: number | null = null;
+      for (const toolCall of assistant.toolCalls) {
+        const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
+          groupId: this.session.getCurrentGroupId(),
+          systemPrompt: snapshot.systemPrompt,
+          messages: snapshot.messages,
+          tools: activeTools,
+        });
+        if (toolResult.content.length > 0) {
+          await this.context.appendToolResult({
+            toolCallId: toolCall.id,
+            content: toolResult.content,
+          });
           await this.compactContextIfNeeded();
         }
-
-        let shouldFinishRound = false;
-        for (const toolCall of assistant.toolCalls) {
-          const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
-            groupId: currentGroupId ?? undefined,
-            systemPrompt: snapshot.systemPrompt,
-            messages: snapshot.messages,
-          });
-          if (toolResult.signal === "finish_round") {
-            shouldFinishRound = true;
-          }
-          if (toolResult.content.length > 0) {
-            await this.context.appendToolResult({
-              toolCallId: toolCall.id,
-              content: toolResult.content,
-            });
-            await this.compactContextIfNeeded();
-          }
-          if (shouldFinishRound) {
-            break;
-          }
-        }
-
-        if (shouldFinishRound && this.eventQueue.size() === 0) {
+        await this.session.flushPendingPostToolEffects();
+        await this.compactContextIfNeeded();
+        if (toolResult.signal === "sleep") {
+          sleepMs = toolResult.sleepMs ?? null;
           break;
         }
+        if (toolResult.signal === "finish_round") {
+          break;
+        }
+        shouldRunRound = true;
+      }
+
+      if (sleepMs !== null) {
+        shouldRunRound = true;
+        await this.sleep(sleepMs);
+        continue;
       }
     }
   }
 
   public async hydrateStartupEvents(events: Event[]): Promise<void> {
-    if (events.length === 0) {
-      return;
+    for (const event of events) {
+      await this.session.consumeIncomingEvent(event);
     }
-
-    await this.context.appendEvents(events);
-    await this.compactContextIfNeeded();
+    const result = await this.session.flushPendingIncomingEffects();
+    if (result.shouldTriggerRound) {
+      await this.compactContextIfNeeded();
+    }
   }
 
-  private async handleEvents(events: Event[]): Promise<void> {
-    await this.context.appendEvents(events);
+  private async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
+    while (true) {
+      const event = this.eventQueue.dequeue();
+      if (!event) {
+        break;
+      }
+
+      await this.session.consumeIncomingEvent(event);
+    }
+
+    const result = await this.session.flushPendingIncomingEffects();
     await this.compactContextIfNeeded();
+    return result;
   }
 
   private async executeToolCall(
@@ -158,14 +197,16 @@ export class RootAgentRuntime {
       groupId?: string;
       systemPrompt?: string;
       messages?: import("../../../llm/types.js").LlmMessage[];
+      tools: ToolExecutor;
     },
   ): Promise<ToolSetExecutionResult> {
     const toolContext = {
       ...context,
       agentContext: this.context,
+      rootAgentSession: this.session,
     };
 
-    return await this.tools.execute(toolName, argumentsValue, toolContext);
+    return await context.tools.execute(toolName, argumentsValue, toolContext);
   }
 
   private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
@@ -212,6 +253,14 @@ export class RootAgentRuntime {
       ...snapshot.messages.slice(splitIndex),
     ]);
   }
+
+  private getActiveTools(): ToolExecutor {
+    return this.session.getState().kind === "portal" ? this.portalTools : this.groupTools;
+  }
+}
+
+async function createSleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function failMissingTools(): never {
@@ -255,15 +304,4 @@ function createWakeReminderMinuteKey(now: Date): string {
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
 
   return [values.year, values.month, values.day, values.hour, values.minute].join("-");
-}
-
-function extractCurrentGroupId(events: Event[], fallback: string | null): string | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event.type === "napcat_group_message") {
-      return event.data.groupId;
-    }
-  }
-
-  return fallback;
 }

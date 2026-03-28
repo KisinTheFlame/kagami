@@ -33,7 +33,7 @@ type NapcatActionRequester = {
 };
 
 type NapcatGroupMessageProcessorOptions = {
-  listenGroupId: string;
+  listenGroupIds: string[];
   actionRequester: NapcatActionRequester;
   enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
@@ -44,7 +44,7 @@ const LIVE_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message"]);
 const HISTORICAL_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message", "message_sent"]);
 
 export class NapcatGroupMessageProcessor {
-  private readonly listenGroupId: string;
+  private readonly listenGroupIds: Set<string>;
   private readonly actionRequester: NapcatActionRequester;
   private readonly enqueueGroupMessageEvent: (
     event: NapcatGroupMessageEvent,
@@ -56,12 +56,12 @@ export class NapcatGroupMessageProcessor {
   >();
 
   public constructor({
-    listenGroupId,
+    listenGroupIds,
     actionRequester,
     enqueueGroupMessageEvent,
     imageMessageAnalyzer,
   }: NapcatGroupMessageProcessorOptions) {
-    this.listenGroupId = listenGroupId;
+    this.listenGroupIds = new Set(listenGroupIds);
     this.actionRequester = actionRequester;
     this.enqueueGroupMessageEvent = enqueueGroupMessageEvent;
     this.imageMessageAnalyzer = imageMessageAnalyzer;
@@ -217,7 +217,7 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    if (options.requireListenedGroup && event.groupId !== this.listenGroupId) {
+    if (options.requireListenedGroup && !this.listenGroupIds.has(event.groupId)) {
       return null;
     }
 

@@ -38,7 +38,16 @@ import { ToolCatalog } from "@kagami/agent-runtime";
 import { InMemoryAgentEventQueue } from "../agent/runtime/event/in-memory-agent-event-queue.js";
 import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
-import { FinishTool, FINISH_TOOL_NAME } from "../agent/runtime/root-agent/tools/finish.tool.js";
+import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
+import {
+  EnterGroupTool,
+  ENTER_GROUP_TOOL_NAME,
+} from "../agent/runtime/root-agent/tools/enter-group.tool.js";
+import {
+  ExitGroupTool,
+  EXIT_GROUP_TOOL_NAME,
+} from "../agent/runtime/root-agent/tools/exit-group.tool.js";
+import { SleepTool, SLEEP_TOOL_NAME } from "../agent/runtime/root-agent/tools/sleep.tool.js";
 import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/indexer.service.js";
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
 import {
@@ -92,7 +101,7 @@ export type ServerRuntime = {
   authUsageCacheManager: AuthUsageCacheManager;
   rootAgentRuntime: RootAgentRuntime;
   port: number;
-  listenGroupId: string;
+  listenGroupIds: string[];
   startupContextRecentMessageCount: number;
   hasTavilyApiKey: boolean;
   listAvailableAgentProviders: () => Promise<
@@ -252,43 +261,64 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const agentMessageService = new DefaultAgentMessageService({
     napcatGatewayService,
   });
+  const context = new DefaultAgentContext({
+    systemPromptFactory: agentSystemPromptFactory,
+  });
+  const rootAgentSession = new RootAgentSession({
+    context,
+    napcatGatewayService,
+    listenGroupIds: config.server.napcat.listenGroupIds,
+    recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
+  });
   const toolCatalog = new ToolCatalog([
+    new EnterGroupTool(),
+    new ExitGroupTool(),
+    new SleepTool({
+      sleepMs: config.server.agent.portalSleepMs,
+    }),
     new SearchWebTool({
       webSearchTaskAgent,
     }),
     new SendMessageTool({
       agentMessageService,
     }),
-    new FinishTool(),
     new SummaryTool(),
   ]);
-  const agentVisibleTools = toolCatalog.pick([
+  const portalTools = toolCatalog.pick([ENTER_GROUP_TOOL_NAME, SLEEP_TOOL_NAME]);
+  const groupTools = toolCatalog.pick([
     SEARCH_WEB_TOOL_NAME,
     SEND_MESSAGE_TOOL_NAME,
-    FINISH_TOOL_NAME,
+    EXIT_GROUP_TOOL_NAME,
   ]);
   const contextSummaryOperation = new ContextSummaryOperation({
     llmClient,
     summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
   });
-  const context = new DefaultAgentContext({
-    systemPromptFactory: agentSystemPromptFactory,
-  });
   const rootAgentRuntime = new RootAgentRuntime({
     llmClient,
     context,
     eventQueue,
-    tools: agentVisibleTools,
+    session: rootAgentSession,
+    portalTools,
+    groupTools,
     contextSummaryOperation,
     summaryTools: [
-      ...agentVisibleTools.definitions(),
+      ...portalTools.definitions(),
+      ...groupTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
     ],
   });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
     llmClient,
     playgroundToolDefinitions: toolCatalog
-      .pick([SEARCH_WEB_TOOL_NAME, SEND_MESSAGE_TOOL_NAME, FINISH_TOOL_NAME, SUMMARY_TOOL_NAME])
+      .pick([
+        ENTER_GROUP_TOOL_NAME,
+        SLEEP_TOOL_NAME,
+        SEARCH_WEB_TOOL_NAME,
+        SEND_MESSAGE_TOOL_NAME,
+        EXIT_GROUP_TOOL_NAME,
+        SUMMARY_TOOL_NAME,
+      ])
       .definitions(),
   });
 
@@ -314,7 +344,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     authUsageCacheManager: authModule.authUsageCacheManager,
     rootAgentRuntime,
     port: config.server.port,
-    listenGroupId: config.server.napcat.listenGroupId,
+    listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     listAvailableAgentProviders: async () => {

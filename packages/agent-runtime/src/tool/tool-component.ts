@@ -12,7 +12,7 @@ export type ToolDefinition = {
 };
 
 export type ToolKind = "business" | "control";
-export type ToolSignal = "continue" | "finish_round";
+export type ToolSignal = "continue" | "finish_round" | "sleep";
 
 export type ToolContext<TMessage = unknown> = {
   groupId?: string;
@@ -23,6 +23,7 @@ export type ToolContext<TMessage = unknown> = {
 export type ToolExecutionResult = {
   content: string;
   signal: ToolSignal;
+  sleepMs?: number;
 };
 
 export interface ToolComponent<TMessage = unknown> {

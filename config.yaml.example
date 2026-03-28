@@ -1,11 +1,14 @@
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
   port: 20003
+  agent:
+    portalSleepMs: 30000
   napcat:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupId: "123456"
+    listenGroupIds:
+      - "123456"
     startupContextRecentMessageCount: 40
   llm:
     timeoutMs: 45000

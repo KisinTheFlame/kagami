@@ -43,6 +43,49 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
   );
 }
 
+export function createPortalSnapshotMessage(
+  groups: Array<{ groupId: string; unreadCount: number }>,
+): UserMessage {
+  const lines = [
+    `<${SYSTEM_INSTRUCTION_TAG}>`,
+    "你当前处于门户状态。",
+    "这里只显示可进入的群 ID 和未读数；如果你想进入某个群，调用 enter_group。",
+    "群列表：",
+    ...groups.map(group => `- 群 ${group.groupId}，未读 ${group.unreadCount} 条`),
+    `</${SYSTEM_INSTRUCTION_TAG}>`,
+  ];
+
+  return createUserMessage(lines.join("\n"));
+}
+
+export function createEnterGroupMessage(input: {
+  groupId: string;
+  source: "history" | "unread";
+  hydratedCount: number;
+}): UserMessage {
+  const sourceLabel = input.source === "history" ? "最近历史消息" : "未读消息";
+  return createUserMessage(
+    [
+      `<${SYSTEM_INSTRUCTION_TAG}>`,
+      `你已进入群 ${input.groupId}。`,
+      `接下来会看到该群补入的${sourceLabel}，本次共 ${input.hydratedCount} 条。`,
+      "当前如果要发言，请在这个群里行动；如果想回到门户，调用 exit_group。",
+      `</${SYSTEM_INSTRUCTION_TAG}>`,
+    ].join("\n"),
+  );
+}
+
+export function createExitGroupMessage(groupId: string): UserMessage {
+  return createUserMessage(
+    [
+      `<${SYSTEM_INSTRUCTION_TAG}>`,
+      `你已退出群 ${groupId}，回到门户状态。`,
+      "现在不要直接发群消息；如需进入某个群，请调用 enter_group。",
+      `</${SYSTEM_INSTRUCTION_TAG}>`,
+    ].join("\n"),
+  );
+}
+
 export function createWebSearchInstructionMessage(question: string): UserMessage {
   return createUserMessage(
     [

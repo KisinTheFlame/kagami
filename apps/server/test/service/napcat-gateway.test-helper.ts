@@ -106,11 +106,14 @@ export function createConfigManager(): ConfigManager {
     server: {
       databaseUrl: "postgresql://localhost:5432/kagami",
       port: 20003,
+      agent: {
+        portalSleepMs: 30_000,
+      },
       napcat: {
         wsUrl: "ws://napcat:3001/",
         reconnectMs: 3000,
         requestTimeoutMs: 10000,
-        listenGroupId: "987654",
+        listenGroupIds: ["987654"],
         startupContextRecentMessageCount: 40,
       },
       llm: {
@@ -196,9 +199,8 @@ export function createAgentEventQueue(): AgentEventQueue & {
 } {
   return {
     enqueue: vi.fn().mockReturnValue(1),
-    drainAll: vi.fn().mockReturnValue([]),
+    dequeue: vi.fn().mockReturnValue(null),
     size: vi.fn().mockReturnValue(0),
-    waitForEvent: vi.fn().mockResolvedValue(undefined),
   };
 }
 

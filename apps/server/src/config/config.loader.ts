@@ -9,6 +9,7 @@ import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
+const DEFAULT_AGENT_PORTAL_SLEEP_MS = 30_000;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -69,6 +70,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
   return value;
 }, z.string().trim().min(1).optional());
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
+const StringLikeArraySchema = z.array(StringLikeSchema).min(1);
 const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-code"] satisfies [
   LlmProviderId,
   ...LlmProviderId[],
@@ -82,20 +84,63 @@ const LlmUsageAttemptConfigSchema = z.object({
 const LlmUsageConfigSchema = z.object({
   attempts: z.array(LlmUsageAttemptConfigSchema).min(1),
 });
+const NapcatConfigSchema = z.preprocess(
+  value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (!("listenGroupId" in record)) {
+      return value;
+    }
+
+    return {
+      ...record,
+      listenGroupIds:
+        "listenGroupIds" in record ? record.listenGroupIds : ["__legacy_listen_group_id__"],
+      __legacyListenGroupId__: record.listenGroupId,
+    };
+  },
+  z
+    .object({
+      wsUrl: UrlSchema,
+      reconnectMs: PositiveIntSchema,
+      requestTimeoutMs: PositiveIntSchema,
+      listenGroupIds: StringLikeArraySchema,
+      startupContextRecentMessageCount: NonNegativeIntSchema.default(
+        DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT,
+      ),
+      __legacyListenGroupId__: z.unknown().optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.__legacyListenGroupId__ !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["listenGroupId"],
+          message: "listenGroupId 已废弃，请改用 listenGroupIds",
+        });
+      }
+    })
+    .transform(value => ({
+      wsUrl: value.wsUrl,
+      reconnectMs: value.reconnectMs,
+      requestTimeoutMs: value.requestTimeoutMs,
+      listenGroupIds: value.listenGroupIds,
+      startupContextRecentMessageCount: value.startupContextRecentMessageCount,
+    })),
+);
 
 const ConfigSchema = z.object({
   server: z.object({
     databaseUrl: UrlSchema,
     port: PositiveIntSchema.default(DEFAULT_PORT),
-    napcat: z.object({
-      wsUrl: UrlSchema,
-      reconnectMs: PositiveIntSchema,
-      requestTimeoutMs: PositiveIntSchema,
-      listenGroupId: StringLikeSchema,
-      startupContextRecentMessageCount: NonNegativeIntSchema.default(
-        DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT,
-      ),
-    }),
+    agent: z
+      .object({
+        portalSleepMs: PositiveIntSchema.default(DEFAULT_AGENT_PORTAL_SLEEP_MS),
+      })
+      .default({}),
+    napcat: NapcatConfigSchema,
     llm: z.object({
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
       codexAuth: z

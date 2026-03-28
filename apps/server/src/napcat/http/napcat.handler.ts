@@ -26,6 +26,7 @@ export class NapcatHandler {
       responseSchema: NapcatSendGroupMessageResponseSchema,
       execute: ({ body }) => {
         return this.napcatGatewayService.sendGroupMessage({
+          groupId: body.groupId,
           message: body.message,
         });
       },
