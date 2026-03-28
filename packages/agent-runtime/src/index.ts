@@ -1,6 +1,6 @@
-export type { AgentRuntime } from "./agent-runtime.js";
-export type { Operation } from "./operation.js";
-export {
+import type { AgentRuntime } from "./agent-runtime.js";
+import type { Operation } from "./operation.js";
+import {
   TaskAgentRuntime,
   type AssistantLikeMessage,
   type TaskAgentInvoker,
@@ -9,13 +9,13 @@ export {
   type TaskAgentToolCall,
   type ToolLikeMessage,
 } from "./task-agent-runtime.js";
-export {
+import {
   ToolCatalog,
   ToolSet,
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "./tool/tool-catalog.js";
-export {
+import {
   ZodToolComponent,
   type JsonSchema,
   type ToolComponent,
@@ -25,3 +25,27 @@ export {
   type ToolKind,
   type ToolSignal,
 } from "./tool/tool-component.js";
+
+export {
+  TaskAgentRuntime,
+  ToolCatalog,
+  ToolSet,
+  ZodToolComponent,
+  type AgentRuntime,
+  type AssistantLikeMessage,
+  type JsonSchema,
+  type Operation,
+  type TaskAgentInvoker,
+  type TaskAgentInvocationState,
+  type TaskAgentModel,
+  type TaskAgentToolCall,
+  type ToolComponent,
+  type ToolContext,
+  type ToolDefinition,
+  type ToolExecutionResult,
+  type ToolExecutor,
+  type ToolKind,
+  type ToolLikeMessage,
+  type ToolSetExecutionResult,
+  type ToolSignal,
+};

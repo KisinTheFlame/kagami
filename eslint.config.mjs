@@ -19,6 +19,19 @@ export default tseslint.config(
         ...globals.node,
       },
     },
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ExportAllDeclaration",
+          message: "禁止使用 re-export，请直接导入真实实现路径。",
+        },
+        {
+          selector: "ExportNamedDeclaration[source!=null]",
+          message: "禁止使用 re-export，请直接导入真实实现路径。",
+        },
+      ],
+    },
   },
   {
     files: ["apps/web/**/*.{ts,tsx}"],
