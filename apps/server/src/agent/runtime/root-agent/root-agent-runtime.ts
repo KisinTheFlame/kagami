@@ -252,7 +252,7 @@ function extractCurrentGroupId(events: Event[], fallback: string | null): string
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (event.type === "napcat_group_message") {
-      return event.groupId;
+      return event.data.groupId;
     }
   }
 

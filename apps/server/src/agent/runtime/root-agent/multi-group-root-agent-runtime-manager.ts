@@ -29,7 +29,7 @@ export class MultiGroupRootAgentRuntimeManager {
   }
 
   public enqueue(event: Event): number {
-    const runtime = this.runtimesByGroupId.get(event.groupId);
+    const runtime = this.runtimesByGroupId.get(event.data.groupId);
     if (!runtime) {
       return 0;
     }

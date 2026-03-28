@@ -39,6 +39,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -67,6 +68,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -95,6 +97,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -120,6 +123,7 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });

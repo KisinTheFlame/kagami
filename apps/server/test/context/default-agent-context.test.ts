@@ -71,20 +71,22 @@ describe("DefaultAgentContext", () => {
     await context.appendEvents([
       {
         type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "hello",
-        messageSegments: [
-          {
-            type: "text",
-            data: {
-              text: "hello structured",
+        data: {
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "hello",
+          messageSegments: [
+            {
+              type: "text",
+              data: {
+                text: "hello structured",
+              },
             },
-          },
-        ],
-        messageId: 1001,
-        time: 1710000000,
+          ],
+          messageId: 1001,
+          time: 1710000000,
+        },
       },
     ]);
 
@@ -107,13 +109,15 @@ describe("DefaultAgentContext", () => {
     await context.appendEvents([
       {
         type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "raw fallback",
-        messageSegments: [],
-        messageId: 1001,
-        time: 1710000000,
+        data: {
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "raw fallback",
+          messageSegments: [],
+          messageId: 1001,
+          time: 1710000000,
+        },
       },
     ]);
 
@@ -131,37 +135,39 @@ describe("DefaultAgentContext", () => {
     await context.appendEvents([
       {
         type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "前[CQ:face,id=66]后",
-        messageSegments: [
-          {
-            type: "text",
-            data: {
-              text: "前",
-            },
-          },
-          {
-            type: "face",
-            data: {
-              id: "66",
-              raw: {
-                faceIndex: 66,
+        data: {
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "前[CQ:face,id=66]后",
+          messageSegments: [
+            {
+              type: "text",
+              data: {
+                text: "前",
               },
-              resultId: null,
-              chainCount: null,
             },
-          },
-          {
-            type: "text",
-            data: {
-              text: "后",
+            {
+              type: "face",
+              data: {
+                id: "66",
+                raw: {
+                  faceIndex: 66,
+                },
+                resultId: null,
+                chainCount: null,
+              },
             },
-          },
-        ],
-        messageId: 1002,
-        time: 1710000001,
+            {
+              type: "text",
+              data: {
+                text: "后",
+              },
+            },
+          ],
+          messageId: 1002,
+          time: 1710000001,
+        },
       },
     ]);
 
@@ -184,25 +190,27 @@ describe("DefaultAgentContext", () => {
     await context.appendEvents([
       {
         type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "",
-        messageSegments: [
-          {
-            type: "face",
-            data: {
-              id: "66",
-              raw: {
-                faceIndex: 66,
+        data: {
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "",
+          messageSegments: [
+            {
+              type: "face",
+              data: {
+                id: "66",
+                raw: {
+                  faceIndex: 66,
+                },
+                resultId: null,
+                chainCount: null,
               },
-              resultId: null,
-              chainCount: null,
             },
-          },
-        ],
-        messageId: 1003,
-        time: 1710000002,
+          ],
+          messageId: 1003,
+          time: 1710000002,
+        },
       },
     ]);
 
@@ -225,26 +233,28 @@ describe("DefaultAgentContext", () => {
     await context.appendEvents([
       {
         type: "napcat_group_message",
-        groupId: "123456",
-        userId: "654321",
-        nickname: "测试昵称",
-        rawMessage: "[CQ:at,qq=714457117] hi",
-        messageSegments: [
-          {
-            type: "at",
-            data: {
-              qq: "714457117",
+        data: {
+          groupId: "123456",
+          userId: "654321",
+          nickname: "测试昵称",
+          rawMessage: "[CQ:at,qq=714457117] hi",
+          messageSegments: [
+            {
+              type: "at",
+              data: {
+                qq: "714457117",
+              },
             },
-          },
-          {
-            type: "text",
-            data: {
-              text: " hi",
+            {
+              type: "text",
+              data: {
+                text: " hi",
+              },
             },
-          },
-        ],
-        messageId: 1004,
-        time: 1710000003,
+          ],
+          messageId: 1004,
+          time: 1710000003,
+        },
       },
     ]);
 

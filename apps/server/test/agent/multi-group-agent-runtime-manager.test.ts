@@ -23,35 +23,43 @@ describe("MultiGroupAgentRuntimeManager", () => {
 
     manager.enqueue({
       type: "napcat_group_message",
-      groupId: "group-1",
-      userId: "10001",
-      nickname: "群友A",
-      rawMessage: "hello group 1",
-      messageSegments: [],
-      messageId: 1,
-      time: 1710000000,
+      data: {
+        groupId: "group-1",
+        userId: "10001",
+        nickname: "群友A",
+        rawMessage: "hello group 1",
+        messageSegments: [],
+        messageId: 1,
+        time: 1710000000,
+      },
     });
     manager.enqueue({
       type: "napcat_group_message",
-      groupId: "group-2",
-      userId: "10002",
-      nickname: "群友B",
-      rawMessage: "hello group 2",
-      messageSegments: [],
-      messageId: 2,
-      time: 1710000001,
+      data: {
+        groupId: "group-2",
+        userId: "10002",
+        nickname: "群友B",
+        rawMessage: "hello group 2",
+        messageSegments: [],
+        messageId: 2,
+        time: 1710000001,
+      },
     });
 
     expect(groupOneQueue.drainAll()).toEqual([
       expect.objectContaining({
-        groupId: "group-1",
-        rawMessage: "hello group 1",
+        data: expect.objectContaining({
+          groupId: "group-1",
+          rawMessage: "hello group 1",
+        }),
       }),
     ]);
     expect(groupTwoQueue.drainAll()).toEqual([
       expect.objectContaining({
-        groupId: "group-2",
-        rawMessage: "hello group 2",
+        data: expect.objectContaining({
+          groupId: "group-2",
+          rawMessage: "hello group 2",
+        }),
       }),
     ]);
   });

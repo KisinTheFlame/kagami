@@ -10,6 +10,7 @@ import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-mess
 import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
+  NapcatGroupMessageData,
   NapcatGatewayService,
   NapcatGroupMessageEvent,
   NapcatSendGroupMessageInput,
@@ -33,6 +34,11 @@ type NapcatGatewayOptions = {
 };
 
 const MessageIdSchema = z.number().int().positive();
+const PositiveIntSchema = z.number().int().positive();
+const NonEmptyStringSchema = z.string().min(1);
+const GroupMessageHistoryResponseSchema = z.object({
+  messages: z.array(z.record(z.string(), z.unknown())),
+});
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 
 type OrderedPostTypeEventResult =
@@ -51,6 +57,7 @@ type OrderedPostTypeEventResult =
 
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly transport: NapcatGatewayTransport;
+  private readonly groupMessageProcessor: NapcatGroupMessageProcessor;
 
   public static async create({
     configManager,
@@ -92,6 +99,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       enqueueGroupMessageEvent,
       imageMessageAnalyzer,
     });
+    this.groupMessageProcessor = groupMessageProcessor;
     let nextSequence = 0;
     let nextFlushSequence = 0;
     const completedResults = new Map<number, OrderedPostTypeEventResult>();
@@ -183,5 +191,49 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return {
       messageId: messageIdResult.data,
     };
+  }
+
+  public async getRecentGroupMessages(input: {
+    groupId: string;
+    count: number;
+  }): Promise<NapcatGroupMessageData[]> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(input.groupId);
+    if (!groupIdResult.success) {
+      throw new BizError({
+        message: "groupId 必须是非空字符串",
+        meta: {
+          reason: "INVALID_GROUP_ID",
+        },
+      });
+    }
+
+    const countResult = PositiveIntSchema.safeParse(input.count);
+    if (!countResult.success) {
+      throw new BizError({
+        message: "count 必须是正整数",
+        meta: {
+          reason: "INVALID_COUNT",
+        },
+      });
+    }
+
+    const data = await this.transport.request("get_group_msg_history", {
+      group_id: groupIdResult.data,
+      count: countResult.data,
+    });
+
+    const historyResult = GroupMessageHistoryResponseSchema.safeParse(data ?? {});
+    if (!historyResult.success) {
+      throw new BizError({
+        message: "NapCat 返回的群历史消息结构无效",
+        meta: {
+          reason: "INVALID_GROUP_MESSAGE_HISTORY_RESPONSE",
+        },
+      });
+    }
+
+    return await this.groupMessageProcessor.normalizeHistoricalGroupMessages(
+      historyResult.data.messages,
+    );
   }
 }

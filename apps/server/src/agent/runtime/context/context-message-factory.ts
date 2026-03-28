@@ -62,13 +62,13 @@ export function createWebSearchInstructionMessage(question: string): UserMessage
 export function createMessagesFromEvent(event: Event): UserMessage[] {
   switch (event.type) {
     case "napcat_group_message":
-      if ((event.messageSegments?.length ?? 0) === 0) {
+      if ((event.data.messageSegments?.length ?? 0) === 0) {
         return [];
       }
 
       return [
         createUserMessage(
-          ["<qq_message>", renderGroupMessagePlainText(event), "</qq_message>"].join("\n"),
+          ["<qq_message>", renderGroupMessagePlainText(event.data), "</qq_message>"].join("\n"),
         ),
       ];
     default:

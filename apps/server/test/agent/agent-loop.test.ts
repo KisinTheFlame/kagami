@@ -114,20 +114,22 @@ function createGroupEvent(
 ) {
   return {
     type: "napcat_group_message" as const,
-    groupId: overrides?.groupId ?? "123456",
-    userId: overrides?.userId ?? "654321",
-    nickname: overrides?.nickname ?? "测试昵称",
-    rawMessage: message,
-    messageSegments: overrides?.messageSegments ?? [
-      {
-        type: "text" as const,
-        data: {
-          text: message,
+    data: {
+      groupId: overrides?.groupId ?? "123456",
+      userId: overrides?.userId ?? "654321",
+      nickname: overrides?.nickname ?? "测试昵称",
+      rawMessage: message,
+      messageSegments: overrides?.messageSegments ?? [
+        {
+          type: "text" as const,
+          data: {
+            text: message,
+          },
         },
-      },
-    ],
-    messageId: overrides?.messageId ?? 1001,
-    time: overrides?.time ?? 1710000000,
+      ],
+      messageId: overrides?.messageId ?? 1001,
+      time: overrides?.time ?? 1710000000,
+    },
   };
 }
 

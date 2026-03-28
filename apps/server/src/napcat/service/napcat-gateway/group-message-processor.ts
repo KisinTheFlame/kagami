@@ -1,5 +1,6 @@
 import { AppLogger } from "../../../logger/logger.js";
 import type {
+  NapcatGroupMessageData,
   NapcatGroupMessageEvent,
   NapcatPersistableGroupMessageEvent,
 } from "../napcat-gateway.service.js";
@@ -84,12 +85,49 @@ export class NapcatGroupMessageProcessor {
     const normalizedEvent = await this.normalize(eventPayload);
     this.logPrivateMessage(normalizedEvent);
 
-    const groupMessageEvent = this.toGroupMessageEvent(normalizedEvent);
+    const groupMessageEvent = this.toPersistableGroupMessageEvent(normalizedEvent);
 
     return {
       normalizedEvent,
       groupMessageEvent,
     };
+  }
+
+  public async normalizeHistoricalGroupMessages(
+    messagePayloads: Record<string, unknown>[],
+  ): Promise<NapcatGroupMessageData[]> {
+    const normalizedEntries = await Promise.all(
+      messagePayloads.map(async (messagePayload, index) => {
+        const normalizedEvent = await this.normalize({
+          post_type: "message",
+          message_type: "group",
+          ...messagePayload,
+        });
+        const groupMessageData = this.toGroupMessageData(normalizedEvent, {
+          requireListenedGroup: false,
+          includeSelfMessages: true,
+        });
+
+        if (!groupMessageData) {
+          logger.warn("Skipping malformed NapCat history message", {
+            event: "napcat.gateway.history_message_skipped",
+            groupId: toNullableId(messagePayload.group_id),
+            messageId: toNullablePositiveInt(messagePayload.message_id),
+          });
+          return null;
+        }
+
+        return {
+          index,
+          data: groupMessageData,
+        };
+      }),
+    );
+
+    return normalizedEntries
+      .filter((entry): entry is { index: number; data: NapcatGroupMessageData } => entry !== null)
+      .sort((left, right) => compareGroupMessageOrder(left, right))
+      .map(entry => entry.data);
   }
 
   public publishGroupMessageEvent(event: NapcatPersistableGroupMessageEvent): void {
@@ -140,14 +178,39 @@ export class NapcatGroupMessageProcessor {
     });
   }
 
-  private toGroupMessageEvent(
+  private toPersistableGroupMessageEvent(
     event: NapcatGatewayNormalizedPostTypeEvent,
   ): NapcatPersistableGroupMessageEvent | null {
+    const groupMessageData = this.toGroupMessageData(event, {
+      requireListenedGroup: true,
+      includeSelfMessages: false,
+    });
+    if (!groupMessageData) {
+      return null;
+    }
+
+    return {
+      ...groupMessageData,
+      payload: event.payload,
+    };
+  }
+
+  private toGroupMessageData(
+    event: NapcatGatewayNormalizedPostTypeEvent,
+    options: {
+      requireListenedGroup: boolean;
+      includeSelfMessages: boolean;
+    },
+  ): NapcatGroupMessageData | null {
     if (event.postType !== "message" || event.messageType !== "group") {
       return null;
     }
 
-    if (!event.groupId || !this.listenGroupIds.has(event.groupId)) {
+    if (!event.groupId) {
+      return null;
+    }
+
+    if (options.requireListenedGroup && !this.listenGroupIds.has(event.groupId)) {
       return null;
     }
 
@@ -159,7 +222,7 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    if (event.selfId !== null && event.selfId === event.userId) {
+    if (!options.includeSelfMessages && event.selfId !== null && event.selfId === event.userId) {
       return null;
     }
 
@@ -171,7 +234,6 @@ export class NapcatGroupMessageProcessor {
       messageSegments: event.messageSegments,
       messageId: event.messageId,
       time: event.time,
-      payload: event.payload,
     };
   }
 
@@ -179,31 +241,34 @@ export class NapcatGroupMessageProcessor {
     event: NapcatGroupMessageEvent | NapcatPersistableGroupMessageEvent,
   ): void {
     try {
-      const { groupId, userId, nickname, rawMessage, messageSegments, messageId, time } = event;
+      const data = "data" in event ? event.data : event;
+      const { groupId, userId, nickname, rawMessage, messageSegments, messageId, time } = data;
       const result = this.enqueueGroupMessageEvent({
         type: "napcat_group_message",
-        groupId,
-        userId,
-        nickname,
-        rawMessage,
-        messageSegments,
-        messageId,
-        time,
+        data: {
+          groupId,
+          userId,
+          nickname,
+          rawMessage,
+          messageSegments,
+          messageId,
+          time,
+        },
       });
       void Promise.resolve(result).catch(error => {
         logger.errorWithCause("Failed to publish group message event", error, {
           event: "napcat.gateway.group_message_publish_failed",
-          groupId: event.groupId,
-          userId: event.userId,
-          messageId: event.messageId,
+          groupId,
+          userId,
+          messageId,
         });
       });
     } catch (error) {
       logger.errorWithCause("Failed to publish group message event", error, {
         event: "napcat.gateway.group_message_publish_failed",
-        groupId: event.groupId,
-        userId: event.userId,
-        messageId: event.messageId,
+        groupId: "data" in event ? event.data.groupId : event.groupId,
+        userId: "data" in event ? event.data.userId : event.userId,
+        messageId: "data" in event ? event.data.messageId : event.messageId,
       });
     }
   }
@@ -403,4 +468,23 @@ function extractImageDescription(renderedText: string | undefined): string | nul
 
   const matched = /^\[图片: (.+)\]$/u.exec(renderedText.trim());
   return matched?.[1]?.trim() || null;
+}
+
+function compareGroupMessageOrder(
+  left: { index: number; data: NapcatGroupMessageData },
+  right: { index: number; data: NapcatGroupMessageData },
+): number {
+  if (left.data.time !== null && right.data.time !== null && left.data.time !== right.data.time) {
+    return left.data.time - right.data.time;
+  }
+
+  if (
+    left.data.messageId !== null &&
+    right.data.messageId !== null &&
+    left.data.messageId !== right.data.messageId
+  ) {
+    return left.data.messageId - right.data.messageId;
+  }
+
+  return left.index - right.index;
 }

@@ -12,6 +12,13 @@ import {
   waitOneTick,
 } from "./napcat-gateway.test-helper.js";
 
+function expectEnqueuedGroupMessage(data: Record<string, unknown>) {
+  return expect.objectContaining({
+    type: "napcat_group_message",
+    data: expect.objectContaining(data),
+  });
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -223,8 +230,7 @@ describe("DefaultNapcatGatewayService", () => {
     await waitOneTick();
 
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "napcat_group_message",
+      expectEnqueuedGroupMessage({
         rawMessage: "{@测试成员(10001)} hello group",
         messageSegments: [
           {
@@ -416,7 +422,7 @@ describe("DefaultNapcatGatewayService", () => {
 
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         messageId: 1001,
         rawMessage: "[图片: 第一张图]",
         messageSegments: [
@@ -435,7 +441,7 @@ describe("DefaultNapcatGatewayService", () => {
     );
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         messageId: 1002,
         rawMessage: "later",
         messageSegments: [
@@ -448,6 +454,155 @@ describe("DefaultNapcatGatewayService", () => {
         ],
       }),
     );
+
+    await gateway.stop();
+  });
+
+  it("should fetch recent group messages and normalize them into data payloads", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+
+    const historyPromise = gateway.getRecentGroupMessages({
+      groupId: "987654",
+      count: 2,
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      action: string;
+      params: Record<string, unknown>;
+    };
+
+    expect(sentPayload.action).toBe("get_group_msg_history");
+    expect(sentPayload.params).toEqual({
+      group_id: "987654",
+      count: 2,
+    });
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          messages: [
+            {
+              group_id: "987654",
+              user_id: 654321,
+              self_id: 654321,
+              message_id: 1002,
+              raw_message: "bot reply",
+              message: [
+                {
+                  type: "text",
+                  data: {
+                    text: "bot reply",
+                  },
+                },
+              ],
+              time: 1710000001,
+              sender: {
+                card: "Kagami",
+              },
+            },
+            {
+              group_id: "987654",
+              user_id: 123456,
+              self_id: 654321,
+              message_id: 1001,
+              raw_message: "[CQ:at,qq=10001] hello",
+              message: [
+                {
+                  type: "at",
+                  data: {
+                    qq: "10001",
+                  },
+                },
+                {
+                  type: "text",
+                  data: {
+                    text: " hello",
+                  },
+                },
+              ],
+              time: 1710000000,
+              sender: {
+                card: "测试群名片",
+              },
+            },
+          ],
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+    await waitOneTick();
+    const lookupPayload = JSON.parse(socket.sentPayloads[1]) as { echo: string };
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          card: "测试成员",
+        },
+        message: "",
+        echo: lookupPayload.echo,
+      }),
+    );
+
+    await expect(historyPromise).resolves.toEqual([
+      {
+        groupId: "987654",
+        userId: "123456",
+        nickname: "测试群名片",
+        rawMessage: "{@测试成员(10001)} hello",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+              name: "测试成员",
+            },
+          },
+          {
+            type: "text",
+            data: {
+              text: " hello",
+            },
+          },
+        ],
+        messageId: 1001,
+        time: 1710000000,
+      },
+      {
+        groupId: "987654",
+        userId: "654321",
+        nickname: "Kagami",
+        rawMessage: "bot reply",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "bot reply",
+            },
+          },
+        ],
+        messageId: 1002,
+        time: 1710000001,
+      },
+    ]);
 
     await gateway.stop();
   });

@@ -9,20 +9,7 @@ describe("InMemoryAgentEventQueue", () => {
 
     const sizeAfterEnqueue = queue.enqueue({
       type: "napcat_group_message",
-      groupId: "10001",
-      userId: "20002",
-      nickname: "测试昵称",
-      rawMessage: "hello",
-      messageSegments: [],
-      messageId: 30003,
-      time: 1710000000,
-    });
-
-    expect(sizeAfterEnqueue).toBe(1);
-    expect(queue.size()).toBe(1);
-    expect(queue.drainAll()).toEqual([
-      {
-        type: "napcat_group_message",
+      data: {
         groupId: "10001",
         userId: "20002",
         nickname: "测试昵称",
@@ -30,6 +17,23 @@ describe("InMemoryAgentEventQueue", () => {
         messageSegments: [],
         messageId: 30003,
         time: 1710000000,
+      },
+    });
+
+    expect(sizeAfterEnqueue).toBe(1);
+    expect(queue.size()).toBe(1);
+    expect(queue.drainAll()).toEqual([
+      {
+        type: "napcat_group_message",
+        data: {
+          groupId: "10001",
+          userId: "20002",
+          nickname: "测试昵称",
+          rawMessage: "hello",
+          messageSegments: [],
+          messageId: 30003,
+          time: 1710000000,
+        },
       },
     ]);
     expect(queue.size()).toBe(0);
@@ -40,13 +44,15 @@ describe("InMemoryAgentEventQueue", () => {
     const queue = new InMemoryAgentEventQueue();
     queue.enqueue({
       type: "napcat_group_message",
-      groupId: "10001",
-      userId: "20002",
-      nickname: "测试昵称",
-      rawMessage: "already-queued",
-      messageSegments: [],
-      messageId: 30003,
-      time: 1710000000,
+      data: {
+        groupId: "10001",
+        userId: "20002",
+        nickname: "测试昵称",
+        rawMessage: "already-queued",
+        messageSegments: [],
+        messageId: 30003,
+        time: 1710000000,
+      },
     });
 
     await expect(queue.waitForEvent()).resolves.toBeUndefined();
@@ -58,19 +64,7 @@ describe("InMemoryAgentEventQueue", () => {
 
     queue.enqueue({
       type: "napcat_group_message",
-      groupId: "10001",
-      userId: "20002",
-      nickname: "测试昵称",
-      rawMessage: "later",
-      messageSegments: [],
-      messageId: 30003,
-      time: 1710000000,
-    });
-
-    await expect(waitPromise).resolves.toBeUndefined();
-    expect(queue.drainAll()).toEqual([
-      {
-        type: "napcat_group_message",
+      data: {
         groupId: "10001",
         userId: "20002",
         nickname: "测试昵称",
@@ -78,6 +72,22 @@ describe("InMemoryAgentEventQueue", () => {
         messageSegments: [],
         messageId: 30003,
         time: 1710000000,
+      },
+    });
+
+    await expect(waitPromise).resolves.toBeUndefined();
+    expect(queue.drainAll()).toEqual([
+      {
+        type: "napcat_group_message",
+        data: {
+          groupId: "10001",
+          userId: "20002",
+          nickname: "测试昵称",
+          rawMessage: "later",
+          messageSegments: [],
+          messageId: 30003,
+          time: 1710000000,
+        },
       },
     ]);
   });

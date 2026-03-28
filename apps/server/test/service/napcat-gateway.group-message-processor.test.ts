@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NapcatGroupMessageProcessor } from "../../src/napcat/service/napcat-gateway/group-message-processor.js";
 import { createAgentEventQueue, initTestLogger } from "./napcat-gateway.test-helper.js";
 
+function expectEnqueuedGroupMessage(data: Record<string, unknown>) {
+  return expect.objectContaining({
+    type: "napcat_group_message",
+    data: expect.objectContaining(data),
+  });
+}
+
 describe("NapcatGroupMessageProcessor", () => {
   let logs = initTestLogger();
 
@@ -68,30 +75,31 @@ describe("NapcatGroupMessageProcessor", () => {
       user_id: "10001",
       no_cache: false,
     });
-    expect(eventQueue.enqueue).toHaveBeenCalledWith({
-      type: "napcat_group_message",
-      groupId: "987654",
-      userId: "123456",
-      nickname: "测试群名片",
-      rawMessage: "{@测试成员(10001)} hello group",
-      messageSegments: [
-        {
-          type: "at",
-          data: {
-            qq: "10001",
-            name: "测试成员",
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expectEnqueuedGroupMessage({
+        groupId: "987654",
+        userId: "123456",
+        nickname: "测试群名片",
+        rawMessage: "{@测试成员(10001)} hello group",
+        messageSegments: [
+          {
+            type: "at",
+            data: {
+              qq: "10001",
+              name: "测试成员",
+            },
           },
-        },
-        {
-          type: "text",
-          data: {
-            text: " hello group",
+          {
+            type: "text",
+            data: {
+              text: " hello group",
+            },
           },
-        },
-      ],
-      messageId: 9988,
-      time: 1710000000,
-    });
+        ],
+        messageId: 9988,
+        time: 1710000000,
+      }),
+    );
     expect(result.groupMessageEvent).toEqual(
       expect.objectContaining({
         rawMessage: "{@测试成员(10001)} hello group",
@@ -182,8 +190,7 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(actionRequester.request).toHaveBeenCalledTimes(1);
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({
-        type: "napcat_group_message",
+      expectEnqueuedGroupMessage({
         rawMessage: "{@缓存昵称(10001)} again",
         messageSegments: [
           {
@@ -338,7 +345,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
     expect(imageMessageAnalyzer.analyzeImageSegment).toHaveBeenCalledTimes(1);
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         rawMessage: "你看这个[图片: 一只橘猫趴在键盘上]",
         messageSegments: [
           {
@@ -411,7 +418,7 @@ describe("NapcatGroupMessageProcessor", () => {
     });
 
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         rawMessage: "前后",
       }),
     );
@@ -454,7 +461,7 @@ describe("NapcatGroupMessageProcessor", () => {
     });
 
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         rawMessage: "[图片]",
         messageSegments: [
           {
@@ -524,14 +531,14 @@ describe("NapcatGroupMessageProcessor", () => {
 
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         groupId: "987654",
         rawMessage: "first group",
       }),
     );
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         groupId: "123456",
         rawMessage: "second group",
       }),
@@ -593,7 +600,7 @@ describe("NapcatGroupMessageProcessor", () => {
       }),
     );
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expectEnqueuedGroupMessage({
         rawMessage: "",
       }),
     );
