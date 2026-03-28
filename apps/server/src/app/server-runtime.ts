@@ -302,6 +302,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     portalTools,
     groupTools,
     contextSummaryOperation,
+    contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
     summaryTools: [
       ...portalTools.definitions(),
       ...groupTools.definitions(),

@@ -25,6 +25,7 @@ ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
     portalSleepMs: 30000
+    contextCompactionThreshold: 60
   llm:
     timeoutMs: 15000
     codexAuth:
@@ -115,6 +116,7 @@ startupContextRecentMessageCount: 0
         port: 3100,
         agent: {
           portalSleepMs: 30000,
+          contextCompactionThreshold: 60,
         },
         napcat: {
           wsUrl: "wss://example.com/napcat",
@@ -286,6 +288,73 @@ server:
     const config = await loadStaticConfig({ configPath });
 
     expect(config.server.agent.portalSleepMs).toBe(30_000);
+    expect(config.server.agent.contextCompactionThreshold).toBe(60);
+  });
+
+  it("should allow overriding context compaction threshold", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  agent:
+    portalSleepMs: 30000
+    contextCompactionThreshold: 80
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+  llm:
+    timeoutMs: 15000
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        apiKey: ""
+        models:
+          - deepseek-chat
+      openai:
+        apiKey: openai-key
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+            times: 2
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.agent.contextCompactionThreshold).toBe(80);
   });
 
   it("should allow zero startup context recent message count", async () => {

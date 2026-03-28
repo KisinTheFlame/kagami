@@ -3,6 +3,7 @@ server:
   port: 20003
   agent:
     portalSleepMs: 30000
+    contextCompactionThreshold: 60
   napcat:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000

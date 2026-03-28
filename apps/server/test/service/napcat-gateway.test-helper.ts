@@ -108,6 +108,7 @@ export function createConfigManager(): ConfigManager {
       port: 20003,
       agent: {
         portalSleepMs: 30_000,
+        contextCompactionThreshold: 60,
       },
       napcat: {
         wsUrl: "ws://napcat:3001/",
