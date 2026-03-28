@@ -1,9 +1,10 @@
 import { z } from "zod";
 
-export const NapcatSendGroupMessageRequestSchema = z.object({
-  groupId: z.string().min(1),
-  message: z.string().min(1),
-});
+export const NapcatSendGroupMessageRequestSchema = z
+  .object({
+    message: z.string().min(1),
+  })
+  .strict();
 
 export type NapcatSendGroupMessageRequest = z.infer<typeof NapcatSendGroupMessageRequestSchema>;
 

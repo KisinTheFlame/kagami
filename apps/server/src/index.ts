@@ -118,10 +118,10 @@ try {
 
   await runtime.napcatGatewayService.start();
   await hydrateStartupContextFromRecentMessages({
-    listenGroupIds: runtime.listenGroupIds,
+    listenGroupId: runtime.listenGroupId,
     startupContextRecentMessageCount: runtime.startupContextRecentMessageCount,
     napcatGatewayService: runtime.napcatGatewayService,
-    agentRuntimeManager: runtime.agentRuntimeManager,
+    rootAgentRuntime: runtime.rootAgentRuntime,
   });
   await runtime.app.listen({ host: "0.0.0.0", port: runtime.port });
   isServerStarted = true;
@@ -133,12 +133,12 @@ try {
     port: runtime.port,
     pid: process.pid,
     providers,
-    listenGroupIds: runtime.listenGroupIds,
+    listenGroupId: runtime.listenGroupId,
     hasTavilyApiKey: runtime.hasTavilyApiKey,
     traceRuntimeEnabled: true,
   });
 
-  void runtime.agentRuntimeManager.run().catch(error => {
+  void runtime.rootAgentRuntime.run().catch(error => {
     logger.errorWithCause("Agent loop crashed", error, {
       event: "agent.loop.crashed",
     });

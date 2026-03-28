@@ -91,7 +91,7 @@ const ConfigSchema = z.object({
       wsUrl: UrlSchema,
       reconnectMs: PositiveIntSchema,
       requestTimeoutMs: PositiveIntSchema,
-      listenGroupIds: z.array(StringLikeSchema).min(1),
+      listenGroupId: StringLikeSchema,
       startupContextRecentMessageCount: NonNegativeIntSchema.default(
         DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT,
       ),

@@ -67,7 +67,6 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
-      groupId: "987654",
       message: "hello group",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
@@ -122,7 +121,6 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
-      groupId: "987654",
       message: "{@闻震(870853294)} hi",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
@@ -323,7 +321,6 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
-      groupId: "987654",
       message: "hello",
     });
     const sentPayload = JSON.parse(socket.sentPayloads[0]) as { echo: string };

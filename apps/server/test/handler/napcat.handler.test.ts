@@ -49,7 +49,6 @@ describe("NapcatHandler", () => {
       method: "POST",
       url: "/napcat/group/send",
       payload: {
-        groupId: "1122334455",
         message: "hello group",
       },
     });
@@ -57,7 +56,6 @@ describe("NapcatHandler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ messageId: 654321 });
     expect(sendGroupMessage).toHaveBeenCalledWith({
-      groupId: "1122334455",
       message: "hello group",
     });
   });
@@ -78,7 +76,6 @@ describe("NapcatHandler", () => {
       method: "POST",
       url: "/napcat/group/send",
       payload: {
-        groupId: "",
         message: "",
       },
     });
@@ -107,7 +104,6 @@ describe("NapcatHandler", () => {
       method: "POST",
       url: "/napcat/group/send",
       payload: {
-        groupId: "2987345656",
         message: "hello",
       },
     });
@@ -116,6 +112,31 @@ describe("NapcatHandler", () => {
     expect(response.json()).toEqual({
       message: "NapCat 请求发送失败",
     });
+  });
+
+  it("should return 400 when legacy groupId is still provided", async () => {
+    const sendGroupMessage = vi.fn();
+    const napcatGatewayService: NapcatGatewayService = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      sendGroupMessage,
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+    };
+
+    const handler = new NapcatHandler({ napcatGatewayService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/napcat/group/send",
+      payload: {
+        groupId: "1122334455",
+        message: "hello group",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(sendGroupMessage).not.toHaveBeenCalled();
   });
 
   it("should remove private send route", async () => {

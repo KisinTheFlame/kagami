@@ -31,8 +31,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
     startupContextRecentMessageCount: 0
   llm:
     timeoutMs: 15000
@@ -95,7 +94,7 @@ server:
           wsUrl: "wss://example.com/napcat",
           reconnectMs: 3000,
           requestTimeoutMs: 10000,
-          listenGroupIds: ["123456"],
+          listenGroupId: "123456",
           startupContextRecentMessageCount: 0,
         },
         llm: {
@@ -196,8 +195,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -252,7 +250,7 @@ server:
     } satisfies Partial<BizError>);
   });
 
-  it("should reject empty listen group list", async () => {
+  it("should reject blank listen group id", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -260,7 +258,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds: []
+    listenGroupId: ""
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -309,13 +307,13 @@ server:
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.napcat.listenGroupIds",
+        key: "server.napcat.listenGroupId",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
   });
 
-  it("should reject blank group id in listen group list", async () => {
+  it("should reject legacy listenGroupIds config", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -373,7 +371,7 @@ server:
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.napcat.listenGroupIds.0",
+        key: "server.napcat.listenGroupId",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -387,8 +385,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -446,8 +443,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
     startupContextRecentMessageCount: 0
   llm:
     codexAuth:
@@ -506,8 +502,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
     startupContextRecentMessageCount: -1
   llm:
     codexAuth:
@@ -571,8 +566,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
     startupContextRecentMessageCount: 1.5
   llm:
     codexAuth:
@@ -636,8 +630,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -695,8 +688,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     codexAuth:
       publicBaseUrl: http://localhost:20004
@@ -755,8 +747,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -813,8 +804,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -869,8 +859,7 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -927,8 +916,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -983,8 +971,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -1039,8 +1026,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -1095,8 +1081,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:
@@ -1150,8 +1135,7 @@ server:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
   llm:
     providers:
       deepseek:

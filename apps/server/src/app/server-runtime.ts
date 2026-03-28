@@ -36,7 +36,6 @@ import { StdoutLogSink } from "../logger/sinks/stdout-sink.js";
 import { createAuthModule } from "../auth/index.js";
 import { ToolCatalog } from "@kagami/agent-runtime";
 import { InMemoryAgentEventQueue } from "../agent/runtime/event/in-memory-agent-event-queue.js";
-import { MultiGroupRootAgentRuntimeManager } from "../agent/runtime/root-agent/multi-group-root-agent-runtime-manager.js";
 import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { FinishTool, FINISH_TOOL_NAME } from "../agent/runtime/root-agent/tools/finish.tool.js";
@@ -91,9 +90,9 @@ export type ServerRuntime = {
   napcatGatewayService: NapcatGatewayService;
   callbackServers: Array<{ stop(): Promise<void> }>;
   authUsageCacheManager: AuthUsageCacheManager;
-  agentRuntimeManager: MultiGroupRootAgentRuntimeManager;
+  rootAgentRuntime: RootAgentRuntime;
   port: number;
-  listenGroupIds: string[];
+  listenGroupId: string;
   startupContextRecentMessageCount: number;
   hasTavilyApiKey: boolean;
   listAvailableAgentProviders: () => Promise<
@@ -243,76 +242,52 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGroupMessageChunkDao,
     groupMessageChunkIndexer,
   });
-  let agentRuntimeManager: MultiGroupRootAgentRuntimeManager | null = null;
+  const eventQueue = new InMemoryAgentEventQueue();
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
     configManager,
-    enqueueGroupMessageEvent: event => {
-      if (!agentRuntimeManager) {
-        throw new Error("Agent runtime manager is not initialized");
-      }
-
-      return agentRuntimeManager.enqueue(event);
-    },
+    enqueueGroupMessageEvent: event => eventQueue.enqueue(event),
     persistenceWriter: napcatPersistenceWriter,
     imageMessageAnalyzer,
   });
-  const groupRuntimes = config.server.napcat.listenGroupIds.map(groupId => {
-    const eventQueue = new InMemoryAgentEventQueue();
-    const agentMessageService = new DefaultAgentMessageService({
-      napcatGatewayService,
-      targetGroupId: groupId,
-    });
-    const toolCatalog = new ToolCatalog([
-      new SearchWebTool({
-        webSearchTaskAgent,
-      }),
-      new SendMessageTool({
-        agentMessageService,
-      }),
-      new FinishTool(),
-      new SummaryTool(),
-    ]);
-    const agentVisibleTools = toolCatalog.pick([
-      SEARCH_WEB_TOOL_NAME,
-      SEND_MESSAGE_TOOL_NAME,
-      FINISH_TOOL_NAME,
-    ]);
-    const contextSummaryOperation = new ContextSummaryOperation({
-      llmClient,
-      summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
-    });
-    const context = new DefaultAgentContext({
-      systemPromptFactory: agentSystemPromptFactory,
-    });
-    const rootAgentRuntime = new RootAgentRuntime({
-      llmClient,
-      context,
-      eventQueue,
-      tools: agentVisibleTools,
-      contextSummaryOperation,
-      summaryTools: [
-        ...agentVisibleTools.definitions(),
-        ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
-      ],
-    });
-
-    return {
-      groupId,
-      eventQueue,
-      rootAgentRuntime,
-      toolCatalog,
-    };
+  const agentMessageService = new DefaultAgentMessageService({
+    napcatGatewayService,
   });
-  agentRuntimeManager = new MultiGroupRootAgentRuntimeManager({
-    runtimes: groupRuntimes.map(({ groupId, eventQueue, rootAgentRuntime }) => ({
-      groupId,
-      eventQueue,
-      rootAgentRuntime,
-    })),
+  const toolCatalog = new ToolCatalog([
+    new SearchWebTool({
+      webSearchTaskAgent,
+    }),
+    new SendMessageTool({
+      agentMessageService,
+    }),
+    new FinishTool(),
+    new SummaryTool(),
+  ]);
+  const agentVisibleTools = toolCatalog.pick([
+    SEARCH_WEB_TOOL_NAME,
+    SEND_MESSAGE_TOOL_NAME,
+    FINISH_TOOL_NAME,
+  ]);
+  const contextSummaryOperation = new ContextSummaryOperation({
+    llmClient,
+    summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
+  });
+  const context = new DefaultAgentContext({
+    systemPromptFactory: agentSystemPromptFactory,
+  });
+  const rootAgentRuntime = new RootAgentRuntime({
+    llmClient,
+    context,
+    eventQueue,
+    tools: agentVisibleTools,
+    contextSummaryOperation,
+    summaryTools: [
+      ...agentVisibleTools.definitions(),
+      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
+    ],
   });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
     llmClient,
-    playgroundToolDefinitions: groupRuntimes[0].toolCatalog
+    playgroundToolDefinitions: toolCatalog
       .pick([SEARCH_WEB_TOOL_NAME, SEND_MESSAGE_TOOL_NAME, FINISH_TOOL_NAME, SUMMARY_TOOL_NAME])
       .definitions(),
   });
@@ -337,9 +312,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     callbackServers: authModule.callbackServers,
     authUsageCacheManager: authModule.authUsageCacheManager,
-    agentRuntimeManager,
+    rootAgentRuntime,
     port: config.server.port,
-    listenGroupIds: config.server.napcat.listenGroupIds,
+    listenGroupId: config.server.napcat.listenGroupId,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     listAvailableAgentProviders: async () => {

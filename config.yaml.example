@@ -5,8 +5,7 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
+    listenGroupId: "123456"
     startupContextRecentMessageCount: 40
   llm:
     timeoutMs: 45000

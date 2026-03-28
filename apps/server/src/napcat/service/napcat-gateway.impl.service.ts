@@ -56,6 +56,7 @@ type OrderedPostTypeEventResult =
     };
 
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
+  private readonly listenGroupId: string;
   private readonly transport: NapcatGatewayTransport;
   private readonly groupMessageProcessor: NapcatGroupMessageProcessor;
 
@@ -84,6 +85,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     imageMessageAnalyzer,
     createWebSocket,
   }: NapcatGatewayOptions) {
+    this.listenGroupId = config.listenGroupId;
     const transport = new NapcatGatewayTransport({
       wsUrl: config.wsUrl,
       reconnectMs: config.reconnectMs,
@@ -94,7 +96,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       },
     });
     const groupMessageProcessor = new NapcatGroupMessageProcessor({
-      listenGroupIds: config.listenGroupIds,
+      listenGroupId: config.listenGroupId,
       actionRequester: transport,
       enqueueGroupMessageEvent,
       imageMessageAnalyzer,
@@ -169,12 +171,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   }
 
   public async sendGroupMessage({
-    groupId,
     message,
   }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
     const messageSegments = parseOutgoingMessageSegments(message);
     const data = await this.transport.request("send_group_msg", {
-      group_id: groupId,
+      group_id: this.listenGroupId,
       message: messageSegments,
     });
 

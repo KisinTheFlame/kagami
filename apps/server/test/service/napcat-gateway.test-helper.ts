@@ -110,7 +110,7 @@ export function createConfigManager(): ConfigManager {
         wsUrl: "ws://napcat:3001/",
         reconnectMs: 3000,
         requestTimeoutMs: 10000,
-        listenGroupIds: ["987654"],
+        listenGroupId: "987654",
         startupContextRecentMessageCount: 40,
       },
       llm: {

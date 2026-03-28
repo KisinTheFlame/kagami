@@ -55,7 +55,7 @@ pnpm --filter @kagami/shared <script>
 关键配置分区：
 
 - `server.databaseUrl`、`server.port`
-- `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`、`server.napcat.listenGroupIds`
+- `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`、`server.napcat.listenGroupId`
 - `server.llm.timeoutMs`
 - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
 - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
