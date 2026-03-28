@@ -15,7 +15,7 @@ describe("DefaultAgentContext", () => {
       createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
       {
         role: "user",
-        content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+        content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
       },
     ]);
 
@@ -25,7 +25,7 @@ describe("DefaultAgentContext", () => {
         createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
         },
       ],
     });
@@ -93,7 +93,7 @@ describe("DefaultAgentContext", () => {
       messages: [
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nhello structured\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\nhello structured\n</qq_message>",
         },
       ],
     });
@@ -170,7 +170,7 @@ describe("DefaultAgentContext", () => {
       messages: [
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\n前后\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\n前后\n</qq_message>",
         },
       ],
     });
@@ -211,7 +211,7 @@ describe("DefaultAgentContext", () => {
       messages: [
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\n\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\n\n</qq_message>",
         },
       ],
     });
@@ -253,7 +253,7 @@ describe("DefaultAgentContext", () => {
       messages: [
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\n@714457117 hi\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\n@714457117 hi\n</qq_message>",
         },
       ],
     });
@@ -268,7 +268,7 @@ describe("DefaultAgentContext", () => {
       createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
       {
         role: "user",
-        content: "<message>\n测试昵称 (654321):\nhello\n</message>",
+        content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
       },
     ]);
     await context.replaceMessages([

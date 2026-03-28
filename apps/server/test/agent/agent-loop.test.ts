@@ -181,7 +181,7 @@ describe("AgentLoop", () => {
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+            content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
         tools: agentTools.definitions(),
@@ -200,7 +200,7 @@ describe("AgentLoop", () => {
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+            content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
       },
@@ -213,7 +213,7 @@ describe("AgentLoop", () => {
         createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
         },
         {
           role: "assistant",
@@ -547,7 +547,7 @@ describe("AgentLoop", () => {
           createConversationSummaryMessage("累计摘要"),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+            content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
       }),
@@ -627,7 +627,7 @@ describe("AgentLoop", () => {
           createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
           {
             role: "user",
-            content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+            content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
           },
         ],
       },
@@ -639,7 +639,7 @@ describe("AgentLoop", () => {
         createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z")),
         {
           role: "user",
-          content: "<message>\n测试昵称 (654321):\nhello world\n</message>",
+          content: "<qq_message>\n测试昵称 (654321):\nhello world\n</qq_message>",
         },
         {
           role: "assistant",

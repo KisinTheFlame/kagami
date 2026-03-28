@@ -66,7 +66,7 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
 
       return [
         createUserMessage(
-          ["<message>", renderGroupMessagePlainText(event), "</message>"].join("\n"),
+          ["<qq_message>", renderGroupMessagePlainText(event), "</qq_message>"].join("\n"),
         ),
       ];
     default:
