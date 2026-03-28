@@ -1,92 +1,56 @@
-import { z } from "zod";
+import {
+  AuthLoginUrlResponseSchema,
+  AuthRefreshResponseSchema,
+  AuthStatusResponseSchema,
+  AuthStatusSchema,
+  ClaudeCodeExtraUsageSchema,
+  ClaudeCodeUsageLimitWindowSchema,
+  ClaudeCodeUsageLimitsSchema,
+  type AuthLoginUrlResponse,
+  type AuthRefreshResponse,
+  type AuthStatus,
+  type AuthStatusResponse,
+  type ClaudeCodeExtraUsage,
+  type ClaudeCodeUsageLimitWindow,
+  type ClaudeCodeUsageLimits,
+} from "./auth.js";
 
-export const ClaudeCodeAuthStatusSchema = z.enum([
-  "active",
-  "expired",
-  "refresh_failed",
-  "logged_out",
-  "unavailable",
-]);
+export const ClaudeCodeAuthStatusSchema = AuthStatusSchema;
 
-export type ClaudeCodeAuthStatus = z.infer<typeof ClaudeCodeAuthStatusSchema>;
+export type ClaudeCodeAuthStatus = AuthStatus;
 
-export const ClaudeCodeAuthSessionSummarySchema = z
-  .object({
-    provider: z.literal("claude-code"),
-    accountId: z.string().min(1).nullable(),
-    email: z.string().email().nullable(),
-    expiresAt: z.string().datetime().nullable(),
-    lastRefreshAt: z.string().datetime().nullable(),
-    lastError: z.string().min(1).nullable(),
-  })
-  .strict();
+export const ClaudeCodeAuthSessionSummarySchema = AuthStatusResponseSchema.shape.session.unwrap();
 
-export type ClaudeCodeAuthSessionSummary = z.infer<typeof ClaudeCodeAuthSessionSummarySchema>;
+export type ClaudeCodeAuthSessionSummary = NonNullable<AuthStatusResponse["session"]>;
 
-export const ClaudeCodeAuthStatusResponseSchema = z
-  .object({
-    status: ClaudeCodeAuthStatusSchema,
-    isLoggedIn: z.boolean(),
-    session: ClaudeCodeAuthSessionSummarySchema.nullable(),
-  })
-  .strict();
+export const ClaudeCodeAuthStatusResponseSchema = AuthStatusResponseSchema;
 
-export type ClaudeCodeAuthStatusResponse = z.infer<typeof ClaudeCodeAuthStatusResponseSchema>;
+export type ClaudeCodeAuthStatusResponse = AuthStatusResponse;
 
-export const ClaudeCodeAuthLoginUrlResponseSchema = z
-  .object({
-    loginUrl: z.string().url(),
-    expiresAt: z.string().datetime(),
-  })
-  .strict();
+export const ClaudeCodeAuthLoginUrlResponseSchema = AuthLoginUrlResponseSchema;
 
-export type ClaudeCodeAuthLoginUrlResponse = z.infer<typeof ClaudeCodeAuthLoginUrlResponseSchema>;
+export type ClaudeCodeAuthLoginUrlResponse = AuthLoginUrlResponse;
 
-export const ClaudeCodeAuthLogoutResponseSchema = z
-  .object({
-    success: z.literal(true),
-    status: ClaudeCodeAuthStatusSchema,
-  })
-  .strict();
+export const ClaudeCodeAuthLogoutResponseSchema = AuthRefreshResponseSchema.pick({
+  provider: true,
+  success: true,
+  status: true,
+});
 
-export type ClaudeCodeAuthLogoutResponse = z.infer<typeof ClaudeCodeAuthLogoutResponseSchema>;
+export type ClaudeCodeAuthLogoutResponse = Omit<AuthRefreshResponse, "session">;
 
-export const ClaudeCodeAuthRefreshResponseSchema = z
-  .object({
-    success: z.literal(true),
-    status: ClaudeCodeAuthStatusSchema,
-    session: ClaudeCodeAuthSessionSummarySchema.nullable(),
-  })
-  .strict();
+export const ClaudeCodeAuthRefreshResponseSchema = AuthRefreshResponseSchema;
 
-export type ClaudeCodeAuthRefreshResponse = z.infer<typeof ClaudeCodeAuthRefreshResponseSchema>;
+export type ClaudeCodeAuthRefreshResponse = AuthRefreshResponse;
 
-export const ClaudeCodeUsageLimitWindowSchema = z
-  .object({
-    utilization: z.number(),
-    resets_at: z.string().datetime({ offset: true }).nullable(),
-  })
-  .strict();
+export { ClaudeCodeUsageLimitWindowSchema };
 
-export type ClaudeCodeUsageLimitWindow = z.infer<typeof ClaudeCodeUsageLimitWindowSchema>;
+export type { ClaudeCodeUsageLimitWindow };
 
-export const ClaudeCodeExtraUsageSchema = z
-  .object({
-    is_enabled: z.boolean(),
-    monthly_limit: z.number().nullable(),
-    used_credits: z.number().nullable(),
-    utilization: z.number().nullable(),
-  })
-  .strict();
+export { ClaudeCodeExtraUsageSchema };
 
-export type ClaudeCodeExtraUsage = z.infer<typeof ClaudeCodeExtraUsageSchema>;
+export type { ClaudeCodeExtraUsage };
 
-export const ClaudeCodeUsageLimitsResponseSchema = z
-  .object({
-    five_hour: ClaudeCodeUsageLimitWindowSchema.nullable(),
-    seven_day: ClaudeCodeUsageLimitWindowSchema.nullable(),
-    extra_usage: ClaudeCodeExtraUsageSchema.nullable(),
-  })
-  .strict();
+export const ClaudeCodeUsageLimitsResponseSchema = ClaudeCodeUsageLimitsSchema;
 
-export type ClaudeCodeUsageLimitsResponse = z.infer<typeof ClaudeCodeUsageLimitsResponseSchema>;
+export type ClaudeCodeUsageLimitsResponse = ClaudeCodeUsageLimits;

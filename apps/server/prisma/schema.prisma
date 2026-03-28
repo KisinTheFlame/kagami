@@ -159,7 +159,7 @@ model NapcatGroupMessageChunk {
   @@map("napcat_group_message_chunk")
 }
 
-model CodexAuthSession {
+model OauthSession {
   id            Int      @id @default(autoincrement())
   provider      String
   accountId     String?  @map("account_id")
@@ -174,55 +174,22 @@ model CodexAuthSession {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  @@unique([provider], map: "codex_auth_session_provider_uq")
-  @@index([status, updatedAt], map: "codex_auth_session_status_updated_at_idx")
-  @@map("codex_auth_session")
+  @@unique([provider], map: "oauth_session_provider_uq")
+  @@index([status, updatedAt], map: "oauth_session_status_updated_at_idx")
+  @@map("oauth_session")
 }
 
-model CodexOAuthState {
+model OauthState {
   id          Int       @id @default(autoincrement())
-  state       String    @unique(map: "codex_oauth_state_state_uq")
+  state       String    @unique(map: "oauth_state_state_uq")
   codeVerifier String   @map("code_verifier")
   redirectUri String    @map("redirect_uri")
   expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
   usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  @@index([expiresAt], map: "codex_oauth_state_expires_at_idx")
-  @@map("codex_oauth_state")
-}
-
-model ClaudeCodeAuthSession {
-  id            Int       @id @default(autoincrement())
-  provider      String
-  accountId     String?   @map("account_id")
-  email         String?
-  accessToken   String?   @map("access_token")
-  refreshToken  String?   @map("refresh_token")
-  idToken       String?   @map("id_token")
-  expiresAt     DateTime? @map("expires_at") @db.Timestamptz(6)
-  lastRefreshAt DateTime? @map("last_refresh_at") @db.Timestamptz(6)
-  status        String
-  lastError     String?   @map("last_error")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  @@unique([provider], map: "claude_code_auth_session_provider_uq")
-  @@index([status, updatedAt], map: "claude_code_auth_session_status_updated_at_idx")
-  @@map("claude_code_auth_session")
-}
-
-model ClaudeCodeOAuthState {
-  id           Int       @id @default(autoincrement())
-  state        String    @unique(map: "claude_code_oauth_state_state_uq")
-  codeVerifier String    @map("code_verifier")
-  redirectUri  String    @map("redirect_uri")
-  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
-  usedAt       DateTime? @map("used_at") @db.Timestamptz(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([expiresAt], map: "claude_code_oauth_state_expires_at_idx")
-  @@map("claude_code_oauth_state")
+  @@index([expiresAt], map: "oauth_state_expires_at_idx")
+  @@map("oauth_state")
 }
 
 model AuthUsageSnapshot {

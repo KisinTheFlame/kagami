@@ -6,8 +6,6 @@ import { buildServerRuntime } from "./bootstrap/server-runtime.js";
 import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
 import type { AuthUsageCacheManager } from "./service/auth-usage-cache.impl.service.js";
-import { ClaudeCodeAuthCallbackServer } from "./claude-code-auth/callback-server.js";
-import { CodexAuthCallbackServer } from "./codex-auth/callback-server.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -20,8 +18,7 @@ const logger = new AppLogger({ source: "bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
-let claudeCodeAuthCallbackServer: ClaudeCodeAuthCallbackServer | null = null;
-let codexAuthCallbackServer: CodexAuthCallbackServer | null = null;
+let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -66,18 +63,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
-    if (claudeCodeAuthCallbackServer) {
-      await claudeCodeAuthCallbackServer.stop();
-      logger.info("Claude Code auth callback server closed", {
-        event: "server.shutdown.claude_code_auth_callback_closed",
-      });
-    }
-
-    if (codexAuthCallbackServer) {
-      await codexAuthCallbackServer.stop();
-      logger.info("Codex auth callback server closed", {
-        event: "server.shutdown.codex_auth_callback_closed",
-      });
+    for (const callbackServer of callbackServers) {
+      await callbackServer.stop();
     }
 
     if (authUsageCacheManager) {
@@ -124,8 +111,7 @@ try {
   app = runtime.app;
   database = runtime.database;
   napcatGatewayService = runtime.napcatGatewayService;
-  claudeCodeAuthCallbackServer = runtime.claudeCodeAuthCallbackServer;
-  codexAuthCallbackServer = runtime.codexAuthCallbackServer;
+  callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
   port = runtime.port;
 

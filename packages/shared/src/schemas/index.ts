@@ -1,4 +1,5 @@
 export * from "./app-log.js";
+export * from "./auth.js";
 export * from "./auth-usage-trend.js";
 export * from "./base.js";
 export * from "./claude-code-auth.js";

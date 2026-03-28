@@ -1,15 +1,17 @@
 import {
+  AuthLoginUrlResponseSchema,
+  AuthRefreshResponseSchema,
+  AuthStatusResponseSchema,
+  AuthUsageLimitsResponseSchema,
   AuthUsageTrendResponseSchema,
+  type AuthProvider,
+  type AuthStatus,
+  type AuthStatusResponse,
+  type AuthUsageLimitsResponse,
   type AuthUsageTrendRange,
   type AuthUsageTrendResponse,
-  ClaudeCodeAuthLoginUrlResponseSchema,
-  ClaudeCodeAuthRefreshResponseSchema,
-  ClaudeCodeAuthStatusResponseSchema,
-  ClaudeCodeUsageLimitsResponseSchema,
-  CodexAuthLoginUrlResponseSchema,
-  CodexAuthRefreshResponseSchema,
-  CodexAuthStatusResponseSchema,
-  CodexUsageLimitsResponseSchema,
+  type ClaudeCodeUsageLimits,
+  type CodexUsageLimits,
 } from "@kagami/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
@@ -27,31 +29,7 @@ import {
 import { apiFetch, apiRequest } from "@/lib/api";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
-type AuthProvider = "codex" | "claude-code";
-type AuthStatus = "active" | "expired" | "refresh_failed" | "logged_out" | "unavailable";
 type PrimaryAuthStatus = Exclude<AuthStatus, "refresh_failed">;
-
-type AuthStatusResponse = {
-  status: AuthStatus;
-  isLoggedIn: boolean;
-  session: {
-    accountId: string | null;
-    email: string | null;
-    expiresAt: string | null;
-    lastRefreshAt: string | null;
-    lastError: string | null;
-  } | null;
-};
-
-type AuthUsageLimitsData =
-  | {
-      provider: "codex";
-      limits: ReturnType<typeof CodexUsageLimitsResponseSchema.parse>;
-    }
-  | {
-      provider: "claude-code";
-      limits: ReturnType<typeof ClaudeCodeUsageLimitsResponseSchema.parse>;
-    };
 
 type AuthUsageTrendData = AuthUsageTrendResponse;
 
@@ -67,7 +45,6 @@ type AuthProviderConfig = {
   badge: string;
   title: string;
   actionDescription: string;
-  endpointPrefix: "/codex-auth" | "/claude-code-auth";
   backgroundClassName: string;
   successMessage: string;
   errorMessage: string;
@@ -75,10 +52,6 @@ type AuthProviderConfig = {
     fiveHour: string;
     sevenDay: string;
   };
-  parseStatusResponse: (value: unknown) => AuthStatusResponse;
-  parseLoginUrlResponse: (value: unknown) => { loginUrl: string; expiresAt: string };
-  parseRefreshResponse: (value: unknown) => unknown;
-  parseUsageLimitsResponse: (value: unknown) => AuthUsageLimitsData;
 };
 
 const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
@@ -88,7 +61,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     badge: "Codex 内置登录",
     title: "管理 Codex 登录状态",
     actionDescription: "首版按单账号设计。登录会跳转到 OpenAI 的授权页，成功后回到当前管理页。",
-    endpointPrefix: "/codex-auth",
     backgroundClassName:
       "bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.10),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
     successMessage: "Codex 登录已完成。",
@@ -97,28 +69,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
       fiveHour: "#16a34a",
       sevenDay: "#2563eb",
     },
-    parseStatusResponse: value => {
-      const parsed = CodexAuthStatusResponseSchema.parse(value);
-      return {
-        status: parsed.status,
-        isLoggedIn: parsed.isLoggedIn,
-        session: parsed.session
-          ? {
-              accountId: parsed.session.accountId,
-              email: parsed.session.email,
-              expiresAt: parsed.session.expiresAt,
-              lastRefreshAt: parsed.session.lastRefreshAt,
-              lastError: parsed.session.lastError,
-            }
-          : null,
-      };
-    },
-    parseLoginUrlResponse: value => CodexAuthLoginUrlResponseSchema.parse(value),
-    parseRefreshResponse: value => CodexAuthRefreshResponseSchema.parse(value),
-    parseUsageLimitsResponse: value => ({
-      provider: "codex",
-      limits: CodexUsageLimitsResponseSchema.parse(value),
-    }),
   },
   "claude-code": {
     key: "claude-code",
@@ -126,7 +76,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     badge: "Claude Code 内置登录",
     title: "管理 Claude Code 登录状态",
     actionDescription: "首版按单账号设计。登录会跳转到 Anthropic 的授权页，成功后回到当前管理页。",
-    endpointPrefix: "/claude-code-auth",
     backgroundClassName:
       "bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.12),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
     successMessage: "Claude Code 登录已完成。",
@@ -135,28 +84,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
       fiveHour: "#f59e0b",
       sevenDay: "#0ea5e9",
     },
-    parseStatusResponse: value => {
-      const parsed = ClaudeCodeAuthStatusResponseSchema.parse(value);
-      return {
-        status: parsed.status,
-        isLoggedIn: parsed.isLoggedIn,
-        session: parsed.session
-          ? {
-              accountId: parsed.session.accountId,
-              email: parsed.session.email,
-              expiresAt: parsed.session.expiresAt,
-              lastRefreshAt: parsed.session.lastRefreshAt,
-              lastError: parsed.session.lastError,
-            }
-          : null,
-      };
-    },
-    parseLoginUrlResponse: value => ClaudeCodeAuthLoginUrlResponseSchema.parse(value),
-    parseRefreshResponse: value => ClaudeCodeAuthRefreshResponseSchema.parse(value),
-    parseUsageLimitsResponse: value => ({
-      provider: "claude-code",
-      limits: ClaudeCodeUsageLimitsResponseSchema.parse(value),
-    }),
   },
 };
 
@@ -177,23 +104,25 @@ export function AuthPage() {
   const statusQuery = useQuery({
     queryKey: ["auth-status", providerConfig.key],
     queryFn: async () => {
-      const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/status`);
-      return providerConfig.parseStatusResponse(response);
+      const response = await apiFetch<unknown>(buildAuthEndpoint(providerConfig.key, "status"));
+      return AuthStatusResponseSchema.parse(response);
     },
   });
 
   const usageLimitsQuery = useQuery({
     queryKey: ["auth-usage-limits", providerConfig.key],
     queryFn: async () => {
-      const response = await apiFetch<unknown>(`${providerConfig.endpointPrefix}/usage-limits`);
-      return providerConfig.parseUsageLimitsResponse(response);
+      const response = await apiFetch<unknown>(
+        buildAuthEndpoint(providerConfig.key, "usage-limits"),
+      );
+      return AuthUsageLimitsResponseSchema.parse(response);
     },
   });
   const usageTrendQuery = useQuery({
     queryKey: ["auth-usage-trend", providerConfig.key, trendRange],
     queryFn: async () => {
       const response = await apiFetch<unknown>(
-        `${providerConfig.endpointPrefix}/usage-trend?range=${trendRange}`,
+        `${buildAuthEndpoint(providerConfig.key, "usage-trend")}?range=${trendRange}`,
       );
       return AuthUsageTrendResponseSchema.parse(response);
     },
@@ -201,7 +130,7 @@ export function AuthPage() {
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`${providerConfig.endpointPrefix}/login-url`, {
+      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "login-url"), {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -209,7 +138,7 @@ export function AuthPage() {
         throw new Error(formatApiError(response.status, response.statusText));
       }
 
-      return providerConfig.parseLoginUrlResponse(response.body);
+      return AuthLoginUrlResponseSchema.parse(response.body);
     },
     onSuccess: data => {
       window.location.assign(data.loginUrl);
@@ -218,7 +147,7 @@ export function AuthPage() {
 
   const refreshMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`${providerConfig.endpointPrefix}/refresh`, {
+      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "refresh"), {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -226,7 +155,7 @@ export function AuthPage() {
         throw new Error(formatApiError(response.status, response.statusText));
       }
 
-      return providerConfig.parseRefreshResponse(response.body);
+      return AuthRefreshResponseSchema.parse(response.body);
     },
     onSuccess: async () => {
       await Promise.all([
@@ -245,7 +174,7 @@ export function AuthPage() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`${providerConfig.endpointPrefix}/logout`, {
+      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "logout"), {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -507,7 +436,7 @@ export function AuthPage() {
   );
 }
 
-function UsageLimitsPanel({ data }: { data: AuthUsageLimitsData }) {
+function UsageLimitsPanel({ data }: { data: AuthUsageLimitsResponse }) {
   if (data.provider === "claude-code") {
     return <ClaudeUsageLimitsPanel limits={data.limits} />;
   }
@@ -515,11 +444,7 @@ function UsageLimitsPanel({ data }: { data: AuthUsageLimitsData }) {
   return <CodexUsageLimitsPanel limits={data.limits} />;
 }
 
-function ClaudeUsageLimitsPanel({
-  limits,
-}: {
-  limits: ReturnType<typeof ClaudeCodeUsageLimitsResponseSchema.parse>;
-}) {
+function ClaudeUsageLimitsPanel({ limits }: { limits: ClaudeCodeUsageLimits }) {
   const items: ReactElement[] = [];
 
   if (limits.five_hour) {
@@ -688,11 +613,7 @@ function UsageTrendPanel({
   );
 }
 
-function CodexUsageLimitsPanel({
-  limits,
-}: {
-  limits: ReturnType<typeof CodexUsageLimitsResponseSchema.parse>;
-}) {
+function CodexUsageLimitsPanel({ limits }: { limits: CodexUsageLimits }) {
   const items: ReactElement[] = [];
 
   if (limits.primary) {
@@ -782,6 +703,13 @@ function UsageLimitCard({
 
 function isAuthProvider(value: string): value is AuthProvider {
   return value === "codex" || value === "claude-code";
+}
+
+function buildAuthEndpoint(
+  provider: AuthProvider,
+  action: "status" | "login-url" | "logout" | "refresh" | "usage-limits" | "usage-trend",
+): string {
+  return `/auth/${provider}/${action}`;
 }
 
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {

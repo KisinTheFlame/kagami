@@ -1,81 +1,50 @@
-import { z } from "zod";
+import {
+  AuthLoginUrlResponseSchema,
+  AuthRefreshResponseSchema,
+  AuthStatusResponseSchema,
+  AuthStatusSchema,
+  CodexUsageLimitWindowSchema,
+  CodexUsageLimitsSchema,
+  type AuthLoginUrlResponse,
+  type AuthRefreshResponse,
+  type AuthStatus,
+  type AuthStatusResponse,
+  type CodexUsageLimitWindow,
+  type CodexUsageLimits,
+} from "./auth.js";
 
-export const CodexAuthStatusSchema = z.enum([
-  "active",
-  "expired",
-  "refresh_failed",
-  "logged_out",
-  "unavailable",
-]);
+export const CodexAuthStatusSchema = AuthStatusSchema;
 
-export type CodexAuthStatus = z.infer<typeof CodexAuthStatusSchema>;
+export type CodexAuthStatus = AuthStatus;
 
-export const CodexAuthSessionSummarySchema = z
-  .object({
-    provider: z.literal("openai-codex"),
-    accountId: z.string().min(1).nullable(),
-    email: z.string().email().nullable(),
-    expiresAt: z.string().datetime().nullable(),
-    lastRefreshAt: z.string().datetime().nullable(),
-    lastError: z.string().min(1).nullable(),
-  })
-  .strict();
+export const CodexAuthSessionSummarySchema = AuthStatusResponseSchema.shape.session.unwrap();
 
-export type CodexAuthSessionSummary = z.infer<typeof CodexAuthSessionSummarySchema>;
+export type CodexAuthSessionSummary = NonNullable<AuthStatusResponse["session"]>;
 
-export const CodexAuthStatusResponseSchema = z
-  .object({
-    status: CodexAuthStatusSchema,
-    isLoggedIn: z.boolean(),
-    session: CodexAuthSessionSummarySchema.nullable(),
-  })
-  .strict();
+export const CodexAuthStatusResponseSchema = AuthStatusResponseSchema;
 
-export type CodexAuthStatusResponse = z.infer<typeof CodexAuthStatusResponseSchema>;
+export type CodexAuthStatusResponse = AuthStatusResponse;
 
-export const CodexAuthLoginUrlResponseSchema = z
-  .object({
-    loginUrl: z.string().url(),
-    expiresAt: z.string().datetime(),
-  })
-  .strict();
+export const CodexAuthLoginUrlResponseSchema = AuthLoginUrlResponseSchema;
 
-export type CodexAuthLoginUrlResponse = z.infer<typeof CodexAuthLoginUrlResponseSchema>;
+export type CodexAuthLoginUrlResponse = AuthLoginUrlResponse;
 
-export const CodexAuthLogoutResponseSchema = z
-  .object({
-    success: z.literal(true),
-    status: CodexAuthStatusSchema,
-  })
-  .strict();
+export const CodexAuthLogoutResponseSchema = AuthRefreshResponseSchema.pick({
+  provider: true,
+  success: true,
+  status: true,
+});
 
-export type CodexAuthLogoutResponse = z.infer<typeof CodexAuthLogoutResponseSchema>;
+export type CodexAuthLogoutResponse = Omit<AuthRefreshResponse, "session">;
 
-export const CodexAuthRefreshResponseSchema = z
-  .object({
-    success: z.literal(true),
-    status: CodexAuthStatusSchema,
-    session: CodexAuthSessionSummarySchema.nullable(),
-  })
-  .strict();
+export const CodexAuthRefreshResponseSchema = AuthRefreshResponseSchema;
 
-export type CodexAuthRefreshResponse = z.infer<typeof CodexAuthRefreshResponseSchema>;
+export type CodexAuthRefreshResponse = AuthRefreshResponse;
 
-export const CodexUsageLimitWindowSchema = z
-  .object({
-    usedPercent: z.number(),
-    windowDurationMins: z.number().int().nonnegative(),
-    resetsAt: z.number().int().nonnegative(),
-  })
-  .strict();
+export { CodexUsageLimitWindowSchema };
 
-export type CodexUsageLimitWindow = z.infer<typeof CodexUsageLimitWindowSchema>;
+export type { CodexUsageLimitWindow };
 
-export const CodexUsageLimitsResponseSchema = z
-  .object({
-    primary: CodexUsageLimitWindowSchema.nullable(),
-    secondary: CodexUsageLimitWindowSchema.nullable(),
-  })
-  .strict();
+export const CodexUsageLimitsResponseSchema = CodexUsageLimitsSchema;
 
-export type CodexUsageLimitsResponse = z.infer<typeof CodexUsageLimitsResponseSchema>;
+export type CodexUsageLimitsResponse = CodexUsageLimits;

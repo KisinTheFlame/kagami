@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 describe("claude code auth schemas", () => {
   it("should parse auth status responses", () => {
     const result = ClaudeCodeAuthStatusResponseSchema.parse({
+      provider: "claude-code",
       status: "active",
       isLoggedIn: true,
       session: {
@@ -26,6 +27,7 @@ describe("claude code auth schemas", () => {
 
   it("should parse login url responses", () => {
     const result = ClaudeCodeAuthLoginUrlResponseSchema.parse({
+      provider: "claude-code",
       loginUrl: "https://claude.ai/oauth/authorize?foo=bar",
       expiresAt: "2026-03-20T00:10:00.000Z",
     });
@@ -35,6 +37,7 @@ describe("claude code auth schemas", () => {
 
   it("should parse refresh responses", () => {
     const result = ClaudeCodeAuthRefreshResponseSchema.parse({
+      provider: "claude-code",
       success: true,
       status: "active",
       session: {

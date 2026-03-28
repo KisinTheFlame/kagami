@@ -9,10 +9,11 @@ import { describe, expect, it } from "vitest";
 describe("codex auth schemas", () => {
   it("should parse auth status responses", () => {
     const result = CodexAuthStatusResponseSchema.parse({
+      provider: "codex",
       status: "active",
       isLoggedIn: true,
       session: {
-        provider: "openai-codex",
+        provider: "codex",
         accountId: "acct_123",
         email: "bot@example.com",
         expiresAt: "2026-03-20T00:00:00.000Z",
@@ -21,11 +22,12 @@ describe("codex auth schemas", () => {
       },
     });
 
-    expect(result.session?.provider).toBe("openai-codex");
+    expect(result.session?.provider).toBe("codex");
   });
 
   it("should parse login url responses", () => {
     const result = CodexAuthLoginUrlResponseSchema.parse({
+      provider: "codex",
       loginUrl: "https://auth.openai.com/oauth/authorize?foo=bar",
       expiresAt: "2026-03-20T00:10:00.000Z",
     });
@@ -35,10 +37,11 @@ describe("codex auth schemas", () => {
 
   it("should parse refresh responses", () => {
     const result = CodexAuthRefreshResponseSchema.parse({
+      provider: "codex",
       success: true,
       status: "active",
       session: {
-        provider: "openai-codex",
+        provider: "codex",
         accountId: "acct_123",
         email: "bot@example.com",
         expiresAt: "2026-03-20T01:00:00.000Z",

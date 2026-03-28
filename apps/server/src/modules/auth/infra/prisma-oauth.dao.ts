@@ -1,40 +1,46 @@
-import type { Database } from "../../db/client.js";
-import { createPrismaOAuthDao } from "../../auth/shared/dao.js";
-import type { ClaudeCodeAuthDao } from "../claude-code-auth.dao.js";
-import type {
-  ClaudeCodeAuthSessionRecord,
-  ClaudeCodeOAuthStateRecord,
-} from "../../claude-code-auth/types.js";
+import type { Database } from "../../../db/client.js";
+import { createPrismaOAuthDao } from "../../../auth/shared/dao.js";
+import type { OAuthDao, OAuthSessionRecord, OAuthStateRecord } from "../../../auth/shared/types.js";
+import type { InternalAuthProvider } from "../domain/auth-provider.js";
 
-type PrismaClaudeCodeAuthDaoDeps = {
+type PrismaOAuthDaoDeps<TProvider extends InternalAuthProvider> = {
   database: Database;
+  provider: TProvider;
 };
 
-export class PrismaClaudeCodeAuthDao implements ClaudeCodeAuthDao {
-  private readonly dao: ClaudeCodeAuthDao;
+export class PrismaOAuthDao<TProvider extends InternalAuthProvider> implements OAuthDao<
+  TProvider,
+  OAuthSessionRecord<TProvider>,
+  OAuthStateRecord
+> {
+  private readonly dao: OAuthDao<TProvider, OAuthSessionRecord<TProvider>, OAuthStateRecord>;
 
-  public constructor({ database }: PrismaClaudeCodeAuthDaoDeps) {
+  public constructor({ database }: PrismaOAuthDaoDeps<TProvider>) {
     this.dao = createPrismaOAuthDao({
-      sessionTable: database.claudeCodeAuthSession,
-      stateTable: database.claudeCodeOAuthState,
+      sessionTable: database.oauthSession,
+      stateTable: database.oauthState,
       mapSessionRow: toSessionRecord,
       mapStateRow: toOAuthStateRecord,
     });
   }
 
-  public async findSession(provider: "claude-code"): Promise<ClaudeCodeAuthSessionRecord | null> {
+  public async findSession(provider: TProvider): Promise<OAuthSessionRecord<TProvider> | null> {
     return await this.dao.findSession(provider);
   }
 
-  public async upsertSession(input: Parameters<ClaudeCodeAuthDao["upsertSession"]>[0]) {
+  public async upsertSession(
+    input: Parameters<OAuthDao<TProvider, OAuthSessionRecord<TProvider>>["upsertSession"]>[0],
+  ): Promise<OAuthSessionRecord<TProvider>> {
     return await this.dao.upsertSession(input);
   }
 
-  public async createOAuthState(input: Parameters<ClaudeCodeAuthDao["createOAuthState"]>[0]) {
+  public async createOAuthState(
+    input: Parameters<OAuthDao<TProvider, OAuthSessionRecord<TProvider>>["createOAuthState"]>[0],
+  ): Promise<OAuthStateRecord> {
     return await this.dao.createOAuthState(input);
   }
 
-  public async findOAuthState(state: string): Promise<ClaudeCodeOAuthStateRecord | null> {
+  public async findOAuthState(state: string): Promise<OAuthStateRecord | null> {
     return await this.dao.findOAuthState(state);
   }
 
@@ -47,7 +53,7 @@ export class PrismaClaudeCodeAuthDao implements ClaudeCodeAuthDao {
   }
 }
 
-function toSessionRecord(row: {
+function toSessionRecord<TProvider extends InternalAuthProvider>(row: {
   id: number;
   provider: string;
   accountId: string | null;
@@ -61,10 +67,10 @@ function toSessionRecord(row: {
   lastError: string | null;
   createdAt: Date;
   updatedAt: Date;
-}): ClaudeCodeAuthSessionRecord {
+}): OAuthSessionRecord<TProvider> {
   return {
     id: row.id,
-    provider: "claude-code",
+    provider: row.provider as TProvider,
     accountId: row.accountId,
     email: row.email,
     accessToken: row.accessToken,
@@ -72,7 +78,7 @@ function toSessionRecord(row: {
     idToken: row.idToken,
     expiresAt: row.expiresAt,
     lastRefreshAt: row.lastRefreshAt,
-    status: row.status as ClaudeCodeAuthSessionRecord["status"],
+    status: row.status as OAuthSessionRecord<TProvider>["status"],
     lastError: row.lastError,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -87,7 +93,7 @@ function toOAuthStateRecord(row: {
   expiresAt: Date;
   usedAt: Date | null;
   createdAt: Date;
-}): ClaudeCodeOAuthStateRecord {
+}): OAuthStateRecord {
   return {
     id: row.id,
     state: row.state,
