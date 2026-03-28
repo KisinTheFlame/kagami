@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolCatalog } from "../../src/tools/index.js";
-import type { ToolComponent } from "../../src/tools/index.js";
+import { ToolCatalog } from "../../src/agent/tools/index.js";
+import type { ToolComponent } from "../../src/agent/tools/index.js";
 
 function createToolComponent(name: string): ToolComponent {
   return {

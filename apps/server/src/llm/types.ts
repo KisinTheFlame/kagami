@@ -1,5 +1,6 @@
-export type LlmProviderId = "deepseek" | "openai" | "openai-codex" | "claude-code";
-export type LlmUsageId = "agent" | "contextSummarizer" | "vision" | "webSearchAgent";
+import type { LlmProviderId } from "../common/contracts/llm.js";
+
+export type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 export type JsonSchema = {
   type: "object";

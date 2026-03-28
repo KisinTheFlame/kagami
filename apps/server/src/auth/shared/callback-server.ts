@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { BizError } from "../../errors/biz-error.js";
+import { BizError } from "../../common/errors/biz-error.js";
 import type { OAuthCallbackHandler, OAuthCallbackInput, OAuthCallbackServerLike } from "./types.js";
 
 type OAuthCallbackServerConfig = {

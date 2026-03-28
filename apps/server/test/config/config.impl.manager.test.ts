@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DefaultConfigManager } from "../../src/config/config.impl.manager.js";
-import { BizError } from "../../src/errors/biz-error.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import { loadStaticConfig } from "../../src/config/config.loader.js";
 
 const tempDirs: string[] = [];

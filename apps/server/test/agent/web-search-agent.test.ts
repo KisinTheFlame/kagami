@@ -5,11 +5,11 @@ import {
   SEARCH_WEB_RAW_TOOL_NAME,
   SearchWebRawTool,
   WebSearchAgent,
-} from "../../src/agents/subagents/web-search/index.js";
-import { createWebSearchReminderMessage } from "../../src/context/context-message-factory.js";
+} from "../../src/agent/agents/subagents/web-search/index.js";
+import { createWebSearchReminderMessage } from "../../src/agent/context/context-message-factory.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
-import { ToolCatalog } from "../../src/tools/index.js";
+import { ToolCatalog } from "../../src/agent/tools/index.js";
 
 function createWebSearchAgent(params?: {
   chat?: ReturnType<typeof vi.fn>;

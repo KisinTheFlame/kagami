@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { BizError } from "../../src/errors/biz-error.js";
-import { toHttpErrorResponse } from "../../src/errors/http-error.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
+import { toHttpErrorResponse } from "../../src/common/errors/http-error.js";
 
 describe("toHttpErrorResponse", () => {
   it("should map ZodError to 400 response", () => {

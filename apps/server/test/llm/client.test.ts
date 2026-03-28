@@ -4,8 +4,8 @@ import type {
   LlmUsageRuntimeConfig,
   OpenAiCodexRuntimeConfig,
 } from "../../src/config/config.manager.js";
-import type { LlmChatCallDao } from "../../src/dao/llm-chat-call.dao.js";
-import { BizError } from "../../src/errors/biz-error.js";
+import type { LlmChatCallDao } from "../../src/llm/dao/llm-chat-call.dao.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
 import {
   attachLlmProviderFailureContext,

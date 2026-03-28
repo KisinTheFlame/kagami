@@ -4,8 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { z } from "zod";
-import { BizError } from "../errors/biz-error.js";
-import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
+import { BizError } from "../common/errors/biz-error.js";
+import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 import type { LlmUsageAttemptRuntimeConfig, LlmUsageRuntimeConfig } from "./config.manager.js";
 
 const DEFAULT_PORT = 20003;

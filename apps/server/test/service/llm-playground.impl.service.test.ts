@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DefaultLlmPlaygroundService } from "../../src/service/llm-playground.impl.service.js";
+import { DefaultLlmPlaygroundService } from "../../src/llm/application/llm-playground.impl.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 
 describe("DefaultLlmPlaygroundService", () => {

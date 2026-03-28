@@ -6,8 +6,8 @@ import type {
   LlmUsageAttemptRuntimeConfig,
   LlmUsageRuntimeConfig,
 } from "../config/config.manager.js";
-import type { LlmChatCallDao } from "../dao/llm-chat-call.dao.js";
-import { BizError } from "../errors/biz-error.js";
+import type { LlmChatCallDao } from "./dao/llm-chat-call.dao.js";
+import { BizError } from "../common/errors/biz-error.js";
 import {
   getLlmProviderFailureContext,
   type LlmProvider,

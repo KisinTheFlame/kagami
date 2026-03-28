@@ -11,7 +11,7 @@ import type {
   LlmContentPart,
   LlmToolCall,
 } from "../types.js";
-import { BizError } from "../../errors/biz-error.js";
+import { BizError } from "../../common/errors/biz-error.js";
 import type { OpenAiCodexRuntimeConfig } from "../../config/config.manager.js";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
 

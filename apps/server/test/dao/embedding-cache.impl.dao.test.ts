@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "../../src/db/client.js";
-import { PrismaEmbeddingCacheDao } from "../../src/dao/impl/embedding-cache.impl.dao.js";
+import { PrismaEmbeddingCacheDao } from "../../src/llm/dao/impl/embedding-cache.impl.dao.js";
 
 describe("PrismaEmbeddingCacheDao", () => {
   it("should query cache entries by the full compound key", async () => {

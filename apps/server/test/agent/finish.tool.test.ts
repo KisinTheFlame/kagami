@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FinishTool } from "../../src/tools/index.js";
+import { FinishTool } from "../../src/agent/tools/index.js";
 
 describe("finish tool", () => {
   it("should mark the current round as finished", async () => {

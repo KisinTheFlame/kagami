@@ -148,26 +148,37 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 ### 后端（`@kagami/server`）
 
-后端采用事件驱动的 agent 循环架构，主要目录如下（非穷举）：
+后端当前已经重组为“扁平模块 + 模块内分层”的结构，顶级目录直接位于 `apps/server/src/<module>`，以模块 DAG 为主，而不是旧的全局 `service / handler / dao / agents` 横向分层。
 
-- `agents/main-engine/`：主 agent 循环、多群运行时管理、主系统提示词
-- `agents/subagents/`：子 agent 能力，当前包含 `context-summarizer`、`rag`、`reply-sender`、`vision`、`web-search`
-- `auth/`、`codex-auth/`、`claude-code-auth/`：OAuth 登录状态、回调服务与认证流程
-- `bootstrap/`：运行时装配与依赖初始化入口
-- `config/`：静态配置加载、运行时配置管理
-- `context/`、`event/`：上下文聚合、事件抽象与处理链路
-- `dao/`：数据访问层接口，实现在 `dao/impl/`
-- `db/`：Prisma 客户端
-- `handler/`：Fastify 路由注册
-- `llm/`：LLM 客户端封装、provider 适配、embedding、类型与错误定义
-- `rag/`：检索增强相关能力
-- `service/`：领域服务与外部能力接入，当前可见 `napcat-gateway/`、`news-feed/`
-- `tools/`：Agent 可调用工具、工具组件与核心抽象
-- `schema/`、`mappers/`、`errors/`、`logger/`：辅助建模、映射、错误和日志能力
+当前主要模块如下（非穷举）：
+
+- `common/`：无业务语义的公共能力与跨模块契约，当前包括 `contracts/`、`errors/`、`http/`
+- `config/`：配置 schema、配置加载、运行时配置管理
+- `db/`：Prisma 客户端、数据库连接与事务基础设施
+- `logger/`：日志 runtime、serializer、sink、日志 DAO
+- `auth/`：OAuth、回调服务、secret store、usage cache 与 usage trend
+- `llm/`：LLM provider、chat client、embedding、playground、相关 DAO
+- `napcat/`：NapCat gateway、入站事件归一化、消息发送、NapCat 相关持久化与 HTTP 接口
+- `agent/`：主 agent loop、subagents、context、event queue、tools、RAG、agent message、loop run
+- `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、loop run、NapCat history
+- `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动入口
+
+模块内优先按垂直分层组织，常见层次包括：
+
+- `domain/`：实体、值对象、模块内 port、纯规则
+- `application/`：use case、workflow、query/command service
+- `infra/`：Prisma/HTTP/外部系统适配实现
+- `http/`：Fastify handler 与路由注册
+
+补充说明：
+
+- 不是每个模块都会把 `domain / application / infra / http` 四层补齐，是否拆层以实际复杂度为准。
+- 模块之间按 DAG 依赖，一个模块可以依赖多个更底层模块，但禁止出现循环依赖。
 
 后端代码约定：
 
 - 构造函数统一使用对象参数风格（`{ dep1, dep2 }`）。
+- 新代码优先放入所属模块内部，并优先从模块根入口或模块内分层路径导入；不要继续新增全局 `handler / service / dao / event / tools / rag` 风格目录。
 
 后端当前对外接口大致分为：
 

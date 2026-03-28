@@ -3,7 +3,7 @@ import { NapcatSendGroupMessageRequestSchema } from "@kagami/shared";
 import {
   NapcatReceiveMessageSegmentSchema,
   NapcatSendMessageSegmentSchema,
-} from "../../src/schema/napcat-segment.js";
+} from "../../src/napcat/schema/napcat-segment.js";
 
 describe("NapCat segment schemas", () => {
   it("should validate all supported send segments", () => {

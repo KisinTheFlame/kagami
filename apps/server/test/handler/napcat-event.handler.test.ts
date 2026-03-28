@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NapcatEventQueryService } from "../../src/service/napcat-event-query.service.js";
-import { NapcatEventHandler } from "../../src/handler/napcat-event.handler.js";
+import type { NapcatEventQueryService } from "../../src/ops/application/napcat-event-query.service.js";
+import { NapcatEventHandler } from "../../src/ops/http/napcat-event.handler.js";
 
 describe("NapcatEventHandler", () => {
   let app = Fastify({ logger: false });

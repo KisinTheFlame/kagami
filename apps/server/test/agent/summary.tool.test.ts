@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SummaryTool } from "../../src/tools/index.js";
+import { SummaryTool } from "../../src/agent/tools/index.js";
 
 describe("summary tool", () => {
   it("should return the provided summary string", async () => {

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LlmPlaygroundService } from "../../src/service/llm-playground.service.js";
-import { LlmHandler } from "../../src/handler/llm.handler.js";
+import type { LlmPlaygroundService } from "../../src/llm/application/llm-playground.service.js";
+import { LlmHandler } from "../../src/llm/http/llm.handler.js";
 
 describe("LlmHandler", () => {
   let app = Fastify({ logger: false });

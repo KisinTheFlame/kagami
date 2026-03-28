@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { EmbeddingCacheDao } from "../../src/dao/embedding-cache.dao.js";
-import { DefaultEmbeddingCacheQueryService } from "../../src/service/embedding-cache-query.impl.service.js";
+import type { EmbeddingCacheDao } from "../../src/llm/dao/embedding-cache.dao.js";
+import { DefaultEmbeddingCacheQueryService } from "../../src/ops/application/embedding-cache-query.impl.service.js";
 
 describe("DefaultEmbeddingCacheQueryService", () => {
   it("should return paginated embedding cache items", async () => {

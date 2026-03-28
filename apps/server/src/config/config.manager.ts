@@ -1,4 +1,4 @@
-import type { LlmProviderId, LlmUsageId } from "../llm/types.js";
+import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 export type NapcatBootConfig = {
   wsUrl: string;

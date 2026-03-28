@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NapcatEventPersistenceWriter } from "../../src/service/napcat-gateway/event-persistence-writer.js";
-import type { GroupMessageChunkIndexer } from "../../src/rag/indexer.service.js";
+import { NapcatEventPersistenceWriter } from "../../src/napcat/service/napcat-gateway/event-persistence-writer.js";
+import type { GroupMessageChunkIndexer } from "../../src/agent/rag/indexer.service.js";
 import {
   createNapcatEventDao,
   createNapcatGroupMessageChunkDao,

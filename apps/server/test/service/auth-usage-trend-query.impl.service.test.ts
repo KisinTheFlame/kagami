@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AuthUsageSnapshotDao } from "../../src/dao/auth-usage-snapshot.dao.js";
-import { DefaultAuthUsageTrendQueryService } from "../../src/service/auth-usage-trend-query.impl.service.js";
+import type { AuthUsageSnapshotDao } from "../../src/auth/dao/auth-usage-snapshot.dao.js";
+import { DefaultAuthUsageTrendQueryService } from "../../src/auth/application/auth-usage-trend-query.impl.service.js";
 
 describe("DefaultAuthUsageTrendQueryService", () => {
   it("should return empty series when account id is missing", async () => {

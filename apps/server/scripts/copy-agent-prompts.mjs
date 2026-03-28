@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const serverDir = resolve(scriptDir, "..");
-const sourceRootDir = resolve(serverDir, "src/agents");
-const targetRootDir = resolve(serverDir, "dist/agents");
+const sourceRootDir = resolve(serverDir, "src");
+const targetRootDir = resolve(serverDir, "dist");
 
 copyPromptDirectories(sourceRootDir);
 

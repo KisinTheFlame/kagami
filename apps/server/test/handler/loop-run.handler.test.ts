@@ -1,8 +1,8 @@
 import Fastify from "fastify";
 import type { LoopRunDetailResponse } from "@kagami/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LoopRunHandler } from "../../src/handler/loop-run.handler.js";
-import type { LoopRunQueryService } from "../../src/service/loop-run-query.service.js";
+import { LoopRunHandler } from "../../src/ops/http/loop-run.handler.js";
+import type { LoopRunQueryService } from "../../src/ops/application/loop-run-query.service.js";
 
 describe("LoopRunHandler", () => {
   let app = Fastify({ logger: false });

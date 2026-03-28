@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOutgoingMessageSegments } from "../../src/service/napcat-gateway/shared.js";
+import { parseOutgoingMessageSegments } from "../../src/napcat/service/napcat-gateway/shared.js";
 
 describe("parseOutgoingMessageSegments", () => {
   it("should keep plain text as a single text segment", () => {

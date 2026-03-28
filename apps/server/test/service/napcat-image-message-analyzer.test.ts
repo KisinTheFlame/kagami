@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { DefaultNapcatImageMessageAnalyzer } from "../../src/service/napcat-gateway/image-message-analyzer.js";
-import type { VisionAgent } from "../../src/agents/subagents/vision/index.js";
+import { DefaultNapcatImageMessageAnalyzer } from "../../src/napcat/service/napcat-gateway/image-message-analyzer.js";
+import type { VisionAgent } from "../../src/agent/agents/subagents/vision/index.js";
 import { initTestLogger } from "./napcat-gateway.test-helper.js";
 
 function createImageSegment(url: string, file = "image.png") {

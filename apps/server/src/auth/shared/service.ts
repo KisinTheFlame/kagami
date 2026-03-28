@@ -1,4 +1,4 @@
-import { BizError } from "../../errors/biz-error.js";
+import { BizError } from "../../common/errors/biz-error.js";
 import { createPkcePair } from "./pkce.js";
 import type {
   OAuthCallbackInput,

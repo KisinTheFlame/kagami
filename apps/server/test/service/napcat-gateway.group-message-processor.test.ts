@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NapcatGroupMessageProcessor } from "../../src/service/napcat-gateway/group-message-processor.js";
+import { NapcatGroupMessageProcessor } from "../../src/napcat/service/napcat-gateway/group-message-processor.js";
 import { createAgentEventQueue, initTestLogger } from "./napcat-gateway.test-helper.js";
 
 describe("NapcatGroupMessageProcessor", () => {

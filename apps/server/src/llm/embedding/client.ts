@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RagEmbeddingRuntimeConfig } from "../../config/config.manager.js";
-import type { EmbeddingCacheDao } from "../../dao/embedding-cache.dao.js";
+import type { EmbeddingCacheDao } from "../dao/embedding-cache.dao.js";
 import { createGeminiEmbeddingProvider } from "./providers/gemini-provider.js";
 import type { EmbeddingProvider } from "./provider.js";
 import type { EmbeddingRequest, EmbeddingResponse } from "./types.js";

@@ -1,4 +1,4 @@
-import type { InsertAppLogItem, LogDao } from "../../dao/log.dao.js";
+import type { InsertAppLogItem, LogDao } from "../dao/log.dao.js";
 import type { LogEvent, LogSink } from "../types.js";
 
 type DbLogSinkOptions = {

@@ -1,9 +1,9 @@
 import { vi } from "vitest";
-import type { AgentEventQueue } from "../../src/event/event.queue.js";
+import type { AgentEventQueue } from "../../src/agent/event/event.queue.js";
 import type { ConfigManager } from "../../src/config/config.manager.js";
-import type { NapcatEventDao } from "../../src/dao/napcat-event.dao.js";
-import type { NapcatGroupMessageChunkDao } from "../../src/dao/napcat-group-message-chunk.dao.js";
-import type { NapcatGroupMessageDao } from "../../src/dao/napcat-group-message.dao.js";
+import type { NapcatEventDao } from "../../src/napcat/dao/napcat-event.dao.js";
+import type { NapcatGroupMessageChunkDao } from "../../src/napcat/dao/napcat-group-message-chunk.dao.js";
+import type { NapcatGroupMessageDao } from "../../src/napcat/dao/napcat-group-message.dao.js";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "../../src/db/client.js";
-import { PrismaNapcatEventDao } from "../../src/dao/impl/napcat-event.impl.dao.js";
+import { PrismaNapcatEventDao } from "../../src/napcat/dao/impl/napcat-event.impl.dao.js";
 
 describe("PrismaNapcatEventDao", () => {
   it("should persist event payload without rawMessage column", async () => {

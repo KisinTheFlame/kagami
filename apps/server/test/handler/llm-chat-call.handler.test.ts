@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LlmChatCallQueryService } from "../../src/service/llm-chat-call-query.service.js";
-import { LlmChatCallHandler } from "../../src/handler/llm-chat-call.handler.js";
+import type { LlmChatCallQueryService } from "../../src/ops/application/llm-chat-call-query.service.js";
+import { LlmChatCallHandler } from "../../src/ops/http/llm-chat-call.handler.js";
 
 describe("LlmChatCallHandler", () => {
   let app = Fastify({ logger: false });

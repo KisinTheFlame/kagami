@@ -1,4 +1,4 @@
-import type { ClaudeCodeAuthService } from "../../service/claude-code-auth.service.js";
+import type { ClaudeCodeAuthService } from "../../auth/application/claude-code-auth.service.js";
 
 export type ClaudeCodeAuth = {
   accessToken: string;

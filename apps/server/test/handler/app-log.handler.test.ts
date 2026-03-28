@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppLogQueryService } from "../../src/service/app-log-query.service.js";
-import { AppLogHandler } from "../../src/handler/app-log.handler.js";
+import type { AppLogQueryService } from "../../src/ops/application/app-log-query.service.js";
+import { AppLogHandler } from "../../src/ops/http/app-log.handler.js";
 
 describe("AppLogHandler", () => {
   let app = Fastify({ logger: false });

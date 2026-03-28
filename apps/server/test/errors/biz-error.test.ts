@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BizError } from "../../src/errors/biz-error.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 
 describe("BizError", () => {
   it("should preserve message, meta, and cause", () => {

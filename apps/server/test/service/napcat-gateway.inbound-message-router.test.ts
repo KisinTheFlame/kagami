@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NapcatGatewayInboundMessageRouter } from "../../src/service/napcat-gateway/inbound-message-router.js";
+import { NapcatGatewayInboundMessageRouter } from "../../src/napcat/service/napcat-gateway/inbound-message-router.js";
 import { initTestLogger } from "./napcat-gateway.test-helper.js";
 
 describe("NapcatGatewayInboundMessageRouter", () => {

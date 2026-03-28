@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { AgentLoop } from "../../src/agents/main-engine/agent-loop.js";
-import { DefaultAgentContext } from "../../src/context/default-agent-context.js";
+import { AgentLoop } from "../../src/agent/agents/main-engine/agent-loop.js";
+import { DefaultAgentContext } from "../../src/agent/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
-} from "../../src/context/context-message-factory.js";
-import type { AgentEventQueue } from "../../src/event/event.queue.js";
+} from "../../src/agent/context/context-message-factory.js";
+import type { AgentEventQueue } from "../../src/agent/event/event.queue.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
-import { ToolCatalog } from "../../src/tools/index.js";
-import type { ToolComponent, ToolSet } from "../../src/tools/index.js";
-import type { LoopRunRecorder } from "../../src/service/loop-run-recorder.service.js";
+import { ToolCatalog } from "../../src/agent/tools/index.js";
+import type { ToolComponent, ToolSet } from "../../src/agent/tools/index.js";
+import type { LoopRunRecorder } from "../../src/agent/service/loop-run-recorder.service.js";
 
 class StopLoopError extends Error {}
 

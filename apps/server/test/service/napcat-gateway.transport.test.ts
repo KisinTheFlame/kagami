@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NapcatGatewayTransport } from "../../src/service/napcat-gateway/transport.js";
+import { NapcatGatewayTransport } from "../../src/napcat/service/napcat-gateway/transport.js";
 import { FakeWebSocket, initTestLogger } from "./napcat-gateway.test-helper.js";
 
 describe("NapcatGatewayTransport", () => {

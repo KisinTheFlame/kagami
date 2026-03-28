@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
-import { BizError } from "../../errors/biz-error.js";
+import { BizError } from "../../common/errors/biz-error.js";
 import {
   attachLlmProviderFailureContext,
   toSerializableLlmNativeRecord,

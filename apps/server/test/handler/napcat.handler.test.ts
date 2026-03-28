@@ -1,9 +1,9 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { BizError } from "../../src/errors/biz-error.js";
-import { NapcatHandler } from "../../src/handler/napcat.handler.js";
-import type { NapcatGatewayService } from "../../src/service/napcat-gateway.service.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
+import { NapcatHandler } from "../../src/napcat/http/napcat.handler.js";
+import type { NapcatGatewayService } from "../../src/napcat/service/napcat-gateway.service.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 describe("NapcatHandler", () => {

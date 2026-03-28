@@ -2,10 +2,10 @@ import { getLoggerRuntime, initLoggerRuntime } from "./logger/runtime.js";
 import { closeDb, type Database } from "./db/client.js";
 import { AppLogger } from "./logger/logger.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
-import { buildServerRuntime } from "./bootstrap/server-runtime.js";
+import { buildServerRuntime } from "./app/server-runtime.js";
 import type { FastifyInstance } from "fastify";
-import type { NapcatGatewayService } from "./service/napcat-gateway.service.js";
-import type { AuthUsageCacheManager } from "./service/auth-usage-cache.impl.service.js";
+import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.service.js";
+import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 

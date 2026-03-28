@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NapcatEventPersistenceWriter } from "../../src/service/napcat-gateway/event-persistence-writer.js";
-import { DefaultNapcatGatewayService } from "../../src/service/napcat-gateway.impl.service.js";
+import { NapcatEventPersistenceWriter } from "../../src/napcat/service/napcat-gateway/event-persistence-writer.js";
+import { DefaultNapcatGatewayService } from "../../src/napcat/service/napcat-gateway.impl.service.js";
 import {
   FakeWebSocket,
   createAgentEventQueue,

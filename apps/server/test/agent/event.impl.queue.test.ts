@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryAgentEventQueue } from "../../src/event/event.impl.queue.js";
+import { InMemoryAgentEventQueue } from "../../src/agent/event/event.impl.queue.js";
 
 describe("InMemoryAgentEventQueue", () => {
   it("should support enqueue, drainAll and size with group message event", () => {

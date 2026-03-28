@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NapcatGroupMessageQueryService } from "../../src/service/napcat-group-message-query.service.js";
-import { NapcatGroupMessageHandler } from "../../src/handler/napcat-group-message.handler.js";
+import type { NapcatGroupMessageQueryService } from "../../src/ops/application/napcat-group-message-query.service.js";
+import { NapcatGroupMessageHandler } from "../../src/ops/http/napcat-group-message.handler.js";
 
 describe("NapcatGroupMessageHandler", () => {
   let app = Fastify({ logger: false });

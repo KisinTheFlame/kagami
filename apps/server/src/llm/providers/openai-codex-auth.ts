@@ -1,4 +1,4 @@
-import type { CodexAuthService } from "../../service/codex-auth.service.js";
+import type { CodexAuthService } from "../../auth/application/codex-auth.service.js";
 
 export type OpenAiCodexAuth = {
   accessToken: string;

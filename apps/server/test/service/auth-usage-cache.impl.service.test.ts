@@ -3,16 +3,16 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeCodeUsageLimitsResponse, CodexUsageLimitsResponse } from "@kagami/shared";
-import type { AuthUsageSnapshotDao } from "../../src/dao/auth-usage-snapshot.dao.js";
+import type { AuthUsageSnapshotDao } from "../../src/auth/dao/auth-usage-snapshot.dao.js";
 import {
   AuthUsageCacheManager,
   EMPTY_CLAUDE_CODE_USAGE_LIMITS,
   EMPTY_CODEX_USAGE_LIMITS,
   fetchClaudeCodeUsageLimitsFromApi,
   fetchCodexUsageLimitsViaAppServer,
-} from "../../src/service/auth-usage-cache.impl.service.js";
-import type { ClaudeCodeAuthService } from "../../src/service/claude-code-auth.service.js";
-import type { CodexAuthService } from "../../src/service/codex-auth.service.js";
+} from "../../src/auth/application/auth-usage-cache.impl.service.js";
+import type { ClaudeCodeAuthService } from "../../src/auth/application/claude-code-auth.service.js";
+import type { CodexAuthService } from "../../src/auth/application/codex-auth.service.js";
 
 const tempDirs: string[] = [];
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "../../src/db/client.js";
-import { PrismaLlmChatCallDao } from "../../src/dao/impl/llm-chat-call.impl.dao.js";
+import { PrismaLlmChatCallDao } from "../../src/llm/dao/impl/llm-chat-call.impl.dao.js";
 
 describe("PrismaLlmChatCallDao", () => {
   it("should persist only serializable response payload fields", async () => {

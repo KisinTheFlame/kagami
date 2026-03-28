@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EmbeddingCacheHandler } from "../../src/handler/embedding-cache.handler.js";
-import type { EmbeddingCacheQueryService } from "../../src/service/embedding-cache-query.service.js";
+import { EmbeddingCacheHandler } from "../../src/ops/http/embedding-cache.handler.js";
+import type { EmbeddingCacheQueryService } from "../../src/ops/application/embedding-cache-query.service.js";
 
 describe("EmbeddingCacheHandler", () => {
   let app = Fastify({ logger: false });
