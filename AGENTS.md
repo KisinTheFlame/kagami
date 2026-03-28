@@ -2,10 +2,11 @@
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含三个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含四个工作空间包：
 
 - `apps/server`：Fastify 后端服务（`@kagami/server`）
 - `apps/web`：React 前端管理台（`@kagami/web`）
+- `packages/agent-runtime`：通用 Agent Runtime 内核（`@kagami/agent-runtime`）
 - `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
 
 workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `apps/*` 与 `packages/*`。
@@ -49,6 +50,7 @@ pnpm app:deploy # build -> prisma migrate deploy -> PM2 reload/startOrReload -> 
 ```bash
 pnpm --filter @kagami/server <script>
 pnpm --filter @kagami/web <script>
+pnpm --filter @kagami/agent-runtime <script>
 pnpm --filter @kagami/shared <script>
 ```
 
@@ -57,6 +59,7 @@ pnpm --filter @kagami/shared <script>
 - 当前仓库没有统一的根目录 `pnpm dev` 脚本。
 - `apps/server` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
 - `apps/web` 当前提供 `build`、`typecheck` 脚本。
+- `packages/agent-runtime` 当前提供 `build`、`typecheck` 脚本。
 - `packages/shared` 当前提供 `build`、`typecheck` 脚本。
 - 因此前后端联调时，需要按实际情况分别启动或补充本地开发脚本，不要假设仓库已经内置一键 dev 流程。
 
@@ -131,6 +134,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 路径别名现状：
 
 - 后端 `apps/server/tsconfig.json` 为 `@kagami/shared` 和 `@kagami/shared/*` 配置了源码路径映射。
+- 后端 `apps/server/tsconfig.json` 也为 `@kagami/agent-runtime` 和 `@kagami/agent-runtime/*` 配置了源码路径映射。
 - 前端显式配置了 `@/* -> apps/web/src/*`。
 - 不要假设前端也单独声明了 `@kagami/shared` 的源码路径别名；它当前通过 workspace 依赖使用该包。
 
@@ -143,6 +147,13 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 - `packages/shared` 主要承载前后端共用的 Zod Schema、响应模型和工具函数。
 - 当前 `@kagami/shared` 入口未再导出 `z`；如果需要直接定义 Zod schema，按现状应从 `zod` 导入。
+
+### Agent Runtime 包约定
+
+- `packages/agent-runtime` 只承载通用 Agent Runtime 内核，不承载 Kagami 项目语义。
+- 允许放入该包的内容包括：`AgentRuntime`、`TaskAgentRuntime`、`Operation`、`Tool` 抽象、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等纯运行时能力。
+- 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、`LoopRunRecorder`、具体 capability 实现放入该包。
+- `apps/server` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
 
 ## 架构概览
 
@@ -159,7 +170,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `auth/`：OAuth、回调服务、secret store、usage cache 与 usage trend
 - `llm/`：LLM provider、chat client、embedding、playground、相关 DAO
 - `napcat/`：NapCat gateway、入站事件归一化、消息发送、NapCat 相关持久化与 HTTP 接口
-- `agent/`：主 agent loop、subagents、context、event queue、tools、RAG、agent message、loop run
+- `agent/`：Kagami 的 Agent 业务层，负责 RootAgent、capabilities、NapCat 事件适配、上下文压缩、RAG、observability 等
 - `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、loop run、NapCat history
 - `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动入口
 
@@ -179,6 +190,18 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 - 构造函数统一使用对象参数风格（`{ dep1, dep2 }`）。
 - 新代码优先放入所属模块内部，并优先从模块根入口或模块内分层路径导入；不要继续新增全局 `handler / service / dao / event / tools / rag` 风格目录。
+
+Agent 相关补充约定：
+
+- 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
+- `apps/server/src/agent` 当前按 `runtime / capabilities / observability` 分层组织：
+  - `runtime/`：仍留在 server 的 Kagami 定制运行时，如 `RootAgentRuntime`、事件队列、上下文渲染
+  - `capabilities/`：按能力聚合的实现，如 `web-search`、`messaging`、`context-summary`、`rag`、`vision`
+  - `observability/`：如 `loop-run`
+- `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
+- `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
+- `Tool` 的职责是上层调用入口，不承载能力本体；业务语义应放在 capability service、task-agent 或 operation 中。
+- `apps/server/src/agent/agents`、`apps/server/src/agent/tools/components`、`apps/server/src/agent/service`、`apps/server/src/agent/dao` 等旧路径当前主要用于兼容 re-export；除非在做兼容层清理，否则不要继续往这些目录添加新实现。
 
 后端当前对外接口大致分为：
 

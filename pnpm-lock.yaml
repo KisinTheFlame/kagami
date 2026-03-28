@@ -47,6 +47,9 @@ importers:
       '@google/genai':
         specifier: ^1.44.0
         version: 1.44.0
+      '@kagami/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -163,6 +166,16 @@ importers:
       vite:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@24.11.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/agent-runtime:
+    dependencies:
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/shared:
     dependencies:

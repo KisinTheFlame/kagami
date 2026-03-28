@@ -1,27 +1,13 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import {
-  AgentLoop,
-  MultiGroupAgentRuntimeManager,
-  createAgentSystemPrompt,
-} from "../agent/agents/main-engine/index.js";
-import { ContextSummaryPlannerService } from "../agent/agents/subagents/context-summarizer/index.js";
-import { VisionAgent } from "../agent/agents/subagents/vision/index.js";
-import {
-  FINALIZE_WEB_SEARCH_TOOL_NAME,
-  FinalizeWebSearchTool,
-  SEARCH_WEB_RAW_TOOL_NAME,
-  SearchWebRawTool,
-  WebSearchAgent,
-} from "../agent/agents/subagents/web-search/index.js";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
-import { DefaultAgentContext } from "../agent/context/default-agent-context.js";
+import { DefaultAgentContext } from "../agent/runtime/context/default-agent-context.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaEmbeddingCacheDao } from "../llm/dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
-import { PrismaLoopRunDao } from "../agent/dao/impl/loop-run.impl.dao.js";
+import { PrismaLoopRunDao } from "../agent/observability/loop-run/prisma-loop-run.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatGroupMessageChunkDao } from "../napcat/dao/impl/napcat-group-message-chunk.impl.dao.js";
@@ -50,34 +36,51 @@ import { initLoggerRuntime, withTraceContext } from "../logger/runtime.js";
 import { DbLogSink } from "../logger/sinks/db-sink.js";
 import { StdoutLogSink } from "../logger/sinks/stdout-sink.js";
 import { createAuthModule } from "../auth/index.js";
-import { InMemoryAgentEventQueue } from "../agent/event/event.impl.queue.js";
-import { GroupMessageChunkIndexer } from "../agent/rag/indexer.service.js";
-import { DefaultAgentMessageService } from "../agent/service/agent-message.impl.service.js";
+import { ToolCatalog } from "@kagami/agent-runtime";
+import { InMemoryAgentEventQueue } from "../agent/runtime/event/in-memory-agent-event-queue.js";
+import { MultiGroupRootAgentRuntimeManager } from "../agent/runtime/root-agent/multi-group-root-agent-runtime-manager.js";
+import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
+import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
+import { FinishTool, FINISH_TOOL_NAME } from "../agent/runtime/root-agent/tools/finish.tool.js";
+import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/indexer.service.js";
+import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
+import {
+  SendMessageTool,
+  SEND_MESSAGE_TOOL_NAME,
+} from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import { DefaultLoopRunQueryService } from "../ops/application/loop-run-query.impl.service.js";
-import { LoopRunRecorder } from "../agent/service/loop-run-recorder.service.js";
+import { LoopRunRecorder } from "../agent/observability/loop-run/loop-run-recorder.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
 import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
-import { TavilyWebSearchService } from "../agent/service/tavily-web-search.impl.service.js";
+import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import {
-  FINISH_TOOL_NAME,
-  FinishTool,
-  SEARCH_WEB_TOOL_NAME,
-  SEND_MESSAGE_TOOL_NAME,
+  SearchWebRawTool,
+  SEARCH_WEB_RAW_TOOL_NAME,
+} from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
+import {
+  FinalizeWebSearchTool,
+  FINALIZE_WEB_SEARCH_TOOL_NAME,
+} from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
+import { WebSearchTaskAgent } from "../agent/capabilities/web-search/task-agent/web-search-task-agent.js";
+import {
   SearchWebTool,
-  SendMessageTool,
-  SUMMARY_TOOL_NAME,
+  SEARCH_WEB_TOOL_NAME,
+} from "../agent/capabilities/web-search/tools/search-web.tool.js";
+import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
+import {
   SummaryTool,
-  ToolCatalog,
-} from "../agent/tools/index.js";
+  SUMMARY_TOOL_NAME,
+} from "../agent/capabilities/context-summary/tools/summary.tool.js";
+import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -92,7 +95,7 @@ export type ServerRuntime = {
   napcatGatewayService: NapcatGatewayService;
   callbackServers: Array<{ stop(): Promise<void> }>;
   authUsageCacheManager: AuthUsageCacheManager;
-  agentRuntimeManager: MultiGroupAgentRuntimeManager;
+  agentRuntimeManager: MultiGroupRootAgentRuntimeManager;
   port: number;
   listenGroupIds: string[];
   hasTavilyApiKey: boolean;
@@ -232,9 +235,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     }),
     new FinalizeWebSearchTool(),
   ]);
-  const webSearchAgent = new WebSearchAgent({
+  const webSearchTaskAgent = new WebSearchTaskAgent({
     llmClient,
-    searchTools: webSearchInternalToolCatalog.pick([
+    taskTools: webSearchInternalToolCatalog.pick([
       SEARCH_WEB_RAW_TOOL_NAME,
       FINALIZE_WEB_SEARCH_TOOL_NAME,
     ]),
@@ -245,7 +248,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGroupMessageChunkDao,
     groupMessageChunkIndexer,
   });
-  let agentRuntimeManager: MultiGroupAgentRuntimeManager | null = null;
+  let agentRuntimeManager: MultiGroupRootAgentRuntimeManager | null = null;
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
     configManager,
     enqueueGroupMessageEvent: event => {
@@ -270,7 +273,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     });
     const toolCatalog = new ToolCatalog([
       new SearchWebTool({
-        webSearchAgent,
+        webSearchTaskAgent,
       }),
       new SendMessageTool({
         agentMessageService,
@@ -283,19 +286,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       SEND_MESSAGE_TOOL_NAME,
       FINISH_TOOL_NAME,
     ]);
-    const summaryPlanner = new ContextSummaryPlannerService({
+    const contextSummaryOperation = new ContextSummaryOperation({
       llmClient,
       summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
     });
     const context = new DefaultAgentContext({
       systemPromptFactory: agentSystemPromptFactory,
     });
-    const agentLoop = new AgentLoop({
+    const rootAgentRuntime = new RootAgentRuntime({
       llmClient,
       context,
       eventQueue,
-      agentTools: agentVisibleTools,
-      summaryPlanner,
+      tools: agentVisibleTools,
+      contextSummaryOperation,
       summaryTools: [
         ...agentVisibleTools.definitions(),
         ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
@@ -306,15 +309,15 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     return {
       groupId,
       eventQueue,
-      agentLoop,
+      rootAgentRuntime,
       toolCatalog,
     };
   });
-  agentRuntimeManager = new MultiGroupAgentRuntimeManager({
-    runtimes: groupRuntimes.map(({ groupId, eventQueue, agentLoop }) => ({
+  agentRuntimeManager = new MultiGroupRootAgentRuntimeManager({
+    runtimes: groupRuntimes.map(({ groupId, eventQueue, rootAgentRuntime }) => ({
       groupId,
       eventQueue,
-      agentLoop,
+      rootAgentRuntime,
     })),
   });
   const llmPlaygroundService = new DefaultLlmPlaygroundService({

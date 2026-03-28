@@ -1,5 +1,5 @@
 import type { LoopRunDetailResponse, LoopRunListQuery, LoopRunListResponse } from "@kagami/shared";
-import type { LoopRunDao } from "../../agent/dao/loop-run.dao.js";
+import type { LoopRunDao } from "../../agent/observability/loop-run/loop-run.dao.js";
 import { BizError } from "../../common/errors/biz-error.js";
 import { mapLoopRunDetail, mapLoopRunList } from "../mappers/loop-run.mapper.js";
 import type { LoopRunQueryService } from "./loop-run-query.service.js";

@@ -8,6 +8,8 @@
     "strict": true,
     "noEmit": true,
     "paths": {
+      "@kagami/agent-runtime": ["./../../packages/agent-runtime/src/index.ts"],
+      "@kagami/agent-runtime/*": ["./../../packages/agent-runtime/src/*"],
       "@kagami/shared": ["./../../packages/shared/src/index.ts"],
       "@kagami/shared/*": ["./../../packages/shared/src/*"]
     }

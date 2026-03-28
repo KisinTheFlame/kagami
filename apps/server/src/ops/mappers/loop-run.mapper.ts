@@ -5,7 +5,10 @@ import type {
   LoopRunListResponse,
   LoopRunTimelineItem,
 } from "@kagami/shared";
-import type { LoopRunItem, LoopRunStepItem } from "../../agent/dao/loop-run.dao.js";
+import type {
+  LoopRunItem,
+  LoopRunStepItem,
+} from "../../agent/observability/loop-run/loop-run.dao.js";
 
 export function mapLoopRunDetail(item: LoopRunItem): LoopRunDetailResponse {
   const trigger = mapTriggerPayload(item);

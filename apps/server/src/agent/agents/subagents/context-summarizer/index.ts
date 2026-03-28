@@ -1,5 +1,6 @@
 export {
-  ContextSummaryPlannerService,
+  ContextSummaryOperation as ContextSummaryPlannerService,
   type ContextSummaryPlanner,
-} from "./context-summary-planner.service.js";
-export { createContextSummarizerSystemPrompt } from "./system-prompt.js";
+  type ContextSummaryInput,
+} from "../../../capabilities/context-summary/operations/context-summary.operation.js";
+export { createContextSummarizerSystemPrompt } from "../../../capabilities/context-summary/operations/system-prompt.js";
