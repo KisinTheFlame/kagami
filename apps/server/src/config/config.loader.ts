@@ -8,6 +8,7 @@ import { BizError } from "../common/errors/biz-error.js";
 import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 const DEFAULT_PORT = 20003;
+const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -45,6 +46,14 @@ const PositiveIntSchema = z.preprocess(value => {
 
   return value;
 }, z.number().int().positive());
+const NonNegativeIntSchema = z.preprocess(value => {
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? value : parsed;
+  }
+
+  return value;
+}, z.number().int().nonnegative());
 const StringLikeSchema = z.preprocess(value => {
   if (typeof value === "number") {
     return String(value);
@@ -83,6 +92,9 @@ const ConfigSchema = z.object({
       reconnectMs: PositiveIntSchema,
       requestTimeoutMs: PositiveIntSchema,
       listenGroupIds: z.array(StringLikeSchema).min(1),
+      startupContextRecentMessageCount: NonNegativeIntSchema.default(
+        DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT,
+      ),
     }),
     llm: z.object({
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),

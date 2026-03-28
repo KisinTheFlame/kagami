@@ -86,4 +86,54 @@ describe("MultiGroupAgentRuntimeManager", () => {
 
     await expect(manager.run()).rejects.toThrow("group-2");
   });
+
+  it("should hydrate startup events into the matching group runtime only", async () => {
+    const hydrateGroupOne = vi.fn().mockResolvedValue(undefined);
+    const hydrateGroupTwo = vi.fn().mockResolvedValue(undefined);
+    const manager = new MultiGroupAgentRuntimeManager({
+      runtimes: [
+        {
+          groupId: "group-1",
+          eventQueue: new InMemoryAgentEventQueue(),
+          agentLoop: {
+            run: vi.fn().mockResolvedValue(undefined),
+            hydrateStartupEvents: hydrateGroupOne,
+          } as never,
+        },
+        {
+          groupId: "group-2",
+          eventQueue: new InMemoryAgentEventQueue(),
+          agentLoop: {
+            run: vi.fn().mockResolvedValue(undefined),
+            hydrateStartupEvents: hydrateGroupTwo,
+          } as never,
+        },
+      ],
+    });
+
+    await manager.hydrateStartupEvents("group-2", [
+      {
+        type: "napcat_group_message",
+        data: {
+          groupId: "group-2",
+          userId: "10002",
+          nickname: "群友B",
+          rawMessage: "history",
+          messageSegments: [],
+          messageId: 2,
+          time: 1710000001,
+        },
+      },
+    ]);
+
+    expect(hydrateGroupOne).not.toHaveBeenCalled();
+    expect(hydrateGroupTwo).toHaveBeenCalledWith([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          groupId: "group-2",
+          rawMessage: "history",
+        }),
+      }),
+    ]);
+  });
 });

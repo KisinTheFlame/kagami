@@ -137,6 +137,15 @@ export class RootAgentRuntime {
     }
   }
 
+  public async hydrateStartupEvents(events: Event[]): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+
+    await this.context.appendEvents(events);
+    await this.compactContextIfNeeded();
+  }
+
   private async handleEvents(events: Event[]): Promise<void> {
     await this.context.appendEvents(events);
     await this.compactContextIfNeeded();

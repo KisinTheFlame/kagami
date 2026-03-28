@@ -271,6 +271,46 @@ describe("AgentLoop", () => {
     );
   });
 
+  it("should hydrate startup events into context without touching the live loop", async () => {
+    const { agentTools } = createAgentTools();
+    const chat = vi.fn();
+    const waitForEvent = vi.fn();
+    const drainAll = vi.fn();
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const loop = new AgentLoop({
+      llmClient: {
+        chat,
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(0),
+        drainAll,
+        size: vi.fn().mockReturnValue(0),
+        waitForEvent,
+      },
+      agentTools,
+    });
+
+    await loop.hydrateStartupEvents([createGroupEvent("startup history")]);
+
+    expect(chat).not.toHaveBeenCalled();
+    expect(waitForEvent).not.toHaveBeenCalled();
+    expect(drainAll).not.toHaveBeenCalled();
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nstartup history\n</qq_message>",
+        },
+      ],
+    });
+  });
+
   it("should not carry finish tool calls or responses into later chat context", async () => {
     const stopError = new StopLoopError("stop-loop");
     const now = vi
@@ -431,6 +471,65 @@ describe("AgentLoop", () => {
         usage: "agent",
       }),
     );
+  });
+
+  it("should compact hydrated startup events when they exceed the threshold", async () => {
+    const summaryPlanner = {
+      summarize: vi.fn().mockResolvedValue("启动期累计摘要"),
+    };
+    const { agentTools } = createAgentTools();
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const loop = new AgentLoop({
+      llmClient: {
+        chat: vi.fn(),
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(0),
+        drainAll: vi.fn().mockReturnValue([]),
+        size: vi.fn().mockReturnValue(0),
+        waitForEvent: vi.fn(),
+      },
+      agentTools,
+      summaryPlanner,
+      summaryTools: [],
+      contextCompactionThreshold: 1,
+    });
+
+    await loop.hydrateStartupEvents([
+      createGroupEvent("startup-1", {
+        messageId: 1001,
+        time: 1710000000,
+      }),
+      createGroupEvent("startup-2", {
+        messageId: 1002,
+        time: 1710000001,
+      }),
+    ]);
+
+    expect(summaryPlanner.summarize).toHaveBeenCalledWith({
+      messages: [
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nstartup-1\n</qq_message>",
+        },
+      ],
+      tools: [],
+    });
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createConversationSummaryMessage("启动期累计摘要"),
+        {
+          role: "user",
+          content: "<qq_message>\n测试昵称 (654321):\nstartup-2\n</qq_message>",
+        },
+      ],
+    });
   });
 
   it("should stop executing later tool calls after a finish_round signal", async () => {

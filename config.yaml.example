@@ -7,6 +7,7 @@ server:
     requestTimeoutMs: 10000
     listenGroupIds:
       - "123456"
+    startupContextRecentMessageCount: 40
   llm:
     timeoutMs: 45000
     codexAuth:

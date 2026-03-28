@@ -37,6 +37,20 @@ export class MultiGroupRootAgentRuntimeManager {
     return runtime.eventQueue.enqueue(event);
   }
 
+  public async hydrateStartupEvents(groupId: string, events: Event[]): Promise<void> {
+    const runtime = this.runtimesByGroupId.get(groupId);
+    if (!runtime) {
+      return;
+    }
+
+    const rootAgentRuntime = runtime.rootAgentRuntime ?? runtime.agentLoop;
+    if (!rootAgentRuntime) {
+      throw new Error(`Missing root agent runtime for group ${groupId}`);
+    }
+
+    await rootAgentRuntime.hydrateStartupEvents(events);
+  }
+
   public async run(): Promise<never> {
     const runPromises = [...this.runtimesByGroupId.values()].map(async runtime => {
       try {

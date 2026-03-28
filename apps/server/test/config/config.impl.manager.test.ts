@@ -33,6 +33,7 @@ server:
     requestTimeoutMs: 10000
     listenGroupIds:
       - "123456"
+    startupContextRecentMessageCount: 0
   llm:
     timeoutMs: 15000
     codexAuth:
@@ -95,6 +96,7 @@ server:
           reconnectMs: 3000,
           requestTimeoutMs: 10000,
           listenGroupIds: ["123456"],
+          startupContextRecentMessageCount: 0,
         },
         llm: {
           timeoutMs: 15000,
@@ -372,6 +374,255 @@ server:
       message: "配置值不合法",
       meta: {
         key: "server.napcat.listenGroupIds.0",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should default startup context recent message count to 40", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.napcat.startupContextRecentMessageCount).toBe(40);
+  });
+
+  it("should allow zero startup context recent message count to disable hydration", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+    startupContextRecentMessageCount: 0
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.napcat.startupContextRecentMessageCount).toBe(0);
+  });
+
+  it("should reject negative startup context recent message count", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+    startupContextRecentMessageCount: -1
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.napcat.startupContextRecentMessageCount",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should reject non-integer startup context recent message count", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+    startupContextRecentMessageCount: 1.5
+  llm:
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        models:
+          - deepseek-chat
+      openai:
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+`);
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.napcat.startupContextRecentMessageCount",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);

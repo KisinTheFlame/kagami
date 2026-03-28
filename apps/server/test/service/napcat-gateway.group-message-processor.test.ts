@@ -246,6 +246,41 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(eventQueue.enqueue).not.toHaveBeenCalled();
   });
 
+  it("should ignore realtime message_sent group events", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      imageMessageAnalyzer,
+    });
+
+    const result = await processor.handle({
+      post_type: "message_sent",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 123456,
+      raw_message: "hello",
+      message: [
+        {
+          type: "text",
+          data: {
+            text: "hello",
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(result.groupMessageEvent).toBeNull();
+    expect(eventQueue.enqueue).not.toHaveBeenCalled();
+  });
+
   it("should log publish failures without throwing", async () => {
     const eventQueue = createAgentEventQueue();
     eventQueue.enqueue.mockImplementation(() => {
@@ -603,6 +638,101 @@ describe("NapcatGroupMessageProcessor", () => {
       expectEnqueuedGroupMessage({
         rawMessage: "",
       }),
+    );
+  });
+
+  it("should log payload and skip reasons when malformed history messages are skipped", async () => {
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: vi.fn(),
+      imageMessageAnalyzer,
+    });
+
+    const historyPayload = {
+      group_id: "987654",
+      user_id: 123456,
+      message_id: 9988,
+      message: [],
+      sender: {
+        nickname: "测试昵称",
+      },
+    };
+
+    const result = await processor.normalizeHistoricalGroupMessages([historyPayload]);
+
+    expect(result).toEqual([]);
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            event: "napcat.gateway.history_message_skipped",
+            groupId: "987654",
+            messageId: 9988,
+            skipReasons: ["EMPTY_OR_INVALID_MESSAGE_SEGMENTS"],
+            payload: historyPayload,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("should keep self sent message_sent history messages in context payloads", async () => {
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: vi.fn(),
+      imageMessageAnalyzer,
+    });
+
+    const result = await processor.normalizeHistoricalGroupMessages([
+      {
+        post_type: "message_sent",
+        message_type: "group",
+        message_sent_type: "self",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 123456,
+        message_id: 9988,
+        time: 1710000000,
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "bot reply",
+            },
+          },
+        ],
+        sender: {
+          card: "Kagami",
+        },
+      },
+    ]);
+
+    expect(result).toEqual([
+      {
+        groupId: "987654",
+        userId: "123456",
+        nickname: "Kagami",
+        rawMessage: "bot reply",
+        messageSegments: [
+          {
+            type: "text",
+            data: {
+              text: "bot reply",
+            },
+          },
+        ],
+        messageId: 9988,
+        time: 1710000000,
+      },
+    ]);
+    expect(logs.some(log => log.metadata.event === "napcat.gateway.history_message_skipped")).toBe(
+      false,
     );
   });
 });

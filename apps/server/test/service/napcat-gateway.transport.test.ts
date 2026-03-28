@@ -25,9 +25,10 @@ describe("NapcatGatewayTransport", () => {
       },
     });
 
-    await transport.start();
+    const startPromise = transport.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const requestPromise = transport.request("send_group_msg", {
       group_id: "987654",
@@ -63,9 +64,10 @@ describe("NapcatGatewayTransport", () => {
       },
     });
 
-    await transport.start();
+    const startPromise = transport.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const requestPromise = transport.request("send_group_msg", {
       group_id: "987654",
@@ -106,9 +108,10 @@ describe("NapcatGatewayTransport", () => {
       },
     });
 
-    await transport.start();
+    const startPromise = transport.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const requestPromise = transport.request("send_group_msg", {
       group_id: "987654",
@@ -151,9 +154,10 @@ describe("NapcatGatewayTransport", () => {
       },
     });
 
-    await transport.start();
+    const startPromise = transport.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const requestPromise = transport.request("send_group_msg", {
       group_id: "987654",
@@ -187,14 +191,45 @@ describe("NapcatGatewayTransport", () => {
       },
     });
 
-    await transport.start();
+    const startPromise = transport.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
     socket.emitClose(1006, "closed");
 
     await transport.stop();
     await vi.advanceTimersByTimeAsync(3001);
 
     expect(sockets).toHaveLength(1);
+  });
+
+  it("should wait until websocket open before resolving start", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const transport = new NapcatGatewayTransport({
+      wsUrl: "ws://napcat:3001/",
+      reconnectMs: 3000,
+      requestTimeoutMs: 10000,
+      onMessage: vi.fn(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    let resolved = false;
+    const startPromise = transport.start().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    expect(resolved).toBe(false);
+
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    expect(resolved).toBe(true);
+    await transport.stop();
   });
 });

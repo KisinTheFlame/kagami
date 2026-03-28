@@ -40,6 +40,8 @@ type NapcatGroupMessageProcessorOptions = {
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
+const LIVE_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message"]);
+const HISTORICAL_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message", "message_sent"]);
 
 export class NapcatGroupMessageProcessor {
   private readonly listenGroupIds: Set<string>;
@@ -106,6 +108,7 @@ export class NapcatGroupMessageProcessor {
         const groupMessageData = this.toGroupMessageData(normalizedEvent, {
           requireListenedGroup: false,
           includeSelfMessages: true,
+          acceptedPostTypes: HISTORICAL_GROUP_MESSAGE_POST_TYPES,
         });
 
         if (!groupMessageData) {
@@ -113,6 +116,8 @@ export class NapcatGroupMessageProcessor {
             event: "napcat.gateway.history_message_skipped",
             groupId: toNullableId(messagePayload.group_id),
             messageId: toNullablePositiveInt(messagePayload.message_id),
+            skipReasons: explainSkippedHistoricalMessageReasons(normalizedEvent),
+            payload: messagePayload,
           });
           return null;
         }
@@ -184,6 +189,7 @@ export class NapcatGroupMessageProcessor {
     const groupMessageData = this.toGroupMessageData(event, {
       requireListenedGroup: true,
       includeSelfMessages: false,
+      acceptedPostTypes: LIVE_GROUP_MESSAGE_POST_TYPES,
     });
     if (!groupMessageData) {
       return null;
@@ -200,9 +206,10 @@ export class NapcatGroupMessageProcessor {
     options: {
       requireListenedGroup: boolean;
       includeSelfMessages: boolean;
+      acceptedPostTypes: ReadonlySet<string>;
     },
   ): NapcatGroupMessageData | null {
-    if (event.postType !== "message" || event.messageType !== "group") {
+    if (!options.acceptedPostTypes.has(event.postType) || event.messageType !== "group") {
       return null;
     }
 
@@ -487,4 +494,36 @@ function compareGroupMessageOrder(
   }
 
   return left.index - right.index;
+}
+
+function explainSkippedHistoricalMessageReasons(
+  event: NapcatGatewayNormalizedPostTypeEvent,
+): string[] {
+  const reasons: string[] = [];
+
+  if (!HISTORICAL_GROUP_MESSAGE_POST_TYPES.has(event.postType)) {
+    reasons.push("NOT_MESSAGE_POST_TYPE");
+  }
+
+  if (event.messageType !== "group") {
+    reasons.push("NOT_GROUP_MESSAGE");
+  }
+
+  if (!event.groupId) {
+    reasons.push("MISSING_GROUP_ID");
+  }
+
+  if (event.rawMessage === null) {
+    reasons.push("EMPTY_OR_INVALID_MESSAGE_SEGMENTS");
+  }
+
+  if (!event.userId) {
+    reasons.push("MISSING_USER_ID");
+  }
+
+  if (!event.nickname) {
+    reasons.push("MISSING_NICKNAME");
+  }
+
+  return reasons;
 }

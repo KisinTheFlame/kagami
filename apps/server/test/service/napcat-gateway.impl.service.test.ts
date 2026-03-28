@@ -61,9 +61,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
@@ -115,9 +116,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
@@ -181,9 +183,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     socket.emitMessage(
       JSON.stringify({
@@ -273,9 +276,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     socket.emitMessage(
       JSON.stringify({
@@ -313,9 +317,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const sendPromise = gateway.sendGroupMessage({
       groupId: "987654",
@@ -360,9 +365,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     socket.emitMessage(
       JSON.stringify({
@@ -472,9 +478,10 @@ describe("DefaultNapcatGatewayService", () => {
       },
     });
 
-    await gateway.start();
+    const startPromise = gateway.start();
     const socket = sockets[0];
     socket.emitOpen();
+    await startPromise;
 
     const historyPromise = gateway.getRecentGroupMessages({
       groupId: "987654",
@@ -499,6 +506,9 @@ describe("DefaultNapcatGatewayService", () => {
         data: {
           messages: [
             {
+              post_type: "message_sent",
+              message_type: "group",
+              message_sent_type: "self",
               group_id: "987654",
               user_id: 654321,
               self_id: 654321,

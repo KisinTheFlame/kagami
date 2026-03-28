@@ -34,6 +34,9 @@ export class NapcatGatewayTransport {
   private started = false;
   private socket: WebSocketLike | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private startPromise: Promise<void> | null = null;
+  private resolveStartPromise: (() => void) | null = null;
+  private rejectStartPromise: ((error: Error) => void) | null = null;
 
   public constructor({
     wsUrl,
@@ -51,24 +54,36 @@ export class NapcatGatewayTransport {
 
   public async start(): Promise<void> {
     if (this.started) {
+      if (this.socket?.readyState === WS_OPEN_READY_STATE) {
+        return;
+      }
+
+      if (this.startPromise) {
+        await this.startPromise;
+      }
       return;
     }
 
     this.started = true;
+    this.startPromise = new Promise<void>((resolve, reject) => {
+      this.resolveStartPromise = resolve;
+      this.rejectStartPromise = reject;
+    });
     this.connect();
+    await this.startPromise;
   }
 
   public async stop(): Promise<void> {
     this.started = false;
     this.clearReconnectTimer();
-    this.rejectAllPending(
-      new BizError({
-        message: "NapCat 网关已停止",
-        meta: {
-          reason: "GATEWAY_STOPPED",
-        },
-      }),
-    );
+    const stoppedError = new BizError({
+      message: "NapCat 网关已停止",
+      meta: {
+        reason: "GATEWAY_STOPPED",
+      },
+    });
+    this.rejectAllPending(stoppedError);
+    this.rejectStartWaiting(stoppedError);
 
     const activeSocket = this.socket;
     this.socket = null;
@@ -201,6 +216,7 @@ export class NapcatGatewayTransport {
     }
 
     this.clearReconnectTimer();
+    this.resolveStartWaiting();
     logger.info("NapCat websocket connected", {
       event: "napcat.gateway.connected",
       wsUrl: this.wsUrl,
@@ -281,5 +297,19 @@ export class NapcatGatewayTransport {
       pendingRequest.reject(error);
       this.pendingRequests.delete(echo);
     }
+  }
+
+  private resolveStartWaiting(): void {
+    this.resolveStartPromise?.();
+    this.startPromise = null;
+    this.resolveStartPromise = null;
+    this.rejectStartPromise = null;
+  }
+
+  private rejectStartWaiting(error: Error): void {
+    this.rejectStartPromise?.(error);
+    this.startPromise = null;
+    this.resolveStartPromise = null;
+    this.rejectStartPromise = null;
   }
 }

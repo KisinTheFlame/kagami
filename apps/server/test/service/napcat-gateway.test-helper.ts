@@ -111,6 +111,7 @@ export function createConfigManager(): ConfigManager {
         reconnectMs: 3000,
         requestTimeoutMs: 10000,
         listenGroupIds: ["987654"],
+        startupContextRecentMessageCount: 40,
       },
       llm: {
         timeoutMs: 45_000,

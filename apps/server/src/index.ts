@@ -3,6 +3,7 @@ import { closeDb, type Database } from "./db/client.js";
 import { AppLogger } from "./logger/logger.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { buildServerRuntime } from "./app/server-runtime.js";
+import { hydrateStartupContextFromRecentMessages } from "./app/startup-context-hydrator.js";
 import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.service.js";
 import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
@@ -116,6 +117,12 @@ try {
   port = runtime.port;
 
   await runtime.napcatGatewayService.start();
+  await hydrateStartupContextFromRecentMessages({
+    listenGroupIds: runtime.listenGroupIds,
+    startupContextRecentMessageCount: runtime.startupContextRecentMessageCount,
+    napcatGatewayService: runtime.napcatGatewayService,
+    agentRuntimeManager: runtime.agentRuntimeManager,
+  });
   await runtime.app.listen({ host: "0.0.0.0", port: runtime.port });
   isServerStarted = true;
 

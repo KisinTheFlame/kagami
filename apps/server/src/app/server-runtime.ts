@@ -94,6 +94,7 @@ export type ServerRuntime = {
   agentRuntimeManager: MultiGroupRootAgentRuntimeManager;
   port: number;
   listenGroupIds: string[];
+  startupContextRecentMessageCount: number;
   hasTavilyApiKey: boolean;
   listAvailableAgentProviders: () => Promise<
     Awaited<ReturnType<ReturnType<typeof createLlmClient>["listAvailableProviders"]>>
@@ -339,6 +340,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     agentRuntimeManager,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
+    startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
