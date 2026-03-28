@@ -6,7 +6,6 @@ import {
   type LucideIcon,
   KeyRound,
   MessagesSquare,
-  Route,
   Webhook,
 } from "lucide-react";
 
@@ -25,14 +24,9 @@ export const navItems: readonly NavItem[] = [
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "群聊消息", icon: MessagesSquare },
-  { to: "/loop-runs", label: "Loop 链路回放", icon: Route },
 ];
 
 export function getPageTitle(pathname: string): string {
-  if (pathname === "/loop-runs" || pathname.startsWith("/loop-runs/")) {
-    return "Loop 详情";
-  }
-
   const matchedItem = navItems.find(
     ({ to, matchPrefixes }) =>
       pathname === to ||

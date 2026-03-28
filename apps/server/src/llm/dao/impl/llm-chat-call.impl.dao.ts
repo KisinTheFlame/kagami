@@ -40,7 +40,6 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
     return rows.map(item => ({
       id: item.id,
       requestId: item.requestId,
-      loopRunId: item.loopRunId,
       seq: item.seq,
       provider: item.provider,
       model: item.model,
@@ -65,7 +64,6 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
-          ...(input.loopRunId ? { loopRunId: input.loopRunId } : {}),
           seq: input.seq,
           provider: input.provider,
           model: input.model,
@@ -97,7 +95,6 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       await this.database.llmChatCall.create({
         data: {
           requestId: input.requestId,
-          ...(input.loopRunId ? { loopRunId: input.loopRunId } : {}),
           seq: input.seq,
           provider: input.provider,
           model: input.model,

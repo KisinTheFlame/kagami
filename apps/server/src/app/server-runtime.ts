@@ -7,7 +7,6 @@ import { DefaultAgentContext } from "../agent/runtime/context/default-agent-cont
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaEmbeddingCacheDao } from "../llm/dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
-import { PrismaLoopRunDao } from "../agent/observability/loop-run/prisma-loop-run.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatGroupMessageChunkDao } from "../napcat/dao/impl/napcat-group-message-chunk.impl.dao.js";
@@ -19,7 +18,6 @@ import { EmbeddingCacheHandler } from "../ops/http/embedding-cache.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
-import { LoopRunHandler } from "../ops/http/loop-run.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
 import { NapcatGroupMessageHandler } from "../ops/http/napcat-group-message.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
@@ -53,8 +51,6 @@ import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl
 import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
-import { DefaultLoopRunQueryService } from "../ops/application/loop-run-query.impl.service.js";
-import { LoopRunRecorder } from "../agent/observability/loop-run/loop-run-recorder.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
 import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
@@ -125,7 +121,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     configManager,
   });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
-  const loopRunDao = new PrismaLoopRunDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database });
@@ -139,7 +134,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     embeddingCacheDao,
   });
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
-  const loopRunQueryService = new DefaultLoopRunQueryService({ loopRunDao });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
     napcatEventDao,
   });
@@ -261,10 +255,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     persistenceWriter: napcatPersistenceWriter,
     imageMessageAnalyzer,
   });
-
-  const loopRunRecorder = new LoopRunRecorder({
-    loopRunDao,
-  });
   const groupRuntimes = config.server.napcat.listenGroupIds.map(groupId => {
     const eventQueue = new InMemoryAgentEventQueue();
     const agentMessageService = new DefaultAgentMessageService({
@@ -303,7 +293,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         ...agentVisibleTools.definitions(),
         ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
       ],
-      loopRunRecorder,
     });
 
     return {
@@ -333,7 +322,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       authModule.authHandler,
       new LlmHandler({ llmPlaygroundService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
-      new LoopRunHandler({ loopRunQueryService }),
       new EmbeddingCacheHandler({ embeddingCacheQueryService }),
       new AppLogHandler({ appLogQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),

@@ -9,7 +9,6 @@ import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { Tool } from "../../../llm/types.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
-import type { LoopRunRecorder } from "../../observability/loop-run/loop-run-recorder.service.js";
 
 type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
@@ -31,7 +30,6 @@ type RootAgentRuntimeDeps = {
   summaryTools?: Tool[];
   contextCompactionThreshold?: number;
   now?: () => Date;
-  loopRunRecorder?: LoopRunRecorder;
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
@@ -45,7 +43,6 @@ export class RootAgentRuntime {
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
   private readonly now: () => Date;
-  private readonly loopRunRecorder?: LoopRunRecorder;
   private lastWakeReminderAt: Date | null = null;
 
   public constructor({
@@ -59,7 +56,6 @@ export class RootAgentRuntime {
     summaryTools,
     contextCompactionThreshold,
     now,
-    loopRunRecorder,
   }: RootAgentRuntimeDeps) {
     this.llmClient = llmClient;
     this.context = context;
@@ -70,7 +66,6 @@ export class RootAgentRuntime {
     this.contextCompactionThreshold =
       contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
     this.now = now ?? (() => new Date());
-    this.loopRunRecorder = loopRunRecorder;
   }
 
   public async run(): Promise<void> {
@@ -83,66 +78,29 @@ export class RootAgentRuntime {
 
       let hasActiveRound = false;
       let currentGroupId: string | null = null;
-      let currentLoopRunId: string | null = null;
-      let currentLoopStartedAt: Date | null = null;
-      let currentStepSeq = 1;
 
       while (true) {
         const events = this.eventQueue.drainAll();
         if (events.length > 0) {
           hasActiveRound = true;
           currentGroupId = extractCurrentGroupId(events, currentGroupId);
-          if (!currentLoopRunId) {
-            const triggerEvent = extractLatestGroupMessageEvent(events);
-            if (triggerEvent && this.loopRunRecorder) {
-              currentLoopStartedAt = this.now();
-              currentLoopRunId = await this.loopRunRecorder.startRun({
-                event: triggerEvent,
-                startedAt: currentLoopStartedAt,
-              });
-            }
-          }
           await this.handleEvents(events);
         } else if (!hasActiveRound) {
           break;
         }
 
         const snapshot = await this.context.getSnapshot();
-        let completion;
-        try {
-          completion = await this.llmClient.chat(
-            {
-              system: snapshot.systemPrompt,
-              messages: snapshot.messages,
-              tools: this.tools.definitions(),
-              toolChoice: "required",
-            },
-            {
-              usage: "agent",
-              loopRunId: currentLoopRunId ?? undefined,
-              onSettled: async observation => {
-                if (!currentLoopRunId || !this.loopRunRecorder) {
-                  return;
-                }
-
-                await this.loopRunRecorder.recordLlmCall({
-                  loopRunId: currentLoopRunId,
-                  seq: currentStepSeq,
-                  observation,
-                });
-                currentStepSeq += 1;
-              },
-            },
-          );
-        } catch (error) {
-          await this.failCurrentLoopRun({
-            loopRunId: currentLoopRunId,
-            loopStartedAt: currentLoopStartedAt,
-            stepSeq: currentStepSeq,
-            error,
-          });
-          throw error;
-        }
+        const completion = await this.llmClient.chat(
+          {
+            system: snapshot.systemPrompt,
+            messages: snapshot.messages,
+            tools: this.tools.definitions(),
+            toolChoice: "required",
+          },
+          {
+            usage: "agent",
+          },
+        );
         const assistant = completion.message;
         const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
         if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
@@ -152,35 +110,11 @@ export class RootAgentRuntime {
 
         let shouldFinishRound = false;
         for (const toolCall of assistant.toolCalls) {
-          const toolStartedAt = this.now();
-          if (currentLoopRunId && this.loopRunRecorder) {
-            await this.loopRunRecorder.recordToolCall({
-              loopRunId: currentLoopRunId,
-              seq: currentStepSeq,
-              toolName: toolCall.name,
-              toolCallId: toolCall.id,
-              argumentsValue: toolCall.arguments,
-              startedAt: toolStartedAt,
-            });
-            currentStepSeq += 1;
-          }
           const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
             groupId: currentGroupId ?? undefined,
             systemPrompt: snapshot.systemPrompt,
             messages: snapshot.messages,
           });
-          if (currentLoopRunId && this.loopRunRecorder) {
-            await this.loopRunRecorder.recordToolResult({
-              loopRunId: currentLoopRunId,
-              seq: currentStepSeq,
-              toolName: toolCall.name,
-              toolCallId: toolCall.id,
-              result: toolResult,
-              startedAt: toolStartedAt,
-              finishedAt: this.now(),
-            });
-            currentStepSeq += 1;
-          }
           if (toolResult.signal === "finish_round") {
             shouldFinishRound = true;
           }
@@ -197,15 +131,6 @@ export class RootAgentRuntime {
         }
 
         if (shouldFinishRound && this.eventQueue.size() === 0) {
-          await this.finishCurrentLoopRun({
-            loopRunId: currentLoopRunId,
-            loopStartedAt: currentLoopStartedAt,
-            stepSeq: currentStepSeq,
-            outcome: {
-              reason: "finish_round",
-              groupId: currentGroupId,
-            },
-          });
           break;
         }
       }
@@ -233,6 +158,7 @@ export class RootAgentRuntime {
 
     return await this.tools.execute(toolName, argumentsValue, toolContext);
   }
+
   private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
     if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {
       return;
@@ -276,46 +202,6 @@ export class RootAgentRuntime {
       createConversationSummaryMessage(summary),
       ...snapshot.messages.slice(splitIndex),
     ]);
-  }
-
-  private async finishCurrentLoopRun(input: {
-    loopRunId: string | null;
-    loopStartedAt: Date | null;
-    stepSeq: number;
-    outcome: Record<string, unknown>;
-  }): Promise<void> {
-    if (!input.loopRunId || !input.loopStartedAt || !this.loopRunRecorder) {
-      return;
-    }
-
-    await this.loopRunRecorder.finishRun({
-      loopRunId: input.loopRunId,
-      status: "success",
-      startedAt: input.loopStartedAt,
-      finishedAt: this.now(),
-      outcome: input.outcome,
-      seq: input.stepSeq,
-    });
-  }
-
-  private async failCurrentLoopRun(input: {
-    loopRunId: string | null;
-    loopStartedAt: Date | null;
-    stepSeq: number;
-    error: unknown;
-  }): Promise<void> {
-    if (!input.loopRunId || !input.loopStartedAt || !this.loopRunRecorder) {
-      return;
-    }
-
-    await this.loopRunRecorder.finishRun({
-      loopRunId: input.loopRunId,
-      status: "failed",
-      startedAt: input.loopStartedAt,
-      finishedAt: this.now(),
-      outcome: serializeUnknownError(input.error),
-      seq: input.stepSeq,
-    });
   }
 }
 
@@ -371,32 +257,4 @@ function extractCurrentGroupId(events: Event[], fallback: string | null): string
   }
 
   return fallback;
-}
-
-function extractLatestGroupMessageEvent(events: Event[]): Event | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event.type === "napcat_group_message") {
-      return event;
-    }
-  }
-
-  return null;
-}
-
-function serializeUnknownError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      code:
-        typeof (error as Error & { code?: unknown }).code === "string"
-          ? (error as Error & { code?: string }).code
-          : undefined,
-    };
-  }
-
-  return {
-    message: typeof error === "string" ? error : "Unknown error",
-  };
 }

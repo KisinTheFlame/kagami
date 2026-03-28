@@ -12,7 +12,6 @@ datasource db {
 model LlmChatCall {
   id              Int       @id @default(autoincrement())
   requestId       String    @map("request_id")
-  loopRunId       String?   @map("loop_run_id")
   seq             Int       @default(1)
   provider        String
   model           String
@@ -28,48 +27,9 @@ model LlmChatCall {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@unique([requestId, seq], map: "llm_chat_call_request_id_seq_uq")
-  @@index([loopRunId], map: "llm_chat_call_loop_run_id_idx")
   @@index([provider, model], map: "llm_chat_call_provider_model_idx")
   @@index([createdAt], map: "llm_chat_call_created_at_idx")
   @@map("llm_chat_call")
-}
-
-model LoopRun {
-  id               String        @id
-  groupId          String        @map("group_id")
-  triggerMessageId Int?          @map("trigger_message_id")
-  status           String
-  triggerPayload   Json          @map("trigger_payload") @db.JsonB
-  startedAt        DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
-  finishedAt       DateTime?     @map("finished_at") @db.Timestamptz(6)
-  durationMs       Int?          @map("duration_ms")
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  steps            LoopRunStep[]
-
-  @@index([groupId, createdAt], map: "loop_run_group_id_created_at_idx")
-  @@index([createdAt], map: "loop_run_created_at_idx")
-  @@map("loop_run")
-}
-
-model LoopRunStep {
-  id         Int      @id @default(autoincrement())
-  loopRunId  String   @map("loop_run_id")
-  seq        Int
-  type       String
-  title      String
-  status     String
-  payload    Json     @db.JsonB
-  startedAt  DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
-  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
-  durationMs Int?     @map("duration_ms")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  loopRun    LoopRun  @relation(fields: [loopRunId], references: [id], onDelete: Cascade)
-
-  @@unique([loopRunId, seq], map: "loop_run_step_loop_run_id_seq_uq")
-  @@index([loopRunId, createdAt], map: "loop_run_step_loop_run_id_created_at_idx")
-  @@map("loop_run_step")
 }
 
 model EmbeddingCache {

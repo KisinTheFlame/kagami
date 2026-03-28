@@ -110,7 +110,6 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `/llm/*`
 - `/codex-auth/*`
 - `/claude-code-auth/*`
-- `/loop-run/*`
 - Napcat 相关历史与事件接口
 - App Log、Embedding Cache、LLM 调用历史等后台查询接口
 
@@ -125,8 +124,6 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`
-- `/loop-runs`
-- `/loop-runs/:id`
 
 补充说明：
 

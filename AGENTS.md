@@ -154,7 +154,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 - `packages/agent-runtime` 只承载通用 Agent Runtime 内核，不承载 Kagami 项目语义。
 - 允许放入该包的内容包括：`AgentRuntime`、`TaskAgentRuntime`、`Operation`、`Tool` 抽象、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等纯运行时能力。
-- 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、`LoopRunRecorder`、具体 capability 实现放入该包。
+- 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 实现放入该包。
 - `apps/server` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
 
 ## 架构概览
@@ -172,8 +172,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `auth/`：OAuth、回调服务、secret store、usage cache 与 usage trend
 - `llm/`：LLM provider、chat client、embedding、playground、相关 DAO
 - `napcat/`：NapCat gateway、入站事件归一化、消息发送、NapCat 相关持久化与 HTTP 接口
-- `agent/`：Kagami 的 Agent 业务层，负责 RootAgent、capabilities、NapCat 事件适配、上下文压缩、RAG、observability 等
-- `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、loop run、NapCat history
+- `agent/`：Kagami 的 Agent 业务层，负责 RootAgent、capabilities、NapCat 事件适配、上下文压缩、RAG 等
+- `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、NapCat history
 - `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动入口
 
 模块内优先按垂直分层组织，常见层次包括：
@@ -196,10 +196,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 Agent 相关补充约定：
 
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
-- `apps/server/src/agent` 当前按 `runtime / capabilities / observability` 分层组织：
+- `apps/server/src/agent` 当前按 `runtime / capabilities` 分层组织：
   - `runtime/`：仍留在 server 的 Kagami 定制运行时，如 `RootAgentRuntime`、事件队列、上下文渲染
   - `capabilities/`：按能力聚合的实现，如 `web-search`、`messaging`、`context-summary`、`rag`、`vision`
-  - `observability/`：如 `loop-run`
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
 - `Tool` 的职责是上层调用入口，不承载能力本体；业务语义应放在 capability service、task-agent 或 operation 中。
@@ -210,7 +209,6 @@ Agent 相关补充约定：
 - 健康检查：`/health`
 - LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
 - OAuth 与配额：`/codex-auth/*`、`/claude-code-auth/*`
-- Loop Run：`/loop-run/query`、`/loop-run/:id`
 - Napcat 相关历史与事件查询
 - App Log、Embedding Cache、LLM 调用历史等后台查询接口
 
@@ -225,7 +223,6 @@ Agent 相关补充约定：
 - `/app-log-history`：应用日志历史
 - `/napcat-event-history`：Napcat 事件历史
 - `/napcat-group-message-history`：群消息历史
-- `/loop-runs` 与 `/loop-runs/:id`：Loop 链路列表与详情
 
 补充说明：
 

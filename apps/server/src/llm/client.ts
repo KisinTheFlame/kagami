@@ -50,7 +50,6 @@ type CreateLlmClientOptions = {
 export type LlmChatOptions = {
   usage: LlmUsageId;
   recordCall?: boolean;
-  loopRunId?: string;
   onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 };
 
@@ -58,7 +57,6 @@ export type LlmChatDirectOptions = {
   providerId: LlmProviderId;
   model: string;
   recordCall?: boolean;
-  loopRunId?: string;
   onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 };
 
@@ -68,7 +66,6 @@ export type LlmListAvailableProvidersOptions = {
 
 export type LlmChatObservation = {
   requestId: string;
-  loopRunId: string | null;
   provider: LlmProviderId;
   model: string;
   request: Record<string, unknown>;
@@ -115,7 +112,6 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               requestId,
               seq: (seq += 1),
               recordCall,
-              loopRunId: chatOptions?.loopRunId,
               onSettled: chatOptions?.onSettled,
             });
           } catch (error) {
@@ -146,7 +142,6 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
         requestId: randomUUID(),
         seq: 1,
         recordCall: chatOptions?.recordCall ?? true,
-        loopRunId: chatOptions?.loopRunId,
         onSettled: chatOptions?.onSettled,
       });
     },
@@ -162,7 +157,6 @@ async function executeChatAttempt({
   requestId,
   seq,
   recordCall,
-  loopRunId,
   onSettled,
 }: {
   llmChatCallDao: LlmChatCallDao;
@@ -173,7 +167,6 @@ async function executeChatAttempt({
   requestId: string;
   seq: number;
   recordCall: boolean;
-  loopRunId?: string;
   onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
 }): Promise<LlmChatResponsePayload> {
   requireConfiguredModel(providerConfigs, attempt.provider, attempt.model);
@@ -211,7 +204,6 @@ async function executeChatAttempt({
             actualModel: response.model,
           }),
           requestId,
-          loopRunId,
           seq,
           latencyMs,
           request: toRecordableChatRequest(requestWithModel),
@@ -225,7 +217,6 @@ async function executeChatAttempt({
     if (onSettled) {
       await onSettled({
         requestId,
-        loopRunId: loopRunId ?? null,
         provider: provider.id,
         model: response.model,
         request: toRecordableChatRequest(requestWithModel),
@@ -261,7 +252,6 @@ async function executeChatAttempt({
                   actualModel,
                 }),
           requestId,
-          loopRunId,
           seq,
           latencyMs,
           request: toRecordableChatRequest(requestWithModel),
@@ -279,7 +269,6 @@ async function executeChatAttempt({
     if (onSettled) {
       await onSettled({
         requestId,
-        loopRunId: loopRunId ?? null,
         provider: attempt.provider,
         model: attempt.model,
         request: toRecordableChatRequest(requestWithModel),
