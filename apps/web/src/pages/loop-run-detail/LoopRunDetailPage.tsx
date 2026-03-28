@@ -1,4 +1,7 @@
-import type { LoopRunDetailResponse, LoopRunTimelineItem } from "@kagami/shared";
+import {
+  type LoopRunDetailResponse,
+  type LoopRunTimelineItem,
+} from "@kagami/shared/schemas/loop-run";
 import {
   Activity,
   ArrowLeft,

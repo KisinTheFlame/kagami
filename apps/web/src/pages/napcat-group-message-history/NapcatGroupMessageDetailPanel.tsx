@@ -1,4 +1,4 @@
-import type { NapcatGroupMessageItem } from "@kagami/shared";
+import { type NapcatGroupMessageItem } from "@kagami/shared/schemas/napcat-group-message";
 import { safeStringify } from "./message-render";
 
 type NapcatGroupMessageDetailPanelProps = {

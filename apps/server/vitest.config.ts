@@ -7,7 +7,6 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "@kagami/shared": path.resolve(rootDir, "../../packages/shared/src/index.ts"),
       "@kagami/shared/": path.resolve(rootDir, "../../packages/shared/src/"),
     },
   },

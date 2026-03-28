@@ -2,7 +2,7 @@ import {
   type LlmChatCallListQuery,
   type LlmChatCallListResponse,
   LlmChatCallListResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/llm-chat";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

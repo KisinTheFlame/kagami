@@ -1,18 +1,17 @@
+import { z } from "zod";
 import {
   AuthLoginUrlResponseSchema,
   AuthRefreshResponseSchema,
   AuthStatusResponseSchema,
   AuthStatusSchema,
-  ClaudeCodeExtraUsageSchema,
-  ClaudeCodeUsageLimitWindowSchema,
+  ClaudeCodeExtraUsageSchema as BaseClaudeCodeExtraUsageSchema,
+  ClaudeCodeUsageLimitWindowSchema as BaseClaudeCodeUsageLimitWindowSchema,
   ClaudeCodeUsageLimitsSchema,
   type AuthLoginUrlResponse,
   type AuthRefreshResponse,
   type AuthStatus,
   type AuthStatusResponse,
-  type ClaudeCodeExtraUsage,
-  type ClaudeCodeUsageLimitWindow,
-  type ClaudeCodeUsageLimits,
+  type ClaudeCodeUsageLimits as BaseClaudeCodeUsageLimits,
 } from "./auth.js";
 
 export const ClaudeCodeAuthStatusSchema = AuthStatusSchema;
@@ -43,14 +42,13 @@ export const ClaudeCodeAuthRefreshResponseSchema = AuthRefreshResponseSchema;
 
 export type ClaudeCodeAuthRefreshResponse = AuthRefreshResponse;
 
-export { ClaudeCodeUsageLimitWindowSchema };
+export const ClaudeCodeUsageLimitWindowSchema = BaseClaudeCodeUsageLimitWindowSchema;
+export type ClaudeCodeUsageLimitWindow = z.infer<typeof ClaudeCodeUsageLimitWindowSchema>;
 
-export type { ClaudeCodeUsageLimitWindow };
-
-export { ClaudeCodeExtraUsageSchema };
-
-export type { ClaudeCodeExtraUsage };
+export const ClaudeCodeExtraUsageSchema = BaseClaudeCodeExtraUsageSchema;
+export type ClaudeCodeExtraUsage = z.infer<typeof ClaudeCodeExtraUsageSchema>;
 
 export const ClaudeCodeUsageLimitsResponseSchema = ClaudeCodeUsageLimitsSchema;
 
+export type ClaudeCodeUsageLimits = BaseClaudeCodeUsageLimits;
 export type ClaudeCodeUsageLimitsResponse = ClaudeCodeUsageLimits;

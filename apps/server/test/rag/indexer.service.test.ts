@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GroupMessageChunkIndexer } from "../../src/agent/rag/indexer.service.js";
+import { GroupMessageChunkIndexer } from "../../src/agent/capabilities/rag/application/indexer.service.js";
 import type { EmbeddingClient } from "../../src/llm/embedding/client.js";
 import type { NapcatGroupMessageChunkDao } from "../../src/napcat/dao/napcat-group-message-chunk.dao.js";
 

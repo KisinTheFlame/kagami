@@ -2,7 +2,8 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClaudeCodeUsageLimitsResponse, CodexUsageLimitsResponse } from "@kagami/shared";
+import { type ClaudeCodeUsageLimitsResponse } from "@kagami/shared/schemas/claude-code-auth";
+import { type CodexUsageLimitsResponse } from "@kagami/shared/schemas/codex-auth";
 import type { AuthUsageSnapshotDao } from "../../src/auth/dao/auth-usage-snapshot.dao.js";
 import {
   AuthUsageCacheManager,

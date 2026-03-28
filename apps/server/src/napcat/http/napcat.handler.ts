@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   NapcatSendGroupMessageRequestSchema,
   NapcatSendGroupMessageResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/napcat-message";
 import type { NapcatGatewayService } from "../service/napcat-gateway.service.js";
 import { registerCommandRoute } from "../../common/http/route.helper.js";
 

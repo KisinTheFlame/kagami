@@ -4,7 +4,7 @@ import {
   type LlmProviderOption,
   type PlaygroundContentPart,
   type PlaygroundMessage,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/llm-chat";
 import type {
   ParsedLlmChatRequestPayload,
   ParsedLlmRequestMessage,

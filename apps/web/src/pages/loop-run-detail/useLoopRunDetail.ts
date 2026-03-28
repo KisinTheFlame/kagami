@@ -1,4 +1,4 @@
-import { LoopRunDetailResponseSchema } from "@kagami/shared";
+import { LoopRunDetailResponseSchema } from "@kagami/shared/schemas/loop-run";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 

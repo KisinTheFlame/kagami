@@ -5,10 +5,12 @@ import {
   AuthRefreshResponseSchema,
   AuthStatusResponseSchema,
   AuthUsageLimitsResponseSchema,
+} from "@kagami/shared/schemas/auth";
+import {
   AuthUsageTrendQuerySchema,
   AuthUsageTrendResponseSchema,
-} from "@kagami/shared";
-import type { AuthProvider } from "@kagami/shared";
+} from "@kagami/shared/schemas/auth-usage-trend";
+import { type AuthProvider } from "@kagami/shared/schemas/auth";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AuthUsageTrendQueryService } from "../application/auth-usage-trend-query.service.js";

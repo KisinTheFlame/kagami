@@ -1,4 +1,7 @@
-import { type EmbeddingCacheItem, type EmbeddingTaskType } from "@kagami/shared";
+import {
+  type EmbeddingCacheItem,
+  type EmbeddingTaskType,
+} from "@kagami/shared/schemas/embedding-cache";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Button } from "@/components/ui/button";

@@ -2,7 +2,7 @@ import {
   LoopRunDetailResponseSchema,
   LoopRunListQuerySchema,
   LoopRunListResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/loop-run";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { LoopRunQueryService } from "../application/loop-run-query.service.js";

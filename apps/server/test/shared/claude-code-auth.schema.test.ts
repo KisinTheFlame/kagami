@@ -3,7 +3,7 @@ import {
   ClaudeCodeAuthRefreshResponseSchema,
   ClaudeCodeAuthStatusResponseSchema,
   ClaudeCodeUsageLimitsResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/claude-code-auth";
 import { describe, expect, it } from "vitest";
 
 describe("claude code auth schemas", () => {

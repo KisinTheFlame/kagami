@@ -1,4 +1,4 @@
-import { type HealthResponse } from "./schemas.js";
+import type { HealthResponse } from "./schemas/health.js";
 
 export function createHealthResponse(): HealthResponse {
   return {

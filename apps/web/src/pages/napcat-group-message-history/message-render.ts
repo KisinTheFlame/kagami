@@ -1,4 +1,4 @@
-import type { JsonValue } from "@kagami/shared";
+import { type JsonValue } from "@kagami/shared/schemas/base";
 
 const SEGMENT_LABELS: Record<string, string> = {
   dice: "[dice]",

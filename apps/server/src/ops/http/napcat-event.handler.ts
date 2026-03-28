@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { NapcatEventListQuerySchema, NapcatEventListResponseSchema } from "@kagami/shared";
+import {
+  NapcatEventListQuerySchema,
+  NapcatEventListResponseSchema,
+} from "@kagami/shared/schemas/napcat-event";
 import type { NapcatEventQueryService } from "../application/napcat-event-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 

@@ -1,5 +1,8 @@
 import type { NapcatReceiveMessageSegment } from "./napcat-gateway/shared.js";
-import type { NapcatSendGroupMessageRequest, NapcatSendGroupMessageResponse } from "@kagami/shared";
+import {
+  type NapcatSendGroupMessageRequest,
+  type NapcatSendGroupMessageResponse,
+} from "@kagami/shared/schemas/napcat-message";
 
 export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
 export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;

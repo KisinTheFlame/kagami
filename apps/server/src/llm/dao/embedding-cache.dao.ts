@@ -1,4 +1,7 @@
-import type { EmbeddingCacheListQuery, EmbeddingTaskType } from "@kagami/shared";
+import {
+  type EmbeddingCacheListQuery,
+  type EmbeddingTaskType,
+} from "@kagami/shared/schemas/embedding-cache";
 
 export type EmbeddingCacheKey = {
   provider: string;

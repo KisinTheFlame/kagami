@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DefaultAgentContext } from "../../src/agent/context/default-agent-context.js";
+import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
-} from "../../src/agent/context/context-message-factory.js";
+} from "../../src/agent/runtime/context/context-message-factory.js";
 
 describe("DefaultAgentContext", () => {
   it("should append plain messages into the context", async () => {

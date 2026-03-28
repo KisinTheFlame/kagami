@@ -1,4 +1,5 @@
-import type { JsonValue, NapcatGroupMessageListQuery } from "@kagami/shared";
+import { type JsonValue } from "@kagami/shared/schemas/base";
+import { type NapcatGroupMessageListQuery } from "@kagami/shared/schemas/napcat-group-message";
 
 export type InsertNapcatGroupMessageItem = {
   groupId: string;

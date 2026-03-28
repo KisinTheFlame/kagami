@@ -1,4 +1,4 @@
-import type { LoopRunListItem, LoopRunStatus } from "@kagami/shared";
+import { type LoopRunListItem, type LoopRunStatus } from "@kagami/shared/schemas/loop-run";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";

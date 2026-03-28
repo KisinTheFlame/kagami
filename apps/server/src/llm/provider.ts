@@ -1,4 +1,5 @@
-import type { LlmChatRequest, LlmChatResponsePayload, LlmProviderId } from "./types.js";
+import type { LlmProviderId } from "../common/contracts/llm.js";
+import type { LlmChatRequest, LlmChatResponsePayload } from "./types.js";
 
 export type LlmProviderChatResult = {
   response: LlmChatResponsePayload;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SendMessageTool } from "../../src/agent/tools/index.js";
+import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 
 describe("send_message tool", () => {
   it("should send message by injected gateway function", async () => {

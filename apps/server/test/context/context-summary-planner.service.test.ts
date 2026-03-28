@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmClient } from "../../src/llm/client.js";
-import { ContextSummaryPlannerService } from "../../src/agent/agents/subagents/context-summarizer/context-summary-planner.service.js";
-import { SUMMARY_TOOL_NAME, SummaryTool, ToolCatalog } from "../../src/agent/tools/index.js";
+import { ContextSummaryOperation as ContextSummaryPlannerService } from "../../src/agent/capabilities/context-summary/operations/context-summary.operation.js";
+import {
+  SUMMARY_TOOL_NAME,
+  SummaryTool,
+} from "../../src/agent/capabilities/context-summary/tools/summary.tool.js";
+import { ToolCatalog } from "@kagami/agent-runtime";
 
 describe("ContextSummaryPlannerService", () => {
   it("should force the summary tool and return its content", async () => {

@@ -3,7 +3,7 @@ import {
   CodexAuthRefreshResponseSchema,
   CodexAuthStatusResponseSchema,
   CodexUsageLimitsResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/codex-auth";
 import { describe, expect, it } from "vitest";
 
 describe("codex auth schemas", () => {

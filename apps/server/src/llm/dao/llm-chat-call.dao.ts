@@ -1,4 +1,4 @@
-import type { LlmProviderId } from "../types.js";
+import type { LlmProviderId } from "../../common/contracts/llm.js";
 
 export type LlmChatCallStatus = "success" | "failed";
 

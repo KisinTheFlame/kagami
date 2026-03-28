@@ -10,11 +10,11 @@ import type {
   LlmContentPart,
   LlmChatRequest,
   LlmChatResponsePayload,
-  LlmUsage,
   LlmMessage,
-  LlmProviderId,
   LlmToolCall,
+  LlmUsage,
 } from "../types.js";
+import type { LlmProviderId } from "../../common/contracts/llm.js";
 
 type OpenAiStyleUsage = {
   prompt_tokens?: number;

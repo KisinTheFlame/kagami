@@ -4,7 +4,7 @@ import {
   LlmPlaygroundChatResponseSchema,
   LlmPlaygroundToolListResponseSchema,
   LlmProviderListResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/llm-chat";
 import { z } from "zod";
 import type { LlmPlaygroundService } from "../application/llm-playground.service.js";
 import { registerCommandRoute, registerQueryRoute } from "../../common/http/route.helper.js";

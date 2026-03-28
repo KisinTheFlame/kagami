@@ -1,10 +1,10 @@
-import type {
-  JsonValue,
-  LoopRunDetailResponse,
-  LoopRunListItem,
-  LoopRunListResponse,
-  LoopRunTimelineItem,
-} from "@kagami/shared";
+import { type JsonValue } from "@kagami/shared/schemas/base";
+import {
+  type LoopRunDetailResponse,
+  type LoopRunListItem,
+  type LoopRunListResponse,
+  type LoopRunTimelineItem,
+} from "@kagami/shared/schemas/loop-run";
 import type {
   LoopRunItem,
   LoopRunStepItem,

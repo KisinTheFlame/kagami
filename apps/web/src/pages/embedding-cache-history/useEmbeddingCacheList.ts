@@ -1,4 +1,7 @@
-import { EmbeddingCacheListResponseSchema, type EmbeddingCacheListQuery } from "@kagami/shared";
+import {
+  EmbeddingCacheListResponseSchema,
+  type EmbeddingCacheListQuery,
+} from "@kagami/shared/schemas/embedding-cache";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

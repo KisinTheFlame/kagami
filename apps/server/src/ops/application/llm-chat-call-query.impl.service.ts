@@ -1,4 +1,7 @@
-import type { LlmChatCallListQuery, LlmChatCallListResponse } from "@kagami/shared";
+import {
+  type LlmChatCallListQuery,
+  type LlmChatCallListResponse,
+} from "@kagami/shared/schemas/llm-chat";
 import type { LlmChatCallDao } from "../../llm/dao/llm-chat-call.dao.js";
 import type { LlmChatCallQueryService } from "./llm-chat-call-query.service.js";
 import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";

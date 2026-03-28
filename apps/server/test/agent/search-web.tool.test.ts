@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SearchWebTool } from "../../src/agent/tools/index.js";
+import { SearchWebTool } from "../../src/agent/capabilities/web-search/tools/search-web.tool.js";
 
 describe("search_web tool", () => {
   it("should fork current context into injected web search agent and return summary text", async () => {

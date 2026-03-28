@@ -3,13 +3,15 @@ import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { type AuthUsageTrendWindow } from "@kagami/shared/schemas/auth-usage-trend";
 import {
-  type AuthUsageTrendWindow,
   ClaudeCodeUsageLimitsResponseSchema,
   type ClaudeCodeUsageLimitsResponse,
+} from "@kagami/shared/schemas/claude-code-auth";
+import {
   CodexUsageLimitsResponseSchema,
   type CodexUsageLimitsResponse,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/codex-auth";
 import type {
   AuthUsageSnapshotDao,
   InsertAuthUsageSnapshotInput,

@@ -3,7 +3,7 @@ import {
   LlmPlaygroundChatResponseSchema,
   LlmPlaygroundToolListResponseSchema,
   LlmProviderListResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/llm-chat";
 import { describe, expect, it } from "vitest";
 
 describe("llm playground schemas", () => {

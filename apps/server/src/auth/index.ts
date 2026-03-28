@@ -1,4 +1,4 @@
-import type { AuthUsageLimitsResponse } from "@kagami/shared";
+import { type AuthUsageLimitsResponse } from "@kagami/shared/schemas/auth";
 import { SharedOAuthCallbackServer } from "./shared/callback-server.js";
 import type { ConfigManager } from "../config/config.manager.js";
 import type { Database } from "../db/client.js";

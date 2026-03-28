@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TavilyWebSearchService } from "../../src/agent/service/tavily-web-search.impl.service.js";
+import { TavilyWebSearchService } from "../../src/agent/capabilities/web-search/application/tavily-web-search.service.js";
 
 describe("TavilyWebSearchService", () => {
   it("should map Tavily response into internal search result", async () => {

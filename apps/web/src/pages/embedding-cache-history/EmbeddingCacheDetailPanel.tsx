@@ -1,4 +1,4 @@
-import type { EmbeddingCacheItem } from "@kagami/shared";
+import { type EmbeddingCacheItem } from "@kagami/shared/schemas/embedding-cache";
 
 type EmbeddingCacheDetailPanelProps = {
   item: EmbeddingCacheItem | null;

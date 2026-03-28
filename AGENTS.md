@@ -133,7 +133,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 路径别名现状：
 
-- 后端 `apps/server/tsconfig.json` 为 `@kagami/shared` 和 `@kagami/shared/*` 配置了源码路径映射。
+- 后端 `apps/server/tsconfig.json` 为 `@kagami/shared/*` 配置了源码路径映射。
 - 后端 `apps/server/tsconfig.json` 也为 `@kagami/agent-runtime` 和 `@kagami/agent-runtime/*` 配置了源码路径映射。
 - 前端显式配置了 `@/* -> apps/web/src/*`。
 - 不要假设前端也单独声明了 `@kagami/shared` 的源码路径别名；它当前通过 workspace 依赖使用该包。
@@ -146,7 +146,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 ### Shared 包约定
 
 - `packages/shared` 主要承载前后端共用的 Zod Schema、响应模型和工具函数。
-- 当前 `@kagami/shared` 入口未再导出 `z`；如果需要直接定义 Zod schema，按现状应从 `zod` 导入。
+- `packages/shared` 不再提供根入口 barrel；统一使用显式子路径导入，例如 `@kagami/shared/schemas/health`、`@kagami/shared/utils`。
+- 当前 shared 包不会导出 `z`；如果需要直接定义 Zod schema，按现状应从 `zod` 导入。
+- 新代码不要在项目内新增 re-export/barrel 文件，优先直接导入真实实现路径或包的显式子路径。
 
 ### Agent Runtime 包约定
 

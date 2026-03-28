@@ -1,4 +1,4 @@
-import type { NapcatEventItem } from "@kagami/shared";
+import { type NapcatEventItem } from "@kagami/shared/schemas/napcat-event";
 
 type NapcatEventDetailPanelProps = {
   item: NapcatEventItem | null;

@@ -1,7 +1,5 @@
 import type { LlmProviderId } from "../common/contracts/llm.js";
 
-export type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
-
 export type JsonSchema = {
   type: "object";
   properties: Record<string, unknown>;

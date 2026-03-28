@@ -5,7 +5,7 @@ import {
   type LlmChatErrorPayload,
   type LlmChatResponsePayload,
   type LlmToolCallPayload,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/llm-chat";
 
 export type ParsedLlmUserContentPart =
   | {

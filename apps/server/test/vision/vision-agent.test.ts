@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmClient } from "../../src/llm/client.js";
-import { VisionAgent } from "../../src/agent/agents/subagents/vision/vision-agent.js";
+import { VisionAgent } from "../../src/agent/capabilities/vision/application/vision-agent.js";
 
 function createLlmClientMock(): LlmClient {
   return {

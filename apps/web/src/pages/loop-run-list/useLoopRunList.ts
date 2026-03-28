@@ -1,4 +1,4 @@
-import { LoopRunListResponseSchema, type LoopRunListQuery } from "@kagami/shared";
+import { LoopRunListResponseSchema, type LoopRunListQuery } from "@kagami/shared/schemas/loop-run";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

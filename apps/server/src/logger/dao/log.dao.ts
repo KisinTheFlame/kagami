@@ -1,4 +1,4 @@
-import type { AppLogLevel, AppLogListQuery } from "@kagami/shared";
+import { type AppLogLevel, type AppLogListQuery } from "@kagami/shared/schemas/app-log";
 
 export type InsertAppLogItem = {
   traceId: string;

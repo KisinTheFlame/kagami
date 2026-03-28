@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { JsonValue } from "@kagami/shared";
+import { type JsonValue } from "@kagami/shared/schemas/base";
 import type { Database } from "../../../db/client.js";
 import type {
   InsertNapcatGroupMessageItem,

@@ -1,4 +1,4 @@
-import type { AuthProvider } from "@kagami/shared";
+import { type AuthProvider } from "@kagami/shared/schemas/auth";
 import type { LlmProviderId } from "../../common/contracts/llm.js";
 
 export type InternalAuthProvider = Extract<LlmProviderId, "openai-codex" | "claude-code">;

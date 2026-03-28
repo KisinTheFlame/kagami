@@ -1,7 +1,7 @@
 import {
   NapcatGroupMessageListResponseSchema,
   type NapcatGroupMessageListQuery,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/napcat-group-message";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

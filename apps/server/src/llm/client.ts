@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { LlmProviderOption } from "@kagami/shared";
+import { type LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 import type { Config } from "../config/config.loader.js";
 import type { LlmChatCallDao } from "./dao/llm-chat-call.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
@@ -12,9 +13,7 @@ import type {
   LlmContentPart,
   LlmChatRequest,
   LlmChatResponsePayload,
-  LlmProviderId,
   LlmToolChoice,
-  LlmUsageId,
 } from "./types.js";
 
 type LlmProviderConfig = {

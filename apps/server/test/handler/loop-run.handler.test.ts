@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import type { LoopRunDetailResponse } from "@kagami/shared";
+import { type LoopRunDetailResponse } from "@kagami/shared/schemas/loop-run";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LoopRunHandler } from "../../src/ops/http/loop-run.handler.js";
 import type { LoopRunQueryService } from "../../src/ops/application/loop-run-query.service.js";

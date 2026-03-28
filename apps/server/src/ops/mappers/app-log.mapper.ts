@@ -1,4 +1,4 @@
-import type { AppLogItem, AppLogListResponse } from "@kagami/shared";
+import { type AppLogItem, type AppLogListResponse } from "@kagami/shared/schemas/app-log";
 import type { AppLogItem as AppLogDaoItem } from "../../logger/dao/log.dao.js";
 
 type MapAppLogListInput = {

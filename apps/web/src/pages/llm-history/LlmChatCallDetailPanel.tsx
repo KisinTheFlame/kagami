@@ -1,4 +1,4 @@
-import type { LlmChatCallItem } from "@kagami/shared";
+import { type LlmChatCallItem } from "@kagami/shared/schemas/llm-chat";
 import { FlaskConical } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";

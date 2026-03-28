@@ -3,16 +3,18 @@ import {
   AuthRefreshResponseSchema,
   AuthStatusResponseSchema,
   AuthUsageLimitsResponseSchema,
-  AuthUsageTrendResponseSchema,
   type AuthProvider,
   type AuthStatus,
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
+} from "@kagami/shared/schemas/auth";
+import {
+  AuthUsageTrendResponseSchema,
   type AuthUsageTrendRange,
   type AuthUsageTrendResponse,
-  type ClaudeCodeUsageLimits,
-  type CodexUsageLimits,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/auth-usage-trend";
+import { type ClaudeCodeUsageLimits } from "@kagami/shared/schemas/claude-code-auth";
+import { type CodexUsageLimits } from "@kagami/shared/schemas/codex-auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
 import { type ReactElement, useMemo, useState } from "react";

@@ -1,4 +1,7 @@
-import { AuthUsageTrendQuerySchema, AuthUsageTrendResponseSchema } from "@kagami/shared";
+import {
+  AuthUsageTrendQuerySchema,
+  AuthUsageTrendResponseSchema,
+} from "@kagami/shared/schemas/auth-usage-trend";
 import { describe, expect, it } from "vitest";
 
 describe("auth usage trend schemas", () => {

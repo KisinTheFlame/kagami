@@ -8,7 +8,8 @@ import {
   type LlmProvider,
   type LlmProviderChatResult,
 } from "../../src/llm/provider.js";
-import type { LlmChatResponsePayload, LlmProviderId, LlmUsageId } from "../../src/llm/types.js";
+import type { LlmProviderId, LlmUsageId } from "../../src/common/contracts/llm.js";
+import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 
 type LlmProviderConfig = {
   apiKey?: string;

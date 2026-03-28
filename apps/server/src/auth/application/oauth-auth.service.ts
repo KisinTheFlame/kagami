@@ -1,11 +1,11 @@
-import type {
-  AuthLoginUrlResponse,
-  AuthLogoutResponse,
-  AuthProvider,
-  AuthRefreshResponse,
-  AuthStatusResponse,
-  AuthUsageLimitsResponse,
-} from "@kagami/shared";
+import {
+  type AuthLoginUrlResponse,
+  type AuthLogoutResponse,
+  type AuthProvider,
+  type AuthRefreshResponse,
+  type AuthStatusResponse,
+  type AuthUsageLimitsResponse,
+} from "@kagami/shared/schemas/auth";
 import { SharedOAuthServiceCore } from "../shared/service.js";
 import type {
   OAuthCallbackInput,

@@ -2,7 +2,6 @@ import { BizError } from "../../common/errors/biz-error.js";
 import type { Config } from "../../config/config.loader.js";
 import type { PkcePair } from "../shared/pkce.js";
 import type { ClaudeCodeTokenResponse } from "./types.js";
-export { createPkcePair } from "../shared/pkce.js";
 
 const CLAUDE_CODE_AUTH_URL = "https://claude.ai/oauth/authorize";
 const CLAUDE_CODE_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token";

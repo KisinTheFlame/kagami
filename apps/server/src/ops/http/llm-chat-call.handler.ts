@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { LlmChatCallListQuerySchema, LlmChatCallListResponseSchema } from "@kagami/shared";
+import {
+  LlmChatCallListQuerySchema,
+  LlmChatCallListResponseSchema,
+} from "@kagami/shared/schemas/llm-chat";
 import type { LlmChatCallQueryService } from "../application/llm-chat-call-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 

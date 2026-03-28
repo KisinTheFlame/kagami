@@ -1,4 +1,7 @@
-import { NapcatEventListResponseSchema, type NapcatEventListQuery } from "@kagami/shared";
+import {
+  NapcatEventListResponseSchema,
+  type NapcatEventListQuery,
+} from "@kagami/shared/schemas/napcat-event";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

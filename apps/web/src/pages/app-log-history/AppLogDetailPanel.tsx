@@ -1,4 +1,4 @@
-import type { AppLogItem } from "@kagami/shared";
+import { type AppLogItem } from "@kagami/shared/schemas/app-log";
 
 type AppLogDetailPanelProps = {
   item: AppLogItem | null;

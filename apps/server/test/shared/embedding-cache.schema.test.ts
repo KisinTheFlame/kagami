@@ -1,4 +1,7 @@
-import { EmbeddingCacheListQuerySchema, EmbeddingCacheListResponseSchema } from "@kagami/shared";
+import {
+  EmbeddingCacheListQuerySchema,
+  EmbeddingCacheListResponseSchema,
+} from "@kagami/shared/schemas/embedding-cache";
 import { describe, expect, it } from "vitest";
 
 describe("embedding cache schemas", () => {

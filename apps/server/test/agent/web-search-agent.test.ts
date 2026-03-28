@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import {
   FINALIZE_WEB_SEARCH_TOOL_NAME,
   FinalizeWebSearchTool,
+} from "../../src/agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
+import {
   SEARCH_WEB_RAW_TOOL_NAME,
   SearchWebRawTool,
-  WebSearchAgent,
-} from "../../src/agent/agents/subagents/web-search/index.js";
-import { createWebSearchReminderMessage } from "../../src/agent/context/context-message-factory.js";
+} from "../../src/agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
+import { WebSearchTaskAgent as WebSearchAgent } from "../../src/agent/capabilities/web-search/task-agent/web-search-task-agent.js";
+import { createWebSearchReminderMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
-import { ToolCatalog } from "../../src/agent/tools/index.js";
+import { ToolCatalog } from "@kagami/agent-runtime";
 
 function createWebSearchAgent(params?: {
   chat?: ReturnType<typeof vi.fn>;

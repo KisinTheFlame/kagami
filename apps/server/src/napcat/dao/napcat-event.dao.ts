@@ -1,4 +1,4 @@
-import type { NapcatEventListQuery } from "@kagami/shared";
+import { type NapcatEventListQuery } from "@kagami/shared/schemas/napcat-event";
 
 export type InsertNapcatEventItem = {
   postType: string;

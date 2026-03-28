@@ -1,8 +1,8 @@
-import type {
-  AuthUsageTrendPoint,
-  AuthUsageTrendResponse,
-  AuthUsageTrendWindow,
-} from "@kagami/shared";
+import {
+  type AuthUsageTrendPoint,
+  type AuthUsageTrendResponse,
+  type AuthUsageTrendWindow,
+} from "@kagami/shared/schemas/auth-usage-trend";
 import type { AuthUsageSnapshotDao } from "../dao/auth-usage-snapshot.dao.js";
 import type {
   AuthUsageTrendQueryService,

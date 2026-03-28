@@ -1,4 +1,4 @@
-import { type AppLogItem, type AppLogLevel } from "@kagami/shared";
+import { type AppLogItem, type AppLogLevel } from "@kagami/shared/schemas/app-log";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Badge } from "@/components/ui/badge";

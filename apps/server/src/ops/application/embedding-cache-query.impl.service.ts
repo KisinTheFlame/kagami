@@ -1,4 +1,7 @@
-import type { EmbeddingCacheListQuery, EmbeddingCacheListResponse } from "@kagami/shared";
+import {
+  type EmbeddingCacheListQuery,
+  type EmbeddingCacheListResponse,
+} from "@kagami/shared/schemas/embedding-cache";
 import type { EmbeddingCacheDao } from "../../llm/dao/embedding-cache.dao.js";
 import { mapEmbeddingCacheList } from "../mappers/embedding-cache.mapper.js";
 import type { EmbeddingCacheQueryService } from "./embedding-cache-query.service.js";

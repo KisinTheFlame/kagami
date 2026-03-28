@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { AgentLoop } from "../../src/agent/agents/main-engine/agent-loop.js";
-import { DefaultAgentContext } from "../../src/agent/context/default-agent-context.js";
+import { RootAgentRuntime as AgentLoop } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
+import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
-} from "../../src/agent/context/context-message-factory.js";
-import type { AgentEventQueue } from "../../src/agent/event/event.queue.js";
+} from "../../src/agent/runtime/context/context-message-factory.js";
+import { type AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
-import { ToolCatalog } from "../../src/agent/tools/index.js";
-import type { ToolComponent, ToolSet } from "../../src/agent/tools/index.js";
-import type { LoopRunRecorder } from "../../src/agent/service/loop-run-recorder.service.js";
+import { ToolCatalog } from "@kagami/agent-runtime";
+import { type ToolComponent, type ToolSet } from "@kagami/agent-runtime";
+import { type LoopRunRecorder } from "../../src/agent/observability/loop-run/loop-run-recorder.service.js";
 
 class StopLoopError extends Error {}
 

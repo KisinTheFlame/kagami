@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { EmbeddingCacheListQuerySchema, EmbeddingCacheListResponseSchema } from "@kagami/shared";
+import {
+  EmbeddingCacheListQuerySchema,
+  EmbeddingCacheListResponseSchema,
+} from "@kagami/shared/schemas/embedding-cache";
 import type { EmbeddingCacheQueryService } from "../application/embedding-cache-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 

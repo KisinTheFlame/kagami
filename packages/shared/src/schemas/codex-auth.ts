@@ -1,16 +1,16 @@
+import { z } from "zod";
 import {
   AuthLoginUrlResponseSchema,
   AuthRefreshResponseSchema,
   AuthStatusResponseSchema,
   AuthStatusSchema,
-  CodexUsageLimitWindowSchema,
+  CodexUsageLimitWindowSchema as BaseCodexUsageLimitWindowSchema,
   CodexUsageLimitsSchema,
   type AuthLoginUrlResponse,
   type AuthRefreshResponse,
   type AuthStatus,
   type AuthStatusResponse,
-  type CodexUsageLimitWindow,
-  type CodexUsageLimits,
+  type CodexUsageLimits as BaseCodexUsageLimits,
 } from "./auth.js";
 
 export const CodexAuthStatusSchema = AuthStatusSchema;
@@ -41,10 +41,10 @@ export const CodexAuthRefreshResponseSchema = AuthRefreshResponseSchema;
 
 export type CodexAuthRefreshResponse = AuthRefreshResponse;
 
-export { CodexUsageLimitWindowSchema };
-
-export type { CodexUsageLimitWindow };
+export const CodexUsageLimitWindowSchema = BaseCodexUsageLimitWindowSchema;
+export type CodexUsageLimitWindow = z.infer<typeof CodexUsageLimitWindowSchema>;
 
 export const CodexUsageLimitsResponseSchema = CodexUsageLimitsSchema;
 
+export type CodexUsageLimits = BaseCodexUsageLimits;
 export type CodexUsageLimitsResponse = CodexUsageLimits;

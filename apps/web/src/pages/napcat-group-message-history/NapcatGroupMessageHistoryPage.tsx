@@ -1,4 +1,4 @@
-import { type NapcatGroupMessageItem } from "@kagami/shared";
+import { type NapcatGroupMessageItem } from "@kagami/shared/schemas/napcat-group-message";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Button } from "@/components/ui/button";

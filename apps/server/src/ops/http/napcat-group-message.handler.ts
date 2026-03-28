@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   NapcatGroupMessageListQuerySchema,
   NapcatGroupMessageListResponseSchema,
-} from "@kagami/shared";
+} from "@kagami/shared/schemas/napcat-group-message";
 import type { NapcatGroupMessageQueryService } from "../application/napcat-group-message-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 

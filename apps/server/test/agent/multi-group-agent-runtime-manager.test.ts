@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { InMemoryAgentEventQueue } from "../../src/agent/event/event.impl.queue.js";
-import { MultiGroupAgentRuntimeManager } from "../../src/agent/agents/main-engine/index.js";
+import { InMemoryAgentEventQueue } from "../../src/agent/runtime/event/in-memory-agent-event-queue.js";
+import { MultiGroupRootAgentRuntimeManager as MultiGroupAgentRuntimeManager } from "../../src/agent/runtime/root-agent/multi-group-root-agent-runtime-manager.js";
 
 describe("MultiGroupAgentRuntimeManager", () => {
   it("should route events to the matching group queue only", () => {

@@ -1,4 +1,4 @@
-import { AppLogListResponseSchema, type AppLogListQuery } from "@kagami/shared";
+import { AppLogListResponseSchema, type AppLogListQuery } from "@kagami/shared/schemas/app-log";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";

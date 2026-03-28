@@ -2,7 +2,6 @@ import { BizError } from "../../common/errors/biz-error.js";
 import type { Config } from "../../config/config.loader.js";
 import type { PkcePair } from "../shared/pkce.js";
 import type { CodexTokenResponse } from "./types.js";
-export { createPkcePair } from "../shared/pkce.js";
 
 const CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize";
 const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";

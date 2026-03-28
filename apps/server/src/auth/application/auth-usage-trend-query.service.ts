@@ -1,4 +1,7 @@
-import type { AuthUsageTrendQuery, AuthUsageTrendResponse } from "@kagami/shared";
+import {
+  type AuthUsageTrendQuery,
+  type AuthUsageTrendResponse,
+} from "@kagami/shared/schemas/auth-usage-trend";
 import type { LlmProviderId } from "../../common/contracts/llm.js";
 
 export type QueryAuthUsageTrendInput = {

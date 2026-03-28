@@ -1,4 +1,7 @@
-import type { NapcatGroupMessageListQuery, NapcatGroupMessageListResponse } from "@kagami/shared";
+import {
+  type NapcatGroupMessageListQuery,
+  type NapcatGroupMessageListResponse,
+} from "@kagami/shared/schemas/napcat-group-message";
 import type { NapcatGroupMessageDao } from "../../napcat/dao/napcat-group-message.dao.js";
 import { mapNapcatGroupMessageList } from "../mappers/napcat-group-message.mapper.js";
 import type { NapcatGroupMessageQueryService } from "./napcat-group-message-query.service.js";

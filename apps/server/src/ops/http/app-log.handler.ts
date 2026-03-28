@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AppLogListQuerySchema, AppLogListResponseSchema } from "@kagami/shared";
+import { AppLogListQuerySchema, AppLogListResponseSchema } from "@kagami/shared/schemas/app-log";
 import type { AppLogQueryService } from "../application/app-log-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 
