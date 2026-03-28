@@ -10,3 +10,4 @@ coverage
 .DS_Store
 .vscode
 TODO.md
+apps/server/src/generated/prisma

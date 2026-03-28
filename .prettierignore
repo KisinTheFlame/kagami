@@ -3,3 +3,4 @@ pnpm-lock.yaml
 dist
 build
 coverage
+apps/server/src/generated/prisma

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "../../../generated/prisma/client.js";
 import type { Database } from "../../../db/client.js";
 import type {
   InsertNapcatEventItem,

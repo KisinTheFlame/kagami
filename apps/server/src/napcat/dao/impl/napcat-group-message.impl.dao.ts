@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../../../generated/prisma/client.js";
 import { type JsonValue } from "@kagami/shared/schemas/base";
 import type { Database } from "../../../db/client.js";
 import type {
