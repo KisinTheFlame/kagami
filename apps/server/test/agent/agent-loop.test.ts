@@ -399,6 +399,7 @@ describe("RootAgentRuntime", () => {
               name: "search_web",
               arguments: { question: "今天有什么热点" },
             },
+            { id: "back-1", name: "back_to_portal", arguments: {} },
             { id: "sleep-1", name: "sleep", arguments: {} },
           ],
         },
@@ -419,8 +420,9 @@ describe("RootAgentRuntime", () => {
       tools: new ToolCatalog([
         new EnterGroupTool(),
         new SearchWebTool({ webSearchAgent }),
+        new BackToPortalTool(),
         new SleepTool({ sleepMs: 30_000 }),
-      ]).pick(["enter_group", "search_web", "sleep"]),
+      ]).pick(["enter_group", "search_web", "back_to_portal", "sleep"]),
       sleep,
     });
 
