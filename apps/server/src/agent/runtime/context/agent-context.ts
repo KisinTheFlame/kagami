@@ -1,5 +1,6 @@
 import type { LlmMessage } from "../../../llm/types.js";
 import type { Event } from "../event/event.js";
+import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
 
 export type AssistantMessage = Extract<LlmMessage, { role: "assistant" }>;
 export type AgentContextDashboardItem = {
@@ -31,6 +32,8 @@ export type AgentContextSnapshot = {
 export interface AgentContext {
   getSnapshot(): Promise<AgentContextSnapshot>;
   fork(): Promise<AgentContext>;
+  exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot>;
+  restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void>;
   appendEvents(events: Event[]): Promise<void>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   appendAssistantTurn(message: AssistantMessage): Promise<void>;

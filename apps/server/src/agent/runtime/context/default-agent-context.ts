@@ -11,6 +11,7 @@ import type {
   ContextItem,
 } from "./agent-context.js";
 import type { Event } from "../event/event.js";
+import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
 
 const DEFAULT_DASHBOARD_LIMIT = 5;
 const DEFAULT_PREVIEW_LENGTH = 200;
@@ -21,7 +22,7 @@ type DefaultAgentContextOptions = {
 };
 
 export class DefaultAgentContext implements AgentContext {
-  private readonly systemPrompt: string | (() => Promise<string> | string);
+  private systemPrompt: string | (() => Promise<string> | string);
   private readonly items: ContextItem[] = [];
 
   public constructor({ systemPrompt, systemPromptFactory }: DefaultAgentContextOptions) {
@@ -51,6 +52,25 @@ export class DefaultAgentContext implements AgentContext {
     await forkedContext.appendMessages(cloneMessages(snapshot.messages));
 
     return forkedContext;
+  }
+
+  public async exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot> {
+    const snapshot = await this.getSnapshot();
+    return {
+      systemPrompt: snapshot.systemPrompt,
+      messages: cloneMessages(snapshot.messages),
+    };
+  }
+
+  public async restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void> {
+    this.systemPrompt = snapshot.systemPrompt;
+    this.items.splice(
+      0,
+      this.items.length,
+      ...cloneMessages(snapshot.messages).map(
+        message => ({ kind: "llm_message", message }) as const,
+      ),
+    );
   }
 
   public async appendEvents(events: Event[]): Promise<void> {

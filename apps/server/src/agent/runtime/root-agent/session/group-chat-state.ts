@@ -32,6 +32,14 @@ export class GroupChatState {
     return this.unreadMessages.length;
   }
 
+  public getGroupInfo(): NapcatGetGroupInfoResult | null {
+    return this.groupInfo ? structuredClone(this.groupInfo) : null;
+  }
+
+  public getUnreadMessages(): NapcatGroupMessageData[] {
+    return structuredClone(this.unreadMessages);
+  }
+
   public setGroupInfo(groupInfo: NapcatGetGroupInfoResult): void {
     this.groupInfo = groupInfo;
   }
@@ -53,6 +61,16 @@ export class GroupChatState {
 
   public clearUnreadMessages(): void {
     this.unreadMessages = [];
+  }
+
+  public restoreSnapshot(input: {
+    groupInfo: NapcatGetGroupInfoResult | null;
+    unreadMessages: NapcatGroupMessageData[];
+    hasEntered: boolean;
+  }): void {
+    this.groupInfo = input.groupInfo ? structuredClone(input.groupInfo) : null;
+    this.unreadMessages = takeLast(structuredClone(input.unreadMessages), this.unreadLimit);
+    this.entered = input.hasEntered;
   }
 }
 

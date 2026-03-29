@@ -12,6 +12,10 @@ import type {
   NapcatGroupMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import { GroupChatState } from "./group-chat-state.js";
+import type {
+  PersistedRootAgentSessionSnapshot,
+  PersistedRootAgentSessionState,
+} from "../persistence/root-agent-runtime-snapshot.js";
 
 export const ROOT_AGENT_ENTER_TARGET_KINDS = ["qq_group", "zone_out"] as const;
 export type RootAgentEnterTargetKind = (typeof ROOT_AGENT_ENTER_TARGET_KINDS)[number];
@@ -66,7 +70,9 @@ export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
-  getDashboardSnapshot?(): RootAgentSessionDashboardSnapshot;
+  getDashboardSnapshot(): RootAgentSessionDashboardSnapshot;
+  exportPersistedSnapshot(): PersistedRootAgentSessionSnapshot;
+  restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void;
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
@@ -145,6 +151,50 @@ export class RootAgentSession implements RootAgentSessionController {
       availableInvokeTools: this.getAvailableInvokeTools(),
       groups: this.renderPortalGroups(),
     };
+  }
+
+  public exportPersistedSnapshot(): PersistedRootAgentSessionSnapshot {
+    return {
+      state: cloneSessionState(this.state),
+      groups: this.groupStates.map(groupState => ({
+        groupId: groupState.groupId,
+        groupInfo: groupState.getGroupInfo(),
+        unreadMessages: groupState.getUnreadMessages(),
+        hasEntered: groupState.hasEntered(),
+      })),
+    };
+  }
+
+  public restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void {
+    for (const groupState of this.groupStates) {
+      groupState.restoreSnapshot({
+        groupInfo: null,
+        unreadMessages: [],
+        hasEntered: false,
+      });
+    }
+
+    for (const persistedGroupState of snapshot.groups) {
+      const groupState = this.groupStateById.get(persistedGroupState.groupId);
+      if (!groupState) {
+        continue;
+      }
+
+      groupState.restoreSnapshot({
+        groupInfo: persistedGroupState.groupInfo,
+        unreadMessages: persistedGroupState.unreadMessages,
+        hasEntered: persistedGroupState.hasEntered,
+      });
+    }
+
+    this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
+    this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
+    this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
+    this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
+    this.portalSnapshotDirty = false;
+    this.groupInfoLoaded = true;
+    this.initialized = true;
+    this.state = normalizeRestoredSessionState(snapshot.state, this.groupStateById);
   }
 
   public async initializeContext(): Promise<void> {
@@ -455,4 +505,17 @@ function cloneSessionState(state: RootAgentSessionState): RootAgentSessionState 
   }
 
   return { ...state };
+}
+
+function normalizeRestoredSessionState(
+  state: PersistedRootAgentSessionState,
+  groupStateById: Map<string, GroupChatState>,
+): RootAgentSessionState {
+  if (state.kind === "qq_group" && !groupStateById.has(state.groupId)) {
+    return {
+      kind: "portal",
+    };
+  }
+
+  return cloneSessionState(state);
 }

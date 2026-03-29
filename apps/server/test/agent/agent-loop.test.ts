@@ -7,6 +7,7 @@ import {
   createUserMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
+import type { RootAgentRuntimeSnapshotRepository } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
 import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
@@ -14,6 +15,7 @@ import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.j
 import { WaitTool } from "../../src/agent/runtime/root-agent/tools/wait.tool.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmMessage, Tool } from "../../src/llm/types.js";
+import type { PersistedRootAgentRuntimeSnapshot } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.js";
 
 class StopLoopError extends Error {}
 
@@ -104,6 +106,24 @@ function createRuntimeForCompactionTest(input: {
     contextSummaryOperation: input.contextSummaryOperation,
     contextCompactionThreshold: input.contextCompactionThreshold,
   });
+}
+
+function createInMemorySnapshotRepository(): RootAgentRuntimeSnapshotRepository & {
+  snapshot: PersistedRootAgentRuntimeSnapshot | null;
+} {
+  let snapshot: PersistedRootAgentRuntimeSnapshot | null = null;
+
+  return {
+    get snapshot() {
+      return snapshot ? structuredClone(snapshot) : null;
+    },
+    load: vi.fn(async () => {
+      return snapshot ? structuredClone(snapshot) : null;
+    }),
+    save: vi.fn(async nextSnapshot => {
+      snapshot = structuredClone(nextSnapshot);
+    }),
+  };
 }
 
 describe("RootAgentRuntime", () => {
@@ -477,5 +497,116 @@ describe("RootAgentRuntime", () => {
     const dashboardSnapshot = await runtime.getDashboardSnapshot();
     expect(dashboardSnapshot.lastCompactionAt).not.toBeNull();
     expect(dashboardSnapshot.contextSummary.messageCount).toBe(1);
+  });
+
+  it("should persist and restore runtime snapshot without duplicating wake reminder", async () => {
+    const repository = createInMemorySnapshotRepository();
+    const stopError = new StopLoopError("stop-loop");
+    const firstNow = new Date("2026-03-30T12:00:00.000Z");
+    const secondNow = new Date("2026-03-30T12:00:30.000Z");
+    const createSession = (context: DefaultAgentContext) =>
+      new RootAgentSession({
+        context,
+        napcatGatewayService: {
+          start: vi.fn(),
+          stop: vi.fn(),
+          sendGroupMessage: vi.fn(),
+          getGroupInfo: vi.fn().mockResolvedValue({
+            groupId: "group-1",
+            groupName: "产品群",
+            memberCount: 123,
+            maxMemberCount: 500,
+            groupRemark: "",
+            groupAllShut: false,
+          }),
+          getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        },
+        listenGroupIds: ["group-1"],
+        recentMessageLimit: 0,
+      });
+
+    const firstContext = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const firstRuntime = new RootAgentRuntime({
+      llmClient: {
+        chat: vi.fn().mockResolvedValue({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
+          },
+        }),
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context: firstContext,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(1),
+        dequeue: vi.fn().mockReturnValue(null),
+        size: vi.fn().mockReturnValue(0),
+      },
+      session: createSession(firstContext),
+      snapshotRepository: repository,
+      tools: new ToolCatalog([
+        new WaitTool({
+          now: () => firstNow,
+        }),
+      ]).pick(["wait"]),
+      now: () => firstNow,
+      sleep: vi.fn().mockRejectedValue(stopError),
+    });
+
+    await expect(firstRuntime.run()).rejects.toBe(stopError);
+    expect(repository.snapshot).not.toBeNull();
+
+    const restoredContext = new DefaultAgentContext({
+      systemPromptFactory: () => "another-system-prompt",
+    });
+    const restoredRuntime = new RootAgentRuntime({
+      llmClient: {
+        chat: vi.fn().mockResolvedValue({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "wait-2", name: "wait", arguments: {} }],
+          },
+        }),
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context: restoredContext,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(1),
+        dequeue: vi.fn().mockReturnValue(null),
+        size: vi.fn().mockReturnValue(0),
+      },
+      session: createSession(restoredContext),
+      snapshotRepository: repository,
+      tools: new ToolCatalog([
+        new WaitTool({
+          now: () => secondNow,
+        }),
+      ]).pick(["wait"]),
+      now: () => secondNow,
+      sleep: vi.fn().mockRejectedValue(stopError),
+    });
+
+    await restoredRuntime.restorePersistedSnapshot(repository.snapshot!);
+    await expect(restoredRuntime.run()).rejects.toBe(stopError);
+
+    const restoredSnapshot = await restoredContext.getSnapshot();
+    const wakeReminderCount = restoredSnapshot.messages.filter(
+      message =>
+        message.role === "user" &&
+        typeof message.content === "string" &&
+        message.content.includes("当前时间为北京时间"),
+    ).length;
+
+    expect(wakeReminderCount).toBe(1);
   });
 });

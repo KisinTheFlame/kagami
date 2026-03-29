@@ -28,12 +28,18 @@ let isShuttingDown = false;
 let port: number | null = null;
 
 async function startAgentLoop(runtime: {
+  restoredRootAgentSnapshot: boolean;
+  hydrateColdStartAgentContext(): Promise<void>;
   rootAgentRuntime: {
     initialize(): Promise<void>;
     run(): Promise<void>;
   };
 }): Promise<void> {
   try {
+    if (!runtime.restoredRootAgentSnapshot) {
+      await runtime.hydrateColdStartAgentContext();
+    }
+
     await runtime.rootAgentRuntime.initialize();
   } catch (error) {
     logger.errorWithCause(

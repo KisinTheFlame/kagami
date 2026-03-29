@@ -39,6 +39,8 @@ import { createAuthModule } from "../auth/index.js";
 import { ToolCatalog } from "@kagami/agent-runtime";
 import { InMemoryAgentEventQueue } from "../agent/runtime/event/in-memory-agent-event-queue.js";
 import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
+import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-agent/persistence/prisma-root-agent-runtime-snapshot.repository.js";
+import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
 import {
@@ -101,9 +103,11 @@ export type ServerRuntime = {
   authUsageCacheManager: AuthUsageCacheManager;
   claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
   rootAgentRuntime: RootAgentRuntime;
+  restoredRootAgentSnapshot: boolean;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
+  hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
   closeLlmProviders: () => Promise<void>;
   listAvailableAgentProviders: () => Promise<
@@ -123,6 +127,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const logDao = new PrismaLogDao({ database });
+  const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
+    database,
+  });
   initLoggerRuntime({
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
@@ -307,6 +314,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     context,
     eventQueue,
     session: rootAgentSession,
+    snapshotRepository: rootAgentRuntimeSnapshotRepository,
     tools: rootAgentTools,
     contextSummaryOperation,
     contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
@@ -315,6 +323,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
     ],
   });
+  const restoredSnapshot = await rootAgentRuntimeSnapshotRepository.load(
+    ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
+  );
+  let restoredRootAgentSnapshot = false;
+  if (restoredSnapshot) {
+    await rootAgentRuntime.restorePersistedSnapshot(restoredSnapshot);
+    restoredRootAgentSnapshot = true;
+  }
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
     llmClient,
     playgroundToolDefinitions: toolCatalog
@@ -360,9 +376,21 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     authUsageCacheManager: authModule.authUsageCacheManager,
     claudeCodeAuthRefreshScheduler: authModule.claudeCodeAuthRefreshScheduler,
     rootAgentRuntime,
+    restoredRootAgentSnapshot,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
+    hydrateColdStartAgentContext: async () => {
+      const { hydrateStartupContextFromRecentMessages } =
+        await import("./startup-context-hydrator.js");
+
+      await hydrateStartupContextFromRecentMessages({
+        listenGroupIds: config.server.napcat.listenGroupIds,
+        startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
+        napcatGatewayService,
+        rootAgentRuntime,
+      });
+    },
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     closeLlmProviders: async () => {
       await closeLlmProviders(llmProviders);

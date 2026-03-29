@@ -370,4 +370,60 @@ describe("RootAgentSession", () => {
       ),
     ).toBe(true);
   });
+
+  it("should export and restore persisted session snapshot without duplicating portal snapshot", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      getRecentGroupMessages: vi
+        .fn()
+        .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
+    });
+
+    await session.initializeContext();
+    await session.consumeIncomingEvent(createGroupEvent("portal-unread-1", "group-1"));
+    await session.flushPendingIncomingEffects();
+    await session.enter({ kind: "qq_group", id: "group-1" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await session.backToPortal();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const originalSnapshot = await context.getSnapshot();
+    const originalPortalMessageCount = originalSnapshot.messages.filter(
+      message =>
+        typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+    ).length;
+    const exportedContext = await context.exportPersistedSnapshot();
+    const exportedSession = session.exportPersistedSnapshot();
+
+    const restoredContext = new DefaultAgentContext({
+      systemPromptFactory: () => "new-system-prompt",
+    });
+    await restoredContext.restorePersistedSnapshot(exportedContext);
+    const restoredSession = createSession({ context: restoredContext });
+    restoredSession.restorePersistedSnapshot(exportedSession);
+
+    await restoredSession.initializeContext();
+
+    expect(restoredSession.getState()).toEqual({
+      kind: "portal",
+    });
+    expect(restoredSession.getDashboardSnapshot().groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          groupId: "group-1",
+          hasEntered: true,
+        }),
+      ]),
+    );
+
+    const restoredSnapshot = await restoredContext.getSnapshot();
+    const portalMessages = restoredSnapshot.messages.filter(
+      message =>
+        typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+    );
+    expect(portalMessages).toHaveLength(originalPortalMessageCount);
+  });
 });

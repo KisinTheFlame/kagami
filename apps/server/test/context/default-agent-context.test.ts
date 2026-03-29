@@ -458,4 +458,59 @@ describe("DefaultAgentContext", () => {
       ],
     });
   });
+
+  it("should export and restore persisted snapshot", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendMessages([
+      createConversationSummaryMessage("累计摘要"),
+      {
+        role: "assistant",
+        content: "reply-after-summary",
+        toolCalls: [],
+      },
+    ]);
+
+    const exported = await context.exportPersistedSnapshot();
+    const restored = new DefaultAgentContext({
+      systemPromptFactory: () => "other-system-prompt",
+    });
+    await restored.restorePersistedSnapshot(exported);
+
+    await expect(restored.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createConversationSummaryMessage("累计摘要"),
+        {
+          role: "assistant",
+          content: "reply-after-summary",
+          toolCalls: [],
+        },
+      ],
+    });
+
+    await restored.appendToolResult({
+      toolCallId: "tool-restored",
+      content: "ok",
+    });
+
+    await expect(restored.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [
+        createConversationSummaryMessage("累计摘要"),
+        {
+          role: "assistant",
+          content: "reply-after-summary",
+          toolCalls: [],
+        },
+        {
+          role: "tool",
+          toolCallId: "tool-restored",
+          content: "ok",
+        },
+      ],
+    });
+  });
 });

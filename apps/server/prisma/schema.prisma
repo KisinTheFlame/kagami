@@ -169,3 +169,16 @@ model AuthUsageSnapshot {
   @@index([capturedAt], map: "auth_usage_snapshot_captured_at_idx")
   @@map("auth_usage_snapshot")
 }
+
+model RootAgentRuntimeSnapshot {
+  id                 Int       @id @default(autoincrement())
+  runtimeKey         String    @unique(map: "root_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
+  schemaVersion      Int       @map("schema_version")
+  contextSnapshot    Json      @map("context_snapshot") @db.JsonB
+  sessionSnapshot    Json      @map("session_snapshot") @db.JsonB
+  lastWakeReminderAt DateTime? @map("last_wake_reminder_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("root_agent_runtime_snapshot")
+}

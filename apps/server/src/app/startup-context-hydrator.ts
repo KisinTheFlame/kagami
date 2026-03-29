@@ -9,14 +9,14 @@ import type {
 const logger = new AppLogger({ source: "bootstrap" });
 
 type HydrateStartupContextFromRecentMessagesOptions = {
-  listenGroupId: string;
+  listenGroupIds: string[];
   startupContextRecentMessageCount: number;
   napcatGatewayService: NapcatGatewayService;
   rootAgentRuntime: RootAgentRuntime;
 };
 
 export async function hydrateStartupContextFromRecentMessages({
-  listenGroupId,
+  listenGroupIds,
   startupContextRecentMessageCount,
   napcatGatewayService,
   rootAgentRuntime,
@@ -31,17 +31,32 @@ export async function hydrateStartupContextFromRecentMessages({
   }
 
   try {
-    const recentMessages = await napcatGatewayService.getRecentGroupMessages({
-      groupId: listenGroupId,
-      count: startupContextRecentMessageCount,
-    });
-    const startupEvents = recentMessages.map(createStartupEventFromGroupMessage);
+    const startupEvents: Event[] = [];
+
+    for (const groupId of listenGroupIds) {
+      try {
+        const recentMessages = await napcatGatewayService.getRecentGroupMessages({
+          groupId,
+          count: startupContextRecentMessageCount,
+        });
+        startupEvents.push(...recentMessages.map(createStartupEventFromGroupMessage));
+      } catch (error) {
+        logger.errorWithCause("Failed to load startup context for listen group", error, {
+          event: "agent.startup_context_group_hydrate_failed",
+          groupId,
+          requestedCount: startupContextRecentMessageCount,
+          status: "failed",
+        });
+      }
+    }
+
+    startupEvents.sort(compareStartupEvent);
 
     await rootAgentRuntime.hydrateStartupEvents(startupEvents);
 
     logger.info("Startup context hydrated from recent group messages", {
       event: "agent.startup_context_hydrated",
-      groupId: listenGroupId,
+      groupIds: listenGroupIds,
       requestedCount: startupContextRecentMessageCount,
       actualCount: startupEvents.length,
       status: startupEvents.length === 0 ? "empty" : "hydrated",
@@ -49,7 +64,7 @@ export async function hydrateStartupContextFromRecentMessages({
   } catch (error) {
     logger.errorWithCause("Failed to hydrate startup context from recent group messages", error, {
       event: "agent.startup_context_hydrate_failed",
-      groupId: listenGroupId,
+      groupIds: listenGroupIds,
       requestedCount: startupContextRecentMessageCount,
       status: "failed",
     });
@@ -61,4 +76,20 @@ function createStartupEventFromGroupMessage(message: NapcatGroupMessageData): Ev
     type: "napcat_group_message",
     data: message,
   };
+}
+
+function compareStartupEvent(left: Event, right: Event): number {
+  const leftTime = left.data.time ?? 0;
+  const rightTime = right.data.time ?? 0;
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+
+  const leftMessageId = left.data.messageId ?? 0;
+  const rightMessageId = right.data.messageId ?? 0;
+  if (leftMessageId !== rightMessageId) {
+    return leftMessageId - rightMessageId;
+  }
+
+  return left.data.groupId.localeCompare(right.data.groupId);
 }

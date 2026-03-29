@@ -13,7 +13,14 @@ import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
+import { AppLogger } from "../../../logger/logger.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
+import type { RootAgentRuntimeSnapshotRepository } from "./persistence/root-agent-runtime-snapshot.repository.js";
+import {
+  ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
+  ROOT_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
+} from "./persistence/root-agent-runtime-snapshot.repository.js";
+import type { PersistedRootAgentRuntimeSnapshot } from "./persistence/root-agent-runtime-snapshot.js";
 import type {
   RootAgentInvokeToolName,
   RootAgentPostToolEffects,
@@ -36,6 +43,8 @@ type RootAgentRuntimeDeps = {
   context: AgentContext;
   eventQueue: AgentEventQueue;
   session: RootAgentSessionController;
+  snapshotRepository?: RootAgentRuntimeSnapshotRepository;
+  runtimeKey?: string;
   tools?: ToolExecutor;
   agentTools?: ToolExecutor;
   contextSummaryOperation?: ContextSummaryLike;
@@ -47,8 +56,9 @@ type RootAgentRuntimeDeps = {
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
-const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 5;
-const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 200;
+const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
+const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
+const logger = new AppLogger({ source: "agent.root-agent-runtime" });
 
 type PendingToolPersistence = {
   toolResult?: {
@@ -108,6 +118,8 @@ export class RootAgentRuntime {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
+  private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
+  private readonly runtimeKey: string;
   private readonly tools: ToolExecutor;
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
@@ -124,12 +136,15 @@ export class RootAgentRuntime {
   private lastToolCall: RootAgentToolCallSummary | null = null;
   private lastToolResultPreview: string | null = null;
   private lastLlmCall: RootAgentLlmCallSummary | null = null;
+  private lastPersistedSnapshotFingerprint: string | null = null;
 
   public constructor({
     llmClient,
     context,
     eventQueue,
     session,
+    snapshotRepository,
+    runtimeKey,
     tools,
     agentTools,
     contextSummaryOperation,
@@ -143,6 +158,8 @@ export class RootAgentRuntime {
     this.context = context;
     this.eventQueue = eventQueue;
     this.session = session;
+    this.snapshotRepository = snapshotRepository;
+    this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
     this.tools = tools ?? agentTools ?? failMissingTools();
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
     this.summaryTools = summaryTools ?? [];
@@ -162,6 +179,7 @@ export class RootAgentRuntime {
     try {
       await this.session.initializeContext();
       await this.compactContextIfNeeded();
+      await this.persistSnapshotIfChanged();
       this.initialized = true;
       this.touchActivity();
       this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
@@ -169,6 +187,15 @@ export class RootAgentRuntime {
       this.recordCrash(error);
       throw error;
     }
+  }
+
+  public async restorePersistedSnapshot(
+    snapshot: PersistedRootAgentRuntimeSnapshot,
+  ): Promise<void> {
+    await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
+    this.session.restorePersistedSnapshot(snapshot.sessionSnapshot);
+    this.lastWakeReminderAt = cloneDate(snapshot.lastWakeReminderAt);
+    this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
   }
 
   public async run(): Promise<void> {
@@ -276,6 +303,7 @@ export class RootAgentRuntime {
     if (result.shouldTriggerRound) {
       await this.compactContextIfNeeded();
     }
+    await this.persistSnapshotIfChanged();
     if (events.length > 0) {
       this.touchActivity();
     }
@@ -328,6 +356,7 @@ export class RootAgentRuntime {
       result.shouldTriggerRound
     ) {
       this.touchActivity();
+      await this.persistSnapshotIfChanged();
     }
     return {
       shouldTriggerRound: result.shouldTriggerRound || waitingTimeoutResult.shouldTriggerRound,
@@ -383,6 +412,7 @@ export class RootAgentRuntime {
 
     if (hasWrittenMessages) {
       await this.compactContextIfNeeded();
+      await this.persistSnapshotIfChanged();
     }
   }
 
@@ -395,6 +425,7 @@ export class RootAgentRuntime {
     this.lastWakeReminderAt = new Date(now);
     this.touchActivity();
     await this.compactContextIfNeeded();
+    await this.persistSnapshotIfChanged();
   }
 
   private async compactContextIfNeeded(): Promise<void> {
@@ -424,6 +455,38 @@ export class RootAgentRuntime {
     await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
     this.lastCompactionAt = this.now();
     this.touchActivity();
+  }
+
+  private async persistSnapshotIfChanged(): Promise<void> {
+    if (!this.snapshotRepository) {
+      return;
+    }
+
+    const snapshot = await this.createPersistedSnapshot();
+    const fingerprint = createSnapshotFingerprint(snapshot);
+    if (fingerprint === this.lastPersistedSnapshotFingerprint) {
+      return;
+    }
+
+    try {
+      await this.snapshotRepository.save(snapshot);
+      this.lastPersistedSnapshotFingerprint = fingerprint;
+    } catch (error) {
+      logger.errorWithCause("Failed to persist root agent runtime snapshot", error, {
+        event: "agent.root_agent_runtime_snapshot.persist_failed",
+        runtimeKey: this.runtimeKey,
+      });
+    }
+  }
+
+  private async createPersistedSnapshot(): Promise<PersistedRootAgentRuntimeSnapshot> {
+    return {
+      runtimeKey: this.runtimeKey,
+      schemaVersion: ROOT_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
+      contextSnapshot: await this.context.exportPersistedSnapshot(),
+      sessionSnapshot: this.session.exportPersistedSnapshot(),
+      lastWakeReminderAt: cloneDate(this.lastWakeReminderAt),
+    };
   }
 
   private transitionTo(loopState: RootAgentLoopState): void {
@@ -606,4 +669,14 @@ function createSessionDashboardSnapshot(
     availableInvokeTools: session.getAvailableInvokeTools(),
     groups: [],
   };
+}
+
+function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot): string {
+  return JSON.stringify({
+    runtimeKey: snapshot.runtimeKey,
+    schemaVersion: snapshot.schemaVersion,
+    contextSnapshot: snapshot.contextSnapshot,
+    sessionSnapshot: snapshot.sessionSnapshot,
+    lastWakeReminderAt: snapshot.lastWakeReminderAt?.toISOString() ?? null,
+  });
 }
