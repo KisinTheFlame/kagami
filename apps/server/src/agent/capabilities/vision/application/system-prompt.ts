@@ -1,7 +1,5 @@
-import { readServerStaticText } from "../../../../common/runtime/read-static-text.js";
-
-const rawSystemPrompt = readServerStaticText(import.meta.url, "vision-system.txt");
+import { renderServerStaticTemplate } from "../../../../common/runtime/read-static-text.js";
 
 export function createVisionSystemPrompt(): string {
-  return rawSystemPrompt.trim();
+  return renderServerStaticTemplate(import.meta.url, "prompts/vision-system.hbs").trim();
 }

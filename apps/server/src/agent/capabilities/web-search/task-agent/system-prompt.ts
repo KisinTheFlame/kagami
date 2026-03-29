@@ -1,7 +1,5 @@
-import { readServerStaticText } from "../../../../common/runtime/read-static-text.js";
-
-const rawSystemPrompt = readServerStaticText(import.meta.url, "web-search-system.txt");
+import { renderServerStaticTemplate } from "../../../../common/runtime/read-static-text.js";
 
 export function createWebSearchSystemPrompt(): string {
-  return rawSystemPrompt.trim();
+  return renderServerStaticTemplate(import.meta.url, "prompts/web-search-system.hbs").trim();
 }

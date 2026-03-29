@@ -1,10 +1,8 @@
-import { readServerStaticText } from "../../../../common/runtime/read-static-text.js";
-
-const rawSummarizerPrompt = readServerStaticText(
-  import.meta.url,
-  "context-summarizer-system.txt",
-).trim();
+import { renderServerStaticTemplate } from "../../../../common/runtime/read-static-text.js";
 
 export function createContextSummarizerSystemPrompt(): string {
-  return rawSummarizerPrompt;
+  return renderServerStaticTemplate(
+    import.meta.url,
+    "prompts/context-summarizer-system.hbs",
+  ).trim();
 }

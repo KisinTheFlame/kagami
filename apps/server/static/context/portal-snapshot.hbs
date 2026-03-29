@@ -1,0 +1,9 @@
+<system_reminder>
+你当前处于门户状态。
+这里会显示可进入的目标；如果你想进入某个目标，调用 enter。
+可进入目标：
+{{#each groups}}
+- {{groupLabel}}{{#if hasEntered}}，未读 {{unreadCount}} 条，可通过 {{enterCommandText}} 进入{{else}}，尚未查看，可通过 {{enterCommandText}} 进去看看最近消息{{/if}}
+{{/each}}
+- 神游（kind="zone_out"），可通过 enter(kind="zone_out") 进入自由思考状态
+</system_reminder>

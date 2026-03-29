@@ -1,8 +1,4 @@
-import Handlebars from "handlebars";
-import { readServerStaticText } from "../../../common/runtime/read-static-text.js";
-
-const rawSystemPrompt = readServerStaticText(import.meta.url, "main-engine-system.txt");
-const compileSystemPrompt = Handlebars.compile(rawSystemPrompt);
+import { renderServerStaticTemplate } from "../../../common/runtime/read-static-text.js";
 
 export function createAgentSystemPrompt({
   botQQ,
@@ -13,7 +9,7 @@ export function createAgentSystemPrompt({
   creatorName: string;
   creatorQQ: string;
 }): string {
-  return compileSystemPrompt({
+  return renderServerStaticTemplate(import.meta.url, "prompts/main-engine-system.hbs", {
     botQQ,
     creatorName,
     creatorQQ,
