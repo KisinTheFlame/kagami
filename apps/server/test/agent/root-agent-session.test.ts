@@ -123,8 +123,9 @@ describe("RootAgentSession", () => {
     await session.enter({ kind: "qq_group", id: "group-1" });
 
     const postToolEffects = await session.flushPendingPostToolEffects();
-    expect(postToolEffects.messages).toHaveLength(0);
-    expect(postToolEffects.events).toHaveLength(1);
+    expect(postToolEffects.messages).toHaveLength(1);
+    expect(postToolEffects.events).toHaveLength(0);
+    expect(postToolEffects.messages[0]?.content).toContain("history-1");
 
     await applyPostToolEffects(context, postToolEffects);
 
@@ -163,7 +164,12 @@ describe("RootAgentSession", () => {
       source: "history",
       hydratedCount: 2,
     });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    let postToolEffects = await session.flushPendingPostToolEffects();
+    expect(postToolEffects.messages).toHaveLength(1);
+    expect(postToolEffects.events).toHaveLength(0);
+    expect(postToolEffects.messages[0]?.content).toContain("history-1");
+    expect(postToolEffects.messages[0]?.content).toContain("history-2");
+    await applyPostToolEffects(context, postToolEffects);
 
     const backgroundResults = await Promise.all([
       session.consumeIncomingEvent(createGroupEvent("b-1", "group-2")),
@@ -229,12 +235,23 @@ describe("RootAgentSession", () => {
       source: "unread",
       hydratedCount: 2,
     });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    postToolEffects = await session.flushPendingPostToolEffects();
+    expect(postToolEffects.messages).toHaveLength(1);
+    expect(postToolEffects.events).toHaveLength(0);
+    expect(postToolEffects.messages[0]?.content).toContain("b-5");
+    expect(postToolEffects.messages[0]?.content).toContain("b-6");
+    await applyPostToolEffects(context, postToolEffects);
 
     snapshot = await context.getSnapshot();
     contents = snapshot.messages.flatMap(message =>
       typeof message.content === "string" ? [message.content] : [],
     );
+    expect(
+      contents.filter(content => content.includes("history-1") && content.includes("history-2")),
+    ).toHaveLength(1);
+    expect(
+      contents.filter(content => content.includes("b-5") && content.includes("b-6")),
+    ).toHaveLength(1);
     expect(contents.some(content => content.includes("history-1"))).toBe(true);
     expect(contents.some(content => content.includes("b-5"))).toBe(true);
     expect(contents.some(content => content.includes("b-6"))).toBe(true);

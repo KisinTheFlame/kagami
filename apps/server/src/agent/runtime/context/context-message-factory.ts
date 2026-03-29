@@ -4,6 +4,7 @@ import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
 } from "../../../napcat/service/napcat-gateway/shared.js";
+import type { NapcatGroupMessageData } from "../../../napcat/service/napcat-gateway.service.js";
 import { renderServerStaticTemplate } from "../../../common/runtime/read-static-text.js";
 
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
@@ -95,6 +96,18 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
     default:
       return [];
   }
+}
+
+export function createMergedGroupMessagesMessage(
+  messages: NapcatGroupMessageData[],
+): UserMessage | null {
+  if (messages.length === 0) {
+    return null;
+  }
+
+  return createUserMessage(
+    messages.map(message => renderGroupMessagePlainText(message)).join("\n\n"),
+  );
 }
 
 export function renderGroupMessagePlainText(input: {

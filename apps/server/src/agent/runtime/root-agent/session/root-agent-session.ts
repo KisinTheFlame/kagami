@@ -1,6 +1,7 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
+  createMergedGroupMessagesMessage,
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
   createPortalSnapshotMessage,
@@ -46,10 +47,26 @@ export type RootAgentPostToolEffects = {
   events: Event[];
 };
 
+export type RootAgentSessionDashboardGroup = {
+  groupId: string;
+  groupName?: string;
+  unreadCount: number;
+  hasEntered: boolean;
+};
+
+export type RootAgentSessionDashboardSnapshot = {
+  state: RootAgentSessionState;
+  currentGroupId: string | null;
+  waitingDeadlineAt: Date | null;
+  availableInvokeTools: RootAgentInvokeToolName[];
+  groups: RootAgentSessionDashboardGroup[];
+};
+
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
+  getDashboardSnapshot?(): RootAgentSessionDashboardSnapshot;
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
@@ -118,6 +135,16 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
     return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE[this.state.kind]];
+  }
+
+  public getDashboardSnapshot(): RootAgentSessionDashboardSnapshot {
+    return {
+      state: cloneSessionState(this.state),
+      currentGroupId: this.getCurrentGroupId() ?? null,
+      waitingDeadlineAt: this.state.kind === "waiting" ? new Date(this.state.deadlineAt) : null,
+      availableInvokeTools: this.getAvailableInvokeTools(),
+      groups: this.renderPortalGroups(),
+    };
   }
 
   public async initializeContext(): Promise<void> {
@@ -344,8 +371,9 @@ export class RootAgentSession implements RootAgentSessionController {
     };
     groupState.markEntered();
 
-    if (hydratedMessages.length > 0) {
-      this.pendingPostToolEvents.push(...hydratedMessages.map(createGroupMessageEvent));
+    const hydratedMessage = createMergedGroupMessagesMessage(hydratedMessages);
+    if (hydratedMessage) {
+      this.pendingPostToolMessages.push(hydratedMessage);
     }
 
     return {
@@ -418,9 +446,13 @@ export class RootAgentSession implements RootAgentSessionController {
   }
 }
 
-function createGroupMessageEvent(data: NapcatGroupMessageData): Event {
-  return {
-    type: "napcat_group_message",
-    data,
-  };
+function cloneSessionState(state: RootAgentSessionState): RootAgentSessionState {
+  if (state.kind === "waiting") {
+    return {
+      kind: "waiting",
+      deadlineAt: new Date(state.deadlineAt),
+    };
+  }
+
+  return { ...state };
 }
