@@ -27,6 +27,32 @@ let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
 
+async function startAgentLoop(runtime: {
+  rootAgentRuntime: {
+    initialize(): Promise<void>;
+    run(): Promise<void>;
+  };
+}): Promise<void> {
+  try {
+    await runtime.rootAgentRuntime.initialize();
+  } catch (error) {
+    logger.errorWithCause(
+      "Agent runtime initialization failed; backend will continue without agent loop",
+      error,
+      {
+        event: "agent.loop.init_failed",
+      },
+    );
+    return;
+  }
+
+  void runtime.rootAgentRuntime.run().catch(error => {
+    logger.errorWithCause("Agent loop crashed; backend will continue without agent loop", error, {
+      event: "agent.loop.crashed",
+    });
+  });
+}
+
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (isShuttingDown) {
     logger.warn("Shutdown already in progress, ignoring repeated signal", {
@@ -135,7 +161,6 @@ try {
   port = runtime.port;
 
   await runtime.napcatGatewayService.start();
-  await runtime.rootAgentRuntime.initialize();
   await runtime.app.listen({ host: "0.0.0.0", port: runtime.port });
   isServerStarted = true;
 
@@ -151,12 +176,7 @@ try {
     traceRuntimeEnabled: true,
   });
 
-  void runtime.rootAgentRuntime.run().catch(error => {
-    logger.errorWithCause("Agent loop crashed", error, {
-      event: "agent.loop.crashed",
-    });
-    void shutdown("SIGTERM");
-  });
+  void startAgentLoop(runtime);
 } catch (error) {
   logger.errorWithCause("Failed to start server", error, {
     event: "server.start_failed",
