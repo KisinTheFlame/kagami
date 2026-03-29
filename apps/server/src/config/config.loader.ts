@@ -9,7 +9,6 @@ import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
-const DEFAULT_AGENT_PORTAL_SLEEP_MS = 30_000;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD = 60;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
@@ -140,7 +139,6 @@ const ConfigSchema = z.object({
     port: PositiveIntSchema.default(DEFAULT_PORT),
     agent: z
       .object({
-        portalSleepMs: PositiveIntSchema.default(DEFAULT_AGENT_PORTAL_SLEEP_MS),
         contextCompactionThreshold: PositiveIntSchema.default(
           DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD,
         ),

@@ -71,7 +71,7 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
       });
     }
 
-    if (rootAgentSession.getState().kind !== "group") {
+    if (rootAgentSession.getState().kind !== "qq_group") {
       return JSON.stringify({
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",

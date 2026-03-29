@@ -33,13 +33,20 @@ describe("DefaultLlmPlaygroundService", () => {
 
   it("should disable history recording and route to the selected provider", async () => {
     const chatDirect = vi.fn().mockResolvedValue({
-      provider: "deepseek",
-      model: "deepseek-chat",
-      message: {
-        role: "assistant",
-        content: "pong",
-        toolCalls: [],
+      response: {
+        provider: "deepseek",
+        model: "deepseek-chat",
+        message: {
+          role: "assistant",
+          content: "pong",
+          toolCalls: [],
+        },
       },
+      nativeRequestPayload: {
+        model: "deepseek-reasoner",
+        messages: [{ role: "user", content: "describe" }],
+      },
+      nativeResponsePayload: null,
     });
     const llmClient: LlmClient = {
       chat: vi.fn(),
@@ -74,28 +81,42 @@ describe("DefaultLlmPlaygroundService", () => {
       ],
     });
 
-    await service.chat({
+    await expect(
+      service.chat({
+        provider: "deepseek",
+        model: "deepseek-reasoner",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "describe",
+              },
+              {
+                type: "image",
+                mimeType: "image/png",
+                dataUrl: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
+                fileName: "cat.png",
+              },
+            ],
+          },
+        ],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toEqual({
       provider: "deepseek",
-      model: "deepseek-reasoner",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "describe",
-            },
-            {
-              type: "image",
-              mimeType: "image/png",
-              dataUrl: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
-              fileName: "cat.png",
-            },
-          ],
-        },
-      ],
-      tools: [],
-      toolChoice: "none",
+      model: "deepseek-chat",
+      message: {
+        role: "assistant",
+        content: "pong",
+        toolCalls: [],
+      },
+      nativeRequestPayload: {
+        model: "deepseek-reasoner",
+        messages: [{ role: "user", content: "describe" }],
+      },
     });
 
     expect(chatDirect).toHaveBeenCalledWith(

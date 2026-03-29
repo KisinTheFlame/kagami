@@ -127,6 +127,10 @@ describe("llm playground schemas", () => {
         content: "pong",
         toolCalls: [],
       },
+      nativeRequestPayload: {
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "ping" }],
+      },
       usage: {
         promptTokens: 10,
         completionTokens: 2,
@@ -135,5 +139,20 @@ describe("llm playground schemas", () => {
     });
 
     expect(result.usage?.totalTokens).toBe(12);
+  });
+
+  it("should parse playground chat response when native request payload is null", () => {
+    const result = LlmPlaygroundChatResponseSchema.parse({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      message: {
+        role: "assistant",
+        content: "pong",
+        toolCalls: [],
+      },
+      nativeRequestPayload: null,
+    });
+
+    expect(result.nativeRequestPayload).toBeNull();
   });
 });

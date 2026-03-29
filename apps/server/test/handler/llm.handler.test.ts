@@ -101,6 +101,10 @@ describe("LlmHandler", () => {
         content: "pong",
         toolCalls: [],
       },
+      nativeRequestPayload: {
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "ping" }],
+      },
       usage: {
         totalTokens: 12,
       },
@@ -136,6 +140,10 @@ describe("LlmHandler", () => {
         role: "assistant",
         content: "pong",
         toolCalls: [],
+      },
+      nativeRequestPayload: {
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "ping" }],
       },
       usage: {
         totalTokens: 12,

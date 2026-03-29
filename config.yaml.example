@@ -2,7 +2,6 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
   port: 20003
   agent:
-    portalSleepMs: 30000
     contextCompactionThreshold: 60
   napcat:
     wsUrl: ws://localhost:6099

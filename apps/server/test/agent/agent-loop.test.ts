@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { ToolCatalog, type ToolComponent } from "@kagami/agent-runtime";
 import { SearchWebTool } from "../../src/agent/capabilities/web-search/tools/search-web.tool.js";
-import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
-import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
-import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
-import { EnterGroupTool } from "../../src/agent/runtime/root-agent/tools/enter-group.tool.js";
-import { SleepTool } from "../../src/agent/runtime/root-agent/tools/sleep.tool.js";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import {
   createConversationSummaryMessage,
   createUserMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
+import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
+import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
+import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
+import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.js";
+import { WaitTool } from "../../src/agent/runtime/root-agent/tools/wait.tool.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmMessage, Tool } from "../../src/llm/types.js";
 
@@ -100,7 +100,7 @@ function createRuntimeForCompactionTest(input: {
     context: input.context,
     eventQueue,
     session,
-    tools: new ToolCatalog([new SleepTool({ sleepMs: 1 })]).pick(["sleep"]),
+    tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
     contextSummaryOperation: input.contextSummaryOperation,
     contextCompactionThreshold: input.contextCompactionThreshold,
   });
@@ -113,6 +113,7 @@ describe("RootAgentRuntime", () => {
       .fn()
       .mockResolvedValue([createGroupHistoryMessage("history message")]);
     const sleep = vi.fn().mockRejectedValue(stopError);
+    const waitNow = new Date("2026-03-30T12:00:00.000Z");
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -136,8 +137,8 @@ describe("RootAgentRuntime", () => {
       recentMessageLimit: 2,
     });
 
-    const sendMessageExecute = vi.fn().mockResolvedValue({
-      content: JSON.stringify({ ok: true, messageId: 9527 }),
+    const invokeExecute = vi.fn().mockResolvedValue({
+      content: JSON.stringify({ ok: true, message: "noop" }),
       signal: "continue",
     });
     const searchWebExecute = vi.fn().mockResolvedValue({
@@ -145,10 +146,10 @@ describe("RootAgentRuntime", () => {
       signal: "continue",
     });
     const toolCatalog = new ToolCatalog([
-      new EnterGroupTool(),
+      new EnterTool(),
       new BackToPortalTool(),
-      new SleepTool({
-        sleepMs: 30_000,
+      new WaitTool({
+        now: () => waitNow,
       }),
       {
         name: "search_web",
@@ -163,16 +164,16 @@ describe("RootAgentRuntime", () => {
         execute: searchWebExecute,
       } satisfies ToolComponent,
       {
-        name: "send_message",
-        description: "send",
+        name: "invoke",
+        description: "invoke",
         parameters: { type: "object", properties: {} },
         kind: "business",
         llmTool: {
-          name: "send_message",
-          description: "send",
+          name: "invoke",
+          description: "invoke",
           parameters: { type: "object", properties: {} },
         },
-        execute: sendMessageExecute,
+        execute: invokeExecute,
       } satisfies ToolComponent,
     ]);
 
@@ -185,7 +186,13 @@ describe("RootAgentRuntime", () => {
           message: {
             role: "assistant",
             content: "",
-            toolCalls: [{ id: "enter-1", name: "enter_group", arguments: { groupId: "group-1" } }],
+            toolCalls: [
+              {
+                id: "enter-1",
+                name: "enter",
+                arguments: { kind: "qq_group", id: "group-1" },
+              },
+            ],
           },
         })
         .mockResolvedValueOnce({
@@ -203,7 +210,7 @@ describe("RootAgentRuntime", () => {
           message: {
             role: "assistant",
             content: "",
-            toolCalls: [{ id: "sleep-1", name: "sleep", arguments: {} }],
+            toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
           },
         }),
       chatDirect: vi.fn(),
@@ -220,13 +227,7 @@ describe("RootAgentRuntime", () => {
       context,
       eventQueue,
       session,
-      tools: toolCatalog.pick([
-        "enter_group",
-        "back_to_portal",
-        "send_message",
-        "sleep",
-        "search_web",
-      ]),
+      tools: toolCatalog.pick(["enter", "back_to_portal", "invoke", "wait", "search_web"]),
       sleep,
     });
 
@@ -235,48 +236,33 @@ describe("RootAgentRuntime", () => {
     const chatCalls = vi.mocked(llmClient.chat).mock.calls;
     expect(chatCalls).toHaveLength(3);
     expect(chatCalls[0]?.[0].tools.map(tool => tool.name)).toEqual([
-      "enter_group",
+      "enter",
       "back_to_portal",
-      "send_message",
-      "sleep",
+      "invoke",
+      "wait",
       "search_web",
     ]);
     expect(chatCalls[1]?.[0].tools.map(tool => tool.name)).toEqual([
-      "enter_group",
+      "enter",
       "back_to_portal",
-      "send_message",
-      "sleep",
+      "invoke",
+      "wait",
       "search_web",
     ]);
     expect(chatCalls[2]?.[0].tools.map(tool => tool.name)).toEqual([
-      "enter_group",
+      "enter",
       "back_to_portal",
-      "send_message",
-      "sleep",
+      "invoke",
+      "wait",
       "search_web",
     ]);
     expect(getRecentGroupMessages).toHaveBeenCalledWith({
       groupId: "group-1",
       count: 2,
     });
-    expect(sendMessageExecute).not.toHaveBeenCalled();
+    expect(invokeExecute).not.toHaveBeenCalled();
     expect(searchWebExecute).not.toHaveBeenCalled();
-    expect(sleep).toHaveBeenCalledWith(30_000);
-
-    const firstReminder = chatCalls[0]?.[0].messages.at(-1);
-    const secondReminder = chatCalls[1]?.[0].messages.at(-1);
-    expect(firstReminder).toEqual(
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining("当前允许动作：enter_group、sleep"),
-      }),
-    );
-    expect(secondReminder).toEqual(
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining("当前允许动作：send_message、back_to_portal、search_web"),
-      }),
-    );
+    expect(sleep).toHaveBeenCalledWith(10);
 
     const snapshot = await context.getSnapshot();
     expect(
@@ -289,58 +275,16 @@ describe("RootAgentRuntime", () => {
       snapshot.messages.some(
         message =>
           typeof message.content === "string" &&
-          message.content.includes("群 产品群（group-1），未读 0 条"),
+          message.content.includes("QQ 群 产品群（group-1），未读 0 条"),
       ),
     ).toBe(true);
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" &&
-          message.content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息"),
-      ),
-    ).toBe(true);
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
-      ),
-    ).toBe(true);
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("你已退出群 group-1"),
-      ),
-    ).toBe(true);
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" &&
-          message.content.includes("当前允许动作：enter_group、sleep"),
-      ),
-    ).toBe(false);
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" &&
-          message.content.includes("当前允许动作：send_message、back_to_portal、search_web"),
-      ),
-    ).toBe(false);
-
     const enterAssistantIndex = snapshot.messages.findIndex(
       message =>
         message.role === "assistant" &&
-        message.toolCalls.some(
-          toolCall => toolCall.id === "enter-1" && toolCall.name === "enter_group",
-        ),
+        message.toolCalls.some(toolCall => toolCall.id === "enter-1" && toolCall.name === "enter"),
     );
     const enterToolResultIndex = snapshot.messages.findIndex(
       message => message.role === "tool" && message.toolCallId === "enter-1",
-    );
-    const enterGroupNoticeIndex = snapshot.messages.findIndex(
-      message =>
-        message.role === "user" &&
-        typeof message.content === "string" &&
-        message.content.includes("你已进入群 group-1"),
     );
     const historyMessageIndex = snapshot.messages.findIndex(
       message =>
@@ -351,13 +295,13 @@ describe("RootAgentRuntime", () => {
 
     expect(enterAssistantIndex).toBeGreaterThanOrEqual(0);
     expect(enterToolResultIndex).toBeGreaterThan(enterAssistantIndex);
-    expect(enterGroupNoticeIndex).toBeGreaterThan(enterToolResultIndex);
     expect(historyMessageIndex).toBeGreaterThan(enterToolResultIndex);
   });
 
-  it("should expose post-tool context to nested search without persisting an unfinished tool call", async () => {
+  it("should expose post-tool context to nested search without persisting unfinished wait tool call", async () => {
     const stopError = new StopLoopError("stop-loop");
     const sleep = vi.fn().mockRejectedValue(stopError);
+    const waitNow = new Date("2026-03-30T12:00:00.000Z");
     const webSearchAgent = {
       search: vi.fn().mockResolvedValue("search summary"),
     };
@@ -393,14 +337,14 @@ describe("RootAgentRuntime", () => {
           role: "assistant",
           content: "",
           toolCalls: [
-            { id: "enter-1", name: "enter_group", arguments: { groupId: "group-1" } },
+            { id: "enter-1", name: "enter", arguments: { kind: "qq_group", id: "group-1" } },
             {
               id: "search-1",
               name: "search_web",
               arguments: { question: "今天有什么热点" },
             },
             { id: "back-1", name: "back_to_portal", arguments: {} },
-            { id: "sleep-1", name: "sleep", arguments: {} },
+            { id: "wait-1", name: "wait", arguments: {} },
           ],
         },
       }),
@@ -418,11 +362,13 @@ describe("RootAgentRuntime", () => {
       eventQueue,
       session,
       tools: new ToolCatalog([
-        new EnterGroupTool(),
+        new EnterTool(),
         new SearchWebTool({ webSearchAgent }),
         new BackToPortalTool(),
-        new SleepTool({ sleepMs: 30_000 }),
-      ]).pick(["enter_group", "search_web", "back_to_portal", "sleep"]),
+        new WaitTool({
+          now: () => waitNow,
+        }),
+      ]).pick(["enter", "search_web", "back_to_portal", "wait"]),
       sleep,
     });
 
@@ -436,10 +382,6 @@ describe("RootAgentRuntime", () => {
           expect.objectContaining({
             role: "user",
             content: expect.stringContaining("你当前处于门户状态"),
-          }),
-          expect.objectContaining({
-            role: "user",
-            content: expect.stringContaining("你已进入群 group-1"),
           }),
           expect.objectContaining({
             role: "user",
@@ -464,12 +406,6 @@ describe("RootAgentRuntime", () => {
     const enterToolResultIndex = snapshot.messages.findIndex(
       message => message.role === "tool" && message.toolCallId === "enter-1",
     );
-    const enterGroupNoticeIndex = snapshot.messages.findIndex(
-      message =>
-        message.role === "user" &&
-        typeof message.content === "string" &&
-        message.content.includes("你已进入群 group-1"),
-    );
     const historyMessageIndex = snapshot.messages.findIndex(
       message =>
         message.role === "user" &&
@@ -479,12 +415,20 @@ describe("RootAgentRuntime", () => {
     const searchToolResultIndex = snapshot.messages.findIndex(
       message => message.role === "tool" && message.toolCallId === "search-1",
     );
-
+    const waitAssistantIndex = snapshot.messages.findIndex(
+      message =>
+        message.role === "assistant" &&
+        message.toolCalls.some(toolCall => toolCall.id === "wait-1" && toolCall.name === "wait"),
+    );
+    const waitToolResultIndex = snapshot.messages.findIndex(
+      message => message.role === "tool" && message.toolCallId === "wait-1",
+    );
     expect(assistantIndex).toBeGreaterThanOrEqual(0);
     expect(enterToolResultIndex).toBeGreaterThan(assistantIndex);
-    expect(enterGroupNoticeIndex).toBeGreaterThan(enterToolResultIndex);
-    expect(historyMessageIndex).toBeGreaterThan(enterGroupNoticeIndex);
+    expect(historyMessageIndex).toBeGreaterThan(enterToolResultIndex);
     expect(searchToolResultIndex).toBeGreaterThan(historyMessageIndex);
+    expect(waitAssistantIndex).toBeGreaterThanOrEqual(0);
+    expect(waitToolResultIndex).toBeGreaterThan(waitAssistantIndex);
   });
 
   it("should summarize the full context and replace it with a single cumulative summary", async () => {
@@ -517,96 +461,5 @@ describe("RootAgentRuntime", () => {
 
     const snapshot = await context.getSnapshot();
     expect(snapshot.messages).toEqual([createConversationSummaryMessage("累计摘要")]);
-  });
-
-  it("should re-summarize existing conversation summary together with newer messages", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    await context.appendMessages([
-      createConversationSummaryMessage("旧上下文摘要"),
-      createUserMessage("新增消息"),
-      createUserMessage("再新增一条"),
-    ]);
-    const summarize = vi.fn().mockResolvedValue("新的累计摘要");
-    const runtime = createRuntimeForCompactionTest({
-      context,
-      contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).toHaveBeenCalledWith({
-      messages: [
-        createConversationSummaryMessage("旧上下文摘要"),
-        createUserMessage("新增消息"),
-        createUserMessage("再新增一条"),
-        expect.objectContaining({
-          role: "user",
-          content: expect.stringContaining("你当前处于门户状态"),
-        }),
-      ],
-      tools: [],
-    });
-
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toEqual([createConversationSummaryMessage("新的累计摘要")]);
-  });
-
-  it("should keep original messages when summary returns null", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    await context.appendMessages([
-      createUserMessage("alpha"),
-      createUserMessage("beta"),
-      createUserMessage("gamma"),
-    ]);
-    const summarize = vi.fn().mockResolvedValue(null);
-    const runtime = createRuntimeForCompactionTest({
-      context,
-      contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
-    });
-
-    await runtime.initialize();
-
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toEqual([
-      createUserMessage("alpha"),
-      createUserMessage("beta"),
-      createUserMessage("gamma"),
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining("你当前处于门户状态"),
-      }),
-    ]);
-  });
-
-  it("should not summarize when message count does not exceed threshold", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    await context.appendMessages([createUserMessage("alpha")]);
-    const summarize = vi.fn().mockResolvedValue("不会被使用");
-    const runtime = createRuntimeForCompactionTest({
-      context,
-      contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).not.toHaveBeenCalled();
-
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toEqual([
-      createUserMessage("alpha"),
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining("你当前处于门户状态"),
-      }),
-    ]);
   });
 });

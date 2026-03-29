@@ -56,30 +56,40 @@ async function applyPostToolEffects(
   }
 }
 
+function createSession({
+  context,
+  getRecentGroupMessages = vi.fn().mockResolvedValue([]),
+}: {
+  context: DefaultAgentContext;
+  getRecentGroupMessages?: ReturnType<typeof vi.fn>;
+}) {
+  return new RootAgentSession({
+    context,
+    napcatGatewayService: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      sendGroupMessage: vi.fn(),
+      getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
+        groupId,
+        groupName: groupId === "group-1" ? "产品群" : "测试群",
+        memberCount: 123,
+        maxMemberCount: 500,
+        groupRemark: "",
+        groupAllShut: false,
+      })),
+      getRecentGroupMessages,
+    },
+    listenGroupIds: ["group-1", "group-2"],
+    recentMessageLimit: 2,
+  });
+}
+
 describe("RootAgentSession", () => {
   it("should initialize portal snapshot and buffer unread while in portal", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const session = new RootAgentSession({
-      context,
-      napcatGatewayService: {
-        start: vi.fn(),
-        stop: vi.fn(),
-        sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
-          groupId,
-          groupName: groupId === "group-1" ? "产品群" : "测试群",
-          memberCount: 123,
-          maxMemberCount: 500,
-          groupRemark: "",
-          groupAllShut: false,
-        })),
-        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
-      },
-      listenGroupIds: ["group-1", "group-2"],
-      recentMessageLimit: 2,
-    });
+    const session = createSession({ context });
 
     await session.initializeContext();
     const consumeResult = await session.consumeIncomingEvent(createGroupEvent("hello", "group-1"));
@@ -93,71 +103,32 @@ describe("RootAgentSession", () => {
     });
     const snapshot = await context.getSnapshot();
     expect(snapshot.messages.at(-1)?.content).toContain(
-      "群 产品群（group-1），尚未查看，可进入看看最近消息",
+      'QQ 群 产品群（group-1），尚未查看，可通过 enter(kind="qq_group", id="group-1")',
     );
-    expect(snapshot.messages.at(-1)?.content).toContain(
-      "群 测试群（group-2），尚未查看，可进入看看最近消息",
-    );
+    expect(snapshot.messages.at(-1)?.content).toContain('enter(kind="zone_out")');
   });
 
-  it("should drain post-tool effects without mutating context until the runtime persists them", async () => {
+  it("should drain post-tool effects without mutating context until persisted", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const session = new RootAgentSession({
+    const session = createSession({
       context,
-      napcatGatewayService: {
-        start: vi.fn(),
-        stop: vi.fn(),
-        sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn().mockResolvedValue({
-          groupId: "group-1",
-          groupName: "产品群",
-          memberCount: 123,
-          maxMemberCount: 500,
-          groupRemark: "",
-          groupAllShut: false,
-        }),
-        getRecentGroupMessages: vi
-          .fn()
-          .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
-      },
-      listenGroupIds: ["group-1"],
-      recentMessageLimit: 1,
+      getRecentGroupMessages: vi
+        .fn()
+        .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
     });
 
     await session.initializeContext();
-    await session.enterGroup({ groupId: "group-1" });
-
-    const beforeFlushSnapshot = await context.getSnapshot();
-    expect(
-      beforeFlushSnapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
-      ),
-    ).toBe(false);
+    await session.enter({ kind: "qq_group", id: "group-1" });
 
     const postToolEffects = await session.flushPendingPostToolEffects();
-    expect(postToolEffects.messages).toHaveLength(1);
+    expect(postToolEffects.messages).toHaveLength(0);
     expect(postToolEffects.events).toHaveLength(1);
-
-    const afterDrainSnapshot = await context.getSnapshot();
-    expect(
-      afterDrainSnapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
-      ),
-    ).toBe(false);
 
     await applyPostToolEffects(context, postToolEffects);
 
     const persistedSnapshot = await context.getSnapshot();
-    expect(
-      persistedSnapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
-      ),
-    ).toBe(true);
     expect(
       persistedSnapshot.messages.some(
         message => typeof message.content === "string" && message.content.includes("history-1"),
@@ -165,7 +136,7 @@ describe("RootAgentSession", () => {
     ).toBe(true);
   });
 
-  it("should use history on first enter, unread tail on re-enter, and not surface background events in group", async () => {
+  it("should use history on first enter, unread tail on re-enter, and not surface background events in qq group", async () => {
     const getRecentGroupMessages = vi
       .fn()
       .mockResolvedValueOnce([
@@ -176,33 +147,19 @@ describe("RootAgentSession", () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const session = new RootAgentSession({
+    const session = createSession({
       context,
-      napcatGatewayService: {
-        start: vi.fn(),
-        stop: vi.fn(),
-        sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
-          groupId,
-          groupName: groupId === "group-1" ? "产品群" : "测试群",
-          memberCount: 123,
-          maxMemberCount: 500,
-          groupRemark: "",
-          groupAllShut: false,
-        })),
-        getRecentGroupMessages,
-      },
-      listenGroupIds: ["group-1", "group-2"],
-      recentMessageLimit: 2,
+      getRecentGroupMessages,
     });
 
     await session.initializeContext();
     await session.consumeIncomingEvent(createGroupEvent("portal-unread-1", "group-1"));
     await session.consumeIncomingEvent(createGroupEvent("portal-unread-2", "group-1"));
     await session.flushPendingIncomingEffects();
-    await expect(session.enterGroup({ groupId: "group-1" })).resolves.toMatchObject({
+    await expect(session.enter({ kind: "qq_group", id: "group-1" })).resolves.toMatchObject({
       ok: true,
-      groupId: "group-1",
+      kind: "qq_group",
+      id: "group-1",
       source: "history",
       hydratedCount: 2,
     });
@@ -223,9 +180,10 @@ describe("RootAgentSession", () => {
     expect(backgroundResult).toEqual({
       shouldTriggerRound: false,
     });
-    await expect(session.exitGroup()).resolves.toMatchObject({
+    await expect(session.backToPortal()).resolves.toMatchObject({
       ok: true,
-      groupId: "group-1",
+      kind: "qq_group",
+      id: "group-1",
     });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
@@ -233,26 +191,30 @@ describe("RootAgentSession", () => {
     let contents = snapshot.messages.flatMap(message =>
       typeof message.content === "string" ? [message.content] : [],
     );
-    expect(contents.some(content => content.includes("群 产品群（group-1），未读 0 条"))).toBe(
+    expect(contents.some(content => content.includes("QQ 群 产品群（group-1），未读 0 条"))).toBe(
       true,
     );
     expect(
       contents.some(content =>
-        content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息"),
+        content.includes(
+          'QQ 群 测试群（group-2），尚未查看，可通过 enter(kind="qq_group", id="group-2")',
+        ),
       ),
     ).toBe(true);
 
-    await expect(session.enterGroup({ groupId: "group-2" })).resolves.toMatchObject({
+    await expect(session.enter({ kind: "qq_group", id: "group-2" })).resolves.toMatchObject({
       ok: true,
-      groupId: "group-2",
+      kind: "qq_group",
+      id: "group-2",
       source: "history",
       hydratedCount: 0,
     });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
-    await expect(session.exitGroup()).resolves.toMatchObject({
+    await expect(session.backToPortal()).resolves.toMatchObject({
       ok: true,
-      groupId: "group-2",
+      kind: "qq_group",
+      id: "group-2",
     });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await session.consumeIncomingEvent(createGroupEvent("b-4", "group-2"));
@@ -260,9 +222,10 @@ describe("RootAgentSession", () => {
     await session.consumeIncomingEvent(createGroupEvent("b-6", "group-2"));
     await session.flushPendingIncomingEffects();
 
-    await expect(session.enterGroup({ groupId: "group-2" })).resolves.toMatchObject({
+    await expect(session.enter({ kind: "qq_group", id: "group-2" })).resolves.toMatchObject({
       ok: true,
-      groupId: "group-2",
+      kind: "qq_group",
+      id: "group-2",
       source: "unread",
       hydratedCount: 2,
     });
@@ -276,5 +239,118 @@ describe("RootAgentSession", () => {
     expect(contents.some(content => content.includes("b-5"))).toBe(true);
     expect(contents.some(content => content.includes("b-6"))).toBe(true);
     expect(contents.some(content => content.includes("b-4"))).toBe(false);
+  });
+
+  it("should enter zone out and return to portal", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await expect(session.enter({ kind: "zone_out" })).resolves.toMatchObject({
+      ok: true,
+      kind: "zone_out",
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    expect(session.getState()).toEqual({
+      kind: "zone_out",
+    });
+
+    await expect(session.backToPortal()).resolves.toMatchObject({
+      ok: true,
+      kind: "zone_out",
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你已进入神游状态"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message => typeof message.content === "string" && message.content.includes("你已结束神游"),
+      ),
+    ).toBe(true);
+  });
+
+  it("should interrupt waiting on new qq message and return to portal", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const consumeResult = await session.consumeIncomingEvent(
+      createGroupEvent("wake-up", "group-1"),
+    );
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes(
+            'QQ 群 产品群（group-1），尚未查看，可通过 enter(kind="qq_group", id="group-1")',
+          ),
+      ),
+    ).toBe(true);
+  });
+
+  it("should finish waiting after timeout and return to portal", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const result = await session.finishWaitingIfExpired(new Date("2026-03-30T12:05:01.000Z"));
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(result).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+      ),
+    ).toBe(true);
   });
 });

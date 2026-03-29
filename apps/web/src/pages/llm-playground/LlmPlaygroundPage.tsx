@@ -832,13 +832,26 @@ export function LlmPlaygroundPage() {
                             )}
                           </div>
                         </section>
+
+                        <section className="rounded-2xl border bg-background/80 p-4">
+                          <h2 className="text-sm font-semibold">Native Request Payload</h2>
+                          {lastParsedResponse.nativeRequestPayload ? (
+                            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
+                              {formatJson(lastParsedResponse.nativeRequestPayload)}
+                            </pre>
+                          ) : (
+                            <p className="mt-3 text-sm text-muted-foreground">
+                              当前 provider 未返回 native request payload。
+                            </p>
+                          )}
+                        </section>
                       </>
                     ) : null}
 
                     <section className="rounded-2xl border bg-background/80 p-4">
                       <h2 className="text-sm font-semibold">Raw Response</h2>
                       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
-                        {formatJson(lastResponse.body)}
+                        {formatJson(toDisplayResponseBody(lastResponse.body))}
                       </pre>
                     </section>
                   </div>
@@ -1894,6 +1907,16 @@ function formatHttpError(response: ApiRequestResult): string {
 function formatJson(value: unknown): string {
   const formatted = JSON.stringify(value, null, 2);
   return formatted ?? "null";
+}
+
+function toDisplayResponseBody(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const nextValue = { ...(value as Record<string, unknown>) };
+  delete nextValue.nativeRequestPayload;
+  return nextValue;
 }
 
 function createDefaultMessages(): EditorMessage[] {

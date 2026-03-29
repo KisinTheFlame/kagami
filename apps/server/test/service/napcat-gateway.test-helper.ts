@@ -107,7 +107,6 @@ export function createConfigManager(): ConfigManager {
       databaseUrl: "postgresql://localhost:5432/kagami",
       port: 20003,
       agent: {
-        portalSleepMs: 30_000,
         contextCompactionThreshold: 60,
       },
       napcat: {

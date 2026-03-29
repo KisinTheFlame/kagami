@@ -36,7 +36,7 @@ export interface LlmClient {
   chatDirect(
     request: LlmChatRequest,
     options: LlmChatDirectOptions,
-  ): Promise<LlmChatResponsePayload>;
+  ): Promise<LlmChatDirectResult>;
   listAvailableProviders(options: LlmListAvailableProvidersOptions): Promise<LlmProviderOption[]>;
 }
 
@@ -77,6 +77,12 @@ export type LlmChatObservation = {
   status: "success" | "failed";
 };
 
+export type LlmChatDirectResult = {
+  response: LlmChatResponsePayload;
+  nativeRequestPayload: Record<string, unknown> | null;
+  nativeResponsePayload: Record<string, unknown> | null;
+};
+
 export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
   return {
     async listAvailableProviders(
@@ -103,7 +109,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       for (const attempt of usageConfig.attempts) {
         for (let currentTry = 0; currentTry < attempt.times; currentTry += 1) {
           try {
-            return await executeChatAttempt({
+            const result = await executeChatAttempt({
               llmChatCallDao: options.llmChatCallDao,
               providers: options.providers,
               providerConfigs: options.providerConfigs,
@@ -114,6 +120,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               recordCall,
               onSettled: chatOptions?.onSettled,
             });
+            return result.response;
           } catch (error) {
             lastError = error;
           }
@@ -125,7 +132,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
     async chatDirect(
       request: LlmChatRequest,
       chatOptions: LlmChatDirectOptions,
-    ): Promise<LlmChatResponsePayload> {
+    ): Promise<LlmChatDirectResult> {
       const providerId = requireProviderId(chatOptions?.providerId);
       const model = requireModel(chatOptions?.model);
 
@@ -168,7 +175,7 @@ async function executeChatAttempt({
   seq: number;
   recordCall: boolean;
   onSettled?: (observation: LlmChatObservation) => void | Promise<void>;
-}): Promise<LlmChatResponsePayload> {
+}): Promise<LlmChatDirectResult> {
   requireConfiguredModel(providerConfigs, attempt.provider, attempt.model);
   const provider = providers[attempt.provider];
   const requestWithModel = {
@@ -229,7 +236,11 @@ async function executeChatAttempt({
       });
     }
 
-    return response;
+    return {
+      response,
+      nativeRequestPayload: providerResult.nativeRequestPayload ?? null,
+      nativeResponsePayload: providerResult.nativeResponsePayload ?? null,
+    };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
     const finishedAt = new Date();

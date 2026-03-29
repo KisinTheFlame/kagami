@@ -248,6 +248,8 @@ export const LlmPlaygroundChatRequestSchema = z
 
 export type LlmPlaygroundChatRequest = z.infer<typeof LlmPlaygroundChatRequestSchema>;
 
-export const LlmPlaygroundChatResponseSchema = LlmChatResponsePayloadSchema;
+export const LlmPlaygroundChatResponseSchema = LlmChatResponsePayloadSchema.extend({
+  nativeRequestPayload: JsonRecordSchema.nullable(),
+}).strict();
 
 export type LlmPlaygroundChatResponse = z.infer<typeof LlmPlaygroundChatResponseSchema>;

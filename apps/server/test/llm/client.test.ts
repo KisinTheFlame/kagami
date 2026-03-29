@@ -262,17 +262,37 @@ describe("createLlmClient", () => {
       },
     });
 
-    await client.chatDirect(
-      {
-        messages: [{ role: "user", content: "ping" }],
-        tools: [],
-        toolChoice: "none",
+    await expect(
+      client.chatDirect(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        {
+          providerId: "openai",
+          model: "gpt-4o-mini",
+        },
+      ),
+    ).resolves.toEqual({
+      response: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+        message: {
+          role: "assistant",
+          content: "pong",
+          toolCalls: [],
+        },
       },
-      {
-        providerId: "openai",
+      nativeRequestPayload: {
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "ping" }],
+      },
+      nativeResponsePayload: {
+        id: "chatcmpl_test",
         model: "gpt-4o-mini",
       },
-    );
+    });
 
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
       expect.objectContaining({

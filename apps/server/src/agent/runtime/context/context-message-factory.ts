@@ -47,61 +47,45 @@ export function createPortalSnapshotMessage(
   groups: Array<{ groupId: string; groupName?: string; unreadCount: number; hasEntered: boolean }>,
 ): UserMessage {
   const lines = [
-    `<${SYSTEM_INSTRUCTION_TAG}>`,
+    `<${SYSTEM_REMINDER_TAG}>`,
     "你当前处于门户状态。",
-    "这里会显示可进入的群名、群 ID 和当前阅读状态；如果你想进入某个群，调用 enter_group。",
-    "群列表：",
+    "这里会显示可进入的目标；如果你想进入某个目标，调用 enter。",
+    "可进入目标：",
     ...groups.map(group => {
       const groupLabel = group.groupName
-        ? `群 ${group.groupName}（${group.groupId}）`
-        : `群 ${group.groupId}`;
+        ? `QQ 群 ${group.groupName}（${group.groupId}）`
+        : `QQ 群 ${group.groupId}`;
 
       if (!group.hasEntered) {
-        return `- ${groupLabel}，尚未查看，可进入看看最近消息`;
+        return `- ${groupLabel}，尚未查看，可通过 enter(kind="qq_group", id="${group.groupId}") 进去看看最近消息`;
       }
 
-      return `- ${groupLabel}，未读 ${group.unreadCount} 条`;
+      return `- ${groupLabel}，未读 ${group.unreadCount} 条，可通过 enter(kind="qq_group", id="${group.groupId}") 进入`;
     }),
-    `</${SYSTEM_INSTRUCTION_TAG}>`,
+    '- 神游（kind="zone_out"），可通过 enter(kind="zone_out") 进入自由思考状态',
+    `</${SYSTEM_REMINDER_TAG}>`,
   ];
 
   return createUserMessage(lines.join("\n"));
 }
 
-export function createAvailableActionsReminderMessage(input: {
-  state: "portal" | "group";
-}): UserMessage {
-  const content =
-    input.state === "portal"
-      ? "当前状态：门户。当前允许动作：enter_group、sleep。不要调用 send_message、back_to_portal、search_web。"
-      : "当前状态：群聊。当前允许动作：send_message、back_to_portal、search_web。不要调用 enter_group、sleep。";
-
-  return createUserMessage(`<${SYSTEM_REMINDER_TAG}>${content}</${SYSTEM_REMINDER_TAG}>`);
-}
-
-export function createEnterGroupMessage(input: {
-  groupId: string;
-  source: "history" | "unread";
-  hydratedCount: number;
-}): UserMessage {
-  const sourceLabel = input.source === "history" ? "最近历史消息" : "未读消息";
+export function createEnterZoneOutMessage(): UserMessage {
   return createUserMessage(
     [
       `<${SYSTEM_INSTRUCTION_TAG}>`,
-      `你已进入群 ${input.groupId}。`,
-      `接下来会看到该群补入的${sourceLabel}，本次共 ${input.hydratedCount} 条。`,
-      "当前如果要发言，请在这个群里行动；如果想回到门户，调用 back_to_portal。",
+      "你已进入神游状态。",
+      '现在不能看群消息，也不能直接搜索或发群消息；如果要继续思考，请调用 invoke(tool="zone_out", args={ thought: "..." })，如果想回到门户，调用 back_to_portal。',
       `</${SYSTEM_INSTRUCTION_TAG}>`,
     ].join("\n"),
   );
 }
 
-export function createExitGroupMessage(groupId: string): UserMessage {
+export function createExitZoneOutMessage(): UserMessage {
   return createUserMessage(
     [
       `<${SYSTEM_INSTRUCTION_TAG}>`,
-      `你已退出群 ${groupId}，回到门户状态。`,
-      "现在不要直接发群消息；如需进入某个群，请调用 enter_group。",
+      "你已结束神游，回到门户状态。",
+      "如需进入某个目标，请调用 enter。",
       `</${SYSTEM_INSTRUCTION_TAG}>`,
     ].join("\n"),
   );

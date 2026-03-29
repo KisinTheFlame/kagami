@@ -1,8 +1,8 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
-  createEnterGroupMessage,
-  createExitGroupMessage,
+  createEnterZoneOutMessage,
+  createExitZoneOutMessage,
   createPortalSnapshotMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
@@ -12,13 +12,33 @@ import type {
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 
+export const ROOT_AGENT_ENTER_TARGET_KINDS = ["qq_group", "zone_out"] as const;
+export type RootAgentEnterTargetKind = (typeof ROOT_AGENT_ENTER_TARGET_KINDS)[number];
+
+export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
+  portal: [],
+  qq_group: ["send_message"],
+  zone_out: ["zone_out"],
+  waiting: [],
+} as const;
+
+export type RootAgentInvokeToolName =
+  (typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE)[keyof typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE][number];
+
 export type RootAgentSessionState =
   | {
       kind: "portal";
     }
   | {
-      kind: "group";
+      kind: "qq_group";
       groupId: string;
+    }
+  | {
+      kind: "zone_out";
+    }
+  | {
+      kind: "waiting";
+      deadlineAt: Date;
     };
 
 export type RootAgentPostToolEffects = {
@@ -29,12 +49,15 @@ export type RootAgentPostToolEffects = {
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getCurrentGroupId(): string | undefined;
+  getAvailableInvokeTools(): RootAgentInvokeToolName[];
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
-  enterGroup(input: { groupId: string }): Promise<Record<string, unknown>>;
-  exitGroup(): Promise<Record<string, unknown>>;
+  enter(input: { kind: RootAgentEnterTargetKind; id?: string }): Promise<Record<string, unknown>>;
+  backToPortal(): Promise<Record<string, unknown>>;
+  wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>>;
+  finishWaitingIfExpired(now: Date): Promise<{ shouldTriggerRound: boolean }>;
 };
 
 type RootAgentSessionDeps = {
@@ -44,6 +67,8 @@ type RootAgentSessionDeps = {
   recentMessageLimit: number;
 };
 
+type EnterHandler = (input: { id?: string }) => Promise<Record<string, unknown>>;
+
 export class RootAgentSession implements RootAgentSessionController {
   private readonly context: AgentContext;
   private readonly napcatGatewayService: NapcatGatewayService;
@@ -51,8 +76,10 @@ export class RootAgentSession implements RootAgentSessionController {
   private readonly groupStates: GroupChatState[];
   private readonly groupStateById: Map<string, GroupChatState>;
   private readonly pendingVisibleEvents: Event[] = [];
+  private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
   private readonly pendingPostToolEvents: Event[] = [];
+  private readonly enterHandlers: Map<RootAgentEnterTargetKind, EnterHandler>;
   private portalSnapshotDirty = false;
   private state: RootAgentSessionState = { kind: "portal" };
   private initialized = false;
@@ -75,6 +102,10 @@ export class RootAgentSession implements RootAgentSessionController {
         }),
     );
     this.groupStateById = new Map(this.groupStates.map(state => [state.groupId, state]));
+    this.enterHandlers = new Map<RootAgentEnterTargetKind, EnterHandler>([
+      ["qq_group", async input => await this.enterQqGroup(input)],
+      ["zone_out", async () => await this.enterZoneOut()],
+    ]);
   }
 
   public getState(): RootAgentSessionState {
@@ -82,7 +113,11 @@ export class RootAgentSession implements RootAgentSessionController {
   }
 
   public getCurrentGroupId(): string | undefined {
-    return this.state.kind === "group" ? this.state.groupId : undefined;
+    return this.state.kind === "qq_group" ? this.state.groupId : undefined;
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE[this.state.kind]];
   }
 
   public async initializeContext(): Promise<void> {
@@ -111,7 +146,7 @@ export class RootAgentSession implements RootAgentSessionController {
       };
     }
 
-    if (this.state.kind === "group" && this.state.groupId === groupState.groupId) {
+    if (this.state.kind === "qq_group" && this.state.groupId === groupState.groupId) {
       this.pendingVisibleEvents.push(event);
       return {
         shouldTriggerRound: true,
@@ -126,6 +161,14 @@ export class RootAgentSession implements RootAgentSessionController {
       };
     }
 
+    if (this.state.kind === "waiting") {
+      this.state = { kind: "portal" };
+      this.portalSnapshotDirty = true;
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
     return {
       shouldTriggerRound: false,
     };
@@ -134,7 +177,15 @@ export class RootAgentSession implements RootAgentSessionController {
   public async flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
 
-    const shouldTriggerRound = this.pendingVisibleEvents.length > 0 || this.portalSnapshotDirty;
+    const shouldTriggerRound =
+      this.pendingIncomingMessages.length > 0 ||
+      this.pendingVisibleEvents.length > 0 ||
+      this.portalSnapshotDirty;
+    if (this.pendingIncomingMessages.length > 0) {
+      await this.context.appendMessages(this.pendingIncomingMessages);
+      this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
+    }
+
     if (this.pendingVisibleEvents.length > 0) {
       await this.context.appendEvents(this.pendingVisibleEvents);
       this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
@@ -160,7 +211,10 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
-  public async enterGroup(input: { groupId: string }): Promise<Record<string, unknown>> {
+  public async enter(input: {
+    kind: RootAgentEnterTargetKind;
+    id?: string;
+  }): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
     if (this.state.kind !== "portal") {
@@ -170,36 +224,125 @@ export class RootAgentSession implements RootAgentSessionController {
       };
     }
 
-    const groupState = this.groupStateById.get(input.groupId);
+    const enterHandler = this.enterHandlers.get(input.kind);
+    if (!enterHandler) {
+      return {
+        ok: false,
+        error: "ENTER_TARGET_NOT_SUPPORTED",
+        kind: input.kind,
+      };
+    }
+
+    return await enterHandler({
+      id: input.id,
+    });
+  }
+
+  public async backToPortal(): Promise<Record<string, unknown>> {
+    await this.initializeContext();
+
+    if (this.state.kind === "portal" || this.state.kind === "waiting") {
+      return {
+        ok: false,
+        error: "STATE_TRANSITION_NOT_ALLOWED",
+      };
+    }
+
+    if (this.state.kind === "qq_group") {
+      const previousGroupId = this.state.groupId;
+      this.state = { kind: "portal" };
+
+      this.pendingPostToolMessages.push(createPortalSnapshotMessage(this.renderPortalGroups()));
+
+      return {
+        ok: true,
+        kind: "qq_group",
+        id: previousGroupId,
+      };
+    }
+
+    this.state = { kind: "portal" };
+    this.pendingPostToolMessages.push(
+      createExitZoneOutMessage(),
+      createPortalSnapshotMessage(this.renderPortalGroups()),
+    );
+
+    return {
+      ok: true,
+      kind: "zone_out",
+    };
+  }
+
+  public async wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>> {
+    await this.initializeContext();
+
+    if (this.state.kind !== "portal") {
+      return {
+        ok: false,
+        error: "STATE_TRANSITION_NOT_ALLOWED",
+      };
+    }
+
+    this.state = {
+      kind: "waiting",
+      deadlineAt: new Date(input.deadlineAt),
+    };
+
+    return {
+      ok: true,
+      deadlineAt: input.deadlineAt.toISOString(),
+    };
+  }
+
+  public async finishWaitingIfExpired(now: Date): Promise<{ shouldTriggerRound: boolean }> {
+    await this.initializeContext();
+
+    if (this.state.kind !== "waiting" || now.getTime() < this.state.deadlineAt.getTime()) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    this.state = { kind: "portal" };
+    this.portalSnapshotDirty = true;
+    return {
+      shouldTriggerRound: true,
+    };
+  }
+
+  private async enterQqGroup(input: { id?: string }): Promise<Record<string, unknown>> {
+    const groupId = input.id?.trim();
+    if (!groupId) {
+      return {
+        ok: false,
+        error: "ENTER_TARGET_ID_REQUIRED",
+        kind: "qq_group",
+      };
+    }
+
+    const groupState = this.groupStateById.get(groupId);
     if (!groupState) {
       return {
         ok: false,
-        error: "GROUP_NOT_AVAILABLE",
-        groupId: input.groupId,
+        error: "ENTER_TARGET_NOT_AVAILABLE",
+        kind: "qq_group",
+        id: groupId,
       };
     }
 
     const hasEnteredBefore = groupState.hasEntered();
     const hydratedMessages = hasEnteredBefore
       ? groupState.consumeUnreadTail()
-      : await this.fetchRecentMessages(input.groupId);
+      : await this.fetchRecentMessages(groupId);
     if (!hasEnteredBefore) {
       groupState.clearUnreadMessages();
     }
 
     this.state = {
-      kind: "group",
-      groupId: input.groupId,
+      kind: "qq_group",
+      groupId,
     };
     groupState.markEntered();
-
-    this.pendingPostToolMessages.push(
-      createEnterGroupMessage({
-        groupId: input.groupId,
-        source: hasEnteredBefore ? "unread" : "history",
-        hydratedCount: hydratedMessages.length,
-      }),
-    );
 
     if (hydratedMessages.length > 0) {
       this.pendingPostToolEvents.push(...hydratedMessages.map(createGroupMessageEvent));
@@ -207,33 +350,21 @@ export class RootAgentSession implements RootAgentSessionController {
 
     return {
       ok: true,
-      groupId: input.groupId,
+      kind: "qq_group",
+      id: groupId,
       source: hasEnteredBefore ? "unread" : "history",
       hydratedCount: hydratedMessages.length,
     };
   }
 
-  public async exitGroup(): Promise<Record<string, unknown>> {
-    await this.initializeContext();
-
-    if (this.state.kind !== "group") {
-      return {
-        ok: false,
-        error: "STATE_TRANSITION_NOT_ALLOWED",
-      };
-    }
-
-    const previousGroupId = this.state.groupId;
-    this.state = { kind: "portal" };
-
-    this.pendingPostToolMessages.push(
-      createExitGroupMessage(previousGroupId),
-      createPortalSnapshotMessage(this.renderPortalGroups()),
-    );
-
+  private async enterZoneOut(): Promise<Record<string, unknown>> {
+    this.state = {
+      kind: "zone_out",
+    };
+    this.pendingPostToolMessages.push(createEnterZoneOutMessage());
     return {
       ok: true,
-      groupId: previousGroupId,
+      kind: "zone_out",
     };
   }
 

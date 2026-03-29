@@ -24,7 +24,6 @@ server:
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
-    portalSleepMs: 30000
     contextCompactionThreshold: 60
   llm:
     timeoutMs: 15000
@@ -119,7 +118,6 @@ startupContextRecentMessageCount: 0
         databaseUrl: "postgresql://user:password@localhost:5432/kagami",
         port: 3100,
         agent: {
-          portalSleepMs: 30000,
           contextCompactionThreshold: 60,
         },
         napcat: {
@@ -306,7 +304,7 @@ listenGroupIds:
     expect(config.server.napcat.startupContextRecentMessageCount).toBe(40);
   });
 
-  it("should default portal sleep ms to 30000", async () => {
+  it("should default context compaction threshold to 60", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -369,7 +367,6 @@ server:
 
     const config = await loadStaticConfig({ configPath });
 
-    expect(config.server.agent.portalSleepMs).toBe(30_000);
     expect(config.server.agent.contextCompactionThreshold).toBe(60);
   });
 
@@ -483,7 +480,6 @@ listenGroupIds:
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
   agent:
-    portalSleepMs: 30000
     contextCompactionThreshold: 80
   napcat:
     wsUrl: wss://example.com/napcat

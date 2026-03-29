@@ -6,7 +6,7 @@ describe("back_to_portal tool", () => {
     const tool = new BackToPortalTool();
     const toolContext = {
       rootAgentSession: {
-        exitGroup: async () => ({
+        backToPortal: async () => ({
           ok: false,
           error: "STATE_TRANSITION_NOT_ALLOWED",
         }),

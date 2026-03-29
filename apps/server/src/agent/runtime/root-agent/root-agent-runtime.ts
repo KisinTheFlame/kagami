@@ -1,6 +1,5 @@
 import type { AgentContext, AssistantMessage } from "../context/agent-context.js";
 import {
-  createAvailableActionsReminderMessage,
   createConversationSummaryMessage,
   createMessagesFromEvent,
   createWakeReminderMessage,
@@ -15,6 +14,7 @@ import type {
   RootAgentPostToolEffects,
   RootAgentSessionController,
 } from "./session/root-agent-session.js";
+import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 
 type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
@@ -109,6 +109,11 @@ export class RootAgentRuntime {
       const consumeResult = await this.consumePendingEvents();
       shouldRunRound = shouldRunRound || consumeResult.shouldTriggerRound;
 
+      if (this.session.getState().kind === "waiting") {
+        await this.sleep(10);
+        continue;
+      }
+
       if (!shouldRunRound) {
         await this.sleep(10);
         continue;
@@ -119,16 +124,10 @@ export class RootAgentRuntime {
 
       const snapshot = await this.context.getSnapshot();
       const transientMessages = [...snapshot.messages];
-      const requestMessages = [
-        ...transientMessages,
-        createAvailableActionsReminderMessage({
-          state: this.session.getState().kind,
-        }),
-      ];
       const completion = await this.llmClient.chat(
         {
           system: snapshot.systemPrompt,
-          messages: requestMessages,
+          messages: transientMessages,
           tools: this.tools.definitions(),
           toolChoice: "required",
         },
@@ -142,7 +141,6 @@ export class RootAgentRuntime {
         ? persistentAssistantMessage
         : null;
 
-      let sleepMs: number | null = null;
       const pendingPersistence: PendingToolPersistence[] = [];
       for (const toolCall of assistant.toolCalls) {
         const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
@@ -153,7 +151,10 @@ export class RootAgentRuntime {
         });
         const postToolEffects = await this.session.flushPendingPostToolEffects();
         pendingPersistence.push({
-          ...(toolResult.content.length > 0
+          ...(shouldPersistToolResultInContext({
+            toolName: toolCall.name,
+            toolResult,
+          }) && toolResult.content.length > 0
             ? {
                 toolResult: {
                   toolCallId: toolCall.id,
@@ -167,10 +168,6 @@ export class RootAgentRuntime {
           ...postToolEffects.messages,
           ...postToolEffects.events.flatMap(createMessagesFromEvent),
         );
-        if (toolResult.signal === "sleep") {
-          sleepMs = toolResult.sleepMs ?? null;
-          break;
-        }
         if (toolResult.signal === "finish_round") {
           break;
         }
@@ -180,12 +177,6 @@ export class RootAgentRuntime {
         assistantMessage: assistantToPersist,
         toolPersistences: pendingPersistence,
       });
-
-      if (sleepMs !== null) {
-        shouldRunRound = true;
-        await this.sleep(sleepMs);
-        continue;
-      }
     }
   }
 
@@ -209,9 +200,12 @@ export class RootAgentRuntime {
       await this.session.consumeIncomingEvent(event);
     }
 
+    const waitingTimeoutResult = await this.session.finishWaitingIfExpired(this.now());
     const result = await this.session.flushPendingIncomingEffects();
     await this.compactContextIfNeeded();
-    return result;
+    return {
+      shouldTriggerRound: result.shouldTriggerRound || waitingTimeoutResult.shouldTriggerRound,
+    };
   }
 
   private async executeToolCall(
@@ -319,9 +313,23 @@ function omitControlToolCalls(
   return {
     ...message,
     toolCalls: message.toolCalls.filter(
-      toolCall => agentTools.getKind(toolCall.name) !== "control",
+      toolCall =>
+        agentTools.getKind(toolCall.name) !== "control" || shouldPersistControlToolInContext(toolCall.name),
     ),
   };
+}
+
+function shouldPersistToolResultInContext(input: {
+  toolName: string;
+  toolResult: ToolSetExecutionResult;
+}): boolean {
+  return (
+    input.toolResult.kind !== "control" || shouldPersistControlToolInContext(input.toolName)
+  );
+}
+
+function shouldPersistControlToolInContext(toolName: string): boolean {
+  return toolName === WAIT_TOOL_NAME;
 }
 
 function shouldPersistAssistantMessage(message: AssistantMessage): boolean {

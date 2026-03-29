@@ -32,6 +32,6 @@ export class BackToPortalTool extends ZodToolComponent<typeof BackToPortalArgume
       });
     }
 
-    return JSON.stringify(await rootAgentSession.exitGroup());
+    return JSON.stringify(await rootAgentSession.backToPortal());
   }
 }

@@ -39,11 +39,16 @@ export class DefaultLlmPlaygroundService implements LlmPlaygroundService {
   }
 
   public async chat(input: LlmPlaygroundChatRequest): Promise<LlmPlaygroundChatResponse> {
-    return this.llmClient.chatDirect(toLlmChatRequest(input), {
+    const result = await this.llmClient.chatDirect(toLlmChatRequest(input), {
       providerId: input.provider,
       model: input.model,
       recordCall: false,
     });
+
+    return {
+      ...result.response,
+      nativeRequestPayload: result.nativeRequestPayload,
+    };
   }
 }
 

@@ -44,17 +44,12 @@ import {
   BackToPortalTool,
   BACK_TO_PORTAL_TOOL_NAME,
 } from "../agent/runtime/root-agent/tools/back-to-portal.tool.js";
-import {
-  EnterGroupTool,
-  ENTER_GROUP_TOOL_NAME,
-} from "../agent/runtime/root-agent/tools/enter-group.tool.js";
-import { SleepTool, SLEEP_TOOL_NAME } from "../agent/runtime/root-agent/tools/sleep.tool.js";
+import { EnterTool, ENTER_TOOL_NAME } from "../agent/runtime/root-agent/tools/enter.tool.js";
+import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
+import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/indexer.service.js";
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
-import {
-  SendMessageTool,
-  SEND_MESSAGE_TOOL_NAME,
-} from "../agent/capabilities/messaging/tools/send-message.tool.js";
+import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
@@ -87,6 +82,7 @@ import {
   SUMMARY_TOOL_NAME,
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
+import { ZoneOutTool } from "../agent/runtime/root-agent/tools/zone-out.tool.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -277,25 +273,28 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
   });
   const toolCatalog = new ToolCatalog([
-    new EnterGroupTool(),
+    new EnterTool(),
     new BackToPortalTool(),
-    new SleepTool({
-      sleepMs: config.server.agent.portalSleepMs,
+    new WaitTool(),
+    new InvokeTool({
+      tools: [
+        new SendMessageTool({
+          agentMessageService,
+        }),
+        new ZoneOutTool(),
+      ],
     }),
     new SearchWebTool({
       webSearchTaskAgent,
     }),
-    new SendMessageTool({
-      agentMessageService,
-    }),
     new SummaryTool(),
   ]);
   const rootAgentTools = toolCatalog.pick([
-    ENTER_GROUP_TOOL_NAME,
+    ENTER_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
-    SLEEP_TOOL_NAME,
+    WAIT_TOOL_NAME,
+    INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
-    SEND_MESSAGE_TOOL_NAME,
   ]);
   const contextSummaryOperation = new ContextSummaryOperation({
     llmClient,
@@ -318,10 +317,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     llmClient,
     playgroundToolDefinitions: toolCatalog
       .pick([
-        ENTER_GROUP_TOOL_NAME,
-        SLEEP_TOOL_NAME,
+        ENTER_TOOL_NAME,
+        WAIT_TOOL_NAME,
+        INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
-        SEND_MESSAGE_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])
