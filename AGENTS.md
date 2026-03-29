@@ -105,14 +105,16 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
 - 关键配置分区包括：
   - `server.databaseUrl`、`server.port`
-  - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`、`server.napcat.listenGroupId`
+  - `server.agent.portalSleepMs`、`server.agent.contextCompactionThreshold`
+  - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
+  - `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
   - `server.llm.timeoutMs`
   - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
   - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
   - `server.llm.usages.agent`、`contextSummarizer`、`vision`、`webSearchAgent`
   - `server.rag.embedding`、`server.rag.retrieval`
   - `server.tavily.apiKey`
-  - `server.bot.qq`
+  - `server.bot.qq`、`server.bot.creator`
 
 ## 代码规范
 
@@ -165,16 +167,16 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 当前主要模块如下（非穷举）：
 
-- `common/`：无业务语义的公共能力与跨模块契约，当前包括 `contracts/`、`errors/`、`http/`
+- `common/`：无业务语义的公共能力与跨模块契约，当前包括 `contracts/`、`errors/`、`http/`、`runtime/`
 - `config/`：配置 schema、配置加载、运行时配置管理
 - `db/`：Prisma 客户端、数据库连接与事务基础设施
 - `logger/`：日志 runtime、serializer、sink、日志 DAO
-- `auth/`：OAuth、回调服务、secret store、usage cache 与 usage trend
+- `auth/`：OAuth、回调服务、secret store、usage cache、usage trend 与统一认证 HTTP 接口
 - `llm/`：LLM provider、chat client、embedding、playground、相关 DAO
 - `napcat/`：NapCat gateway、入站事件归一化、消息发送、NapCat 相关持久化与 HTTP 接口
 - `agent/`：Kagami 的 Agent 业务层，负责 RootAgent、capabilities、NapCat 事件适配、上下文压缩、RAG 等
 - `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、NapCat history
-- `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动入口
+- `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动上下文补水
 
 模块内优先按垂直分层组织，常见层次包括：
 
@@ -197,20 +199,20 @@ Agent 相关补充约定：
 
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
 - `apps/server/src/agent` 当前按 `runtime / capabilities` 分层组织：
-  - `runtime/`：仍留在 server 的 Kagami 定制运行时，如 `RootAgentRuntime`、事件队列、上下文渲染
+  - `runtime/`：仍留在 server 的 Kagami 定制运行时，如 `RootAgentRuntime`、session、事件队列、上下文渲染
   - `capabilities/`：按能力聚合的实现，如 `web-search`、`messaging`、`context-summary`、`rag`、`vision`
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
 - `Tool` 的职责是上层调用入口，不承载能力本体；业务语义应放在 capability service、task-agent 或 operation 中。
-- `apps/server/src/agent/agents`、`apps/server/src/agent/tools/components`、`apps/server/src/agent/service`、`apps/server/src/agent/dao` 等旧路径当前主要用于兼容 re-export；除非在做兼容层清理，否则不要继续往这些目录添加新实现。
+- 新实现只放在 `runtime/` 或 `capabilities/`；不要重新向 `apps/server/src/agent/agents`、`apps/server/src/agent/service`、`apps/server/src/agent/dao`、`apps/server/src/agent/tools/*` 等旧风格目录补内容。
 
 后端当前对外接口大致分为：
 
 - 健康检查：`/health`
+- OAuth 与配额管理：`/auth/:provider/status`、`/auth/:provider/login-url`、`/auth/:provider/logout`、`/auth/:provider/refresh`、`/auth/:provider/usage-limits`、`/auth/:provider/usage-trend`
 - LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
-- OAuth 与配额：`/codex-auth/*`、`/claude-code-auth/*`
-- Napcat 相关历史与事件查询
-- App Log、Embedding Cache、LLM 调用历史等后台查询接口
+- Napcat 主动发送：`/napcat/group/send`
+- 观测与历史查询：`/app-log/query`、`/llm-chat-call/query`、`/embedding-cache/query`、`/napcat-event/query`、`/napcat-group-message/query`
 
 ### 前端（`@kagami/web`）
 
