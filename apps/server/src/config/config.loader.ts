@@ -29,6 +29,7 @@ const DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH = "/callback";
 const DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS = 60_000;
+const DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
@@ -169,6 +170,9 @@ const ConfigSchema = z.object({
             .default(DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH),
           oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS),
           refreshLeewayMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS),
+          refreshCheckIntervalMs: PositiveIntSchema.default(
+            DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS,
+          ),
         })
         .default({}),
       providers: z.object({

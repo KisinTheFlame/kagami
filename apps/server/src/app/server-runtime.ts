@@ -57,6 +57,7 @@ import {
 } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
+import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
 import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
@@ -100,6 +101,7 @@ export type ServerRuntime = {
   napcatGatewayService: NapcatGatewayService;
   callbackServers: Array<{ stop(): Promise<void> }>;
   authUsageCacheManager: AuthUsageCacheManager;
+  claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
   rootAgentRuntime: RootAgentRuntime;
   port: number;
   listenGroupIds: string[];
@@ -344,6 +346,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     callbackServers: authModule.callbackServers,
     authUsageCacheManager: authModule.authUsageCacheManager,
+    claudeCodeAuthRefreshScheduler: authModule.claudeCodeAuthRefreshScheduler,
     rootAgentRuntime,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,

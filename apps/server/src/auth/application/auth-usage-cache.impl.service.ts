@@ -135,13 +135,20 @@ export class AuthUsageCacheManager {
 
     this.isRefreshingClaudeCode = true;
     try {
-      const hasCredentials = await this.claudeCodeAuthService.hasCredentials();
-      if (!hasCredentials) {
+      const status = await this.claudeCodeAuthService.getStatus();
+      if (status.status !== "active") {
         this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
         return;
       }
 
-      const auth = await this.claudeCodeAuthService.getAuth();
+      let auth: ClaudeCodeProviderAuth;
+      try {
+        auth = await this.claudeCodeAuthService.getAuthWithoutRefresh();
+      } catch {
+        this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
+        return;
+      }
+
       const capturedAt = new Date();
       this.claudeCodeUsageLimits = await this.fetchClaudeUsageLimits(auth);
       await this.recordClaudeCodeSnapshots({

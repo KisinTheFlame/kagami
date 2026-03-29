@@ -155,9 +155,13 @@ describe("RootAgentSession", () => {
     let contents = snapshot.messages.flatMap(message =>
       typeof message.content === "string" ? [message.content] : [],
     );
-    expect(contents.some(content => content.includes("群 产品群（group-1），未读 0 条"))).toBe(true);
+    expect(contents.some(content => content.includes("群 产品群（group-1），未读 0 条"))).toBe(
+      true,
+    );
     expect(
-      contents.some(content => content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息")),
+      contents.some(content =>
+        content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息"),
+      ),
     ).toBe(true);
 
     await expect(session.enterGroup({ groupId: "group-2" })).resolves.toMatchObject({

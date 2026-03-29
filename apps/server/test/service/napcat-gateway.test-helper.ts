@@ -133,6 +133,7 @@ export function createConfigManager(): ConfigManager {
           oauthRedirectPath: "/callback",
           oauthStateTtlMs: 600_000,
           refreshLeewayMs: 60_000,
+          refreshCheckIntervalMs: 60_000,
         },
         providers: {
           deepseek: {

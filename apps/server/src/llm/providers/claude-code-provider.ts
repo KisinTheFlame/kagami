@@ -222,38 +222,24 @@ async function sendClaudeCodeRequest(params: {
     });
   }
 
-  const refreshedAuth = await params.authStore.getAuth({ forceRefresh: true });
-  const retriedResponse = await fetchClaudeCodeResponse({
-    config: params.config,
-    auth: refreshedAuth,
-    requestBody: params.requestBody,
-  });
-
-  if (retriedResponse.status === 401 || retriedResponse.status === 403) {
-    throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "所选 LLM provider 当前不可用",
-        meta: {
-          provider: "claude-code",
-          reason: "UNAUTHORIZED",
-        },
-      }),
-      {
-        nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
-        nativeResponsePayload: toSerializableLlmNativeRecordOrNull(retriedResponse.responsePayload),
-        nativeError: buildClaudeCodeNativeError({
-          status: retriedResponse.status,
-          responseText: retriedResponse.responseText,
-          reason: "UNAUTHORIZED",
-        }),
+  throw attachLlmProviderFailureContext(
+    new BizError({
+      message: "所选 LLM provider 当前不可用",
+      meta: {
+        provider: "claude-code",
+        reason: "UNAUTHORIZED",
       },
-    );
-  }
-
-  return mapClaudeMessageResult({
-    requestBody: params.requestBody,
-    responsePayload: retriedResponse.responsePayload,
-  });
+    }),
+    {
+      nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
+      nativeResponsePayload: toSerializableLlmNativeRecordOrNull(initialResponse.responsePayload),
+      nativeError: buildClaudeCodeNativeError({
+        status: initialResponse.status,
+        responseText: initialResponse.responseText,
+        reason: "UNAUTHORIZED",
+      }),
+    },
+  );
 }
 
 async function fetchClaudeCodeResponse(params: {

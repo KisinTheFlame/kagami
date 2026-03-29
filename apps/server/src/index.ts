@@ -6,6 +6,7 @@ import { buildServerRuntime } from "./app/server-runtime.js";
 import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.service.js";
 import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
+import type { ClaudeCodeAuthRefreshScheduler } from "./auth/application/claude-code-auth-refresh.scheduler.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -20,6 +21,7 @@ let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
+let claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -75,6 +77,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
+    if (claudeCodeAuthRefreshScheduler) {
+      claudeCodeAuthRefreshScheduler.close();
+      logger.info("Claude Code auth refresh scheduler closed", {
+        event: "server.shutdown.claude_code_auth_refresh_scheduler_closed",
+      });
+    }
+
     if (closeLlmProviders) {
       await closeLlmProviders();
       logger.info("LLM providers closed", {
@@ -121,6 +130,7 @@ try {
   napcatGatewayService = runtime.napcatGatewayService;
   callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
+  claudeCodeAuthRefreshScheduler = runtime.claudeCodeAuthRefreshScheduler;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 

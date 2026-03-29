@@ -49,6 +49,7 @@ type DefaultOAuthAuthServiceDeps<
   internalProvider: TInternalProvider;
   displayName: string;
   managementPath: string;
+  autoRefreshOnGetAuth?: boolean;
   dao: OAuthDao<TInternalProvider, TSession, TState>;
   config: TConfig;
   callbackServer: OAuthCallbackServerLike;
@@ -105,6 +106,7 @@ export class DefaultOAuthAuthService<
     internalProvider,
     displayName,
     managementPath,
+    autoRefreshOnGetAuth,
     dao,
     config,
     callbackServer,
@@ -130,6 +132,7 @@ export class DefaultOAuthAuthService<
       providerId: internalProvider,
       displayName,
       managementPath,
+      autoRefreshOnGetAuth,
       protocolAdapter,
       toStatusResponse: session => toStatusResponse(publicProvider, session),
       toRefreshResponse: session => toRefreshResponse(publicProvider, session),

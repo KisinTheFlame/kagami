@@ -509,25 +509,15 @@ describe("createClaudeCodeProvider", () => {
     });
   });
 
-  it("should refresh auth and retry once after an unauthorized response", async () => {
-    const getAuth = vi
-      .fn()
-      .mockResolvedValueOnce({
-        accessToken: "stale-access",
-        refreshToken: "refresh-token",
-        accountId: "user_123",
-        email: "claude@example.com",
-        lastRefresh: new Date().toISOString(),
-        expiresAt: Date.now() + 60_000,
-      })
-      .mockResolvedValueOnce({
-        accessToken: "fresh-access",
-        refreshToken: "refresh-token",
-        accountId: "user_123",
-        email: "claude@example.com",
-        lastRefresh: new Date().toISOString(),
-        expiresAt: Date.now() + 60_000,
-      });
+  it("should not retry auth refresh after an unauthorized response", async () => {
+    const getAuth = vi.fn().mockResolvedValueOnce({
+      accessToken: "stale-access",
+      refreshToken: "refresh-token",
+      accountId: "user_123",
+      email: "claude@example.com",
+      lastRefresh: new Date().toISOString(),
+      expiresAt: Date.now() + 60_000,
+    });
     const authStore = new ClaudeCodeAuthStore({
       claudeCodeAuthService: {
         hasCredentials: vi.fn().mockResolvedValue(true),
@@ -542,31 +532,21 @@ describe("createClaudeCodeProvider", () => {
       },
     });
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: {
-              message: "unauthorized",
-            },
-          }),
-          {
-            status: 401,
-            headers: {
-              "content-type": "application/json",
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(createTextMessageSse({ model: "claude-sonnet-4-6", text: "pong" }), {
-          status: 200,
-          headers: {
-            "content-type": "text/event-stream",
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "unauthorized",
           },
         }),
-      );
+        {
+          status: 401,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
@@ -581,37 +561,23 @@ describe("createClaudeCodeProvider", () => {
         tools: [],
         toolChoice: "none",
       }),
-    ).resolves.toMatchObject({
-      response: {
-        provider: "claude-code",
-        message: {
-          content: "pong",
-        },
-      },
+    ).rejects.toMatchObject({
+      message: "所选 LLM provider 当前不可用",
     });
-    expect(getAuth).toHaveBeenNthCalledWith(1, undefined);
-    expect(getAuth).toHaveBeenNthCalledWith(2, { forceRefresh: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getAuth).toHaveBeenCalledTimes(1);
+    expect(getAuth).toHaveBeenCalledWith(undefined);
   });
 
-  it("should expose failure context when retry still fails with unauthorized", async () => {
-    const getAuth = vi
-      .fn()
-      .mockResolvedValueOnce({
-        accessToken: "stale-access",
-        refreshToken: "refresh-token",
-        accountId: "user_123",
-        email: "claude@example.com",
-        lastRefresh: new Date().toISOString(),
-        expiresAt: Date.now() + 60_000,
-      })
-      .mockResolvedValueOnce({
-        accessToken: "still-stale-access",
-        refreshToken: "refresh-token",
-        accountId: "user_123",
-        email: "claude@example.com",
-        lastRefresh: new Date().toISOString(),
-        expiresAt: Date.now() + 60_000,
-      });
+  it("should expose failure context when the upstream responds with unauthorized", async () => {
+    const getAuth = vi.fn().mockResolvedValueOnce({
+      accessToken: "stale-access",
+      refreshToken: "refresh-token",
+      accountId: "user_123",
+      email: "claude@example.com",
+      lastRefresh: new Date().toISOString(),
+      expiresAt: Date.now() + 60_000,
+    });
     const authStore = new ClaudeCodeAuthStore({
       claudeCodeAuthService: {
         hasCredentials: vi.fn().mockResolvedValue(true),

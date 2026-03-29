@@ -26,6 +26,7 @@ server:
       oauthRedirectPath: /callback
       oauthStateTtlMs: 600000
       refreshLeewayMs: 60000
+      refreshCheckIntervalMs: 60000
     providers:
       deepseek:
         apiKey: ""

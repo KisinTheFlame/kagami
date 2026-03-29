@@ -160,11 +160,65 @@ describe("SharedOAuthServiceCore", () => {
       isLoggedIn: true,
     });
   });
+
+  it("should return the current active auth without refreshing when automatic refresh on getAuth is disabled", async () => {
+    const refreshTokens = vi.fn();
+    const core = createCore({
+      autoRefreshOnGetAuth: false,
+      dao: createDao({
+        findSession: vi.fn().mockResolvedValue(
+          createSession({
+            accessToken: "encoded-active-access",
+            refreshToken: "encoded-active-refresh",
+            expiresAt: new Date(Date.now() + 5_000),
+          }),
+        ),
+      }),
+      secretStore: {
+        encode: vi.fn(async value => `encoded-${value}`),
+        decode: vi.fn(async value => value.replace(/^encoded-/, "")),
+      },
+      refreshTokens,
+    });
+
+    await expect(core.getAuth()).resolves.toMatchObject({
+      accessToken: "active-access",
+      refreshToken: "active-refresh",
+    });
+    expect(refreshTokens).not.toHaveBeenCalled();
+  });
+
+  it("should reject expired auth reads when automatic refresh on getAuth is disabled", async () => {
+    const refreshTokens = vi.fn();
+    const core = createCore({
+      autoRefreshOnGetAuth: false,
+      dao: createDao({
+        findSession: vi.fn().mockResolvedValue(
+          createSession({
+            accessToken: "encoded-expired-access",
+            refreshToken: "encoded-expired-refresh",
+            expiresAt: new Date(Date.now() - 5_000),
+          }),
+        ),
+      }),
+      secretStore: {
+        encode: vi.fn(async value => `encoded-${value}`),
+        decode: vi.fn(async value => value.replace(/^encoded-/, "")),
+      },
+      refreshTokens,
+    });
+
+    await expect(core.getAuth()).rejects.toMatchObject({
+      message: "Test OAuth 登录状态不可用",
+    });
+    expect(refreshTokens).not.toHaveBeenCalled();
+  });
 });
 
 function createCore(input?: {
   dao?: OAuthDao<"test-provider", TestSessionRecord, TestStateRecord>;
   secretStore?: OAuthSecretStore;
+  autoRefreshOnGetAuth?: boolean;
   refreshTokens?: (input: {
     refreshToken: string;
     config: OAuthRuntimeConfig;
@@ -186,6 +240,7 @@ function createCore(input?: {
     providerId: "test-provider",
     displayName: "Test OAuth",
     managementPath: "/auth",
+    autoRefreshOnGetAuth: input?.autoRefreshOnGetAuth,
     protocolAdapter: {
       buildAuthorizeUrl: ({ redirectUri, state }) =>
         `https://example.com/oauth?redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`,

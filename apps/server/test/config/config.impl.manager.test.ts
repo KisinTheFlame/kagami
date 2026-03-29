@@ -335,6 +335,44 @@ listenGroupIds:
     expect(config.server.llm.providers.claudeCode.keepAliveReplayIntervalMinutes).toBe(45);
   });
 
+  it("should default claude code auth refresh check interval ms to 60000", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`),
+    );
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.llm.claudeCodeAuth.refreshCheckIntervalMs).toBe(60_000);
+  });
+
+  it("should allow overriding claude code auth refresh check interval ms", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace(
+        `    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004`,
+        `    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+      refreshCheckIntervalMs: 120000`,
+      ),
+    );
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.llm.claudeCodeAuth.refreshCheckIntervalMs).toBe(120_000);
+  });
+
   it("should reject non-positive claude code keep alive replay interval minutes", async () => {
     const configPath = await writeConfigFile(
       buildConfigYaml(`

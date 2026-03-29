@@ -76,7 +76,9 @@ describe("AuthUsageCacheManager", () => {
     );
     expect(claudeFetch).toHaveBeenCalledTimes(1);
     expect(codexFetch).toHaveBeenCalledTimes(1);
-    expect(claudeCodeAuthService.getAuth).toHaveBeenCalledTimes(1);
+    expect(claudeCodeAuthService.getStatus).toHaveBeenCalledTimes(1);
+    expect(claudeCodeAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
+    expect(claudeCodeAuthService.getAuth).not.toHaveBeenCalled();
     expect(codexAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
     expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledTimes(2);
     expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledWith(
@@ -150,19 +152,36 @@ describe("AuthUsageCacheManager", () => {
     );
   });
 
-  it("should keep the last successful Claude cache when auth refresh fails", async () => {
+  it("should clear the last successful Claude cache when auth becomes expired", async () => {
     const claudeCodeAuthService = createClaudeCodeAuthService({
-      getAuth: vi
+      getStatus: vi
         .fn()
         .mockResolvedValueOnce({
-          accessToken: "claude-access-token",
-          refreshToken: "claude-refresh-token",
-          accountId: "user_123",
-          email: "claude@example.com",
-          lastRefresh: "2026-03-25T00:00:00.000Z",
-          expiresAt: Date.now() + 60_000,
+          provider: "claude-code",
+          status: "active",
+          isLoggedIn: true,
+          session: {
+            provider: "claude-code",
+            accountId: "user_123",
+            email: "claude@example.com",
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            lastRefreshAt: "2026-03-25T00:00:00.000Z",
+            lastError: null,
+          },
         })
-        .mockRejectedValueOnce(new Error("refresh failed")),
+        .mockResolvedValueOnce({
+          provider: "claude-code",
+          status: "expired",
+          isLoggedIn: true,
+          session: {
+            provider: "claude-code",
+            accountId: "user_123",
+            email: "claude@example.com",
+            expiresAt: new Date(Date.now() - 1_000).toISOString(),
+            lastRefreshAt: "2026-03-25T00:00:00.000Z",
+            lastError: "expired",
+          },
+        }),
     });
     const claudeFetch = vi.fn().mockResolvedValue({
       five_hour: {
@@ -193,18 +212,32 @@ describe("AuthUsageCacheManager", () => {
     );
 
     await manager.refreshAll();
-    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
-      expect.objectContaining({
-        five_hour: expect.objectContaining({
-          utilization: 19,
-        }),
-      }),
-    );
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(EMPTY_CLAUDE_CODE_USAGE_LIMITS);
   });
 
   it("should clear the Claude cache when credentials become unavailable", async () => {
     const claudeCodeAuthService = createClaudeCodeAuthService({
-      hasCredentials: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+      getStatus: vi
+        .fn()
+        .mockResolvedValueOnce({
+          provider: "claude-code",
+          status: "active",
+          isLoggedIn: true,
+          session: {
+            provider: "claude-code",
+            accountId: "user_123",
+            email: "claude@example.com",
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            lastRefreshAt: "2026-03-25T00:00:00.000Z",
+            lastError: null,
+          },
+        })
+        .mockResolvedValueOnce({
+          provider: "claude-code",
+          status: "logged_out",
+          isLoggedIn: false,
+          session: null,
+        }),
     });
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService,
@@ -287,7 +320,7 @@ describe("AuthUsageCacheManager", () => {
     const authUsageSnapshotDao = createAuthUsageSnapshotDao();
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService: createClaudeCodeAuthService({
-        getAuth: vi.fn().mockResolvedValue({
+        getAuthWithoutRefresh: vi.fn().mockResolvedValue({
           accessToken: "claude-access-token",
           refreshToken: "claude-refresh-token",
           accountId: undefined,
@@ -475,7 +508,19 @@ function createClaudeCodeAuthService(
   overrides?: Partial<ClaudeCodeAuthService>,
 ): ClaudeCodeAuthService {
   return {
-    getStatus: vi.fn(),
+    getStatus: vi.fn().mockResolvedValue({
+      provider: "claude-code",
+      status: "active",
+      isLoggedIn: true,
+      session: {
+        provider: "claude-code",
+        accountId: "user_123",
+        email: "claude@example.com",
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        lastRefreshAt: "2026-03-25T00:00:00.000Z",
+        lastError: null,
+      },
+    }),
     createLoginUrl: vi.fn(),
     handleCallback: vi.fn(),
     logout: vi.fn(),

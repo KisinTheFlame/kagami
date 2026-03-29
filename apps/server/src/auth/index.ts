@@ -5,6 +5,7 @@ import type { Database } from "../db/client.js";
 import { PrismaAuthUsageSnapshotDao } from "./dao/impl/auth-usage-snapshot.impl.dao.js";
 import { DefaultAuthUsageTrendQueryService } from "./application/auth-usage-trend-query.impl.service.js";
 import { AuthUsageCacheManager } from "./application/auth-usage-cache.impl.service.js";
+import { ClaudeCodeAuthRefreshScheduler } from "./application/claude-code-auth-refresh.scheduler.js";
 import {
   buildClaudeCodeAuthorizeUrl,
   exchangeCodeForTokens as exchangeClaudeCodeTokens,
@@ -35,6 +36,7 @@ export type AuthModule = {
     "claude-code": OAuthAuthService<"claude-code">;
   };
   authUsageCacheManager: AuthUsageCacheManager;
+  claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
   authHandler: AuthHandler;
   callbackServers: SharedOAuthCallbackServer<OAuthAuthService>[];
 };
@@ -110,6 +112,7 @@ export async function createAuthModule({
     internalProvider: "claude-code",
     displayName: "Claude Code",
     managementPath: "/auth/claude-code",
+    autoRefreshOnGetAuth: false,
     dao: new PrismaOAuthDao({
       database,
       provider: "claude-code",
@@ -141,6 +144,11 @@ export async function createAuthModule({
       }) satisfies AuthUsageLimitsResponse,
   });
   claudeCodeCallbackServer.setAuthService(claudeCodeAuthService);
+  const claudeCodeAuthRefreshScheduler = new ClaudeCodeAuthRefreshScheduler({
+    claudeCodeAuthService,
+    refreshCheckIntervalMs: claudeCodeConfig.refreshCheckIntervalMs,
+    refreshLeewayMs: claudeCodeConfig.refreshLeewayMs,
+  });
 
   const authUsageCacheManager = new AuthUsageCacheManager({
     claudeCodeAuthService,
@@ -160,6 +168,7 @@ export async function createAuthModule({
       limits: await authUsageCacheManager.getClaudeCodeUsageLimits(),
     };
   });
+  claudeCodeAuthRefreshScheduler.start();
   authUsageCacheManager.start();
 
   const authServices: AuthModule["authServices"] = {
@@ -170,6 +179,7 @@ export async function createAuthModule({
   return {
     authServices,
     authUsageCacheManager,
+    claudeCodeAuthRefreshScheduler,
     authHandler: new AuthHandler({
       authServices,
       authUsageTrendQueryService,

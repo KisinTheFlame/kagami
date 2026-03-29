@@ -48,6 +48,7 @@ type SharedOAuthServiceCoreDeps<
   providerId: TProvider;
   displayName: string;
   managementPath: string;
+  autoRefreshOnGetAuth?: boolean;
   protocolAdapter: OAuthProtocolAdapter<TTokenResponse>;
   toStatusResponse(session: TSession | null): TStatusResponse;
   toRefreshResponse(session: TSession): TRefreshResponse;
@@ -75,6 +76,7 @@ export class SharedOAuthServiceCore<
   private readonly providerId: TProvider;
   private readonly displayName: string;
   private readonly managementPath: string;
+  private readonly autoRefreshOnGetAuth: boolean;
   private readonly protocolAdapter: OAuthProtocolAdapter<TTokenResponse>;
   private readonly statusResponseMapper: (session: TSession | null) => TStatusResponse;
   private readonly refreshResponseMapper: (session: TSession) => TRefreshResponse;
@@ -94,6 +96,7 @@ export class SharedOAuthServiceCore<
     providerId,
     displayName,
     managementPath,
+    autoRefreshOnGetAuth,
     protocolAdapter,
     toStatusResponse,
     toRefreshResponse,
@@ -114,6 +117,7 @@ export class SharedOAuthServiceCore<
     this.providerId = providerId;
     this.displayName = displayName;
     this.managementPath = managementPath;
+    this.autoRefreshOnGetAuth = autoRefreshOnGetAuth ?? true;
     this.protocolAdapter = protocolAdapter;
     this.statusResponseMapper = toStatusResponse;
     this.refreshResponseMapper = toRefreshResponse;
@@ -234,7 +238,8 @@ export class SharedOAuthServiceCore<
   }
 
   public async refresh(): Promise<TRefreshResponse> {
-    const auth = await this.getAuth({ forceRefresh: true });
+    const session = this.requireRefreshableSession(await this.loadSession());
+    const auth = await this.refreshWithDedup(session);
     const nextSession = await this.loadSession();
     if (!nextSession) {
       throw new BizError({
@@ -274,37 +279,30 @@ export class SharedOAuthServiceCore<
 
   public async getAuthWithoutRefresh(): Promise<TProviderAuth> {
     this.assertEnabled();
-    const session = await this.peekSession();
-    if (!session || !session.refreshToken || !session.accessToken || !session.expiresAt) {
-      throw new BizError({
-        message: `${this.displayName} 登录状态不可用`,
-        meta: {
-          provider: this.providerId,
-          reason: "AUTH_UNAVAILABLE",
-        },
-      });
-    }
-
+    const session = this.requireActiveSession(await this.loadSession());
     return await this.toProviderAuth(session);
   }
 
   public async getAuth(options?: { forceRefresh?: boolean }): Promise<TProviderAuth> {
     this.assertEnabled();
     const session = await this.loadSession();
-    if (!session || !session.refreshToken || !session.accessToken || !session.expiresAt) {
-      throw new BizError({
-        message: `${this.displayName} 登录状态不可用`,
-        meta: {
-          provider: this.providerId,
-          reason: "AUTH_UNAVAILABLE",
-        },
-      });
+    if (options?.forceRefresh ?? false) {
+      return await this.refreshWithDedup(this.requireRefreshableSession(session));
     }
 
-    if (!(options?.forceRefresh ?? false) && !this.isRefreshRequired(session)) {
-      return await this.toProviderAuth(session);
+    if (!this.autoRefreshOnGetAuth) {
+      return await this.toProviderAuth(this.requireActiveSession(session));
     }
 
+    const refreshableSession = this.requireRefreshableSession(session);
+    if (!this.isRefreshRequired(refreshableSession)) {
+      return await this.toProviderAuth(refreshableSession);
+    }
+
+    return await this.refreshWithDedup(refreshableSession);
+  }
+
+  private async refreshWithDedup(session: TSession): Promise<TProviderAuth> {
     if (this.refreshPromise) {
       return await this.refreshPromise;
     }
@@ -318,19 +316,49 @@ export class SharedOAuthServiceCore<
     }
   }
 
-  private async peekSession(): Promise<TSession | null> {
-    return await this.dao.findSession(this.providerId);
-  }
-
-  private async loadSession(): Promise<TSession | null> {
-    const session = await this.peekSession();
-    if (!session) {
-      return null;
+  private requireActiveSession(session: TSession | null): TSession {
+    if (!session || session.status !== "active") {
+      throw new BizError({
+        message: `${this.displayName} 登录状态不可用`,
+        meta: {
+          provider: this.providerId,
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
     }
 
-    const normalizedStatus = this.resolveSessionStatus(session);
-    if (normalizedStatus !== session.status) {
-      return await this.persistSessionStatus(session, normalizedStatus, session.lastError);
+    if (!session.refreshToken || !session.accessToken || !session.expiresAt) {
+      throw new BizError({
+        message: `${this.displayName} 登录状态不可用`,
+        meta: {
+          provider: this.providerId,
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
+    }
+
+    return session;
+  }
+
+  private requireRefreshableSession(session: TSession | null): TSession {
+    if (!session || (session.status !== "active" && session.status !== "expired")) {
+      throw new BizError({
+        message: `${this.displayName} 登录状态不可用`,
+        meta: {
+          provider: this.providerId,
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
+    }
+
+    if (!session.refreshToken || !session.accessToken || !session.expiresAt) {
+      throw new BizError({
+        message: `${this.displayName} 登录状态不可用`,
+        meta: {
+          provider: this.providerId,
+          reason: "AUTH_UNAVAILABLE",
+        },
+      });
     }
 
     return session;
@@ -379,6 +407,24 @@ export class SharedOAuthServiceCore<
         cause: error,
       });
     }
+  }
+
+  private async peekSession(): Promise<TSession | null> {
+    return await this.dao.findSession(this.providerId);
+  }
+
+  private async loadSession(): Promise<TSession | null> {
+    const session = await this.peekSession();
+    if (!session) {
+      return null;
+    }
+
+    const normalizedStatus = this.resolveSessionStatus(session);
+    if (normalizedStatus !== session.status) {
+      return await this.persistSessionStatus(session, normalizedStatus, session.lastError);
+    }
+
+    return session;
   }
 
   private async persistTokenResponse(tokens: TTokenResponse): Promise<TSession> {
