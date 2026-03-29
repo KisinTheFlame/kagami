@@ -2,15 +2,19 @@ import type { AgentContext, AssistantMessage } from "../context/agent-context.js
 import {
   createAvailableActionsReminderMessage,
   createConversationSummaryMessage,
+  createMessagesFromEvent,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
-import type { Tool } from "../../../llm/types.js";
+import type { LlmMessage, Tool } from "../../../llm/types.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
-import type { RootAgentSessionController } from "./session/root-agent-session.js";
+import type {
+  RootAgentPostToolEffects,
+  RootAgentSessionController,
+} from "./session/root-agent-session.js";
 
 type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
@@ -37,6 +41,14 @@ type RootAgentRuntimeDeps = {
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
+
+type PendingToolPersistence = {
+  toolResult?: {
+    toolCallId: string;
+    content: string;
+  };
+  postToolEffects: RootAgentPostToolEffects;
+};
 
 export class RootAgentRuntime {
   private readonly llmClient: LlmClient;
@@ -106,8 +118,9 @@ export class RootAgentRuntime {
       await this.appendWakeReminderIfNeeded(this.now());
 
       const snapshot = await this.context.getSnapshot();
+      const transientMessages = [...snapshot.messages];
       const requestMessages = [
-        ...snapshot.messages,
+        ...transientMessages,
         createAvailableActionsReminderMessage({
           state: this.session.getState().kind,
         }),
@@ -125,28 +138,35 @@ export class RootAgentRuntime {
       );
       const assistant = completion.message;
       const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
-      if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
-        await this.context.appendAssistantTurn(persistentAssistantMessage);
-        await this.compactContextIfNeeded();
-      }
+      const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
+        ? persistentAssistantMessage
+        : null;
 
       let sleepMs: number | null = null;
+      const pendingPersistence: PendingToolPersistence[] = [];
       for (const toolCall of assistant.toolCalls) {
         const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
           groupId: this.session.getCurrentGroupId(),
           systemPrompt: snapshot.systemPrompt,
-          messages: requestMessages,
+          messages: [...transientMessages],
           tools: this.tools,
         });
-        if (toolResult.content.length > 0) {
-          await this.context.appendToolResult({
-            toolCallId: toolCall.id,
-            content: toolResult.content,
-          });
-          await this.compactContextIfNeeded();
-        }
-        await this.session.flushPendingPostToolEffects();
-        await this.compactContextIfNeeded();
+        const postToolEffects = await this.session.flushPendingPostToolEffects();
+        pendingPersistence.push({
+          ...(toolResult.content.length > 0
+            ? {
+                toolResult: {
+                  toolCallId: toolCall.id,
+                  content: toolResult.content,
+                },
+              }
+            : {}),
+          postToolEffects,
+        });
+        transientMessages.push(
+          ...postToolEffects.messages,
+          ...postToolEffects.events.flatMap(createMessagesFromEvent),
+        );
         if (toolResult.signal === "sleep") {
           sleepMs = toolResult.sleepMs ?? null;
           break;
@@ -156,6 +176,10 @@ export class RootAgentRuntime {
         }
         shouldRunRound = true;
       }
+      await this.persistRoundState({
+        assistantMessage: assistantToPersist,
+        toolPersistences: pendingPersistence,
+      });
 
       if (sleepMs !== null) {
         shouldRunRound = true;
@@ -196,7 +220,7 @@ export class RootAgentRuntime {
     context: {
       groupId?: string;
       systemPrompt?: string;
-      messages?: import("../../../llm/types.js").LlmMessage[];
+      messages?: LlmMessage[];
       tools: ToolExecutor;
     },
   ): Promise<ToolSetExecutionResult> {
@@ -207,6 +231,39 @@ export class RootAgentRuntime {
     };
 
     return await context.tools.execute(toolName, argumentsValue, toolContext);
+  }
+
+  private async persistRoundState(input: {
+    assistantMessage: AssistantMessage | null;
+    toolPersistences: PendingToolPersistence[];
+  }): Promise<void> {
+    let hasWrittenMessages = false;
+
+    if (input.assistantMessage) {
+      await this.context.appendAssistantTurn(input.assistantMessage);
+      hasWrittenMessages = true;
+    }
+
+    for (const toolPersistence of input.toolPersistences) {
+      if (toolPersistence.toolResult) {
+        await this.context.appendToolResult(toolPersistence.toolResult);
+        hasWrittenMessages = true;
+      }
+
+      if (toolPersistence.postToolEffects.messages.length > 0) {
+        await this.context.appendMessages(toolPersistence.postToolEffects.messages);
+        hasWrittenMessages = true;
+      }
+
+      if (toolPersistence.postToolEffects.events.length > 0) {
+        await this.context.appendEvents(toolPersistence.postToolEffects.events);
+        hasWrittenMessages = true;
+      }
+    }
+
+    if (hasWrittenMessages) {
+      await this.compactContextIfNeeded();
+    }
   }
 
   private async appendWakeReminderIfNeeded(now: Date): Promise<void> {

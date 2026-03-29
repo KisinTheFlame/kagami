@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ToolCatalog, type ToolComponent } from "@kagami/agent-runtime";
+import { SearchWebTool } from "../../src/agent/capabilities/web-search/tools/search-web.tool.js";
 import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
 import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
@@ -352,6 +353,136 @@ describe("RootAgentRuntime", () => {
     expect(enterToolResultIndex).toBeGreaterThan(enterAssistantIndex);
     expect(enterGroupNoticeIndex).toBeGreaterThan(enterToolResultIndex);
     expect(historyMessageIndex).toBeGreaterThan(enterToolResultIndex);
+  });
+
+  it("should expose post-tool context to nested search without persisting an unfinished tool call", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
+    const webSearchAgent = {
+      search: vi.fn().mockResolvedValue("search summary"),
+    };
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi
+          .fn()
+          .mockResolvedValue([createGroupHistoryMessage("history message")]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 1,
+    });
+    const llmClient: LlmClient = {
+      chat: vi.fn().mockResolvedValue({
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "enter-1", name: "enter_group", arguments: { groupId: "group-1" } },
+            {
+              id: "search-1",
+              name: "search_web",
+              arguments: { question: "今天有什么热点" },
+            },
+            { id: "sleep-1", name: "sleep", arguments: {} },
+          ],
+        },
+      }),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      dequeue: vi.fn().mockReturnValue(null),
+      size: vi.fn().mockReturnValue(0),
+    };
+    const runtime = new RootAgentRuntime({
+      llmClient,
+      context,
+      eventQueue,
+      session,
+      tools: new ToolCatalog([
+        new EnterGroupTool(),
+        new SearchWebTool({ webSearchAgent }),
+        new SleepTool({ sleepMs: 30_000 }),
+      ]).pick(["enter_group", "search_web", "sleep"]),
+      sleep,
+    });
+
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    expect(webSearchAgent.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: "今天有什么热点",
+        systemPrompt: "system-prompt",
+        contextMessages: expect.arrayContaining([
+          expect.objectContaining({
+            role: "user",
+            content: expect.stringContaining("你当前处于门户状态"),
+          }),
+          expect.objectContaining({
+            role: "user",
+            content: expect.stringContaining("你已进入群 group-1"),
+          }),
+          expect.objectContaining({
+            role: "user",
+            content: expect.stringContaining("history message"),
+          }),
+        ]),
+      }),
+    );
+    const searchContext = vi.mocked(webSearchAgent.search).mock.calls[0]?.[0].contextMessages ?? [];
+    expect(searchContext.some((message: { role: string }) => message.role === "assistant")).toBe(
+      false,
+    );
+    expect(searchContext.some((message: { role: string }) => message.role === "tool")).toBe(false);
+
+    const snapshot = await context.getSnapshot();
+    const assistantIndex = snapshot.messages.findIndex(
+      message =>
+        message.role === "assistant" &&
+        message.toolCalls.some(toolCall => toolCall.id === "enter-1") &&
+        message.toolCalls.some(toolCall => toolCall.id === "search-1"),
+    );
+    const enterToolResultIndex = snapshot.messages.findIndex(
+      message => message.role === "tool" && message.toolCallId === "enter-1",
+    );
+    const enterGroupNoticeIndex = snapshot.messages.findIndex(
+      message =>
+        message.role === "user" &&
+        typeof message.content === "string" &&
+        message.content.includes("你已进入群 group-1"),
+    );
+    const historyMessageIndex = snapshot.messages.findIndex(
+      message =>
+        message.role === "user" &&
+        typeof message.content === "string" &&
+        message.content.includes("history message"),
+    );
+    const searchToolResultIndex = snapshot.messages.findIndex(
+      message => message.role === "tool" && message.toolCallId === "search-1",
+    );
+
+    expect(assistantIndex).toBeGreaterThanOrEqual(0);
+    expect(enterToolResultIndex).toBeGreaterThan(assistantIndex);
+    expect(enterGroupNoticeIndex).toBeGreaterThan(enterToolResultIndex);
+    expect(historyMessageIndex).toBeGreaterThan(enterGroupNoticeIndex);
+    expect(searchToolResultIndex).toBeGreaterThan(historyMessageIndex);
   });
 
   it("should summarize the full context and replace it with a single cumulative summary", async () => {

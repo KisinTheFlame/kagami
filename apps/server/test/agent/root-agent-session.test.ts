@@ -43,6 +43,19 @@ function createHistoryMessage(message: string, groupId: string) {
   };
 }
 
+async function applyPostToolEffects(
+  context: DefaultAgentContext,
+  effects: Awaited<ReturnType<RootAgentSession["flushPendingPostToolEffects"]>>,
+): Promise<void> {
+  if (effects.messages.length > 0) {
+    await context.appendMessages(effects.messages);
+  }
+
+  if (effects.events.length > 0) {
+    await context.appendEvents(effects.events);
+  }
+}
+
 describe("RootAgentSession", () => {
   it("should initialize portal snapshot and buffer unread while in portal", async () => {
     const context = new DefaultAgentContext({
@@ -87,6 +100,71 @@ describe("RootAgentSession", () => {
     );
   });
 
+  it("should drain post-tool effects without mutating context until the runtime persists them", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi
+          .fn()
+          .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 1,
+    });
+
+    await session.initializeContext();
+    await session.enterGroup({ groupId: "group-1" });
+
+    const beforeFlushSnapshot = await context.getSnapshot();
+    expect(
+      beforeFlushSnapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
+      ),
+    ).toBe(false);
+
+    const postToolEffects = await session.flushPendingPostToolEffects();
+    expect(postToolEffects.messages).toHaveLength(1);
+    expect(postToolEffects.events).toHaveLength(1);
+
+    const afterDrainSnapshot = await context.getSnapshot();
+    expect(
+      afterDrainSnapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
+      ),
+    ).toBe(false);
+
+    await applyPostToolEffects(context, postToolEffects);
+
+    const persistedSnapshot = await context.getSnapshot();
+    expect(
+      persistedSnapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你已进入群 group-1"),
+      ),
+    ).toBe(true);
+    expect(
+      persistedSnapshot.messages.some(
+        message => typeof message.content === "string" && message.content.includes("history-1"),
+      ),
+    ).toBe(true);
+  });
+
   it("should use history on first enter, unread tail on re-enter, and not surface background events in group", async () => {
     const getRecentGroupMessages = vi
       .fn()
@@ -128,7 +206,7 @@ describe("RootAgentSession", () => {
       source: "history",
       hydratedCount: 2,
     });
-    await session.flushPendingPostToolEffects();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     const backgroundResults = await Promise.all([
       session.consumeIncomingEvent(createGroupEvent("b-1", "group-2")),
@@ -149,7 +227,7 @@ describe("RootAgentSession", () => {
       ok: true,
       groupId: "group-1",
     });
-    await session.flushPendingPostToolEffects();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     let snapshot = await context.getSnapshot();
     let contents = snapshot.messages.flatMap(message =>
@@ -170,13 +248,13 @@ describe("RootAgentSession", () => {
       source: "history",
       hydratedCount: 0,
     });
-    await session.flushPendingPostToolEffects();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     await expect(session.exitGroup()).resolves.toMatchObject({
       ok: true,
       groupId: "group-2",
     });
-    await session.flushPendingPostToolEffects();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await session.consumeIncomingEvent(createGroupEvent("b-4", "group-2"));
     await session.consumeIncomingEvent(createGroupEvent("b-5", "group-2"));
     await session.consumeIncomingEvent(createGroupEvent("b-6", "group-2"));
@@ -188,7 +266,7 @@ describe("RootAgentSession", () => {
       source: "unread",
       hydratedCount: 2,
     });
-    await session.flushPendingPostToolEffects();
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     snapshot = await context.getSnapshot();
     contents = snapshot.messages.flatMap(message =>

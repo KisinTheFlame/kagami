@@ -60,8 +60,9 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
     input: z.infer<typeof SearchWebArgumentsSchema>,
     context: ToolContext<LlmMessage>,
   ): Promise<string> {
-    const agentContext = (context as SearchWebToolContext).agentContext;
-    const rootAgentSession = (context as SearchWebToolContext).rootAgentSession;
+    const typedContext = context as SearchWebToolContext;
+    const agentContext = typedContext.agentContext;
+    const rootAgentSession = typedContext.rootAgentSession;
 
     if (!rootAgentSession) {
       return JSON.stringify({
@@ -77,18 +78,19 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
       });
     }
 
-    if (!agentContext) {
-      return JSON.stringify({
-        ok: false,
-        error: "CONTEXT_UNAVAILABLE",
-      });
-    }
+    const inlineSystemPrompt = typedContext.systemPrompt?.trim();
+    const inlineMessages = typedContext.messages ? structuredClone(typedContext.messages) : null;
+    const snapshot =
+      inlineSystemPrompt && inlineMessages !== null
+        ? null
+        : agentContext
+          ? await agentContext.getSnapshot()
+          : null;
+    const systemPrompt = inlineSystemPrompt ?? snapshot?.systemPrompt.trim() ?? "";
+    const contextMessages = inlineMessages ?? structuredClone(snapshot?.messages ?? []);
+    const hasInlineMessages = inlineMessages !== null;
 
-    const forkedContext = await agentContext.fork();
-    const snapshot = await forkedContext.getSnapshot();
-    const systemPrompt = snapshot.systemPrompt.trim();
-
-    if (!systemPrompt) {
+    if (!systemPrompt || (!hasInlineMessages && !agentContext)) {
       return JSON.stringify({
         ok: false,
         error: "CONTEXT_UNAVAILABLE",
@@ -98,7 +100,7 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
     const taskInput = {
       question: input.question,
       systemPrompt,
-      contextMessages: snapshot.messages,
+      contextMessages,
     };
 
     if ("invoke" in this.webSearchTaskAgent) {

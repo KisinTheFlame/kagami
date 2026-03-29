@@ -21,13 +21,18 @@ export type RootAgentSessionState =
       groupId: string;
     };
 
+export type RootAgentPostToolEffects = {
+  messages: LlmMessage[];
+  events: Event[];
+};
+
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getCurrentGroupId(): string | undefined;
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
-  flushPendingPostToolEffects(): Promise<void>;
+  flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
   enterGroup(input: { groupId: string }): Promise<Record<string, unknown>>;
   exitGroup(): Promise<Record<string, unknown>>;
 };
@@ -146,18 +151,13 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
-  public async flushPendingPostToolEffects(): Promise<void> {
+  public async flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects> {
     await this.initializeContext();
 
-    if (this.pendingPostToolMessages.length > 0) {
-      await this.context.appendMessages(this.pendingPostToolMessages);
-      this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
-    }
-
-    if (this.pendingPostToolEvents.length > 0) {
-      await this.context.appendEvents(this.pendingPostToolEvents);
-      this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
-    }
+    return {
+      messages: this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length),
+      events: this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length),
+    };
   }
 
   public async enterGroup(input: { groupId: string }): Promise<Record<string, unknown>> {

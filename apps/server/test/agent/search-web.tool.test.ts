@@ -3,7 +3,7 @@ import { SearchWebTool } from "../../src/agent/capabilities/web-search/tools/sea
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 
 describe("search_web tool", () => {
-  it("should fork current context into injected web search agent and return summary text", async () => {
+  it("should prefer runtime-provided transient messages when invoking web search agent", async () => {
     const webSearchAgent = {
       search: vi.fn().mockResolvedValue("这是给主 Agent 的摘要结果。"),
     };
@@ -19,8 +19,8 @@ describe("search_web tool", () => {
       rootAgentSession: {
         getState: () => ({ kind: "group" as const, groupId: "group-1" }),
       },
-      systemPrompt: "stale-system-prompt",
-      messages: [{ role: "user" as const, content: "这份消息不该直接透传" }],
+      systemPrompt: "runtime-system-prompt",
+      messages: [{ role: "user" as const, content: "这份消息应该优先透传" }],
     };
 
     const result = await tool.execute(
@@ -33,8 +33,8 @@ describe("search_web tool", () => {
     expect(tool.name).toBe("search_web");
     expect(webSearchAgent.search).toHaveBeenCalledWith({
       question: "OpenAI latest news",
-      systemPrompt: "main-system-prompt",
-      contextMessages: [{ role: "user", content: "群里有人在问 OpenAI 最近动态" }],
+      systemPrompt: "runtime-system-prompt",
+      contextMessages: [{ role: "user", content: "这份消息应该优先透传" }],
     });
     expect(result.signal).toBe("continue");
     expect(result.content).toBe("这是给主 Agent 的摘要结果。");
@@ -112,7 +112,7 @@ describe("search_web tool", () => {
     });
   });
 
-  it("should use a forked context that stays isolated from later parent writes", async () => {
+  it("should fall back to the agent context snapshot when runtime messages are absent", async () => {
     const webSearchAgent = {
       search: vi.fn(async input => {
         await agentContext.appendMessages([{ role: "user", content: "fork 之后的新消息" }]);
