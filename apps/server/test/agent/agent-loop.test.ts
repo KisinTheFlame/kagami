@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ToolCatalog, type ToolComponent } from "@kagami/agent-runtime";
 import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
+import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 import { EnterGroupTool } from "../../src/agent/runtime/root-agent/tools/enter-group.tool.js";
-import { ExitGroupTool } from "../../src/agent/runtime/root-agent/tools/exit-group.tool.js";
 import { SleepTool } from "../../src/agent/runtime/root-agent/tools/sleep.tool.js";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import {
@@ -99,15 +99,14 @@ function createRuntimeForCompactionTest(input: {
     context: input.context,
     eventQueue,
     session,
-    portalTools: new ToolCatalog([new SleepTool({ sleepMs: 1 })]).pick(["sleep"]),
-    groupTools: new ToolCatalog([new SleepTool({ sleepMs: 1 })]).pick(["sleep"]),
+    tools: new ToolCatalog([new SleepTool({ sleepMs: 1 })]).pick(["sleep"]),
     contextSummaryOperation: input.contextSummaryOperation,
     contextCompactionThreshold: input.contextCompactionThreshold,
   });
 }
 
 describe("RootAgentRuntime", () => {
-  it("should start in portal tools, switch to group tools, then return to portal and sleep", async () => {
+  it("should keep tool definitions stable and inject state-specific reminder per round", async () => {
     const stopError = new StopLoopError("stop-loop");
     const getRecentGroupMessages = vi
       .fn()
@@ -122,7 +121,14 @@ describe("RootAgentRuntime", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn(),
+        getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
+          groupId,
+          groupName: groupId === "group-1" ? "产品群" : "测试群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        })),
         getRecentGroupMessages,
       },
       listenGroupIds: ["group-1", "group-2"],
@@ -133,12 +139,28 @@ describe("RootAgentRuntime", () => {
       content: JSON.stringify({ ok: true, messageId: 9527 }),
       signal: "continue",
     });
+    const searchWebExecute = vi.fn().mockResolvedValue({
+      content: "search summary",
+      signal: "continue",
+    });
     const toolCatalog = new ToolCatalog([
       new EnterGroupTool(),
-      new ExitGroupTool(),
+      new BackToPortalTool(),
       new SleepTool({
         sleepMs: 30_000,
       }),
+      {
+        name: "search_web",
+        description: "search",
+        parameters: { type: "object", properties: {} },
+        kind: "business",
+        llmTool: {
+          name: "search_web",
+          description: "search",
+          parameters: { type: "object", properties: {} },
+        },
+        execute: searchWebExecute,
+      } satisfies ToolComponent,
       {
         name: "send_message",
         description: "send",
@@ -171,7 +193,7 @@ describe("RootAgentRuntime", () => {
           message: {
             role: "assistant",
             content: "",
-            toolCalls: [{ id: "exit-1", name: "exit_group", arguments: {} }],
+            toolCalls: [{ id: "back-1", name: "back_to_portal", arguments: {} }],
           },
         })
         .mockResolvedValueOnce({
@@ -197,8 +219,13 @@ describe("RootAgentRuntime", () => {
       context,
       eventQueue,
       session,
-      portalTools: toolCatalog.pick(["enter_group", "sleep"]),
-      groupTools: toolCatalog.pick(["send_message", "exit_group"]),
+      tools: toolCatalog.pick([
+        "enter_group",
+        "back_to_portal",
+        "send_message",
+        "sleep",
+        "search_web",
+      ]),
       sleep,
     });
 
@@ -206,21 +233,69 @@ describe("RootAgentRuntime", () => {
 
     const chatCalls = vi.mocked(llmClient.chat).mock.calls;
     expect(chatCalls).toHaveLength(3);
-    expect(chatCalls[0]?.[0].tools.map(tool => tool.name)).toEqual(["enter_group", "sleep"]);
-    expect(chatCalls[1]?.[0].tools.map(tool => tool.name)).toEqual(["send_message", "exit_group"]);
-    expect(chatCalls[2]?.[0].tools.map(tool => tool.name)).toEqual(["enter_group", "sleep"]);
+    expect(chatCalls[0]?.[0].tools.map(tool => tool.name)).toEqual([
+      "enter_group",
+      "back_to_portal",
+      "send_message",
+      "sleep",
+      "search_web",
+    ]);
+    expect(chatCalls[1]?.[0].tools.map(tool => tool.name)).toEqual([
+      "enter_group",
+      "back_to_portal",
+      "send_message",
+      "sleep",
+      "search_web",
+    ]);
+    expect(chatCalls[2]?.[0].tools.map(tool => tool.name)).toEqual([
+      "enter_group",
+      "back_to_portal",
+      "send_message",
+      "sleep",
+      "search_web",
+    ]);
     expect(getRecentGroupMessages).toHaveBeenCalledWith({
       groupId: "group-1",
       count: 2,
     });
     expect(sendMessageExecute).not.toHaveBeenCalled();
+    expect(searchWebExecute).not.toHaveBeenCalled();
     expect(sleep).toHaveBeenCalledWith(30_000);
+
+    const firstReminder = chatCalls[0]?.[0].messages.at(-1);
+    const secondReminder = chatCalls[1]?.[0].messages.at(-1);
+    expect(firstReminder).toEqual(
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("当前允许动作：enter_group、sleep"),
+      }),
+    );
+    expect(secondReminder).toEqual(
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("当前允许动作：send_message、back_to_portal、search_web"),
+      }),
+    );
 
     const snapshot = await context.getSnapshot();
     expect(
       snapshot.messages.some(
         message =>
           typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("群 产品群（group-1），未读 0 条"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息"),
       ),
     ).toBe(true);
     expect(
@@ -235,11 +310,27 @@ describe("RootAgentRuntime", () => {
           typeof message.content === "string" && message.content.includes("你已退出群 group-1"),
       ),
     ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("当前允许动作：enter_group、sleep"),
+      ),
+    ).toBe(false);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("当前允许动作：send_message、back_to_portal、search_web"),
+      ),
+    ).toBe(false);
 
     const enterAssistantIndex = snapshot.messages.findIndex(
       message =>
         message.role === "assistant" &&
-        message.toolCalls.some(toolCall => toolCall.id === "enter-1" && toolCall.name === "enter_group"),
+        message.toolCalls.some(
+          toolCall => toolCall.id === "enter-1" && toolCall.name === "enter_group",
+        ),
     );
     const enterToolResultIndex = snapshot.messages.findIndex(
       message => message.role === "tool" && message.toolCallId === "enter-1",
@@ -262,7 +353,6 @@ describe("RootAgentRuntime", () => {
     expect(enterGroupNoticeIndex).toBeGreaterThan(enterToolResultIndex);
     expect(historyMessageIndex).toBeGreaterThan(enterToolResultIndex);
   });
-});
 
   it("should summarize the full context and replace it with a single cumulative summary", async () => {
     const context = new DefaultAgentContext({
@@ -386,3 +476,4 @@ describe("RootAgentRuntime", () => {
       }),
     ]);
   });
+});

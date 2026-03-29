@@ -1,5 +1,6 @@
 import type { AgentContext, AssistantMessage } from "../context/agent-context.js";
 import {
+  createAvailableActionsReminderMessage,
   createConversationSummaryMessage,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
@@ -25,8 +26,6 @@ type RootAgentRuntimeDeps = {
   context: AgentContext;
   eventQueue: AgentEventQueue;
   session: RootAgentSessionController;
-  portalTools?: ToolExecutor;
-  groupTools?: ToolExecutor;
   tools?: ToolExecutor;
   agentTools?: ToolExecutor;
   contextSummaryOperation?: ContextSummaryLike;
@@ -44,8 +43,7 @@ export class RootAgentRuntime {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
-  private readonly portalTools: ToolExecutor;
-  private readonly groupTools: ToolExecutor;
+  private readonly tools: ToolExecutor;
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
@@ -59,8 +57,6 @@ export class RootAgentRuntime {
     context,
     eventQueue,
     session,
-    portalTools,
-    groupTools,
     tools,
     agentTools,
     contextSummaryOperation,
@@ -74,8 +70,7 @@ export class RootAgentRuntime {
     this.context = context;
     this.eventQueue = eventQueue;
     this.session = session;
-    this.portalTools = portalTools ?? tools ?? agentTools ?? failMissingTools();
-    this.groupTools = groupTools ?? tools ?? agentTools ?? failMissingTools();
+    this.tools = tools ?? agentTools ?? failMissingTools();
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionThreshold =
@@ -111,12 +106,17 @@ export class RootAgentRuntime {
       await this.appendWakeReminderIfNeeded(this.now());
 
       const snapshot = await this.context.getSnapshot();
-      const activeTools = this.getActiveTools();
+      const requestMessages = [
+        ...snapshot.messages,
+        createAvailableActionsReminderMessage({
+          state: this.session.getState().kind,
+        }),
+      ];
       const completion = await this.llmClient.chat(
         {
           system: snapshot.systemPrompt,
-          messages: snapshot.messages,
-          tools: activeTools.definitions(),
+          messages: requestMessages,
+          tools: this.tools.definitions(),
           toolChoice: "required",
         },
         {
@@ -124,7 +124,7 @@ export class RootAgentRuntime {
         },
       );
       const assistant = completion.message;
-      const persistentAssistantMessage = omitControlToolCalls(assistant, activeTools);
+      const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
       if (shouldPersistAssistantMessage(persistentAssistantMessage)) {
         await this.context.appendAssistantTurn(persistentAssistantMessage);
         await this.compactContextIfNeeded();
@@ -135,8 +135,8 @@ export class RootAgentRuntime {
         const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
           groupId: this.session.getCurrentGroupId(),
           systemPrompt: snapshot.systemPrompt,
-          messages: snapshot.messages,
-          tools: activeTools,
+          messages: requestMessages,
+          tools: this.tools,
         });
         if (toolResult.content.length > 0) {
           await this.context.appendToolResult({
@@ -244,10 +244,6 @@ export class RootAgentRuntime {
     }
 
     await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
-  }
-
-  private getActiveTools(): ToolExecutor {
-    return this.session.getState().kind === "portal" ? this.portalTools : this.groupTools;
   }
 }
 

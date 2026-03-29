@@ -54,7 +54,14 @@ describe("RootAgentSession", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn(),
+        getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
+          groupId,
+          groupName: groupId === "group-1" ? "产品群" : "测试群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        })),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1", "group-2"],
@@ -72,8 +79,12 @@ describe("RootAgentSession", () => {
       shouldTriggerRound: true,
     });
     const snapshot = await context.getSnapshot();
-    expect(snapshot.messages.at(-1)?.content).toContain("群 group-1，未读 1 条");
-    expect(snapshot.messages.at(-1)?.content).toContain("群 group-2，未读 0 条");
+    expect(snapshot.messages.at(-1)?.content).toContain(
+      "群 产品群（group-1），尚未查看，可进入看看最近消息",
+    );
+    expect(snapshot.messages.at(-1)?.content).toContain(
+      "群 测试群（group-2），尚未查看，可进入看看最近消息",
+    );
   });
 
   it("should use history on first enter, unread tail on re-enter, and not surface background events in group", async () => {
@@ -93,7 +104,14 @@ describe("RootAgentSession", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
-        getGroupInfo: vi.fn(),
+        getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
+          groupId,
+          groupName: groupId === "group-1" ? "产品群" : "测试群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        })),
         getRecentGroupMessages,
       },
       listenGroupIds: ["group-1", "group-2"],
@@ -137,7 +155,10 @@ describe("RootAgentSession", () => {
     let contents = snapshot.messages.flatMap(message =>
       typeof message.content === "string" ? [message.content] : [],
     );
-    expect(contents.some(content => content.includes("群 group-1，未读 0 条"))).toBe(true);
+    expect(contents.some(content => content.includes("群 产品群（group-1），未读 0 条"))).toBe(true);
+    expect(
+      contents.some(content => content.includes("群 测试群（group-2），尚未查看，可进入看看最近消息")),
+    ).toBe(true);
 
     await expect(session.enterGroup({ groupId: "group-2" })).resolves.toMatchObject({
       ok: true,

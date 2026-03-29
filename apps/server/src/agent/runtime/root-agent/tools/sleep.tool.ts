@@ -1,9 +1,19 @@
 import { z } from "zod";
-import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
+import {
+  ZodToolComponent,
+  type ToolContext,
+  type ToolExecutionResult,
+  type ToolKind,
+} from "@kagami/agent-runtime";
+import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const SLEEP_TOOL_NAME = "sleep";
 
 const SleepArgumentsSchema = z.object({});
+
+type SleepToolContext = ToolContext & {
+  rootAgentSession?: RootAgentSessionController;
+};
 
 export class SleepTool extends ZodToolComponent<typeof SleepArgumentsSchema> {
   public readonly name = SLEEP_TOOL_NAME;
@@ -22,7 +32,31 @@ export class SleepTool extends ZodToolComponent<typeof SleepArgumentsSchema> {
     this.sleepMs = sleepMs;
   }
 
-  protected async executeTyped(): Promise<ToolExecutionResult> {
+  protected async executeTyped(
+    _input: z.infer<typeof SleepArgumentsSchema>,
+    context: ToolContext,
+  ): Promise<ToolExecutionResult> {
+    const rootAgentSession = (context as SleepToolContext).rootAgentSession;
+    if (!rootAgentSession) {
+      return {
+        content: JSON.stringify({
+          ok: false,
+          error: "SESSION_UNAVAILABLE",
+        }),
+        signal: "continue",
+      };
+    }
+
+    if (rootAgentSession.getState().kind !== "portal") {
+      return {
+        content: JSON.stringify({
+          ok: false,
+          error: "STATE_TRANSITION_NOT_ALLOWED",
+        }),
+        signal: "continue",
+      };
+    }
+
     return {
       content: "",
       signal: "sleep",

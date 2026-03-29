@@ -16,6 +16,9 @@ describe("search_web tool", () => {
     ]);
     const toolContext = {
       agentContext,
+      rootAgentSession: {
+        getState: () => ({ kind: "group" as const, groupId: "group-1" }),
+      },
       systemPrompt: "stale-system-prompt",
       messages: [{ role: "user" as const, content: "这份消息不该直接透传" }],
     };
@@ -75,7 +78,37 @@ describe("search_web tool", () => {
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
-      error: "CONTEXT_UNAVAILABLE",
+      error: "SESSION_UNAVAILABLE",
+    });
+  });
+
+  it("should reject web search in portal state", async () => {
+    const webSearchAgent = {
+      search: vi.fn(),
+    };
+    const tool = new SearchWebTool({ webSearchAgent });
+    const agentContext = new DefaultAgentContext({
+      systemPromptFactory: () => "main-system-prompt",
+    });
+    const toolContext = {
+      agentContext,
+      rootAgentSession: {
+        getState: () => ({ kind: "portal" as const }),
+      },
+    } as Parameters<typeof tool.execute>[1];
+
+    const result = await tool.execute(
+      {
+        question: "OpenAI latest news",
+      },
+      toolContext,
+    );
+
+    expect(webSearchAgent.search).not.toHaveBeenCalled();
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      error: "STATE_TRANSITION_NOT_ALLOWED",
     });
   });
 
@@ -93,6 +126,9 @@ describe("search_web tool", () => {
     await agentContext.appendMessages([{ role: "user", content: "fork 前的消息" }]);
     const toolContext = {
       agentContext,
+      rootAgentSession: {
+        getState: () => ({ kind: "group" as const, groupId: "group-1" }),
+      },
       systemPrompt: undefined,
       messages: undefined,
     };

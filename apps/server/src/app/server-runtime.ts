@@ -41,13 +41,13 @@ import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
 import {
+  BackToPortalTool,
+  BACK_TO_PORTAL_TOOL_NAME,
+} from "../agent/runtime/root-agent/tools/back-to-portal.tool.js";
+import {
   EnterGroupTool,
   ENTER_GROUP_TOOL_NAME,
 } from "../agent/runtime/root-agent/tools/enter-group.tool.js";
-import {
-  ExitGroupTool,
-  EXIT_GROUP_TOOL_NAME,
-} from "../agent/runtime/root-agent/tools/exit-group.tool.js";
 import { SleepTool, SLEEP_TOOL_NAME } from "../agent/runtime/root-agent/tools/sleep.tool.js";
 import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/indexer.service.js";
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
@@ -274,7 +274,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const toolCatalog = new ToolCatalog([
     new EnterGroupTool(),
-    new ExitGroupTool(),
+    new BackToPortalTool(),
     new SleepTool({
       sleepMs: config.server.agent.portalSleepMs,
     }),
@@ -286,11 +286,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     }),
     new SummaryTool(),
   ]);
-  const portalTools = toolCatalog.pick([ENTER_GROUP_TOOL_NAME, SLEEP_TOOL_NAME]);
-  const groupTools = toolCatalog.pick([
+  const rootAgentTools = toolCatalog.pick([
+    ENTER_GROUP_TOOL_NAME,
+    BACK_TO_PORTAL_TOOL_NAME,
+    SLEEP_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
     SEND_MESSAGE_TOOL_NAME,
-    EXIT_GROUP_TOOL_NAME,
   ]);
   const contextSummaryOperation = new ContextSummaryOperation({
     llmClient,
@@ -301,13 +302,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     context,
     eventQueue,
     session: rootAgentSession,
-    portalTools,
-    groupTools,
+    tools: rootAgentTools,
     contextSummaryOperation,
     contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
     summaryTools: [
-      ...portalTools.definitions(),
-      ...groupTools.definitions(),
+      ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
     ],
   });
@@ -319,7 +318,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         SLEEP_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEND_MESSAGE_TOOL_NAME,
-        EXIT_GROUP_TOOL_NAME,
+        BACK_TO_PORTAL_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])
       .definitions(),

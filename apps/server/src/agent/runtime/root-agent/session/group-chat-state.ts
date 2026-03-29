@@ -32,6 +32,14 @@ export class GroupChatState {
     return this.unreadMessages.length;
   }
 
+  public setGroupInfo(groupInfo: NapcatGetGroupInfoResult): void {
+    this.groupInfo = groupInfo;
+  }
+
+  public getGroupName(): string | null {
+    return this.groupInfo?.groupName?.trim() || null;
+  }
+
   public pushUnreadMessage(message: NapcatGroupMessageData): void {
     this.unreadMessages.push(message);
     this.unreadMessages = takeLast(this.unreadMessages, this.unreadLimit);

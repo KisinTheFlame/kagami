@@ -44,18 +44,39 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
 }
 
 export function createPortalSnapshotMessage(
-  groups: Array<{ groupId: string; unreadCount: number }>,
+  groups: Array<{ groupId: string; groupName?: string; unreadCount: number; hasEntered: boolean }>,
 ): UserMessage {
   const lines = [
     `<${SYSTEM_INSTRUCTION_TAG}>`,
     "你当前处于门户状态。",
-    "这里只显示可进入的群 ID 和未读数；如果你想进入某个群，调用 enter_group。",
+    "这里会显示可进入的群名、群 ID 和当前阅读状态；如果你想进入某个群，调用 enter_group。",
     "群列表：",
-    ...groups.map(group => `- 群 ${group.groupId}，未读 ${group.unreadCount} 条`),
+    ...groups.map(group => {
+      const groupLabel = group.groupName
+        ? `群 ${group.groupName}（${group.groupId}）`
+        : `群 ${group.groupId}`;
+
+      if (!group.hasEntered) {
+        return `- ${groupLabel}，尚未查看，可进入看看最近消息`;
+      }
+
+      return `- ${groupLabel}，未读 ${group.unreadCount} 条`;
+    }),
     `</${SYSTEM_INSTRUCTION_TAG}>`,
   ];
 
   return createUserMessage(lines.join("\n"));
+}
+
+export function createAvailableActionsReminderMessage(input: {
+  state: "portal" | "group";
+}): UserMessage {
+  const content =
+    input.state === "portal"
+      ? "当前状态：门户。当前允许动作：enter_group、sleep。不要调用 send_message、back_to_portal、search_web。"
+      : "当前状态：群聊。当前允许动作：send_message、back_to_portal、search_web。不要调用 enter_group、sleep。";
+
+  return createUserMessage(`<${SYSTEM_REMINDER_TAG}>${content}</${SYSTEM_REMINDER_TAG}>`);
 }
 
 export function createEnterGroupMessage(input: {
@@ -69,7 +90,7 @@ export function createEnterGroupMessage(input: {
       `<${SYSTEM_INSTRUCTION_TAG}>`,
       `你已进入群 ${input.groupId}。`,
       `接下来会看到该群补入的${sourceLabel}，本次共 ${input.hydratedCount} 条。`,
-      "当前如果要发言，请在这个群里行动；如果想回到门户，调用 exit_group。",
+      "当前如果要发言，请在这个群里行动；如果想回到门户，调用 back_to_portal。",
       `</${SYSTEM_INSTRUCTION_TAG}>`,
     ].join("\n"),
   );

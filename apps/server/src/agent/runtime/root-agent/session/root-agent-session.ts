@@ -51,6 +51,7 @@ export class RootAgentSession implements RootAgentSessionController {
   private portalSnapshotDirty = false;
   private state: RootAgentSessionState = { kind: "portal" };
   private initialized = false;
+  private groupInfoLoaded = false;
 
   public constructor({
     context,
@@ -84,6 +85,7 @@ export class RootAgentSession implements RootAgentSessionController {
       return;
     }
 
+    await this.ensureGroupInfosLoaded();
     await this.context.appendMessages([createPortalSnapshotMessage(this.renderPortalGroups())]);
     this.initialized = true;
   }
@@ -134,6 +136,7 @@ export class RootAgentSession implements RootAgentSessionController {
     }
 
     if (this.portalSnapshotDirty) {
+      await this.ensureGroupInfosLoaded();
       await this.context.appendMessages([createPortalSnapshotMessage(this.renderPortalGroups())]);
       this.portalSnapshotDirty = false;
     }
@@ -245,11 +248,42 @@ export class RootAgentSession implements RootAgentSessionController {
     });
   }
 
-  private renderPortalGroups(): Array<{ groupId: string; unreadCount: number }> {
-    return this.groupStates.map(groupState => ({
-      groupId: groupState.groupId,
-      unreadCount: groupState.getUnreadCount(),
-    }));
+  private async ensureGroupInfosLoaded(): Promise<void> {
+    if (this.groupInfoLoaded) {
+      return;
+    }
+
+    await Promise.all(
+      this.groupStates.map(async groupState => {
+        try {
+          const groupInfo = await this.napcatGatewayService.getGroupInfo({
+            groupId: groupState.groupId,
+          });
+          groupState.setGroupInfo(groupInfo);
+        } catch {
+          // Fallback to groupId-only portal rendering when group info is unavailable.
+        }
+      }),
+    );
+    this.groupInfoLoaded = true;
+  }
+
+  private renderPortalGroups(): Array<{
+    groupId: string;
+    groupName?: string;
+    unreadCount: number;
+    hasEntered: boolean;
+  }> {
+    return this.groupStates.map(groupState => {
+      const groupName = groupState.getGroupName();
+
+      return {
+        groupId: groupState.groupId,
+        ...(groupName ? { groupName } : {}),
+        unreadCount: groupState.getUnreadCount(),
+        hasEntered: groupState.hasEntered(),
+      };
+    });
   }
 }
 
