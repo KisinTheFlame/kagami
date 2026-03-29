@@ -56,7 +56,7 @@ describe("ContextSummaryPlannerService", () => {
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolChoice: "auto",
+        toolChoice: { tool_name: SUMMARY_TOOL_NAME },
         tools: expect.arrayContaining([
           expect.objectContaining({ name: "search_web" }),
           expect.objectContaining({ name: SUMMARY_TOOL_NAME }),
