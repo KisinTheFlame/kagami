@@ -6,16 +6,16 @@ const compileSystemPrompt = Handlebars.compile(rawSystemPrompt);
 
 export function createAgentSystemPrompt({
   botQQ,
-  ownerName,
-  ownerQQ,
+  creatorName,
+  creatorQQ,
 }: {
   botQQ: string;
-  ownerName: string;
-  ownerQQ: string;
+  creatorName: string;
+  creatorQQ: string;
 }): string {
   return compileSystemPrompt({
     botQQ,
-    ownerName,
-    ownerQQ,
+    creatorName,
+    creatorQQ,
   }).trim();
 }

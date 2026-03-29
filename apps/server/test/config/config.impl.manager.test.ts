@@ -73,8 +73,8 @@ ${indent(napcatBlock, 4)}
     apiKey: tavily-key
   bot:
     qq: "10001"
-    owner:
-      name: 主人
+    creator:
+      name: 创造者
       qq: "10000"
 `;
 }
@@ -174,7 +174,7 @@ listenGroupIds:
     } satisfies Partial<BizError>);
   });
 
-  it("should reject missing owner config", async () => {
+  it("should reject missing creator config", async () => {
     const configPath = await writeConfigFile(
       buildConfigYaml(
         `
@@ -187,8 +187,8 @@ listenGroupIds:
       ).replace(
         `  bot:
     qq: "10001"
-    owner:
-      name: 主人
+    creator:
+      name: 创造者
       qq: "10000"
 `,
         `  bot:
@@ -201,13 +201,13 @@ listenGroupIds:
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.bot.owner",
+        key: "server.bot.creator",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
   });
 
-  it("should reject missing owner name", async () => {
+  it("should reject missing creator name", async () => {
     const configPath = await writeConfigFile(
       buildConfigYaml(`
 wsUrl: wss://example.com/napcat
@@ -215,20 +215,20 @@ reconnectMs: 3000
 requestTimeoutMs: 10000
 listenGroupIds:
   - "123456"
-`).replace("      name: 主人\n", ""),
+`).replace("      name: 创造者\n", ""),
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.bot.owner.name",
+        key: "server.bot.creator.name",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
   });
 
-  it("should reject missing owner qq", async () => {
+  it("should reject missing creator qq", async () => {
     const configPath = await writeConfigFile(
       buildConfigYaml(`
 wsUrl: wss://example.com/napcat
@@ -243,7 +243,7 @@ listenGroupIds:
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.bot.owner.qq",
+        key: "server.bot.creator.qq",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -362,8 +362,8 @@ server:
     apiKey: tavily-key
   bot:
     qq: "10001"
-    owner:
-      name: 主人
+    creator:
+      name: 创造者
       qq: "10000"
 `);
 
@@ -537,8 +537,8 @@ server:
     apiKey: tavily-key
   bot:
     qq: "10001"
-    owner:
-      name: 主人
+    creator:
+      name: 创造者
       qq: "10000"
 `);
 
