@@ -76,11 +76,10 @@ describe("AuthUsageCacheManager", () => {
     );
     expect(claudeFetch).toHaveBeenCalledTimes(1);
     expect(codexFetch).toHaveBeenCalledTimes(1);
-    expect(claudeCodeAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
+    expect(claudeCodeAuthService.getAuth).toHaveBeenCalledTimes(1);
     expect(codexAuthService.getAuthWithoutRefresh).toHaveBeenCalledTimes(1);
     expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledTimes(2);
-    expect(authUsageSnapshotDao.insertBatch).toHaveBeenNthCalledWith(
-      1,
+    expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           provider: "claude-code",
@@ -90,8 +89,7 @@ describe("AuthUsageCacheManager", () => {
         }),
       ]),
     );
-    expect(authUsageSnapshotDao.insertBatch).toHaveBeenNthCalledWith(
-      2,
+    expect(authUsageSnapshotDao.insertBatch).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           provider: "openai-codex",
@@ -152,6 +150,92 @@ describe("AuthUsageCacheManager", () => {
     );
   });
 
+  it("should keep the last successful Claude cache when auth refresh fails", async () => {
+    const claudeCodeAuthService = createClaudeCodeAuthService({
+      getAuth: vi
+        .fn()
+        .mockResolvedValueOnce({
+          accessToken: "claude-access-token",
+          refreshToken: "claude-refresh-token",
+          accountId: "user_123",
+          email: "claude@example.com",
+          lastRefresh: "2026-03-25T00:00:00.000Z",
+          expiresAt: Date.now() + 60_000,
+        })
+        .mockRejectedValueOnce(new Error("refresh failed")),
+    });
+    const claudeFetch = vi.fn().mockResolvedValue({
+      five_hour: {
+        utilization: 19,
+        resets_at: "2026-03-25T12:00:00.000Z",
+      },
+      seven_day: null,
+      extra_usage: null,
+    } satisfies ClaudeCodeUsageLimitsResponse);
+
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService,
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: claudeFetch,
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
+      expect.objectContaining({
+        five_hour: expect.objectContaining({
+          utilization: 19,
+        }),
+      }),
+    );
+
+    await manager.refreshAll();
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
+      expect.objectContaining({
+        five_hour: expect.objectContaining({
+          utilization: 19,
+        }),
+      }),
+    );
+  });
+
+  it("should clear the Claude cache when credentials become unavailable", async () => {
+    const claudeCodeAuthService = createClaudeCodeAuthService({
+      hasCredentials: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+    });
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService,
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: {
+          utilization: 19,
+          resets_at: "2026-03-25T12:00:00.000Z",
+        },
+        seven_day: null,
+        extra_usage: null,
+      } satisfies ClaudeCodeUsageLimitsResponse),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
+      expect.objectContaining({
+        five_hour: expect.objectContaining({
+          utilization: 19,
+        }),
+      }),
+    );
+
+    await manager.refreshAll();
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(EMPTY_CLAUDE_CODE_USAGE_LIMITS);
+  });
+
   it("should clear a cache when credentials become unavailable", async () => {
     const getAuthWithoutRefresh = vi
       .fn()
@@ -203,7 +287,7 @@ describe("AuthUsageCacheManager", () => {
     const authUsageSnapshotDao = createAuthUsageSnapshotDao();
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService: createClaudeCodeAuthService({
-        getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+        getAuth: vi.fn().mockResolvedValue({
           accessToken: "claude-access-token",
           refreshToken: "claude-refresh-token",
           accountId: undefined,
