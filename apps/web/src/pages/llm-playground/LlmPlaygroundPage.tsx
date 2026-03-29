@@ -21,9 +21,14 @@ import {
   SendHorizontal,
   Trash2,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  JsonPanelSection,
+  type JsonPanelCopyStatus,
+  type JsonPanelSectionItem,
+} from "@/components/ui/json-panel-section";
 import {
   Select,
   SelectContent,
@@ -128,6 +133,12 @@ export function LlmPlaygroundPage() {
   const [lastParsedResponse, setLastParsedResponse] = useState<LlmPlaygroundChatResponse | null>(
     null,
   );
+  const [activeNativePayloadPanelKey, setActiveNativePayloadPanelKey] = useState<string | null>(
+    null,
+  );
+  const [nativePayloadCopyStatus, setNativePayloadCopyStatus] =
+    useState<JsonPanelCopyStatus>("idle");
+  const nativePayloadCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const providersQuery = useQuery({
     queryKey: ["llm-providers"],
@@ -173,6 +184,27 @@ export function LlmPlaygroundPage() {
   const effectiveSelectedToolNameForChoice = currentToolNames.includes(selectedToolNameForChoice)
     ? selectedToolNameForChoice
     : (currentToolNames[0] ?? "");
+  const nativePayloadItems = useMemo<JsonPanelSectionItem[]>(
+    () =>
+      lastParsedResponse?.nativeRequestPayload
+        ? [
+            {
+              key: "nativeRequestPayload",
+              title: "nativeRequestPayload",
+              value: lastParsedResponse.nativeRequestPayload,
+            },
+          ]
+        : [],
+    [lastParsedResponse],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (nativePayloadCopyTimeoutRef.current !== null) {
+        clearTimeout(nativePayloadCopyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const requestMutation = useMutation({
     mutationFn: async (payload: LlmPlaygroundChatRequest): Promise<PlaygroundResult> => {
@@ -302,6 +334,40 @@ export function LlmPlaygroundPage() {
     setLastPayload(null);
     setLastResponse(null);
     setLastParsedResponse(null);
+  }
+
+  async function handleCopyNativePayload(panelKey: string, text: string): Promise<void> {
+    if (nativePayloadCopyTimeoutRef.current !== null) {
+      clearTimeout(nativePayloadCopyTimeoutRef.current);
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      console.error("Clipboard API is not available in this browser.");
+      setActiveNativePayloadPanelKey(panelKey);
+      setNativePayloadCopyStatus("error");
+      scheduleNativePayloadCopyReset();
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setActiveNativePayloadPanelKey(panelKey);
+      setNativePayloadCopyStatus("success");
+    } catch (error) {
+      console.error("Failed to copy native request payload.", error);
+      setActiveNativePayloadPanelKey(panelKey);
+      setNativePayloadCopyStatus("error");
+    }
+
+    scheduleNativePayloadCopyReset();
+  }
+
+  function scheduleNativePayloadCopyReset(): void {
+    nativePayloadCopyTimeoutRef.current = window.setTimeout(() => {
+      setActiveNativePayloadPanelKey(null);
+      setNativePayloadCopyStatus("idle");
+      nativePayloadCopyTimeoutRef.current = null;
+    }, 1800);
   }
 
   function handleAddMessage(role: EditorRole): void {
@@ -833,18 +899,24 @@ export function LlmPlaygroundPage() {
                           </div>
                         </section>
 
-                        <section className="rounded-2xl border bg-background/80 p-4">
-                          <h2 className="text-sm font-semibold">Native Request Payload</h2>
-                          {lastParsedResponse.nativeRequestPayload ? (
-                            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
-                              {formatJson(lastParsedResponse.nativeRequestPayload)}
-                            </pre>
-                          ) : (
-                            <p className="mt-3 text-sm text-muted-foreground">
+                        {lastParsedResponse.nativeRequestPayload ? (
+                          <JsonPanelSection
+                            title="Native Request Payload"
+                            items={nativePayloadItems}
+                            activePanelKey={activeNativePayloadPanelKey}
+                            activeCopyStatus={nativePayloadCopyStatus}
+                            onCopy={(panelKey, text) => {
+                              void handleCopyNativePayload(panelKey, text);
+                            }}
+                          />
+                        ) : (
+                          <section className="space-y-3">
+                            <h2 className="text-sm font-semibold">Native Request Payload</h2>
+                            <p className="text-sm text-muted-foreground">
                               当前 provider 未返回 native request payload。
                             </p>
-                          )}
-                        </section>
+                          </section>
+                        )}
                       </>
                     ) : null}
                   </div>
