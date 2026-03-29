@@ -130,7 +130,7 @@ export class RootAgentRuntime {
           system: snapshot.systemPrompt,
           messages: requestMessages,
           tools: this.tools.definitions(),
-          toolChoice: "required",
+          toolChoice: "auto",
         },
         {
           usage: "agent",

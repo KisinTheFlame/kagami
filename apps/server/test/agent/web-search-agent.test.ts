@@ -122,7 +122,7 @@ describe("WebSearchAgent", () => {
           },
           createWebSearchInstructionMessage("OpenAI 最近有什么新动态？"),
         ],
-        toolChoice: "required",
+        toolChoice: "auto",
         tools: expect.arrayContaining([
           expect.objectContaining({ name: SEARCH_WEB_RAW_TOOL_NAME }),
           expect.objectContaining({ name: FINALIZE_WEB_SEARCH_TOOL_NAME }),

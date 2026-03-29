@@ -36,7 +36,7 @@ export class ContextSummaryOperation
         system: createContextSummarizerSystemPrompt(),
         messages: input.messages,
         tools: input.tools,
-        toolChoice: { tool_name: SUMMARY_TOOL_NAME },
+        toolChoice: "auto",
       },
       {
         usage: "contextSummarizer",

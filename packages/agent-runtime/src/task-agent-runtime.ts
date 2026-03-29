@@ -26,7 +26,7 @@ export interface TaskAgentModel<TMessage extends { role: string }, TUsage extend
       system?: string;
       messages: TMessage[];
       tools: ToolDefinition[];
-      toolChoice: "required";
+      toolChoice: "auto";
     },
     options: {
       usage: TUsage;
@@ -75,7 +75,7 @@ export abstract class TaskAgentRuntime<
           system: invocation.systemPrompt,
           messages: [...messages],
           tools: this.taskTools.definitions(),
-          toolChoice: "required",
+          toolChoice: "auto",
         },
         {
           usage: invocation.usage,
