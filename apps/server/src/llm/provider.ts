@@ -23,6 +23,7 @@ export interface LlmProvider {
   id: LlmProviderId;
   isAvailable?(): Promise<boolean>;
   chat(request: LlmChatRequest): Promise<LlmProviderChatResult>;
+  close?(): void | Promise<void>;
 }
 
 export function attachLlmProviderFailureContext<TError extends Error>(

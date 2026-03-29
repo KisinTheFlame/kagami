@@ -15,6 +15,7 @@ type LlmProviderConfig = {
   apiKey?: string;
   baseUrl: string;
   models: string[];
+  keepAliveReplayIntervalMinutes?: number;
   timeoutMs: number;
 };
 
@@ -100,6 +101,7 @@ function createProviderConfigs(): Record<LlmProviderId, LlmProviderConfig | Open
       apiKey: undefined,
       baseUrl: "https://api.anthropic.com",
       models: ["claude-sonnet-4-20250514"],
+      keepAliveReplayIntervalMinutes: 30,
       timeoutMs: 45_000,
     },
   };

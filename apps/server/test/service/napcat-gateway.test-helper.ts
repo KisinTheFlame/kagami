@@ -152,6 +152,7 @@ export function createConfigManager(): ConfigManager {
           claudeCode: {
             baseUrl: "https://api.anthropic.com",
             models: ["claude-sonnet-4-20250514"],
+            keepAliveReplayIntervalMinutes: 30,
           },
         },
         usages: {

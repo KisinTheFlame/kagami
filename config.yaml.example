@@ -45,6 +45,7 @@ server:
         baseUrl: https://api.anthropic.com
         models:
           - claude-sonnet-4-6
+        keepAliveReplayIntervalMinutes: 30
     usages:
       agent:
         attempts:

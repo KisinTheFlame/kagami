@@ -13,6 +13,7 @@ import type {
 } from "../types.js";
 import { BizError } from "../../common/errors/biz-error.js";
 import type { Config } from "../../config/config.loader.js";
+import { AppLogger } from "../../logger/logger.js";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -31,8 +32,10 @@ const CLAUDE_CODE_BILLING_HEADER =
 const DEFAULT_MAX_TOKENS = 4096;
 const CLAUDE_4_MAX_TOKENS = 32000;
 const CLAUDE_4_THINKING_BUDGET = 1024;
+const KEEP_ALIVE_REPLAY_MAX_TOKENS = 1;
+const logger = new AppLogger({ source: "claude-code-provider" });
 
-type LlmProviderConfig = Config["server"]["llm"]["providers"]["deepseek"] & {
+type LlmProviderConfig = Config["server"]["llm"]["providers"]["claudeCode"] & {
   timeoutMs: Config["server"]["llm"]["timeoutMs"];
 };
 
@@ -95,6 +98,68 @@ export function createClaudeCodeProvider(input: {
   config: LlmProviderConfig;
   authStore: ClaudeCodeAuthStore;
 }): LlmProvider {
+  let replayTimeout: NodeJS.Timeout | null = null;
+  let lastSuccessfulRequestBody: ClaudeMessageRequestBody | null = null;
+  let lastSuccessfulRequestVersion = 0;
+  let isReplaying = false;
+  let isClosed = false;
+
+  function clearReplayTimeout(): void {
+    if (!replayTimeout) {
+      return;
+    }
+
+    clearTimeout(replayTimeout);
+    replayTimeout = null;
+  }
+
+  function scheduleReplay(version: number): void {
+    clearReplayTimeout();
+
+    if (isClosed || !lastSuccessfulRequestBody) {
+      return;
+    }
+
+    replayTimeout = setTimeout(() => {
+      replayTimeout = null;
+      void replayLastSuccessfulRequest(version);
+    }, input.config.keepAliveReplayIntervalMinutes * 60_000);
+
+    if (typeof replayTimeout.unref === "function") {
+      replayTimeout.unref();
+    }
+  }
+
+  async function replayLastSuccessfulRequest(version: number): Promise<void> {
+    if (isClosed || version !== lastSuccessfulRequestVersion || !lastSuccessfulRequestBody) {
+      return;
+    }
+
+    if (isReplaying) {
+      scheduleReplay(version);
+      return;
+    }
+
+    isReplaying = true;
+    try {
+      const replayRequestBody = structuredClone(lastSuccessfulRequestBody);
+      replayRequestBody.max_tokens = KEEP_ALIVE_REPLAY_MAX_TOKENS;
+      await sendClaudeCodeRequest({
+        config: input.config,
+        authStore: input.authStore,
+        requestBody: replayRequestBody,
+      });
+    } catch (error) {
+      logReplayFailure(error);
+    } finally {
+      isReplaying = false;
+    }
+
+    if (!isClosed && version === lastSuccessfulRequestVersion && lastSuccessfulRequestBody) {
+      scheduleReplay(version);
+    }
+  }
+
   return {
     id: "claude-code",
     isAvailable: async () => {
@@ -102,11 +167,16 @@ export function createClaudeCodeProvider(input: {
     },
     async chat(request: LlmChatRequest): Promise<LlmProviderChatResult> {
       try {
-        return await sendClaudeCodeRequest({
+        const requestBody = toClaudeCodeRequestBody(request);
+        const result = await sendClaudeCodeRequest({
           config: input.config,
           authStore: input.authStore,
-          request,
+          requestBody,
         });
+        lastSuccessfulRequestBody = structuredClone(requestBody);
+        lastSuccessfulRequestVersion += 1;
+        scheduleReplay(lastSuccessfulRequestVersion);
+        return result;
       } catch (error) {
         if (error instanceof BizError) {
           throw error;
@@ -126,25 +196,28 @@ export function createClaudeCodeProvider(input: {
         );
       }
     },
+    close(): void {
+      isClosed = true;
+      clearReplayTimeout();
+    },
   };
 }
 
 async function sendClaudeCodeRequest(params: {
   config: LlmProviderConfig;
   authStore: ClaudeCodeAuthStore;
-  request: LlmChatRequest;
+  requestBody: ClaudeMessageRequestBody;
 }): Promise<LlmProviderChatResult> {
-  const requestBody = toClaudeCodeRequestBody(params.request);
   const initialAuth = await params.authStore.getAuth();
   const initialResponse = await fetchClaudeCodeResponse({
     config: params.config,
     auth: initialAuth,
-    requestBody,
+    requestBody: params.requestBody,
   });
 
   if (initialResponse.status !== 401 && initialResponse.status !== 403) {
     return mapClaudeMessageResult({
-      requestBody,
+      requestBody: params.requestBody,
       responsePayload: initialResponse.responsePayload,
     });
   }
@@ -153,7 +226,7 @@ async function sendClaudeCodeRequest(params: {
   const retriedResponse = await fetchClaudeCodeResponse({
     config: params.config,
     auth: refreshedAuth,
-    requestBody,
+    requestBody: params.requestBody,
   });
 
   if (retriedResponse.status === 401 || retriedResponse.status === 403) {
@@ -166,7 +239,7 @@ async function sendClaudeCodeRequest(params: {
         },
       }),
       {
-        nativeRequestPayload: toSerializableLlmNativeRecord(requestBody),
+        nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
         nativeResponsePayload: toSerializableLlmNativeRecordOrNull(retriedResponse.responsePayload),
         nativeError: buildClaudeCodeNativeError({
           status: retriedResponse.status,
@@ -178,7 +251,7 @@ async function sendClaudeCodeRequest(params: {
   }
 
   return mapClaudeMessageResult({
-    requestBody,
+    requestBody: params.requestBody,
     responsePayload: retriedResponse.responsePayload,
   });
 }
@@ -402,6 +475,7 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
   if (lastBlock) {
     lastBlock.cache_control = {
       type: "ephemeral",
+      ttl: "1h",
     };
   }
 
@@ -607,6 +681,17 @@ function buildClaudeCodeNativeError(input: {
     status: input.status,
     responseText: input.responseText.slice(0, 5000),
   };
+}
+
+function logReplayFailure(error: unknown): void {
+  try {
+    logger.warn("Failed to replay Claude Code keep-alive request", {
+      event: "llm.claude_code.keep_alive_replay_failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } catch {
+    // Ignore logging failures in contexts where logger runtime is not initialized.
+  }
 }
 
 function parseClaudeMessageResponse(value: string): ClaudeMessageResponse | null {

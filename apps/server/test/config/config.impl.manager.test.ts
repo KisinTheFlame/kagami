@@ -47,6 +47,7 @@ ${indent(napcatBlock, 4)}
       claudeCode:
         models:
           - claude-sonnet-4-20250514
+        keepAliveReplayIntervalMinutes: 30
     usages:
       agent:
         attempts:
@@ -289,6 +290,73 @@ server:
 
     expect(config.server.agent.portalSleepMs).toBe(30_000);
     expect(config.server.agent.contextCompactionThreshold).toBe(60);
+  });
+
+  it("should default claude code keep alive replay interval minutes to 30", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace(
+        `      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+        keepAliveReplayIntervalMinutes: 30`,
+        `      claudeCode:
+        models:
+          - claude-sonnet-4-20250514`,
+      ),
+    );
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.llm.providers.claudeCode.keepAliveReplayIntervalMinutes).toBe(30);
+  });
+
+  it("should allow overriding claude code keep alive replay interval minutes", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace(
+        "        keepAliveReplayIntervalMinutes: 30",
+        "        keepAliveReplayIntervalMinutes: 45",
+      ),
+    );
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.llm.providers.claudeCode.keepAliveReplayIntervalMinutes).toBe(45);
+  });
+
+  it("should reject non-positive claude code keep alive replay interval minutes", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace(
+        "        keepAliveReplayIntervalMinutes: 30",
+        "        keepAliveReplayIntervalMinutes: 0",
+      ),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.llm.providers.claudeCode.keepAliveReplayIntervalMinutes",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should allow overriding context compaction threshold", async () => {

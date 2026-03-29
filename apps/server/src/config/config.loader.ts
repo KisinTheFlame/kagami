@@ -17,6 +17,7 @@ const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/responses";
 const DEFAULT_CLAUDE_CODE_BASE_URL = "https://api.anthropic.com";
 const DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES = 30;
 const DEFAULT_CODEX_AUTH_ENABLED = true;
 const DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CODEX_AUTH_REDIRECT_PATH = "/auth/callback";
@@ -189,9 +190,13 @@ const ConfigSchema = z.object({
           .object({
             baseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_BASE_URL),
             models: NonEmptyStringArraySchema,
+            keepAliveReplayIntervalMinutes: PositiveIntSchema.default(
+              DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
+            ),
           })
           .default({
             models: [DEFAULT_CLAUDE_CODE_MODEL],
+            keepAliveReplayIntervalMinutes: DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
           }),
       }),
       usages: z

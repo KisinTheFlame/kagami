@@ -23,6 +23,7 @@ import { NapcatGroupMessageHandler } from "../ops/http/napcat-group-message.hand
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { createLlmClient } from "../llm/client.js";
 import { createEmbeddingClient } from "../llm/embedding/client.js";
+import type { LlmProvider } from "../llm/provider.js";
 import { createDeepSeekProvider } from "../llm/providers/deepseek-provider.js";
 import { ClaudeCodeAuthStore } from "../llm/providers/claude-code-auth.js";
 import { createClaudeCodeProvider } from "../llm/providers/claude-code-provider.js";
@@ -104,6 +105,7 @@ export type ServerRuntime = {
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
   hasTavilyApiKey: boolean;
+  closeLlmProviders: () => Promise<void>;
   listAvailableAgentProviders: () => Promise<
     Awaited<ReturnType<ReturnType<typeof createLlmClient>["listAvailableProviders"]>>
   >;
@@ -348,10 +350,27 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
+    closeLlmProviders: async () => {
+      await closeLlmProviders(llmProviders);
+    },
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },
   };
+}
+
+async function closeLlmProviders(
+  providers: Partial<Record<string, LlmProvider | undefined>>,
+): Promise<void> {
+  await Promise.all(
+    Object.values(providers).map(async provider => {
+      if (!provider?.close) {
+        return;
+      }
+
+      await provider.close();
+    }),
+  );
 }
 
 function createServerApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {

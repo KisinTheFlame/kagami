@@ -4,6 +4,7 @@ import { ClaudeCodeAuthStore } from "../../src/llm/providers/claude-code-auth.js
 import { createClaudeCodeProvider } from "../../src/llm/providers/claude-code-provider.js";
 
 afterEach(async () => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -146,6 +147,28 @@ function createToolUseSse(input: {
   ]);
 }
 
+function createProviderConfig(
+  overrides: Partial<{
+    baseUrl: string;
+    models: string[];
+    timeoutMs: number;
+    keepAliveReplayIntervalMinutes: number;
+  }> = {},
+): {
+  baseUrl: string;
+  models: string[];
+  timeoutMs: number;
+  keepAliveReplayIntervalMinutes: number;
+} {
+  return {
+    baseUrl: "https://api.anthropic.com",
+    models: ["claude-sonnet-4-6"],
+    timeoutMs: 5_000,
+    keepAliveReplayIntervalMinutes: 30,
+    ...overrides,
+  };
+}
+
 describe("createClaudeCodeProvider", () => {
   it("should map a final assistant message from the Claude stream response", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -165,6 +188,7 @@ describe("createClaudeCodeProvider", () => {
         text: "你是一个测试助手。",
         cache_control: {
           type: "ephemeral",
+          ttl: "1h",
         },
       });
       expect(body.thinking).toEqual({
@@ -203,11 +227,7 @@ describe("createClaudeCodeProvider", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
-      config: {
-        baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-6"],
-        timeoutMs: 5_000,
-      },
+      config: createProviderConfig(),
       authStore: createAuthStore(),
     });
 
@@ -253,6 +273,7 @@ describe("createClaudeCodeProvider", () => {
             text: "你是一个测试助手。",
             cache_control: {
               type: "ephemeral",
+              ttl: "1h",
             },
           },
         ],
@@ -328,11 +349,7 @@ describe("createClaudeCodeProvider", () => {
     );
 
     const provider = createClaudeCodeProvider({
-      config: {
-        baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-6"],
-        timeoutMs: 5_000,
-      },
+      config: createProviderConfig(),
       authStore: createAuthStore(),
     });
 
@@ -446,11 +463,9 @@ describe("createClaudeCodeProvider", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
-      config: {
-        baseUrl: "https://api.anthropic.com",
+      config: createProviderConfig({
         models: ["claude-sonnet-4-5-20250929"],
-        timeoutMs: 5_000,
-      },
+      }),
       authStore: createAuthStore(),
     });
 
@@ -555,11 +570,7 @@ describe("createClaudeCodeProvider", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createClaudeCodeProvider({
-      config: {
-        baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-6"],
-        timeoutMs: 5_000,
-      },
+      config: createProviderConfig(),
       authStore,
     });
 
@@ -635,11 +646,7 @@ describe("createClaudeCodeProvider", () => {
     );
 
     const provider = createClaudeCodeProvider({
-      config: {
-        baseUrl: "https://api.anthropic.com",
-        models: ["claude-sonnet-4-6"],
-        timeoutMs: 5_000,
-      },
+      config: createProviderConfig(),
       authStore,
     });
 
@@ -664,5 +671,252 @@ describe("createClaudeCodeProvider", () => {
           },
         });
       });
+  });
+
+  it("should replay the last successful request with max_tokens set to 1 after the keep alive interval", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          createTextMessageSse({
+            model: "claude-sonnet-4-6",
+            text: "pong",
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          createTextMessageSse({
+            model: "claude-sonnet-4-6",
+            text: "keepalive",
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({
+        keepAliveReplayIntervalMinutes: 1,
+      }),
+      authStore: createAuthStore(),
+    });
+
+    await provider.chat({
+      model: "claude-sonnet-4-6",
+      system: "你是一个测试助手。",
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "ping",
+            },
+          ],
+        },
+      ],
+    });
+
+    provider.close?.();
+  });
+
+  it("should reset the replay countdown when a new successful request arrives", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      return new Response(
+        createTextMessageSse({
+          model: "claude-sonnet-4-6",
+          text: "pong",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream",
+          },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({
+        keepAliveReplayIntervalMinutes: 1,
+      }),
+      authStore: createAuthStore(),
+    });
+
+    await provider.chat({
+      model: "claude-sonnet-4-6",
+      messages: [{ role: "user", content: "first" }],
+      tools: [],
+      toolChoice: "none",
+    });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await provider.chat({
+      model: "claude-sonnet-4-6",
+      messages: [{ role: "user", content: "second" }],
+      tools: [],
+      toolChoice: "none",
+    });
+
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      max_tokens: 1,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "second",
+            },
+          ],
+        },
+      ],
+    });
+
+    provider.close?.();
+  });
+
+  it("should continue scheduling replays after a replay failure", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          createTextMessageSse({
+            model: "claude-sonnet-4-6",
+            text: "pong",
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(new Response("bad gateway", { status: 502 }))
+      .mockResolvedValueOnce(
+        new Response(
+          createTextMessageSse({
+            model: "claude-sonnet-4-6",
+            text: "keepalive",
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({
+        keepAliveReplayIntervalMinutes: 1,
+      }),
+      authStore: createAuthStore(),
+    });
+
+    await provider.chat({
+      model: "claude-sonnet-4-6",
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      max_tokens: 1,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "ping",
+            },
+          ],
+        },
+      ],
+    });
+
+    provider.close?.();
+  });
+
+  it("should clear the scheduled replay when the provider is closed", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        createTextMessageSse({
+          model: "claude-sonnet-4-6",
+          text: "pong",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream",
+          },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({
+        keepAliveReplayIntervalMinutes: 1,
+      }),
+      authStore: createAuthStore(),
+    });
+
+    await provider.chat({
+      model: "claude-sonnet-4-6",
+      messages: [{ role: "user", content: "ping" }],
+      tools: [],
+      toolChoice: "none",
+    });
+
+    provider.close?.();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

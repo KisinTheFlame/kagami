@@ -20,6 +20,7 @@ let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
+let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
@@ -74,6 +75,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
+    if (closeLlmProviders) {
+      await closeLlmProviders();
+      logger.info("LLM providers closed", {
+        event: "server.shutdown.llm_providers_closed",
+      });
+    }
+
     if (database) {
       logger.info("Database client closing", {
         event: "server.shutdown.db_closing",
@@ -113,6 +121,7 @@ try {
   napcatGatewayService = runtime.napcatGatewayService;
   callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
+  closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 
   await runtime.napcatGatewayService.start();
