@@ -1,4 +1,5 @@
 import {
+  Bot,
   Database,
   FileText,
   FlaskConical,
@@ -17,6 +18,7 @@ type NavItem = {
 };
 
 export const navItems: readonly NavItem[] = [
+  { to: "/agent-dashboard", label: "Agent 仪表盘", icon: Bot },
   { to: "/auth/codex", label: "内置登录", icon: KeyRound, matchPrefixes: ["/auth", "/auth/"] },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },

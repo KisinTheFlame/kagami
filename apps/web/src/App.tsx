@@ -5,6 +5,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 const AuthPage = lazy(() =>
   import("@/pages/auth/AuthPage").then(module => ({ default: module.AuthPage })),
 );
+const AgentDashboardPage = lazy(() =>
+  import("@/pages/agent-dashboard/AgentDashboardPage").then(module => ({
+    default: module.AgentDashboardPage,
+  })),
+);
 const LlmPlaygroundPage = lazy(() =>
   import("@/pages/llm-playground/LlmPlaygroundPage").then(module => ({
     default: module.LlmPlaygroundPage,
@@ -39,9 +44,10 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/llm-history" replace />} />
+          <Route index element={<Navigate to="/agent-dashboard" replace />} />
           <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
           <Route path="/auth/:provider" element={<AuthPage />} />
+          <Route path="/agent-dashboard" element={<AgentDashboardPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />

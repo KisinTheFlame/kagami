@@ -296,6 +296,18 @@ describe("RootAgentRuntime", () => {
     expect(enterAssistantIndex).toBeGreaterThanOrEqual(0);
     expect(enterToolResultIndex).toBeGreaterThan(enterAssistantIndex);
     expect(historyMessageIndex).toBeGreaterThan(enterToolResultIndex);
+
+    const dashboardSnapshot = await runtime.getDashboardSnapshot();
+    expect(dashboardSnapshot.initialized).toBe(true);
+    expect(dashboardSnapshot.lastLlmCall).toMatchObject({
+      provider: "openai",
+      model: "gpt-test",
+    });
+    expect(dashboardSnapshot.lastToolCall).toMatchObject({
+      name: "wait",
+    });
+    expect(dashboardSnapshot.lastToolResultPreview).toContain("deadlineAt");
+    expect(dashboardSnapshot.loopState).toBe("crashed");
   });
 
   it("should expose post-tool context to nested search without persisting unfinished wait tool call", async () => {
@@ -461,5 +473,9 @@ describe("RootAgentRuntime", () => {
 
     const snapshot = await context.getSnapshot();
     expect(snapshot.messages).toEqual([createConversationSummaryMessage("累计摘要")]);
+
+    const dashboardSnapshot = await runtime.getDashboardSnapshot();
+    expect(dashboardSnapshot.lastCompactionAt).not.toBeNull();
+    expect(dashboardSnapshot.contextSummary.messageCount).toBe(1);
   });
 });

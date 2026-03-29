@@ -1,4 +1,8 @@
-import type { AgentContext, AssistantMessage } from "../context/agent-context.js";
+import type {
+  AgentContext,
+  AgentContextDashboardSummary,
+  AssistantMessage,
+} from "../context/agent-context.js";
 import {
   createConversationSummaryMessage,
   createMessagesFromEvent,
@@ -11,8 +15,10 @@ import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
 import type {
+  RootAgentInvokeToolName,
   RootAgentPostToolEffects,
   RootAgentSessionController,
+  RootAgentSessionDashboardSnapshot,
 } from "./session/root-agent-session.js";
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 
@@ -41,6 +47,8 @@ type RootAgentRuntimeDeps = {
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
+const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 5;
+const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 200;
 
 type PendingToolPersistence = {
   toolResult?: {
@@ -48,6 +56,51 @@ type PendingToolPersistence = {
     content: string;
   };
   postToolEffects: RootAgentPostToolEffects;
+};
+
+export type RootAgentLoopState =
+  | "starting"
+  | "idle"
+  | "consuming_events"
+  | "calling_llm"
+  | "executing_tool"
+  | "waiting"
+  | "crashed";
+
+export type RootAgentRuntimeErrorSummary = {
+  name: string;
+  message: string;
+  updatedAt: Date;
+};
+
+export type RootAgentToolCallSummary = {
+  name: string;
+  argumentsPreview: string;
+  updatedAt: Date;
+};
+
+export type RootAgentLlmCallSummary = {
+  provider: string;
+  model: string;
+  assistantContentPreview: string;
+  toolCallNames: string[];
+  updatedAt: Date;
+};
+
+export type RootAgentRuntimeDashboardSnapshot = {
+  initialized: boolean;
+  loopState: RootAgentLoopState;
+  lastError: RootAgentRuntimeErrorSummary | null;
+  lastActivityAt: Date | null;
+  lastRoundCompletedAt: Date | null;
+  lastCompactionAt: Date | null;
+  contextCompactionThreshold: number;
+  contextSummary: AgentContextDashboardSummary;
+  lastToolCall: RootAgentToolCallSummary | null;
+  lastToolResultPreview: string | null;
+  lastLlmCall: RootAgentLlmCallSummary | null;
+  session: RootAgentSessionDashboardSnapshot;
+  availableInvokeTools: RootAgentInvokeToolName[];
 };
 
 export class RootAgentRuntime {
@@ -63,6 +116,14 @@ export class RootAgentRuntime {
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
   private initialized = false;
+  private loopState: RootAgentLoopState = "starting";
+  private lastError: RootAgentRuntimeErrorSummary | null = null;
+  private lastActivityAt: Date | null = null;
+  private lastRoundCompletedAt: Date | null = null;
+  private lastCompactionAt: Date | null = null;
+  private lastToolCall: RootAgentToolCallSummary | null = null;
+  private lastToolResultPreview: string | null = null;
+  private lastLlmCall: RootAgentLlmCallSummary | null = null;
 
   public constructor({
     llmClient,
@@ -96,87 +157,114 @@ export class RootAgentRuntime {
       return;
     }
 
-    await this.session.initializeContext();
-    await this.compactContextIfNeeded();
-    this.initialized = true;
+    this.transitionTo("starting");
+
+    try {
+      await this.session.initializeContext();
+      await this.compactContextIfNeeded();
+      this.initialized = true;
+      this.touchActivity();
+      this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
+    } catch (error) {
+      this.recordCrash(error);
+      throw error;
+    }
   }
 
   public async run(): Promise<void> {
-    await this.initialize();
-    let shouldRunRound = true;
+    try {
+      await this.initialize();
+      let shouldRunRound = true;
 
-    while (true) {
-      const consumeResult = await this.consumePendingEvents();
-      shouldRunRound = shouldRunRound || consumeResult.shouldTriggerRound;
+      while (true) {
+        const consumeResult = await this.consumePendingEvents();
+        shouldRunRound = shouldRunRound || consumeResult.shouldTriggerRound;
 
-      if (this.session.getState().kind === "waiting") {
-        await this.sleep(10);
-        continue;
-      }
-
-      if (!shouldRunRound) {
-        await this.sleep(10);
-        continue;
-      }
-      shouldRunRound = false;
-
-      await this.appendWakeReminderIfNeeded(this.now());
-
-      const snapshot = await this.context.getSnapshot();
-      const transientMessages = [...snapshot.messages];
-      const completion = await this.llmClient.chat(
-        {
-          system: snapshot.systemPrompt,
-          messages: transientMessages,
-          tools: this.tools.definitions(),
-          toolChoice: "required",
-        },
-        {
-          usage: "agent",
-        },
-      );
-      const assistant = completion.message;
-      const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
-      const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
-        ? persistentAssistantMessage
-        : null;
-
-      const pendingPersistence: PendingToolPersistence[] = [];
-      for (const toolCall of assistant.toolCalls) {
-        const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
-          groupId: this.session.getCurrentGroupId(),
-          systemPrompt: snapshot.systemPrompt,
-          messages: [...transientMessages],
-          tools: this.tools,
-        });
-        const postToolEffects = await this.session.flushPendingPostToolEffects();
-        pendingPersistence.push({
-          ...(shouldPersistToolResultInContext({
-            toolName: toolCall.name,
-            toolResult,
-          }) && toolResult.content.length > 0
-            ? {
-                toolResult: {
-                  toolCallId: toolCall.id,
-                  content: toolResult.content,
-                },
-              }
-            : {}),
-          postToolEffects,
-        });
-        transientMessages.push(
-          ...postToolEffects.messages,
-          ...postToolEffects.events.flatMap(createMessagesFromEvent),
-        );
-        if (toolResult.signal === "finish_round") {
-          break;
+        if (this.session.getState().kind === "waiting") {
+          this.transitionTo("waiting");
+          await this.sleep(10);
+          continue;
         }
-        shouldRunRound = true;
+
+        if (!shouldRunRound) {
+          this.transitionTo("idle");
+          await this.sleep(10);
+          continue;
+        }
+        shouldRunRound = false;
+
+        await this.appendWakeReminderIfNeeded(this.now());
+
+        const snapshot = await this.context.getSnapshot();
+        const transientMessages = [...snapshot.messages];
+        this.transitionTo("calling_llm");
+        const completion = await this.llmClient.chat(
+          {
+            system: snapshot.systemPrompt,
+            messages: transientMessages,
+            tools: this.tools.definitions(),
+            toolChoice: "required",
+          },
+          {
+            usage: "agent",
+          },
+        );
+        this.recordLlmCall(completion);
+        const assistant = completion.message;
+        const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
+        const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
+          ? persistentAssistantMessage
+          : null;
+
+        const pendingPersistence: PendingToolPersistence[] = [];
+        for (const toolCall of assistant.toolCalls) {
+          this.transitionTo("executing_tool");
+          const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
+            groupId: this.session.getCurrentGroupId(),
+            systemPrompt: snapshot.systemPrompt,
+            messages: [...transientMessages],
+            tools: this.tools,
+          });
+          this.recordToolCall({
+            toolName: toolCall.name,
+            argumentsValue: toolCall.arguments,
+            resultContent: toolResult.content,
+          });
+          const postToolEffects = await this.session.flushPendingPostToolEffects();
+          pendingPersistence.push({
+            ...(shouldPersistToolResultInContext({
+              toolName: toolCall.name,
+              toolResult,
+            }) && toolResult.content.length > 0
+              ? {
+                  toolResult: {
+                    toolCallId: toolCall.id,
+                    content: toolResult.content,
+                  },
+                }
+              : {}),
+            postToolEffects,
+          });
+          transientMessages.push(
+            ...postToolEffects.messages,
+            ...postToolEffects.events.flatMap(createMessagesFromEvent),
+          );
+          if (toolResult.signal === "finish_round") {
+            break;
+          }
+          shouldRunRound = true;
+        }
+        await this.persistRoundState({
+          assistantMessage: assistantToPersist,
+          toolPersistences: pendingPersistence,
+        });
+        this.lastRoundCompletedAt = this.now();
+        this.touchActivity();
+        this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
       }
-      await this.persistRoundState({
-        assistantMessage: assistantToPersist,
-        toolPersistences: pendingPersistence,
-      });
+    } catch (error) {
+      this.recordCrash(error);
+      throw error;
     }
   }
 
@@ -188,9 +276,39 @@ export class RootAgentRuntime {
     if (result.shouldTriggerRound) {
       await this.compactContextIfNeeded();
     }
+    if (events.length > 0) {
+      this.touchActivity();
+    }
+  }
+
+  public async getDashboardSnapshot(): Promise<RootAgentRuntimeDashboardSnapshot> {
+    const sessionSnapshot =
+      this.session.getDashboardSnapshot?.() ?? createSessionDashboardSnapshot(this.session);
+
+    return {
+      initialized: this.initialized,
+      loopState: this.loopState,
+      lastError: cloneErrorSummary(this.lastError),
+      lastActivityAt: cloneDate(this.lastActivityAt),
+      lastRoundCompletedAt: cloneDate(this.lastRoundCompletedAt),
+      lastCompactionAt: cloneDate(this.lastCompactionAt),
+      contextCompactionThreshold: this.contextCompactionThreshold,
+      contextSummary: await this.context.getDashboardSummary({
+        limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
+        previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
+      }),
+      lastToolCall: cloneToolCallSummary(this.lastToolCall),
+      lastToolResultPreview: this.lastToolResultPreview,
+      lastLlmCall: cloneLlmCallSummary(this.lastLlmCall),
+      session: sessionSnapshot,
+      availableInvokeTools: this.session.getAvailableInvokeTools(),
+    };
   }
 
   private async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
+    this.transitionTo("consuming_events");
+    let consumedEventCount = 0;
+
     while (true) {
       const event = this.eventQueue.dequeue();
       if (!event) {
@@ -198,11 +316,19 @@ export class RootAgentRuntime {
       }
 
       await this.session.consumeIncomingEvent(event);
+      consumedEventCount += 1;
     }
 
     const waitingTimeoutResult = await this.session.finishWaitingIfExpired(this.now());
     const result = await this.session.flushPendingIncomingEffects();
     await this.compactContextIfNeeded();
+    if (
+      consumedEventCount > 0 ||
+      waitingTimeoutResult.shouldTriggerRound ||
+      result.shouldTriggerRound
+    ) {
+      this.touchActivity();
+    }
     return {
       shouldTriggerRound: result.shouldTriggerRound || waitingTimeoutResult.shouldTriggerRound,
     };
@@ -267,6 +393,7 @@ export class RootAgentRuntime {
 
     await this.context.appendMessages([createWakeReminderMessage(now)]);
     this.lastWakeReminderAt = new Date(now);
+    this.touchActivity();
     await this.compactContextIfNeeded();
   }
 
@@ -295,6 +422,52 @@ export class RootAgentRuntime {
     }
 
     await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
+    this.lastCompactionAt = this.now();
+    this.touchActivity();
+  }
+
+  private transitionTo(loopState: RootAgentLoopState): void {
+    this.loopState = loopState;
+  }
+
+  private touchActivity(): void {
+    this.lastActivityAt = this.now();
+  }
+
+  private recordCrash(error: unknown): void {
+    this.loopState = "crashed";
+    this.lastError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  private recordLlmCall(completion: Awaited<ReturnType<LlmClient["chat"]>>): void {
+    this.lastLlmCall = {
+      provider: completion.provider,
+      model: completion.model,
+      assistantContentPreview: createPreview(completion.message.content),
+      toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  private recordToolCall(input: {
+    toolName: string;
+    argumentsValue: Record<string, unknown>;
+    resultContent: string;
+  }): void {
+    this.lastToolCall = {
+      name: input.toolName,
+      argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
+      updatedAt: this.now(),
+    };
+    this.lastToolResultPreview =
+      input.resultContent.trim().length > 0 ? createPreview(input.resultContent) : null;
+    this.touchActivity();
   }
 }
 
@@ -356,4 +529,81 @@ function createWakeReminderMinuteKey(now: Date): string {
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
 
   return [values.year, values.month, values.day, values.hour, values.minute].join("-");
+}
+
+function cloneDate(value: Date | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+function cloneErrorSummary(
+  value: RootAgentRuntimeErrorSummary | null,
+): RootAgentRuntimeErrorSummary | null {
+  if (!value) {
+    return null;
+  }
+
+  return {
+    ...value,
+    updatedAt: new Date(value.updatedAt),
+  };
+}
+
+function cloneToolCallSummary(
+  value: RootAgentToolCallSummary | null,
+): RootAgentToolCallSummary | null {
+  if (!value) {
+    return null;
+  }
+
+  return {
+    ...value,
+    updatedAt: new Date(value.updatedAt),
+  };
+}
+
+function cloneLlmCallSummary(
+  value: RootAgentLlmCallSummary | null,
+): RootAgentLlmCallSummary | null {
+  if (!value) {
+    return null;
+  }
+
+  return {
+    ...value,
+    updatedAt: new Date(value.updatedAt),
+  };
+}
+
+function safeJsonStringify(value: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
+function createPreview(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= DEFAULT_DASHBOARD_PREVIEW_LENGTH) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
+}
+
+function createSessionDashboardSnapshot(
+  session: RootAgentSessionController,
+): RootAgentSessionDashboardSnapshot {
+  const state = session.getState();
+
+  return {
+    state:
+      state.kind === "waiting"
+        ? { kind: "waiting", deadlineAt: new Date(state.deadlineAt) }
+        : state,
+    currentGroupId: session.getCurrentGroupId() ?? null,
+    waitingDeadlineAt: state.kind === "waiting" ? new Date(state.deadlineAt) : null,
+    availableInvokeTools: session.getAvailableInvokeTools(),
+    groups: [],
+  };
 }

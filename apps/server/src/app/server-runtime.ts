@@ -14,6 +14,7 @@ import { PrismaNapcatGroupMessageDao } from "../napcat/dao/impl/napcat-group-mes
 import { BizError } from "../common/errors/biz-error.js";
 import { toHttpErrorResponse } from "../common/errors/http-error.js";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
+import { AgentDashboardHandler } from "../ops/http/agent-dashboard.handler.js";
 import { EmbeddingCacheHandler } from "../ops/http/embedding-cache.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
@@ -51,6 +52,7 @@ import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
+import { DefaultAgentDashboardQueryService } from "../ops/application/agent-dashboard-query.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
 import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
@@ -326,12 +328,21 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       ])
       .definitions(),
   });
+  const agentDashboardQueryService = new DefaultAgentDashboardQueryService({
+    rootAgentRuntime,
+    eventQueue,
+    listenGroupIds: config.server.napcat.listenGroupIds,
+    listAvailableAgentProviders: async () => {
+      return await llmClient.listAvailableProviders({ usage: "agent" });
+    },
+  });
 
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
       authModule.authHandler,
       new LlmHandler({ llmPlaygroundService }),
+      new AgentDashboardHandler({ agentDashboardQueryService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new EmbeddingCacheHandler({ embeddingCacheQueryService }),
       new AppLogHandler({ appLogQueryService }),

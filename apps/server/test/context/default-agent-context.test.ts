@@ -411,4 +411,51 @@ describe("DefaultAgentContext", () => {
       messages: [],
     });
   });
+
+  it("should expose dashboard summary with truncated recent items", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendMessages([
+      {
+        role: "user",
+        content: "第一条很长很长的用户消息，需要被截断显示",
+      },
+      {
+        role: "assistant",
+        content: "assistant response that is also quite long",
+        toolCalls: [],
+      },
+      {
+        role: "tool",
+        toolCallId: "tool-1",
+        content: "tool result payload",
+      },
+    ]);
+
+    await expect(
+      context.getDashboardSummary({
+        limit: 2,
+        previewLength: 12,
+      }),
+    ).resolves.toEqual({
+      messageCount: 3,
+      recentItemsTruncated: true,
+      recentItems: [
+        {
+          kind: "llm_message",
+          label: "Assistant",
+          preview: "assistant r…",
+          truncated: true,
+        },
+        {
+          kind: "llm_message",
+          label: "工具结果 tool-1",
+          preview: "tool result…",
+          truncated: true,
+        },
+      ],
+    });
+  });
 });

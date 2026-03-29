@@ -1,5 +1,5 @@
 import { type LlmChatCallItem } from "@kagami/shared/schemas/llm-chat";
-import { FlaskConical } from "lucide-react";
+import { AlertCircle, Check, Copy, FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -542,25 +542,39 @@ function JsonPanel({
 
   return (
     <details open={defaultOpen} className="relative rounded-md border bg-muted/20 p-3">
-      <summary className="cursor-pointer pr-20 text-sm font-medium">{title}</summary>
+      <summary className="cursor-pointer pr-12 text-sm font-medium">{title}</summary>
       <Button
         type="button"
-        size="sm"
-        variant="outline"
-        className="absolute right-3 top-2 h-7 px-2 text-xs"
+        size="icon"
+        variant="ghost"
+        aria-label={copyButtonLabel}
+        title={copyButtonLabel}
+        className="absolute right-2 top-1.5 h-8 w-8"
         onClick={event => {
           event.preventDefault();
           event.stopPropagation();
           onCopy(serializedValue);
         }}
       >
-        {copyButtonLabel}
+        <CopyStatusIcon status={copyStatus} />
       </Button>
       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">
         {serializedValue}
       </pre>
     </details>
   );
+}
+
+function CopyStatusIcon({ status }: { status: JsonCopyStatus }) {
+  if (status === "success") {
+    return <Check className="h-4 w-4" />;
+  }
+
+  if (status === "error") {
+    return <AlertCircle className="h-4 w-4" />;
+  }
+
+  return <Copy className="h-4 w-4" />;
 }
 
 function MetaItem({

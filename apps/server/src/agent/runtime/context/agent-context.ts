@@ -2,6 +2,17 @@ import type { LlmMessage } from "../../../llm/types.js";
 import type { Event } from "../event/event.js";
 
 export type AssistantMessage = Extract<LlmMessage, { role: "assistant" }>;
+export type AgentContextDashboardItem = {
+  kind: "llm_message" | "event";
+  label: string;
+  preview: string;
+  truncated: boolean;
+};
+export type AgentContextDashboardSummary = {
+  messageCount: number;
+  recentItems: AgentContextDashboardItem[];
+  recentItemsTruncated: boolean;
+};
 export type ContextGroupMessageEventItem = {
   kind: "event";
   event: Event;
@@ -25,4 +36,8 @@ export interface AgentContext {
   appendAssistantTurn(message: AssistantMessage): Promise<void>;
   appendToolResult(input: { toolCallId: string; content: string }): Promise<void>;
   replaceMessages(messages: LlmMessage[]): Promise<void>;
+  getDashboardSummary(input?: {
+    limit?: number;
+    previewLength?: number;
+  }): Promise<AgentContextDashboardSummary>;
 }
