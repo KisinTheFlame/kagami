@@ -73,6 +73,9 @@ ${indent(napcatBlock, 4)}
     apiKey: tavily-key
   bot:
     qq: "10001"
+    owner:
+      name: 主人
+      qq: "10000"
 `;
 }
 
@@ -166,6 +169,81 @@ listenGroupIds:
       message: "配置值不合法",
       meta: {
         key: "server.port",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should reject missing owner config", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(
+        `
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`,
+      ).replace(
+        `  bot:
+    qq: "10001"
+    owner:
+      name: 主人
+      qq: "10000"
+`,
+        `  bot:
+    qq: "10001"
+`,
+      ),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.bot.owner",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should reject missing owner name", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace("      name: 主人\n", ""),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.bot.owner.name",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
+  });
+
+  it("should reject missing owner qq", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace('      qq: "10000"\n', ""),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.bot.owner.qq",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -284,6 +362,9 @@ server:
     apiKey: tavily-key
   bot:
     qq: "10001"
+    owner:
+      name: 主人
+      qq: "10000"
 `);
 
     const config = await loadStaticConfig({ configPath });
@@ -456,6 +537,9 @@ server:
     apiKey: tavily-key
   bot:
     qq: "10001"
+    owner:
+      name: 主人
+      qq: "10000"
 `);
 
     const config = await loadStaticConfig({ configPath });

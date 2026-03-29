@@ -233,6 +233,10 @@ const ConfigSchema = z.object({
     }),
     bot: z.object({
       qq: StringLikeSchema,
+      owner: z.object({
+        name: NonEmptyStringSchema,
+        qq: StringLikeSchema,
+      }),
     }),
   }),
 });

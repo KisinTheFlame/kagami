@@ -230,6 +230,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
       botQQ: config.server.bot.qq,
+      ownerName: config.server.bot.owner.name,
+      ownerQQ: config.server.bot.owner.qq,
     });
   };
 

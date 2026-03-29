@@ -188,6 +188,10 @@ export function createConfigManager(): ConfigManager {
       },
       bot: {
         qq: "10001",
+        owner: {
+          name: "主人",
+          qq: "10000",
+        },
       },
     },
   };

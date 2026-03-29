@@ -24,6 +24,8 @@ export class DefaultAgentContext implements AgentContext {
       systemPrompt ??
       createAgentSystemPrompt({
         botQQ: "unknown",
+        ownerName: "unknown",
+        ownerQQ: "unknown",
       });
   }
 

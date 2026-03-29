@@ -5,6 +5,8 @@ describe("createAgentSystemPrompt", () => {
   it("should describe qq message and system tags in the prompt", () => {
     const prompt = createAgentSystemPrompt({
       botQQ: "123456789",
+      ownerName: "测试主人",
+      ownerQQ: "987654321",
     });
 
     expect(prompt).toContain("<input_format>");
@@ -13,5 +15,7 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).toContain("<system_instruction>");
     expect(prompt).toContain("<conversation_summary>");
     expect(prompt).toContain("123456789");
+    expect(prompt).toContain("测试主人");
+    expect(prompt).toContain("987654321");
   });
 });
