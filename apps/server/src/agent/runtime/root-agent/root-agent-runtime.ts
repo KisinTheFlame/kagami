@@ -314,7 +314,8 @@ function omitControlToolCalls(
     ...message,
     toolCalls: message.toolCalls.filter(
       toolCall =>
-        agentTools.getKind(toolCall.name) !== "control" || shouldPersistControlToolInContext(toolCall.name),
+        agentTools.getKind(toolCall.name) !== "control" ||
+        shouldPersistControlToolInContext(toolCall.name),
     ),
   };
 }
@@ -323,9 +324,7 @@ function shouldPersistToolResultInContext(input: {
   toolName: string;
   toolResult: ToolSetExecutionResult;
 }): boolean {
-  return (
-    input.toolResult.kind !== "control" || shouldPersistControlToolInContext(input.toolName)
-  );
+  return input.toolResult.kind !== "control" || shouldPersistControlToolInContext(input.toolName);
 }
 
 function shouldPersistControlToolInContext(toolName: string): boolean {

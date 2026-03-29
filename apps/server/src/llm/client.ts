@@ -33,10 +33,7 @@ type ProviderConfigs = Record<LlmProviderId, LlmProviderConfig | OpenAiCodexConf
 
 export interface LlmClient {
   chat(request: LlmChatRequest, options: LlmChatOptions): Promise<LlmChatResponsePayload>;
-  chatDirect(
-    request: LlmChatRequest,
-    options: LlmChatDirectOptions,
-  ): Promise<LlmChatDirectResult>;
+  chatDirect(request: LlmChatRequest, options: LlmChatDirectOptions): Promise<LlmChatDirectResult>;
   listAvailableProviders(options: LlmListAvailableProvidersOptions): Promise<LlmProviderOption[]>;
 }
 

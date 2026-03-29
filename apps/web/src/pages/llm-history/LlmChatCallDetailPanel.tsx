@@ -1,6 +1,6 @@
 import { type LlmChatCallItem } from "@kagami/shared/schemas/llm-chat";
 import { FlaskConical } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,15 @@ type InputEntry =
       originalIndex: number;
     };
 
+type JsonCopyStatus = "idle" | "success" | "error";
+
 export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
   const navigate = useNavigate();
   const [inputOrder, setInputOrder] = useState<"asc" | "desc">("desc");
+  const [activeCopyPanelKey, setActiveCopyPanelKey] = useState<string | null>(null);
+  const [activeCopyItemId, setActiveCopyItemId] = useState<number | null>(null);
+  const [copyStatus, setCopyStatus] = useState<JsonCopyStatus>("idle");
+  const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
   const importDraft = useMemo(() => {
     if (item === null || !parsed?.request) {
@@ -75,6 +81,56 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
 
     return [...new Set(parsed.request.tools.map(tool => tool.name))];
   }, [parsed]);
+
+  useEffect(() => {
+    return () => {
+      if (copyFeedbackTimeoutRef.current !== null) {
+        clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  async function handleCopyJson(panelKey: string, text: string): Promise<void> {
+    if (item === null) {
+      return;
+    }
+
+    if (copyFeedbackTimeoutRef.current !== null) {
+      clearTimeout(copyFeedbackTimeoutRef.current);
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      console.error("Clipboard API is not available in this browser.");
+      setActiveCopyItemId(item.id);
+      setActiveCopyPanelKey(panelKey);
+      setCopyStatus("error");
+      scheduleCopyFeedbackReset();
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setActiveCopyItemId(item.id);
+      setActiveCopyPanelKey(panelKey);
+      setCopyStatus("success");
+    } catch (error) {
+      console.error("Failed to copy JSON payload.", error);
+      setActiveCopyItemId(item.id);
+      setActiveCopyPanelKey(panelKey);
+      setCopyStatus("error");
+    }
+
+    scheduleCopyFeedbackReset();
+  }
+
+  function scheduleCopyFeedbackReset(): void {
+    copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setActiveCopyItemId(null);
+      setActiveCopyPanelKey(null);
+      setCopyStatus("idle");
+      copyFeedbackTimeoutRef.current = null;
+    }, 1800);
+  }
 
   if (item === null || parsed === null) {
     return (
@@ -253,16 +309,80 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
 
         <section className="space-y-3">
           <h3 className="text-base font-semibold">原始 Payload</h3>
-          <JsonPanel title="requestPayload" value={item.requestPayload} />
-          <JsonPanel title="responsePayload" value={item.responsePayload} />
-          <JsonPanel title="error" value={item.error} />
+          <JsonPanel
+            title="requestPayload"
+            value={item.requestPayload}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "requestPayload"
+                ? copyStatus
+                : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("requestPayload", text);
+            }}
+          />
+          <JsonPanel
+            title="responsePayload"
+            value={item.responsePayload}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "responsePayload"
+                ? copyStatus
+                : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("responsePayload", text);
+            }}
+          />
+          <JsonPanel
+            title="error"
+            value={item.error}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "error" ? copyStatus : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("error", text);
+            }}
+          />
         </section>
 
         <section className="space-y-3">
           <h3 className="text-base font-semibold">Native Payload</h3>
-          <JsonPanel title="nativeRequestPayload" value={item.nativeRequestPayload} />
-          <JsonPanel title="nativeResponsePayload" value={item.nativeResponsePayload} />
-          <JsonPanel title="nativeError" value={item.nativeError} />
+          <JsonPanel
+            title="nativeRequestPayload"
+            value={item.nativeRequestPayload}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "nativeRequestPayload"
+                ? copyStatus
+                : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("nativeRequestPayload", text);
+            }}
+          />
+          <JsonPanel
+            title="nativeResponsePayload"
+            value={item.nativeResponsePayload}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "nativeResponsePayload"
+                ? copyStatus
+                : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("nativeResponsePayload", text);
+            }}
+          />
+          <JsonPanel
+            title="nativeError"
+            value={item.nativeError}
+            copyStatus={
+              activeCopyItemId === item.id && activeCopyPanelKey === "nativeError"
+                ? copyStatus
+                : "idle"
+            }
+            onCopy={text => {
+              void handleCopyJson("nativeError", text);
+            }}
+          />
         </section>
       </div>
     </div>
@@ -406,17 +526,38 @@ function ContentCard({
 function JsonPanel({
   title,
   value,
+  copyStatus,
+  onCopy,
   defaultOpen = false,
 }: {
   title: string;
   value: unknown;
+  copyStatus: JsonCopyStatus;
+  onCopy: (text: string) => void;
   defaultOpen?: boolean;
 }) {
+  const serializedValue = safeStringify(value);
+  const copyButtonLabel =
+    copyStatus === "success" ? "已复制" : copyStatus === "error" ? "复制失败" : "复制";
+
   return (
-    <details open={defaultOpen} className="rounded-md border bg-muted/20 p-3">
-      <summary className="cursor-pointer text-sm font-medium">{title}</summary>
+    <details open={defaultOpen} className="relative rounded-md border bg-muted/20 p-3">
+      <summary className="cursor-pointer pr-20 text-sm font-medium">{title}</summary>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="absolute right-3 top-2 h-7 px-2 text-xs"
+        onClick={event => {
+          event.preventDefault();
+          event.stopPropagation();
+          onCopy(serializedValue);
+        }}
+      >
+        {copyButtonLabel}
+      </Button>
       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">
-        {safeStringify(value)}
+        {serializedValue}
       </pre>
     </details>
   );
