@@ -52,6 +52,10 @@ type ClaudeMessageRequestBody = {
   model: string;
   max_tokens: number;
   stream: true;
+  cache_control?: {
+    type: "ephemeral";
+    ttl?: "1h";
+  };
   system: ClaudeSystemBlock[];
   messages: Array<{
     role: "user" | "assistant";
@@ -87,6 +91,7 @@ type ClaudeMessageResponse = {
     input_tokens?: number;
     output_tokens?: number;
     cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
   };
   error?: {
     type?: string;
@@ -370,6 +375,10 @@ function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestB
     model,
     stream: true,
     max_tokens: resolveClaudeMaxTokens(model),
+    cache_control: {
+      type: "ephemeral",
+      ttl: "1h",
+    },
     system: toClaudeSystemBlocks(request.system),
     messages: request.messages.flatMap<ClaudeMessageRequest>(message => {
       if (message.role === "user") {
@@ -455,14 +464,6 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
       type: "text",
       text: system,
     });
-  }
-
-  const lastBlock = blocks.at(-1);
-  if (lastBlock) {
-    lastBlock.cache_control = {
-      type: "ephemeral",
-      ttl: "1h",
-    };
   }
 
   return blocks;
@@ -604,28 +605,42 @@ function mapClaudeMessageResult(input: {
   }
 
   const message = toClaudeAssistantMessage(input.responsePayload);
+  const usage = input.responsePayload.usage ? toLlmUsage(input.responsePayload.usage) : undefined;
   return {
     response: {
       provider: "claude-code",
       model: input.responsePayload.model ?? input.requestBody.model,
       message,
-      ...(input.responsePayload.usage
-        ? {
-            usage: {
-              promptTokens: input.responsePayload.usage.input_tokens,
-              completionTokens: input.responsePayload.usage.output_tokens,
-              totalTokens:
-                (input.responsePayload.usage.input_tokens ?? 0) +
-                (input.responsePayload.usage.output_tokens ?? 0),
-              ...(typeof input.responsePayload.usage.cache_read_input_tokens === "number"
-                ? { cacheHitTokens: input.responsePayload.usage.cache_read_input_tokens }
-                : {}),
-            },
-          }
-        : {}),
+      ...(usage ? { usage } : {}),
     },
     nativeRequestPayload: toSerializableLlmNativeRecord(input.requestBody),
     nativeResponsePayload: toSerializableLlmNativeRecord(input.responsePayload),
+  };
+}
+
+function toLlmUsage(
+  usage: NonNullable<ClaudeMessageResponse["usage"]>,
+): LlmProviderChatResult["response"]["usage"] {
+  const cacheHitTokens = usage.cache_read_input_tokens;
+  const cacheCreationTokens = usage.cache_creation_input_tokens;
+  const uncachedPromptTokens = usage.input_tokens;
+  const promptTokens = [cacheHitTokens, cacheCreationTokens, uncachedPromptTokens].reduce<number>(
+    (sum, value) => sum + (typeof value === "number" ? value : 0),
+    0,
+  );
+  const cacheMissTokens =
+    (typeof cacheCreationTokens === "number" ? cacheCreationTokens : 0) +
+    (typeof uncachedPromptTokens === "number" ? uncachedPromptTokens : 0);
+  const completionTokens = usage.output_tokens;
+
+  return {
+    ...(promptTokens > 0 ? { promptTokens } : {}),
+    ...(typeof completionTokens === "number" ? { completionTokens } : {}),
+    ...(promptTokens > 0 || typeof completionTokens === "number"
+      ? { totalTokens: promptTokens + (completionTokens ?? 0) }
+      : {}),
+    ...(typeof cacheHitTokens === "number" ? { cacheHitTokens } : {}),
+    ...(cacheMissTokens > 0 ? { cacheMissTokens } : {}),
   };
 }
 
@@ -711,6 +726,7 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
   let cacheReadInputTokens: number | undefined;
+  let cacheCreationInputTokens: number | undefined;
 
   for (const chunk of value.split("\n\n")) {
     const lines = chunk
@@ -752,6 +768,9 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       }
       if (usage && typeof usage.cache_read_input_tokens === "number") {
         cacheReadInputTokens = usage.cache_read_input_tokens;
+      }
+      if (usage && typeof usage.cache_creation_input_tokens === "number") {
+        cacheCreationInputTokens = usage.cache_creation_input_tokens;
       }
       continue;
     }
@@ -840,6 +859,9 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       if (usage && typeof usage.cache_read_input_tokens === "number") {
         cacheReadInputTokens = usage.cache_read_input_tokens;
       }
+      if (usage && typeof usage.cache_creation_input_tokens === "number") {
+        cacheCreationInputTokens = usage.cache_creation_input_tokens;
+      }
     }
   }
 
@@ -862,13 +884,17 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
     content,
     ...(inputTokens !== undefined ||
     outputTokens !== undefined ||
-    cacheReadInputTokens !== undefined
+    cacheReadInputTokens !== undefined ||
+    cacheCreationInputTokens !== undefined
       ? {
           usage: {
             ...(inputTokens !== undefined ? { input_tokens: inputTokens } : {}),
             ...(outputTokens !== undefined ? { output_tokens: outputTokens } : {}),
             ...(cacheReadInputTokens !== undefined
               ? { cache_read_input_tokens: cacheReadInputTokens }
+              : {}),
+            ...(cacheCreationInputTokens !== undefined
+              ? { cache_creation_input_tokens: cacheCreationInputTokens }
               : {}),
           },
         }

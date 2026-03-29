@@ -42,6 +42,7 @@ function createTextMessageSse(input: {
   inputTokens?: number;
   outputTokens?: number;
   cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }): string {
   return createSseResponse([
     {
@@ -56,6 +57,9 @@ function createTextMessageSse(input: {
           output_tokens: 0,
           ...(input.cacheReadInputTokens !== undefined
             ? { cache_read_input_tokens: input.cacheReadInputTokens }
+            : {}),
+          ...(input.cacheCreationInputTokens !== undefined
+            ? { cache_creation_input_tokens: input.cacheCreationInputTokens }
             : {}),
         },
       },
@@ -178,6 +182,10 @@ describe("createClaudeCodeProvider", () => {
       expect(body.model).toBe("claude-sonnet-4-6");
       expect(body.stream).toBe(true);
       expect(body.max_tokens).toBe(32000);
+      expect(body.cache_control).toEqual({
+        type: "ephemeral",
+        ttl: "1h",
+      });
       expect(system[0]?.text).toMatch(/^x-anthropic-billing-header:/);
       expect(system[1]).toEqual({
         type: "text",
@@ -186,10 +194,6 @@ describe("createClaudeCodeProvider", () => {
       expect(system[2]).toEqual({
         type: "text",
         text: "你是一个测试助手。",
-        cache_control: {
-          type: "ephemeral",
-          ttl: "1h",
-        },
       });
       expect(body.thinking).toEqual({
         type: "adaptive",
@@ -249,16 +253,21 @@ describe("createClaudeCodeProvider", () => {
           toolCalls: [],
         },
         usage: {
-          promptTokens: 11,
+          promptTokens: 17,
           completionTokens: 7,
-          totalTokens: 18,
+          totalTokens: 24,
           cacheHitTokens: 6,
+          cacheMissTokens: 11,
         },
       },
       nativeRequestPayload: {
         model: "claude-sonnet-4-6",
         stream: true,
         max_tokens: 32000,
+        cache_control: {
+          type: "ephemeral",
+          ttl: "1h",
+        },
         system: [
           {
             type: "text",
@@ -271,10 +280,6 @@ describe("createClaudeCodeProvider", () => {
           {
             type: "text",
             text: "你是一个测试助手。",
-            cache_control: {
-              type: "ephemeral",
-              ttl: "1h",
-            },
           },
         ],
         thinking: {
@@ -312,6 +317,62 @@ describe("createClaudeCodeProvider", () => {
           input_tokens: 11,
           output_tokens: 7,
           cache_read_input_tokens: 6,
+        },
+      },
+    });
+  });
+
+  it("should normalize Claude prompt caching usage fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(
+          createTextMessageSse({
+            model: "claude-sonnet-4-6",
+            text: "pong",
+            inputTokens: 11,
+            outputTokens: 7,
+            cacheReadInputTokens: 100,
+            cacheCreationInputTokens: 20,
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        );
+      }),
+    );
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig(),
+      authStore: createAuthStore(),
+    });
+
+    await expect(
+      provider.chat({
+        model: "claude-sonnet-4-6",
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      response: {
+        usage: {
+          promptTokens: 131,
+          completionTokens: 7,
+          totalTokens: 138,
+          cacheHitTokens: 100,
+          cacheMissTokens: 31,
+        },
+      },
+      nativeResponsePayload: {
+        usage: {
+          input_tokens: 11,
+          output_tokens: 7,
+          cache_read_input_tokens: 100,
+          cache_creation_input_tokens: 20,
         },
       },
     });
@@ -391,6 +452,7 @@ describe("createClaudeCodeProvider", () => {
           promptTokens: 9,
           completionTokens: 3,
           totalTokens: 12,
+          cacheMissTokens: 9,
         },
       },
       nativeRequestPayload: expect.objectContaining({
