@@ -229,29 +229,21 @@ export class RootAgentRuntime {
       return;
     }
 
-    const splitIndex = Math.floor(snapshot.messages.length / 2);
-    if (splitIndex <= 0 || splitIndex >= snapshot.messages.length) {
-      return;
-    }
-
     const summary =
       "execute" in this.contextSummaryOperation
         ? await this.contextSummaryOperation.execute({
-            messages: snapshot.messages.slice(0, splitIndex),
+            messages: snapshot.messages,
             tools: this.summaryTools,
           })
         : await this.contextSummaryOperation.summarize({
-            messages: snapshot.messages.slice(0, splitIndex),
+            messages: snapshot.messages,
             tools: this.summaryTools,
           });
     if (!summary) {
       return;
     }
 
-    await this.context.replaceMessages([
-      createConversationSummaryMessage(summary),
-      ...snapshot.messages.slice(splitIndex),
-    ]);
+    await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
   }
 
   private getActiveTools(): ToolExecutor {
