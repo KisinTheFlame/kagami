@@ -4,6 +4,37 @@ import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool
 import { ZoneOutTool } from "../../src/agent/runtime/root-agent/tools/zone-out.tool.js";
 
 describe("invoke tool", () => {
+  it("should expose flattened invoke parameters", () => {
+    const tool = new InvokeTool({
+      tools: [
+        new SendMessageTool({
+          agentMessageService: {
+            sendGroupMessage: vi.fn(),
+          },
+        }),
+        new ZoneOutTool(),
+      ],
+    });
+
+    expect(tool.parameters).toEqual({
+      type: "object",
+      properties: {
+        tool: {
+          type: "string",
+          description: '要调用的子工具名，例如 "send_message" 或 "zone_out"。',
+        },
+        message: {
+          type: "string",
+          description: "仅 send_message 使用。要发送到群里的文本内容。",
+        },
+        thought: {
+          type: "string",
+          description: "仅 zone_out 使用。这次神游里想的内容。",
+        },
+      },
+    });
+  });
+
   it("should invoke send_message in qq group state", async () => {
     const agentMessageService = {
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 9527 }),
@@ -15,9 +46,7 @@ describe("invoke tool", () => {
     const result = await tool.execute(
       {
         tool: "send_message",
-        args: {
-          message: "  hello group  ",
-        },
+        message: "  hello group  ",
       },
       {
         groupId: "group-1",
@@ -51,9 +80,7 @@ describe("invoke tool", () => {
     const result = await tool.execute(
       {
         tool: "send_message",
-        args: {
-          message: "hello",
-        },
+        message: "hello",
       },
       {
         rootAgentSession: {
@@ -88,9 +115,7 @@ describe("invoke tool", () => {
     const result = await tool.execute(
       {
         tool: "zone_out",
-        args: {
-          thought: "  先发会呆  ",
-        },
+        thought: "  先发会呆  ",
       },
       {
         rootAgentSession: {

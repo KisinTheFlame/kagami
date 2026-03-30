@@ -140,7 +140,7 @@ describe("context-message-factory", () => {
       content: [
         "<system_instruction>",
         "你已进入神游状态。",
-        '现在不能看群消息，也不能直接搜索或发群消息；如果要继续思考，请调用 invoke(tool="zone_out", args={ thought: "..." })，如果想回到门户，调用 back_to_portal。',
+        '现在不能看群消息，也不能直接搜索或发群消息；如果要继续思考，请调用 invoke(tool="zone_out", thought="...")，如果想回到门户，调用 back_to_portal。',
         "</system_instruction>",
       ].join("\n"),
     });
