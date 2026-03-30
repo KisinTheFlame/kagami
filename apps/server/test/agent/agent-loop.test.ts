@@ -6,6 +6,7 @@ import {
   createConversationSummaryMessage,
   createUserMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
+import { InMemoryAgentEventQueue } from "../../src/agent/runtime/event/in-memory-agent-event-queue.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import type { RootAgentRuntimeSnapshotRepository } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
@@ -20,6 +21,21 @@ import type { PersistedRootAgentRuntimeSnapshot } from "../../src/agent/runtime/
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 class StopLoopError extends Error {}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+}
 
 function createGroupEvent(message: string, groupId = "group-1") {
   return {
@@ -94,6 +110,7 @@ function createRuntimeForCompactionTest(input: {
     enqueue: vi.fn().mockReturnValue(1),
     dequeue: vi.fn().mockReturnValue(null),
     size: vi.fn().mockReturnValue(0),
+    clear: vi.fn().mockReturnValue(0),
   };
   const llmClient: LlmClient = {
     chat: vi.fn(),
@@ -128,6 +145,9 @@ function createInMemorySnapshotRepository(): RootAgentRuntimeSnapshotRepository 
     }),
     save: vi.fn(async nextSnapshot => {
       snapshot = structuredClone(nextSnapshot);
+    }),
+    delete: vi.fn(async () => {
+      snapshot = null;
     }),
   };
 }
@@ -247,6 +267,11 @@ describe("RootAgentRuntime", () => {
       enqueue: vi.fn().mockReturnValue(1),
       dequeue: vi.fn(() => dequeuedEvents.shift() ?? null),
       size: vi.fn(() => dequeuedEvents.filter(event => event !== null).length),
+      clear: vi.fn(() => {
+        const remaining = dequeuedEvents.filter(event => event !== null).length;
+        dequeuedEvents.splice(0, dequeuedEvents.length);
+        return remaining;
+      }),
     };
     const runtime = new RootAgentRuntime({
       llmClient,
@@ -393,6 +418,7 @@ describe("RootAgentRuntime", () => {
       enqueue: vi.fn().mockReturnValue(1),
       dequeue: vi.fn().mockReturnValue(null),
       size: vi.fn().mockReturnValue(0),
+      clear: vi.fn().mockReturnValue(0),
     };
     const runtime = new RootAgentRuntime({
       llmClient,
@@ -525,6 +551,7 @@ describe("RootAgentRuntime", () => {
       enqueue: vi.fn().mockReturnValue(1),
       dequeue: vi.fn().mockReturnValue(null),
       size: vi.fn().mockReturnValue(0),
+      clear: vi.fn().mockReturnValue(0),
     };
     const runtime = new RootAgentRuntime({
       llmClient,
@@ -636,6 +663,7 @@ describe("RootAgentRuntime", () => {
         enqueue: vi.fn().mockReturnValue(1),
         dequeue: vi.fn().mockReturnValue(null),
         size: vi.fn().mockReturnValue(0),
+        clear: vi.fn().mockReturnValue(0),
       },
       session,
       tools: new ToolCatalog([
@@ -752,6 +780,7 @@ describe("RootAgentRuntime", () => {
         enqueue: vi.fn().mockReturnValue(1),
         dequeue: vi.fn().mockReturnValue(null),
         size: vi.fn().mockReturnValue(0),
+        clear: vi.fn().mockReturnValue(0),
       },
       session: createSession(firstContext),
       snapshotRepository: repository,
@@ -789,6 +818,7 @@ describe("RootAgentRuntime", () => {
         enqueue: vi.fn().mockReturnValue(1),
         dequeue: vi.fn().mockReturnValue(null),
         size: vi.fn().mockReturnValue(0),
+        clear: vi.fn().mockReturnValue(0),
       },
       session: createSession(restoredContext),
       snapshotRepository: repository,
@@ -813,5 +843,167 @@ describe("RootAgentRuntime", () => {
     ).length;
 
     expect(wakeReminderCount).toBe(1);
+  });
+
+  it("should reset runtime context, session and pending queue into a clean persisted snapshot", async () => {
+    const repository = createInMemorySnapshotRepository();
+    const eventQueue = new InMemoryAgentEventQueue();
+    eventQueue.enqueue(createGroupEvent("queued-before-reset"));
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "latest-system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 0,
+    });
+    const runtime = new RootAgentRuntime({
+      llmClient: {
+        chat: vi.fn(),
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn().mockResolvedValue([]),
+      },
+      context,
+      eventQueue,
+      session,
+      snapshotRepository: repository,
+      tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
+    });
+
+    await runtime.initialize();
+    await context.appendMessages([createUserMessage("old-context-message")]);
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+
+    const result = await runtime.resetContext();
+    const snapshot = await context.getSnapshot();
+
+    expect(result.resetAt).toBeInstanceOf(Date);
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
+    expect(eventQueue.size()).toBe(0);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("old-context-message"),
+      ),
+    ).toBe(false);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+      ),
+    ).toBe(true);
+    expect(repository.snapshot).toMatchObject({
+      runtimeKey: "root-agent",
+      contextSnapshot: {
+        systemPrompt: "latest-system-prompt",
+      },
+      sessionSnapshot: {
+        state: {
+          kind: "portal",
+        },
+      },
+      lastWakeReminderAt: null,
+    });
+  });
+
+  it("should wait for the active round to finish before resetting context", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const chatDeferred = createDeferred<Awaited<ReturnType<LlmClient["chat"]>>>();
+    const sleep = vi.fn().mockRejectedValue(stopError);
+    const eventQueue = new InMemoryAgentEventQueue();
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "latest-system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 0,
+    });
+    const llmClient: LlmClient = {
+      chat: vi.fn().mockReturnValue(chatDeferred.promise),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const runtime = new RootAgentRuntime({
+      llmClient,
+      context,
+      eventQueue,
+      session,
+      snapshotRepository: createInMemorySnapshotRepository(),
+      tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
+      sleep,
+    });
+
+    const runPromise = runtime.run();
+    await vi.waitFor(() => {
+      expect(llmClient.chat).toHaveBeenCalledTimes(1);
+    });
+
+    let resetResolved = false;
+    const resetPromise = runtime.resetContext().then(result => {
+      resetResolved = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    expect(resetResolved).toBe(false);
+
+    chatDeferred.resolve({
+      provider: "openai",
+      model: "gpt-test",
+      message: {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
+      },
+    });
+
+    await expect(resetPromise).resolves.toMatchObject({
+      resetAt: expect.any(Date),
+    });
+    await expect(runPromise).rejects.toBe(stopError);
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(message => message.role === "tool" && message.toolCallId === "wait-1"),
+    ).toBe(false);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+      ),
+    ).toBe(true);
   });
 });

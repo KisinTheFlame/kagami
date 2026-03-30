@@ -22,11 +22,12 @@ type DefaultAgentContextOptions = {
 };
 
 export class DefaultAgentContext implements AgentContext {
+  private readonly defaultSystemPrompt: string | (() => Promise<string> | string);
   private systemPrompt: string | (() => Promise<string> | string);
   private readonly items: ContextItem[] = [];
 
   public constructor({ systemPrompt, systemPromptFactory }: DefaultAgentContextOptions) {
-    this.systemPrompt =
+    this.defaultSystemPrompt =
       systemPromptFactory ??
       systemPrompt ??
       createAgentSystemPrompt({
@@ -34,6 +35,7 @@ export class DefaultAgentContext implements AgentContext {
         creatorName: "unknown",
         creatorQQ: "unknown",
       });
+    this.systemPrompt = this.defaultSystemPrompt;
   }
 
   public async getSnapshot(): Promise<AgentContextSnapshot> {
@@ -71,6 +73,11 @@ export class DefaultAgentContext implements AgentContext {
         message => ({ kind: "llm_message", message }) as const,
       ),
     );
+  }
+
+  public async reset(): Promise<void> {
+    this.systemPrompt = this.defaultSystemPrompt;
+    this.items.splice(0, this.items.length);
   }
 
   public async appendEvents(events: Event[]): Promise<void> {

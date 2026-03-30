@@ -67,6 +67,14 @@ export class PrismaRootAgentRuntimeSnapshotRepository implements RootAgentRuntim
       },
     });
   }
+
+  public async delete(runtimeKey: string): Promise<void> {
+    await this.database.rootAgentRuntimeSnapshot.deleteMany({
+      where: {
+        runtimeKey,
+      },
+    });
+  }
 }
 
 function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {

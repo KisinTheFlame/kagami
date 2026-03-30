@@ -5,9 +5,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
+export const AGENT_DASHBOARD_QUERY_KEY = ["agent-dashboard", "current"] as const;
+
 export function useAgentDashboardSnapshot() {
   return useQuery<AgentDashboardSnapshot>({
-    queryKey: ["agent-dashboard", "current"],
+    queryKey: AGENT_DASHBOARD_QUERY_KEY,
     queryFn: async () => {
       const response = await apiFetch<unknown>("/agent-dashboard/current");
       return AgentDashboardSnapshotSchema.parse(response);

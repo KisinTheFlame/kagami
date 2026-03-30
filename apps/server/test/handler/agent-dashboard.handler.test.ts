@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentDashboardCommandService } from "../../src/ops/application/agent-dashboard-command.service.js";
 import type { AgentDashboardQueryService } from "../../src/ops/application/agent-dashboard-query.service.js";
 import { AgentDashboardHandler } from "../../src/ops/http/agent-dashboard.handler.js";
 
@@ -54,8 +55,14 @@ describe("AgentDashboardHandler", () => {
     const agentDashboardQueryService: AgentDashboardQueryService = {
       getCurrentSnapshot,
     };
+    const agentDashboardCommandService: AgentDashboardCommandService = {
+      resetContext: vi.fn(),
+    };
 
-    const handler = new AgentDashboardHandler({ agentDashboardQueryService });
+    const handler = new AgentDashboardHandler({
+      agentDashboardQueryService,
+      agentDashboardCommandService,
+    });
     handler.register(app);
 
     const response = await app.inject({
@@ -101,5 +108,37 @@ describe("AgentDashboardHandler", () => {
       },
     });
     expect(getCurrentSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("should reset the current agent context", async () => {
+    const agentDashboardQueryService: AgentDashboardQueryService = {
+      getCurrentSnapshot: vi.fn(),
+    };
+    const resetContext = vi.fn().mockResolvedValue({
+      ok: true,
+      resetAt: "2026-03-30T08:00:00.000Z",
+    });
+    const agentDashboardCommandService: AgentDashboardCommandService = {
+      resetContext,
+    };
+
+    const handler = new AgentDashboardHandler({
+      agentDashboardQueryService,
+      agentDashboardCommandService,
+    });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/agent-dashboard/reset-context",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      resetAt: "2026-03-30T08:00:00.000Z",
+    });
+    expect(resetContext).toHaveBeenCalledTimes(1);
   });
 });

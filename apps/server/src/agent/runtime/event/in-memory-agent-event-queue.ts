@@ -21,4 +21,10 @@ export class InMemoryAgentEventQueue implements AgentEventQueue {
   public size(): number {
     return this.events.length;
   }
+
+  public clear(): number {
+    const clearedCount = this.events.length;
+    this.events.splice(0, this.events.length);
+    return clearedCount;
+  }
 }

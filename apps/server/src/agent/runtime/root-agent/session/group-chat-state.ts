@@ -72,6 +72,12 @@ export class GroupChatState {
     this.unreadMessages = takeLast(structuredClone(input.unreadMessages), this.unreadLimit);
     this.entered = input.hasEntered;
   }
+
+  public reset(): void {
+    this.groupInfo = null;
+    this.unreadMessages = [];
+    this.entered = false;
+  }
 }
 
 function takeLast<T>(items: T[], limit: number): T[] {

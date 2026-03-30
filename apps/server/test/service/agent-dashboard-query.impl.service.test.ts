@@ -63,6 +63,7 @@ describe("DefaultAgentDashboardQueryService", () => {
       enqueue: vi.fn(),
       dequeue: vi.fn(),
       size: vi.fn().mockReturnValue(2),
+      clear: vi.fn().mockReturnValue(0),
     };
     const service = new DefaultAgentDashboardQueryService({
       rootAgentRuntime: rootAgentRuntime as RootAgentRuntime,

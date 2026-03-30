@@ -71,6 +71,17 @@ export const AgentDashboardGroupSchema = z
 
 export type AgentDashboardGroup = z.infer<typeof AgentDashboardGroupSchema>;
 
+export const AgentDashboardResetContextResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    resetAt: z.string().datetime(),
+  })
+  .strict();
+
+export type AgentDashboardResetContextResponse = z.infer<
+  typeof AgentDashboardResetContextResponseSchema
+>;
+
 export const AgentDashboardSnapshotSchema = z
   .object({
     generatedAt: z.string().datetime(),

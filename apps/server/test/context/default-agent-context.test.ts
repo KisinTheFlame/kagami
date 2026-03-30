@@ -182,6 +182,29 @@ describe("DefaultAgentContext", () => {
     });
   });
 
+  it("should reset to the original system prompt source and clear messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "latest-system-prompt",
+    });
+
+    await context.restorePersistedSnapshot({
+      systemPrompt: "persisted-system-prompt",
+      messages: [
+        {
+          role: "user",
+          content: "old-message",
+        },
+      ],
+    });
+
+    await context.reset();
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "latest-system-prompt",
+      messages: [],
+    });
+  });
+
   it("should keep group message events when only unsupported segments are present", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",

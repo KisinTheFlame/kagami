@@ -80,6 +80,7 @@ export type RootAgentSessionController = {
   getDashboardSnapshot(): RootAgentSessionDashboardSnapshot;
   exportPersistedSnapshot(): PersistedRootAgentSessionSnapshot;
   restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void;
+  reset(): void;
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
@@ -219,6 +220,22 @@ export class RootAgentSession implements RootAgentSessionController {
     this.groupInfoLoaded = true;
     this.initialized = true;
     this.state = normalizeRestoredSessionState(snapshot.state, this.groupStateById);
+  }
+
+  public reset(): void {
+    for (const groupState of this.groupStates) {
+      groupState.reset();
+    }
+
+    this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
+    this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
+    this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
+    this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
+    this.portalSnapshotDirty = false;
+    this.groupInfoLoaded = false;
+    this.ithomeFeedState = null;
+    this.initialized = false;
+    this.state = { kind: "portal" };
   }
 
   public async initializeContext(): Promise<void> {

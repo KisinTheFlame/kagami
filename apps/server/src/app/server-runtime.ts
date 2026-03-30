@@ -55,6 +55,7 @@ import { DefaultAgentMessageService } from "../agent/capabilities/messaging/appl
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { DefaultAgentDashboardQueryService } from "../ops/application/agent-dashboard-query.impl.service.js";
+import { DefaultAgentDashboardCommandService } from "../ops/application/agent-dashboard-command.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
 import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
@@ -393,13 +394,19 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },
   });
+  const agentDashboardCommandService = new DefaultAgentDashboardCommandService({
+    rootAgentRuntime,
+  });
 
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
       authModule.authHandler,
       new LlmHandler({ llmPlaygroundService }),
-      new AgentDashboardHandler({ agentDashboardQueryService }),
+      new AgentDashboardHandler({
+        agentDashboardQueryService,
+        agentDashboardCommandService,
+      }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new EmbeddingCacheHandler({ embeddingCacheQueryService }),
       new AppLogHandler({ appLogQueryService }),

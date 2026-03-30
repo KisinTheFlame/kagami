@@ -1,22 +1,68 @@
+import { AgentDashboardResetContextResponseSchema } from "@kagami/shared/schemas/agent-dashboard";
 import type {
   AgentDashboardContextItem,
   AgentDashboardGroup,
+  AgentDashboardResetContextResponse,
   AgentLoopState,
 } from "@kagami/shared/schemas/agent-dashboard";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useAgentDashboardSnapshot } from "./useAgentDashboardSnapshot";
+import { AGENT_DASHBOARD_QUERY_KEY, useAgentDashboardSnapshot } from "./useAgentDashboardSnapshot";
 
-type DashboardTab = "overview" | "context";
+type DashboardTab = "overview" | "context" | "control";
+type ResetFeedback =
+  | {
+      kind: "success";
+      message: string;
+    }
+  | {
+      kind: "error";
+      message: string;
+    };
 
 export function AgentDashboardPage() {
+  const queryClient = useQueryClient();
   const query = useAgentDashboardSnapshot();
   const snapshot = query.data;
   const isInitialLoading = query.isLoading && !snapshot;
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [resetFeedback, setResetFeedback] = useState<ResetFeedback | null>(null);
+  const resetContextMutation = useMutation({
+    mutationFn: async (): Promise<AgentDashboardResetContextResponse> => {
+      const response = await apiRequest("/agent-dashboard/reset-context", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        throw new Error(formatApiError(response));
+      }
+
+      return AgentDashboardResetContextResponseSchema.parse(response.body);
+    },
+    onMutate: () => {
+      setResetFeedback(null);
+    },
+    onSuccess: async result => {
+      setResetFeedback({
+        kind: "success",
+        message: `上下文已重置，时间：${formatStableDateTime(result.resetAt) ?? result.resetAt}`,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: AGENT_DASHBOARD_QUERY_KEY,
+      });
+    },
+    onError: error => {
+      setResetFeedback({
+        kind: "error",
+        message: error instanceof Error ? error.message : "重置失败，请稍后再试。",
+      });
+    },
+  });
 
   if (isInitialLoading) {
     return (
@@ -68,6 +114,11 @@ export function AgentDashboardPage() {
           onClick={() => setActiveTab("context")}
           label={`最近上下文 (${snapshot.context.recentItems.length})`}
         />
+        <TabButton
+          active={activeTab === "control"}
+          onClick={() => setActiveTab("control")}
+          label="控制面板"
+        />
       </div>
 
       {query.isError ? (
@@ -82,6 +133,25 @@ export function AgentDashboardPage() {
           <ContextTab
             items={snapshot.context.recentItems}
             totalCount={snapshot.context.recentItems.length}
+          />
+        ) : null}
+        {activeTab === "control" ? (
+          <ControlTab
+            loopState={snapshot.runtime.loopState}
+            pendingEventCount={snapshot.queue.pendingEventCount}
+            feedback={resetFeedback}
+            isResetting={resetContextMutation.isPending}
+            onReset={() => {
+              if (
+                !window.confirm(
+                  "确认重置 Agent 上下文吗？这会清空当前上下文、会话状态和待处理事件，并以当前 System Prompt 从新的初始态继续运行。",
+                )
+              ) {
+                return;
+              }
+
+              resetContextMutation.mutate();
+            }}
           />
         ) : null}
       </div>
@@ -251,6 +321,57 @@ function ContextTab({
   );
 }
 
+function ControlTab({
+  loopState,
+  pendingEventCount,
+  feedback,
+  isResetting,
+  onReset,
+}: {
+  loopState: AgentLoopState;
+  pendingEventCount: number;
+  feedback: ResetFeedback | null;
+  isResetting: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <Card className="flex h-full min-h-0 flex-col">
+      <CardHeader className="pb-4">
+        <CardTitle>控制面板</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-4">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-destructive">重置上下文</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              适用于 System Prompt 更新后，希望 Agent 丢弃旧上下文重新开始的场景。
+              当前会清空上下文、session 和待处理事件队列，并立即生成新的初始 portal 上下文。
+            </p>
+            <p className="text-xs text-muted-foreground">
+              当前 Loop：{formatLoopState(loopState)}，待处理事件：{pendingEventCount}
+            </p>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button variant="destructive" onClick={onReset} disabled={isResetting}>
+              {isResetting ? "重置中..." : "重置上下文"}
+            </Button>
+            {feedback ? (
+              <p
+                className={cn(
+                  "text-sm",
+                  feedback.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {feedback.message}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TabButton({
   active,
   label,
@@ -325,6 +446,19 @@ function ActivityBlock({
       </pre>
     </div>
   );
+}
+
+function formatApiError(response: Awaited<ReturnType<typeof apiRequest>>): string {
+  if (
+    response.body &&
+    typeof response.body === "object" &&
+    "message" in response.body &&
+    typeof response.body.message === "string"
+  ) {
+    return response.body.message;
+  }
+
+  return `API error ${response.status}: ${response.statusText}`;
 }
 
 function ContextItemCard({ item }: { item: AgentDashboardContextItem }) {

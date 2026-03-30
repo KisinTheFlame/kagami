@@ -578,4 +578,64 @@ describe("RootAgentSession", () => {
     );
     expect(portalMessages).toHaveLength(originalPortalMessageCount);
   });
+
+  it("should reset session state back to a fresh portal state", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      getRecentGroupMessages: vi
+        .fn()
+        .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
+      ithomeNewsService: {
+        getFeedOverview: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          unreadCount: 2,
+          hasEntered: true,
+        }),
+        enterFeed: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          mode: "new",
+          hiddenNewCount: 0,
+          articles: [],
+        }),
+        openArticle: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await session.initializeContext();
+    await session.consumeIncomingEvent(createGroupEvent("portal-unread-1", "group-1"));
+    await session.flushPendingIncomingEffects();
+    await session.enter({ kind: "qq_group", id: "group-1" });
+    await session.flushPendingPostToolEffects();
+
+    session.reset();
+
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
+    expect(session.getDashboardSnapshot().groups).toEqual([
+      expect.objectContaining({
+        groupId: "group-1",
+        unreadCount: 0,
+        hasEntered: false,
+      }),
+      expect.objectContaining({
+        groupId: "group-2",
+        unreadCount: 0,
+        hasEntered: false,
+      }),
+    ]);
+
+    await session.initializeContext();
+    const snapshot = await context.getSnapshot();
+    const portalMessageCount = snapshot.messages.filter(
+      message =>
+        typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+    ).length;
+    expect(portalMessageCount).toBeGreaterThanOrEqual(1);
+  });
 });

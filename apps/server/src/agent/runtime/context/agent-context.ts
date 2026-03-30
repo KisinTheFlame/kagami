@@ -34,6 +34,7 @@ export interface AgentContext {
   fork(): Promise<AgentContext>;
   exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot>;
   restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void>;
+  reset(): Promise<void>;
   appendEvents(events: Event[]): Promise<void>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   appendAssistantTurn(message: AssistantMessage): Promise<void>;

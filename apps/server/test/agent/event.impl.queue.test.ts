@@ -83,4 +83,36 @@ describe("InMemoryAgentEventQueue", () => {
     );
     expect(queue.dequeue()).toBeNull();
   });
+
+  it("should clear queued events and return cleared count", () => {
+    const queue = new InMemoryAgentEventQueue();
+    queue.enqueue({
+      type: "napcat_group_message",
+      data: {
+        groupId: "10001",
+        userId: "20002",
+        nickname: "测试昵称",
+        rawMessage: "already-queued",
+        messageSegments: [],
+        messageId: 30003,
+        time: 1710000000,
+      },
+    });
+    queue.enqueue({
+      type: "napcat_group_message",
+      data: {
+        groupId: "10001",
+        userId: "20002",
+        nickname: "测试昵称",
+        rawMessage: "later",
+        messageSegments: [],
+        messageId: 30004,
+        time: 1710000000,
+      },
+    });
+
+    expect(queue.clear()).toBe(2);
+    expect(queue.size()).toBe(0);
+    expect(queue.dequeue()).toBeNull();
+  });
 });
