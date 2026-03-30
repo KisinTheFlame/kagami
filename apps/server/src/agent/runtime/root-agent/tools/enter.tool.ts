@@ -21,11 +21,11 @@ const EnterArgumentsSchema = z
       });
     }
 
-    if (value.kind === "zone_out" && value.id !== undefined) {
+    if ((value.kind === "zone_out" || value.kind === "ithome") && value.id !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["id"],
-        message: "进入 zone_out 时不需要提供 id",
+        message: `进入 ${value.kind} 时不需要提供 id`,
       });
     }
   });
@@ -36,17 +36,19 @@ type EnterToolContext = ToolContext & {
 
 export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
   public readonly name = ENTER_TOOL_NAME;
-  public readonly description = "从门户状态进入一个可进入目标，例如某个 QQ 群或神游状态。";
+  public readonly description =
+    "从门户状态进入一个可进入目标，例如某个 QQ 群、IT 之家资讯空间或神游状态。";
   public readonly parameters = {
     type: "object",
     properties: {
       kind: {
         type: "string",
-        description: '进入目标类型。当前支持 "qq_group" 和 "zone_out"。',
+        description: '进入目标类型。当前支持 "qq_group"、"ithome" 和 "zone_out"。',
       },
       id: {
         type: "string",
-        description: '目标 ID。kind 为 "qq_group" 时填写群 ID；kind 为 "zone_out" 时不要填写。',
+        description:
+          '目标 ID。kind 为 "qq_group" 时填写群 ID；kind 为 "ithome" 或 "zone_out" 时不要填写。',
       },
     },
   } as const;

@@ -94,6 +94,9 @@ const PersistedRootAgentSessionStateSchema = z.union([
     kind: z.literal("zone_out"),
   }),
   z.object({
+    kind: z.literal("ithome"),
+  }),
+  z.object({
     kind: z.literal("waiting"),
     deadlineAt: DateValueSchema,
   }),

@@ -1,6 +1,8 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
+  createIthomeArticleDetailMessage,
+  createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
@@ -11,18 +13,20 @@ import type {
   NapcatGatewayService,
   NapcatGroupMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import type {
   PersistedRootAgentSessionSnapshot,
   PersistedRootAgentSessionState,
 } from "../persistence/root-agent-runtime-snapshot.js";
 
-export const ROOT_AGENT_ENTER_TARGET_KINDS = ["qq_group", "zone_out"] as const;
+export const ROOT_AGENT_ENTER_TARGET_KINDS = ["qq_group", "zone_out", "ithome"] as const;
 export type RootAgentEnterTargetKind = (typeof ROOT_AGENT_ENTER_TARGET_KINDS)[number];
 
 export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   portal: [],
   qq_group: ["send_message"],
+  ithome: [],
   zone_out: ["zone_out"],
   waiting: [],
 } as const;
@@ -40,6 +44,9 @@ export type RootAgentSessionState =
     }
   | {
       kind: "zone_out";
+    }
+  | {
+      kind: "ithome";
     }
   | {
       kind: "waiting";
@@ -78,6 +85,7 @@ export type RootAgentSessionController = {
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
   enter(input: { kind: RootAgentEnterTargetKind; id?: string }): Promise<Record<string, unknown>>;
+  openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>>;
   backToPortal(): Promise<Record<string, unknown>>;
   wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>>;
   finishWaitingIfExpired(now: Date): Promise<{ shouldTriggerRound: boolean }>;
@@ -88,14 +96,26 @@ type RootAgentSessionDeps = {
   napcatGatewayService: NapcatGatewayService;
   listenGroupIds: string[];
   recentMessageLimit: number;
+  ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
 };
 
 type EnterHandler = (input: { id?: string }) => Promise<Record<string, unknown>>;
+
+type PortalFeedState = {
+  kind: "ithome";
+  label: string;
+  unreadCount: number;
+  hasEntered: boolean;
+};
 
 export class RootAgentSession implements RootAgentSessionController {
   private readonly context: AgentContext;
   private readonly napcatGatewayService: NapcatGatewayService;
   private readonly recentMessageLimit: number;
+  private readonly ithomeNewsService: Pick<
+    IthomeNewsService,
+    "getFeedOverview" | "enterFeed" | "openArticle"
+  > | null;
   private readonly groupStates: GroupChatState[];
   private readonly groupStateById: Map<string, GroupChatState>;
   private readonly pendingVisibleEvents: Event[] = [];
@@ -107,16 +127,19 @@ export class RootAgentSession implements RootAgentSessionController {
   private state: RootAgentSessionState = { kind: "portal" };
   private initialized = false;
   private groupInfoLoaded = false;
+  private ithomeFeedState: PortalFeedState | null = null;
 
   public constructor({
     context,
     napcatGatewayService,
     listenGroupIds,
     recentMessageLimit,
+    ithomeNewsService,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
     this.recentMessageLimit = recentMessageLimit;
+    this.ithomeNewsService = ithomeNewsService ?? null;
     this.groupStates = listenGroupIds.map(
       groupId =>
         new GroupChatState({
@@ -127,6 +150,7 @@ export class RootAgentSession implements RootAgentSessionController {
     this.groupStateById = new Map(this.groupStates.map(state => [state.groupId, state]));
     this.enterHandlers = new Map<RootAgentEnterTargetKind, EnterHandler>([
       ["qq_group", async input => await this.enterQqGroup(input)],
+      ["ithome", async () => await this.enterIthome()],
       ["zone_out", async () => await this.enterZoneOut()],
     ]);
   }
@@ -203,16 +227,22 @@ export class RootAgentSession implements RootAgentSessionController {
     }
 
     await this.ensureGroupInfosLoaded();
-    await this.context.appendMessages([createPortalSnapshotMessage(this.renderPortalGroups())]);
+    await this.ensureIthomeFeedStateLoaded();
+    await this.context.appendMessages([
+      createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
+    ]);
     this.initialized = true;
   }
 
   public async consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
+    if (event.type === "news_article_ingested") {
+      return await this.consumeNewsArticleIngestedEvent(event);
+    }
+
     if (event.type !== "napcat_group_message") {
-      this.pendingVisibleEvents.push(event);
       return {
-        shouldTriggerRound: true,
+        shouldTriggerRound: false,
       };
     }
 
@@ -270,7 +300,10 @@ export class RootAgentSession implements RootAgentSessionController {
 
     if (this.portalSnapshotDirty) {
       await this.ensureGroupInfosLoaded();
-      await this.context.appendMessages([createPortalSnapshotMessage(this.renderPortalGroups())]);
+      await this.ensureIthomeFeedStateLoaded();
+      await this.context.appendMessages([
+        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
+      ]);
       this.portalSnapshotDirty = false;
     }
 
@@ -315,6 +348,56 @@ export class RootAgentSession implements RootAgentSessionController {
     });
   }
 
+  public async openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>> {
+    await this.initializeContext();
+
+    if (this.state.kind !== "ithome") {
+      return {
+        ok: false,
+        error: "STATE_TRANSITION_NOT_ALLOWED",
+      };
+    }
+
+    if (!this.ithomeNewsService) {
+      return {
+        ok: false,
+        error: "ENTER_TARGET_NOT_AVAILABLE",
+        kind: "ithome",
+      };
+    }
+
+    const article = await this.ithomeNewsService.openArticle({
+      articleId: input.articleId,
+    });
+    if (!article) {
+      return {
+        ok: false,
+        error: "ARTICLE_NOT_FOUND",
+        articleId: input.articleId,
+      };
+    }
+
+    this.pendingPostToolMessages.push(
+      createIthomeArticleDetailMessage({
+        title: article.title,
+        url: article.url,
+        publishedAt: article.publishedAt,
+        content: article.content,
+        contentSource: article.contentSource,
+        truncated: article.truncated,
+        maxChars: article.maxChars,
+      }),
+    );
+
+    return {
+      ok: true,
+      kind: "ithome_article",
+      articleId: article.articleId,
+      contentSource: article.contentSource,
+      truncated: article.truncated,
+    };
+  }
+
   public async backToPortal(): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
@@ -328,8 +411,11 @@ export class RootAgentSession implements RootAgentSessionController {
     if (this.state.kind === "qq_group") {
       const previousGroupId = this.state.groupId;
       this.state = { kind: "portal" };
+      await this.ensureIthomeFeedStateLoaded();
 
-      this.pendingPostToolMessages.push(createPortalSnapshotMessage(this.renderPortalGroups()));
+      this.pendingPostToolMessages.push(
+        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
+      );
 
       return {
         ok: true,
@@ -338,10 +424,24 @@ export class RootAgentSession implements RootAgentSessionController {
       };
     }
 
+    if (this.state.kind === "ithome") {
+      this.state = { kind: "portal" };
+      await this.ensureIthomeFeedStateLoaded();
+      this.pendingPostToolMessages.push(
+        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
+      );
+
+      return {
+        ok: true,
+        kind: "ithome",
+      };
+    }
+
     this.state = { kind: "portal" };
+    await this.ensureIthomeFeedStateLoaded();
     this.pendingPostToolMessages.push(
       createExitZoneOutMessage(),
-      createPortalSnapshotMessage(this.renderPortalGroups()),
+      createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
     );
 
     return {
@@ -446,6 +546,76 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
+  private async enterIthome(): Promise<Record<string, unknown>> {
+    if (!this.ithomeNewsService) {
+      return {
+        ok: false,
+        error: "ENTER_TARGET_NOT_AVAILABLE",
+        kind: "ithome",
+      };
+    }
+
+    const result = await this.ithomeNewsService.enterFeed();
+    this.state = {
+      kind: "ithome",
+    };
+    this.ithomeFeedState = {
+      kind: "ithome",
+      label: result.displayName,
+      unreadCount: 0,
+      hasEntered: true,
+    };
+    this.pendingPostToolMessages.push(
+      createIthomeArticleListMessage({
+        displayName: result.displayName,
+        mode: result.mode,
+        hiddenNewCount: result.hiddenNewCount,
+        articles: result.articles,
+      }),
+    );
+
+    return {
+      ok: true,
+      kind: "ithome",
+      source: result.mode,
+      articleCount: result.articles.length,
+      hiddenNewCount: result.hiddenNewCount,
+    };
+  }
+
+  private async consumeNewsArticleIngestedEvent(
+    event: Extract<Event, { type: "news_article_ingested" }>,
+  ): Promise<{ shouldTriggerRound: boolean }> {
+    await this.ensureIthomeFeedStateLoaded();
+    if (!this.ithomeFeedState || event.data.sourceKey !== this.ithomeFeedState.kind) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    this.ithomeFeedState.unreadCount += 1;
+    if (this.state.kind === "portal") {
+      this.pendingVisibleEvents.push(event);
+      this.portalSnapshotDirty = true;
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
+    if (this.state.kind === "waiting") {
+      this.pendingVisibleEvents.push(event);
+      this.state = { kind: "portal" };
+      this.portalSnapshotDirty = true;
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
+    return {
+      shouldTriggerRound: false,
+    };
+  }
+
   private async fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]> {
     if (this.recentMessageLimit === 0) {
       return [];
@@ -477,6 +647,20 @@ export class RootAgentSession implements RootAgentSessionController {
     this.groupInfoLoaded = true;
   }
 
+  private async ensureIthomeFeedStateLoaded(): Promise<void> {
+    if (!this.ithomeNewsService || this.ithomeFeedState) {
+      return;
+    }
+
+    const overview = await this.ithomeNewsService.getFeedOverview();
+    this.ithomeFeedState = {
+      kind: "ithome",
+      label: overview.displayName,
+      unreadCount: overview.unreadCount,
+      hasEntered: overview.hasEntered,
+    };
+  }
+
   private renderPortalGroups(): Array<{
     groupId: string;
     groupName?: string;
@@ -493,6 +677,10 @@ export class RootAgentSession implements RootAgentSessionController {
         hasEntered: groupState.hasEntered(),
       };
     });
+  }
+
+  private renderPortalFeeds(): PortalFeedState[] {
+    return this.ithomeFeedState ? [this.ithomeFeedState] : [];
   }
 }
 

@@ -3,6 +3,8 @@ import {
   createConversationSummaryMessage,
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
+  createIthomeArticleDetailMessage,
+  createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
   createPortalSnapshotMessage,
   createWakeReminderMessage,
@@ -27,19 +29,29 @@ describe("context-message-factory", () => {
 
   it("should render portal snapshot for unread and unseen groups", () => {
     expect(
-      createPortalSnapshotMessage([
-        {
-          groupId: "10001",
-          groupName: "测试群",
-          unreadCount: 3,
-          hasEntered: true,
-        },
-        {
-          groupId: "10002",
-          unreadCount: 0,
-          hasEntered: false,
-        },
-      ]),
+      createPortalSnapshotMessage(
+        [
+          {
+            groupId: "10001",
+            groupName: "测试群",
+            unreadCount: 3,
+            hasEntered: true,
+          },
+          {
+            groupId: "10002",
+            unreadCount: 0,
+            hasEntered: false,
+          },
+        ],
+        [
+          {
+            kind: "ithome",
+            label: "IT之家",
+            unreadCount: 2,
+            hasEntered: true,
+          },
+        ],
+      ),
     ).toEqual({
       role: "user",
       content: [
@@ -49,8 +61,75 @@ describe("context-message-factory", () => {
         "可进入目标：",
         '- QQ 群 测试群（10001），未读 3 条，可通过 enter(kind="qq_group", id="10001") 进入',
         '- QQ 群 10002，尚未查看，可通过 enter(kind="qq_group", id="10002") 进去看看最近消息',
+        '- IT之家（kind="ithome"），新文章 2 篇，可通过 enter(kind="ithome") 进入',
         '- 神游（kind="zone_out"），可通过 enter(kind="zone_out") 进入自由思考状态',
         "</system_reminder>",
+      ].join("\n"),
+    });
+  });
+
+  it("should render ithome article list and detail messages", () => {
+    expect(
+      createIthomeArticleListMessage({
+        displayName: "IT之家",
+        mode: "new",
+        hiddenNewCount: 3,
+        articles: [
+          {
+            id: 11,
+            title: "测试文章",
+            url: "https://www.ithome.com/test",
+            publishedAt: new Date("2026-03-30T04:21:03.000Z"),
+            rssSummary: "这是摘要",
+          },
+        ],
+      }),
+    ).toEqual({
+      role: "user",
+      content: [
+        "<system_instruction>",
+        "你已进入 IT之家 资讯空间。",
+        "以下是游标之后最新的一批新文章。",
+        "本轮只展示最新几篇；更早的 3 篇新文章已随本次进入一起略过。",
+        "如果想阅读全文，调用 open_ithome_article；如果想离开，调用 back_to_portal。",
+        "</system_instruction>",
+        "<ithome_article_list>",
+        "[11] 测试文章",
+        "发布时间：2026/3/30 12:21",
+        "链接：https://www.ithome.com/test",
+        "摘要：这是摘要",
+        "",
+        "</ithome_article_list>",
+      ].join("\n"),
+    });
+
+    expect(
+      createIthomeArticleDetailMessage({
+        title: "测试文章",
+        url: "https://www.ithome.com/test",
+        publishedAt: new Date("2026-03-30T04:21:03.000Z"),
+        content: "正文内容",
+        contentSource: "rss_summary",
+        truncated: true,
+        maxChars: 8000,
+      }),
+    ).toEqual({
+      role: "user",
+      content: [
+        "<system_instruction>",
+        "以下是当前打开的 IT 之家文章。",
+        "正文暂不可用，以下内容来自 RSS 摘要整理。",
+        "正文过长，以下仅保留前 8000 字。",
+        "看完后可以继续打开别的文章，或者调用 back_to_portal 离开资讯空间。",
+        "</system_instruction>",
+        "<ithome_article>",
+        "标题：测试文章",
+        "发布时间：2026/3/30 12:21",
+        "链接：https://www.ithome.com/test",
+        "",
+        "正文：",
+        "正文内容",
+        "</ithome_article>",
       ].join("\n"),
     });
   });

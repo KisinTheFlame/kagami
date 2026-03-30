@@ -111,6 +111,13 @@ export function createConfigManager(): ConfigManager {
         llmRetryBackoffMs: 30_000,
         waitToolMaxWaitMs: 600_000,
       },
+      news: {
+        ithome: {
+          pollIntervalMs: 300_000,
+          recentArticleLimit: 8,
+          articleMaxChars: 8000,
+        },
+      },
       napcat: {
         wsUrl: "ws://napcat:3001/",
         reconnectMs: 3000,

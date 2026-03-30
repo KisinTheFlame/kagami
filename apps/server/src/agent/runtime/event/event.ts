@@ -5,4 +5,13 @@ export type NapcatGroupMessageEvent = {
   data: NapcatGroupMessageData;
 };
 
-export type Event = NapcatGroupMessageEvent;
+export type NewsArticleIngestedEvent = {
+  type: "news_article_ingested";
+  data: {
+    sourceKey: "ithome";
+    articleId: number;
+    title: string;
+  };
+};
+
+export type Event = NapcatGroupMessageEvent | NewsArticleIngestedEvent;

@@ -32,7 +32,7 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
     super();
     this.now = now ?? (() => new Date());
     this.maxWaitMs = maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
-    this.description = `在门户状态进入最多 ${formatWaitDuration(this.maxWaitMs)} 的等待，直到新的 QQ 消息出现或等待自然结束。`;
+    this.description = `在门户状态进入最多 ${formatWaitDuration(this.maxWaitMs)} 的等待，直到新的外部事件出现或等待自然结束。`;
   }
 
   protected async executeTyped(

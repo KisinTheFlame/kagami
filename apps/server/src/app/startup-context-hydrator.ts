@@ -79,6 +79,10 @@ function createStartupEventFromGroupMessage(message: NapcatGroupMessageData): Ev
 }
 
 function compareStartupEvent(left: Event, right: Event): number {
+  if (left.type !== "napcat_group_message" || right.type !== "napcat_group_message") {
+    return 0;
+  }
+
   const leftTime = left.data.time ?? 0;
   const rightTime = right.data.time ?? 0;
   if (leftTime !== rightTime) {

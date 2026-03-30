@@ -12,6 +12,9 @@ const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD = 60;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT = 8;
+const DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS = 8000;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -146,6 +149,17 @@ const ConfigSchema = z.object({
         ),
         llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
         waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+      })
+      .default({}),
+    news: z
+      .object({
+        ithome: z
+          .object({
+            pollIntervalMs: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS),
+            recentArticleLimit: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT),
+            articleMaxChars: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS),
+          })
+          .default({}),
       })
       .default({}),
     napcat: NapcatConfigSchema,

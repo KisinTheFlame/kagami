@@ -87,6 +87,15 @@ import {
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { ZoneOutTool } from "../agent/runtime/root-agent/tools/zone-out.tool.js";
+import {
+  OpenIthomeArticleTool,
+  OPEN_ITHOME_ARTICLE_TOOL_NAME,
+} from "../agent/capabilities/news/tools/open-ithome-article.tool.js";
+import { PrismaNewsArticleDao } from "../news/infra/prisma-news-article.dao.js";
+import { PrismaNewsFeedCursorDao } from "../news/infra/prisma-news-feed-cursor.dao.js";
+import { DefaultIthomeClient } from "../news/application/ithome-client.js";
+import { IthomeNewsService } from "../news/application/ithome-news.service.js";
+import { IthomePoller } from "../news/application/ithome-poller.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -99,6 +108,7 @@ export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
   napcatGatewayService: NapcatGatewayService;
+  ithomePoller: IthomePoller;
   callbackServers: Array<{ stop(): Promise<void> }>;
   authUsageCacheManager: AuthUsageCacheManager;
   claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
@@ -145,6 +155,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const napcatGroupMessageChunkDao = new PrismaNapcatGroupMessageChunkDao({
     database,
   });
+  const newsArticleDao = new PrismaNewsArticleDao({ database });
+  const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
   });
@@ -263,6 +275,28 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     groupMessageChunkIndexer,
   });
   const eventQueue = new InMemoryAgentEventQueue();
+  const ithomeNewsService = new IthomeNewsService({
+    articleDao: newsArticleDao,
+    cursorDao: newsFeedCursorDao,
+    ithomeClient: new DefaultIthomeClient(),
+    recentArticleLimit: config.server.news.ithome.recentArticleLimit,
+    articleMaxChars: config.server.news.ithome.articleMaxChars,
+  });
+  const ithomePoller = new IthomePoller({
+    ithomeNewsService,
+    pollIntervalMs: config.server.news.ithome.pollIntervalMs,
+    onArticleIngested: article => {
+      eventQueue.enqueue({
+        type: "news_article_ingested",
+        data: {
+          sourceKey: "ithome",
+          articleId: article.articleId,
+          title: article.title,
+        },
+      });
+    },
+  });
+  ithomePoller.start();
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
     configManager,
     enqueueGroupMessageEvent: event => eventQueue.enqueue(event),
@@ -280,6 +314,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
+    ithomeNewsService,
   });
   const toolCatalog = new ToolCatalog([
     new EnterTool(),
@@ -295,6 +330,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         new ZoneOutTool(),
       ],
     }),
+    new OpenIthomeArticleTool(),
     new SearchWebTool({
       webSearchTaskAgent,
     }),
@@ -305,6 +341,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     BACK_TO_PORTAL_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
+    OPEN_ITHOME_ARTICLE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
   ]);
   const contextSummaryOperation = new ContextSummaryOperation({
@@ -341,6 +378,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         ENTER_TOOL_NAME,
         WAIT_TOOL_NAME,
         INVOKE_TOOL_NAME,
+        OPEN_ITHOME_ARTICLE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
         SUMMARY_TOOL_NAME,
@@ -375,6 +413,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     app,
     database,
     napcatGatewayService,
+    ithomePoller,
     callbackServers: authModule.callbackServers,
     authUsageCacheManager: authModule.authUsageCacheManager,
     claudeCodeAuthRefreshScheduler: authModule.claudeCodeAuthRefreshScheduler,

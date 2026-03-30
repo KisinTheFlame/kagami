@@ -86,7 +86,7 @@ export const AgentDashboardSnapshotSchema = z
       .strict(),
     session: z
       .object({
-        kind: z.enum(["portal", "qq_group", "zone_out", "waiting"]),
+        kind: z.enum(["portal", "qq_group", "ithome", "zone_out", "waiting"]),
         currentGroupId: z.string().min(1).nullable(),
         waitingDeadlineAt: z.string().datetime().nullable(),
         availableInvokeTools: z.array(z.string().min(1)),

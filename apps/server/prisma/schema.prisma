@@ -182,3 +182,33 @@ model RootAgentRuntimeSnapshot {
 
   @@map("root_agent_runtime_snapshot")
 }
+
+model NewsArticle {
+  id                     Int       @id @default(autoincrement())
+  sourceKey              String    @map("source_key")
+  upstreamId             String    @map("upstream_id")
+  title                  String
+  url                    String
+  publishedAt            DateTime  @map("published_at") @db.Timestamptz(6)
+  rssSummary             String    @map("rss_summary")
+  rssPayload             Json      @map("rss_payload") @db.JsonB
+  articleContent         String?   @map("article_content")
+  articleContentStatus   String    @default("pending") @map("article_content_status")
+  articleContentFetchedAt DateTime? @map("article_content_fetched_at") @db.Timestamptz(6)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([sourceKey, upstreamId], map: "news_article_source_key_upstream_id_uq")
+  @@index([sourceKey, publishedAt], map: "news_article_source_key_published_at_idx")
+  @@map("news_article")
+}
+
+model NewsFeedCursor {
+  sourceKey           String   @id @map("source_key")
+  lastSeenArticleId   Int      @map("last_seen_article_id")
+  lastSeenPublishedAt DateTime @map("last_seen_published_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("news_feed_cursor")
+}

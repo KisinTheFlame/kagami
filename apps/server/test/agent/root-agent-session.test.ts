@@ -59,9 +59,41 @@ async function applyPostToolEffects(
 function createSession({
   context,
   getRecentGroupMessages = vi.fn().mockResolvedValue([]),
+  ithomeNewsService,
 }: {
   context: DefaultAgentContext;
   getRecentGroupMessages?: ReturnType<typeof vi.fn>;
+  ithomeNewsService?: {
+    getFeedOverview(): Promise<{
+      sourceKey: "ithome";
+      displayName: string;
+      unreadCount: number;
+      hasEntered: boolean;
+    }>;
+    enterFeed(): Promise<{
+      sourceKey: "ithome";
+      displayName: string;
+      mode: "latest" | "new";
+      hiddenNewCount: number;
+      articles: Array<{
+        id: number;
+        title: string;
+        url: string;
+        publishedAt: Date;
+        rssSummary: string;
+      }>;
+    }>;
+    openArticle(input: { articleId: number }): Promise<{
+      articleId: number;
+      title: string;
+      url: string;
+      publishedAt: Date;
+      content: string;
+      contentSource: "article_content" | "rss_summary";
+      truncated: boolean;
+      maxChars: number;
+    } | null>;
+  };
 }) {
   return new RootAgentSession({
     context,
@@ -81,6 +113,7 @@ function createSession({
     },
     listenGroupIds: ["group-1", "group-2"],
     recentMessageLimit: 2,
+    ithomeNewsService,
   });
 }
 
@@ -369,6 +402,125 @@ describe("RootAgentSession", () => {
           typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
       ),
     ).toBe(true);
+  });
+
+  it("should enter ithome, open article and return to portal", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      ithomeNewsService: {
+        getFeedOverview: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          unreadCount: 1,
+          hasEntered: false,
+        }),
+        enterFeed: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          mode: "new",
+          hiddenNewCount: 0,
+          articles: [
+            {
+              id: 1,
+              title: "测试文章",
+              url: "https://www.ithome.com/1.htm",
+              publishedAt: new Date("2026-03-30T04:21:03.000Z"),
+              rssSummary: "文章摘要",
+            },
+          ],
+        }),
+        openArticle: vi.fn().mockResolvedValue({
+          articleId: 1,
+          title: "测试文章",
+          url: "https://www.ithome.com/1.htm",
+          publishedAt: new Date("2026-03-30T04:21:03.000Z"),
+          content: "文章正文",
+          contentSource: "article_content",
+          truncated: false,
+          maxChars: 8000,
+        }),
+      },
+    });
+
+    await session.initializeContext();
+    await expect(session.enter({ kind: "ithome" })).resolves.toMatchObject({
+      ok: true,
+      kind: "ithome",
+      articleCount: 1,
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await expect(session.openIthomeArticle({ articleId: 1 })).resolves.toMatchObject({
+      ok: true,
+      kind: "ithome_article",
+      articleId: 1,
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await expect(session.backToPortal()).resolves.toMatchObject({
+      ok: true,
+      kind: "ithome",
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("<ithome_article_list>"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("<ithome_article>"),
+      ),
+    ).toBe(true);
+  });
+
+  it("should interrupt waiting on ithome news event and return to portal", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      ithomeNewsService: {
+        getFeedOverview: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          unreadCount: 0,
+          hasEntered: true,
+        }),
+        enterFeed: vi.fn(),
+        openArticle: vi.fn(),
+      },
+    });
+
+    await session.initializeContext();
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+
+    const consumeResult = await session.consumeIncomingEvent({
+      type: "news_article_ingested",
+      data: {
+        sourceKey: "ithome",
+        articleId: 1,
+        title: "新文章",
+      },
+    });
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(session.getState()).toEqual({
+      kind: "portal",
+    });
   });
 
   it("should export and restore persisted session snapshot without duplicating portal snapshot", async () => {

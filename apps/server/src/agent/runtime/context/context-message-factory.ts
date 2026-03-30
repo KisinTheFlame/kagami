@@ -45,6 +45,7 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
 
 export function createPortalSnapshotMessage(
   groups: Array<{ groupId: string; groupName?: string; unreadCount: number; hasEntered: boolean }>,
+  feeds: Array<{ kind: "ithome"; label: string; unreadCount: number; hasEntered: boolean }> = [],
 ): UserMessage {
   const renderedGroups = groups.map(group => {
     const groupLabel = group.groupName
@@ -57,10 +58,15 @@ export function createPortalSnapshotMessage(
       enterCommandText: `enter(kind="qq_group", id="${group.groupId}")`,
     };
   });
+  const renderedFeeds = feeds.map(feed => ({
+    ...feed,
+    enterCommandText: `enter(kind="${feed.kind}")`,
+  }));
 
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/portal-snapshot.hbs", {
       groups: renderedGroups,
+      feeds: renderedFeeds,
     }),
   );
 }
@@ -85,6 +91,53 @@ export function createWebSearchInstructionMessage(question: string): UserMessage
   );
 }
 
+export function createIthomeArticleListMessage(input: {
+  displayName: string;
+  mode: "latest" | "new";
+  hiddenNewCount: number;
+  articles: Array<{
+    id: number;
+    title: string;
+    url: string;
+    publishedAt: Date;
+    rssSummary: string;
+  }>;
+}): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/ithome-article-list.hbs", {
+      displayName: input.displayName,
+      isNewMode: input.mode === "new",
+      hiddenNewCount: input.hiddenNewCount,
+      articles: input.articles.map(article => ({
+        ...article,
+        publishedAtText: formatDateTime(article.publishedAt),
+      })),
+    }),
+  );
+}
+
+export function createIthomeArticleDetailMessage(input: {
+  title: string;
+  url: string;
+  publishedAt: Date;
+  content: string;
+  contentSource: "article_content" | "rss_summary";
+  truncated: boolean;
+  maxChars: number;
+}): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/ithome-article-detail.hbs", {
+      title: input.title,
+      url: input.url,
+      publishedAtText: formatDateTime(input.publishedAt),
+      content: input.content.trim(),
+      fallbackToSummary: input.contentSource === "rss_summary",
+      truncated: input.truncated,
+      maxChars: input.maxChars,
+    }),
+  );
+}
+
 export function createMessagesFromEvent(event: Event): UserMessage[] {
   switch (event.type) {
     case "napcat_group_message":
@@ -93,6 +146,8 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
       }
 
       return [createUserMessage(renderGroupMessagePlainText(event.data))];
+    case "news_article_ingested":
+      return [];
     default:
       return [];
   }
@@ -135,4 +190,16 @@ function renderGroupMessageBody(input: {
 
   const rendered = renderSupportedMessageSegments(segments);
   return rendered;
+}
+
+function formatDateTime(value: Date): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
 }

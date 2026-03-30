@@ -55,7 +55,7 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
         lastCompactionAt: toIsoString(runtimeSnapshot.lastCompactionAt),
       },
       session: {
-        kind: runtimeSnapshot.session.state.kind,
+        kind: runtimeSnapshot.session.state.kind as AgentDashboardSnapshot["session"]["kind"],
         currentGroupId: runtimeSnapshot.session.currentGroupId,
         waitingDeadlineAt: toIsoString(runtimeSnapshot.session.waitingDeadlineAt),
         availableInvokeTools: runtimeSnapshot.availableInvokeTools,

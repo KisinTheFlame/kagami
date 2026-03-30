@@ -1,0 +1,18 @@
+<system_instruction>
+以下是当前打开的 IT 之家文章。
+{{#if fallbackToSummary}}
+正文暂不可用，以下内容来自 RSS 摘要整理。
+{{/if}}
+{{#if truncated}}
+正文过长，以下仅保留前 {{maxChars}} 字。
+{{/if}}
+看完后可以继续打开别的文章，或者调用 back_to_portal 离开资讯空间。
+</system_instruction>
+<ithome_article>
+标题：{{title}}
+发布时间：{{publishedAtText}}
+链接：{{url}}
+
+正文：
+{{content}}
+</ithome_article>

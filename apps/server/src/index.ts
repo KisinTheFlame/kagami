@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.service.js";
 import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthRefreshScheduler } from "./auth/application/claude-code-auth-refresh.scheduler.js";
+import type { IthomePoller } from "./news/application/ithome-poller.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -19,6 +20,7 @@ const logger = new AppLogger({ source: "bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
+let ithomePoller: IthomePoller | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
 let claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler | null = null;
@@ -98,6 +100,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
+    if (ithomePoller) {
+      ithomePoller.close();
+      logger.info("Ithome poller closed", {
+        event: "server.shutdown.ithome_poller_closed",
+      });
+    }
+
     for (const callbackServer of callbackServers) {
       await callbackServer.stop();
     }
@@ -160,6 +169,7 @@ try {
   app = runtime.app;
   database = runtime.database;
   napcatGatewayService = runtime.napcatGatewayService;
+  ithomePoller = runtime.ithomePoller;
   callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
   claudeCodeAuthRefreshScheduler = runtime.claudeCodeAuthRefreshScheduler;

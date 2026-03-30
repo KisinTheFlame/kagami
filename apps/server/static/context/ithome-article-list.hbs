@@ -1,0 +1,21 @@
+<system_instruction>
+你已进入 {{displayName}} 资讯空间。
+{{#if isNewMode}}
+以下是游标之后最新的一批新文章。
+{{#if hiddenNewCount}}
+本轮只展示最新几篇；更早的 {{hiddenNewCount}} 篇新文章已随本次进入一起略过。
+{{/if}}
+{{else}}
+以下是最近文章列表。
+{{/if}}
+如果想阅读全文，调用 open_ithome_article；如果想离开，调用 back_to_portal。
+</system_instruction>
+<ithome_article_list>
+{{#each articles}}
+[{{id}}] {{title}}
+发布时间：{{publishedAtText}}
+链接：{{url}}
+摘要：{{rssSummary}}
+
+{{/each}}
+</ithome_article_list>

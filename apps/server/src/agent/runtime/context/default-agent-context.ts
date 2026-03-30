@@ -184,6 +184,13 @@ function summarizeEvent(event: Event, previewLength: number): AgentContextDashbo
         truncated: preview.truncated,
       };
     }
+    case "news_article_ingested":
+      return {
+        kind: "event",
+        label: "资讯文章事件",
+        preview: truncateText(`IT之家新文章：${event.data.title}`, previewLength).text,
+        truncated: truncateText(`IT之家新文章：${event.data.title}`, previewLength).truncated,
+      };
     default:
       return {
         kind: "event",

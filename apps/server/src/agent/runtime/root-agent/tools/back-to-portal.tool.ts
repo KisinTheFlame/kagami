@@ -12,7 +12,7 @@ type BackToPortalToolContext = ToolContext & {
 
 export class BackToPortalTool extends ZodToolComponent<typeof BackToPortalArgumentsSchema> {
   public readonly name = BACK_TO_PORTAL_TOOL_NAME;
-  public readonly description = "退出当前群聊并返回门户状态。";
+  public readonly description = "退出当前目标并返回门户状态。";
   public readonly parameters = {
     type: "object",
     properties: {},
