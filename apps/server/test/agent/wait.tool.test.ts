@@ -23,9 +23,7 @@ describe("wait tool", () => {
     });
     expect(tool.name).toBe("wait");
     expect(result.signal).toBe("finish_round");
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-    });
+    expect(result.content).toBe("休息结束了");
   });
 
   it("should allow overriding max wait duration", async () => {
@@ -50,6 +48,7 @@ describe("wait tool", () => {
       deadlineAt: new Date(now.getTime() + 90_000),
     });
     expect(result.signal).toBe("finish_round");
+    expect(result.content).toBe("休息结束了");
   });
 
   it("should reject wait outside portal state", async () => {

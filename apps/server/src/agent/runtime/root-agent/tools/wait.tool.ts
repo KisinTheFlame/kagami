@@ -62,7 +62,7 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
     }
 
     return {
-      content: JSON.stringify(result),
+      content: "休息结束了",
       signal: "finish_round",
     };
   }

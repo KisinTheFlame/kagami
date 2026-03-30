@@ -357,7 +357,7 @@ describe("RootAgentRuntime", () => {
     expect(dashboardSnapshot.lastToolCall).toMatchObject({
       name: "wait",
     });
-    expect(dashboardSnapshot.lastToolResultPreview).toContain("deadlineAt");
+    expect(dashboardSnapshot.lastToolResultPreview).toBe("休息结束了");
     expect(dashboardSnapshot.loopState).toBe("crashed");
   });
 
