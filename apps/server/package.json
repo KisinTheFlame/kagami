@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm db:generate && tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "NODE_OPTIONS=--max-old-space-size=2048 vitest run",
+    "test:watch": "NODE_OPTIONS=--max-old-space-size=2048 vitest",
     "typecheck": "pnpm db:generate && tsc --noEmit",
     "db:generate": "bash ../../scripts/prisma.sh generate",
     "db:migrate:dev": "bash ../../scripts/prisma.sh migrate dev",
