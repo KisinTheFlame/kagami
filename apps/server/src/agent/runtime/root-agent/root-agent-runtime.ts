@@ -58,6 +58,7 @@ type RootAgentRuntimeDeps = {
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
+const CONTEXT_COMPACTION_KEEP_RATIO = 0.1;
 const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
@@ -69,6 +70,11 @@ type PendingToolPersistence = {
     content: string;
   };
   postToolEffects: RootAgentPostToolEffects;
+};
+
+type ContextCompactionPlan = {
+  messagesToSummarize: LlmMessage[];
+  messagesToKeep: LlmMessage[];
 };
 
 export type RootAgentLoopState =
@@ -554,7 +560,11 @@ export class RootAgentRuntime {
 
     while (true) {
       const snapshot = await this.context.getSnapshot();
-      if (snapshot.messages.length <= this.contextCompactionThreshold) {
+      const compactionPlan = planContextCompaction({
+        messages: snapshot.messages,
+        threshold: this.contextCompactionThreshold,
+      });
+      if (!compactionPlan) {
         return;
       }
 
@@ -563,11 +573,11 @@ export class RootAgentRuntime {
         summary =
           "execute" in this.contextSummaryOperation
             ? await this.contextSummaryOperation.execute({
-                messages: snapshot.messages,
+                messages: compactionPlan.messagesToSummarize,
                 tools: this.summaryTools,
               })
             : await this.contextSummaryOperation.summarize({
-                messages: snapshot.messages,
+                messages: compactionPlan.messagesToSummarize,
                 tools: this.summaryTools,
               });
       } catch (error) {
@@ -591,7 +601,10 @@ export class RootAgentRuntime {
         return;
       }
 
-      await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
+      await this.context.replaceMessages([
+        createConversationSummaryMessage(summary),
+        ...compactionPlan.messagesToKeep,
+      ]);
       this.lastCompactionAt = this.now();
       this.touchActivity();
       return;
@@ -920,4 +933,70 @@ function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot):
     sessionSnapshot: snapshot.sessionSnapshot,
     lastWakeReminderAt: snapshot.lastWakeReminderAt?.toISOString() ?? null,
   });
+}
+
+function planContextCompaction(input: {
+  messages: LlmMessage[];
+  threshold: number;
+}): ContextCompactionPlan | null {
+  const { messages, threshold } = input;
+  if (messages.length <= threshold) {
+    return null;
+  }
+
+  const keepCount = calculateCompactionKeepCount({
+    totalMessageCount: messages.length,
+    threshold,
+  });
+  const initialCutIndex = messages.length - keepCount;
+  const cutIndex = extendCompactionCutIndexForAssistantToolBoundary({
+    messages,
+    cutIndex: initialCutIndex,
+  });
+
+  return {
+    messagesToSummarize: messages.slice(0, cutIndex),
+    messagesToKeep: messages.slice(cutIndex),
+  };
+}
+
+function calculateCompactionKeepCount(input: {
+  totalMessageCount: number;
+  threshold: number;
+}): number {
+  if (input.threshold <= 1) {
+    return 0;
+  }
+
+  return Math.min(
+    Math.max(1, Math.ceil(input.totalMessageCount * CONTEXT_COMPACTION_KEEP_RATIO)),
+    input.threshold - 1,
+  );
+}
+
+function extendCompactionCutIndexForAssistantToolBoundary(input: {
+  messages: LlmMessage[];
+  cutIndex: number;
+}): number {
+  const { messages, cutIndex } = input;
+  if (cutIndex <= 0 || cutIndex >= messages.length) {
+    return cutIndex;
+  }
+
+  const boundaryMessage = messages[cutIndex - 1];
+  if (boundaryMessage?.role !== "assistant" || boundaryMessage.toolCalls.length === 0) {
+    return cutIndex;
+  }
+
+  const toolCallIds = new Set(boundaryMessage.toolCalls.map(toolCall => toolCall.id));
+  let lastMatchingToolIndex = -1;
+
+  for (let index = cutIndex; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message?.role === "tool" && toolCallIds.has(message.toolCallId)) {
+      lastMatchingToolIndex = index;
+    }
+  }
+
+  return lastMatchingToolIndex >= 0 ? lastMatchingToolIndex + 1 : cutIndex;
 }

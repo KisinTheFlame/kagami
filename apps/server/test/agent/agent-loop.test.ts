@@ -601,9 +601,12 @@ describe("RootAgentRuntime", () => {
 
     expect(summarize).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(30_000);
-    expect((await context.getSnapshot()).messages).toEqual([
-      createConversationSummaryMessage("累计摘要"),
-    ]);
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
+    expect(snapshot.messages[1]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
+    });
   });
 
   it("should return a temporary failure tool result to the agent when tool execution throws", async () => {
@@ -696,7 +699,7 @@ describe("RootAgentRuntime", () => {
     expect(toolFailureMessage?.content).toContain("工具 explode 暂时调用失败了");
   });
 
-  it("should summarize the full context and replace it with a single cumulative summary", async () => {
+  it("should summarize older context messages and keep the recent tail", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -716,20 +719,196 @@ describe("RootAgentRuntime", () => {
 
     expect(summarize).toHaveBeenCalledTimes(1);
     expect(summarize).toHaveBeenCalledWith({
-      messages: expect.arrayContaining([
-        expect.objectContaining({ role: "user", content: "alpha" }),
-        expect.objectContaining({ role: "user", content: "beta" }),
-        expect.objectContaining({ role: "user", content: "gamma" }),
-      ]),
+      messages: [createUserMessage("alpha"), createUserMessage("beta"), createUserMessage("gamma")],
       tools: [],
     });
 
     const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toEqual([createConversationSummaryMessage("累计摘要")]);
+    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
+    expect(snapshot.messages[1]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
+    });
 
     const dashboardSnapshot = await runtime.getDashboardSnapshot();
     expect(dashboardSnapshot.lastCompactionAt).not.toBeNull();
-    expect(dashboardSnapshot.contextSummary.messageCount).toBe(1);
+    expect(dashboardSnapshot.contextSummary.messageCount).toBe(2);
+  });
+
+  it("should shrink the kept tail when the default 10 percent would exceed the threshold", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const sourceMessages = Array.from({ length: 20 }, (_, index) =>
+      createUserMessage(`message-${index + 1}`),
+    );
+    await context.appendMessages(sourceMessages);
+    const summarize = vi.fn().mockResolvedValue("累计摘要");
+    const runtime = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionThreshold: 2,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).toHaveBeenCalledWith({
+      messages: sourceMessages,
+      tools: [],
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages).toHaveLength(2);
+    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
+    expect(snapshot.messages[1]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
+    });
+  });
+
+  it("should fall back to summary only when the compaction threshold is 1", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    await context.appendMessages([createUserMessage("alpha"), createUserMessage("beta")]);
+    const summarize = vi.fn().mockResolvedValue("累计摘要");
+    const runtime = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionThreshold: 1,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).toHaveBeenCalledTimes(1);
+    expect((await context.getSnapshot()).messages).toEqual([
+      createConversationSummaryMessage("累计摘要"),
+    ]);
+  });
+
+  it("should include the matching tool result in the summarized segment when the cut lands on an assistant tool call", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    await context.appendMessages([
+      ...Array.from({ length: 8 }, (_, index) => createUserMessage(`history-${index + 1}`)),
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "tool-1", name: "wait", arguments: {} }],
+      },
+      {
+        role: "tool",
+        toolCallId: "tool-1",
+        content: "tool-result-1",
+      },
+    ]);
+    const summarize = vi.fn().mockResolvedValue("累计摘要");
+    const runtime = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionThreshold: 4,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).toHaveBeenCalledWith({
+      messages: [
+        ...Array.from({ length: 8 }, (_, index) => createUserMessage(`history-${index + 1}`)),
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "tool-1", name: "wait", arguments: {} }],
+        },
+        {
+          role: "tool",
+          toolCallId: "tool-1",
+          content: "tool-result-1",
+        },
+      ],
+      tools: [],
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages).toHaveLength(2);
+    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
+    expect(snapshot.messages[1]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
+    });
+  });
+
+  it("should extend compaction through the last matching tool result and keep unrelated tail messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const historyMessages = Array.from({ length: 26 }, (_, index) =>
+      createUserMessage(`history-${index + 1}`),
+    );
+    await context.appendMessages([
+      ...historyMessages,
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          { id: "tool-1", name: "wait", arguments: {} },
+          { id: "tool-2", name: "wait", arguments: {} },
+        ],
+      },
+      {
+        role: "tool",
+        toolCallId: "tool-1",
+        content: "tool-result-1",
+      },
+      createUserMessage("mid-message"),
+      {
+        role: "tool",
+        toolCallId: "tool-2",
+        content: "tool-result-2",
+      },
+    ]);
+    const summarize = vi.fn().mockResolvedValue("累计摘要");
+    const runtime = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionThreshold: 6,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).toHaveBeenCalledWith({
+      messages: [
+        ...historyMessages,
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "tool-1", name: "wait", arguments: {} },
+            { id: "tool-2", name: "wait", arguments: {} },
+          ],
+        },
+        {
+          role: "tool",
+          toolCallId: "tool-1",
+          content: "tool-result-1",
+        },
+        createUserMessage("mid-message"),
+        {
+          role: "tool",
+          toolCallId: "tool-2",
+          content: "tool-result-2",
+        },
+      ],
+      tools: [],
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages).toHaveLength(2);
+    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
+    expect(snapshot.messages[1]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
+    });
   });
 
   it("should persist and restore runtime snapshot without duplicating wake reminder", async () => {
