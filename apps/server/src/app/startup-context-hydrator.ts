@@ -1,5 +1,5 @@
 import type { Event } from "../agent/runtime/event/event.js";
-import type { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
+import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { AppLogger } from "../logger/logger.js";
 import type {
   NapcatGatewayService,
@@ -12,7 +12,7 @@ type HydrateStartupContextFromRecentMessagesOptions = {
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
   napcatGatewayService: NapcatGatewayService;
-  rootAgentRuntime: RootAgentRuntime;
+  rootAgentRuntime: RootLoopAgent;
 };
 
 export async function hydrateStartupContextFromRecentMessages({

@@ -1089,11 +1089,6 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 }
 
-/**
- * @deprecated Use RootLoopAgent instead.
- */
-export class RootAgentRuntime extends RootLoopAgent {}
-
 async function createSleep(ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms));
 }

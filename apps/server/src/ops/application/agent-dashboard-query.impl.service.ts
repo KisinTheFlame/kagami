@@ -7,21 +7,21 @@ import type {
 import type { AgentEventQueue } from "../../agent/runtime/event/event.queue.js";
 import type {
   RootAgentLlmCallSummary,
-  RootAgentRuntime,
   RootAgentRuntimeErrorSummary,
   RootAgentToolCallSummary,
+  RootLoopAgent,
 } from "../../agent/runtime/root-agent/root-agent-runtime.js";
 import type { AgentDashboardQueryService } from "./agent-dashboard-query.service.js";
 
 type DefaultAgentDashboardQueryServiceDeps = {
-  rootAgentRuntime: RootAgentRuntime;
+  rootAgentRuntime: RootLoopAgent;
   eventQueue: AgentEventQueue;
   listenGroupIds: string[];
   listAvailableAgentProviders: () => Promise<AgentDashboardSnapshot["providers"]>;
 };
 
 export class DefaultAgentDashboardQueryService implements AgentDashboardQueryService {
-  private readonly rootAgentRuntime: RootAgentRuntime;
+  private readonly rootAgentRuntime: RootLoopAgent;
   private readonly eventQueue: AgentEventQueue;
   private readonly listenGroupIds: string[];
   private readonly listAvailableAgentProviders: () => Promise<AgentDashboardSnapshot["providers"]>;

@@ -9,7 +9,7 @@ import {
 import { InMemoryAgentEventQueue } from "../../src/agent/runtime/event/in-memory-agent-event-queue.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import type { RootAgentRuntimeSnapshotRepository } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
-import { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
+import { RootLoopAgent } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
 import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.js";
@@ -118,7 +118,7 @@ function createRuntimeForCompactionTest(input: {
     listAvailableProviders: vi.fn().mockResolvedValue([]),
   };
 
-  return new RootAgentRuntime({
+  return new RootLoopAgent({
     llmClient,
     context: input.context,
     eventQueue,
@@ -152,7 +152,7 @@ function createInMemorySnapshotRepository(): RootAgentRuntimeSnapshotRepository 
   };
 }
 
-describe("RootAgentRuntime", () => {
+describe("RootLoopAgent", () => {
   it("should keep tool definitions stable and inject state-specific reminder per round", async () => {
     const stopError = new StopLoopError("stop-loop");
     const getRecentGroupMessages = vi
@@ -273,7 +273,7 @@ describe("RootAgentRuntime", () => {
         return remaining;
       }),
     };
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient,
       context,
       eventQueue,
@@ -420,7 +420,7 @@ describe("RootAgentRuntime", () => {
       size: vi.fn().mockReturnValue(0),
       clear: vi.fn().mockReturnValue(0),
     };
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient,
       context,
       eventQueue,
@@ -553,7 +553,7 @@ describe("RootAgentRuntime", () => {
       size: vi.fn().mockReturnValue(0),
       clear: vi.fn().mockReturnValue(0),
     };
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient,
       context,
       eventQueue,
@@ -659,7 +659,7 @@ describe("RootAgentRuntime", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient,
       context,
       eventQueue: {
@@ -940,7 +940,7 @@ describe("RootAgentRuntime", () => {
     const firstContext = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const firstRuntime = new RootAgentRuntime({
+    const firstRuntime = new RootLoopAgent({
       llmClient: {
         chat: vi.fn().mockResolvedValue({
           provider: "openai",
@@ -978,7 +978,7 @@ describe("RootAgentRuntime", () => {
     const restoredContext = new DefaultAgentContext({
       systemPromptFactory: () => "another-system-prompt",
     });
-    const restoredRuntime = new RootAgentRuntime({
+    const restoredRuntime = new RootLoopAgent({
       llmClient: {
         chat: vi.fn().mockResolvedValue({
           provider: "openai",
@@ -1050,7 +1050,7 @@ describe("RootAgentRuntime", () => {
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,
     });
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient: {
         chat: vi.fn(),
         chatDirect: vi.fn(),
@@ -1135,7 +1135,7 @@ describe("RootAgentRuntime", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
-    const runtime = new RootAgentRuntime({
+    const runtime = new RootLoopAgent({
       llmClient,
       context,
       eventQueue,

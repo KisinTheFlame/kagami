@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
-import type { RootAgentRuntime } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
+import type { RootLoopAgent } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { DefaultAgentDashboardQueryService } from "../../src/ops/application/agent-dashboard-query.impl.service.js";
 
 describe("DefaultAgentDashboardQueryService", () => {
   it("should compose a full agent dashboard snapshot", async () => {
-    const rootAgentRuntime: Pick<RootAgentRuntime, "getDashboardSnapshot"> = {
+    const rootAgentRuntime: Pick<RootLoopAgent, "getDashboardSnapshot"> = {
       getDashboardSnapshot: vi.fn().mockResolvedValue({
         initialized: true,
         loopState: "waiting",
@@ -66,7 +66,7 @@ describe("DefaultAgentDashboardQueryService", () => {
       clear: vi.fn().mockReturnValue(0),
     };
     const service = new DefaultAgentDashboardQueryService({
-      rootAgentRuntime: rootAgentRuntime as RootAgentRuntime,
+      rootAgentRuntime: rootAgentRuntime as RootLoopAgent,
       eventQueue,
       listenGroupIds: ["group-1"],
       listAvailableAgentProviders: vi.fn().mockResolvedValue([

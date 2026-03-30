@@ -39,7 +39,7 @@ import { StdoutLogSink } from "../logger/sinks/stdout-sink.js";
 import { createAuthModule } from "../auth/index.js";
 import { ToolCatalog } from "@kagami/agent-runtime";
 import { InMemoryAgentEventQueue } from "../agent/runtime/event/in-memory-agent-event-queue.js";
-import { RootAgentRuntime } from "../agent/runtime/root-agent/root-agent-runtime.js";
+import { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-agent/persistence/prisma-root-agent-runtime-snapshot.repository.js";
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
@@ -126,7 +126,7 @@ export type ServerRuntime = {
   callbackServers: Array<{ stop(): Promise<void> }>;
   authUsageCacheManager: AuthUsageCacheManager;
   claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
-  rootAgentRuntime: RootAgentRuntime;
+  rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
   restoredRootAgentSnapshot: boolean;
   port: number;
@@ -408,7 +408,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     candidateTopK: Math.max(5, config.server.rag.retrieval.topK),
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
-  const rootAgentRuntime = new RootAgentRuntime({
+  const rootAgentRuntime = new RootLoopAgent({
     llmClient,
     context,
     eventQueue,
