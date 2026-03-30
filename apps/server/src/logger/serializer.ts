@@ -7,12 +7,22 @@ export function serializeMetadata(metadata: LogMetadata): LogMetadata {
 
 export function serializeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
-    const withCode = error as Error & { code?: unknown };
+    const withDetails = error as Error & {
+      code?: unknown;
+      cause?: unknown;
+      meta?: unknown;
+      statusCode?: unknown;
+    };
+
     return {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      code: typeof withCode.code === "string" ? withCode.code : undefined,
+      code: typeof withDetails.code === "string" ? withDetails.code : undefined,
+      cause:
+        typeof withDetails.cause === "undefined" ? undefined : toSerializable(withDetails.cause),
+      meta: typeof withDetails.meta === "undefined" ? undefined : toSerializable(withDetails.meta),
+      statusCode: typeof withDetails.statusCode === "number" ? withDetails.statusCode : undefined,
     };
   }
 

@@ -19,6 +19,7 @@ import type {
 import type { ClaudeCodeProviderAuth } from "../claude-code/types.js";
 import type { CodexProviderAuth } from "../codex/types.js";
 import { AppLogger } from "../../logger/logger.js";
+import { serializeError } from "../../logger/serializer.js";
 import type { ClaudeCodeAuthService } from "./claude-code-auth.service.js";
 import type { CodexAuthService } from "./codex-auth.service.js";
 
@@ -159,7 +160,7 @@ export class AuthUsageCacheManager {
     } catch (error) {
       logger.warn("Failed to refresh Claude Code usage limits", {
         event: "auth_usage_cache.claude_code_refresh_failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: serializeError(error),
       });
     } finally {
       this.isRefreshingClaudeCode = false;
@@ -194,7 +195,7 @@ export class AuthUsageCacheManager {
     } catch (error) {
       logger.warn("Failed to refresh Codex usage limits", {
         event: "auth_usage_cache.codex_refresh_failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: serializeError(error),
       });
     } finally {
       this.isRefreshingCodex = false;

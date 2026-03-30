@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClaudeCodeAuthRefreshScheduler } from "../../src/auth/application/claude-code-auth-refresh.scheduler.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import type { ClaudeCodeAuthService } from "../../src/auth/application/claude-code-auth.service.js";
+import { initTestLogger } from "../helpers/logger.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -154,6 +156,96 @@ describe("ClaudeCodeAuthRefreshScheduler", () => {
 
     resolveRefresh();
     await flushMicrotasks();
+    scheduler.close();
+  });
+
+  it("should log structured refresh failure details", async () => {
+    vi.useFakeTimers();
+    const logs = initTestLogger();
+    const refresh = vi.fn().mockRejectedValue(
+      new BizError({
+        message: "Claude Code 登录状态不可用",
+        meta: {
+          provider: "claude-code",
+          reason: "AUTH_REFRESH_FAILED",
+        },
+        cause: new BizError({
+          message: "Claude Code 登录当前不可用",
+          meta: {
+            reason: "AUTH_REFRESH_UNAVAILABLE",
+            status: 401,
+          },
+          cause: {
+            error: "invalid_grant",
+          },
+        }),
+      }),
+    );
+    const scheduler = new ClaudeCodeAuthRefreshScheduler({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getStatus: vi.fn().mockResolvedValue(
+          createStatus({
+            status: "expired",
+            session: {
+              provider: "claude-code",
+              accountId: "user_123",
+              email: "claude@example.com",
+              expiresAt: new Date(Date.now() + 30_000).toISOString(),
+              lastRefreshAt: "2026-03-25T00:00:00.000Z",
+              lastError: "previous refresh failed",
+            },
+          }),
+        ),
+        refresh,
+      }),
+      refreshCheckIntervalMs: 60_000,
+      refreshLeewayMs: 60_000,
+    });
+
+    scheduler.start();
+    await flushMicrotasks();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(logs).toEqual([
+      expect.objectContaining({
+        level: "warn",
+        message: "Failed to refresh Claude Code auth session",
+        metadata: expect.objectContaining({
+          event: "claude_code_auth_refresh_scheduler.refresh_failed",
+          provider: "claude-code",
+          authStatus: "expired",
+          session: {
+            accountId: "user_123",
+            email: "claude@example.com",
+            expiresAt: expect.any(String),
+            lastRefreshAt: "2026-03-25T00:00:00.000Z",
+            lastError: "previous refresh failed",
+          },
+          refreshCheckIntervalMs: 60_000,
+          refreshLeewayMs: 60_000,
+          error: expect.objectContaining({
+            name: "BizError",
+            message: "Claude Code 登录状态不可用",
+            meta: {
+              provider: "claude-code",
+              reason: "AUTH_REFRESH_FAILED",
+            },
+            cause: expect.objectContaining({
+              name: "BizError",
+              message: "Claude Code 登录当前不可用",
+              meta: {
+                reason: "AUTH_REFRESH_UNAVAILABLE",
+                status: 401,
+              },
+              cause: {
+                error: "invalid_grant",
+              },
+            }),
+          }),
+        }),
+      }),
+    ]);
+
     scheduler.close();
   });
 });

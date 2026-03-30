@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ClaudeCodeUsageLimitsResponse } from "@kagami/shared/schemas/claude-code-auth";
 import { type CodexUsageLimitsResponse } from "@kagami/shared/schemas/codex-auth";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import type { AuthUsageSnapshotDao } from "../../src/auth/dao/auth-usage-snapshot.dao.js";
 import {
   AuthUsageCacheManager,
@@ -14,6 +15,7 @@ import {
 } from "../../src/auth/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthService } from "../../src/auth/application/claude-code-auth.service.js";
 import type { CodexAuthService } from "../../src/auth/application/codex-auth.service.js";
+import { initTestLogger } from "../helpers/logger.js";
 
 const tempDirs: string[] = [];
 
@@ -363,6 +365,102 @@ describe("AuthUsageCacheManager", () => {
     await manager.refreshAll();
 
     expect(authUsageSnapshotDao.insertBatch).not.toHaveBeenCalled();
+  });
+
+  it("should log structured Claude Code refresh failures", async () => {
+    const logs = initTestLogger();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService(),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: vi.fn().mockRejectedValue(
+        new BizError({
+          message: "Claude Code 登录服务调用失败",
+          meta: {
+            reason: "AUTH_REFRESH_UNAVAILABLE",
+            status: 503,
+          },
+          cause: {
+            detail: "upstream unavailable",
+          },
+        }),
+      ),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        message: "Failed to refresh Claude Code usage limits",
+        metadata: expect.objectContaining({
+          event: "auth_usage_cache.claude_code_refresh_failed",
+          error: expect.objectContaining({
+            name: "BizError",
+            message: "Claude Code 登录服务调用失败",
+            meta: {
+              reason: "AUTH_REFRESH_UNAVAILABLE",
+              status: 503,
+            },
+            cause: {
+              detail: "upstream unavailable",
+            },
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("should log structured Codex refresh failures", async () => {
+    const logs = initTestLogger();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getStatus: vi.fn().mockResolvedValue({
+          provider: "claude-code",
+          status: "logged_out",
+          isLoggedIn: false,
+          session: null,
+        }),
+      }),
+      codexAuthService: createCodexAuthService(),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: vi.fn(),
+      fetchCodexUsageLimits: vi.fn().mockRejectedValue(
+        new BizError({
+          message: "Codex 登录服务调用失败",
+          meta: {
+            reason: "AUTH_REFRESH_FAILED",
+          },
+          cause: new Error("codex upstream timeout"),
+        }),
+      ),
+    });
+
+    await manager.refreshAll();
+
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        message: "Failed to refresh Codex usage limits",
+        metadata: expect.objectContaining({
+          event: "auth_usage_cache.codex_refresh_failed",
+          error: expect.objectContaining({
+            name: "BizError",
+            message: "Codex 登录服务调用失败",
+            meta: {
+              reason: "AUTH_REFRESH_FAILED",
+            },
+            cause: expect.objectContaining({
+              name: "Error",
+              message: "codex upstream timeout",
+            }),
+          }),
+        }),
+      }),
+    );
   });
 });
 

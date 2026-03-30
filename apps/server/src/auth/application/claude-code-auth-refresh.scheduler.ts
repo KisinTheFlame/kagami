@@ -1,4 +1,5 @@
 import { AppLogger } from "../../logger/logger.js";
+import { serializeError } from "../../logger/serializer.js";
 import type { ClaudeCodeAuthService } from "./claude-code-auth.service.js";
 
 const logger = new AppLogger({ source: "claude-code-auth-refresh-scheduler" });
@@ -8,6 +9,22 @@ type ClaudeCodeAuthRefreshSchedulerDeps = {
   refreshCheckIntervalMs: number;
   refreshLeewayMs: number;
   now?: () => Date;
+};
+
+type ClaudeCodeAuthStatus = Awaited<ReturnType<ClaudeCodeAuthService["getStatus"]>>;
+
+type PendingClaudeCodeRefreshContext = {
+  provider: ClaudeCodeAuthStatus["provider"];
+  authStatus: ClaudeCodeAuthStatus["status"];
+  session: {
+    accountId: string | null;
+    email: string | null;
+    expiresAt: string;
+    lastRefreshAt: string | null;
+    lastError: string | null;
+  };
+  refreshCheckIntervalMs: number;
+  refreshLeewayMs: number;
 };
 
 export class ClaudeCodeAuthRefreshScheduler {
@@ -58,11 +75,12 @@ export class ClaudeCodeAuthRefreshScheduler {
       return;
     }
 
-    if (!(await this.shouldRefresh())) {
+    const refreshContext = await this.getPendingRefreshContext();
+    if (!refreshContext) {
       return;
     }
 
-    this.refreshPromise = this.runRefresh();
+    this.refreshPromise = this.runRefresh(refreshContext);
     try {
       await this.refreshPromise;
     } finally {
@@ -70,28 +88,49 @@ export class ClaudeCodeAuthRefreshScheduler {
     }
   }
 
-  private async runRefresh(): Promise<void> {
+  private async runRefresh(refreshContext: PendingClaudeCodeRefreshContext): Promise<void> {
     try {
       await this.claudeCodeAuthService.refresh();
     } catch (error) {
       logger.warn("Failed to refresh Claude Code auth session", {
         event: "claude_code_auth_refresh_scheduler.refresh_failed",
-        error: error instanceof Error ? error.message : String(error),
+        provider: refreshContext.provider,
+        authStatus: refreshContext.authStatus,
+        session: refreshContext.session,
+        refreshCheckIntervalMs: refreshContext.refreshCheckIntervalMs,
+        refreshLeewayMs: refreshContext.refreshLeewayMs,
+        error: serializeError(error),
       });
     }
   }
 
-  private async shouldRefresh(): Promise<boolean> {
+  private async getPendingRefreshContext(): Promise<PendingClaudeCodeRefreshContext | null> {
     const status = await this.claudeCodeAuthService.getStatus();
     if ((status.status !== "active" && status.status !== "expired") || !status.session?.expiresAt) {
-      return false;
+      return null;
     }
 
     const expiresAt = new Date(status.session.expiresAt);
     if (Number.isNaN(expiresAt.getTime())) {
-      return false;
+      return null;
     }
 
-    return expiresAt.getTime() - this.refreshLeewayMs <= this.now().getTime();
+    if (expiresAt.getTime() - this.refreshLeewayMs > this.now().getTime()) {
+      return null;
+    }
+
+    return {
+      provider: status.provider,
+      authStatus: status.status,
+      session: {
+        accountId: status.session.accountId,
+        email: status.session.email,
+        expiresAt: status.session.expiresAt,
+        lastRefreshAt: status.session.lastRefreshAt,
+        lastError: status.session.lastError,
+      },
+      refreshCheckIntervalMs: this.refreshCheckIntervalMs,
+      refreshLeewayMs: this.refreshLeewayMs,
+    };
   }
 }
