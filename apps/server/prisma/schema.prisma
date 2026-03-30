@@ -183,6 +183,61 @@ model RootAgentRuntimeSnapshot {
   @@map("root_agent_runtime_snapshot")
 }
 
+model LinearMessageLedger {
+  id         Int      @id @default(autoincrement())
+  runtimeKey String   @map("runtime_key")
+  message    Json     @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([runtimeKey, id], map: "ledger_runtime_key_id_idx")
+  @@index([createdAt], map: "ledger_created_at_idx")
+  @@map("ledger")
+}
+
+model Story {
+  id                    String     @id @default(uuid())
+  payload               Json       @db.JsonB
+  sourceMessageSeqStart Int        @map("source_message_seq_start")
+  sourceMessageSeqEnd   Int        @map("source_message_seq_end")
+  createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  rags                  StoryRag[]
+
+  @@index([updatedAt], map: "story_updated_at_idx")
+  @@index([sourceMessageSeqEnd], map: "story_source_message_seq_end_idx")
+  @@map("story")
+}
+
+model StoryRag {
+  id             Int      @id @default(autoincrement())
+  storyId        String   @map("story_id")
+  kind           String
+  content        String
+  embeddingModel String?  @map("embedding_model")
+  embeddingDim   Int?     @map("embedding_dim")
+  embedding      Unsupported("vector(768)")?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, kind], map: "story_rag_story_id_kind_uq")
+  @@index([storyId], map: "story_rag_story_id_idx")
+  @@map("story_rag")
+}
+
+model StoryAgentRuntimeSnapshot {
+  id                    Int      @id @default(autoincrement())
+  runtimeKey            String   @unique(map: "story_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
+  schemaVersion         Int      @map("schema_version")
+  contextSnapshot       Json     @map("context_snapshot") @db.JsonB
+  lastProcessedMessageSeq Int    @default(0) @map("last_processed_message_seq")
+  bootstrapCompletedAt  DateTime? @map("bootstrap_completed_at") @db.Timestamptz(6)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("story_agent_runtime_snapshot")
+}
+
 model NewsArticle {
   id                     Int       @id @default(autoincrement())
   sourceKey              String    @map("source_key")

@@ -12,6 +12,8 @@ const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD = 60;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
+const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -149,6 +151,12 @@ const ConfigSchema = z.object({
         ),
         llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
         waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+        story: z
+          .object({
+            batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
+            idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
+          })
+          .default({}),
       })
       .default({}),
     news: z

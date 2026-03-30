@@ -5,6 +5,9 @@ server:
     contextCompactionThreshold: 60
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
+    story:
+      batchSize: 24
+      idleFlushMs: 120000
   news:
     ithome:
       pollIntervalMs: 300000

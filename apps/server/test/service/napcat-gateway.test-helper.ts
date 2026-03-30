@@ -110,6 +110,10 @@ export function createConfigManager(): ConfigManager {
         contextCompactionThreshold: 60,
         llmRetryBackoffMs: 30_000,
         waitToolMaxWaitMs: 600_000,
+        story: {
+          batchSize: 24,
+          idleFlushMs: 120_000,
+        },
       },
       news: {
         ithome: {

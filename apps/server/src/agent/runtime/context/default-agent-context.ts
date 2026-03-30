@@ -1,6 +1,5 @@
 import type { LlmMessage } from "../../../llm/types.js";
 import { createAgentSystemPrompt } from "../root-agent/system-prompt.js";
-import { createMessagesFromEvent } from "./context-message-factory.js";
 import { renderGroupMessagePlainText } from "./context-message-factory.js";
 import type {
   AgentContext,
@@ -12,6 +11,11 @@ import type {
 } from "./agent-context.js";
 import type { Event } from "../event/event.js";
 import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
+import {
+  createContextItemFromEvent,
+  createContextItemFromMessage,
+  renderContextItemToMessages,
+} from "./context-item.utils.js";
 
 const DEFAULT_DASHBOARD_LIMIT = 5;
 const DEFAULT_PREVIEW_LENGTH = 200;
@@ -85,7 +89,7 @@ export class DefaultAgentContext implements AgentContext {
       return;
     }
 
-    this.items.push(...events.map(event => ({ kind: "event", event }) as const));
+    this.items.push(...events.map(createContextItemFromEvent));
   }
 
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
@@ -93,33 +97,25 @@ export class DefaultAgentContext implements AgentContext {
       return;
     }
 
-    this.items.push(...messages.map(message => ({ kind: "llm_message", message }) as const));
+    this.items.push(...messages.map(createContextItemFromMessage));
   }
 
   public async appendAssistantTurn(message: AssistantMessage): Promise<void> {
-    this.items.push({
-      kind: "llm_message",
-      message,
-    });
+    this.items.push(createContextItemFromMessage(message));
   }
 
   public async appendToolResult(input: { toolCallId: string; content: string }): Promise<void> {
-    this.items.push({
-      kind: "llm_message",
-      message: {
+    this.items.push(
+      createContextItemFromMessage({
         role: "tool",
         toolCallId: input.toolCallId,
         content: input.content,
-      },
-    });
+      }),
+    );
   }
 
   public async replaceMessages(messages: LlmMessage[]): Promise<void> {
-    this.items.splice(
-      0,
-      this.items.length,
-      ...messages.map(message => ({ kind: "llm_message", message }) as const),
-    );
+    this.items.splice(0, this.items.length, ...messages.map(createContextItemFromMessage));
   }
 
   public async getDashboardSummary(input?: {
@@ -146,14 +142,6 @@ export class DefaultAgentContext implements AgentContext {
 
     return this.systemPrompt;
   }
-}
-
-function renderContextItemToMessages(item: ContextItem): LlmMessage[] {
-  if (item.kind === "llm_message") {
-    return [item.message];
-  }
-
-  return createMessagesFromEvent(item.event);
 }
 
 function cloneMessages(messages: LlmMessage[]): LlmMessage[] {

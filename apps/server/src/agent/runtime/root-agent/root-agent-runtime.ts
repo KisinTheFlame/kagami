@@ -228,8 +228,14 @@ class RootAgentHost {
     await this.runSerializedMutation(async () => {
       await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
       this.session.restorePersistedSnapshot(snapshot.sessionSnapshot);
+      const waitingTimeoutResult = await this.session.finishWaitingIfExpired(this.now());
+      const pendingEffectsResult = await this.session.flushPendingIncomingEffects();
       this.lastWakeReminderAt = cloneDate(snapshot.lastWakeReminderAt);
       this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
+      if (waitingTimeoutResult.shouldTriggerRound || pendingEffectsResult.shouldTriggerRound) {
+        this.touchActivity();
+      }
+      this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
     });
   }
 

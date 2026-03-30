@@ -4,6 +4,7 @@ import { z } from "zod";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
 import { DefaultAgentContext } from "../agent/runtime/context/default-agent-context.js";
+import { LinearMessageLedgerAgentContext } from "../agent/runtime/context/linear-message-ledger-agent-context.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaEmbeddingCacheDao } from "../llm/dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
@@ -97,6 +98,18 @@ import { PrismaNewsFeedCursorDao } from "../news/infra/prisma-news-feed-cursor.d
 import { DefaultIthomeClient } from "../news/application/ithome-client.js";
 import { IthomeNewsService } from "../news/application/ithome-news.service.js";
 import { IthomePoller } from "../news/application/ithome-poller.js";
+import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
+import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
+import { PrismaStoryRagDao } from "../agent/capabilities/story/infra/impl/prisma-story-rag.impl.dao.js";
+import { PrismaStoryAgentRuntimeSnapshotRepository } from "../agent/capabilities/story/runtime/persistence/prisma-story-agent-runtime-snapshot.repository.js";
+import { StoryRagService } from "../agent/capabilities/story/application/story-rag.service.js";
+import { StoryRecallService } from "../agent/capabilities/story/application/story-recall.service.js";
+import { StoryService } from "../agent/capabilities/story/application/story.service.js";
+import { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
+import {
+  SearchMemoryTool,
+  SEARCH_MEMORY_TOOL_NAME,
+} from "../agent/capabilities/story/tools/search-memory.tool.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -114,6 +127,7 @@ export type ServerRuntime = {
   authUsageCacheManager: AuthUsageCacheManager;
   claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
   rootAgentRuntime: RootAgentRuntime;
+  storyAgentRuntime: StoryLoopAgent;
   restoredRootAgentSnapshot: boolean;
   port: number;
   listenGroupIds: string[];
@@ -141,6 +155,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
   });
+  const storyAgentRuntimeSnapshotRepository = new PrismaStoryAgentRuntimeSnapshotRepository({
+    database,
+  });
   initLoggerRuntime({
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
@@ -158,6 +175,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const newsArticleDao = new PrismaNewsArticleDao({ database });
   const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
+  const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
+  const storyDao = new PrismaStoryDao({ database });
+  const storyRagDao = new PrismaStoryRagDao({ database });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
   });
@@ -234,6 +254,21 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     config: config.server.rag.embedding,
     embeddingCacheDao,
   });
+  const storyRagService = new StoryRagService({
+    storyRagDao,
+    embeddingClient,
+    outputDimensionality: config.server.rag.embedding.outputDimensionality,
+  });
+  const storyService = new StoryService({
+    storyDao,
+    storyRagService,
+  });
+  const storyRecallService = new StoryRecallService({
+    storyRagDao,
+    storyDao,
+    embeddingClient,
+    outputDimensionality: config.server.rag.embedding.outputDimensionality,
+  });
   const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
     chunkDao: napcatGroupMessageChunkDao,
     embeddingClient,
@@ -307,8 +342,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const agentMessageService = new DefaultAgentMessageService({
     napcatGatewayService,
   });
-  const context = new DefaultAgentContext({
-    systemPromptFactory: agentSystemPromptFactory,
+  const context = new LinearMessageLedgerAgentContext({
+    inner: new DefaultAgentContext({
+      systemPromptFactory: agentSystemPromptFactory,
+    }),
+    linearMessageLedgerDao,
+    runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentSession = new RootAgentSession({
     context,
@@ -335,6 +374,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     new SearchWebTool({
       webSearchTaskAgent,
     }),
+    new SearchMemoryTool({
+      storyRecallService,
+      topK: config.server.rag.retrieval.topK,
+    }),
     new SummaryTool(),
   ]);
   const rootAgentTools = toolCatalog.pick([
@@ -344,10 +387,26 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     INVOKE_TOOL_NAME,
     OPEN_ITHOME_ARTICLE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
+    SEARCH_MEMORY_TOOL_NAME,
   ]);
+  const summaryToolExecutor = toolCatalog.pick([SUMMARY_TOOL_NAME]);
   const contextSummaryOperation = new ContextSummaryOperation({
     llmClient,
-    summaryToolExecutor: toolCatalog.pick([SUMMARY_TOOL_NAME]),
+    summaryToolExecutor,
+  });
+  const storyAgentRuntime = new StoryLoopAgent({
+    llmClient,
+    linearMessageLedgerDao,
+    snapshotRepository: storyAgentRuntimeSnapshotRepository,
+    storyService,
+    storyRecallService,
+    contextSummaryOperation,
+    summaryTools: summaryToolExecutor.definitions(),
+    contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
+    batchSize: config.server.agent.story.batchSize,
+    idleFlushMs: config.server.agent.story.idleFlushMs,
+    candidateTopK: Math.max(5, config.server.rag.retrieval.topK),
+    sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentRuntime = new RootAgentRuntime({
     llmClient,
@@ -381,6 +440,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         INVOKE_TOOL_NAME,
         OPEN_ITHOME_ARTICLE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
+        SEARCH_MEMORY_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])
@@ -425,6 +485,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     authUsageCacheManager: authModule.authUsageCacheManager,
     claudeCodeAuthRefreshScheduler: authModule.claudeCodeAuthRefreshScheduler,
     rootAgentRuntime,
+    storyAgentRuntime,
     restoredRootAgentSnapshot,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,

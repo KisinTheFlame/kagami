@@ -24,6 +24,7 @@ let ithomePoller: IthomePoller | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
 let claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler | null = null;
+let storyAgentRuntime: { stop(): Promise<void> } | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -32,6 +33,11 @@ let port: number | null = null;
 async function startAgentLoop(runtime: {
   restoredRootAgentSnapshot: boolean;
   hydrateColdStartAgentContext(): Promise<void>;
+  storyAgentRuntime: {
+    initialize(): Promise<void>;
+    run(): Promise<void>;
+    stop(): Promise<void>;
+  };
   rootAgentRuntime: {
     initialize(): Promise<void>;
     run(): Promise<void>;
@@ -43,6 +49,7 @@ async function startAgentLoop(runtime: {
     }
 
     await runtime.rootAgentRuntime.initialize();
+    await runtime.storyAgentRuntime.initialize();
   } catch (error) {
     logger.errorWithCause(
       "Agent runtime initialization failed; backend will continue without agent loop",
@@ -57,6 +64,12 @@ async function startAgentLoop(runtime: {
   void runtime.rootAgentRuntime.run().catch(error => {
     logger.errorWithCause("Agent loop crashed; backend will continue without agent loop", error, {
       event: "agent.loop.crashed",
+    });
+  });
+
+  void runtime.storyAgentRuntime.run().catch(error => {
+    logger.errorWithCause("Story loop crashed; backend will continue without story loop", error, {
+      event: "agent.story_loop.crashed",
     });
   });
 }
@@ -125,6 +138,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
       });
     }
 
+    if (storyAgentRuntime) {
+      await storyAgentRuntime.stop();
+      logger.info("Story agent runtime closed", {
+        event: "server.shutdown.story_agent_runtime_closed",
+      });
+    }
+
     if (closeLlmProviders) {
       await closeLlmProviders();
       logger.info("LLM providers closed", {
@@ -173,6 +193,7 @@ try {
   callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
   claudeCodeAuthRefreshScheduler = runtime.claudeCodeAuthRefreshScheduler;
+  storyAgentRuntime = runtime.storyAgentRuntime;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 

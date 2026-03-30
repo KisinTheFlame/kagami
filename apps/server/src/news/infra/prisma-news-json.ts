@@ -1,4 +1,4 @@
-import type { Prisma } from "../../generated/prisma/client.js";
+import type * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
 
 export function toJsonRecord(value: Prisma.JsonValue): Record<string, unknown> {
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {

@@ -1,54 +1,44 @@
-import type * as Prisma from "../../../../generated/prisma/internal/prismaNamespace.js";
-import type { Database } from "../../../../db/client.js";
-import { AppLogger } from "../../../../logger/logger.js";
-import type { RootAgentRuntimeSnapshotRepository } from "./root-agent-runtime-snapshot.repository.js";
+import type * as Prisma from "../../../../../generated/prisma/internal/prismaNamespace.js";
+import type { Database } from "../../../../../db/client.js";
 import {
-  PersistedRootAgentRuntimeSnapshotSchema,
-  type PersistedRootAgentRuntimeSnapshot,
-} from "./root-agent-runtime-snapshot.js";
+  PersistedStoryAgentRuntimeSnapshotSchema,
+  type PersistedStoryAgentRuntimeSnapshot,
+} from "./story-agent-runtime-snapshot.js";
+import type { StoryAgentRuntimeSnapshotRepository } from "./story-agent-runtime-snapshot.repository.js";
 
-const logger = new AppLogger({ source: "agent.root-agent-runtime-snapshot-repository" });
-
-export class PrismaRootAgentRuntimeSnapshotRepository implements RootAgentRuntimeSnapshotRepository {
+export class PrismaStoryAgentRuntimeSnapshotRepository implements StoryAgentRuntimeSnapshotRepository {
   private readonly database: Database;
 
   public constructor({ database }: { database: Database }) {
     this.database = database;
   }
 
-  public async load(runtimeKey: string): Promise<PersistedRootAgentRuntimeSnapshot | null> {
-    const row = await this.database.rootAgentRuntimeSnapshot.findUnique({
+  public async load(runtimeKey: string): Promise<PersistedStoryAgentRuntimeSnapshot | null> {
+    const row = await this.database.storyAgentRuntimeSnapshot.findUnique({
       where: {
         runtimeKey,
       },
     });
-
     if (!row) {
       return null;
     }
 
-    const parsed = PersistedRootAgentRuntimeSnapshotSchema.safeParse({
+    const parsed = PersistedStoryAgentRuntimeSnapshotSchema.safeParse({
       runtimeKey: row.runtimeKey,
       schemaVersion: row.schemaVersion,
       contextSnapshot: row.contextSnapshot,
-      sessionSnapshot: row.sessionSnapshot,
-      lastWakeReminderAt: row.lastWakeReminderAt,
+      lastProcessedMessageSeq: row.lastProcessedMessageSeq,
     });
 
     if (!parsed.success) {
-      logger.warn("Discarding invalid root agent runtime snapshot", {
-        event: "agent.root_agent_runtime_snapshot.invalid",
-        runtimeKey,
-        issues: parsed.error.issues,
-      });
       return null;
     }
 
     return parsed.data;
   }
 
-  public async save(snapshot: PersistedRootAgentRuntimeSnapshot): Promise<void> {
-    await this.database.rootAgentRuntimeSnapshot.upsert({
+  public async save(snapshot: PersistedStoryAgentRuntimeSnapshot): Promise<void> {
+    await this.database.storyAgentRuntimeSnapshot.upsert({
       where: {
         runtimeKey: snapshot.runtimeKey,
       },
@@ -56,20 +46,19 @@ export class PrismaRootAgentRuntimeSnapshotRepository implements RootAgentRuntim
         runtimeKey: snapshot.runtimeKey,
         schemaVersion: snapshot.schemaVersion,
         contextSnapshot: toInputJsonObject(snapshot.contextSnapshot),
-        sessionSnapshot: toInputJsonObject(snapshot.sessionSnapshot),
-        lastWakeReminderAt: snapshot.lastWakeReminderAt,
+        lastProcessedMessageSeq: snapshot.lastProcessedMessageSeq,
       },
       update: {
         schemaVersion: snapshot.schemaVersion,
         contextSnapshot: toInputJsonObject(snapshot.contextSnapshot),
-        sessionSnapshot: toInputJsonObject(snapshot.sessionSnapshot),
-        lastWakeReminderAt: snapshot.lastWakeReminderAt,
+        lastProcessedMessageSeq: snapshot.lastProcessedMessageSeq,
+        updatedAt: new Date(),
       },
     });
   }
 
   public async delete(runtimeKey: string): Promise<void> {
-    await this.database.rootAgentRuntimeSnapshot.deleteMany({
+    await this.database.storyAgentRuntimeSnapshot.deleteMany({
       where: {
         runtimeKey,
       },
