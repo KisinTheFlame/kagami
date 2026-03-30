@@ -1,3 +1,13 @@
+import {
+  BaseLoopAgent,
+  type LoopAgentExtension,
+  ReActKernel,
+  type ReActKernelExtension,
+  type ReActKernelRunRoundInput,
+  type ReActRoundResult,
+  type ToolExecutor,
+  type ToolSetExecutionResult,
+} from "@kagami/agent-runtime";
 import type {
   AgentContext,
   AgentContextDashboardSummary,
@@ -8,7 +18,6 @@ import {
   createMessagesFromEvent,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
-import type { ToolExecutor, ToolSetExecutionResult } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import { BizError } from "../../../common/errors/biz-error.js";
@@ -46,8 +55,8 @@ type RootAgentRuntimeDeps = {
   session: RootAgentSessionController;
   snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   runtimeKey?: string;
-  tools?: ToolExecutor;
-  agentTools?: ToolExecutor;
+  tools?: ToolExecutor<LlmMessage>;
+  agentTools?: ToolExecutor<LlmMessage>;
   contextSummaryOperation?: ContextSummaryLike;
   summaryPlanner?: ContextSummaryLike;
   summaryTools?: Tool[];
@@ -62,6 +71,7 @@ const CONTEXT_COMPACTION_KEEP_RATIO = 0.1;
 const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
+const IDLE_SLEEP_MS = 10;
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });
 
 type PendingToolPersistence = {
@@ -75,6 +85,19 @@ type PendingToolPersistence = {
 type ContextCompactionPlan = {
   messagesToSummarize: LlmMessage[];
   messagesToKeep: LlmMessage[];
+};
+
+type RootAgentToolExecutionData = {
+  postToolEffects: RootAgentPostToolEffects;
+};
+
+type RootAgentCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
+
+type RootLoopExtensionContext = {
+  host: Pick<
+    RootAgentHost,
+    "appendWakeReminderIfNeeded" | "compactContextIfNeeded" | "persistSnapshotIfChanged"
+  >;
 };
 
 export type RootAgentLoopState =
@@ -122,14 +145,12 @@ export type RootAgentRuntimeDashboardSnapshot = {
   availableInvokeTools: RootAgentInvokeToolName[];
 };
 
-export class RootAgentRuntime {
-  private readonly llmClient: LlmClient;
+class RootAgentHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
-  private readonly tools: ToolExecutor;
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
@@ -148,18 +169,13 @@ export class RootAgentRuntime {
   private lastLlmCall: RootAgentLlmCallSummary | null = null;
   private lastPersistedSnapshotFingerprint: string | null = null;
   private serializedMutationChain: Promise<void> = Promise.resolve();
-  private activeRoundPromise: Promise<boolean> | null = null;
-  private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
 
   public constructor({
-    llmClient,
     context,
     eventQueue,
     session,
     snapshotRepository,
     runtimeKey,
-    tools,
-    agentTools,
     contextSummaryOperation,
     summaryPlanner,
     summaryTools,
@@ -167,14 +183,12 @@ export class RootAgentRuntime {
     llmRetryBackoffMs,
     now,
     sleep,
-  }: RootAgentRuntimeDeps) {
-    this.llmClient = llmClient;
+  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools">) {
     this.context = context;
     this.eventQueue = eventQueue;
     this.session = session;
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
-    this.tools = tools ?? agentTools ?? failMissingTools();
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionThreshold =
@@ -198,8 +212,6 @@ export class RootAgentRuntime {
         }
 
         await this.session.initializeContext();
-        await this.compactContextIfNeeded();
-        await this.persistSnapshotIfChanged();
         this.initialized = true;
         this.touchActivity();
         this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
@@ -222,87 +234,21 @@ export class RootAgentRuntime {
   }
 
   public async resetContext(): Promise<{ resetAt: Date }> {
-    if (this.pendingResetPromise) {
-      return await this.pendingResetPromise;
-    }
+    const resetAt = this.now();
+    await this.runSerializedMutation(async () => {
+      await this.deletePersistedSnapshot();
+      this.eventQueue.clear();
+      await this.context.reset();
+      this.session.reset();
+      this.resetRuntimeState(resetAt);
+      await this.session.initializeContext();
+      this.initialized = true;
+      this.transitionTo("idle");
+    });
 
-    const resetPromise = (async () => {
-      const activeRoundPromise = this.activeRoundPromise;
-      if (activeRoundPromise) {
-        await activeRoundPromise.catch(() => undefined);
-      }
-
-      const resetAt = this.now();
-      await this.runSerializedMutation(async () => {
-        await this.deletePersistedSnapshot();
-        this.eventQueue.clear();
-        await this.context.reset();
-        this.session.reset();
-        this.resetRuntimeState(resetAt);
-        await this.session.initializeContext();
-        await this.compactContextIfNeeded();
-        this.initialized = true;
-        this.transitionTo("idle");
-        await this.persistSnapshotIfChanged({
-          suppressError: false,
-        });
-      });
-
-      return {
-        resetAt: new Date(resetAt),
-      };
-    })();
-
-    this.pendingResetPromise = resetPromise;
-
-    try {
-      return await resetPromise;
-    } finally {
-      if (this.pendingResetPromise === resetPromise) {
-        this.pendingResetPromise = null;
-      }
-    }
-  }
-
-  public async run(): Promise<void> {
-    try {
-      await this.initialize();
-      let shouldRunRound = true;
-
-      while (true) {
-        await this.awaitPendingReset();
-        const consumeResult = await this.consumePendingEvents();
-        await this.awaitPendingReset();
-        shouldRunRound = shouldRunRound || consumeResult.shouldTriggerRound;
-
-        if (this.session.getState().kind === "waiting") {
-          this.transitionTo("waiting");
-          await this.sleep(10);
-          continue;
-        }
-
-        if (!shouldRunRound) {
-          this.transitionTo("idle");
-          await this.sleep(10);
-          continue;
-        }
-        shouldRunRound = false;
-
-        const roundPromise = this.runRound();
-        this.activeRoundPromise = roundPromise;
-
-        try {
-          shouldRunRound = (await roundPromise) || shouldRunRound;
-        } finally {
-          if (this.activeRoundPromise === roundPromise) {
-            this.activeRoundPromise = null;
-          }
-        }
-      }
-    } catch (error) {
-      this.recordCrash(error);
-      throw error;
-    }
+    return {
+      resetAt: new Date(resetAt),
+    };
   }
 
   public async hydrateStartupEvents(events: Event[]): Promise<void> {
@@ -310,11 +256,7 @@ export class RootAgentRuntime {
       for (const event of events) {
         await this.session.consumeIncomingEvent(event);
       }
-      const result = await this.session.flushPendingIncomingEffects();
-      if (result.shouldTriggerRound) {
-        await this.compactContextIfNeeded();
-      }
-      await this.persistSnapshotIfChanged();
+      await this.session.flushPendingIncomingEffects();
       if (events.length > 0) {
         this.touchActivity();
       }
@@ -345,7 +287,17 @@ export class RootAgentRuntime {
     };
   }
 
-  private async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
+  public getSessionState() {
+    return this.session.getState();
+  }
+
+  public transitionTo(loopState: RootAgentLoopState): void {
+    this.loopState = loopState;
+  }
+
+  public async consumePendingEvents(input?: {
+    allowWaitingTimeout?: boolean;
+  }): Promise<{ shouldTriggerRound: boolean }> {
     return await this.runSerializedMutation(async () => {
       this.transitionTo("consuming_events");
       let consumedEventCount = 0;
@@ -360,186 +312,91 @@ export class RootAgentRuntime {
         consumedEventCount += 1;
       }
 
-      const waitingTimeoutResult = await this.session.finishWaitingIfExpired(this.now());
+      const waitingTimeoutResult =
+        input?.allowWaitingTimeout === false
+          ? { shouldTriggerRound: false }
+          : await this.session.finishWaitingIfExpired(this.now());
       const result = await this.session.flushPendingIncomingEffects();
-      await this.compactContextIfNeeded();
       if (
         consumedEventCount > 0 ||
         waitingTimeoutResult.shouldTriggerRound ||
         result.shouldTriggerRound
       ) {
         this.touchActivity();
-        await this.persistSnapshotIfChanged();
       }
+
       return {
         shouldTriggerRound: result.shouldTriggerRound || waitingTimeoutResult.shouldTriggerRound,
       };
     });
   }
 
-  private async runRound(): Promise<boolean> {
-    await this.appendWakeReminderIfNeeded(this.now());
-
+  public async createRoundInput(
+    tools: ToolExecutor<LlmMessage>,
+  ): Promise<ReActKernelRunRoundInput<LlmMessage, "agent">> {
     const snapshot = await this.context.getSnapshot();
-    const transientMessages = [...snapshot.messages];
     this.transitionTo("calling_llm");
-    let completion;
-    try {
-      completion = await this.llmClient.chat(
-        {
-          system: snapshot.systemPrompt,
-          messages: transientMessages,
-          tools: this.tools.definitions(),
-          toolChoice: "required",
-        },
-        {
-          usage: "agent",
-        },
-      );
-    } catch (error) {
-      if (!isRetryableLlmFailure(error)) {
-        throw error;
-      }
 
-      this.recordRecoverableError(error);
-      this.transitionTo("idle");
-      logger.warn("Root agent LLM call failed; scheduling retry", {
-        event: "agent.root_agent_runtime.llm_retry_scheduled",
-        retryBackoffMs: this.llmRetryBackoffMs,
-        errorName: error.name,
-        errorMessage: error.message,
-      });
-      await this.sleep(this.llmRetryBackoffMs);
-      return true;
-    }
-    this.recordLlmCall(completion);
-    const assistant = completion.message;
-    const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
+    return {
+      state: {
+        systemPrompt: snapshot.systemPrompt,
+        messages: [...snapshot.messages],
+      },
+      tools,
+      toolContext: {
+        groupId: this.session.getCurrentGroupId(),
+        systemPrompt: snapshot.systemPrompt,
+        messages: [...snapshot.messages],
+        agentContext: this.context,
+        rootAgentSession: this.session,
+      } as ReActKernelRunRoundInput<LlmMessage, "agent">["toolContext"],
+      usage: "agent",
+    };
+  }
+
+  public async flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects> {
+    return await this.session.flushPendingPostToolEffects();
+  }
+
+  public async commitRoundResult(
+    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
+    tools: ToolExecutor<LlmMessage>,
+  ): Promise<void> {
+    const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
     const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
       ? persistentAssistantMessage
       : null;
+    const toolPersistences: PendingToolPersistence[] = result.toolExecutions.map(execution => ({
+      ...(shouldPersistToolResultInContext({
+        toolName: execution.toolCall.name,
+        toolResult: execution.result,
+      }) && execution.result.content.length > 0
+        ? {
+            toolResult: {
+              toolCallId: execution.toolCall.id,
+              content: execution.result.content,
+            },
+          }
+        : {}),
+      postToolEffects: execution.extensionData?.postToolEffects ?? {
+        messages: [],
+        events: [],
+      },
+    }));
 
-    let shouldRunRound = false;
-    const pendingPersistence: PendingToolPersistence[] = [];
-    for (const toolCall of assistant.toolCalls) {
-      this.transitionTo("executing_tool");
-      const toolResult = await this.executeToolCall(toolCall.name, toolCall.arguments, {
-        groupId: this.session.getCurrentGroupId(),
-        systemPrompt: snapshot.systemPrompt,
-        messages: [...transientMessages],
-        tools: this.tools,
-      });
-      this.recordToolCall({
-        toolName: toolCall.name,
-        argumentsValue: toolCall.arguments,
-        resultContent: toolResult.content,
-      });
-      const postToolEffects = await this.session.flushPendingPostToolEffects();
-      pendingPersistence.push({
-        ...(shouldPersistToolResultInContext({
-          toolName: toolCall.name,
-          toolResult,
-        }) && toolResult.content.length > 0
-          ? {
-              toolResult: {
-                toolCallId: toolCall.id,
-                content: toolResult.content,
-              },
-            }
-          : {}),
-        postToolEffects,
-      });
-      transientMessages.push(
-        ...postToolEffects.messages,
-        ...postToolEffects.events.flatMap(createMessagesFromEvent),
-      );
-      if (toolResult.signal === "finish_round") {
-        break;
-      }
-      shouldRunRound = true;
-    }
     await this.runSerializedMutation(async () => {
       await this.persistRoundState({
         assistantMessage: assistantToPersist,
-        toolPersistences: pendingPersistence,
+        toolPersistences,
       });
       this.lastRoundCompletedAt = this.now();
       this.touchActivity();
       this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
     });
-
-    return shouldRunRound;
   }
 
-  private async executeToolCall(
-    toolName: string,
-    argumentsValue: Record<string, unknown>,
-    context: {
-      groupId?: string;
-      systemPrompt?: string;
-      messages?: LlmMessage[];
-      tools: ToolExecutor;
-    },
-  ): Promise<ToolSetExecutionResult> {
-    const toolContext = {
-      ...context,
-      agentContext: this.context,
-      rootAgentSession: this.session,
-    };
-
-    try {
-      return await context.tools.execute(toolName, argumentsValue, toolContext);
-    } catch (error) {
-      this.recordRecoverableError(error);
-      logger.warn("Root agent tool call failed; returning temporary failure result", {
-        event: "agent.root_agent_runtime.tool_temporary_failure",
-        toolName,
-        errorName: error instanceof Error ? error.name : "Error",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      return createTemporaryToolFailureResult({
-        toolName,
-        kind: context.tools.getKind(toolName) ?? "business",
-        error,
-      });
-    }
-  }
-
-  private async persistRoundState(input: {
-    assistantMessage: AssistantMessage | null;
-    toolPersistences: PendingToolPersistence[];
-  }): Promise<void> {
-    let hasWrittenMessages = false;
-
-    if (input.assistantMessage) {
-      await this.context.appendAssistantTurn(input.assistantMessage);
-      hasWrittenMessages = true;
-    }
-
-    for (const toolPersistence of input.toolPersistences) {
-      if (toolPersistence.toolResult) {
-        await this.context.appendToolResult(toolPersistence.toolResult);
-        hasWrittenMessages = true;
-      }
-
-      if (toolPersistence.postToolEffects.messages.length > 0) {
-        await this.context.appendMessages(toolPersistence.postToolEffects.messages);
-        hasWrittenMessages = true;
-      }
-
-      if (toolPersistence.postToolEffects.events.length > 0) {
-        await this.context.appendEvents(toolPersistence.postToolEffects.events);
-        hasWrittenMessages = true;
-      }
-    }
-
-    if (hasWrittenMessages) {
-      await this.compactContextIfNeeded();
-      await this.persistSnapshotIfChanged();
-    }
-  }
-
-  private async appendWakeReminderIfNeeded(now: Date): Promise<void> {
+  public async appendWakeReminderIfNeeded(): Promise<void> {
+    const now = this.now();
     await this.runSerializedMutation(async () => {
       if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {
         return;
@@ -553,7 +410,76 @@ export class RootAgentRuntime {
     });
   }
 
-  private async compactContextIfNeeded(): Promise<void> {
+  public recordCrash(error: unknown): void {
+    this.loopState = "crashed";
+    this.lastError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  public recordRecoverableError(error: unknown): void {
+    this.lastError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  public recordLlmCall(completion: RootAgentCompletion): void {
+    this.clearRecoverableError();
+    this.lastLlmCall = {
+      provider: completion.provider,
+      model: completion.model,
+      assistantContentPreview: createPreview(completion.message.content),
+      toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  public recordToolCall(input: {
+    toolName: string;
+    argumentsValue: Record<string, unknown>;
+    resultContent: string;
+  }): void {
+    this.lastToolCall = {
+      name: input.toolName,
+      argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
+      updatedAt: this.now(),
+    };
+    this.lastToolResultPreview =
+      input.resultContent.trim().length > 0 ? createPreview(input.resultContent) : null;
+    this.touchActivity();
+  }
+
+  private async persistRoundState(input: {
+    assistantMessage: AssistantMessage | null;
+    toolPersistences: PendingToolPersistence[];
+  }): Promise<void> {
+    if (input.assistantMessage) {
+      await this.context.appendAssistantTurn(input.assistantMessage);
+    }
+
+    for (const toolPersistence of input.toolPersistences) {
+      if (toolPersistence.toolResult) {
+        await this.context.appendToolResult(toolPersistence.toolResult);
+      }
+
+      if (toolPersistence.postToolEffects.messages.length > 0) {
+        await this.context.appendMessages(toolPersistence.postToolEffects.messages);
+      }
+
+      if (toolPersistence.postToolEffects.events.length > 0) {
+        await this.context.appendEvents(toolPersistence.postToolEffects.events);
+      }
+    }
+  }
+
+  public async compactContextIfNeeded(): Promise<void> {
     if (!this.contextSummaryOperation) {
       return;
     }
@@ -589,8 +515,8 @@ export class RootAgentRuntime {
         logger.warn("Context summary failed; scheduling retry", {
           event: "agent.root_agent_runtime.context_summary_retry_scheduled",
           retryBackoffMs: this.llmRetryBackoffMs,
-          errorName: error.name,
-          errorMessage: error.message,
+          errorName: error instanceof Error ? error.name : "Error",
+          errorMessage: error instanceof Error ? error.message : String(error),
         });
         await this.sleep(this.llmRetryBackoffMs);
         continue;
@@ -611,7 +537,7 @@ export class RootAgentRuntime {
     }
   }
 
-  private async persistSnapshotIfChanged(input?: { suppressError?: boolean }): Promise<void> {
+  public async persistSnapshotIfChanged(input?: { suppressError?: boolean }): Promise<void> {
     if (!this.snapshotRepository) {
       return;
     }
@@ -646,19 +572,6 @@ export class RootAgentRuntime {
     };
   }
 
-  private transitionTo(loopState: RootAgentLoopState): void {
-    this.loopState = loopState;
-  }
-
-  private async awaitPendingReset(): Promise<void> {
-    const pendingResetPromise = this.pendingResetPromise;
-    if (!pendingResetPromise) {
-      return;
-    }
-
-    await pendingResetPromise.catch(() => undefined);
-  }
-
   private async runSerializedMutation<T>(callback: () => Promise<T>): Promise<T> {
     const previous = this.serializedMutationChain;
     let releaseCurrent!: () => void;
@@ -673,20 +586,6 @@ export class RootAgentRuntime {
     } finally {
       releaseCurrent();
     }
-  }
-
-  private resetRuntimeState(resetAt: Date): void {
-    this.lastWakeReminderAt = null;
-    this.initialized = false;
-    this.lastError = null;
-    this.lastActivityAt = new Date(resetAt);
-    this.lastRoundCompletedAt = null;
-    this.lastCompactionAt = null;
-    this.lastToolCall = null;
-    this.lastToolResultPreview = null;
-    this.lastLlmCall = null;
-    this.lastPersistedSnapshotFingerprint = null;
-    this.transitionTo("starting");
   }
 
   private async deletePersistedSnapshot(): Promise<void> {
@@ -707,6 +606,20 @@ export class RootAgentRuntime {
     }
   }
 
+  private resetRuntimeState(resetAt: Date): void {
+    this.lastWakeReminderAt = null;
+    this.initialized = false;
+    this.lastError = null;
+    this.lastActivityAt = new Date(resetAt);
+    this.lastRoundCompletedAt = null;
+    this.lastCompactionAt = null;
+    this.lastToolCall = null;
+    this.lastToolResultPreview = null;
+    this.lastLlmCall = null;
+    this.lastPersistedSnapshotFingerprint = null;
+    this.transitionTo("starting");
+  }
+
   private touchActivity(): void {
     this.lastActivityAt = this.now();
   }
@@ -714,65 +627,478 @@ export class RootAgentRuntime {
   private clearRecoverableError(): void {
     this.lastError = null;
   }
+}
 
-  private recordRecoverableError(error: unknown): void {
-    this.lastError = {
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
-  }
-
-  private recordCrash(error: unknown): void {
-    this.loopState = "crashed";
-    this.lastError = {
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
-  }
-
-  private recordLlmCall(completion: Awaited<ReturnType<LlmClient["chat"]>>): void {
-    this.clearRecoverableError();
-    this.lastLlmCall = {
-      provider: completion.provider,
-      model: completion.model,
-      assistantContentPreview: createPreview(completion.message.content),
-      toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
-  }
-
-  private recordToolCall(input: {
-    toolName: string;
-    argumentsValue: Record<string, unknown>;
-    resultContent: string;
-  }): void {
-    this.lastToolCall = {
-      name: input.toolName,
-      argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
-      updatedAt: this.now(),
-    };
-    this.lastToolResultPreview =
-      input.resultContent.trim().length > 0 ? createPreview(input.resultContent) : null;
-    this.touchActivity();
+class WakeReminderExtension implements LoopAgentExtension<
+  RootLoopExtensionContext,
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.appendWakeReminderIfNeeded();
   }
 }
+
+class ContextCompactionExtension implements LoopAgentExtension<
+  RootLoopExtensionContext,
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  public async onInitialize(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.compactContextIfNeeded();
+  }
+
+  public async onAfterEventsConsumed(input: { context: RootLoopExtensionContext }): Promise<void> {
+    await input.context.host.compactContextIfNeeded();
+  }
+
+  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.compactContextIfNeeded();
+  }
+
+  public async onAfterCommit(input: { context: RootLoopExtensionContext }): Promise<void> {
+    await input.context.host.compactContextIfNeeded();
+  }
+
+  public async onAfterReset(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.compactContextIfNeeded();
+  }
+}
+
+class SnapshotPersistenceExtension implements LoopAgentExtension<
+  RootLoopExtensionContext,
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  public async onInitialize(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.persistSnapshotIfChanged();
+  }
+
+  public async onAfterEventsConsumed(input: { context: RootLoopExtensionContext }): Promise<void> {
+    await input.context.host.persistSnapshotIfChanged();
+  }
+
+  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.persistSnapshotIfChanged();
+  }
+
+  public async onAfterCommit(input: { context: RootLoopExtensionContext }): Promise<void> {
+    await input.context.host.persistSnapshotIfChanged();
+  }
+
+  public async onAfterReset(context: RootLoopExtensionContext): Promise<void> {
+    await context.host.persistSnapshotIfChanged({
+      suppressError: false,
+    });
+  }
+}
+
+class RootLlmTelemetryExtension implements ReActKernelExtension<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  private readonly host: RootAgentHost;
+
+  public constructor({ host }: { host: RootAgentHost }) {
+    this.host = host;
+  }
+
+  public onAfterModel(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    completion: RootAgentCompletion;
+  }): void {
+    this.host.recordLlmCall(input.completion);
+  }
+}
+
+class RootLlmRetryExtension implements ReActKernelExtension<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  private readonly host: RootAgentHost;
+  private readonly llmRetryBackoffMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+
+  public constructor({
+    host,
+    llmRetryBackoffMs,
+    sleep,
+  }: {
+    host: RootAgentHost;
+    llmRetryBackoffMs: number;
+    sleep: (ms: number) => Promise<void>;
+  }) {
+    this.host = host;
+    this.llmRetryBackoffMs = llmRetryBackoffMs;
+    this.sleep = sleep;
+  }
+
+  public async onModelError(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    error: unknown;
+  }): Promise<{ handled: boolean; retry: boolean } | void> {
+    if (!isRetryableLlmFailure(input.error)) {
+      return;
+    }
+
+    this.host.recordRecoverableError(input.error);
+    this.host.transitionTo("idle");
+    logger.warn("Root agent LLM call failed; scheduling retry", {
+      event: "agent.root_agent_runtime.llm_retry_scheduled",
+      retryBackoffMs: this.llmRetryBackoffMs,
+      errorName: input.error.name,
+      errorMessage: input.error.message,
+    });
+    await this.sleep(this.llmRetryBackoffMs);
+
+    return {
+      handled: true,
+      retry: true,
+    };
+  }
+}
+
+class RootToolExecutionStateExtension implements ReActKernelExtension<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  private readonly host: RootAgentHost;
+
+  public constructor({ host }: { host: RootAgentHost }) {
+    this.host = host;
+  }
+
+  public onBeforeToolExecution(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    completion: RootAgentCompletion;
+    toolCall: {
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+  }): void {
+    void input;
+    this.host.transitionTo("executing_tool");
+  }
+}
+
+class RootToolFallbackExtension implements ReActKernelExtension<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  private readonly host: RootAgentHost;
+
+  public constructor({ host }: { host: RootAgentHost }) {
+    this.host = host;
+  }
+
+  public async onToolError(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    toolCall: {
+      name: string;
+    };
+    error: unknown;
+  }): Promise<{ handled: boolean; result: ToolSetExecutionResult }> {
+    this.host.recordRecoverableError(input.error);
+    logger.warn("Root agent tool call failed; returning temporary failure result", {
+      event: "agent.root_agent_runtime.tool_temporary_failure",
+      toolName: input.toolCall.name,
+      errorName: input.error instanceof Error ? input.error.name : "Error",
+      errorMessage: input.error instanceof Error ? input.error.message : String(input.error),
+    });
+
+    return {
+      handled: true,
+      result: createTemporaryToolFailureResult({
+        toolName: input.toolCall.name,
+        kind: input.request.tools.getKind(input.toolCall.name) ?? "business",
+        error: input.error,
+      }),
+    };
+  }
+}
+
+class RootPostToolEffectsExtension implements ReActKernelExtension<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
+  private readonly host: RootAgentHost;
+
+  public constructor({ host }: { host: RootAgentHost }) {
+    this.host = host;
+  }
+
+  public async onAfterToolExecution(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    completion: RootAgentCompletion;
+    toolCall: {
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+    result: ToolSetExecutionResult;
+  }): Promise<{
+    appendedMessages?: LlmMessage[];
+    extensionData?: RootAgentToolExecutionData;
+  }> {
+    this.host.recordToolCall({
+      toolName: input.toolCall.name,
+      argumentsValue: input.toolCall.arguments,
+      resultContent: input.result.content,
+    });
+
+    const postToolEffects = await this.host.flushPendingPostToolEffects();
+
+    return {
+      appendedMessages: [
+        ...postToolEffects.messages,
+        ...postToolEffects.events.flatMap(createMessagesFromEvent),
+      ],
+      extensionData: {
+        postToolEffects,
+      },
+    };
+  }
+}
+
+export class RootLoopAgent extends BaseLoopAgent<
+  LlmMessage,
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData,
+  RootLoopExtensionContext
+> {
+  private readonly host: RootAgentHost;
+  private readonly tools: ToolExecutor<LlmMessage>;
+  private shouldRunRoundFlag = true;
+  private waitingNeedsSleep = false;
+  private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
+
+  public constructor({
+    llmClient,
+    tools,
+    agentTools,
+    llmRetryBackoffMs,
+    sleep,
+    ...rest
+  }: RootAgentRuntimeDeps) {
+    const resolvedSleep = sleep ?? createSleep;
+    const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
+    const resolvedTools = tools ?? agentTools ?? failMissingTools();
+    const host = new RootAgentHost({
+      ...rest,
+      llmRetryBackoffMs: resolvedRetryBackoffMs,
+      sleep: resolvedSleep,
+    });
+    const kernel = new ReActKernel<
+      LlmMessage,
+      "agent",
+      RootAgentCompletion,
+      RootAgentToolExecutionData
+    >({
+      model: llmClient,
+      extensions: [
+        new RootLlmTelemetryExtension({
+          host,
+        }),
+        new RootLlmRetryExtension({
+          host,
+          llmRetryBackoffMs: resolvedRetryBackoffMs,
+          sleep: resolvedSleep,
+        }),
+        new RootToolExecutionStateExtension({
+          host,
+        }),
+        new RootToolFallbackExtension({
+          host,
+        }),
+        new RootPostToolEffectsExtension({
+          host,
+        }),
+      ],
+    });
+
+    super({
+      kernel,
+      extensions: [
+        new WakeReminderExtension(),
+        new ContextCompactionExtension(),
+        new SnapshotPersistenceExtension(),
+      ],
+      sleep: resolvedSleep,
+    });
+
+    this.host = host;
+    this.tools = resolvedTools;
+  }
+
+  public async run(): Promise<void> {
+    await this.start();
+  }
+
+  public async initialize(): Promise<void> {
+    await this.ensureInitialized();
+  }
+
+  public async restorePersistedSnapshot(
+    snapshot: PersistedRootAgentRuntimeSnapshot,
+  ): Promise<void> {
+    await this.host.restorePersistedSnapshot(snapshot);
+  }
+
+  public async resetContext(): Promise<{ resetAt: Date }> {
+    if (this.pendingResetPromise) {
+      return await this.pendingResetPromise;
+    }
+
+    const resetPromise = (async () => {
+      await this.waitForActiveTick();
+
+      this.shouldRunRoundFlag = false;
+      this.waitingNeedsSleep = false;
+      const result = await this.host.resetContext();
+      await this.notifyAfterReset();
+      return result;
+    })();
+
+    this.pendingResetPromise = resetPromise;
+
+    try {
+      return await resetPromise;
+    } finally {
+      if (this.pendingResetPromise === resetPromise) {
+        this.pendingResetPromise = null;
+      }
+    }
+  }
+
+  public async hydrateStartupEvents(events: Event[]): Promise<void> {
+    await this.host.hydrateStartupEvents(events);
+  }
+
+  public async getDashboardSnapshot(): Promise<RootAgentRuntimeDashboardSnapshot> {
+    return await this.host.getDashboardSnapshot();
+  }
+
+  protected override async initializeHostIfNeeded(): Promise<void> {
+    await this.host.initialize();
+  }
+
+  protected override createLoopExtensionContext(): RootLoopExtensionContext {
+    return {
+      host: this.host,
+    };
+  }
+
+  protected override async beforeTick(): Promise<{ shouldTriggerRound: boolean }> {
+    await this.awaitPendingReset();
+    const consumeResult = await this.host.consumePendingEvents({
+      allowWaitingTimeout: !this.waitingNeedsSleep,
+    });
+    await this.awaitPendingReset();
+    this.shouldRunRoundFlag = this.shouldRunRoundFlag || consumeResult.shouldTriggerRound;
+    return consumeResult;
+  }
+
+  protected override async shouldRunRound(): Promise<boolean> {
+    if (this.host.getSessionState().kind === "waiting") {
+      this.host.transitionTo("waiting");
+      return false;
+    }
+
+    if (!this.shouldRunRoundFlag) {
+      this.host.transitionTo("idle");
+      return false;
+    }
+
+    return true;
+  }
+
+  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
+    LlmMessage,
+    "agent"
+  > | null> {
+    this.shouldRunRoundFlag = false;
+    return await this.host.createRoundInput(this.tools);
+  }
+
+  protected override async executeRound(
+    input: ReActKernelRunRoundInput<LlmMessage, "agent">,
+  ): Promise<ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>> {
+    const result = await super.executeRound(input);
+    this.shouldRunRoundFlag = result.shouldContinue || this.shouldRunRoundFlag;
+    return result;
+  }
+
+  protected override async commitRoundResult(
+    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
+  ): Promise<void> {
+    await this.host.commitRoundResult(result, this.tools);
+    this.waitingNeedsSleep = this.host.getSessionState().kind === "waiting";
+  }
+
+  protected override async afterTick(input: {
+    didRunRound: boolean;
+    roundResult: ReActRoundResult<
+      LlmMessage,
+      RootAgentCompletion,
+      RootAgentToolExecutionData
+    > | null;
+  }): Promise<number> {
+    if (this.host.getSessionState().kind !== "waiting") {
+      this.waitingNeedsSleep = false;
+    } else if (!input.didRunRound) {
+      this.waitingNeedsSleep = false;
+    }
+
+    return input.didRunRound ? 0 : IDLE_SLEEP_MS;
+  }
+
+  protected override async onUnhandledError(error: unknown): Promise<void> {
+    this.host.recordCrash(error);
+  }
+
+  private async awaitPendingReset(): Promise<void> {
+    const pendingResetPromise = this.pendingResetPromise;
+    if (!pendingResetPromise) {
+      return;
+    }
+
+    await pendingResetPromise.catch(() => undefined);
+  }
+}
+
+/**
+ * @deprecated Use RootLoopAgent instead.
+ */
+export class RootAgentRuntime extends RootLoopAgent {}
 
 async function createSleep(ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function failMissingTools(): never {
-  throw new Error("RootAgentRuntime requires tools");
+  throw new Error("RootLoopAgent requires tools");
 }
 
 function omitControlToolCalls(
   message: AssistantMessage,
-  agentTools: ToolExecutor,
+  agentTools: ToolExecutor<LlmMessage>,
 ): AssistantMessage {
   return {
     ...message,

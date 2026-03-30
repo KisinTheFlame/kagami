@@ -1,42 +1,20 @@
-import type { AgentRuntime } from "./agent-runtime.js";
+import type { TaskAgent } from "./agent-runtime.js";
+import {
+  ReActKernel,
+  type AssistantLikeMessage,
+  type ReActModel,
+  type ToolLikeMessage,
+} from "./react-kernel.js";
 import type { ToolExecutor } from "./tool/tool-catalog.js";
-import type { ToolContext, ToolDefinition } from "./tool/tool-component.js";
+import type { ToolContext } from "./tool/tool-component.js";
 
-export type TaskAgentToolCall = {
-  id: string;
-  name: string;
-  arguments: Record<string, unknown>;
-};
-
-export type AssistantLikeMessage = {
-  role: "assistant";
-  content: string;
-  toolCalls: TaskAgentToolCall[];
-};
-
-export type ToolLikeMessage = {
-  role: "tool";
-  toolCallId: string;
-  content: string;
-};
-
-export interface TaskAgentModel<TMessage extends { role: string }, TUsage extends string = string> {
-  chat(
-    request: {
-      system?: string;
-      messages: TMessage[];
-      tools: ToolDefinition[];
-      toolChoice: "required";
-    },
-    options: {
-      usage: TUsage;
-    },
-  ): Promise<{
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  }>;
-}
-
-export type TaskAgentInvoker<TInput, TOutput> = Pick<AgentRuntime<TInput, TOutput>, "invoke">;
+export type TaskAgentToolCall = import("./react-kernel.js").ReActToolCall;
+export type { AssistantLikeMessage, ToolLikeMessage };
+export type TaskAgentModel<
+  TMessage extends { role: string },
+  TUsage extends string = string,
+> = ReActModel<TMessage, TUsage>;
+export type TaskAgentInvoker<TInput, TOutput> = Pick<TaskAgent<TInput, TOutput>, "invoke">;
 
 export type TaskAgentInvocationState<TMessage extends { role: string }, TUsage extends string> = {
   systemPrompt?: string;
@@ -45,23 +23,25 @@ export type TaskAgentInvocationState<TMessage extends { role: string }, TUsage e
   usage: TUsage;
 };
 
-export abstract class TaskAgentRuntime<
+export abstract class BaseTaskAgent<
   TInput,
   TOutput,
   TMessage extends { role: string },
   TUsage extends string = string,
-> implements AgentRuntime<TInput, TOutput> {
-  private readonly model: TaskAgentModel<TMessage, TUsage>;
+> implements TaskAgent<TInput, TOutput> {
+  private readonly kernel: ReActKernel<TMessage, TUsage>;
   private readonly taskTools: ToolExecutor<TMessage>;
 
   public constructor({
+    kernel,
     model,
     taskTools,
   }: {
-    model: TaskAgentModel<TMessage, TUsage>;
+    kernel?: ReActKernel<TMessage, TUsage>;
+    model?: TaskAgentModel<TMessage, TUsage>;
     taskTools: ToolExecutor<TMessage>;
   }) {
-    this.model = model;
+    this.kernel = kernel ?? new ReActKernel({ model: model ?? failMissingTaskAgentModel() });
     this.taskTools = taskTools;
   }
 
@@ -70,42 +50,28 @@ export abstract class TaskAgentRuntime<
     const messages = [...invocation.messages];
 
     while (true) {
-      const response = await this.model.chat(
-        {
-          system: invocation.systemPrompt,
+      const roundResult = await this.kernel.runRound({
+        state: {
+          systemPrompt: invocation.systemPrompt,
           messages: [...messages],
-          tools: this.taskTools.definitions(),
-          toolChoice: "required",
         },
-        {
-          usage: invocation.usage,
-        },
+        tools: this.taskTools,
+        toolContext: invocation.toolContext,
+        usage: invocation.usage,
+      });
+      if (roundResult.shouldCommit) {
+        messages.push(roundResult.assistantMessage, ...roundResult.appendedMessages);
+      }
+
+      const terminalExecution = roundResult.toolExecutions.find(
+        execution => execution.result.signal === "finish_round",
       );
-
-      messages.push(response.message);
-
-      for (const toolCall of response.message.toolCalls) {
-        const executionResult = await this.taskTools.execute(
-          toolCall.name,
-          toolCall.arguments,
-          invocation.toolContext ?? {},
-        );
-
-        if (executionResult.content.length > 0) {
-          messages.push({
-            role: "tool",
-            toolCallId: toolCall.id,
-            content: executionResult.content,
-          } as unknown as Extract<TMessage, { role: "tool" }>);
-        }
-
-        if (executionResult.signal === "finish_round") {
-          return await this.buildResult({
-            input,
-            messages,
-            content: executionResult.content,
-          });
-        }
+      if (terminalExecution || !roundResult.shouldContinue) {
+        return await this.buildResult({
+          input,
+          messages,
+          content: terminalExecution?.result.content ?? "",
+        });
       }
     }
   }
@@ -119,4 +85,18 @@ export abstract class TaskAgentRuntime<
     messages: TMessage[];
     content: string;
   }): Promise<TOutput> | TOutput;
+}
+
+/**
+ * @deprecated Use BaseTaskAgent instead.
+ */
+export abstract class TaskAgentRuntime<
+  TInput,
+  TOutput,
+  TMessage extends { role: string },
+  TUsage extends string = string,
+> extends BaseTaskAgent<TInput, TOutput, TMessage, TUsage> {}
+
+function failMissingTaskAgentModel(): never {
+  throw new Error("BaseTaskAgent requires model when kernel is not provided");
 }

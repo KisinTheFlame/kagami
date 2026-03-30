@@ -1,5 +1,5 @@
 import { createWebSearchInstructionMessage } from "../../../runtime/context/context-message-factory.js";
-import { TaskAgentRuntime, type TaskAgentInvoker, type ToolExecutor } from "@kagami/agent-runtime";
+import { BaseTaskAgent, type TaskAgentInvoker, type ToolExecutor } from "@kagami/agent-runtime";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 
@@ -12,7 +12,7 @@ export type WebSearchTaskInput = {
 export type WebSearchAgentInput = WebSearchTaskInput;
 
 export class WebSearchTaskAgent
-  extends TaskAgentRuntime<WebSearchTaskInput, string, LlmMessage, "webSearchAgent">
+  extends BaseTaskAgent<WebSearchTaskInput, string, LlmMessage, "webSearchAgent">
   implements TaskAgentInvoker<WebSearchTaskInput, string>
 {
   public constructor({

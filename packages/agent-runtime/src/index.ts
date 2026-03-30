@@ -1,6 +1,21 @@
-import type { AgentRuntime } from "./agent-runtime.js";
+import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
+import type { LoopAgent } from "./loop-agent.js";
+import type { LoopAgentEventsConsumedSummary, LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
+import { BaseLoopAgent } from "./base-loop-agent.js";
 import {
+  ReActKernel,
+  type ReActKernelExtension,
+  type ReActKernelModelErrorDecision,
+  type ReActKernelRunRoundInput,
+  type ReActKernelToolErrorDecision,
+  type ReActModel,
+  type ReActRoundResult,
+  type ReActRoundState,
+  type ReActToolExecution,
+} from "./react-kernel.js";
+import {
+  BaseTaskAgent,
   TaskAgentRuntime,
   type AssistantLikeMessage,
   type TaskAgentInvoker,
@@ -27,14 +42,29 @@ import {
 } from "./tool/tool-component.js";
 
 export {
+  BaseLoopAgent,
+  BaseTaskAgent,
+  ReActKernel,
   TaskAgentRuntime,
   ToolCatalog,
   ToolSet,
   ZodToolComponent,
   type AgentRuntime,
+  type LoopAgent,
+  type LoopAgentEventsConsumedSummary,
+  type LoopAgentExtension,
+  type TaskAgent,
   type AssistantLikeMessage,
   type JsonSchema,
   type Operation,
+  type ReActKernelExtension,
+  type ReActKernelModelErrorDecision,
+  type ReActKernelRunRoundInput,
+  type ReActKernelToolErrorDecision,
+  type ReActModel,
+  type ReActRoundResult,
+  type ReActRoundState,
+  type ReActToolExecution,
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
