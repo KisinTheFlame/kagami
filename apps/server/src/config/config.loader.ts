@@ -11,6 +11,7 @@ const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD = 60;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
+const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -144,6 +145,7 @@ const ConfigSchema = z.object({
           DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD,
         ),
         llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
+        waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
       })
       .default({}),
     napcat: NapcatConfigSchema,

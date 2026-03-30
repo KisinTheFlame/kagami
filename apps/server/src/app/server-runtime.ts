@@ -284,7 +284,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const toolCatalog = new ToolCatalog([
     new EnterTool(),
     new BackToPortalTool(),
-    new WaitTool(),
+    new WaitTool({
+      maxWaitMs: config.server.agent.waitToolMaxWaitMs,
+    }),
     new InvokeTool({
       tools: [
         new SendMessageTool({

@@ -4,6 +4,7 @@ server:
   agent:
     contextCompactionThreshold: 60
     llmRetryBackoffMs: 30000
+    waitToolMaxWaitMs: 600000
   napcat:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000

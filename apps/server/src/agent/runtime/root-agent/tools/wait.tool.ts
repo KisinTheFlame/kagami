@@ -8,7 +8,7 @@ import {
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const WAIT_TOOL_NAME = "wait";
-const MAX_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_MAX_WAIT_MS = 10 * 60 * 1000;
 
 const WaitArgumentsSchema = z.object({});
 
@@ -18,8 +18,7 @@ type WaitToolContext = ToolContext & {
 
 export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
   public readonly name = WAIT_TOOL_NAME;
-  public readonly description =
-    "在门户状态进入最多 10 分钟的等待，直到新的 QQ 消息出现或等待自然结束。";
+  public readonly description: string;
   public readonly parameters = {
     type: "object",
     properties: {},
@@ -27,10 +26,13 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
   public readonly kind: ToolKind = "control";
   protected readonly inputSchema = WaitArgumentsSchema;
   private readonly now: () => Date;
+  private readonly maxWaitMs: number;
 
-  public constructor({ now }: { now?: () => Date } = {}) {
+  public constructor({ now, maxWaitMs }: { now?: () => Date; maxWaitMs?: number } = {}) {
     super();
     this.now = now ?? (() => new Date());
+    this.maxWaitMs = maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
+    this.description = `在门户状态进入最多 ${formatWaitDuration(this.maxWaitMs)} 的等待，直到新的 QQ 消息出现或等待自然结束。`;
   }
 
   protected async executeTyped(
@@ -49,7 +51,7 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
     }
 
     const result = await rootAgentSession.wait({
-      deadlineAt: new Date(this.now().getTime() + MAX_WAIT_MS),
+      deadlineAt: new Date(this.now().getTime() + this.maxWaitMs),
     });
 
     if (result.ok === false) {
@@ -64,4 +66,16 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
       signal: "finish_round",
     };
   }
+}
+
+function formatWaitDuration(durationMs: number): string {
+  if (durationMs % 60_000 === 0) {
+    return `${durationMs / 60_000} 分钟`;
+  }
+
+  if (durationMs % 1_000 === 0) {
+    return `${durationMs / 1_000} 秒`;
+  }
+
+  return `${durationMs} 毫秒`;
 }

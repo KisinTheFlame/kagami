@@ -28,6 +28,30 @@ describe("wait tool", () => {
     });
   });
 
+  it("should allow overriding max wait duration", async () => {
+    const now = new Date("2026-03-30T10:00:00.000Z");
+    const tool = new WaitTool({
+      now: () => now,
+      maxWaitMs: 90_000,
+    });
+    const wait = vi.fn().mockResolvedValue({
+      ok: true,
+      deadlineAt: new Date(now.getTime() + 90_000).toISOString(),
+    });
+
+    const result = await tool.execute({}, {
+      rootAgentSession: {
+        wait,
+      },
+    } as Parameters<typeof tool.execute>[1]);
+
+    expect(tool.description).toContain("90 秒");
+    expect(wait).toHaveBeenCalledWith({
+      deadlineAt: new Date(now.getTime() + 90_000),
+    });
+    expect(result.signal).toBe("finish_round");
+  });
+
   it("should reject wait outside portal state", async () => {
     const tool = new WaitTool();
 
