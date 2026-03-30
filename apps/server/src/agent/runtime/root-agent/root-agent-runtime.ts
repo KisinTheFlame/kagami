@@ -11,6 +11,7 @@ import {
 import type { ToolExecutor, ToolSetExecutionResult } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
+import { BizError } from "../../../common/errors/biz-error.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
 import { AppLogger } from "../../../logger/logger.js";
@@ -51,11 +52,13 @@ type RootAgentRuntimeDeps = {
   summaryPlanner?: ContextSummaryLike;
   summaryTools?: Tool[];
   contextCompactionThreshold?: number;
+  llmRetryBackoffMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 };
 
 const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
+const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });
@@ -124,6 +127,7 @@ export class RootAgentRuntime {
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionThreshold: number;
+  private readonly llmRetryBackoffMs: number;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
@@ -151,6 +155,7 @@ export class RootAgentRuntime {
     summaryPlanner,
     summaryTools,
     contextCompactionThreshold,
+    llmRetryBackoffMs,
     now,
     sleep,
   }: RootAgentRuntimeDeps) {
@@ -165,6 +170,7 @@ export class RootAgentRuntime {
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionThreshold =
       contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
+    this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;
   }
@@ -225,17 +231,36 @@ export class RootAgentRuntime {
         const snapshot = await this.context.getSnapshot();
         const transientMessages = [...snapshot.messages];
         this.transitionTo("calling_llm");
-        const completion = await this.llmClient.chat(
-          {
-            system: snapshot.systemPrompt,
-            messages: transientMessages,
-            tools: this.tools.definitions(),
-            toolChoice: "required",
-          },
-          {
-            usage: "agent",
-          },
-        );
+        let completion;
+        try {
+          completion = await this.llmClient.chat(
+            {
+              system: snapshot.systemPrompt,
+              messages: transientMessages,
+              tools: this.tools.definitions(),
+              toolChoice: "required",
+            },
+            {
+              usage: "agent",
+            },
+          );
+        } catch (error) {
+          if (!isRetryableLlmFailure(error)) {
+            throw error;
+          }
+
+          this.recordRecoverableError(error);
+          shouldRunRound = true;
+          this.transitionTo("idle");
+          logger.warn("Root agent LLM call failed; scheduling retry", {
+            event: "agent.root_agent_runtime.llm_retry_scheduled",
+            retryBackoffMs: this.llmRetryBackoffMs,
+            errorName: error.name,
+            errorMessage: error.message,
+          });
+          await this.sleep(this.llmRetryBackoffMs);
+          continue;
+        }
         this.recordLlmCall(completion);
         const assistant = completion.message;
         const persistentAssistantMessage = omitControlToolCalls(assistant, this.tools);
@@ -379,7 +404,22 @@ export class RootAgentRuntime {
       rootAgentSession: this.session,
     };
 
-    return await context.tools.execute(toolName, argumentsValue, toolContext);
+    try {
+      return await context.tools.execute(toolName, argumentsValue, toolContext);
+    } catch (error) {
+      this.recordRecoverableError(error);
+      logger.warn("Root agent tool call failed; returning temporary failure result", {
+        event: "agent.root_agent_runtime.tool_temporary_failure",
+        toolName,
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      return createTemporaryToolFailureResult({
+        toolName,
+        kind: context.tools.getKind(toolName) ?? "business",
+        error,
+      });
+    }
   }
 
   private async persistRoundState(input: {
@@ -433,28 +473,50 @@ export class RootAgentRuntime {
       return;
     }
 
-    const snapshot = await this.context.getSnapshot();
-    if (snapshot.messages.length <= this.contextCompactionThreshold) {
+    while (true) {
+      const snapshot = await this.context.getSnapshot();
+      if (snapshot.messages.length <= this.contextCompactionThreshold) {
+        return;
+      }
+
+      let summary;
+      try {
+        summary =
+          "execute" in this.contextSummaryOperation
+            ? await this.contextSummaryOperation.execute({
+                messages: snapshot.messages,
+                tools: this.summaryTools,
+              })
+            : await this.contextSummaryOperation.summarize({
+                messages: snapshot.messages,
+                tools: this.summaryTools,
+              });
+      } catch (error) {
+        if (!isRetryableLlmFailure(error)) {
+          throw error;
+        }
+
+        this.recordRecoverableError(error);
+        logger.warn("Context summary failed; scheduling retry", {
+          event: "agent.root_agent_runtime.context_summary_retry_scheduled",
+          retryBackoffMs: this.llmRetryBackoffMs,
+          errorName: error.name,
+          errorMessage: error.message,
+        });
+        await this.sleep(this.llmRetryBackoffMs);
+        continue;
+      }
+
+      this.clearRecoverableError();
+      if (!summary) {
+        return;
+      }
+
+      await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
+      this.lastCompactionAt = this.now();
+      this.touchActivity();
       return;
     }
-
-    const summary =
-      "execute" in this.contextSummaryOperation
-        ? await this.contextSummaryOperation.execute({
-            messages: snapshot.messages,
-            tools: this.summaryTools,
-          })
-        : await this.contextSummaryOperation.summarize({
-            messages: snapshot.messages,
-            tools: this.summaryTools,
-          });
-    if (!summary) {
-      return;
-    }
-
-    await this.context.replaceMessages([createConversationSummaryMessage(summary)]);
-    this.lastCompactionAt = this.now();
-    this.touchActivity();
   }
 
   private async persistSnapshotIfChanged(): Promise<void> {
@@ -497,6 +559,19 @@ export class RootAgentRuntime {
     this.lastActivityAt = this.now();
   }
 
+  private clearRecoverableError(): void {
+    this.lastError = null;
+  }
+
+  private recordRecoverableError(error: unknown): void {
+    this.lastError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
   private recordCrash(error: unknown): void {
     this.loopState = "crashed";
     this.lastError = {
@@ -508,6 +583,7 @@ export class RootAgentRuntime {
   }
 
   private recordLlmCall(completion: Awaited<ReturnType<LlmClient["chat"]>>): void {
+    this.clearRecoverableError();
     this.lastLlmCall = {
       provider: completion.provider,
       model: completion.model,
@@ -652,6 +728,32 @@ function createPreview(content: string): string {
   }
 
   return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
+}
+
+function isRetryableLlmFailure(error: unknown): error is BizError {
+  return (
+    error instanceof BizError &&
+    (error.message === "所选 LLM provider 当前不可用" || error.message === "LLM 上游服务调用失败")
+  );
+}
+
+function createTemporaryToolFailureResult(input: {
+  toolName: string;
+  kind: ToolSetExecutionResult["kind"];
+  error: unknown;
+}): ToolSetExecutionResult {
+  return {
+    kind: input.kind,
+    signal: "continue",
+    content: JSON.stringify({
+      ok: false,
+      error: "TEMPORARY_TOOL_FAILURE",
+      retryable: true,
+      toolName: input.toolName,
+      message: `工具 ${input.toolName} 暂时调用失败了，请稍后重试，或换一种方式继续。`,
+      details: input.error instanceof Error ? input.error.message : String(input.error),
+    }),
+  };
 }
 
 function createSessionDashboardSnapshot(

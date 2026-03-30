@@ -9,7 +9,7 @@ describe("wait tool", () => {
     });
     const wait = vi.fn().mockResolvedValue({
       ok: true,
-      deadlineAt: new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
+      deadlineAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
     });
 
     const result = await tool.execute({}, {
@@ -19,7 +19,7 @@ describe("wait tool", () => {
     } as Parameters<typeof tool.execute>[1]);
 
     expect(wait).toHaveBeenCalledWith({
-      deadlineAt: new Date(now.getTime() + 5 * 60 * 1000),
+      deadlineAt: new Date(now.getTime() + 10 * 60 * 1000),
     });
     expect(tool.name).toBe("wait");
     expect(result.signal).toBe("finish_round");

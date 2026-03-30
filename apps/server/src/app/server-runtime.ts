@@ -318,6 +318,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     tools: rootAgentTools,
     contextSummaryOperation,
     contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
+    llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     summaryTools: [
       ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),

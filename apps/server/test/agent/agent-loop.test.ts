@@ -13,9 +13,11 @@ import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/roo
 import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.js";
 import { WaitTool } from "../../src/agent/runtime/root-agent/tools/wait.tool.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmMessage, Tool } from "../../src/llm/types.js";
 import type { PersistedRootAgentRuntimeSnapshot } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.js";
+import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 class StopLoopError extends Error {}
 
@@ -66,6 +68,8 @@ function createRuntimeForCompactionTest(input: {
     summarize(input: { messages: LlmMessage[]; tools: Tool[] }): Promise<string | null>;
   };
   contextCompactionThreshold: number;
+  llmRetryBackoffMs?: number;
+  sleep?: (ms: number) => Promise<void>;
 }) {
   const session = new RootAgentSession({
     context: input.context,
@@ -105,6 +109,8 @@ function createRuntimeForCompactionTest(input: {
     tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
     contextSummaryOperation: input.contextSummaryOperation,
     contextCompactionThreshold: input.contextCompactionThreshold,
+    llmRetryBackoffMs: input.llmRetryBackoffMs,
+    sleep: input.sleep,
   });
 }
 
@@ -461,6 +467,205 @@ describe("RootAgentRuntime", () => {
     expect(searchToolResultIndex).toBeGreaterThan(historyMessageIndex);
     expect(waitAssistantIndex).toBeGreaterThanOrEqual(0);
     expect(waitToolResultIndex).toBeGreaterThan(waitAssistantIndex);
+  });
+
+  it("should retry recoverable llm failures after the configured backoff", async () => {
+    initTestLoggerRuntime();
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockImplementation(async (ms: number) => {
+      if (ms === 30_000) {
+        return;
+      }
+
+      throw stopError;
+    });
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 0,
+    });
+    const llmClient: LlmClient = {
+      chat: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new BizError({
+            message: "所选 LLM provider 当前不可用",
+          }),
+        )
+        .mockResolvedValueOnce({
+          provider: "openai-codex",
+          model: "gpt-5.4",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
+          },
+        }),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const eventQueue: AgentEventQueue = {
+      enqueue: vi.fn().mockReturnValue(1),
+      dequeue: vi.fn().mockReturnValue(null),
+      size: vi.fn().mockReturnValue(0),
+    };
+    const runtime = new RootAgentRuntime({
+      llmClient,
+      context,
+      eventQueue,
+      session,
+      tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
+      sleep,
+      llmRetryBackoffMs: 30_000,
+    });
+
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    expect(llmClient.chat).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenNthCalledWith(1, 30_000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 10);
+  });
+
+  it("should retry recoverable context summary failures after the configured backoff", async () => {
+    initTestLoggerRuntime();
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    await context.appendMessages([
+      createUserMessage("alpha"),
+      createUserMessage("beta"),
+      createUserMessage("gamma"),
+    ]);
+    const summarize = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new BizError({
+          message: "LLM 上游服务调用失败",
+        }),
+      )
+      .mockResolvedValueOnce("累计摘要");
+    const runtime = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionThreshold: 2,
+      llmRetryBackoffMs: 30_000,
+      sleep,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(30_000);
+    expect((await context.getSnapshot()).messages).toEqual([
+      createConversationSummaryMessage("累计摘要"),
+    ]);
+  });
+
+  it("should return a temporary failure tool result to the agent when tool execution throws", async () => {
+    initTestLoggerRuntime();
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 0,
+    });
+    const llmClient: LlmClient = {
+      chat: vi
+        .fn()
+        .mockResolvedValueOnce({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "explode-1", name: "explode", arguments: {} }],
+          },
+        })
+        .mockResolvedValueOnce({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
+          },
+        }),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const runtime = new RootAgentRuntime({
+      llmClient,
+      context,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(1),
+        dequeue: vi.fn().mockReturnValue(null),
+        size: vi.fn().mockReturnValue(0),
+      },
+      session,
+      tools: new ToolCatalog([
+        {
+          name: "explode",
+          description: "explode",
+          parameters: { type: "object", properties: {} },
+          kind: "business",
+          llmTool: {
+            name: "explode",
+            description: "explode",
+            parameters: { type: "object", properties: {} },
+          },
+          execute: vi.fn().mockRejectedValue(new Error("service unavailable")),
+        } satisfies ToolComponent,
+        new WaitTool(),
+      ]).pick(["explode", "wait"]),
+      sleep,
+    });
+
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    const snapshot = await context.getSnapshot();
+    const toolFailureMessage = snapshot.messages.find(
+      message => message.role === "tool" && message.toolCallId === "explode-1",
+    );
+
+    expect(toolFailureMessage).toBeDefined();
+    expect(toolFailureMessage?.content).toContain("TEMPORARY_TOOL_FAILURE");
+    expect(toolFailureMessage?.content).toContain("工具 explode 暂时调用失败了");
   });
 
   it("should summarize the full context and replace it with a single cumulative summary", async () => {

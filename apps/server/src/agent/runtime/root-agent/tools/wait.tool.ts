@@ -8,7 +8,7 @@ import {
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const WAIT_TOOL_NAME = "wait";
-const MAX_WAIT_MS = 5 * 60 * 1000;
+const MAX_WAIT_MS = 10 * 60 * 1000;
 
 const WaitArgumentsSchema = z.object({});
 
@@ -19,7 +19,7 @@ type WaitToolContext = ToolContext & {
 export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
   public readonly name = WAIT_TOOL_NAME;
   public readonly description =
-    "在门户状态进入最多 5 分钟的等待，直到新的 QQ 消息出现或等待自然结束。";
+    "在门户状态进入最多 10 分钟的等待，直到新的 QQ 消息出现或等待自然结束。";
   public readonly parameters = {
     type: "object",
     properties: {},

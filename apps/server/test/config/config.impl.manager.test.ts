@@ -119,6 +119,7 @@ startupContextRecentMessageCount: 0
         port: 3100,
         agent: {
           contextCompactionThreshold: 60,
+          llmRetryBackoffMs: 30_000,
         },
         napcat: {
           wsUrl: "wss://example.com/napcat",
@@ -368,6 +369,7 @@ server:
     const config = await loadStaticConfig({ configPath });
 
     expect(config.server.agent.contextCompactionThreshold).toBe(60);
+    expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
   });
 
   it("should default claude code keep alive replay interval minutes to 30", async () => {
@@ -541,6 +543,75 @@ server:
     const config = await loadStaticConfig({ configPath });
 
     expect(config.server.agent.contextCompactionThreshold).toBe(80);
+    expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
+  });
+
+  it("should allow overriding llm retry backoff ms", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  agent:
+    llmRetryBackoffMs: 45000
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+  llm:
+    timeoutMs: 15000
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        apiKey: ""
+        models:
+          - deepseek-chat
+      openai:
+        apiKey: openai-key
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+            times: 2
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+    creator:
+      name: 创造者
+      qq: "10000"
+`);
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.agent.llmRetryBackoffMs).toBe(45_000);
   });
 
   it("should allow zero startup context recent message count", async () => {

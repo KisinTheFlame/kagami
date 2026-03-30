@@ -3,6 +3,7 @@ server:
   port: 20003
   agent:
     contextCompactionThreshold: 60
+    llmRetryBackoffMs: 30000
   napcat:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
@@ -51,6 +52,9 @@ server:
         attempts:
           - provider: claude-code
             model: claude-sonnet-4-6
+          - provider: openai-codex
+            model: gpt-5.4
+            times: 2
       contextSummarizer:
         attempts:
           - provider: openai

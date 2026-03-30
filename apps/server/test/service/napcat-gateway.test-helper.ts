@@ -108,6 +108,7 @@ export function createConfigManager(): ConfigManager {
       port: 20003,
       agent: {
         contextCompactionThreshold: 60,
+        llmRetryBackoffMs: 30_000,
       },
       napcat: {
         wsUrl: "ws://napcat:3001/",
