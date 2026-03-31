@@ -451,6 +451,8 @@ describe("RootAgentSession", () => {
       kind: "ithome",
       articleCount: 1,
     });
+    expect(session.getAvailableInvokeTools()).toEqual(["open_ithome_article"]);
+    expect(session.getDashboardSnapshot().availableInvokeTools).toEqual(["open_ithome_article"]);
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await expect(session.openIthomeArticle({ articleId: 1 })).resolves.toMatchObject({
       ok: true,

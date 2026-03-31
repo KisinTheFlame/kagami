@@ -26,7 +26,7 @@ export type RootAgentEnterTargetKind = (typeof ROOT_AGENT_ENTER_TARGET_KINDS)[nu
 export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   portal: [],
   qq_group: ["send_message"],
-  ithome: [],
+  ithome: ["open_ithome_article"],
   zone_out: ["zone_out"],
   waiting: [],
 } as const;

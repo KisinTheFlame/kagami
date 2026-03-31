@@ -26,7 +26,7 @@ type InvokeToolContext = ToolContext & {
 export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   public readonly name = INVOKE_TOOL_NAME;
   public readonly description =
-    "调用当前状态下可用的动态子工具，例如群聊里的 send_message 或神游里的 zone_out。";
+    "调用当前状态下可用的动态子工具，例如群聊里的 send_message、IT 之家的 open_ithome_article 或神游里的 zone_out。";
   public readonly parameters: JsonSchema;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = InvokeArgumentsSchema;
@@ -110,7 +110,7 @@ function buildInvokeParameters(tools: ToolComponent[]): JsonSchema {
   const properties: Record<string, unknown> = {
     tool: {
       type: "string",
-      description: '要调用的子工具名，例如 "send_message" 或 "zone_out"。',
+      description: '要调用的子工具名，例如 "send_message"、"open_ithome_article" 或 "zone_out"。',
     },
   };
 
@@ -225,6 +225,10 @@ function buildInvokeSubtoolFailureMessage(input: {
 
   if (input.error === "GROUP_CONTEXT_UNAVAILABLE") {
     return `当前缺少可发消息的群聊上下文，不能调用 ${input.tool}。`;
+  }
+
+  if (input.error === "ARTICLE_NOT_FOUND") {
+    return "当前 IT 之家列表中找不到该文章 ID。";
   }
 
   if (input.error) {

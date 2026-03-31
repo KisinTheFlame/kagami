@@ -89,10 +89,7 @@ import {
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { ZoneOutTool } from "../agent/runtime/root-agent/tools/zone-out.tool.js";
-import {
-  OpenIthomeArticleTool,
-  OPEN_ITHOME_ARTICLE_TOOL_NAME,
-} from "../agent/capabilities/news/tools/open-ithome-article.tool.js";
+import { OpenIthomeArticleTool } from "../agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { PrismaNewsArticleDao } from "../news/infra/prisma-news-article.dao.js";
 import { PrismaNewsFeedCursorDao } from "../news/infra/prisma-news-feed-cursor.dao.js";
 import { DefaultIthomeClient } from "../news/application/ithome-client.js";
@@ -368,9 +365,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
           agentMessageService,
         }),
         new ZoneOutTool(),
+        new OpenIthomeArticleTool(),
       ],
     }),
-    new OpenIthomeArticleTool(),
     new SearchWebTool({
       webSearchTaskAgent,
     }),
@@ -385,7 +382,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     BACK_TO_PORTAL_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
-    OPEN_ITHOME_ARTICLE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
   ]);
@@ -438,7 +434,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         ENTER_TOOL_NAME,
         WAIT_TOOL_NAME,
         INVOKE_TOOL_NAME,
-        OPEN_ITHOME_ARTICLE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEARCH_MEMORY_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,

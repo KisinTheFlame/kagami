@@ -91,7 +91,7 @@ describe("context-message-factory", () => {
         "你已进入 IT之家 资讯空间。",
         "以下是游标之后最新的一批新文章。",
         "本轮只展示最新几篇；更早的 3 篇新文章已随本次进入一起略过。",
-        "如果想阅读全文，调用 open_ithome_article；如果想离开，调用 back_to_portal。",
+        '如果想阅读全文，调用 invoke(tool="open_ithome_article", articleId=...)；如果想离开，调用 back_to_portal。',
         "</system_instruction>",
         "<ithome_article_list>",
         "[11] 测试文章",

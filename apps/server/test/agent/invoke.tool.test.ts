@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 import { ZoneOutTool } from "../../src/agent/runtime/root-agent/tools/zone-out.tool.js";
@@ -13,6 +14,7 @@ describe("invoke tool", () => {
           },
         }),
         new ZoneOutTool(),
+        new OpenIthomeArticleTool(),
       ],
     });
 
@@ -21,7 +23,8 @@ describe("invoke tool", () => {
       properties: {
         tool: {
           type: "string",
-          description: '要调用的子工具名，例如 "send_message" 或 "zone_out"。',
+          description:
+            '要调用的子工具名，例如 "send_message"、"open_ithome_article" 或 "zone_out"。',
         },
         message: {
           type: "string",
@@ -30,6 +33,10 @@ describe("invoke tool", () => {
         thought: {
           type: "string",
           description: "仅 zone_out 使用。这次神游里想的内容。",
+        },
+        articleId: {
+          type: "number",
+          description: "仅 open_ithome_article 使用。要打开的文章 ID，来自当前 IT 之家文章列表。",
         },
       },
     });
@@ -130,5 +137,81 @@ describe("invoke tool", () => {
       ok: true,
       thought: "先发会呆",
     });
+  });
+
+  it("should invoke open_ithome_article in ithome state", async () => {
+    const openIthomeArticle = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: "ithome_article",
+      articleId: 123,
+    });
+    const tool = new InvokeTool({
+      tools: [
+        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new ZoneOutTool(),
+        new OpenIthomeArticleTool(),
+      ],
+    });
+
+    const result = await tool.execute(
+      {
+        tool: "open_ithome_article",
+        articleId: 123,
+      },
+      {
+        rootAgentSession: {
+          getState: () => ({ kind: "ithome" as const }),
+          getAvailableInvokeTools: () => ["open_ithome_article"],
+          openIthomeArticle,
+        },
+      } as Parameters<typeof tool.execute>[1],
+    );
+
+    expect(openIthomeArticle).toHaveBeenCalledWith({
+      articleId: 123,
+    });
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      kind: "ithome_article",
+      articleId: 123,
+    });
+  });
+
+  it("should return agent-friendly message when ithome article does not exist", async () => {
+    const tool = new InvokeTool({
+      tools: [
+        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new ZoneOutTool(),
+        new OpenIthomeArticleTool(),
+      ],
+    });
+
+    const result = await tool.execute(
+      {
+        tool: "open_ithome_article",
+        articleId: 999,
+      },
+      {
+        rootAgentSession: {
+          getState: () => ({ kind: "ithome" as const }),
+          getAvailableInvokeTools: () => ["open_ithome_article"],
+          openIthomeArticle: vi.fn().mockResolvedValue({
+            ok: false,
+            error: "ARTICLE_NOT_FOUND",
+            articleId: 999,
+          }),
+        },
+      } as Parameters<typeof tool.execute>[1],
+    );
+
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      error: "ARTICLE_NOT_FOUND",
+      articleId: 999,
+      availableTools: ["open_ithome_article"],
+    });
+    expect(JSON.parse(result.content).message).toBe("当前 IT 之家列表中找不到该文章 ID。");
   });
 });
