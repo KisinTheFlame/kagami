@@ -192,7 +192,6 @@ model StoryAgentRuntimeSnapshot {
   schemaVersion         Int      @map("schema_version")
   contextSnapshot       Json     @map("context_snapshot") @db.JsonB
   lastProcessedMessageSeq Int    @default(0) @map("last_processed_message_seq")
-  bootstrapCompletedAt  DateTime? @map("bootstrap_completed_at") @db.Timestamptz(6)
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
