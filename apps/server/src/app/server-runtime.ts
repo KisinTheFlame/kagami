@@ -6,17 +6,14 @@ import { loadStaticConfig } from "../config/config.loader.js";
 import { DefaultAgentContext } from "../agent/runtime/context/default-agent-context.js";
 import { LinearMessageLedgerAgentContext } from "../agent/runtime/context/linear-message-ledger-agent-context.js";
 import { createDbClient, type Database } from "../db/client.js";
-import { PrismaEmbeddingCacheDao } from "../llm/dao/impl/embedding-cache.impl.dao.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
-import { PrismaNapcatGroupMessageChunkDao } from "../napcat/dao/impl/napcat-group-message-chunk.impl.dao.js";
 import { PrismaNapcatGroupMessageDao } from "../napcat/dao/impl/napcat-group-message.impl.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
 import { toHttpErrorResponse } from "../common/errors/http-error.js";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { AgentDashboardHandler } from "../ops/http/agent-dashboard.handler.js";
-import { EmbeddingCacheHandler } from "../ops/http/embedding-cache.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
@@ -51,7 +48,6 @@ import {
 import { EnterTool, ENTER_TOOL_NAME } from "../agent/runtime/root-agent/tools/enter.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import { GroupMessageChunkIndexer } from "../agent/capabilities/rag/application/indexer.service.js";
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
@@ -59,7 +55,6 @@ import { DefaultAgentDashboardQueryService } from "../ops/application/agent-dash
 import { DefaultAgentDashboardCommandService } from "../ops/application/agent-dashboard-command.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
-import { DefaultEmbeddingCacheQueryService } from "../ops/application/embedding-cache-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
@@ -98,9 +93,9 @@ import { IthomeNewsService } from "../news/application/ithome-news.service.js";
 import { IthomePoller } from "../news/application/ithome-poller.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
-import { PrismaStoryRagDao } from "../agent/capabilities/story/infra/impl/prisma-story-rag.impl.dao.js";
+import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
 import { PrismaStoryAgentRuntimeSnapshotRepository } from "../agent/capabilities/story/runtime/persistence/prisma-story-agent-runtime-snapshot.repository.js";
-import { StoryRagService } from "../agent/capabilities/story/application/story-rag.service.js";
+import { StoryMemoryIndexService } from "../agent/capabilities/story/application/story-memory-index.service.js";
 import { StoryRecallService } from "../agent/capabilities/story/application/story-recall.service.js";
 import { StoryService } from "../agent/capabilities/story/application/story.service.js";
 import { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
@@ -166,22 +161,15 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     configManager,
   });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
-  const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database });
-  const napcatGroupMessageChunkDao = new PrismaNapcatGroupMessageChunkDao({
-    database,
-  });
   const newsArticleDao = new PrismaNewsArticleDao({ database });
   const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
   const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
   const storyDao = new PrismaStoryDao({ database });
-  const storyRagDao = new PrismaStoryRagDao({ database });
+  const storyMemoryDocumentDao = new PrismaStoryMemoryDocumentDao({ database });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
-  });
-  const embeddingCacheQueryService = new DefaultEmbeddingCacheQueryService({
-    embeddingCacheDao,
   });
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
@@ -250,32 +238,26 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const embeddingClient = createEmbeddingClient({
-    config: config.server.rag.embedding,
-    embeddingCacheDao,
+    config: config.server.agent.story.memory.embedding,
   });
-  const storyRagService = new StoryRagService({
-    storyRagDao,
+  const storyMemoryIndexService = new StoryMemoryIndexService({
+    storyMemoryDocumentDao,
     embeddingClient,
-    outputDimensionality: config.server.rag.embedding.outputDimensionality,
+    outputDimensionality: config.server.agent.story.memory.embedding.outputDimensionality,
   });
   const storyService = new StoryService({
     storyDao,
-    storyRagService,
+    storyMemoryIndexService,
   });
   const storyRecallService = new StoryRecallService({
-    storyRagDao,
+    storyMemoryDocumentDao,
     storyDao,
     embeddingClient,
-    outputDimensionality: config.server.rag.embedding.outputDimensionality,
+    outputDimensionality: config.server.agent.story.memory.embedding.outputDimensionality,
   });
   const storyQueryService = new DefaultStoryQueryService({
     storyDao,
     storyRecallService,
-  });
-  const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
-    chunkDao: napcatGroupMessageChunkDao,
-    embeddingClient,
-    outputDimensionality: config.server.rag.embedding.outputDimensionality,
   });
   const visionAgent = new VisionAgent({
     llmClient,
@@ -310,8 +292,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
     napcatGroupMessageDao,
-    napcatGroupMessageChunkDao,
-    groupMessageChunkIndexer,
   });
   const eventQueue = new InMemoryAgentEventQueue();
   const ithomeNewsService = new IthomeNewsService({
@@ -379,7 +359,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     }),
     new SearchMemoryTool({
       storyRecallService,
-      topK: config.server.rag.retrieval.topK,
+      topK: config.server.agent.story.memory.retrieval.topK,
     }),
     new SummaryTool(),
   ]);
@@ -401,14 +381,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     linearMessageLedgerDao,
     snapshotRepository: storyAgentRuntimeSnapshotRepository,
     storyService,
-    storyRecallService,
     contextSummaryOperation,
     summaryTools: summaryToolExecutor.definitions(),
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     batchSize: config.server.agent.story.batchSize,
     idleFlushMs: config.server.agent.story.idleFlushMs,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    candidateTopK: Math.max(5, config.server.rag.retrieval.topK),
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentRuntime = new RootLoopAgent({
@@ -470,7 +448,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         agentDashboardCommandService,
       }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
-      new EmbeddingCacheHandler({ embeddingCacheQueryService }),
       new AppLogHandler({ appLogQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatGroupMessageHandler({ napcatGroupMessageQueryService }),

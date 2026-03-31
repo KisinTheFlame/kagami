@@ -18,11 +18,6 @@ const LlmPlaygroundPage = lazy(() =>
 const LlmHistoryPage = lazy(() =>
   import("@/pages/llm-history/LlmHistoryPage").then(module => ({ default: module.LlmHistoryPage })),
 );
-const EmbeddingCacheHistoryPage = lazy(() =>
-  import("@/pages/embedding-cache-history/EmbeddingCacheHistoryPage").then(module => ({
-    default: module.EmbeddingCacheHistoryPage,
-  })),
-);
 const AppLogHistoryPage = lazy(() =>
   import("@/pages/app-log-history/AppLogHistoryPage").then(module => ({
     default: module.AppLogHistoryPage,
@@ -55,7 +50,6 @@ function App() {
           <Route path="/agent-dashboard" element={<AgentDashboardPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
-          <Route path="/embedding-cache-history" element={<EmbeddingCacheHistoryPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />

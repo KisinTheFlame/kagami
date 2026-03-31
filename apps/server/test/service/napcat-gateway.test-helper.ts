@@ -3,7 +3,6 @@ import { type AgentEventQueue } from "../../src/agent/runtime/event/event.queue.
 import type { ConfigManager } from "../../src/config/config.manager.js";
 import type { Config } from "../../src/config/config.loader.js";
 import type { NapcatEventDao } from "../../src/napcat/dao/napcat-event.dao.js";
-import type { NapcatGroupMessageChunkDao } from "../../src/napcat/dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../../src/napcat/dao/napcat-group-message.dao.js";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
@@ -89,18 +88,6 @@ export function createNapcatGroupMessageDao(): NapcatGroupMessageDao & {
   };
 }
 
-export function createNapcatGroupMessageChunkDao(): NapcatGroupMessageChunkDao & {
-  insert: ReturnType<typeof vi.fn>;
-} {
-  return {
-    insert: vi.fn().mockResolvedValue(101),
-    findById: vi.fn().mockResolvedValue(null),
-    markIndexed: vi.fn().mockResolvedValue(undefined),
-    markFailed: vi.fn().mockResolvedValue(undefined),
-    searchSimilar: vi.fn().mockResolvedValue([]),
-  };
-}
-
 export function createConfigManager(): ConfigManager {
   const config: Config = {
     server: {
@@ -113,6 +100,18 @@ export function createConfigManager(): ConfigManager {
         story: {
           batchSize: 24,
           idleFlushMs: 120_000,
+          memory: {
+            embedding: {
+              provider: "google",
+              apiKey: "gemini-key",
+              baseUrl: "https://generativelanguage.googleapis.com",
+              model: "gemini-embedding-001",
+              outputDimensionality: 768,
+            },
+            retrieval: {
+              topK: 3,
+            },
+          },
         },
       },
       news: {
@@ -184,18 +183,6 @@ export function createConfigManager(): ConfigManager {
           webSearchAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
-        },
-      },
-      rag: {
-        embedding: {
-          provider: "google",
-          apiKey: "gemini-key",
-          baseUrl: "https://generativelanguage.googleapis.com",
-          model: "gemini-embedding-001",
-          outputDimensionality: 768,
-        },
-        retrieval: {
-          topK: 3,
         },
       },
       tavily: {

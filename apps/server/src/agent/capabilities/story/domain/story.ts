@@ -17,8 +17,8 @@ export const StorySchema = z.object({
 
 export type Story = z.infer<typeof StorySchema>;
 
-export const STORY_RAG_KINDS = ["overview", "people_scene", "process"] as const;
-export type StoryRagKind = (typeof STORY_RAG_KINDS)[number];
+export const STORY_MEMORY_DOCUMENT_KINDS = ["overview", "people_scene", "process"] as const;
+export type StoryMemoryDocumentKind = (typeof STORY_MEMORY_DOCUMENT_KINDS)[number];
 
 export type StoryRecord = {
   id: string;
@@ -29,10 +29,10 @@ export type StoryRecord = {
   updatedAt: Date;
 };
 
-export type StoryRagRecord = {
+export type StoryMemoryDocumentRecord = {
   id: number;
   storyId: string;
-  kind: StoryRagKind;
+  kind: StoryMemoryDocumentKind;
   content: string;
   embeddingModel: string | null;
   embeddingDim: number | null;
@@ -40,10 +40,10 @@ export type StoryRagRecord = {
   updatedAt: Date;
 };
 
-export type StoryRagHit = {
+export type StoryMemoryDocumentHit = {
   documentId: number;
   storyId: string;
-  kind: StoryRagKind;
+  kind: StoryMemoryDocumentKind;
   content: string;
   score: number;
 };

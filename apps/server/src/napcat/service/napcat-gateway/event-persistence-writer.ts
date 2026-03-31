@@ -1,5 +1,4 @@
 import type { NapcatEventDao } from "../../dao/napcat-event.dao.js";
-import type { NapcatGroupMessageChunkDao } from "../../dao/napcat-group-message-chunk.dao.js";
 import type { NapcatGroupMessageDao } from "../../dao/napcat-group-message.dao.js";
 import { AppLogger } from "../../../logger/logger.js";
 import type { NapcatPersistableGroupMessageEvent } from "../napcat-gateway.service.js";
@@ -16,10 +15,6 @@ export interface NapcatGatewayPersistenceWriter {
 type NapcatEventPersistenceWriterOptions = {
   napcatEventDao?: NapcatEventDao;
   napcatGroupMessageDao?: NapcatGroupMessageDao;
-  napcatGroupMessageChunkDao?: NapcatGroupMessageChunkDao;
-  groupMessageChunkIndexer?: {
-    enqueue(chunkId: number): void;
-  };
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
@@ -27,19 +22,13 @@ const logger = new AppLogger({ source: "service.napcat-gateway" });
 export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWriter {
   private readonly napcatEventDao: NapcatEventDao | null;
   private readonly napcatGroupMessageDao: NapcatGroupMessageDao | null;
-  private readonly napcatGroupMessageChunkDao: NapcatGroupMessageChunkDao | null;
-  private readonly groupMessageChunkIndexer: { enqueue(chunkId: number): void } | null;
 
   public constructor({
     napcatEventDao,
     napcatGroupMessageDao,
-    napcatGroupMessageChunkDao,
-    groupMessageChunkIndexer,
   }: NapcatEventPersistenceWriterOptions) {
     this.napcatEventDao = napcatEventDao ?? null;
     this.napcatGroupMessageDao = napcatGroupMessageDao ?? null;
-    this.napcatGroupMessageChunkDao = napcatGroupMessageChunkDao ?? null;
-    this.groupMessageChunkIndexer = groupMessageChunkIndexer ?? null;
   }
 
   public persistEvent(event: NapcatGatewayNormalizedPostTypeEvent): void {
@@ -89,27 +78,6 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
         eventTime,
         payload: event.payload,
       })
-      .then(async sourceMessageId => {
-        if (!this.napcatGroupMessageChunkDao) {
-          return;
-        }
-
-        const chunkId = await this.napcatGroupMessageChunkDao.insert({
-          sourceMessageId,
-          groupId: event.groupId,
-          chunkIndex: 0,
-          content: formatGroupMessagePlainText({
-            nickname: event.nickname,
-            userId: event.userId,
-            rawMessage: event.rawMessage,
-          }),
-          status: "pending",
-          embeddingModel: null,
-          embeddingDim: null,
-          errorMessage: null,
-        });
-        this.groupMessageChunkIndexer?.enqueue(chunkId);
-      })
       .catch(error => {
         logger.errorWithCause("Failed to persist NapCat group message", error, {
           event: "napcat.gateway.group_message_persist_failed",
@@ -119,12 +87,4 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
         });
       });
   }
-}
-
-function formatGroupMessagePlainText(input: {
-  nickname: string;
-  userId: string;
-  rawMessage: string;
-}): string {
-  return [`${input.nickname} (${input.userId}):`, input.rawMessage].join("\n");
 }

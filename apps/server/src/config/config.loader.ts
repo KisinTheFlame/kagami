@@ -39,7 +39,7 @@ const DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
-const DEFAULT_RAG_TOP_K = 3;
+const DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K = 3;
 
 const UrlSchema = z.string().url();
 const NonEmptyStringSchema = z.string().trim().min(1);
@@ -84,7 +84,7 @@ const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-
   LlmProviderId,
   ...LlmProviderId[],
 ]);
-const RagEmbeddingProviderSchema = z.literal("google");
+const StoryMemoryEmbeddingProviderSchema = z.literal("google");
 const LlmUsageAttemptConfigSchema = z.object({
   provider: LlmProviderSchema,
   model: NonEmptyStringSchema,
@@ -144,56 +144,68 @@ const ConfigSchema = z.object({
   server: z.object({
     databaseUrl: UrlSchema,
     port: PositiveIntSchema.default(DEFAULT_PORT),
-    agent: z
-      .preprocess(
-        value => {
-          if (!value || typeof value !== "object" || Array.isArray(value)) {
-            return value;
-          }
+    agent: z.preprocess(
+      value => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          return value;
+        }
 
-          const record = value as Record<string, unknown>;
-          if (!("contextCompactionThreshold" in record)) {
-            return value;
-          }
+        const record = value as Record<string, unknown>;
+        if (!("contextCompactionThreshold" in record)) {
+          return value;
+        }
 
-          return {
-            ...record,
-            __legacyContextCompactionThreshold__: record.contextCompactionThreshold,
-          };
-        },
-        z
-          .object({
-            contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
-              DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
-            ),
-            llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
-            waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
-            story: z
-              .object({
-                batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
-                idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
-              })
-              .default({}),
-            __legacyContextCompactionThreshold__: z.unknown().optional(),
-          })
-          .superRefine((value, ctx) => {
-            if (value.__legacyContextCompactionThreshold__ !== undefined) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["contextCompactionThreshold"],
-                message:
-                  "contextCompactionThreshold 已废弃，请改用 contextCompactionTotalTokenThreshold",
-              });
-            }
-          })
-          .transform(value => ({
-            contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
-            llmRetryBackoffMs: value.llmRetryBackoffMs,
-            waitToolMaxWaitMs: value.waitToolMaxWaitMs,
-            story: value.story,
-          })),
-      )
-      .default({}),
+        return {
+          ...record,
+          __legacyContextCompactionThreshold__: record.contextCompactionThreshold,
+        };
+      },
+      z
+        .object({
+          contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
+            DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
+          ),
+          llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
+          waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+          story: z.object({
+            batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
+            idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
+            memory: z.object({
+              embedding: z.object({
+                provider: StoryMemoryEmbeddingProviderSchema.default("google"),
+                apiKey: NonEmptyStringSchema,
+                baseUrl: UrlSchema.default(DEFAULT_GEMINI_EMBEDDING_BASE_URL),
+                model: NonEmptyStringSchema.default(DEFAULT_GEMINI_EMBEDDING_MODEL),
+                outputDimensionality: PositiveIntSchema.default(
+                  DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY,
+                ),
+              }),
+              retrieval: z
+                .object({
+                  topK: PositiveIntSchema.default(DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K),
+                })
+                .default({}),
+            }),
+          }),
+          __legacyContextCompactionThreshold__: z.unknown().optional(),
+        })
+        .superRefine((value, ctx) => {
+          if (value.__legacyContextCompactionThreshold__ !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["contextCompactionThreshold"],
+              message:
+                "contextCompactionThreshold 已废弃，请改用 contextCompactionTotalTokenThreshold",
+            });
+          }
+        })
+        .transform(value => ({
+          contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
+          llmRetryBackoffMs: value.llmRetryBackoffMs,
+          waitToolMaxWaitMs: value.waitToolMaxWaitMs,
+          story: value.story,
+        })),
+    ),
     news: z
       .object({
         ithome: z
@@ -271,22 +283,6 @@ const ConfigSchema = z.object({
           webSearchAgent: LlmUsageConfigSchema,
         })
         .strict(),
-    }),
-    rag: z.object({
-      embedding: z.object({
-        provider: RagEmbeddingProviderSchema.default("google"),
-        apiKey: NonEmptyStringSchema,
-        baseUrl: UrlSchema.default(DEFAULT_GEMINI_EMBEDDING_BASE_URL),
-        model: NonEmptyStringSchema.default(DEFAULT_GEMINI_EMBEDDING_MODEL),
-        outputDimensionality: PositiveIntSchema.default(
-          DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY,
-        ),
-      }),
-      retrieval: z
-        .object({
-          topK: PositiveIntSchema.default(DEFAULT_RAG_TOP_K),
-        })
-        .default({}),
     }),
     tavily: z.object({
       apiKey: NonEmptyStringSchema,

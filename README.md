@@ -67,7 +67,7 @@ pnpm --filter @kagami/shared <script>
 - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
 - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
 - `server.llm.usages.agent`、`contextSummarizer`、`vision`、`webSearchAgent`
-- `server.rag.embedding`、`server.rag.retrieval`
+- `server.agent.story.memory.embedding`、`server.agent.story.memory.retrieval`
 - `server.tavily.apiKey`
 - `server.bot.qq`、`server.bot.creator`
 
@@ -114,12 +114,12 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `llm/`：provider、chat client、embedding、playground、相关 DAO
 - `napcat/`：NapCat gateway、消息发送、事件/群消息持久化与 HTTP 接口
 - `agent/`：Kagami 项目语义的 agent runtime 与 capabilities
-- `ops/`：App Log、LLM Chat Call、Embedding Cache、NapCat 历史等查询接口
+- `ops/`：App Log、LLM Chat Call、Story、NapCat 历史等查询接口
 
 `apps/server/src/agent` 当前按 `runtime/` 与 `capabilities/` 组织：
 
 - `runtime/`：Kagami 定制运行时，如 root-agent、session、context、event queue
-- `capabilities/`：按能力聚合的实现，如 `messaging`、`context-summary`、`rag`、`vision`、`web-search`
+- `capabilities/`：按能力聚合的实现，如 `messaging`、`context-summary`、`story`、`vision`、`web-search`
 
 当前主要接口分组包括：
 
@@ -136,9 +136,9 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `/napcat/group/send`
 - `/app-log/query`
 - `/llm-chat-call/query`
-- `/embedding-cache/query`
 - `/napcat-event/query`
 - `/napcat-group-message/query`
+- `/story/query`
 
 ### 前端
 
@@ -147,10 +147,10 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `/auth/:provider`
 - `/llm-playground`
 - `/llm-history`
-- `/embedding-cache-history`
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`
+- `/story-history`
 
 补充说明：
 

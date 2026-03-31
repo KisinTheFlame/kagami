@@ -25,6 +25,10 @@ ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
     contextCompactionTotalTokenThreshold: 150000
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   llm:
     timeoutMs: 15000
     codexAuth:
@@ -65,9 +69,6 @@ ${indent(napcatBlock, 4)}
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -310,6 +311,11 @@ listenGroupIds:
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
+  agent:
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -355,9 +361,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -485,6 +488,10 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
   agent:
     contextCompactionTotalTokenThreshold: 80000
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -530,9 +537,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -555,6 +559,10 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
   agent:
     contextCompactionThreshold: 80
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -600,9 +608,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -628,6 +633,10 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
   agent:
     llmRetryBackoffMs: 45000
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -673,9 +682,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:
@@ -697,6 +703,10 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
   agent:
     waitToolMaxWaitMs: 120000
+    story:
+      memory:
+        embedding:
+          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -742,9 +752,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      apiKey: gemini-key
   tavily:
     apiKey: tavily-key
   bot:

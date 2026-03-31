@@ -32,22 +32,6 @@ model LlmChatCall {
   @@map("llm_chat_call")
 }
 
-model EmbeddingCache {
-  id                  Int      @id @default(autoincrement())
-  provider            String
-  model               String
-  taskType            String   @map("task_type")
-  outputDimensionality Int     @map("output_dimensionality")
-  text                String
-  textHash            String   @map("text_hash")
-  embedding           Float[]
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@unique([provider, model, taskType, outputDimensionality, textHash], map: "embedding_cache_provider_model_task_output_text_hash_uq")
-  @@index([createdAt], map: "embedding_cache_created_at_idx")
-  @@map("embedding_cache")
-}
-
 model AppLog {
   id        Int      @id @default(autoincrement())
   traceId   String   @map("trace_id")
@@ -91,35 +75,12 @@ model NapcatGroupMessage {
   eventTime  DateTime? @map("event_time") @db.Timestamptz(6)
   payload    Json      @db.JsonB
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  chunks     NapcatGroupMessageChunk[]
 
   @@index([createdAt], map: "napcat_group_message_created_at_idx")
   @@index([groupId, createdAt], map: "napcat_group_message_group_id_created_at_idx")
   @@index([nickname, createdAt], map: "napcat_group_message_nickname_created_at_idx")
   @@index([userId, createdAt], map: "napcat_group_message_user_id_created_at_idx")
   @@map("napcat_group_message")
-}
-
-model NapcatGroupMessageChunk {
-  id              Int                @id @default(autoincrement())
-  sourceMessageId Int                @map("source_message_id")
-  groupId         String             @map("group_id")
-  chunkIndex      Int                @default(0) @map("chunk_index")
-  content         String
-  status          String
-  embeddingModel  String?            @map("embedding_model")
-  embeddingDim    Int?               @map("embedding_dim")
-  embedding       Unsupported("vector(768)")?
-  errorMessage    String?            @map("error_message")
-  indexedAt       DateTime?          @map("indexed_at") @db.Timestamptz(6)
-  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
-  sourceMessage   NapcatGroupMessage @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceMessageId, chunkIndex], map: "napcat_group_message_chunk_source_chunk_idx_uq")
-  @@index([groupId, status, createdAt], map: "napcat_group_message_chunk_group_status_created_at_idx")
-  @@index([sourceMessageId], map: "napcat_group_message_chunk_source_message_id_idx")
-  @@map("napcat_group_message_chunk")
 }
 
 model OauthSession {
@@ -201,14 +162,14 @@ model Story {
   sourceMessageSeqEnd   Int        @map("source_message_seq_end")
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  rags                  StoryRag[]
+  memoryDocuments       StoryMemoryDocument[]
 
   @@index([updatedAt], map: "story_updated_at_idx")
   @@index([sourceMessageSeqEnd], map: "story_source_message_seq_end_idx")
   @@map("story")
 }
 
-model StoryRag {
+model StoryMemoryDocument {
   id             Int      @id @default(autoincrement())
   storyId        String   @map("story_id")
   kind           String
@@ -220,9 +181,9 @@ model StoryRag {
   updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
-  @@unique([storyId, kind], map: "story_rag_story_id_kind_uq")
-  @@index([storyId], map: "story_rag_story_id_idx")
-  @@map("story_rag")
+  @@unique([storyId, kind], map: "story_memory_document_story_id_kind_uq")
+  @@index([storyId], map: "story_memory_document_story_id_idx")
+  @@map("story_memory_document")
 }
 
 model StoryAgentRuntimeSnapshot {

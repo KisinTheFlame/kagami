@@ -1,29 +1,29 @@
 import type { EmbeddingClient } from "../../../../llm/embedding/client.js";
-import type { Story, StoryRagKind, StoryRecord } from "../domain/story.js";
-import { STORY_RAG_KINDS, normalizeEmbedding } from "../domain/story.js";
-import type { StoryRagDao } from "../infra/story-rag.dao.js";
+import type { Story, StoryMemoryDocumentKind, StoryRecord } from "../domain/story.js";
+import { STORY_MEMORY_DOCUMENT_KINDS, normalizeEmbedding } from "../domain/story.js";
+import type { StoryMemoryDocumentDao } from "../infra/story-memory-document.dao.js";
 
-export class StoryRagService {
-  private readonly storyRagDao: StoryRagDao;
+export class StoryMemoryIndexService {
+  private readonly storyMemoryDocumentDao: StoryMemoryDocumentDao;
   private readonly embeddingClient: EmbeddingClient;
   private readonly outputDimensionality: number;
 
   public constructor({
-    storyRagDao,
+    storyMemoryDocumentDao,
     embeddingClient,
     outputDimensionality,
   }: {
-    storyRagDao: StoryRagDao;
+    storyMemoryDocumentDao: StoryMemoryDocumentDao;
     embeddingClient: EmbeddingClient;
     outputDimensionality: number;
   }) {
-    this.storyRagDao = storyRagDao;
+    this.storyMemoryDocumentDao = storyMemoryDocumentDao;
     this.embeddingClient = embeddingClient;
     this.outputDimensionality = outputDimensionality;
   }
 
   public async reindexStory(story: StoryRecord): Promise<void> {
-    const documents = buildStoryRags(story.payload);
+    const documents = buildStoryMemoryDocuments(story.payload);
     const embeddedDocuments = await Promise.all(
       documents.map(async document => {
         const response = await this.embeddingClient.embed({
@@ -42,18 +42,18 @@ export class StoryRagService {
       }),
     );
 
-    await this.storyRagDao.replaceForStory({
+    await this.storyMemoryDocumentDao.replaceForStory({
       storyId: story.id,
       documents: embeddedDocuments,
     });
   }
 }
 
-export function buildStoryRags(story: Story): Array<{
-  kind: StoryRagKind;
+export function buildStoryMemoryDocuments(story: Story): Array<{
+  kind: StoryMemoryDocumentKind;
   content: string;
 }> {
-  const documents: Array<{ kind: StoryRagKind; content: string }> = [
+  const documents: Array<{ kind: StoryMemoryDocumentKind; content: string }> = [
     {
       kind: "overview",
       content: [
@@ -90,6 +90,7 @@ export function buildStoryRags(story: Story): Array<{
   ];
 
   return documents.filter(
-    document => STORY_RAG_KINDS.includes(document.kind) && document.content.trim().length > 0,
+    document =>
+      STORY_MEMORY_DOCUMENT_KINDS.includes(document.kind) && document.content.trim().length > 0,
   );
 }

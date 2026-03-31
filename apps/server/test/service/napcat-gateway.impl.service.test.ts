@@ -7,7 +7,6 @@ import {
   createConfigManager,
   createNapcatEventDao,
   createNapcatGroupMessageDao,
-  createNapcatGroupMessageChunkDao,
   initTestLogger,
   waitOneTick,
 } from "./napcat-gateway.test-helper.js";
@@ -173,7 +172,6 @@ describe("DefaultNapcatGatewayService", () => {
     const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const persistenceWriter = new NapcatEventPersistenceWriter({
       napcatGroupMessageDao,
-      napcatGroupMessageChunkDao: createNapcatGroupMessageChunkDao(),
     });
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),

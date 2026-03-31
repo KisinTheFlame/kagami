@@ -1,7 +1,7 @@
 import type { EmbeddingClient } from "../../../../llm/embedding/client.js";
 import type { StoryRecord } from "../domain/story.js";
 import { normalizeEmbedding } from "../domain/story.js";
-import type { StoryRagDao } from "../infra/story-rag.dao.js";
+import type { StoryMemoryDocumentDao } from "../infra/story-memory-document.dao.js";
 import type { StoryDao } from "../infra/story.dao.js";
 
 export type StoryRecallResult = {
@@ -11,23 +11,23 @@ export type StoryRecallResult = {
 };
 
 export class StoryRecallService {
-  private readonly storyRagDao: StoryRagDao;
+  private readonly storyMemoryDocumentDao: StoryMemoryDocumentDao;
   private readonly storyDao: StoryDao;
   private readonly embeddingClient: EmbeddingClient;
   private readonly outputDimensionality: number;
 
   public constructor({
-    storyRagDao,
+    storyMemoryDocumentDao,
     storyDao,
     embeddingClient,
     outputDimensionality,
   }: {
-    storyRagDao: StoryRagDao;
+    storyMemoryDocumentDao: StoryMemoryDocumentDao;
     storyDao: StoryDao;
     embeddingClient: EmbeddingClient;
     outputDimensionality: number;
   }) {
-    this.storyRagDao = storyRagDao;
+    this.storyMemoryDocumentDao = storyMemoryDocumentDao;
     this.storyDao = storyDao;
     this.embeddingClient = embeddingClient;
     this.outputDimensionality = outputDimensionality;
@@ -39,7 +39,7 @@ export class StoryRecallService {
       taskType: "RETRIEVAL_QUERY",
       outputDimensionality: this.outputDimensionality,
     });
-    const hits = await this.storyRagDao.searchSimilar({
+    const hits = await this.storyMemoryDocumentDao.searchSimilar({
       queryEmbedding: normalizeEmbedding(response.embedding),
       topK: Math.max(input.topK, 1) * 3,
     });

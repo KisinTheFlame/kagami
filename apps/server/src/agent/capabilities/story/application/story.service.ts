@@ -1,20 +1,20 @@
 import type { Story, StoryRecord } from "../domain/story.js";
 import type { StoryDao } from "../infra/story.dao.js";
-import { StoryRagService } from "./story-rag.service.js";
+import { StoryMemoryIndexService } from "./story-memory-index.service.js";
 
 export class StoryService {
   private readonly storyDao: StoryDao;
-  private readonly storyRagService: StoryRagService;
+  private readonly storyMemoryIndexService: StoryMemoryIndexService;
 
   public constructor({
     storyDao,
-    storyRagService,
+    storyMemoryIndexService,
   }: {
     storyDao: StoryDao;
-    storyRagService: StoryRagService;
+    storyMemoryIndexService: StoryMemoryIndexService;
   }) {
     this.storyDao = storyDao;
-    this.storyRagService = storyRagService;
+    this.storyMemoryIndexService = storyMemoryIndexService;
   }
 
   public async create(input: {
@@ -23,7 +23,7 @@ export class StoryService {
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord> {
     const story = await this.storyDao.create(input);
-    await this.storyRagService.reindexStory(story);
+    await this.storyMemoryIndexService.reindexStory(story);
     return story;
   }
 
@@ -44,7 +44,7 @@ export class StoryService {
       sourceMessageSeqStart: Math.min(existing.sourceMessageSeqStart, input.sourceMessageSeqStart),
       sourceMessageSeqEnd: Math.max(existing.sourceMessageSeqEnd, input.sourceMessageSeqEnd),
     });
-    await this.storyRagService.reindexStory(story);
+    await this.storyMemoryIndexService.reindexStory(story);
     return story;
   }
 }

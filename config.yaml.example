@@ -8,6 +8,15 @@ server:
     story:
       batchSize: 24
       idleFlushMs: 120000
+      memory:
+        embedding:
+          provider: google
+          apiKey: your-gemini-api-key
+          baseUrl: https://generativelanguage.googleapis.com
+          model: gemini-embedding-001
+          outputDimensionality: 768
+        retrieval:
+          topK: 3
   news:
     ithome:
       pollIntervalMs: 300000
@@ -80,15 +89,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  rag:
-    embedding:
-      provider: google
-      apiKey: your-gemini-api-key
-      baseUrl: https://generativelanguage.googleapis.com
-      model: gemini-embedding-001
-      outputDimensionality: 768
-    retrieval:
-      topK: 3
   tavily:
     apiKey: ""
   bot:

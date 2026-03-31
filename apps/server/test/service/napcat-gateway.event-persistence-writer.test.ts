@@ -1,9 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { NapcatEventPersistenceWriter } from "../../src/napcat/service/napcat-gateway/event-persistence-writer.js";
-import { type GroupMessageChunkIndexer } from "../../src/agent/capabilities/rag/application/indexer.service.js";
 import {
   createNapcatEventDao,
-  createNapcatGroupMessageChunkDao,
   createNapcatGroupMessageDao,
   initTestLogger,
   waitOneTick,
@@ -83,16 +81,10 @@ describe("NapcatEventPersistenceWriter", () => {
     expect(napcatEventDao.insert).not.toHaveBeenCalled();
   });
 
-  it("should persist group message and enqueue chunk indexing", async () => {
+  it("should persist group message without indexing extra embedding data", async () => {
     const napcatGroupMessageDao = createNapcatGroupMessageDao();
-    const napcatGroupMessageChunkDao = createNapcatGroupMessageChunkDao();
-    const groupMessageChunkIndexer = {
-      enqueue: vi.fn(),
-    } as unknown as GroupMessageChunkIndexer;
     const writer = new NapcatEventPersistenceWriter({
       napcatGroupMessageDao,
-      napcatGroupMessageChunkDao,
-      groupMessageChunkIndexer,
     });
 
     writer.persistGroupMessage(
@@ -140,14 +132,6 @@ describe("NapcatEventPersistenceWriter", () => {
         ],
       }),
     );
-    expect(napcatGroupMessageChunkDao.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        groupId: "987654",
-        status: "pending",
-        content: "测试群名片 (123456):\nhello group",
-      }),
-    );
-    expect(groupMessageChunkIndexer.enqueue).toHaveBeenCalledWith(101);
   });
 
   it("should log persistence failures without throwing", async () => {

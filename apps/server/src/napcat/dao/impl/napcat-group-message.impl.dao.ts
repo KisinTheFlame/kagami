@@ -126,7 +126,6 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
           gm."user_id" AS "userId",
           gm."nickname" AS "nickname",
           COALESCE(
-            NULLIF(regexp_replace(chunk."content", '^[^\n]*\n', ''), ''),
             gm."payload"->>'raw_message',
             gm."message"::text
           ) AS "messageText",
@@ -137,9 +136,6 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
             ORDER BY COALESCE(gm."event_time", gm."created_at") ASC, gm."id" ASC
           ) AS "rowNumber"
         FROM "napcat_group_message" AS gm
-        LEFT JOIN "napcat_group_message_chunk" AS chunk
-          ON chunk."source_message_id" = gm."id"
-          AND chunk."chunk_index" = 0
         WHERE gm."group_id" = ${input.groupId}
       ),
       center_message AS (
