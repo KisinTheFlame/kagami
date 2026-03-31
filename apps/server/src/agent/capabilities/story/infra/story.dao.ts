@@ -14,4 +14,10 @@ export interface StoryDao {
   }): Promise<StoryRecord>;
   findById(id: string): Promise<StoryRecord | null>;
   findManyByIds(ids: string[]): Promise<StoryRecord[]>;
+  countAll(): Promise<number>;
+  listPage(input: {
+    page: number;
+    pageSize: number;
+    orderBy: "createdAtAsc" | "createdAtDesc";
+  }): Promise<StoryRecord[]>;
 }

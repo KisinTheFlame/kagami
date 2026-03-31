@@ -4,11 +4,13 @@ type UseMobileDetailStateParams = {
   isMobile: boolean;
 };
 
-export function useMobileDetailState({ isMobile }: UseMobileDetailStateParams) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+export function useMobileDetailState<TId extends string | number>({
+  isMobile,
+}: UseMobileDetailStateParams) {
+  const [selectedId, setSelectedId] = useState<TId | null>(null);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
 
-  function handleSelectItem(id: number) {
+  function handleSelectItem(id: TId) {
     setSelectedId(id);
     if (isMobile) {
       setIsMobileDetailOpen(true);

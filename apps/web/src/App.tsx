@@ -38,6 +38,11 @@ const NapcatGroupMessageHistoryPage = lazy(() =>
     default: module.NapcatGroupMessageHistoryPage,
   })),
 );
+const StoryHistoryPage = lazy(() =>
+  import("@/pages/story-history/StoryHistoryPage").then(module => ({
+    default: module.StoryHistoryPage,
+  })),
+);
 
 function App() {
   return (
@@ -54,6 +59,7 @@ function App() {
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
+          <Route path="/story-history" element={<StoryHistoryPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

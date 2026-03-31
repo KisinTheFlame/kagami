@@ -73,6 +73,26 @@ export class PrismaStoryDao implements StoryDao {
     const rowsById = new Map(rows.map(row => [row.id, mapStoryRow(row)]));
     return ids.map(id => rowsById.get(id)).filter((row): row is StoryRecord => Boolean(row));
   }
+
+  public async countAll(): Promise<number> {
+    return await this.database.story.count();
+  }
+
+  public async listPage(input: {
+    page: number;
+    pageSize: number;
+    orderBy: "createdAtAsc" | "createdAtDesc";
+  }): Promise<StoryRecord[]> {
+    const rows = await this.database.story.findMany({
+      orderBy: {
+        createdAt: input.orderBy === "createdAtAsc" ? "asc" : "desc",
+      },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    });
+
+    return rows.map(mapStoryRow);
+  }
 }
 
 function mapStoryRow(row: {

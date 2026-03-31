@@ -4,6 +4,7 @@ import {
   type ThHTMLAttributes,
   forwardRef,
 } from "react";
+import { ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(
@@ -57,6 +58,45 @@ const TableHead = forwardRef<HTMLTableCellElement, ThHTMLAttributes<HTMLTableCel
 );
 TableHead.displayName = "TableHead";
 
+export type TableSortDirection = "asc" | "desc";
+
+type SortableTableHeadProps = ThHTMLAttributes<HTMLTableCellElement> & {
+  label: string;
+  active?: boolean;
+  direction?: TableSortDirection;
+  onToggle: () => void;
+};
+
+function SortableTableHead({
+  label,
+  active = false,
+  direction = "desc",
+  className,
+  onToggle,
+  ...props
+}: SortableTableHeadProps) {
+  return (
+    <TableHead className={className} {...props}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex items-center gap-1 text-left text-inherit transition-colors hover:text-foreground"
+      >
+        <span>{label}</span>
+        {active ? (
+          direction === "asc" ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )
+        ) : (
+          <ArrowUpDown className="h-4 w-4 opacity-50" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
 const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
     <td
@@ -68,4 +108,4 @@ const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLTableCel
 );
 TableCell.displayName = "TableCell";
 
-export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell };
+export { Table, TableHeader, TableBody, TableRow, TableHead, SortableTableHead, TableCell };

@@ -68,6 +68,7 @@ import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.im
 import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatGroupMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
+import { DefaultStoryQueryService } from "../ops/application/story-query.impl.service.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import {
   SearchWebRawTool,
@@ -107,6 +108,7 @@ import {
   SearchMemoryTool,
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
+import { StoryHandler } from "../ops/http/story.handler.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -265,6 +267,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyDao,
     embeddingClient,
     outputDimensionality: config.server.rag.embedding.outputDimensionality,
+  });
+  const storyQueryService = new DefaultStoryQueryService({
+    storyDao,
+    storyRecallService,
   });
   const groupMessageChunkIndexer = new GroupMessageChunkIndexer({
     chunkDao: napcatGroupMessageChunkDao,
@@ -467,6 +473,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new AppLogHandler({ appLogQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatGroupMessageHandler({ napcatGroupMessageQueryService }),
+      new StoryHandler({ storyQueryService }),
       new NapcatHandler({ napcatGatewayService }),
     ],
   });

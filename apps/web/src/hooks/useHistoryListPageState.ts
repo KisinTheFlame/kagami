@@ -12,22 +12,26 @@ type UseHistoryListPageStateParams<TFilters, TFormState> = {
   onSameParamsSubmit?: () => void;
 };
 
-type UseHistoryListPageStateResult<TFilters, TFormState> = {
+type UseHistoryListPageStateResult<TFilters, TFormState, TId extends string | number> = {
   isMobile: boolean;
   page: number;
   filters: TFilters;
   formState: TFormState;
   setFormState: Dispatch<SetStateAction<TFormState>>;
-  selectedId: number | null;
+  selectedId: TId | null;
   showMobileDetail: boolean;
-  handleSelectItem: (id: number) => void;
+  handleSelectItem: (id: TId) => void;
   handleBackToList: () => void;
   submitFilters: () => void;
   resetFilters: () => void;
   goToPage: (next: number) => void;
 };
 
-export function useHistoryListPageState<TFilters, TFormState>({
+export function useHistoryListPageState<
+  TFilters,
+  TFormState,
+  TId extends string | number = number,
+>({
   parseFilters,
   toFormState,
   buildSearchParams,
@@ -35,12 +39,13 @@ export function useHistoryListPageState<TFilters, TFormState>({
   onSameParamsSubmit,
 }: UseHistoryListPageStateParams<TFilters, TFormState>): UseHistoryListPageStateResult<
   TFilters,
-  TFormState
+  TFormState,
+  TId
 > {
   const [params, setParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { selectedId, showMobileDetail, handleSelectItem, handleBackToList, resetDetailState } =
-    useMobileDetailState({ isMobile });
+    useMobileDetailState<TId>({ isMobile });
 
   const page = useMemo(() => parsePositivePage(params.get("page")), [params]);
   const filters = useMemo(() => parseFilters(params), [params, parseFilters]);
