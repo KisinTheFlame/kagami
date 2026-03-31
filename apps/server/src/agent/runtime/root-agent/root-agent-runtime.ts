@@ -18,13 +18,19 @@ import {
   createMessagesFromEvent,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
+import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
-import { BizError } from "../../../common/errors/biz-error.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
 import { AppLogger } from "../../../logger/logger.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
+import {
+  DEFAULT_LLM_RETRY_BACKOFF_MS,
+  FixedRetryBackoffPolicy,
+  isRetryableLlmFailure,
+  LoopLlmRetryExtension,
+} from "../llm-retry.js";
 import type { RootAgentRuntimeSnapshotRepository } from "./persistence/root-agent-runtime-snapshot.repository.js";
 import {
   ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
@@ -60,15 +66,13 @@ type RootAgentRuntimeDeps = {
   contextSummaryOperation?: ContextSummaryLike;
   summaryPlanner?: ContextSummaryLike;
   summaryTools?: Tool[];
-  contextCompactionThreshold?: number;
+  contextCompactionTotalTokenThreshold?: number;
   llmRetryBackoffMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 };
 
-const DEFAULT_CONTEXT_COMPACTION_THRESHOLD = 60;
-const CONTEXT_COMPACTION_KEEP_RATIO = 0.1;
-const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
+const DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
 const IDLE_SLEEP_MS = 10;
@@ -80,11 +84,6 @@ type PendingToolPersistence = {
     content: string;
   };
   postToolEffects: RootAgentPostToolEffects;
-};
-
-type ContextCompactionPlan = {
-  messagesToSummarize: LlmMessage[];
-  messagesToKeep: LlmMessage[];
 };
 
 type RootAgentToolExecutionData = {
@@ -126,6 +125,7 @@ export type RootAgentLlmCallSummary = {
   model: string;
   assistantContentPreview: string;
   toolCallNames: string[];
+  totalTokens: number | null;
   updatedAt: Date;
 };
 
@@ -136,7 +136,7 @@ export type RootAgentRuntimeDashboardSnapshot = {
   lastActivityAt: Date | null;
   lastRoundCompletedAt: Date | null;
   lastCompactionAt: Date | null;
-  contextCompactionThreshold: number;
+  contextCompactionTotalTokenThreshold: number;
   contextSummary: AgentContextDashboardSummary;
   lastToolCall: RootAgentToolCallSummary | null;
   lastToolResultPreview: string | null;
@@ -153,7 +153,7 @@ class RootAgentHost {
   private readonly runtimeKey: string;
   private readonly contextSummaryOperation?: ContextSummaryLike;
   private readonly summaryTools: Tool[];
-  private readonly contextCompactionThreshold: number;
+  private readonly contextCompactionTotalTokenThreshold: number;
   private readonly llmRetryBackoffMs: number;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -179,7 +179,7 @@ class RootAgentHost {
     contextSummaryOperation,
     summaryPlanner,
     summaryTools,
-    contextCompactionThreshold,
+    contextCompactionTotalTokenThreshold,
     llmRetryBackoffMs,
     now,
     sleep,
@@ -191,8 +191,8 @@ class RootAgentHost {
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
     this.summaryTools = summaryTools ?? [];
-    this.contextCompactionThreshold =
-      contextCompactionThreshold ?? DEFAULT_CONTEXT_COMPACTION_THRESHOLD;
+    this.contextCompactionTotalTokenThreshold =
+      contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;
@@ -280,7 +280,7 @@ class RootAgentHost {
       lastActivityAt: cloneDate(this.lastActivityAt),
       lastRoundCompletedAt: cloneDate(this.lastRoundCompletedAt),
       lastCompactionAt: cloneDate(this.lastCompactionAt),
-      contextCompactionThreshold: this.contextCompactionThreshold,
+      contextCompactionTotalTokenThreshold: this.contextCompactionTotalTokenThreshold,
       contextSummary: await this.context.getDashboardSummary({
         limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
         previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
@@ -411,7 +411,6 @@ class RootAgentHost {
       await this.context.appendMessages([createWakeReminderMessage(now)]);
       this.lastWakeReminderAt = new Date(now);
       this.touchActivity();
-      await this.compactContextIfNeeded();
       await this.persistSnapshotIfChanged();
     });
   }
@@ -442,6 +441,7 @@ class RootAgentHost {
       model: completion.model,
       assistantContentPreview: createPreview(completion.message.content),
       toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
+      totalTokens: completion.usage?.totalTokens ?? null,
       updatedAt: this.now(),
     };
     this.touchActivity();
@@ -485,16 +485,28 @@ class RootAgentHost {
     }
   }
 
-  public async compactContextIfNeeded(): Promise<void> {
+  public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<void> {
     if (!this.contextSummaryOperation) {
+      return;
+    }
+
+    if (typeof totalTokens !== "number") {
+      try {
+        logger.warn("Skipping context summary because totalTokens is missing", {
+          event: "agent.root_agent_runtime.context_summary_skipped_missing_total_tokens",
+        });
+      } catch {
+        // Ignore logger runtime setup gaps in tests and early boot.
+      }
       return;
     }
 
     while (true) {
       const snapshot = await this.context.getSnapshot();
-      const compactionPlan = planContextCompaction({
+      const compactionPlan = createContextCompactionPlan({
         messages: snapshot.messages,
-        threshold: this.contextCompactionThreshold,
+        totalTokens,
+        totalTokenThreshold: this.contextCompactionTotalTokenThreshold,
       });
       if (!compactionPlan) {
         return;
@@ -654,24 +666,11 @@ class ContextCompactionExtension implements LoopAgentExtension<
   RootAgentCompletion,
   RootAgentToolExecutionData
 > {
-  public async onInitialize(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.compactContextIfNeeded();
-  }
-
-  public async onAfterEventsConsumed(input: { context: RootLoopExtensionContext }): Promise<void> {
-    await input.context.host.compactContextIfNeeded();
-  }
-
-  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.compactContextIfNeeded();
-  }
-
-  public async onAfterCommit(input: { context: RootLoopExtensionContext }): Promise<void> {
-    await input.context.host.compactContextIfNeeded();
-  }
-
-  public async onAfterReset(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.compactContextIfNeeded();
+  public async onAfterCommit(input: {
+    context: RootLoopExtensionContext;
+    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>;
+  }): Promise<void> {
+    await input.context.host.compactContextIfNeeded(input.result.completion.usage?.totalTokens);
   }
 }
 
@@ -722,55 +721,6 @@ class RootLlmTelemetryExtension implements ReActKernelExtension<
     completion: RootAgentCompletion;
   }): void {
     this.host.recordLlmCall(input.completion);
-  }
-}
-
-class RootLlmRetryExtension implements ReActKernelExtension<
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  private readonly host: RootAgentHost;
-  private readonly llmRetryBackoffMs: number;
-  private readonly sleep: (ms: number) => Promise<void>;
-
-  public constructor({
-    host,
-    llmRetryBackoffMs,
-    sleep,
-  }: {
-    host: RootAgentHost;
-    llmRetryBackoffMs: number;
-    sleep: (ms: number) => Promise<void>;
-  }) {
-    this.host = host;
-    this.llmRetryBackoffMs = llmRetryBackoffMs;
-    this.sleep = sleep;
-  }
-
-  public async onModelError(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
-    error: unknown;
-  }): Promise<{ handled: boolean; retry: boolean } | void> {
-    if (!isRetryableLlmFailure(input.error)) {
-      return;
-    }
-
-    this.host.recordRecoverableError(input.error);
-    this.host.transitionTo("idle");
-    logger.warn("Root agent LLM call failed; scheduling retry", {
-      event: "agent.root_agent_runtime.llm_retry_scheduled",
-      retryBackoffMs: this.llmRetryBackoffMs,
-      errorName: input.error.name,
-      errorMessage: input.error.message,
-    });
-    await this.sleep(this.llmRetryBackoffMs);
-
-    return {
-      handled: true,
-      retry: true,
-    };
   }
 }
 
@@ -922,10 +872,21 @@ export class RootLoopAgent extends BaseLoopAgent<
         new RootLlmTelemetryExtension({
           host,
         }),
-        new RootLlmRetryExtension({
-          host,
-          llmRetryBackoffMs: resolvedRetryBackoffMs,
+        new LoopLlmRetryExtension({
+          backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
           sleep: resolvedSleep,
+          onRecoverableError: error => {
+            host.recordRecoverableError(error);
+            host.transitionTo("idle");
+          },
+          onBeforeRetry: ({ error, delayMs }) => {
+            logger.warn("Root agent LLM call failed; scheduling retry", {
+              event: "agent.root_agent_runtime.llm_retry_scheduled",
+              retryBackoffMs: delayMs,
+              errorName: error instanceof Error ? error.name : "Error",
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          },
         }),
         new RootToolExecutionStateExtension({
           host,
@@ -1209,13 +1170,6 @@ function createPreview(content: string): string {
   return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
 }
 
-function isRetryableLlmFailure(error: unknown): error is BizError {
-  return (
-    error instanceof BizError &&
-    (error.message === "所选 LLM provider 当前不可用" || error.message === "LLM 上游服务调用失败")
-  );
-}
-
 function createTemporaryToolFailureResult(input: {
   toolName: string;
   kind: ToolSetExecutionResult["kind"];
@@ -1260,70 +1214,4 @@ function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot):
     sessionSnapshot: snapshot.sessionSnapshot,
     lastWakeReminderAt: snapshot.lastWakeReminderAt?.toISOString() ?? null,
   });
-}
-
-function planContextCompaction(input: {
-  messages: LlmMessage[];
-  threshold: number;
-}): ContextCompactionPlan | null {
-  const { messages, threshold } = input;
-  if (messages.length <= threshold) {
-    return null;
-  }
-
-  const keepCount = calculateCompactionKeepCount({
-    totalMessageCount: messages.length,
-    threshold,
-  });
-  const initialCutIndex = messages.length - keepCount;
-  const cutIndex = extendCompactionCutIndexForAssistantToolBoundary({
-    messages,
-    cutIndex: initialCutIndex,
-  });
-
-  return {
-    messagesToSummarize: messages.slice(0, cutIndex),
-    messagesToKeep: messages.slice(cutIndex),
-  };
-}
-
-function calculateCompactionKeepCount(input: {
-  totalMessageCount: number;
-  threshold: number;
-}): number {
-  if (input.threshold <= 1) {
-    return 0;
-  }
-
-  return Math.min(
-    Math.max(1, Math.ceil(input.totalMessageCount * CONTEXT_COMPACTION_KEEP_RATIO)),
-    input.threshold - 1,
-  );
-}
-
-function extendCompactionCutIndexForAssistantToolBoundary(input: {
-  messages: LlmMessage[];
-  cutIndex: number;
-}): number {
-  const { messages, cutIndex } = input;
-  if (cutIndex <= 0 || cutIndex >= messages.length) {
-    return cutIndex;
-  }
-
-  const boundaryMessage = messages[cutIndex - 1];
-  if (boundaryMessage?.role !== "assistant" || boundaryMessage.toolCalls.length === 0) {
-    return cutIndex;
-  }
-
-  const toolCallIds = new Set(boundaryMessage.toolCalls.map(toolCall => toolCall.id));
-  let lastMatchingToolIndex = -1;
-
-  for (let index = cutIndex; index < messages.length; index += 1) {
-    const message = messages[index];
-    if (message?.role === "tool" && toolCallIds.has(message.toolCallId)) {
-      lastMatchingToolIndex = index;
-    }
-  }
-
-  return lastMatchingToolIndex >= 0 ? lastMatchingToolIndex + 1 : cutIndex;
 }

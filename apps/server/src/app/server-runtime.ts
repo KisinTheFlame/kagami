@@ -404,9 +404,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyRecallService,
     contextSummaryOperation,
     summaryTools: summaryToolExecutor.definitions(),
-    contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
+    contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     batchSize: config.server.agent.story.batchSize,
     idleFlushMs: config.server.agent.story.idleFlushMs,
+    llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     candidateTopK: Math.max(5, config.server.rag.retrieval.topK),
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
@@ -418,7 +419,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     snapshotRepository: rootAgentRuntimeSnapshotRepository,
     tools: rootAgentTools,
     contextSummaryOperation,
-    contextCompactionThreshold: config.server.agent.contextCompactionThreshold,
+    contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     summaryTools: [
       ...rootAgentTools.definitions(),

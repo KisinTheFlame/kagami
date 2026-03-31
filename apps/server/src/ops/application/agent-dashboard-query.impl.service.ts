@@ -71,7 +71,7 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
       })),
       context: {
         messageCount: runtimeSnapshot.contextSummary.messageCount,
-        compactionThreshold: runtimeSnapshot.contextCompactionThreshold,
+        compactionTotalTokenThreshold: runtimeSnapshot.contextCompactionTotalTokenThreshold,
         recentItems: runtimeSnapshot.contextSummary.recentItems,
         recentItemsTruncated: runtimeSnapshot.contextSummary.recentItemsTruncated,
       },
@@ -124,6 +124,7 @@ function mapLlmCall(value: RootAgentLlmCallSummary | null): AgentDashboardLlmCal
     model: value.model,
     assistantContentPreview: value.assistantContentPreview,
     toolCallNames: [...value.toolCallNames],
+    totalTokens: value.totalTokens,
     updatedAt: value.updatedAt.toISOString(),
   };
 }

@@ -9,7 +9,7 @@ import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
-const DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD = 60;
+const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
 const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
@@ -145,19 +145,54 @@ const ConfigSchema = z.object({
     databaseUrl: UrlSchema,
     port: PositiveIntSchema.default(DEFAULT_PORT),
     agent: z
-      .object({
-        contextCompactionThreshold: PositiveIntSchema.default(
-          DEFAULT_AGENT_CONTEXT_COMPACTION_THRESHOLD,
-        ),
-        llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
-        waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
-        story: z
+      .preprocess(
+        value => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) {
+            return value;
+          }
+
+          const record = value as Record<string, unknown>;
+          if (!("contextCompactionThreshold" in record)) {
+            return value;
+          }
+
+          return {
+            ...record,
+            __legacyContextCompactionThreshold__: record.contextCompactionThreshold,
+          };
+        },
+        z
           .object({
-            batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
-            idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
+            contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
+              DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
+            ),
+            llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
+            waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+            story: z
+              .object({
+                batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
+                idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
+              })
+              .default({}),
+            __legacyContextCompactionThreshold__: z.unknown().optional(),
           })
-          .default({}),
-      })
+          .superRefine((value, ctx) => {
+            if (value.__legacyContextCompactionThreshold__ !== undefined) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["contextCompactionThreshold"],
+                message:
+                  "contextCompactionThreshold 已废弃，请改用 contextCompactionTotalTokenThreshold",
+              });
+            }
+          })
+          .transform(value => ({
+            contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
+            llmRetryBackoffMs: value.llmRetryBackoffMs,
+            waitToolMaxWaitMs: value.waitToolMaxWaitMs,
+            story: value.story,
+          })),
+      )
       .default({}),
     news: z
       .object({
@@ -230,6 +265,7 @@ const ConfigSchema = z.object({
       usages: z
         .object({
           agent: LlmUsageConfigSchema,
+          storyAgent: LlmUsageConfigSchema.optional(),
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
           webSearchAgent: LlmUsageConfigSchema,
@@ -275,7 +311,15 @@ type LlmUsageConfig = {
   attempts: LlmUsageAttemptConfig[];
 };
 
-export type Config = z.infer<typeof ConfigSchema>;
+type RawConfig = z.infer<typeof ConfigSchema>;
+
+export type Config = Omit<RawConfig, "server"> & {
+  server: Omit<RawConfig["server"], "llm"> & {
+    llm: Omit<RawConfig["server"]["llm"], "usages"> & {
+      usages: Record<LlmUsageId, LlmUsageConfig>;
+    };
+  };
+};
 
 type LoadStaticConfigOptions = {
   configPath?: string;
@@ -338,23 +382,26 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
   };
 }
 
-function normalizeLlmUsages(input: Config["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
+function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
   return {
     agent: normalizeUsageConfig(input.usages.agent),
+    storyAgent: normalizeUsageConfig(input.usages.storyAgent ?? input.usages.agent),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
     webSearchAgent: normalizeUsageConfig(input.usages.webSearchAgent),
   };
 }
 
-function normalizeUsageConfig(value: Config["server"]["llm"]["usages"]["agent"]): LlmUsageConfig {
+function normalizeUsageConfig(
+  value: RawConfig["server"]["llm"]["usages"]["agent"],
+): LlmUsageConfig {
   return {
     attempts: value.attempts.map(attempt => normalizeUsageAttempt(attempt)),
   };
 }
 
 function normalizeUsageAttempt(
-  value: Config["server"]["llm"]["usages"]["agent"]["attempts"][number],
+  value: RawConfig["server"]["llm"]["usages"]["agent"]["attempts"][number],
 ): LlmUsageAttemptConfig {
   return {
     provider: value.provider,

@@ -13,7 +13,7 @@ describe("DefaultAgentDashboardQueryService", () => {
         lastActivityAt: new Date("2026-03-30T08:00:00.000Z"),
         lastRoundCompletedAt: new Date("2026-03-30T07:59:58.000Z"),
         lastCompactionAt: new Date("2026-03-30T07:55:00.000Z"),
-        contextCompactionThreshold: 60,
+        contextCompactionTotalTokenThreshold: 150_000,
         contextSummary: {
           messageCount: 12,
           recentItems: [
@@ -37,6 +37,7 @@ describe("DefaultAgentDashboardQueryService", () => {
           model: "gpt-4o-mini",
           assistantContentPreview: "正在等待",
           toolCallNames: ["wait"],
+          totalTokens: 12_345,
           updatedAt: new Date("2026-03-30T07:59:59.000Z"),
         },
         session: {
@@ -106,7 +107,7 @@ describe("DefaultAgentDashboardQueryService", () => {
     ]);
     expect(snapshot.context).toEqual({
       messageCount: 12,
-      compactionThreshold: 60,
+      compactionTotalTokenThreshold: 150_000,
       recentItems: [
         {
           kind: "llm_message",
@@ -129,6 +130,7 @@ describe("DefaultAgentDashboardQueryService", () => {
         model: "gpt-4o-mini",
         assistantContentPreview: "正在等待",
         toolCallNames: ["wait"],
+        totalTokens: 12_345,
         updatedAt: "2026-03-30T07:59:59.000Z",
       },
     });

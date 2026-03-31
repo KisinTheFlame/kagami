@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { StoryLoopAgent } from "../../src/agent/capabilities/story/runtime/story-agent.runtime.js";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
+import { createUserMessage } from "../../src/agent/runtime/context/context-message-factory.js";
+import { BizError } from "../../src/common/errors/biz-error.js";
 import type { StoryRecallService } from "../../src/agent/capabilities/story/application/story-recall.service.js";
 import type { StoryService } from "../../src/agent/capabilities/story/application/story.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
+import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 describe("StoryLoopAgent", () => {
   it("processes a batch when pending messages reach the batch threshold", async () => {
@@ -109,7 +112,7 @@ describe("StoryLoopAgent", () => {
         execute: vi.fn().mockResolvedValue(null),
       },
       summaryTools: [],
-      contextCompactionThreshold: 100,
+      contextCompactionTotalTokenThreshold: 100,
       batchSize: 2,
       idleFlushMs: 60_000,
       sourceRuntimeKey: "root-agent",
@@ -181,7 +184,7 @@ describe("StoryLoopAgent", () => {
         execute: vi.fn().mockResolvedValue(null),
       },
       summaryTools: [],
-      contextCompactionThreshold: 100,
+      contextCompactionTotalTokenThreshold: 100,
       batchSize: 10,
       idleFlushMs: 60_000,
       sourceRuntimeKey: "root-agent",
@@ -312,7 +315,7 @@ describe("StoryLoopAgent", () => {
         execute: vi.fn().mockResolvedValue(null),
       },
       summaryTools: [],
-      contextCompactionThreshold: 100,
+      contextCompactionTotalTokenThreshold: 100,
       batchSize: 1,
       idleFlushMs: 60_000,
       sourceRuntimeKey: "root-agent",
@@ -415,7 +418,7 @@ describe("StoryLoopAgent", () => {
         execute: vi.fn().mockResolvedValue(null),
       },
       summaryTools: [],
-      contextCompactionThreshold: 100,
+      contextCompactionTotalTokenThreshold: 100,
       batchSize: 3,
       idleFlushMs: 60_000,
       sourceRuntimeKey: "root-agent",
@@ -446,12 +449,473 @@ describe("StoryLoopAgent", () => {
     expect(userMessages[1]?.content).toContain("[3] tool");
     expect(userMessages[1]?.content).toContain("找到了一条旧记忆");
   });
+
+  it("persists only the latest half of story context and avoids leading tool messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPrompt: "story",
+    });
+    await context.appendMessages([
+      {
+        role: "user",
+        content: "旧消息 1",
+      },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "tool-call-1",
+            name: "search_memory",
+            arguments: {
+              query: "旧消息",
+            },
+          },
+          {
+            id: "tool-call-2",
+            name: "search_memory",
+            arguments: {
+              query: "更多旧消息",
+            },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        toolCallId: "tool-call-1",
+        content: "命中结果 1",
+      },
+      {
+        role: "tool",
+        toolCallId: "tool-call-2",
+        content: "命中结果 2",
+      },
+      {
+        role: "user",
+        content: "较新的消息",
+      },
+      {
+        role: "assistant",
+        content: "较新的总结",
+        toolCalls: [],
+      },
+    ]);
+    const save = vi.fn().mockResolvedValue(undefined);
+    const runtime = new StoryLoopAgent({
+      llmClient: createStubLlmClient([]).client,
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValue(0),
+        findLatest: vi.fn().mockResolvedValue(null),
+        listAfterSeq: vi.fn().mockResolvedValue([]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save,
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: vi.fn().mockResolvedValue(null),
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 100,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      sourceRuntimeKey: "root-agent",
+      context,
+      sleep: vi.fn(),
+    });
+
+    await runtime.initialize();
+
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0]?.[0]?.contextSnapshot.messages).toEqual([
+      {
+        role: "user",
+        content: "较新的消息",
+      },
+      {
+        role: "assistant",
+        content: "较新的总结",
+        toolCalls: [],
+      },
+    ]);
+  });
+
+  it("retries recoverable llm failures without exiting the story loop", async () => {
+    initTestLoggerRuntime();
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const chat = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new BizError({
+          message: "LLM 上游服务调用失败",
+        }),
+      )
+      .mockResolvedValueOnce({
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "tool-call-1",
+              name: "finish_story_batch",
+              arguments: {},
+            },
+          ],
+        },
+      } satisfies LlmChatResponsePayload);
+    const runtime = new StoryLoopAgent({
+      llmClient: {
+        chat,
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn(),
+      },
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findLatest: vi.fn().mockResolvedValue({
+          seq: 1,
+          runtimeKey: "root-agent",
+          message: {
+            role: "user",
+            content: "这个话题还没结束",
+          },
+          createdAt: new Date(),
+        }),
+        listAfterSeq: vi.fn().mockResolvedValue([
+          {
+            seq: 1,
+            runtimeKey: "root-agent",
+            message: {
+              role: "user",
+              content: "这个话题还没结束",
+            },
+            createdAt: new Date(),
+          },
+        ]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: vi.fn().mockResolvedValue(null),
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 100,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      llmRetryBackoffMs: 5_000,
+      sourceRuntimeKey: "root-agent",
+      context: new DefaultAgentContext({
+        systemPrompt: "story",
+      }),
+      sleep,
+    });
+
+    const didProcess = await runtime.runOnce();
+
+    expect(didProcess).toBe(true);
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(5_000);
+  });
+
+  it("retries recoverable context summary failures during story compaction", async () => {
+    initTestLoggerRuntime();
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const summarize = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new BizError({
+          message: "所选 LLM provider 当前不可用",
+        }),
+      )
+      .mockResolvedValueOnce("累计 story 摘要");
+    const context = new DefaultAgentContext({
+      systemPrompt: "story",
+    });
+    const runtime = new StoryLoopAgent({
+      llmClient: createStubLlmClient(
+        [
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "tool-call-1",
+                name: "finish_story_batch",
+                arguments: {},
+              },
+            ],
+          },
+        ],
+        {
+          totalTokens: 3,
+        },
+      ).client,
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findLatest: vi.fn().mockResolvedValue({
+          seq: 1,
+          runtimeKey: "root-agent",
+          message: {
+            role: "user",
+            content: "story 消息",
+          },
+          createdAt: new Date(),
+        }),
+        listAfterSeq: vi.fn().mockResolvedValue([
+          {
+            seq: 1,
+            runtimeKey: "root-agent",
+            message: {
+              role: "user",
+              content: "story 消息",
+            },
+            createdAt: new Date(),
+          },
+        ]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: summarize,
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 2,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      llmRetryBackoffMs: 7_000,
+      sourceRuntimeKey: "root-agent",
+      context,
+      sleep,
+    });
+
+    await runtime.runOnce();
+
+    expect(summarize).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(7_000);
+    const snapshot = await context.getSnapshot();
+    expect(snapshot.messages[0]).toMatchObject({
+      role: "user",
+    });
+    expect(snapshot.messages[0]?.content).toContain("累计 story 摘要");
+  });
+
+  it("does not compact story context during initialize", async () => {
+    const context = new DefaultAgentContext({
+      systemPrompt: "story",
+    });
+    await context.appendMessages([createUserMessage("已有上下文")]);
+    const summarize = vi.fn().mockResolvedValue("累计 story 摘要");
+    const runtime = new StoryLoopAgent({
+      llmClient: createStubLlmClient([]).client,
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValue(0),
+        findLatest: vi.fn().mockResolvedValue(null),
+        listAfterSeq: vi.fn().mockResolvedValue([]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: summarize,
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 2,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      sourceRuntimeKey: "root-agent",
+      context,
+      sleep: vi.fn(),
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).not.toHaveBeenCalled();
+  });
+
+  it("skips story summary when totalTokens is missing", async () => {
+    const summarize = vi.fn().mockResolvedValue("累计 story 摘要");
+    const context = new DefaultAgentContext({
+      systemPrompt: "story",
+    });
+    const runtime = new StoryLoopAgent({
+      llmClient: createStubLlmClient([
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "tool-call-1",
+              name: "finish_story_batch",
+              arguments: {},
+            },
+          ],
+        },
+      ]).client,
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findLatest: vi.fn().mockResolvedValue({
+          seq: 1,
+          runtimeKey: "root-agent",
+          message: {
+            role: "user",
+            content: "story 消息",
+          },
+          createdAt: new Date(),
+        }),
+        listAfterSeq: vi.fn().mockResolvedValue([
+          {
+            seq: 1,
+            runtimeKey: "root-agent",
+            message: {
+              role: "user",
+              content: "story 消息",
+            },
+            createdAt: new Date(),
+          },
+        ]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: summarize,
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 2,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      sourceRuntimeKey: "root-agent",
+      context,
+      sleep: vi.fn(),
+    });
+
+    await runtime.runOnce();
+
+    expect(summarize).not.toHaveBeenCalled();
+  });
+
+  it("still throws non-retryable llm failures", async () => {
+    const error = new Error("boom");
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const runtime = new StoryLoopAgent({
+      llmClient: {
+        chat: vi.fn().mockRejectedValue(error),
+        chatDirect: vi.fn(),
+        listAvailableProviders: vi.fn(),
+      },
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi.fn().mockResolvedValueOnce(1),
+        findLatest: vi.fn().mockResolvedValue({
+          seq: 1,
+          runtimeKey: "root-agent",
+          message: {
+            role: "user",
+            content: "还在讨论",
+          },
+          createdAt: new Date(),
+        }),
+        listAfterSeq: vi.fn().mockResolvedValue([
+          {
+            seq: 1,
+            runtimeKey: "root-agent",
+            message: {
+              role: "user",
+              content: "还在讨论",
+            },
+            createdAt: new Date(),
+          },
+        ]),
+      },
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      storyService: {
+        create: vi.fn(),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      storyRecallService: {
+        search: vi.fn().mockResolvedValue([]),
+      } as unknown as StoryRecallService,
+      contextSummaryOperation: {
+        execute: vi.fn().mockResolvedValue(null),
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 100,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      sourceRuntimeKey: "root-agent",
+      context: new DefaultAgentContext({
+        systemPrompt: "story",
+      }),
+      sleep,
+    });
+
+    await expect(runtime.runOnce()).rejects.toBe(error);
+    expect(sleep).not.toHaveBeenCalled();
+  });
 });
 
 function createStubLlmClient(
   messages: Array<
     Extract<Awaited<ReturnType<LlmClient["chat"]>>["message"], { role: "assistant" }>
   >,
+  options?: {
+    totalTokens?: number;
+  },
 ): {
   client: LlmClient;
   chat: ReturnType<typeof vi.fn>;
@@ -469,6 +933,13 @@ function createStubLlmClient(
           content: "",
           toolCalls: [],
         } satisfies LlmChatResponsePayload["message"]),
+      ...(options?.totalTokens === undefined
+        ? {}
+        : {
+            usage: {
+              totalTokens: options.totalTokens,
+            },
+          }),
     }),
   );
 

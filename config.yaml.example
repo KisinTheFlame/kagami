@@ -2,7 +2,7 @@ server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
   port: 20003
   agent:
-    contextCompactionThreshold: 60
+    contextCompactionTotalTokenThreshold: 150000
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
     story:
@@ -64,6 +64,10 @@ server:
           - provider: openai-codex
             model: gpt-5.4
             times: 2
+      storyAgent:
+        attempts:
+          - provider: claude-code
+            model: claude-haiku-4-5
       contextSummarizer:
         attempts:
           - provider: openai

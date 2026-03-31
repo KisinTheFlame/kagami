@@ -37,7 +37,7 @@ export abstract class BaseLoopAgent<
   >[];
   private readonly sleep: (ms: number) => Promise<void>;
   private startPromise: Promise<void> | null = null;
-  private activeTickPromise: Promise<void> | null = null;
+  private activeTickPromise: Promise<unknown> | null = null;
   private initialized = false;
   private stopRequested = false;
 
@@ -180,7 +180,9 @@ export abstract class BaseLoopAgent<
     }
   }
 
-  private async runSingleTick(): Promise<void> {
+  protected async runSingleTick(): Promise<
+    BaseLoopAgentTickSummary<TMessage, TCompletion, TExtensionData>
+  > {
     let roundResult: ReActRoundResult<TMessage, TCompletion, TExtensionData> | null = null;
     let didRunRound = false;
 
@@ -195,7 +197,10 @@ export abstract class BaseLoopAgent<
       });
     }
     if (this.stopRequested) {
-      return;
+      return {
+        didRunRound,
+        roundResult,
+      };
     }
 
     if (await this.shouldRunRound()) {
@@ -239,6 +244,11 @@ export abstract class BaseLoopAgent<
     if (!this.stopRequested && sleepMs && sleepMs > 0) {
       await this.sleep(sleepMs);
     }
+
+    return {
+      didRunRound,
+      roundResult,
+    };
   }
 }
 

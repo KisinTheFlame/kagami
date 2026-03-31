@@ -54,6 +54,7 @@ export const AgentDashboardLlmCallSchema = z
     model: z.string().min(1),
     assistantContentPreview: z.string(),
     toolCallNames: z.array(z.string().min(1)),
+    totalTokens: z.number().int().nonnegative().nullable(),
     updatedAt: z.string().datetime(),
   })
   .strict();
@@ -112,7 +113,7 @@ export const AgentDashboardSnapshotSchema = z
     context: z
       .object({
         messageCount: z.number().int().nonnegative(),
-        compactionThreshold: z.number().int().positive(),
+        compactionTotalTokenThreshold: z.number().int().positive(),
         recentItems: z.array(AgentDashboardContextItemSchema),
         recentItemsTruncated: z.boolean(),
       })

@@ -19,7 +19,11 @@ export class RewriteStoryTool extends ZodToolComponent<typeof RewriteStoryArgume
       title: { type: "string", description: "叙事标题。" },
       time: { type: "string", description: "叙事发生时间。" },
       scene: { type: "string", description: "叙事发生场景。" },
-      people: { type: "array", items: { type: "string" }, description: "相关人物。" },
+      people: {
+        type: "array",
+        items: { type: "string" },
+        description: "相关人物。每一项必须使用 {qq昵称(qq号)} 的格式，例如 {小伊(3994058476)}。",
+      },
       cause: { type: "string", description: "起因。" },
       process: { type: "array", items: { type: "string" }, description: "经过。" },
       result: { type: "string", description: "结果。" },

@@ -1,5 +1,6 @@
 import {
   BaseLoopAgent,
+  type LoopAgentExtension,
   ReActKernel,
   ToolCatalog,
   type ReActKernelRunRoundInput,
@@ -11,6 +12,7 @@ import {
 } from "@kagami/agent-runtime";
 import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
 import { DefaultAgentContext } from "../../../runtime/context/default-agent-context.js";
+import { createContextCompactionPlan } from "../../../runtime/context/context-compaction.js";
 import {
   createConversationSummaryMessage,
   createUserMessage,
@@ -20,6 +22,12 @@ import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
+import {
+  DEFAULT_LLM_RETRY_BACKOFF_MS,
+  FixedRetryBackoffPolicy,
+  isRetryableLlmFailure,
+  LoopLlmRetryExtension,
+} from "../../../runtime/llm-retry.js";
 import { StoryRecallService, type StoryRecallResult } from "../application/story-recall.service.js";
 import { StoryService } from "../application/story.service.js";
 import type { LinearMessageLedgerRecord } from "../domain/story.js";
@@ -39,6 +47,7 @@ import {
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_CANDIDATE_TOP_K = 5;
+const PERSISTED_CONTEXT_KEEP_RATIO = 0.5;
 const logger = new AppLogger({ source: "agent.story-runtime" });
 
 type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
@@ -53,11 +62,12 @@ type StoryLoopAgentDeps = {
   storyRecallService: StoryRecallService;
   contextSummaryOperation: ContextSummaryLike;
   summaryTools: Tool[];
-  contextCompactionThreshold: number;
+  contextCompactionTotalTokenThreshold: number;
   batchSize: number;
   idleFlushMs: number;
   candidateTopK?: number;
   pollIntervalMs?: number;
+  llmRetryBackoffMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   runtimeKey?: string;
@@ -78,10 +88,12 @@ class StoryAgentHost {
   private readonly storyRecallService: StoryRecallService;
   private readonly contextSummaryOperation: ContextSummaryLike;
   private readonly summaryTools: Tool[];
-  private readonly contextCompactionThreshold: number;
+  private readonly contextCompactionTotalTokenThreshold: number;
   private readonly batchSize: number;
   private readonly idleFlushMs: number;
   private readonly candidateTopK: number;
+  private readonly llmRetryBackoffMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => Date;
   private readonly runtimeKey: string;
   private readonly sourceRuntimeKey: string;
@@ -89,6 +101,11 @@ class StoryAgentHost {
   private lastProcessedMessageSeq = 0;
   private pendingBatch: StoryPendingBatch | null = null;
   private lastPersistedSnapshotFingerprint: string | null = null;
+  private lastRecoverableError: {
+    name: string;
+    message: string;
+    updatedAt: Date;
+  } | null = null;
 
   public constructor({
     linearMessageLedgerDao,
@@ -96,25 +113,29 @@ class StoryAgentHost {
     storyRecallService,
     contextSummaryOperation,
     summaryTools,
-    contextCompactionThreshold,
+    contextCompactionTotalTokenThreshold,
     batchSize,
     idleFlushMs,
     candidateTopK,
+    llmRetryBackoffMs,
     now,
+    sleep,
     runtimeKey,
     sourceRuntimeKey,
     context,
-  }: Omit<StoryLoopAgentDeps, "llmClient" | "storyService" | "pollIntervalMs" | "sleep">) {
+  }: Omit<StoryLoopAgentDeps, "llmClient" | "storyService" | "pollIntervalMs">) {
     this.linearMessageLedgerDao = linearMessageLedgerDao;
     this.snapshotRepository = snapshotRepository;
     this.storyRecallService = storyRecallService;
     this.contextSummaryOperation = contextSummaryOperation;
     this.summaryTools = summaryTools;
-    this.contextCompactionThreshold = contextCompactionThreshold;
+    this.contextCompactionTotalTokenThreshold = contextCompactionTotalTokenThreshold;
     this.batchSize = batchSize;
     this.idleFlushMs = idleFlushMs;
     this.candidateTopK = candidateTopK ?? DEFAULT_CANDIDATE_TOP_K;
+    this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
+    this.sleep = sleep ?? createSleep;
     this.runtimeKey = runtimeKey ?? STORY_RUNTIME_KEY;
     this.sourceRuntimeKey = sourceRuntimeKey;
     this.context =
@@ -212,7 +233,7 @@ class StoryAgentHost {
 
   public async createRoundInput(
     tools: ToolExecutor<LlmMessage>,
-  ): Promise<ReActKernelRunRoundInput<LlmMessage, "agent"> | null> {
+  ): Promise<ReActKernelRunRoundInput<LlmMessage, "storyAgent"> | null> {
     if (!this.pendingBatch) {
       return null;
     }
@@ -224,7 +245,7 @@ class StoryAgentHost {
         messages: [...snapshot.messages, ...this.pendingBatch.roundMessages],
       },
       tools,
-      usage: "agent",
+      usage: "storyAgent",
     };
   }
 
@@ -244,46 +265,77 @@ class StoryAgentHost {
     }
 
     const completedBatch = this.pendingBatch;
-    this.pendingBatch = null;
-
     await this.context.appendMessages(completedBatch.roundMessages);
-    await this.compactContextIfNeeded();
     this.lastProcessedMessageSeq = completedBatch.lastSeq;
-    await this.persistSnapshotIfChanged();
+    this.pendingBatch = null;
   }
 
-  public async compactContextIfNeeded(): Promise<void> {
-    const snapshot = await this.context.getSnapshot();
-    if (snapshot.messages.length <= this.contextCompactionThreshold) {
+  public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<void> {
+    if (typeof totalTokens !== "number") {
+      try {
+        logger.warn("Skipping story context summary because totalTokens is missing", {
+          event: "agent.story_runtime.context_summary_skipped_missing_total_tokens",
+        });
+      } catch {
+        // Ignore logger runtime setup gaps in tests and early boot.
+      }
       return;
     }
 
-    const keepCount = Math.min(
-      Math.max(1, Math.ceil(snapshot.messages.length * 0.1)),
-      this.contextCompactionThreshold - 1,
-    );
-    const cutIndex = snapshot.messages.length - keepCount;
-    const messagesToSummarize = snapshot.messages.slice(0, cutIndex);
-    const messagesToKeep = snapshot.messages.slice(cutIndex);
-    const summary = await this.contextSummaryOperation.execute({
-      messages: messagesToSummarize,
-      tools: this.summaryTools,
-    });
-    if (!summary) {
+    while (true) {
+      const snapshot = await this.context.getSnapshot();
+      const compactionPlan = createContextCompactionPlan({
+        messages: snapshot.messages,
+        totalTokens,
+        totalTokenThreshold: this.contextCompactionTotalTokenThreshold,
+      });
+      if (!compactionPlan) {
+        return;
+      }
+
+      let summary: string | null;
+      try {
+        summary = await this.contextSummaryOperation.execute({
+          messages: compactionPlan.messagesToSummarize,
+          tools: this.summaryTools,
+        });
+      } catch (error) {
+        if (!isRetryableLlmFailure(error)) {
+          throw error;
+        }
+
+        this.recordRecoverableError(error);
+        logger.warn("Story context summary failed; scheduling retry", {
+          event: "agent.story_runtime.context_summary_retry_scheduled",
+          retryBackoffMs: this.llmRetryBackoffMs,
+          errorName: error instanceof Error ? error.name : "Error",
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        await this.sleep(this.llmRetryBackoffMs);
+        continue;
+      }
+
+      this.clearRecoverableError();
+      if (!summary) {
+        return;
+      }
+
+      await this.context.replaceMessages([
+        createConversationSummaryMessage(summary),
+        ...compactionPlan.messagesToKeep,
+      ]);
       return;
     }
-
-    await this.context.replaceMessages([
-      createConversationSummaryMessage(summary),
-      ...messagesToKeep,
-    ]);
   }
 
   public async persistSnapshotIfChanged(): Promise<void> {
+    const persistedContextSnapshot = trimPersistedContextSnapshot(
+      await this.context.exportPersistedSnapshot(),
+    );
     const snapshot = {
       runtimeKey: this.runtimeKey,
       schemaVersion: STORY_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
-      contextSnapshot: await this.context.exportPersistedSnapshot(),
+      contextSnapshot: persistedContextSnapshot,
       lastProcessedMessageSeq: this.lastProcessedMessageSeq,
     };
     const fingerprint = createSnapshotFingerprint(snapshot);
@@ -311,6 +363,18 @@ class StoryAgentHost {
       firstSeq: this.pendingBatch.firstSeq,
       lastSeq: this.pendingBatch.lastSeq,
     };
+  }
+
+  public recordRecoverableError(error: unknown): void {
+    this.lastRecoverableError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+  }
+
+  public clearRecoverableError(): void {
+    this.lastRecoverableError = null;
   }
 
   private async createPendingBatch(
@@ -353,7 +417,7 @@ class StoryAgentHost {
   }
 }
 
-export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryCompletion> {
+export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", StoryCompletion> {
   private readonly host: StoryAgentHost;
   private readonly tools: ToolExecutor<LlmMessage>;
   private readonly pollIntervalMs: number;
@@ -363,9 +427,16 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
     storyService,
     sleep,
     pollIntervalMs,
+    llmRetryBackoffMs,
     ...rest
   }: StoryLoopAgentDeps) {
-    const host = new StoryAgentHost(rest);
+    const resolvedSleep = sleep ?? createSleep;
+    const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
+    const host = new StoryAgentHost({
+      ...rest,
+      sleep: resolvedSleep,
+      llmRetryBackoffMs: resolvedRetryBackoffMs,
+    });
     const toolDefinitions = new ToolCatalog([
       new CreateStoryTool({
         storyService,
@@ -381,13 +452,42 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
     ])
       .pick([CREATE_STORY_TOOL_NAME, REWRITE_STORY_TOOL_NAME, FINISH_STORY_BATCH_TOOL_NAME])
       .definitions();
-    const kernel = new ReActKernel<LlmMessage, "agent", StoryCompletion>({
+    const kernel = new ReActKernel<LlmMessage, "storyAgent", StoryCompletion>({
       model: llmClient,
+      extensions: [
+        new LoopLlmRetryExtension({
+          backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
+          sleep: resolvedSleep,
+          onRecoverableError: error => {
+            host.recordRecoverableError(error);
+          },
+          onBeforeRetry: ({ error, delayMs, attempt }) => {
+            logger.warn("Story agent LLM call failed; scheduling retry", {
+              event: "agent.story_runtime.llm_retry_scheduled",
+              retryBackoffMs: delayMs,
+              attempt,
+              errorName: error instanceof Error ? error.name : "Error",
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          },
+          onSuccessfulModelCall: () => {
+            host.clearRecoverableError();
+          },
+        }),
+      ],
     });
 
     super({
       kernel,
-      sleep,
+      extensions: [
+        new StoryContextCompactionExtension({
+          host,
+        }),
+        new StorySnapshotPersistenceExtension({
+          host,
+        }),
+      ],
+      sleep: resolvedSleep,
     });
 
     this.host = host;
@@ -412,23 +512,18 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
 
     let didRunRound = false;
     while (true) {
-      await this.beforeTick();
-      if (!(await this.shouldRunRound())) {
+      const tickSummary = await this.runSingleTick();
+      if (!tickSummary.didRunRound) {
         return didRunRound;
       }
 
-      const roundInput = await this.buildRoundInput();
-      if (!roundInput) {
-        return didRunRound;
-      }
-
-      const roundResult = await this.executeRound(roundInput);
-      if (roundResult.shouldCommit) {
-        await this.commitRoundResult(roundResult);
-      }
       didRunRound = true;
+      if (this.host.hasPendingBatch()) {
+        continue;
+      }
 
-      if (!(await this.shouldRunRound())) {
+      const nextBatch = await this.host.preparePendingBatchIfNeeded();
+      if (!nextBatch.shouldTriggerRound) {
         return true;
       }
     }
@@ -445,8 +540,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
 
   protected override async initializeHostIfNeeded(): Promise<void> {
     await this.host.initialize();
-    await this.host.compactContextIfNeeded();
-    await this.host.persistSnapshotIfChanged();
   }
 
   protected override createLoopExtensionContext(): void {
@@ -463,7 +556,7 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
 
   protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
     LlmMessage,
-    "agent"
+    "storyAgent"
   > | null> {
     return await this.host.createRoundInput(this.tools);
   }
@@ -496,6 +589,46 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "agent", StoryComp
  * @deprecated Use StoryLoopAgent instead.
  */
 export class StoryAgentRuntime extends StoryLoopAgent {}
+
+class StoryContextCompactionExtension implements LoopAgentExtension<
+  void,
+  LlmMessage,
+  "storyAgent",
+  StoryCompletion
+> {
+  private readonly host: StoryAgentHost;
+
+  public constructor({ host }: { host: StoryAgentHost }) {
+    this.host = host;
+  }
+
+  public async onAfterCommit(input: {
+    result: ReActRoundResult<LlmMessage, StoryCompletion>;
+  }): Promise<void> {
+    await this.host.compactContextIfNeeded(input.result.completion.usage?.totalTokens);
+  }
+}
+
+class StorySnapshotPersistenceExtension implements LoopAgentExtension<
+  void,
+  LlmMessage,
+  "storyAgent",
+  StoryCompletion
+> {
+  private readonly host: StoryAgentHost;
+
+  public constructor({ host }: { host: StoryAgentHost }) {
+    this.host = host;
+  }
+
+  public async onInitialize(): Promise<void> {
+    await this.host.persistSnapshotIfChanged();
+  }
+
+  public async onAfterCommit(): Promise<void> {
+    await this.host.persistSnapshotIfChanged();
+  }
+}
 
 class StoryBatchToolExecutor implements ToolExecutor<LlmMessage> {
   private readonly host: StoryAgentHost;
@@ -611,4 +744,60 @@ function createSnapshotFingerprint(snapshot: {
     contextSnapshot: snapshot.contextSnapshot,
     lastProcessedMessageSeq: snapshot.lastProcessedMessageSeq,
   });
+}
+
+async function createSleep(ms: number): Promise<void> {
+  await new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function trimPersistedContextSnapshot(snapshot: { systemPrompt: string; messages: LlmMessage[] }): {
+  systemPrompt: string;
+  messages: LlmMessage[];
+} {
+  return {
+    systemPrompt: snapshot.systemPrompt,
+    messages: trimPersistedMessages(snapshot.messages),
+  };
+}
+
+function trimPersistedMessages(messages: LlmMessage[]): LlmMessage[] {
+  if (messages.length <= 1) {
+    return [...messages];
+  }
+
+  const keepCount = Math.max(1, Math.ceil(messages.length * PERSISTED_CONTEXT_KEEP_RATIO));
+  const preferredStart = Math.max(0, messages.length - keepCount);
+  const firstNonToolIndex = findFirstNonToolIndex(messages, preferredStart);
+  if (firstNonToolIndex !== -1) {
+    return messages.slice(firstNonToolIndex);
+  }
+
+  const fallbackStart = findLastNonToolIndex(messages, preferredStart - 1);
+  if (fallbackStart !== -1) {
+    return messages.slice(fallbackStart);
+  }
+
+  return [];
+}
+
+function findFirstNonToolIndex(messages: LlmMessage[], start: number): number {
+  for (let index = start; index < messages.length; index += 1) {
+    if (messages[index]?.role !== "tool") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function findLastNonToolIndex(messages: LlmMessage[], start: number): number {
+  for (let index = start; index >= 0; index -= 1) {
+    if (messages[index]?.role !== "tool") {
+      return index;
+    }
+  }
+
+  return -1;
 }

@@ -24,7 +24,7 @@ server:
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
-    contextCompactionThreshold: 60
+    contextCompactionTotalTokenThreshold: 150000
   llm:
     timeoutMs: 15000
     codexAuth:
@@ -118,7 +118,7 @@ startupContextRecentMessageCount: 0
         databaseUrl: "postgresql://user:password@localhost:5432/kagami",
         port: 3100,
         agent: {
-          contextCompactionThreshold: 60,
+          contextCompactionTotalTokenThreshold: 150_000,
           llmRetryBackoffMs: 30_000,
           waitToolMaxWaitMs: 600_000,
         },
@@ -369,7 +369,7 @@ server:
 
     const config = await loadStaticConfig({ configPath });
 
-    expect(config.server.agent.contextCompactionThreshold).toBe(60);
+    expect(config.server.agent.contextCompactionTotalTokenThreshold).toBe(150_000);
     expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
     expect(config.server.agent.waitToolMaxWaitMs).toBe(600_000);
   });
@@ -479,7 +479,77 @@ listenGroupIds:
     } satisfies Partial<BizError>);
   });
 
-  it("should allow overriding context compaction threshold", async () => {
+  it("should allow overriding context compaction total token threshold", async () => {
+    const configPath = await writeConfigFile(`
+server:
+  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  agent:
+    contextCompactionTotalTokenThreshold: 80000
+  napcat:
+    wsUrl: wss://example.com/napcat
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    listenGroupIds:
+      - "123456"
+  llm:
+    timeoutMs: 15000
+    codexAuth:
+      publicBaseUrl: http://localhost:20004
+    claudeCodeAuth:
+      publicBaseUrl: http://localhost:20004
+    providers:
+      deepseek:
+        apiKey: ""
+        models:
+          - deepseek-chat
+      openai:
+        apiKey: openai-key
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        models:
+          - claude-sonnet-4-20250514
+    usages:
+      agent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+            times: 2
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  rag:
+    embedding:
+      apiKey: gemini-key
+  tavily:
+    apiKey: tavily-key
+  bot:
+    qq: "10001"
+    creator:
+      name: 创造者
+      qq: "10000"
+`);
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.agent.contextCompactionTotalTokenThreshold).toBe(80_000);
+    expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
+    expect(config.server.agent.waitToolMaxWaitMs).toBe(600_000);
+  });
+
+  it("should reject the legacy context compaction threshold field", async () => {
     const configPath = await writeConfigFile(`
 server:
   databaseUrl: postgresql://user:password@localhost:5432/kagami
@@ -542,11 +612,14 @@ server:
       qq: "10000"
 `);
 
-    const config = await loadStaticConfig({ configPath });
-
-    expect(config.server.agent.contextCompactionThreshold).toBe(80);
-    expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
-    expect(config.server.agent.waitToolMaxWaitMs).toBe(600_000);
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: "server.agent.contextCompactionThreshold",
+        reason: "CONFIG_INVALID",
+      },
+    } satisfies Partial<BizError>);
   });
 
   it("should allow overriding llm retry backoff ms", async () => {

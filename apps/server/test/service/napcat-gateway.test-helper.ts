@@ -107,7 +107,7 @@ export function createConfigManager(): ConfigManager {
       databaseUrl: "postgresql://localhost:5432/kagami",
       port: 20003,
       agent: {
-        contextCompactionThreshold: 60,
+        contextCompactionTotalTokenThreshold: 150_000,
         llmRetryBackoffMs: 30_000,
         waitToolMaxWaitMs: 600_000,
         story: {
@@ -170,6 +170,9 @@ export function createConfigManager(): ConfigManager {
         },
         usages: {
           agent: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
+          storyAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
           contextSummarizer: {

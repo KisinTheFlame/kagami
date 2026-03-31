@@ -38,7 +38,7 @@ describe("AgentDashboardHandler", () => {
       groups: [],
       context: {
         messageCount: 0,
-        compactionThreshold: 60,
+        compactionTotalTokenThreshold: 150_000,
         recentItems: [],
         recentItemsTruncated: false,
       },
@@ -93,7 +93,7 @@ describe("AgentDashboardHandler", () => {
       groups: [],
       context: {
         messageCount: 0,
-        compactionThreshold: 60,
+        compactionTotalTokenThreshold: 150_000,
         recentItems: [],
         recentItemsTruncated: false,
       },

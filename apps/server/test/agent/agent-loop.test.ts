@@ -83,7 +83,8 @@ function createRuntimeForCompactionTest(input: {
   contextSummaryOperation?: {
     summarize(input: { messages: LlmMessage[]; tools: Tool[] }): Promise<string | null>;
   };
-  contextCompactionThreshold: number;
+  contextCompactionTotalTokenThreshold: number;
+  completions?: Awaited<ReturnType<LlmClient["chat"]>>[];
   llmRetryBackoffMs?: number;
   sleep?: (ms: number) => Promise<void>;
 }) {
@@ -112,23 +113,43 @@ function createRuntimeForCompactionTest(input: {
     size: vi.fn().mockReturnValue(0),
     clear: vi.fn().mockReturnValue(0),
   };
+  const chat = vi.fn();
+  for (const completion of input.completions ?? [
+    {
+      provider: "openai" as const,
+      model: "gpt-test",
+      message: {
+        role: "assistant" as const,
+        content: "已处理",
+        toolCalls: [],
+      },
+      usage: {
+        totalTokens: input.contextCompactionTotalTokenThreshold + 1,
+      },
+    },
+  ]) {
+    chat.mockResolvedValueOnce(completion);
+  }
   const llmClient: LlmClient = {
-    chat: vi.fn(),
+    chat,
     chatDirect: vi.fn(),
     listAvailableProviders: vi.fn().mockResolvedValue([]),
   };
 
-  return new RootLoopAgent({
-    llmClient,
-    context: input.context,
-    eventQueue,
-    session,
-    tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
-    contextSummaryOperation: input.contextSummaryOperation,
-    contextCompactionThreshold: input.contextCompactionThreshold,
-    llmRetryBackoffMs: input.llmRetryBackoffMs,
-    sleep: input.sleep,
-  });
+  return {
+    runtime: new RootLoopAgent({
+      llmClient,
+      context: input.context,
+      eventQueue,
+      session,
+      tools: new ToolCatalog([new WaitTool()]).pick(["wait"]),
+      contextSummaryOperation: input.contextSummaryOperation,
+      contextCompactionTotalTokenThreshold: input.contextCompactionTotalTokenThreshold,
+      llmRetryBackoffMs: input.llmRetryBackoffMs,
+      sleep: input.sleep,
+    }),
+    chat,
+  };
 }
 
 function createInMemorySnapshotRepository(): RootAgentRuntimeSnapshotRepository & {
@@ -570,9 +591,31 @@ describe("RootLoopAgent", () => {
     expect(sleep).toHaveBeenNthCalledWith(2, 10);
   });
 
+  it("does not compact existing context during initialize", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    await context.appendMessages([
+      createUserMessage("alpha"),
+      createUserMessage("beta"),
+      createUserMessage("gamma"),
+    ]);
+    const summarize = vi.fn().mockResolvedValue("累计摘要");
+    const { runtime } = createRuntimeForCompactionTest({
+      context,
+      contextSummaryOperation: { summarize },
+      contextCompactionTotalTokenThreshold: 2,
+    });
+
+    await runtime.initialize();
+
+    expect(summarize).not.toHaveBeenCalled();
+  });
+
   it("should retry recoverable context summary failures after the configured backoff", async () => {
     initTestLoggerRuntime();
-    const sleep = vi.fn().mockResolvedValue(undefined);
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(stopError);
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -589,23 +632,24 @@ describe("RootLoopAgent", () => {
         }),
       )
       .mockResolvedValueOnce("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
+    const { runtime } = createRuntimeForCompactionTest({
       context,
       contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
+      contextCompactionTotalTokenThreshold: 2,
       llmRetryBackoffMs: 30_000,
       sleep,
     });
 
-    await runtime.initialize();
+    await expect(runtime.run()).rejects.toBe(stopError);
 
     expect(summarize).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenCalledWith(30_000);
+    expect(sleep).toHaveBeenNthCalledWith(1, 30_000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 10);
     const snapshot = await context.getSnapshot();
     expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
     expect(snapshot.messages[1]).toMatchObject({
-      role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
+      role: "assistant",
+      content: "已处理",
     });
   });
 
@@ -699,7 +743,9 @@ describe("RootLoopAgent", () => {
     expect(toolFailureMessage?.content).toContain("工具 explode 暂时调用失败了");
   });
 
-  it("should summarize older context messages and keep the recent tail", async () => {
+  it("should summarize older context messages after commit when totalTokens exceeds the threshold", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -709,25 +755,34 @@ describe("RootLoopAgent", () => {
       createUserMessage("gamma"),
     ]);
     const summarize = vi.fn().mockResolvedValue("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
+    const { runtime } = createRuntimeForCompactionTest({
       context,
       contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
+      contextCompactionTotalTokenThreshold: 2,
+      sleep,
     });
 
-    await runtime.initialize();
+    await expect(runtime.run()).rejects.toBe(stopError);
 
     expect(summarize).toHaveBeenCalledTimes(1);
-    expect(summarize).toHaveBeenCalledWith({
-      messages: [createUserMessage("alpha"), createUserMessage("beta"), createUserMessage("gamma")],
-      tools: [],
+    const summarizeInput = summarize.mock.calls[0]?.[0];
+    expect(summarizeInput?.tools).toEqual([]);
+    expect(summarizeInput?.messages.slice(0, 3)).toEqual([
+      createUserMessage("alpha"),
+      createUserMessage("beta"),
+      createUserMessage("gamma"),
+    ]);
+    expect(summarizeInput?.messages[3]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("你当前处于门户状态"),
     });
 
     const snapshot = await context.getSnapshot();
+    expect(snapshot.messages).toHaveLength(2);
     expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
     expect(snapshot.messages[1]).toMatchObject({
-      role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
+      role: "assistant",
+      content: "已处理",
     });
 
     const dashboardSnapshot = await runtime.getDashboardSnapshot();
@@ -735,180 +790,69 @@ describe("RootLoopAgent", () => {
     expect(dashboardSnapshot.contextSummary.messageCount).toBe(2);
   });
 
-  it("should shrink the kept tail when the default 10 percent would exceed the threshold", async () => {
+  it("does not summarize after commit when totalTokens does not exceed the threshold", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const sourceMessages = Array.from({ length: 20 }, (_, index) =>
-      createUserMessage(`message-${index + 1}`),
-    );
-    await context.appendMessages(sourceMessages);
     const summarize = vi.fn().mockResolvedValue("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
+    const { runtime } = createRuntimeForCompactionTest({
       context,
       contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 2,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).toHaveBeenCalledWith({
-      messages: sourceMessages,
-      tools: [],
-    });
-
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toHaveLength(2);
-    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
-    expect(snapshot.messages[1]).toMatchObject({
-      role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
-    });
-  });
-
-  it("should fall back to summary only when the compaction threshold is 1", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    await context.appendMessages([createUserMessage("alpha"), createUserMessage("beta")]);
-    const summarize = vi.fn().mockResolvedValue("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
-      context,
-      contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 1,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).toHaveBeenCalledTimes(1);
-    expect((await context.getSnapshot()).messages).toEqual([
-      createConversationSummaryMessage("累计摘要"),
-    ]);
-  });
-
-  it("should include the matching tool result in the summarized segment when the cut lands on an assistant tool call", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    await context.appendMessages([
-      ...Array.from({ length: 8 }, (_, index) => createUserMessage(`history-${index + 1}`)),
-      {
-        role: "assistant",
-        content: "",
-        toolCalls: [{ id: "tool-1", name: "wait", arguments: {} }],
-      },
-      {
-        role: "tool",
-        toolCallId: "tool-1",
-        content: "tool-result-1",
-      },
-    ]);
-    const summarize = vi.fn().mockResolvedValue("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
-      context,
-      contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 4,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).toHaveBeenCalledWith({
-      messages: [
-        ...Array.from({ length: 8 }, (_, index) => createUserMessage(`history-${index + 1}`)),
+      contextCompactionTotalTokenThreshold: 100,
+      completions: [
         {
-          role: "assistant",
-          content: "",
-          toolCalls: [{ id: "tool-1", name: "wait", arguments: {} }],
-        },
-        {
-          role: "tool",
-          toolCallId: "tool-1",
-          content: "tool-result-1",
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "已处理",
+            toolCalls: [],
+          },
+          usage: {
+            totalTokens: 100,
+          },
         },
       ],
-      tools: [],
+      sleep,
     });
 
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toHaveLength(2);
-    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
-    expect(snapshot.messages[1]).toMatchObject({
-      role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
-    });
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    expect(summarize).not.toHaveBeenCalled();
+    expect((await runtime.getDashboardSnapshot()).lastCompactionAt).toBeNull();
   });
 
-  it("should extend compaction through the last matching tool result and keep unrelated tail messages", async () => {
+  it("skips summary after commit when totalTokens is missing", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const historyMessages = Array.from({ length: 26 }, (_, index) =>
-      createUserMessage(`history-${index + 1}`),
-    );
-    await context.appendMessages([
-      ...historyMessages,
-      {
-        role: "assistant",
-        content: "",
-        toolCalls: [
-          { id: "tool-1", name: "wait", arguments: {} },
-          { id: "tool-2", name: "wait", arguments: {} },
-        ],
-      },
-      {
-        role: "tool",
-        toolCallId: "tool-1",
-        content: "tool-result-1",
-      },
-      createUserMessage("mid-message"),
-      {
-        role: "tool",
-        toolCallId: "tool-2",
-        content: "tool-result-2",
-      },
-    ]);
     const summarize = vi.fn().mockResolvedValue("累计摘要");
-    const runtime = createRuntimeForCompactionTest({
+    const { runtime } = createRuntimeForCompactionTest({
       context,
       contextSummaryOperation: { summarize },
-      contextCompactionThreshold: 6,
-    });
-
-    await runtime.initialize();
-
-    expect(summarize).toHaveBeenCalledWith({
-      messages: [
-        ...historyMessages,
+      contextCompactionTotalTokenThreshold: 2,
+      completions: [
         {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            { id: "tool-1", name: "wait", arguments: {} },
-            { id: "tool-2", name: "wait", arguments: {} },
-          ],
-        },
-        {
-          role: "tool",
-          toolCallId: "tool-1",
-          content: "tool-result-1",
-        },
-        createUserMessage("mid-message"),
-        {
-          role: "tool",
-          toolCallId: "tool-2",
-          content: "tool-result-2",
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "已处理",
+            toolCalls: [],
+          },
         },
       ],
-      tools: [],
+      sleep,
     });
 
-    const snapshot = await context.getSnapshot();
-    expect(snapshot.messages).toHaveLength(2);
-    expect(snapshot.messages[0]).toEqual(createConversationSummaryMessage("累计摘要"));
-    expect(snapshot.messages[1]).toMatchObject({
-      role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
-    });
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    expect(summarize).not.toHaveBeenCalled();
+    expect((await runtime.getDashboardSnapshot()).lastCompactionAt).toBeNull();
   });
 
   it("should persist and restore runtime snapshot without duplicating wake reminder", async () => {

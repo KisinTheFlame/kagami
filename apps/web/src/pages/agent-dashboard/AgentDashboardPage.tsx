@@ -194,7 +194,7 @@ function OverviewTab({
           title="上下文状态"
           rows={[
             ["消息数", String(snapshot.context.messageCount)],
-            ["压缩阈值", String(snapshot.context.compactionThreshold)],
+            ["总 Token 阈值", String(snapshot.context.compactionTotalTokenThreshold)],
             ["最近压缩", formatDateTime(snapshot.runtime.lastCompactionAt) ?? "暂无"],
             ["最近完成轮次", formatDateTime(snapshot.runtime.lastRoundCompletedAt) ?? "暂无"],
           ]}
@@ -245,6 +245,7 @@ function OverviewTab({
                 snapshot.activity.lastLlmCall
                   ? [
                       `${snapshot.activity.lastLlmCall.provider} / ${snapshot.activity.lastLlmCall.model}`,
+                      `总 Token：${snapshot.activity.lastLlmCall.totalTokens ?? "未知"}`,
                       snapshot.activity.lastLlmCall.toolCallNames.length > 0
                         ? `工具：${snapshot.activity.lastLlmCall.toolCallNames.join(", ")}`
                         : "无工具调用",
