@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   attachLlmProviderFailureContext,
   toSerializableLlmNativeRecord,
@@ -93,8 +94,10 @@ async function sendCodexRequest(params: {
   authStore: OpenAiCodexAuthStore;
   request: LlmChatRequest;
 }): Promise<LlmProviderChatResult> {
-  const requestBody = toCodexRequestBody(params.request);
   const initialAuth = await params.authStore.getAuth();
+  const requestBody = toCodexRequestBody(params.request, {
+    accountId: initialAuth.accountId,
+  });
   const initialResponse = await fetchCodexResponse({
     config: params.config,
     auth: initialAuth,
@@ -237,7 +240,10 @@ async function fetchCodexResponse(params: {
   return { status: response.status, completedEvent, responseText: sseText };
 }
 
-function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
+function toCodexRequestBody(
+  request: LlmChatRequest,
+  options?: { accountId?: string | null },
+): Record<string, unknown> {
   const input: Array<Record<string, unknown>> = [];
 
   for (const message of request.messages) {
@@ -297,9 +303,31 @@ function toCodexRequestBody(request: LlmChatRequest): Record<string, unknown> {
             type: "function",
             name: request.toolChoice.tool_name,
           },
+    prompt_cache_key: buildPromptCacheKey(request, options),
     stream: true,
     store: false,
   };
+}
+
+function buildPromptCacheKey(
+  request: LlmChatRequest,
+  options?: { accountId?: string | null },
+): string {
+  const keySeed = JSON.stringify({
+    provider: "openai-codex",
+    accountId: options?.accountId ?? "default",
+    model: requireRequestModel(request),
+    instructions: request.system ?? DEFAULT_INSTRUCTIONS,
+    tools: request.tools,
+    toolChoice:
+      request.toolChoice === "auto" ||
+      request.toolChoice === "none" ||
+      request.toolChoice === "required"
+        ? request.toolChoice
+        : request.toolChoice.tool_name,
+  });
+
+  return `kagami-codex-${createHash("sha256").update(keySeed).digest("hex").slice(0, 32)}`;
 }
 
 function toCodexInputContentPart(part: LlmContentPart): Record<string, unknown> {
