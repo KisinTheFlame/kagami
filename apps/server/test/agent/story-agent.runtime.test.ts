@@ -3,7 +3,6 @@ import { StoryLoopAgent } from "../../src/agent/capabilities/story/runtime/story
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { createUserMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import { BizError } from "../../src/common/errors/biz-error.js";
-import type { StoryRecallService } from "../../src/agent/capabilities/story/application/story-recall.service.js";
 import type { StoryService } from "../../src/agent/capabilities/story/application/story.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
@@ -105,9 +104,6 @@ describe("StoryLoopAgent", () => {
         create,
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -177,9 +173,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -200,7 +193,7 @@ describe("StoryLoopAgent", () => {
     expect(didProcess).toBe(true);
   });
 
-  it("rewrites an existing story when a candidate story is recalled", async () => {
+  it("rewrites an existing story when the model requests it", async () => {
     const rewrite = vi.fn().mockResolvedValue({
       id: "story-1",
       payload: {
@@ -286,31 +279,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite,
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([
-          {
-            score: 0.9,
-            matchedKinds: ["overview"],
-            story: {
-              id: "story-1",
-              payload: {
-                title: "旧 story",
-                time: "",
-                scene: "",
-                people: [],
-                cause: "",
-                process: [],
-                result: "",
-                status: "",
-              },
-              sourceMessageSeqStart: 1,
-              sourceMessageSeqEnd: 10,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          },
-        ]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -411,9 +379,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -437,17 +402,19 @@ describe("StoryLoopAgent", () => {
         (message: LlmMessage): message is Extract<LlmMessage, { role: "user" }> =>
           message.role === "user",
       ) ?? [];
-    expect(userMessages).toHaveLength(2);
-    expect(userMessages[1]).toMatchObject({
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]).toMatchObject({
       role: "user",
     });
-    expect(typeof userMessages[1]?.content).toBe("string");
-    expect(userMessages[1]?.content).toContain("[1] user");
-    expect(userMessages[1]?.content).toContain("又在吐槽权限交接");
-    expect(userMessages[1]?.content).toContain("[2] assistant");
-    expect(userMessages[1]?.content).toContain("工具调用：search_memory");
-    expect(userMessages[1]?.content).toContain("[3] tool");
-    expect(userMessages[1]?.content).toContain("找到了一条旧记忆");
+    expect(typeof userMessages[0]?.content).toBe("string");
+    expect(userMessages[0]?.content).toContain("[1] user");
+    expect(userMessages[0]?.content).toContain("又在吐槽权限交接");
+    expect(userMessages[0]?.content).toContain("[2] assistant");
+    expect(userMessages[0]?.content).toContain("工具调用：search_memory");
+    expect(userMessages[0]?.content).toContain("[3] tool");
+    expect(userMessages[0]?.content).toContain("找到了一条旧记忆");
+    expect(userMessages[0]?.content).not.toContain("候选 story");
+    expect(userMessages[0]?.content).not.toContain("重写对应 story");
   });
 
   it("persists only the latest half of story context and avoids leading tool messages", async () => {
@@ -517,9 +484,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -612,9 +576,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },
@@ -703,9 +664,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: summarize,
       },
@@ -753,9 +711,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: summarize,
       },
@@ -825,9 +780,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: summarize,
       },
@@ -887,9 +839,6 @@ describe("StoryLoopAgent", () => {
         create: vi.fn(),
         rewrite: vi.fn(),
       } as unknown as StoryService,
-      storyRecallService: {
-        search: vi.fn().mockResolvedValue([]),
-      } as unknown as StoryRecallService,
       contextSummaryOperation: {
         execute: vi.fn().mockResolvedValue(null),
       },

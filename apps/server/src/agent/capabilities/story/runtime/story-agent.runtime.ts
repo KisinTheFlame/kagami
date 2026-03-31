@@ -28,7 +28,6 @@ import {
   isRetryableLlmFailure,
   LoopLlmRetryExtension,
 } from "../../../runtime/llm-retry.js";
-import { StoryRecallService, type StoryRecallResult } from "../application/story-recall.service.js";
 import { StoryService } from "../application/story.service.js";
 import type { LinearMessageLedgerRecord } from "../domain/story.js";
 import { STORY_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION, STORY_RUNTIME_KEY } from "../domain/story.js";
@@ -46,7 +45,6 @@ import {
 } from "../task-agent/tools/rewrite-story.tool.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
-const DEFAULT_CANDIDATE_TOP_K = 5;
 const PERSISTED_CONTEXT_KEEP_RATIO = 0.5;
 const logger = new AppLogger({ source: "agent.story-runtime" });
 
@@ -59,13 +57,11 @@ type StoryLoopAgentDeps = {
   linearMessageLedgerDao: LinearMessageLedgerDao;
   snapshotRepository: StoryAgentRuntimeSnapshotRepository;
   storyService: StoryService;
-  storyRecallService: StoryRecallService;
   contextSummaryOperation: ContextSummaryLike;
   summaryTools: Tool[];
   contextCompactionTotalTokenThreshold: number;
   batchSize: number;
   idleFlushMs: number;
-  candidateTopK?: number;
   pollIntervalMs?: number;
   llmRetryBackoffMs?: number;
   now?: () => Date;
@@ -85,13 +81,11 @@ class StoryAgentHost {
   private readonly context: AgentContext;
   private readonly linearMessageLedgerDao: LinearMessageLedgerDao;
   private readonly snapshotRepository: StoryAgentRuntimeSnapshotRepository;
-  private readonly storyRecallService: StoryRecallService;
   private readonly contextSummaryOperation: ContextSummaryLike;
   private readonly summaryTools: Tool[];
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly batchSize: number;
   private readonly idleFlushMs: number;
-  private readonly candidateTopK: number;
   private readonly llmRetryBackoffMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => Date;
@@ -110,13 +104,11 @@ class StoryAgentHost {
   public constructor({
     linearMessageLedgerDao,
     snapshotRepository,
-    storyRecallService,
     contextSummaryOperation,
     summaryTools,
     contextCompactionTotalTokenThreshold,
     batchSize,
     idleFlushMs,
-    candidateTopK,
     llmRetryBackoffMs,
     now,
     sleep,
@@ -126,13 +118,11 @@ class StoryAgentHost {
   }: Omit<StoryLoopAgentDeps, "llmClient" | "storyService" | "pollIntervalMs">) {
     this.linearMessageLedgerDao = linearMessageLedgerDao;
     this.snapshotRepository = snapshotRepository;
-    this.storyRecallService = storyRecallService;
     this.contextSummaryOperation = contextSummaryOperation;
     this.summaryTools = summaryTools;
     this.contextCompactionTotalTokenThreshold = contextCompactionTotalTokenThreshold;
     this.batchSize = batchSize;
     this.idleFlushMs = idleFlushMs;
-    this.candidateTopK = candidateTopK ?? DEFAULT_CANDIDATE_TOP_K;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;
@@ -400,17 +390,10 @@ class StoryAgentHost {
       return null;
     }
 
-    const batchSearchText = renderedBatchMessages.map(renderLlmMessagePlainText).join("\n\n");
-    const candidates = await this.storyRecallService.search({
-      query: batchSearchText,
-      topK: this.candidateTopK,
-    });
-
     return {
       firstSeq,
       lastSeq,
       roundMessages: [
-        createUserMessage(renderStoryCandidateMessage(candidates)),
         createUserMessage(renderStoryBatchMessage({ firstSeq, lastSeq, renderedBatchMessages })),
       ],
     };
@@ -689,32 +672,6 @@ class StoryBatchToolExecutor implements ToolExecutor<LlmMessage> {
 
     return await toolSet.execute(name, argumentsValue, context);
   }
-}
-
-function renderStoryCandidateMessage(candidates: StoryRecallResult[]): string {
-  if (candidates.length === 0) {
-    return [
-      `<system_instruction>`,
-      `当前没有召回到候选 story。若这一批消息形成稳定叙事，请创建新 story。`,
-      `</system_instruction>`,
-    ].join("\n");
-  }
-
-  return [
-    `<system_instruction>`,
-    `下面是基于最新消息召回到的候选 story。默认把连续展开视为同一条 story；如果明显在延续旧叙事，请重写对应 story，而不是重复新建。`,
-    JSON.stringify(
-      candidates.map(candidate => ({
-        storyId: candidate.story.id,
-        score: candidate.score,
-        matchedKinds: candidate.matchedKinds,
-        story: candidate.story.payload,
-      })),
-      null,
-      2,
-    ),
-    `</system_instruction>`,
-  ].join("\n");
 }
 
 function renderStoryBatchMessage(input: {
