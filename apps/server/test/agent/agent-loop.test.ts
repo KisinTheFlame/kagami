@@ -965,6 +965,7 @@ describe("RootLoopAgent", () => {
         message.content.includes("当前时间为北京时间"),
     ).length;
 
+    expect(restoredSnapshot.systemPrompt).toBe("another-system-prompt");
     expect(wakeReminderCount).toBe(1);
   });
 
@@ -1035,15 +1036,15 @@ describe("RootLoopAgent", () => {
     ).toBe(true);
     expect(repository.snapshot).toMatchObject({
       runtimeKey: "root-agent",
-      contextSnapshot: {
-        systemPrompt: "latest-system-prompt",
-      },
       sessionSnapshot: {
         state: {
           kind: "portal",
         },
       },
       lastWakeReminderAt: null,
+    });
+    expect(repository.snapshot?.contextSnapshot).toEqual({
+      messages: snapshot.messages,
     });
   });
 

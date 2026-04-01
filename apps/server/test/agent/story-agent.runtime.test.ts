@@ -417,56 +417,26 @@ describe("StoryLoopAgent", () => {
     expect(userMessages[0]?.content).not.toContain("重写对应 story");
   });
 
-  it("persists only the latest half of story context and avoids leading tool messages", async () => {
-    const context = new DefaultAgentContext({
-      systemPrompt: "story",
-    });
-    await context.appendMessages([
-      {
-        role: "user",
-        content: "旧消息 1",
-      },
-      {
-        role: "assistant",
-        content: "",
-        toolCalls: [
-          {
-            id: "tool-call-1",
-            name: "search_memory",
-            arguments: {
-              query: "旧消息",
+  it("restores story messages while keeping the current system prompt source", async () => {
+    const snapshotRepository = {
+      load: vi.fn().mockResolvedValue({
+        runtimeKey: "story-agent",
+        schemaVersion: 1,
+        contextSnapshot: {
+          messages: [
+            {
+              role: "assistant",
+              content: "已处理旧批次",
+              toolCalls: [],
             },
-          },
-          {
-            id: "tool-call-2",
-            name: "search_memory",
-            arguments: {
-              query: "更多旧消息",
-            },
-          },
-        ],
-      },
-      {
-        role: "tool",
-        toolCallId: "tool-call-1",
-        content: "命中结果 1",
-      },
-      {
-        role: "tool",
-        toolCallId: "tool-call-2",
-        content: "命中结果 2",
-      },
-      {
-        role: "user",
-        content: "较新的消息",
-      },
-      {
-        role: "assistant",
-        content: "较新的总结",
-        toolCalls: [],
-      },
-    ]);
-    const save = vi.fn().mockResolvedValue(undefined);
+          ],
+          systemPrompt: "legacy-story-prompt",
+        },
+        lastProcessedMessageSeq: 12,
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
     const runtime = new StoryLoopAgent({
       llmClient: createStubLlmClient([]).client,
       linearMessageLedgerDao: {
@@ -475,11 +445,7 @@ describe("StoryLoopAgent", () => {
         findLatest: vi.fn().mockResolvedValue(null),
         listAfterSeq: vi.fn().mockResolvedValue([]),
       },
-      snapshotRepository: {
-        load: vi.fn().mockResolvedValue(null),
-        save,
-        delete: vi.fn().mockResolvedValue(undefined),
-      },
+      snapshotRepository,
       storyService: {
         create: vi.fn(),
         rewrite: vi.fn(),
@@ -492,24 +458,167 @@ describe("StoryLoopAgent", () => {
       batchSize: 1,
       idleFlushMs: 60_000,
       sourceRuntimeKey: "root-agent",
-      context,
+      context: new DefaultAgentContext({
+        systemPromptFactory: () => "fresh-story-prompt",
+      }),
       sleep: vi.fn(),
     });
 
     await runtime.initialize();
 
-    expect(save).toHaveBeenCalledOnce();
-    expect(save.mock.calls[0]?.[0]?.contextSnapshot.messages).toEqual([
-      {
-        role: "user",
-        content: "较新的消息",
+    await expect(runtime.getContextSnapshot()).resolves.toEqual({
+      systemPrompt: "fresh-story-prompt",
+      messages: [
+        {
+          role: "assistant",
+          content: "已处理旧批次",
+          toolCalls: [],
+        },
+      ],
+    });
+  });
+
+  it("exposes story dashboard snapshot with runtime state and recent context", async () => {
+    const summarize = vi.fn().mockResolvedValue("累计 story 摘要");
+    const runtime = new StoryLoopAgent({
+      llmClient: createStubLlmClient(
+        [
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "tool-call-1",
+                name: "create_story",
+                arguments: {
+                  title: "权限交接吐槽",
+                  time: "今天",
+                  scene: "群聊",
+                  people: ["Alice"],
+                  cause: "继续吐槽流程",
+                  process: ["提到 CEO 审批"],
+                  result: "觉得流程离谱",
+                  status: "仍在延续",
+                },
+              },
+            ],
+          },
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "tool-call-2",
+                name: "finish_story_batch",
+                arguments: {},
+              },
+            ],
+          },
+        ],
+        {
+          totalTokens: 3,
+        },
+      ).client,
+      linearMessageLedgerDao: {
+        insertMany: vi.fn(),
+        countAfterSeq: vi
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findLatest: vi.fn().mockResolvedValue({
+          seq: 1,
+          runtimeKey: "root-agent",
+          message: {
+            role: "user",
+            content: "又在吐槽权限交接",
+          },
+          createdAt: new Date("2026-03-31T10:00:00.000Z"),
+        }),
+        listAfterSeq: vi.fn().mockResolvedValue([
+          {
+            seq: 1,
+            runtimeKey: "root-agent",
+            message: {
+              role: "user",
+              content: "又在吐槽权限交接",
+            },
+            createdAt: new Date("2026-03-31T10:00:00.000Z"),
+          },
+        ]),
       },
-      {
-        role: "assistant",
-        content: "较新的总结",
-        toolCalls: [],
+      snapshotRepository: {
+        load: vi.fn().mockResolvedValue(null),
+        save: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
       },
-    ]);
+      storyService: {
+        create: vi.fn().mockResolvedValue({
+          id: "story-1",
+          payload: {
+            title: "权限交接吐槽",
+            time: "今天",
+            scene: "群聊",
+            people: ["Alice"],
+            cause: "继续吐槽流程",
+            process: ["提到 CEO 审批"],
+            result: "觉得流程离谱",
+            status: "仍在延续",
+          },
+          sourceMessageSeqStart: 1,
+          sourceMessageSeqEnd: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+        rewrite: vi.fn(),
+      } as unknown as StoryService,
+      contextSummaryOperation: {
+        execute: summarize,
+      },
+      summaryTools: [],
+      contextCompactionTotalTokenThreshold: 2,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+      sourceRuntimeKey: "root-agent",
+      context: new DefaultAgentContext({
+        systemPrompt: "story",
+      }),
+      sleep: vi.fn(),
+    });
+
+    await runtime.runOnce();
+
+    const snapshot = await runtime.getDashboardSnapshot();
+
+    expect(snapshot.initialized).toBe(true);
+    expect(snapshot.loopState).toBe("idle");
+    expect(snapshot.lastError).toBeNull();
+    expect(snapshot.lastActivityAt).toBeInstanceOf(Date);
+    expect(snapshot.lastRoundCompletedAt).toBeInstanceOf(Date);
+    expect(snapshot.lastCompactionAt).toBeInstanceOf(Date);
+    expect(snapshot.lastToolCall).toEqual({
+      name: "finish_story_batch",
+      argumentsPreview: "{}",
+      updatedAt: expect.any(Date),
+    });
+    expect(snapshot.lastLlmCall).toEqual({
+      provider: "openai",
+      model: "gpt-test",
+      assistantContentPreview: "",
+      toolCallNames: ["finish_story_batch"],
+      totalTokens: 3,
+      updatedAt: expect.any(Date),
+    });
+    expect(snapshot.story).toEqual({
+      lastProcessedMessageSeq: 1,
+      pendingMessageCount: 0,
+      pendingBatch: null,
+      batchSize: 1,
+      idleFlushMs: 60_000,
+    });
+    expect(snapshot.contextSummary.messageCount).toBeGreaterThan(0);
+    expect(snapshot.contextSummary.recentItems.length).toBeGreaterThan(0);
+    expect(summarize).toHaveBeenCalledOnce();
   });
 
   it("retries recoverable llm failures without exiting the story loop", async () => {

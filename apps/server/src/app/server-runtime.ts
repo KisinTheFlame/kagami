@@ -52,7 +52,6 @@ import { DefaultAgentMessageService } from "../agent/capabilities/messaging/appl
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { DefaultAgentDashboardQueryService } from "../ops/application/agent-dashboard-query.impl.service.js";
-import { DefaultAgentDashboardCommandService } from "../ops/application/agent-dashboard-command.impl.service.js";
 import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
 import { ClaudeCodeAuthRefreshScheduler } from "../auth/application/claude-code-auth-refresh.scheduler.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
@@ -428,14 +427,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const agentDashboardQueryService = new DefaultAgentDashboardQueryService({
     rootAgentRuntime,
+    storyAgentRuntime,
     eventQueue,
     listenGroupIds: config.server.napcat.listenGroupIds,
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },
-  });
-  const agentDashboardCommandService = new DefaultAgentDashboardCommandService({
-    rootAgentRuntime,
   });
 
   const app = createServerApp({
@@ -445,7 +442,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new LlmHandler({ llmPlaygroundService }),
       new AgentDashboardHandler({
         agentDashboardQueryService,
-        agentDashboardCommandService,
       }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new AppLogHandler({ appLogQueryService }),

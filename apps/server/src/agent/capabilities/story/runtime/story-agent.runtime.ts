@@ -3,6 +3,7 @@ import {
   type LoopAgentExtension,
   ReActKernel,
   ToolCatalog,
+  type ReActKernelExtension,
   type ReActKernelRunRoundInput,
   type ReActRoundResult,
   type ToolContext,
@@ -10,7 +11,11 @@ import {
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
+import type {
+  AgentContext,
+  AgentContextDashboardSummary,
+  AgentContextSnapshot,
+} from "../../../runtime/context/agent-context.js";
 import { DefaultAgentContext } from "../../../runtime/context/default-agent-context.js";
 import { createContextCompactionPlan } from "../../../runtime/context/context-compaction.js";
 import {
@@ -45,12 +50,67 @@ import {
 } from "../task-agent/tools/rewrite-story.tool.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
-const PERSISTED_CONTEXT_KEEP_RATIO = 0.5;
+const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
+const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
 const logger = new AppLogger({ source: "agent.story-runtime" });
 
 type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
 type ContextSummaryLike = Pick<ContextSummaryOperation, "execute">;
+
+export type StoryAgentLoopState =
+  | "starting"
+  | "idle"
+  | "consuming_events"
+  | "calling_llm"
+  | "executing_tool"
+  | "waiting"
+  | "crashed";
+
+export type StoryAgentRuntimeErrorSummary = {
+  name: string;
+  message: string;
+  updatedAt: Date;
+};
+
+export type StoryAgentToolCallSummary = {
+  name: string;
+  argumentsPreview: string;
+  updatedAt: Date;
+};
+
+export type StoryAgentLlmCallSummary = {
+  provider: string;
+  model: string;
+  assistantContentPreview: string;
+  toolCallNames: string[];
+  totalTokens: number | null;
+  updatedAt: Date;
+};
+
+export type StoryAgentRuntimeDashboardSnapshot = {
+  initialized: boolean;
+  loopState: StoryAgentLoopState;
+  lastError: StoryAgentRuntimeErrorSummary | null;
+  lastActivityAt: Date | null;
+  lastRoundCompletedAt: Date | null;
+  lastCompactionAt: Date | null;
+  contextCompactionTotalTokenThreshold: number;
+  contextSummary: AgentContextDashboardSummary;
+  lastToolCall: StoryAgentToolCallSummary | null;
+  lastToolResultPreview: string | null;
+  lastLlmCall: StoryAgentLlmCallSummary | null;
+  story: {
+    lastProcessedMessageSeq: number;
+    pendingMessageCount: number;
+    pendingBatch: {
+      firstSeq: number;
+      lastSeq: number;
+    } | null;
+    batchSize: number;
+    idleFlushMs: number;
+  };
+};
 
 type StoryLoopAgentDeps = {
   llmClient: LlmClient;
@@ -92,9 +152,16 @@ class StoryAgentHost {
   private readonly runtimeKey: string;
   private readonly sourceRuntimeKey: string;
   private initialized = false;
+  private loopState: StoryAgentLoopState = "starting";
   private lastProcessedMessageSeq = 0;
   private pendingBatch: StoryPendingBatch | null = null;
   private lastPersistedSnapshotFingerprint: string | null = null;
+  private lastActivityAt: Date | null = null;
+  private lastRoundCompletedAt: Date | null = null;
+  private lastCompactionAt: Date | null = null;
+  private lastToolCall: StoryAgentToolCallSummary | null = null;
+  private lastToolResultPreview: string | null = null;
+  private lastLlmCall: StoryAgentLlmCallSummary | null = null;
   private lastRecoverableError: {
     name: string;
     message: string;
@@ -140,14 +207,23 @@ class StoryAgentHost {
       return;
     }
 
-    const snapshot = await this.snapshotRepository.load(this.runtimeKey);
-    if (snapshot) {
-      await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
-      this.lastProcessedMessageSeq = snapshot.lastProcessedMessageSeq;
-      this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
-    }
+    this.transitionTo("starting");
 
-    this.initialized = true;
+    try {
+      const snapshot = await this.snapshotRepository.load(this.runtimeKey);
+      if (snapshot) {
+        await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
+        this.lastProcessedMessageSeq = snapshot.lastProcessedMessageSeq;
+        this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
+      }
+
+      this.initialized = true;
+      this.touchActivity();
+      this.transitionTo("idle");
+    } catch (error) {
+      this.recordCrash(error);
+      throw error;
+    }
   }
 
   public async preparePendingBatchIfNeeded(): Promise<{ shouldTriggerRound: boolean }> {
@@ -229,6 +305,7 @@ class StoryAgentHost {
     }
 
     const snapshot = await this.context.getSnapshot();
+    this.transitionTo("calling_llm");
     return {
       state: {
         systemPrompt: snapshot.systemPrompt,
@@ -258,6 +335,9 @@ class StoryAgentHost {
     await this.context.appendMessages(completedBatch.roundMessages);
     this.lastProcessedMessageSeq = completedBatch.lastSeq;
     this.pendingBatch = null;
+    this.lastRoundCompletedAt = this.now();
+    this.touchActivity();
+    this.transitionTo("idle");
   }
 
   public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<void> {
@@ -314,18 +394,17 @@ class StoryAgentHost {
         createConversationSummaryMessage(summary),
         ...compactionPlan.messagesToKeep,
       ]);
+      this.lastCompactionAt = this.now();
+      this.touchActivity();
       return;
     }
   }
 
   public async persistSnapshotIfChanged(): Promise<void> {
-    const persistedContextSnapshot = trimPersistedContextSnapshot(
-      await this.context.exportPersistedSnapshot(),
-    );
     const snapshot = {
       runtimeKey: this.runtimeKey,
       schemaVersion: STORY_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
-      contextSnapshot: persistedContextSnapshot,
+      contextSnapshot: await this.context.exportPersistedSnapshot(),
       lastProcessedMessageSeq: this.lastProcessedMessageSeq,
     };
     const fingerprint = createSnapshotFingerprint(snapshot);
@@ -339,6 +418,37 @@ class StoryAgentHost {
 
   public async getContextSnapshot(): Promise<AgentContextSnapshot> {
     return await this.context.getSnapshot();
+  }
+
+  public async getDashboardSnapshot(): Promise<StoryAgentRuntimeDashboardSnapshot> {
+    const pendingMessageCount = await this.linearMessageLedgerDao.countAfterSeq({
+      runtimeKey: this.sourceRuntimeKey,
+      afterSeq: this.lastProcessedMessageSeq,
+    });
+
+    return {
+      initialized: this.initialized,
+      loopState: this.loopState,
+      lastError: cloneErrorSummary(this.lastRecoverableError),
+      lastActivityAt: cloneDate(this.lastActivityAt),
+      lastRoundCompletedAt: cloneDate(this.lastRoundCompletedAt),
+      lastCompactionAt: cloneDate(this.lastCompactionAt),
+      contextCompactionTotalTokenThreshold: this.contextCompactionTotalTokenThreshold,
+      contextSummary: await this.context.getDashboardSummary({
+        limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
+        previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
+      }),
+      lastToolCall: cloneToolCallSummary(this.lastToolCall),
+      lastToolResultPreview: this.lastToolResultPreview,
+      lastLlmCall: cloneLlmCallSummary(this.lastLlmCall),
+      story: {
+        lastProcessedMessageSeq: this.lastProcessedMessageSeq,
+        pendingMessageCount,
+        pendingBatch: this.getPendingBatchSeqRange(),
+        batchSize: this.batchSize,
+        idleFlushMs: this.idleFlushMs,
+      },
+    };
   }
 
   public getPendingBatchSeqRange(): {
@@ -361,10 +471,57 @@ class StoryAgentHost {
       message: error instanceof Error ? error.message : String(error),
       updatedAt: this.now(),
     };
+    this.touchActivity();
   }
 
   public clearRecoverableError(): void {
     this.lastRecoverableError = null;
+  }
+
+  public recordLlmCall(completion: StoryCompletion): void {
+    this.clearRecoverableError();
+    this.lastLlmCall = {
+      provider: completion.provider,
+      model: completion.model,
+      assistantContentPreview: createPreview(completion.message.content),
+      toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
+      totalTokens: completion.usage?.totalTokens ?? null,
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  public recordToolCall(input: {
+    toolName: string;
+    argumentsValue: Record<string, unknown>;
+    resultContent: string;
+  }): void {
+    this.lastToolCall = {
+      name: input.toolName,
+      argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
+      updatedAt: this.now(),
+    };
+    this.lastToolResultPreview =
+      input.resultContent.trim().length > 0 ? createPreview(input.resultContent) : null;
+    this.touchActivity();
+  }
+
+  public recordCrash(error: unknown): void {
+    this.loopState = "crashed";
+    this.lastRecoverableError = {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: this.now(),
+    };
+    this.touchActivity();
+  }
+
+  public transitionTo(loopState: StoryAgentLoopState): void {
+    this.loopState = loopState;
+  }
+
+  private touchActivity(): void {
+    this.lastActivityAt = this.now();
   }
 
   private async createPendingBatch(
@@ -438,11 +595,15 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     const kernel = new ReActKernel<LlmMessage, "storyAgent", StoryCompletion>({
       model: llmClient,
       extensions: [
+        new StoryLlmTelemetryExtension({
+          host,
+        }),
         new LoopLlmRetryExtension({
           backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
           sleep: resolvedSleep,
           onRecoverableError: error => {
             host.recordRecoverableError(error);
+            host.transitionTo("idle");
           },
           onBeforeRetry: ({ error, delayMs, attempt }) => {
             logger.warn("Story agent LLM call failed; scheduling retry", {
@@ -456,6 +617,12 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
           onSuccessfulModelCall: () => {
             host.clearRecoverableError();
           },
+        }),
+        new StoryToolExecutionStateExtension({
+          host,
+        }),
+        new StoryToolTelemetryExtension({
+          host,
         }),
       ],
     });
@@ -516,6 +683,10 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     return await this.host.getContextSnapshot();
   }
 
+  public async getDashboardSnapshot(): Promise<StoryAgentRuntimeDashboardSnapshot> {
+    return await this.host.getDashboardSnapshot();
+  }
+
   public async resetPersistedState(): Promise<void> {
     await this.ensureInitialized();
     await this.host.resetPersistedState();
@@ -555,10 +726,14 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     roundResult: ReActRoundResult<LlmMessage, StoryCompletion> | null;
   }): Promise<number> {
     void input.roundResult;
+    if (!input.didRunRound) {
+      this.host.transitionTo("idle");
+    }
     return input.didRunRound ? 0 : this.pollIntervalMs;
   }
 
   protected override async onUnhandledError(error: unknown): Promise<void> {
+    this.host.recordCrash(error);
     const pendingBatch = this.host.getPendingBatchSeqRange();
     logger.errorWithCause("Story agent loop crashed", error, {
       event: "agent.story_runtime.crashed",
@@ -572,6 +747,81 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
  * @deprecated Use StoryLoopAgent instead.
  */
 export class StoryAgentRuntime extends StoryLoopAgent {}
+
+class StoryLlmTelemetryExtension implements ReActKernelExtension<
+  LlmMessage,
+  "storyAgent",
+  StoryCompletion
+> {
+  private readonly host: StoryAgentHost;
+
+  public constructor({ host }: { host: StoryAgentHost }) {
+    this.host = host;
+  }
+
+  public onAfterModel(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "storyAgent">;
+    completion: StoryCompletion;
+  }): void {
+    void input.request;
+    this.host.recordLlmCall(input.completion);
+  }
+}
+
+class StoryToolExecutionStateExtension implements ReActKernelExtension<
+  LlmMessage,
+  "storyAgent",
+  StoryCompletion
+> {
+  private readonly host: StoryAgentHost;
+
+  public constructor({ host }: { host: StoryAgentHost }) {
+    this.host = host;
+  }
+
+  public onBeforeToolExecution(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "storyAgent">;
+    completion: StoryCompletion;
+    toolCall: {
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+  }): void {
+    void input;
+    this.host.transitionTo("executing_tool");
+  }
+}
+
+class StoryToolTelemetryExtension implements ReActKernelExtension<
+  LlmMessage,
+  "storyAgent",
+  StoryCompletion
+> {
+  private readonly host: StoryAgentHost;
+
+  public constructor({ host }: { host: StoryAgentHost }) {
+    this.host = host;
+  }
+
+  public async onAfterToolExecution(input: {
+    request: ReActKernelRunRoundInput<LlmMessage, "storyAgent">;
+    completion: StoryCompletion;
+    toolCall: {
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+    result: ToolSetExecutionResult;
+  }): Promise<void> {
+    void input.request;
+    void input.completion;
+    this.host.recordToolCall({
+      toolName: input.toolCall.name,
+      argumentsValue: input.toolCall.arguments,
+      resultContent: input.result.content,
+    });
+  }
+}
 
 class StoryContextCompactionExtension implements LoopAgentExtension<
   void,
@@ -709,52 +959,62 @@ async function createSleep(ms: number): Promise<void> {
   });
 }
 
-function trimPersistedContextSnapshot(snapshot: { systemPrompt: string; messages: LlmMessage[] }): {
-  systemPrompt: string;
-  messages: LlmMessage[];
-} {
+function cloneDate(value: Date | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+function cloneErrorSummary(
+  value: StoryAgentRuntimeErrorSummary | null,
+): StoryAgentRuntimeErrorSummary | null {
+  if (!value) {
+    return null;
+  }
+
   return {
-    systemPrompt: snapshot.systemPrompt,
-    messages: trimPersistedMessages(snapshot.messages),
+    ...value,
+    updatedAt: new Date(value.updatedAt),
   };
 }
 
-function trimPersistedMessages(messages: LlmMessage[]): LlmMessage[] {
-  if (messages.length <= 1) {
-    return [...messages];
+function cloneToolCallSummary(
+  value: StoryAgentToolCallSummary | null,
+): StoryAgentToolCallSummary | null {
+  if (!value) {
+    return null;
   }
 
-  const keepCount = Math.max(1, Math.ceil(messages.length * PERSISTED_CONTEXT_KEEP_RATIO));
-  const preferredStart = Math.max(0, messages.length - keepCount);
-  const firstNonToolIndex = findFirstNonToolIndex(messages, preferredStart);
-  if (firstNonToolIndex !== -1) {
-    return messages.slice(firstNonToolIndex);
-  }
-
-  const fallbackStart = findLastNonToolIndex(messages, preferredStart - 1);
-  if (fallbackStart !== -1) {
-    return messages.slice(fallbackStart);
-  }
-
-  return [];
+  return {
+    ...value,
+    updatedAt: new Date(value.updatedAt),
+  };
 }
 
-function findFirstNonToolIndex(messages: LlmMessage[], start: number): number {
-  for (let index = start; index < messages.length; index += 1) {
-    if (messages[index]?.role !== "tool") {
-      return index;
-    }
+function cloneLlmCallSummary(
+  value: StoryAgentLlmCallSummary | null,
+): StoryAgentLlmCallSummary | null {
+  if (!value) {
+    return null;
   }
 
-  return -1;
+  return {
+    ...value,
+    updatedAt: new Date(value.updatedAt),
+  };
 }
 
-function findLastNonToolIndex(messages: LlmMessage[], start: number): number {
-  for (let index = start; index >= 0; index -= 1) {
-    if (messages[index]?.role !== "tool") {
-      return index;
-    }
+function safeJsonStringify(value: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
+function createPreview(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= DEFAULT_DASHBOARD_PREVIEW_LENGTH) {
+    return trimmed;
   }
 
-  return -1;
+  return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
 }

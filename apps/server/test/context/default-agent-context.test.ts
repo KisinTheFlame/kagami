@@ -4,6 +4,7 @@ import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
+import type { LlmMessage } from "../../src/llm/types.js";
 
 describe("DefaultAgentContext", () => {
   it("should append plain messages into the context", async () => {
@@ -187,15 +188,17 @@ describe("DefaultAgentContext", () => {
       systemPromptFactory: () => "latest-system-prompt",
     });
 
-    await context.restorePersistedSnapshot({
+    const legacySnapshot = {
       systemPrompt: "persisted-system-prompt",
       messages: [
         {
           role: "user",
           content: "old-message",
         },
-      ],
-    });
+      ] satisfies LlmMessage[],
+    };
+
+    await context.restorePersistedSnapshot(legacySnapshot);
 
     await context.reset();
 
@@ -497,13 +500,24 @@ describe("DefaultAgentContext", () => {
     ]);
 
     const exported = await context.exportPersistedSnapshot();
+    expect(exported).toEqual({
+      messages: [
+        createConversationSummaryMessage("累计摘要"),
+        {
+          role: "assistant",
+          content: "reply-after-summary",
+          toolCalls: [],
+        },
+      ],
+    });
+
     const restored = new DefaultAgentContext({
       systemPromptFactory: () => "other-system-prompt",
     });
     await restored.restorePersistedSnapshot(exported);
 
     await expect(restored.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
+      systemPrompt: "other-system-prompt",
       messages: [
         createConversationSummaryMessage("累计摘要"),
         {
@@ -520,7 +534,7 @@ describe("DefaultAgentContext", () => {
     });
 
     await expect(restored.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
+      systemPrompt: "other-system-prompt",
       messages: [
         createConversationSummaryMessage("累计摘要"),
         {

@@ -63,13 +63,11 @@ export class DefaultAgentContext implements AgentContext {
   public async exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot> {
     const snapshot = await this.getSnapshot();
     return {
-      systemPrompt: snapshot.systemPrompt,
       messages: cloneMessages(snapshot.messages),
     };
   }
 
   public async restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void> {
-    this.systemPrompt = snapshot.systemPrompt;
     this.items.splice(
       0,
       this.items.length,
