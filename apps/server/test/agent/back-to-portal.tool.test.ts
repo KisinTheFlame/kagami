@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
+import { BackTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 
-describe("back_to_portal tool", () => {
-  it("should return state transition error when current state is portal", async () => {
-    const tool = new BackToPortalTool();
+describe("back tool", () => {
+  it("should return state transition error when current state is root", async () => {
+    const tool = new BackTool();
     const toolContext = {
       rootAgentSession: {
-        backToPortal: async () => ({
+        back: async () => ({
           ok: false,
           error: "STATE_TRANSITION_NOT_ALLOWED",
         }),
@@ -15,7 +15,7 @@ describe("back_to_portal tool", () => {
 
     const result = await tool.execute({}, toolContext);
 
-    expect(tool.name).toBe("back_to_portal");
+    expect(tool.name).toBe("back");
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,

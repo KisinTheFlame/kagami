@@ -6,7 +6,7 @@
 - {{groupLabel}}{{#if hasEntered}}，未读 {{unreadCount}} 条，可通过 {{enterCommandText}} 进入{{else}}，尚未查看，可通过 {{enterCommandText}} 进去看看最近消息{{/if}}
 {{/each}}
 {{#each feeds}}
-- {{label}}（kind="{{kind}}"）{{#if hasEntered}}{{#if unreadCount}}，新文章 {{unreadCount}} 篇，可通过 {{enterCommandText}} 进入{{else}}，暂无新文章，可通过 {{enterCommandText}} 进去看看最近文章{{/if}}{{else}}，尚未查看，可通过 {{enterCommandText}} 进去看看最近文章{{/if}}
+- {{label}}(kind="{{kind}}"){{#if hasEntered}}{{#if unreadCount}}，新文章 {{unreadCount}} 篇，可通过 {{enterCommandText}} 进入{{else}}，暂无新文章，可通过 {{enterCommandText}} 进去看看最近文章{{/if}}{{else}}，尚未查看，可通过 {{enterCommandText}} 进去看看最近文章{{/if}}
 {{/each}}
-- 神游（kind="zone_out"），可通过 enter(kind="zone_out") 进入自由思考状态
+- 神游(kind="zone_out")，可通过 enter(kind="zone_out") 进入自由思考状态
 </system_reminder>

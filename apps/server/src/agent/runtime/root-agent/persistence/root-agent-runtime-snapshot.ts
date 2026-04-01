@@ -81,37 +81,6 @@ export const PersistedAgentContextSnapshotSchema = z.object({
 
 export type PersistedAgentContextSnapshot = z.infer<typeof PersistedAgentContextSnapshotSchema>;
 
-const PersistedRootAgentActiveSessionStateSchema = z.union([
-  z.object({
-    kind: z.literal("portal"),
-  }),
-  z.object({
-    kind: z.literal("qq_group"),
-    groupId: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal("zone_out"),
-  }),
-  z.object({
-    kind: z.literal("ithome"),
-  }),
-]);
-
-export type PersistedRootAgentActiveSessionState = z.infer<
-  typeof PersistedRootAgentActiveSessionStateSchema
->;
-
-const PersistedRootAgentSessionStateSchema = z.union([
-  PersistedRootAgentActiveSessionStateSchema,
-  z.object({
-    kind: z.literal("waiting"),
-    deadlineAt: DateValueSchema,
-    resumeState: PersistedRootAgentActiveSessionStateSchema,
-  }),
-]);
-
-export type PersistedRootAgentSessionState = z.infer<typeof PersistedRootAgentSessionStateSchema>;
-
 const PersistedRootAgentSessionGroupStateSchema = z.object({
   groupId: z.string().min(1),
   groupInfo: NapcatGetGroupInfoResultSchema.nullable(),
@@ -123,14 +92,35 @@ export type PersistedRootAgentSessionGroupState = z.infer<
   typeof PersistedRootAgentSessionGroupStateSchema
 >;
 
+const PersistedRootAgentIthomeFeedStateSchema = z.object({
+  kind: z.literal("ithome"),
+  label: z.string().min(1),
+  unreadCount: z.number().int().nonnegative(),
+  hasEntered: z.boolean(),
+});
+
+export type PersistedRootAgentIthomeFeedState = z.infer<
+  typeof PersistedRootAgentIthomeFeedStateSchema
+>;
+
+const PersistedRootAgentWaitOverlaySchema = z.object({
+  deadlineAt: DateValueSchema,
+  resumeStateStack: z.array(z.string().min(1)).min(1),
+});
+
+export type PersistedRootAgentWaitOverlay = z.infer<typeof PersistedRootAgentWaitOverlaySchema>;
+
 export const PersistedRootAgentSessionSnapshotSchema = z.object({
-  state: PersistedRootAgentSessionStateSchema,
+  stateStack: z.array(z.string().min(1)).min(1),
+  waitOverlay: PersistedRootAgentWaitOverlaySchema.nullable(),
   groups: z.array(PersistedRootAgentSessionGroupStateSchema),
+  ithomeFeedState: PersistedRootAgentIthomeFeedStateSchema.nullable(),
 });
 
 export type PersistedRootAgentSessionSnapshot = z.infer<
   typeof PersistedRootAgentSessionSnapshotSchema
 >;
+export type CurrentPersistedRootAgentSessionSnapshot = PersistedRootAgentSessionSnapshot;
 
 export const PersistedRootAgentRuntimeSnapshotSchema = z.object({
   runtimeKey: z.string().min(1),

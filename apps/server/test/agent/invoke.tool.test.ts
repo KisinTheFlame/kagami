@@ -58,7 +58,11 @@ describe("invoke tool", () => {
       {
         groupId: "group-1",
         rootAgentSession: {
-          getState: () => ({ kind: "qq_group" as const, groupId: "group-1" }),
+          getState: () => ({
+            focusedStateId: "qq_group:group-1" as const,
+            stateStack: ["portal", "qq_group:group-1"] as const,
+            waiting: null,
+          }),
           getAvailableInvokeTools: () => ["send_message"],
         },
       } as Parameters<typeof tool.execute>[1],
@@ -91,7 +95,11 @@ describe("invoke tool", () => {
       },
       {
         rootAgentSession: {
-          getState: () => ({ kind: "zone_out" as const }),
+          getState: () => ({
+            focusedStateId: "zone_out" as const,
+            stateStack: ["portal", "zone_out"] as const,
+            waiting: null,
+          }),
           getAvailableInvokeTools: () => ["zone_out"],
         },
       } as Parameters<typeof tool.execute>[1],
@@ -126,7 +134,11 @@ describe("invoke tool", () => {
       },
       {
         rootAgentSession: {
-          getState: () => ({ kind: "zone_out" as const }),
+          getState: () => ({
+            focusedStateId: "zone_out" as const,
+            stateStack: ["portal", "zone_out"] as const,
+            waiting: null,
+          }),
           getAvailableInvokeTools: () => ["zone_out"],
         },
       } as Parameters<typeof tool.execute>[1],
@@ -160,7 +172,11 @@ describe("invoke tool", () => {
       },
       {
         rootAgentSession: {
-          getState: () => ({ kind: "ithome" as const }),
+          getState: () => ({
+            focusedStateId: "ithome" as const,
+            stateStack: ["portal", "ithome"] as const,
+            waiting: null,
+          }),
           getAvailableInvokeTools: () => ["open_ithome_article"],
           openIthomeArticle,
         },
@@ -194,7 +210,11 @@ describe("invoke tool", () => {
       },
       {
         rootAgentSession: {
-          getState: () => ({ kind: "ithome" as const }),
+          getState: () => ({
+            focusedStateId: "ithome" as const,
+            stateStack: ["portal", "ithome"] as const,
+            waiting: null,
+          }),
           getAvailableInvokeTools: () => ["open_ithome_article"],
           openIthomeArticle: vi.fn().mockResolvedValue({
             ok: false,

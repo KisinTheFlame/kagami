@@ -81,10 +81,10 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
           ok: false,
           error: "INVOKE_TOOL_NOT_AVAILABLE",
           tool: input.tool,
-          state: state.kind,
+          state: state.waiting ? "waiting" : state.focusedStateId,
           message: buildInvokeToolUnavailableMessage({
             tool: input.tool,
-            state: state.kind,
+            state: state.waiting ? "waiting" : state.focusedStateId,
             availableTools,
           }),
           availableTools,

@@ -1,7 +1,6 @@
 import type {
   AgentDashboardAgentSnapshot,
   AgentDashboardContextItem,
-  AgentDashboardGroup,
   AgentLoopState,
   RootAgentDashboardSnapshot,
   StoryAgentDashboardSnapshot,
@@ -157,10 +156,13 @@ function RootOverviewTab({
         <OverviewCard
           title="会话状态"
           rows={[
-            ["当前会话", agent.session.kind],
-            ["当前群", agent.session.currentGroupId ?? "无"],
-            ["等待截止", formatDateTime(agent.session.waitingDeadlineAt) ?? "无"],
-            ["等待后返回", formatWaitingResumeTarget(agent.session.waitingResumeTarget) ?? "无"],
+            ["当前焦点", agent.session.focusedStateDisplayName],
+            ["当前状态 ID", agent.session.focusedStateId],
+            ["当前描述", agent.session.focusedStateDescription || "无"],
+            ["状态栈", formatStateStack(agent.session.stateStack)],
+            ["等待状态", agent.session.waiting.active ? "等待中" : "未等待"],
+            ["等待截止", formatDateTime(agent.session.waiting.deadlineAt) ?? "无"],
+            ["等待后恢复", agent.session.waiting.resumeStateId ?? "无"],
             [
               "可用工具",
               agent.session.availableInvokeTools.length > 0
@@ -197,13 +199,13 @@ function RootOverviewTab({
       <section className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Card className="min-h-0">
           <CardHeader className="pb-4">
-            <CardTitle>群状态</CardTitle>
+            <CardTitle>当前子节点</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {agent.groups.length === 0 ? (
-              <EmptyBlock label="当前没有监听中的群" />
+            {agent.session.children.length === 0 ? (
+              <EmptyBlock label="当前状态没有可进入的子节点" />
             ) : (
-              agent.groups.map(group => <GroupCard key={group.groupId} group={group} />)
+              agent.session.children.map(child => <StateChildCard key={child.id} child={child} />)
             )}
           </CardContent>
         </Card>
@@ -381,20 +383,23 @@ function OverviewCard({ title, rows }: { title: string; rows: Array<[string, str
   );
 }
 
-function GroupCard({ group }: { group: AgentDashboardGroup }) {
+function StateChildCard({
+  child,
+}: {
+  child: RootAgentDashboardSnapshot["session"]["children"][number];
+}) {
   return (
     <div className="rounded-md border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{group.groupName ?? "未获取到群名"}</p>
-          <p className="mt-1 font-mono text-xs text-muted-foreground">{group.groupId}</p>
+          <p className="truncate text-sm font-medium">{child.displayName}</p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{child.id}</p>
         </div>
-        <Badge variant="outline">{group.hasEntered ? "已进入" : "未进入"}</Badge>
+        <Badge variant="outline">可进入</Badge>
       </div>
-      <div className="mt-4 flex items-end justify-between">
-        <span className="text-xs text-muted-foreground">未读消息</span>
-        <span className="font-mono text-2xl font-semibold tabular-nums">{group.unreadCount}</span>
-      </div>
+      <p className="mt-4 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+        {child.description || "无描述"}
+      </p>
     </div>
   );
 }
@@ -516,23 +521,12 @@ function formatStableDateTime(value: string | null): string | null {
   return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 }
 
-function formatWaitingResumeTarget(
-  value: RootAgentDashboardSnapshot["session"]["waitingResumeTarget"],
-): string | null {
-  if (!value) {
-    return null;
+function formatStateStack(value: RootAgentDashboardSnapshot["session"]["stateStack"]): string {
+  if (value.length === 0) {
+    return "无";
   }
 
-  switch (value.kind) {
-    case "portal":
-      return "portal";
-    case "qq_group":
-      return `qq_group:${value.groupId}`;
-    case "ithome":
-      return "ithome";
-    case "zone_out":
-      return "zone_out";
-  }
+  return value.map(item => `${item.displayName} (${item.id})`).join(" > ");
 }
 
 function formatPendingBatch(value: StoryAgentDashboardSnapshot["story"]["pendingBatch"]): string {

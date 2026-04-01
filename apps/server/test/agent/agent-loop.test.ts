@@ -354,7 +354,7 @@ describe("RootLoopAgent", () => {
       snapshot.messages.some(
         message =>
           typeof message.content === "string" &&
-          message.content.includes("QQ 群 产品群（group-1），未读 0 条"),
+          message.content.includes("QQ 群 产品群 (group-1)，未读 0 条"),
       ),
     ).toBe(true);
     const enterAssistantIndex = snapshot.messages.findIndex(

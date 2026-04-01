@@ -350,12 +350,20 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     linearMessageLedgerDao,
     runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
+  const invokeSubtools = [
+    new SendMessageTool({
+      agentMessageService,
+    }),
+    new ZoneOutTool(),
+    new OpenIthomeArticleTool(),
+  ];
   const rootAgentSession = new RootAgentSession({
     context,
     napcatGatewayService,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     ithomeNewsService,
+    invokeToolDefinitions: invokeSubtools.map(tool => tool.llmTool),
   });
   const toolCatalog = new ToolCatalog([
     new EnterTool(),
@@ -364,13 +372,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       maxWaitMs: config.server.agent.waitToolMaxWaitMs,
     }),
     new InvokeTool({
-      tools: [
-        new SendMessageTool({
-          agentMessageService,
-        }),
-        new ZoneOutTool(),
-        new OpenIthomeArticleTool(),
-      ],
+      tools: invokeSubtools,
     }),
     new SearchWebTool({
       webSearchTaskAgent,

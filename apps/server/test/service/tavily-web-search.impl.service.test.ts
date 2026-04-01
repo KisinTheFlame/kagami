@@ -99,6 +99,6 @@ describe("TavilyWebSearchService", () => {
       service.search({
         query: "kagami project",
       }),
-    ).rejects.toThrow("Tavily 请求失败（429）");
+    ).rejects.toThrow("Tavily 请求失败 (429)");
   });
 });

@@ -31,16 +31,21 @@ describe("AgentDashboardHandler", () => {
             lastCompactionAt: null,
           },
           session: {
-            kind: "portal",
-            currentGroupId: null,
-            waitingDeadlineAt: null,
-            waitingResumeTarget: null,
+            focusedStateId: "portal",
+            focusedStateDisplayName: "门户",
+            focusedStateDescription: "主入口",
+            stateStack: [{ id: "portal", displayName: "门户" }],
+            children: [],
             availableInvokeTools: [],
+            waiting: {
+              active: false,
+              deadlineAt: null,
+              resumeStateId: null,
+            },
           },
           queue: {
             pendingEventCount: 0,
           },
-          groups: [],
           context: {
             messageCount: 0,
             compactionTotalTokenThreshold: 150_000,
@@ -94,16 +99,21 @@ describe("AgentDashboardHandler", () => {
             lastCompactionAt: null,
           },
           session: {
-            kind: "portal",
-            currentGroupId: null,
-            waitingDeadlineAt: null,
-            waitingResumeTarget: null,
+            focusedStateId: "portal",
+            focusedStateDisplayName: "门户",
+            focusedStateDescription: "主入口",
+            stateStack: [{ id: "portal", displayName: "门户" }],
+            children: [],
             availableInvokeTools: [],
+            waiting: {
+              active: false,
+              deadlineAt: null,
+              resumeStateId: null,
+            },
           },
           queue: {
             pendingEventCount: 0,
           },
-          groups: [],
           context: {
             messageCount: 0,
             compactionTotalTokenThreshold: 150_000,

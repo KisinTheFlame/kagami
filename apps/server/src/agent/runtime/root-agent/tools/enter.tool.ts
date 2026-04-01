@@ -1,34 +1,12 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent-runtime";
-import {
-  ROOT_AGENT_ENTER_TARGET_KINDS,
-  type RootAgentSessionController,
-} from "../session/root-agent-session.js";
+import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const ENTER_TOOL_NAME = "enter";
 
-const EnterArgumentsSchema = z
-  .object({
-    kind: z.enum(ROOT_AGENT_ENTER_TARGET_KINDS),
-    id: z.string().trim().min(1).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.kind === "qq_group" && !value.id) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["id"],
-        message: "进入 qq_group 时必须提供 id",
-      });
-    }
-
-    if ((value.kind === "zone_out" || value.kind === "ithome") && value.id !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["id"],
-        message: `进入 ${value.kind} 时不需要提供 id`,
-      });
-    }
-  });
+const EnterArgumentsSchema = z.object({
+  id: z.string().trim().min(1),
+});
 
 type EnterToolContext = ToolContext & {
   rootAgentSession?: RootAgentSessionController;
@@ -36,19 +14,13 @@ type EnterToolContext = ToolContext & {
 
 export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
   public readonly name = ENTER_TOOL_NAME;
-  public readonly description =
-    "从门户状态进入一个可进入目标，例如某个 QQ 群、IT 之家资讯空间或神游状态。";
+  public readonly description = "进入当前焦点状态下的一个直接子节点。";
   public readonly parameters = {
     type: "object",
     properties: {
-      kind: {
-        type: "string",
-        description: '进入目标类型。当前支持 "qq_group"、"ithome" 和 "zone_out"。',
-      },
       id: {
         type: "string",
-        description:
-          '目标 ID。kind 为 "qq_group" 时填写群 ID；kind 为 "ithome" 或 "zone_out" 时不要填写。',
+        description: '目标状态的唯一 ID，例如 "qq_group:123456"、"ithome" 或 "zone_out"。',
       },
     },
   } as const;
@@ -69,8 +41,7 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
 
     return JSON.stringify(
       await rootAgentSession.enter({
-        kind: input.kind,
-        ...(input.id !== undefined ? { id: input.id } : {}),
+        id: input.id,
       }),
     );
   }

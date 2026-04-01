@@ -61,17 +61,6 @@ export const AgentDashboardLlmCallSchema = z
 
 export type AgentDashboardLlmCall = z.infer<typeof AgentDashboardLlmCallSchema>;
 
-export const AgentDashboardGroupSchema = z
-  .object({
-    groupId: z.string().min(1),
-    groupName: z.string().min(1).optional(),
-    unreadCount: z.number().int().nonnegative(),
-    hasEntered: z.boolean(),
-  })
-  .strict();
-
-export type AgentDashboardGroup = z.infer<typeof AgentDashboardGroupSchema>;
-
 export const AgentDashboardRuntimeSchema = z
   .object({
     initialized: z.boolean(),
@@ -106,43 +95,42 @@ export const AgentDashboardActivitySchema = z
 
 export type AgentDashboardActivity = z.infer<typeof AgentDashboardActivitySchema>;
 
-export const AgentDashboardWaitingResumeTargetSchema = z
-  .union([
-    z
-      .object({
-        kind: z.literal("portal"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("qq_group"),
-        groupId: z.string().min(1),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("ithome"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("zone_out"),
-      })
-      .strict(),
-  ])
-  .nullable();
+export const RootAgentDashboardStateStackItemSchema = z
+  .object({
+    id: z.string().min(1),
+    displayName: z.string().min(1),
+  })
+  .strict();
 
-export type AgentDashboardWaitingResumeTarget = z.infer<
-  typeof AgentDashboardWaitingResumeTargetSchema
+export type RootAgentDashboardStateStackItem = z.infer<
+  typeof RootAgentDashboardStateStackItemSchema
 >;
+
+export const RootAgentDashboardChildStateSchema = z
+  .object({
+    id: z.string().min(1),
+    displayName: z.string().min(1),
+    description: z.string(),
+  })
+  .strict();
+
+export type RootAgentDashboardChildState = z.infer<typeof RootAgentDashboardChildStateSchema>;
 
 export const RootAgentDashboardSessionSchema = z
   .object({
-    kind: z.enum(["portal", "qq_group", "ithome", "zone_out", "waiting"]),
-    currentGroupId: z.string().min(1).nullable(),
-    waitingDeadlineAt: z.string().datetime().nullable(),
-    waitingResumeTarget: AgentDashboardWaitingResumeTargetSchema,
+    focusedStateId: z.string().min(1),
+    focusedStateDisplayName: z.string().min(1),
+    focusedStateDescription: z.string(),
+    stateStack: z.array(RootAgentDashboardStateStackItemSchema),
+    children: z.array(RootAgentDashboardChildStateSchema),
     availableInvokeTools: z.array(z.string().min(1)),
+    waiting: z
+      .object({
+        active: z.boolean(),
+        deadlineAt: z.string().datetime().nullable(),
+        resumeStateId: z.string().min(1).nullable(),
+      })
+      .strict(),
   })
   .strict();
 
@@ -192,7 +180,6 @@ export const RootAgentDashboardSnapshotSchema = AgentDashboardAgentBaseSchema.ex
   kind: z.literal("root"),
   session: RootAgentDashboardSessionSchema,
   queue: RootAgentDashboardQueueSchema,
-  groups: z.array(AgentDashboardGroupSchema),
   providers: z.array(LlmProviderOptionSchema),
 }).strict();
 

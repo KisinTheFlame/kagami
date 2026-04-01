@@ -71,7 +71,7 @@ export class TavilyWebSearchService implements WebSearchService {
     const responseText = await response.text();
     if (!response.ok) {
       throw new Error(
-        `Tavily 请求失败（${response.status}）：${truncateText(responseText, 200) || "unknown error"}`,
+        `Tavily 请求失败 (${response.status}): ${truncateText(responseText, 200) || "unknown error"}`,
       );
     }
 

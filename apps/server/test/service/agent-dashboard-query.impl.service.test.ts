@@ -42,29 +42,23 @@ describe("DefaultAgentDashboardQueryService", () => {
           updatedAt: new Date("2026-03-30T07:59:59.000Z"),
         },
         session: {
-          state: {
-            kind: "waiting",
-            deadlineAt: new Date("2026-03-30T08:01:00.000Z"),
-            resumeState: {
-              kind: "qq_group",
-              groupId: "group-1",
-            },
-          },
-          currentGroupId: null,
-          waitingDeadlineAt: new Date("2026-03-30T08:01:00.000Z"),
-          waitingResumeTarget: {
-            kind: "qq_group",
-            groupId: "group-1",
-          },
-          availableInvokeTools: [],
-          groups: [
+          focusedStateId: "portal",
+          focusedStateDisplayName: "门户",
+          focusedStateDescription: "主入口",
+          stateStack: [{ id: "portal", displayName: "门户" }],
+          children: [
             {
-              groupId: "group-1",
-              groupName: "产品群",
-              unreadCount: 3,
-              hasEntered: true,
+              id: "qq_group:group-1",
+              displayName: "QQ 群 产品群 (group-1)",
+              description: "未读 3 条消息。",
             },
           ],
+          waiting: {
+            active: true,
+            deadlineAt: new Date("2026-03-30T08:01:00.000Z"),
+            resumeStateId: "qq_group:group-1",
+          },
+          availableInvokeTools: [],
         },
         availableInvokeTools: [],
       }),
@@ -155,26 +149,27 @@ describe("DefaultAgentDashboardQueryService", () => {
           lastCompactionAt: "2026-03-30T07:55:00.000Z",
         },
         session: {
-          kind: "waiting",
-          currentGroupId: null,
-          waitingDeadlineAt: "2026-03-30T08:01:00.000Z",
-          waitingResumeTarget: {
-            kind: "qq_group",
-            groupId: "group-1",
-          },
+          focusedStateId: "portal",
+          focusedStateDisplayName: "门户",
+          focusedStateDescription: "主入口",
+          stateStack: [{ id: "portal", displayName: "门户" }],
+          children: [
+            {
+              id: "qq_group:group-1",
+              displayName: "QQ 群 产品群 (group-1)",
+              description: "未读 3 条消息。",
+            },
+          ],
           availableInvokeTools: [],
+          waiting: {
+            active: true,
+            deadlineAt: "2026-03-30T08:01:00.000Z",
+            resumeStateId: "qq_group:group-1",
+          },
         },
         queue: {
           pendingEventCount: 2,
         },
-        groups: [
-          {
-            groupId: "group-1",
-            groupName: "产品群",
-            unreadCount: 3,
-            hasEntered: true,
-          },
-        ],
         context: {
           messageCount: 12,
           compactionTotalTokenThreshold: 150_000,

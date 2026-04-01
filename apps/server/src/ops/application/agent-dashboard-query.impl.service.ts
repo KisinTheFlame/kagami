@@ -92,23 +92,28 @@ function mapRootAgentSnapshot(input: {
     kind: "root",
     runtime: mapRuntime(runtimeSnapshot),
     session: {
-      kind: runtimeSnapshot.session.state.kind as RootAgentDashboardSnapshot["session"]["kind"],
-      currentGroupId: runtimeSnapshot.session.currentGroupId,
-      waitingDeadlineAt: toIsoString(runtimeSnapshot.session.waitingDeadlineAt),
-      waitingResumeTarget:
-        runtimeSnapshot.session.waitingResumeTarget &&
-        mapWaitingResumeTarget(runtimeSnapshot.session.waitingResumeTarget),
-      availableInvokeTools: runtimeSnapshot.availableInvokeTools,
+      focusedStateId: runtimeSnapshot.session.focusedStateId,
+      focusedStateDisplayName: runtimeSnapshot.session.focusedStateDisplayName,
+      focusedStateDescription: runtimeSnapshot.session.focusedStateDescription,
+      stateStack: runtimeSnapshot.session.stateStack.map(item => ({
+        id: item.id,
+        displayName: item.displayName,
+      })),
+      children: runtimeSnapshot.session.children.map(child => ({
+        id: child.id,
+        displayName: child.displayName,
+        description: child.description,
+      })),
+      availableInvokeTools: runtimeSnapshot.session.availableInvokeTools,
+      waiting: {
+        active: runtimeSnapshot.session.waiting.active,
+        deadlineAt: toIsoString(runtimeSnapshot.session.waiting.deadlineAt),
+        resumeStateId: runtimeSnapshot.session.waiting.resumeStateId,
+      },
     },
     queue: {
       pendingEventCount,
     },
-    groups: runtimeSnapshot.session.groups.map(group => ({
-      groupId: group.groupId,
-      ...(group.groupName ? { groupName: group.groupName } : {}),
-      unreadCount: group.unreadCount,
-      hasEntered: group.hasEntered,
-    })),
     context: {
       messageCount: runtimeSnapshot.contextSummary.messageCount,
       compactionTotalTokenThreshold: runtimeSnapshot.contextCompactionTotalTokenThreshold,
@@ -220,10 +225,4 @@ function mapLlmCall(
 
 function toIsoString(value: Date | null): string | null {
   return value ? value.toISOString() : null;
-}
-
-function mapWaitingResumeTarget(
-  value: NonNullable<RootAgentDashboardSnapshot["session"]["waitingResumeTarget"]>,
-): NonNullable<RootAgentDashboardSnapshot["session"]["waitingResumeTarget"]> {
-  return "groupId" in value ? { kind: value.kind, groupId: value.groupId } : { kind: value.kind };
 }

@@ -2,16 +2,15 @@ import { describe, expect, it } from "vitest";
 import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.js";
 
 describe("enter tool", () => {
-  it("should enter qq group with flattened arguments", async () => {
+  it("should enter child state by id", async () => {
     const tool = new EnterTool();
     const result = await tool.execute(
       {
-        kind: "qq_group",
-        id: "group-1",
+        id: "qq_group:group-1",
       },
       {
         rootAgentSession: {
-          enter: async (input: { kind: "qq_group" | "zone_out"; id?: string }) => ({
+          enter: async (input: { id: string }) => ({
             ok: true,
             ...input,
           }),
@@ -23,36 +22,13 @@ describe("enter tool", () => {
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
-      kind: "qq_group",
-      id: "group-1",
+      id: "qq_group:group-1",
     });
   });
 
-  it("should reject missing id when entering qq group", async () => {
+  it("should reject missing id", async () => {
     const tool = new EnterTool();
-    const result = await tool.execute(
-      {
-        kind: "qq_group",
-      },
-      {},
-    );
-
-    expect(result.signal).toBe("continue");
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "INVALID_ARGUMENTS",
-    });
-  });
-
-  it("should reject redundant id when entering zone out", async () => {
-    const tool = new EnterTool();
-    const result = await tool.execute(
-      {
-        kind: "zone_out",
-        id: "extra",
-      },
-      {},
-    );
+    const result = await tool.execute({}, {});
 
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({

@@ -220,7 +220,7 @@ class RootAgentHost {
         await this.session.initializeContext();
         this.initialized = true;
         this.touchActivity();
-        this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
+        this.transitionTo(this.session.getState().waiting ? "waiting" : "idle");
       });
     } catch (error) {
       this.recordCrash(error);
@@ -241,7 +241,7 @@ class RootAgentHost {
       if (waitingTimeoutResult.shouldTriggerRound || pendingEffectsResult.shouldTriggerRound) {
         this.touchActivity();
       }
-      this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
+      this.transitionTo(this.session.getState().waiting ? "waiting" : "idle");
     });
   }
 
@@ -276,8 +276,7 @@ class RootAgentHost {
   }
 
   public async getDashboardSnapshot(): Promise<RootAgentRuntimeDashboardSnapshot> {
-    const sessionSnapshot =
-      this.session.getDashboardSnapshot?.() ?? createSessionDashboardSnapshot(this.session);
+    const sessionSnapshot = await this.session.getDashboardSnapshot();
 
     return {
       initialized: this.initialized,
@@ -403,7 +402,7 @@ class RootAgentHost {
       });
       this.lastRoundCompletedAt = this.now();
       this.touchActivity();
-      this.transitionTo(this.session.getState().kind === "waiting" ? "waiting" : "idle");
+      this.transitionTo(this.session.getState().waiting ? "waiting" : "idle");
     });
   }
 
@@ -996,7 +995,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   protected override async shouldRunRound(): Promise<boolean> {
-    if (this.host.getSessionState().kind === "waiting") {
+    if (this.host.getSessionState().waiting) {
       this.host.transitionTo("waiting");
       return false;
     }
@@ -1029,7 +1028,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
   ): Promise<void> {
     await this.host.commitRoundResult(result, this.tools);
-    this.waitingNeedsSleep = this.host.getSessionState().kind === "waiting";
+    this.waitingNeedsSleep = this.host.getSessionState().waiting !== null;
   }
 
   protected override async afterTick(input: {
@@ -1040,7 +1039,7 @@ export class RootLoopAgent extends BaseLoopAgent<
       RootAgentToolExecutionData
     > | null;
   }): Promise<number> {
-    if (this.host.getSessionState().kind !== "waiting") {
+    if (!this.host.getSessionState().waiting) {
       this.waitingNeedsSleep = false;
     } else if (!input.didRunRound) {
       this.waitingNeedsSleep = false;
@@ -1199,28 +1198,6 @@ function createTemporaryToolFailureResult(input: {
       message: `工具 ${input.toolName} 暂时调用失败了，请稍后重试，或换一种方式继续。`,
       details: input.error instanceof Error ? input.error.message : String(input.error),
     }),
-  };
-}
-
-function createSessionDashboardSnapshot(
-  session: RootAgentSessionController,
-): RootAgentSessionDashboardSnapshot {
-  const state = session.getState();
-
-  return {
-    state:
-      state.kind === "waiting"
-        ? {
-            kind: "waiting",
-            deadlineAt: new Date(state.deadlineAt),
-            resumeState: { ...state.resumeState },
-          }
-        : state,
-    currentGroupId: session.getCurrentGroupId() ?? null,
-    waitingDeadlineAt: state.kind === "waiting" ? new Date(state.deadlineAt) : null,
-    waitingResumeTarget: state.kind === "waiting" ? { ...state.resumeState } : null,
-    availableInvokeTools: session.getAvailableInvokeTools(),
-    groups: [],
   };
 }
 

@@ -1,12 +1,13 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
+import type { ToolDefinition } from "@kagami/agent-runtime";
 import {
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
-  createPortalSnapshotMessage,
+  createStateSystemReminderMessage,
   createWaitResumeMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
@@ -17,84 +18,81 @@ import type {
 import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import type {
-  PersistedRootAgentActiveSessionState,
+  CurrentPersistedRootAgentSessionSnapshot,
+  PersistedRootAgentIthomeFeedState,
   PersistedRootAgentSessionSnapshot,
-  PersistedRootAgentSessionState,
 } from "../persistence/root-agent-runtime-snapshot.js";
 
-export const ROOT_AGENT_ENTER_TARGET_KINDS = ["qq_group", "zone_out", "ithome"] as const;
-export type RootAgentEnterTargetKind = (typeof ROOT_AGENT_ENTER_TARGET_KINDS)[number];
+export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome", "zone_out"] as const;
+export type RootAgentStaticStateId = (typeof ROOT_AGENT_STATIC_STATE_IDS)[number];
+export type RootAgentStateId = RootAgentStaticStateId | `qq_group:${string}`;
 
 export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   portal: [],
   qq_group: ["send_message"],
   ithome: ["open_ithome_article"],
   zone_out: ["zone_out"],
-  waiting: [],
 } as const;
 
 export type RootAgentInvokeToolName =
   (typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE)[keyof typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE][number];
 
-export type RootAgentSessionState =
-  | RootAgentActiveSessionState
-  | {
-      kind: "waiting";
-      deadlineAt: Date;
-      resumeState: RootAgentActiveSessionState;
-    };
-
-export type RootAgentActiveSessionState =
-  | {
-      kind: "portal";
-    }
-  | {
-      kind: "qq_group";
-      groupId: string;
-    }
-  | {
-      kind: "zone_out";
-    }
-  | {
-      kind: "ithome";
-    };
+export type RootAgentSessionState = {
+  focusedStateId: RootAgentStateId;
+  stateStack: RootAgentStateId[];
+  waiting: {
+    deadlineAt: Date;
+    resumeStateId: RootAgentStateId;
+  } | null;
+};
 
 export type RootAgentPostToolEffects = {
   messages: LlmMessage[];
   events: Event[];
 };
 
-export type RootAgentSessionDashboardGroup = {
-  groupId: string;
-  groupName?: string;
-  unreadCount: number;
-  hasEntered: boolean;
-};
+export type RootAgentInvokeToolDefinition = ToolDefinition;
 
 export type RootAgentSessionDashboardSnapshot = {
-  state: RootAgentSessionState;
-  currentGroupId: string | null;
-  waitingDeadlineAt: Date | null;
-  waitingResumeTarget: RootAgentActiveSessionState | null;
+  focusedStateId: RootAgentStateId;
+  focusedStateDisplayName: string;
+  focusedStateDescription: string;
+  stateStack: Array<{
+    id: RootAgentStateId;
+    displayName: string;
+  }>;
+  waiting: {
+    active: boolean;
+    deadlineAt: Date | null;
+    resumeStateId: RootAgentStateId | null;
+  };
+  children: Array<{
+    id: RootAgentStateId;
+    displayName: string;
+    description: string;
+  }>;
   availableInvokeTools: RootAgentInvokeToolName[];
-  groups: RootAgentSessionDashboardGroup[];
 };
 
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
+  getFocusedStateId(): RootAgentStateId;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
-  getDashboardSnapshot(): RootAgentSessionDashboardSnapshot;
-  exportPersistedSnapshot(): PersistedRootAgentSessionSnapshot;
+  getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot>;
+  exportPersistedSnapshot(): CurrentPersistedRootAgentSessionSnapshot;
   restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void;
   reset(): void;
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
-  enter(input: { kind: RootAgentEnterTargetKind; id?: string }): Promise<Record<string, unknown>>;
+  enter(
+    input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+  ): Promise<Record<string, unknown>>;
   openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>>;
-  backToPortal(): Promise<Record<string, unknown>>;
+  back(): Promise<Record<string, unknown>>;
+  backToPortal?(): Promise<Record<string, unknown>>;
   wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>>;
   finishWaitingIfExpired(now: Date): Promise<{ shouldTriggerRound: boolean }>;
 };
@@ -105,37 +103,60 @@ type RootAgentSessionDeps = {
   listenGroupIds: string[];
   recentMessageLimit: number;
   ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
+  invokeToolDefinitions?: RootAgentInvokeToolDefinition[];
 };
 
-type EnterHandler = (input: { id?: string }) => Promise<Record<string, unknown>>;
+type PortalFeedState = PersistedRootAgentIthomeFeedState;
 
-type PortalFeedState = {
-  kind: "ithome";
-  label: string;
-  unreadCount: number;
-  hasEntered: boolean;
+type WaitOverlay = {
+  deadlineAt: Date;
+  resumeStateStack: RootAgentStateId[];
+};
+
+type FocusReason = "initialize" | "enter" | "resume_back" | "resume_wait";
+type BlurReason = "enter_child" | "back" | "wait";
+
+type RootAgentStateHandleEventResult = {
+  shouldTriggerRound: boolean;
+  messages?: LlmMessage[];
+  events?: Event[];
+  stateChanged?: boolean;
+};
+
+type RootAgentState = {
+  getId(): RootAgentStateId;
+  getDisplayName(): string;
+  getDescription(): Promise<string>;
+  listChildren(): Promise<RootAgentState[]>;
+  getAvailableInvokeTools(): RootAgentInvokeToolName[];
+  onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]>;
+  onBlur(input: { reason: BlurReason }): Promise<LlmMessage[]>;
+  handleEvent(input: {
+    event: Event;
+    isFocused: boolean;
+  }): Promise<RootAgentStateHandleEventResult>;
 };
 
 export class RootAgentSession implements RootAgentSessionController {
   private readonly context: AgentContext;
   private readonly napcatGatewayService: NapcatGatewayService;
   private readonly recentMessageLimit: number;
-  private readonly ithomeNewsService: Pick<
+  public readonly ithomeNewsService: Pick<
     IthomeNewsService,
     "getFeedOverview" | "enterFeed" | "openArticle"
   > | null;
-  private readonly groupStates: GroupChatState[];
-  private readonly groupStateById: Map<string, GroupChatState>;
+  public readonly groupStates: GroupChatState[];
+  public readonly groupStateById: Map<string, GroupChatState>;
+  private readonly invokeToolDefinitionByName: ReadonlyMap<string, RootAgentInvokeToolDefinition>;
   private readonly pendingVisibleEvents: Event[] = [];
   private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
   private readonly pendingPostToolEvents: Event[] = [];
-  private readonly enterHandlers: Map<RootAgentEnterTargetKind, EnterHandler>;
-  private portalSnapshotDirty = false;
-  private state: RootAgentSessionState = { kind: "portal" };
+  private stateStack: RootAgentStateId[] = ["portal"];
+  private waitOverlay: WaitOverlay | null = null;
   private initialized = false;
   private groupInfoLoaded = false;
-  private ithomeFeedState: PortalFeedState | null = null;
+  public ithomeFeedState: PortalFeedState | null = null;
 
   public constructor({
     context,
@@ -143,6 +164,7 @@ export class RootAgentSession implements RootAgentSessionController {
     listenGroupIds,
     recentMessageLimit,
     ithomeNewsService,
+    invokeToolDefinitions,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
@@ -156,50 +178,109 @@ export class RootAgentSession implements RootAgentSessionController {
         }),
     );
     this.groupStateById = new Map(this.groupStates.map(state => [state.groupId, state]));
-    this.enterHandlers = new Map<RootAgentEnterTargetKind, EnterHandler>([
-      ["qq_group", async input => await this.enterQqGroup(input)],
-      ["ithome", async () => await this.enterIthome()],
-      ["zone_out", async () => await this.enterZoneOut()],
-    ]);
+    this.invokeToolDefinitionByName = new Map(
+      (invokeToolDefinitions ?? []).map(definition => [definition.name, definition]),
+    );
   }
 
   public getState(): RootAgentSessionState {
-    return this.state;
-  }
-
-  public getCurrentGroupId(): string | undefined {
-    return this.state.kind === "qq_group" ? this.state.groupId : undefined;
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE[this.state.kind]];
-  }
-
-  public getDashboardSnapshot(): RootAgentSessionDashboardSnapshot {
     return {
-      state: cloneSessionState(this.state),
-      currentGroupId: this.getCurrentGroupId() ?? null,
-      waitingDeadlineAt: this.state.kind === "waiting" ? new Date(this.state.deadlineAt) : null,
-      waitingResumeTarget:
-        this.state.kind === "waiting" ? cloneActiveSessionState(this.state.resumeState) : null,
-      availableInvokeTools: this.getAvailableInvokeTools(),
-      groups: this.renderPortalGroups(),
+      focusedStateId: this.getFocusedStateId(),
+      stateStack: [...this.stateStack],
+      waiting: this.waitOverlay
+        ? {
+            deadlineAt: new Date(this.waitOverlay.deadlineAt),
+            resumeStateId: this.waitOverlay.resumeStateStack.at(-1) ?? "portal",
+          }
+        : null,
     };
   }
 
-  public exportPersistedSnapshot(): PersistedRootAgentSessionSnapshot {
+  public getFocusedStateId(): RootAgentStateId {
+    return this.stateStack.at(-1) ?? "portal";
+  }
+
+  public getCurrentGroupId(): string | undefined {
+    if (this.waitOverlay) {
+      return undefined;
+    }
+
+    const focusedStateId = this.getFocusedStateId();
+    return parseGroupIdFromStateId(focusedStateId);
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    if (this.waitOverlay) {
+      return [];
+    }
+
+    const focusedState = this.requireState(this.getFocusedStateId());
+    return [...focusedState.getAvailableInvokeTools()];
+  }
+
+  public getAvailableInvokeToolDefinitions(): RootAgentInvokeToolDefinition[] {
+    if (this.waitOverlay) {
+      return [];
+    }
+
+    return this.getInvokeToolDefinitionsForState(this.requireState(this.getFocusedStateId()));
+  }
+
+  public async getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot> {
+    await this.initializeContext();
+
+    const focusedState = this.requireState(this.getFocusedStateId());
+    const children = await focusedState.listChildren();
+
     return {
-      state: cloneSessionState(this.state),
+      focusedStateId: focusedState.getId(),
+      focusedStateDisplayName: focusedState.getDisplayName(),
+      focusedStateDescription: await focusedState.getDescription(),
+      stateStack: this.stateStack.map(stateId => {
+        const state = this.requireState(stateId);
+        return {
+          id: stateId,
+          displayName: state.getDisplayName(),
+        };
+      }),
+      waiting: {
+        active: this.waitOverlay !== null,
+        deadlineAt: this.waitOverlay ? new Date(this.waitOverlay.deadlineAt) : null,
+        resumeStateId: this.waitOverlay?.resumeStateStack.at(-1) ?? null,
+      },
+      children: await Promise.all(
+        children.map(async child => ({
+          id: child.getId(),
+          displayName: child.getDisplayName(),
+          description: await child.getDescription(),
+        })),
+      ),
+      availableInvokeTools: this.getAvailableInvokeTools(),
+    };
+  }
+
+  public exportPersistedSnapshot(): CurrentPersistedRootAgentSessionSnapshot {
+    return {
+      stateStack: [...this.stateStack],
+      waitOverlay: this.waitOverlay
+        ? {
+            deadlineAt: new Date(this.waitOverlay.deadlineAt),
+            resumeStateStack: [...this.waitOverlay.resumeStateStack],
+          }
+        : null,
       groups: this.groupStates.map(groupState => ({
         groupId: groupState.groupId,
         groupInfo: groupState.getGroupInfo(),
         unreadMessages: groupState.getUnreadMessages(),
         hasEntered: groupState.hasEntered(),
       })),
+      ithomeFeedState: this.ithomeFeedState ? { ...this.ithomeFeedState } : null,
     };
   }
 
   public restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void {
+    const normalizedSnapshot = normalizePersistedSnapshot(snapshot, this.groupStateById);
+
     for (const groupState of this.groupStates) {
       groupState.restoreSnapshot({
         groupInfo: null,
@@ -208,7 +289,7 @@ export class RootAgentSession implements RootAgentSessionController {
       });
     }
 
-    for (const persistedGroupState of snapshot.groups) {
+    for (const persistedGroupState of normalizedSnapshot.groups) {
       const groupState = this.groupStateById.get(persistedGroupState.groupId);
       if (!groupState) {
         continue;
@@ -225,10 +306,11 @@ export class RootAgentSession implements RootAgentSessionController {
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
-    this.portalSnapshotDirty = false;
-    this.groupInfoLoaded = true;
+    this.groupInfoLoaded = normalizedSnapshot.groupInfoLoaded;
+    this.ithomeFeedState = normalizedSnapshot.ithomeFeedState;
     this.initialized = true;
-    this.state = normalizeRestoredSessionState(snapshot.state, this.groupStateById);
+    this.stateStack = normalizedSnapshot.stateStack;
+    this.waitOverlay = normalizedSnapshot.waitOverlay;
   }
 
   public reset(): void {
@@ -240,11 +322,11 @@ export class RootAgentSession implements RootAgentSessionController {
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
-    this.portalSnapshotDirty = false;
     this.groupInfoLoaded = false;
     this.ithomeFeedState = null;
     this.initialized = false;
-    this.state = { kind: "portal" };
+    this.stateStack = ["portal"];
+    this.waitOverlay = null;
   }
 
   public async initializeContext(): Promise<void> {
@@ -254,29 +336,28 @@ export class RootAgentSession implements RootAgentSessionController {
 
     await this.ensureGroupInfosLoaded();
     await this.ensureIthomeFeedStateLoaded();
-    await this.context.appendMessages([
-      createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
-    ]);
+    await this.context.appendMessages(
+      await this.renderFocusMessages(this.getFocusedStateId(), "initialize"),
+    );
     this.initialized = true;
   }
 
   public async consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
 
-    if (this.state.kind === "waiting") {
+    if (this.waitOverlay) {
       return await this.consumeIncomingEventWhileWaiting(event);
     }
 
-    return await this.consumeIncomingEventInActiveState(this.state, event);
+    return await this.consumeIncomingEventInActiveState(event);
   }
 
   public async flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
 
     const shouldTriggerRound =
-      this.pendingIncomingMessages.length > 0 ||
-      this.pendingVisibleEvents.length > 0 ||
-      this.portalSnapshotDirty;
+      this.pendingIncomingMessages.length > 0 || this.pendingVisibleEvents.length > 0;
+
     if (this.pendingIncomingMessages.length > 0) {
       await this.context.appendMessages(this.pendingIncomingMessages);
       this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
@@ -285,15 +366,6 @@ export class RootAgentSession implements RootAgentSessionController {
     if (this.pendingVisibleEvents.length > 0) {
       await this.context.appendEvents(this.pendingVisibleEvents);
       this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
-    }
-
-    if (this.portalSnapshotDirty) {
-      await this.ensureGroupInfosLoaded();
-      await this.ensureIthomeFeedStateLoaded();
-      await this.context.appendMessages([
-        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
-      ]);
-      this.portalSnapshotDirty = false;
     }
 
     return {
@@ -310,37 +382,61 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
-  public async enter(input: {
-    kind: RootAgentEnterTargetKind;
-    id?: string;
-  }): Promise<Record<string, unknown>> {
+  public async enter(
+    input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+  ): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
-    if (this.state.kind !== "portal") {
+    if (this.waitOverlay) {
       return {
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",
       };
     }
 
-    const enterHandler = this.enterHandlers.get(input.kind);
-    if (!enterHandler) {
+    const targetStateId = normalizeEnterInputToStateId(input);
+    if (!targetStateId) {
       return {
         ok: false,
-        error: "ENTER_TARGET_NOT_SUPPORTED",
-        kind: input.kind,
+        error: "ENTER_TARGET_NOT_AVAILABLE",
       };
     }
 
-    return await enterHandler({
-      id: input.id,
-    });
+    const targetState = this.resolveState(targetStateId.trim());
+    if (!targetState) {
+      return {
+        ok: false,
+        error: "ENTER_TARGET_NOT_AVAILABLE",
+        id: targetStateId,
+      };
+    }
+
+    const focusedState = this.requireState(this.getFocusedStateId());
+    const children = await focusedState.listChildren();
+    if (!children.some(child => child.getId() === targetState.getId())) {
+      return {
+        ok: false,
+        error: "STATE_TRANSITION_NOT_ALLOWED",
+        id: targetState.getId(),
+      };
+    }
+
+    this.pendingPostToolMessages.push(...(await focusedState.onBlur({ reason: "enter_child" })));
+    this.stateStack.push(targetState.getId());
+    this.pendingPostToolMessages.push(
+      ...(await this.renderFocusMessages(targetState.getId(), "enter")),
+    );
+
+    return {
+      ok: true,
+      id: targetState.getId(),
+    };
   }
 
   public async openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
-    if (this.state.kind !== "ithome") {
+    if (this.waitOverlay || this.getFocusedStateId() !== "ithome") {
       return {
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",
@@ -351,7 +447,7 @@ export class RootAgentSession implements RootAgentSessionController {
       return {
         ok: false,
         error: "ENTER_TARGET_NOT_AVAILABLE",
-        kind: "ithome",
+        id: "ithome",
       };
     }
 
@@ -387,72 +483,49 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
-  public async backToPortal(): Promise<Record<string, unknown>> {
+  public async back(): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
-    if (this.state.kind === "portal" || this.state.kind === "waiting") {
+    if (this.waitOverlay || this.stateStack.length <= 1) {
       return {
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",
       };
     }
 
-    if (this.state.kind === "qq_group") {
-      const previousGroupId = this.state.groupId;
-      this.state = { kind: "portal" };
-      await this.ensureIthomeFeedStateLoaded();
-
-      this.pendingPostToolMessages.push(
-        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
-      );
-
-      return {
-        ok: true,
-        kind: "qq_group",
-        id: previousGroupId,
-      };
-    }
-
-    if (this.state.kind === "ithome") {
-      this.state = { kind: "portal" };
-      await this.ensureIthomeFeedStateLoaded();
-      this.pendingPostToolMessages.push(
-        createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
-      );
-
-      return {
-        ok: true,
-        kind: "ithome",
-      };
-    }
-
-    this.state = { kind: "portal" };
-    await this.ensureIthomeFeedStateLoaded();
+    const currentState = this.requireState(this.getFocusedStateId());
+    this.pendingPostToolMessages.push(...(await currentState.onBlur({ reason: "back" })));
+    const exitedStateId = this.stateStack.pop() ?? "portal";
+    const resumedStateId = this.getFocusedStateId();
     this.pendingPostToolMessages.push(
-      createExitZoneOutMessage(),
-      createPortalSnapshotMessage(this.renderPortalGroups(), this.renderPortalFeeds()),
+      ...(await this.renderFocusMessages(resumedStateId, "resume_back")),
     );
 
     return {
       ok: true,
-      kind: "zone_out",
+      id: exitedStateId,
     };
+  }
+
+  public async backToPortal(): Promise<Record<string, unknown>> {
+    return await this.back();
   }
 
   public async wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
-    if (this.state.kind === "waiting") {
+    if (this.waitOverlay) {
       return {
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",
       };
     }
 
-    this.state = {
-      kind: "waiting",
+    const currentState = this.requireState(this.getFocusedStateId());
+    this.pendingPostToolMessages.push(...(await currentState.onBlur({ reason: "wait" })));
+    this.waitOverlay = {
       deadlineAt: new Date(input.deadlineAt),
-      resumeState: cloneActiveSessionState(this.state),
+      resumeStateStack: [...this.stateStack],
     };
 
     return {
@@ -464,265 +537,241 @@ export class RootAgentSession implements RootAgentSessionController {
   public async finishWaitingIfExpired(now: Date): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
 
-    if (this.state.kind !== "waiting" || now.getTime() < this.state.deadlineAt.getTime()) {
+    if (!this.waitOverlay || now.getTime() < this.waitOverlay.deadlineAt.getTime()) {
       return {
         shouldTriggerRound: false,
       };
     }
 
-    const resumedState = this.exitWaiting();
-    await this.queueWaitResumeMessage({
+    const resumedStateId = await this.resumeFromWait({
       reason: "timeout",
-      resumedState,
     });
-    if (resumedState.kind === "portal") {
-      this.portalSnapshotDirty = true;
-    }
 
     return {
-      shouldTriggerRound: true,
-    };
-  }
-
-  private async enterQqGroup(input: { id?: string }): Promise<Record<string, unknown>> {
-    const groupId = input.id?.trim();
-    if (!groupId) {
-      return {
-        ok: false,
-        error: "ENTER_TARGET_ID_REQUIRED",
-        kind: "qq_group",
-      };
-    }
-
-    const groupState = this.groupStateById.get(groupId);
-    if (!groupState) {
-      return {
-        ok: false,
-        error: "ENTER_TARGET_NOT_AVAILABLE",
-        kind: "qq_group",
-        id: groupId,
-      };
-    }
-
-    const hasEnteredBefore = groupState.hasEntered();
-    const hydratedMessages = hasEnteredBefore
-      ? groupState.consumeUnreadTail()
-      : await this.fetchRecentMessages(groupId);
-    if (!hasEnteredBefore) {
-      groupState.clearUnreadMessages();
-    }
-
-    this.state = {
-      kind: "qq_group",
-      groupId,
-    };
-    groupState.markEntered();
-
-    const hydratedMessage = createMergedGroupMessagesMessage(hydratedMessages);
-    if (hydratedMessage) {
-      this.pendingPostToolMessages.push(hydratedMessage);
-    }
-
-    return {
-      ok: true,
-      kind: "qq_group",
-      id: groupId,
-      source: hasEnteredBefore ? "unread" : "history",
-      hydratedCount: hydratedMessages.length,
-    };
-  }
-
-  private async enterZoneOut(): Promise<Record<string, unknown>> {
-    this.state = {
-      kind: "zone_out",
-    };
-    this.pendingPostToolMessages.push(createEnterZoneOutMessage());
-    return {
-      ok: true,
-      kind: "zone_out",
-    };
-  }
-
-  private async enterIthome(): Promise<Record<string, unknown>> {
-    if (!this.ithomeNewsService) {
-      return {
-        ok: false,
-        error: "ENTER_TARGET_NOT_AVAILABLE",
-        kind: "ithome",
-      };
-    }
-
-    const result = await this.ithomeNewsService.enterFeed();
-    this.state = {
-      kind: "ithome",
-    };
-    this.ithomeFeedState = {
-      kind: "ithome",
-      label: result.displayName,
-      unreadCount: 0,
-      hasEntered: true,
-    };
-    this.pendingPostToolMessages.push(
-      createIthomeArticleListMessage({
-        displayName: result.displayName,
-        mode: result.mode,
-        hiddenNewCount: result.hiddenNewCount,
-        articles: result.articles,
-      }),
-    );
-
-    return {
-      ok: true,
-      kind: "ithome",
-      source: result.mode,
-      articleCount: result.articles.length,
-      hiddenNewCount: result.hiddenNewCount,
+      shouldTriggerRound: resumedStateId !== null,
     };
   }
 
   private async consumeIncomingEventWhileWaiting(
     event: Event,
   ): Promise<{ shouldTriggerRound: boolean }> {
-    const resumedState = this.exitWaiting();
-    await this.queueWaitResumeMessage({
+    await this.resumeFromWait({
       reason: "event",
-      resumedState,
       event,
     });
-    await this.consumeIncomingEventInActiveState(resumedState, event);
-
-    return {
-      shouldTriggerRound: true,
-    };
+    return await this.consumeIncomingEventInActiveState(event);
   }
 
   private async consumeIncomingEventInActiveState(
-    state: RootAgentActiveSessionState,
     event: Event,
   ): Promise<{ shouldTriggerRound: boolean }> {
-    if (event.type === "news_article_ingested") {
-      return await this.consumeNewsArticleIngestedEventInActiveState(state, event);
-    }
-
-    return this.consumeGroupMessageEventInActiveState(state, event);
-  }
-
-  private consumeGroupMessageEventInActiveState(
-    state: RootAgentActiveSessionState,
-    event: Extract<Event, { type: "napcat_group_message" }>,
-  ): { shouldTriggerRound: boolean } {
-    const groupState = this.groupStateById.get(event.data.groupId);
-    if (!groupState) {
+    const targetStateId = this.resolveEventStateId(event);
+    if (!targetStateId) {
       return {
         shouldTriggerRound: false,
       };
     }
 
-    if (state.kind === "qq_group" && state.groupId === groupState.groupId) {
-      this.pendingVisibleEvents.push(event);
-      return {
-        shouldTriggerRound: true,
-      };
-    }
-
-    groupState.pushUnreadMessage(event.data);
-    if (state.kind === "portal") {
-      this.portalSnapshotDirty = true;
-      return {
-        shouldTriggerRound: true,
-      };
-    }
-
-    return {
-      shouldTriggerRound: false,
-    };
-  }
-
-  private async consumeNewsArticleIngestedEventInActiveState(
-    state: RootAgentActiveSessionState,
-    event: Extract<Event, { type: "news_article_ingested" }>,
-  ): Promise<{ shouldTriggerRound: boolean }> {
-    await this.ensureIthomeFeedStateLoaded();
-    if (!this.ithomeFeedState || event.data.sourceKey !== this.ithomeFeedState.kind) {
+    const targetState = this.resolveState(targetStateId);
+    if (!targetState) {
       return {
         shouldTriggerRound: false,
       };
     }
 
-    this.ithomeFeedState.unreadCount += 1;
-    if (state.kind === "portal") {
-      this.pendingVisibleEvents.push(event);
-      this.portalSnapshotDirty = true;
-      return {
-        shouldTriggerRound: true,
-      };
+    const focusedStateId = this.getFocusedStateId();
+    const result = await targetState.handleEvent({
+      event,
+      isFocused: focusedStateId === targetStateId,
+    });
+
+    if (result.messages && result.messages.length > 0) {
+      this.pendingIncomingMessages.push(...result.messages);
+    }
+    if (result.events && result.events.length > 0) {
+      this.pendingVisibleEvents.push(...result.events);
+    }
+
+    let shouldTriggerRound = result.shouldTriggerRound;
+
+    if (result.stateChanged) {
+      const focusedState = this.requireState(focusedStateId);
+      const needsReminderRefresh =
+        focusedStateId === targetStateId ||
+        (await this.hasDescendantState({
+          state: focusedState,
+          targetStateId,
+        }));
+      if (needsReminderRefresh) {
+        this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
+        shouldTriggerRound = true;
+      }
     }
 
     return {
-      shouldTriggerRound: false,
+      shouldTriggerRound,
     };
   }
 
-  private exitWaiting(): RootAgentActiveSessionState {
-    if (this.state.kind !== "waiting") {
-      return cloneActiveSessionState(this.state);
-    }
-
-    const resumedState = cloneActiveSessionState(this.state.resumeState);
-    this.state = resumedState;
-    return resumedState;
-  }
-
-  private async queueWaitResumeMessage(input: {
+  private async resumeFromWait(input: {
     reason: "timeout" | "event";
-    resumedState: RootAgentActiveSessionState;
     event?: Event;
-  }): Promise<void> {
-    const resumedStateLabel = await this.describeActiveState(input.resumedState);
-    const eventSummary = input.event ? await this.describeWakeEvent(input.event) : undefined;
+  }): Promise<RootAgentStateId | null> {
+    if (!this.waitOverlay) {
+      return null;
+    }
+
+    const resumedStateId = this.waitOverlay.resumeStateStack.at(-1) ?? "portal";
+    this.stateStack = [...this.waitOverlay.resumeStateStack];
+    this.waitOverlay = null;
+
     this.pendingIncomingMessages.push(
-      createWaitResumeMessage({
+      await this.createWaitResumeMessage({
         reason: input.reason,
-        resumedStateLabel,
-        ...(eventSummary ? { eventSummary } : {}),
+        resumedStateId,
+        event: input.event,
       }),
     );
+    this.pendingIncomingMessages.push(
+      ...(await this.renderFocusMessages(resumedStateId, "resume_wait")),
+    );
+
+    return resumedStateId;
   }
 
-  private async describeActiveState(state: RootAgentActiveSessionState): Promise<string> {
-    if (state.kind === "portal") {
-      return "门户状态";
-    }
-
-    if (state.kind === "zone_out") {
-      return "神游状态";
-    }
-
-    if (state.kind === "ithome") {
-      await this.ensureIthomeFeedStateLoaded();
-      return this.ithomeFeedState?.label ?? "IT 之家状态";
-    }
-
-    await this.ensureGroupInfosLoaded();
-    const groupName = this.groupStateById.get(state.groupId)?.getGroupName();
-    return groupName ? `QQ 群 ${groupName}（${state.groupId}）` : `QQ 群 ${state.groupId}`;
+  private async createWaitResumeMessage(input: {
+    reason: "timeout" | "event";
+    resumedStateId: RootAgentStateId;
+    event?: Event;
+  }): Promise<LlmMessage> {
+    const resumedState = this.requireState(input.resumedStateId);
+    const eventSummary = input.event ? await this.describeWakeEvent(input.event) : undefined;
+    return createWaitResumeMessage({
+      reason: input.reason,
+      resumedStateLabel: resumedState.getDisplayName(),
+      ...(eventSummary ? { eventSummary } : {}),
+    });
   }
 
   private async describeWakeEvent(event: Event): Promise<string> {
+    const targetStateId = this.resolveEventStateId(event);
+    if (!targetStateId) {
+      return "收到了新的外部事件";
+    }
+
     if (event.type === "news_article_ingested") {
-      await this.ensureIthomeFeedStateLoaded();
       const feedLabel = this.ithomeFeedState?.label ?? "IT 之家";
       return `${feedLabel} 有新文章《${event.data.title}》`;
     }
 
-    await this.ensureGroupInfosLoaded();
-    const groupName = this.groupStateById.get(event.data.groupId)?.getGroupName();
-    return groupName
-      ? `QQ 群 ${groupName}（${event.data.groupId}）收到了新消息`
-      : `QQ 群 ${event.data.groupId} 收到了新消息`;
+    const targetState = this.resolveState(targetStateId);
+    if (!targetState) {
+      return `QQ 群 ${event.data.groupId} 收到了新消息`;
+    }
+
+    return `${targetState.getDisplayName()} 收到了新消息`;
   }
 
-  private async fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]> {
+  private async renderFocusMessages(
+    stateId: RootAgentStateId,
+    reason: FocusReason,
+  ): Promise<LlmMessage[]> {
+    const state = this.requireState(stateId);
+    return [await this.createStateReminderMessage(stateId), ...(await state.onFocus({ reason }))];
+  }
+
+  private async createStateReminderMessage(stateId: RootAgentStateId): Promise<LlmMessage> {
+    const state = this.requireState(stateId);
+    const children = await state.listChildren();
+
+    return createStateSystemReminderMessage({
+      displayName: state.getDisplayName(),
+      children: await Promise.all(
+        children.map(async child => ({
+          id: child.getId(),
+          displayName: child.getDisplayName(),
+          description: await child.getDescription(),
+        })),
+      ),
+      availableInvokeTools: this.getInvokeToolDefinitionsForState(state),
+    });
+  }
+
+  private getInvokeToolDefinitionsForState(
+    state: Pick<RootAgentState, "getAvailableInvokeTools">,
+  ): RootAgentInvokeToolDefinition[] {
+    return state
+      .getAvailableInvokeTools()
+      .map(toolName => this.invokeToolDefinitionByName.get(toolName))
+      .filter(
+        (definition): definition is RootAgentInvokeToolDefinition => definition !== undefined,
+      );
+  }
+
+  private resolveState(stateId: string): RootAgentState | null {
+    if (stateId === "portal") {
+      return new PortalState(this);
+    }
+
+    if (stateId === "ithome") {
+      return this.ithomeNewsService ? new IthomeState(this) : null;
+    }
+
+    if (stateId === "zone_out") {
+      return new ZoneOutState(this);
+    }
+
+    const groupId = parseGroupIdFromStateId(stateId);
+    if (!groupId || !this.groupStateById.has(groupId)) {
+      return null;
+    }
+
+    return new QqGroupState(this, groupId);
+  }
+
+  private requireState(stateId: RootAgentStateId): RootAgentState {
+    const state = this.resolveState(stateId);
+    if (!state) {
+      throw new Error(`Unknown root agent state: ${stateId}`);
+    }
+
+    return state;
+  }
+
+  private resolveEventStateId(event: Event): RootAgentStateId | null {
+    if (event.type === "news_article_ingested") {
+      return event.data.sourceKey === "ithome" && this.ithomeNewsService ? "ithome" : null;
+    }
+
+    return this.groupStateById.has(event.data.groupId)
+      ? createQqGroupStateId(event.data.groupId)
+      : null;
+  }
+
+  private async hasDescendantState(input: {
+    state: RootAgentState;
+    targetStateId: RootAgentStateId;
+  }): Promise<boolean> {
+    const children = await input.state.listChildren();
+    for (const child of children) {
+      if (child.getId() === input.targetStateId) {
+        return true;
+      }
+
+      if (
+        (await this.hasDescendantState({
+          state: child,
+          targetStateId: input.targetStateId,
+        })) === true
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  public async fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]> {
     if (this.recentMessageLimit === 0) {
       return [];
     }
@@ -733,7 +782,7 @@ export class RootAgentSession implements RootAgentSessionController {
     });
   }
 
-  private async ensureGroupInfosLoaded(): Promise<void> {
+  public async ensureGroupInfosLoaded(): Promise<void> {
     if (this.groupInfoLoaded) {
       return;
     }
@@ -746,14 +795,14 @@ export class RootAgentSession implements RootAgentSessionController {
           });
           groupState.setGroupInfo(groupInfo);
         } catch {
-          // Fallback to groupId-only portal rendering when group info is unavailable.
+          // Fallback to groupId-only rendering when group info is unavailable.
         }
       }),
     );
     this.groupInfoLoaded = true;
   }
 
-  private async ensureIthomeFeedStateLoaded(): Promise<void> {
+  public async ensureIthomeFeedStateLoaded(): Promise<void> {
     if (!this.ithomeNewsService || this.ithomeFeedState) {
       return;
     }
@@ -766,70 +815,377 @@ export class RootAgentSession implements RootAgentSessionController {
       hasEntered: overview.hasEntered,
     };
   }
-
-  private renderPortalGroups(): Array<{
-    groupId: string;
-    groupName?: string;
-    unreadCount: number;
-    hasEntered: boolean;
-  }> {
-    return this.groupStates.map(groupState => {
-      const groupName = groupState.getGroupName();
-
-      return {
-        groupId: groupState.groupId,
-        ...(groupName ? { groupName } : {}),
-        unreadCount: groupState.getUnreadCount(),
-        hasEntered: groupState.hasEntered(),
-      };
-    });
-  }
-
-  private renderPortalFeeds(): PortalFeedState[] {
-    return this.ithomeFeedState ? [this.ithomeFeedState] : [];
-  }
 }
 
-function cloneActiveSessionState(state: RootAgentActiveSessionState): RootAgentActiveSessionState {
-  return { ...state };
-}
+class PortalState implements RootAgentState {
+  private readonly session: RootAgentSession;
 
-function cloneSessionState(state: RootAgentSessionState): RootAgentSessionState {
-  if (state.kind !== "waiting") {
-    return cloneActiveSessionState(state);
+  public constructor(session: RootAgentSession) {
+    this.session = session;
   }
 
-  return {
-    kind: "waiting",
-    deadlineAt: new Date(state.deadlineAt),
-    resumeState: cloneActiveSessionState(state.resumeState),
-  };
-}
+  public getId(): RootAgentStateId {
+    return "portal";
+  }
 
-function normalizeActiveSessionState(
-  state: PersistedRootAgentActiveSessionState,
-  groupStateById: Map<string, GroupChatState>,
-): RootAgentActiveSessionState {
-  if (state.kind === "qq_group" && !groupStateById.has(state.groupId)) {
+  public getDisplayName(): string {
+    return "门户";
+  }
+
+  public async getDescription(): Promise<string> {
+    return "主入口，可从这里进入群聊、资讯和神游。";
+  }
+
+  public async listChildren(): Promise<RootAgentState[]> {
+    await this.session.ensureGroupInfosLoaded();
+    await this.session.ensureIthomeFeedStateLoaded();
+
+    const children: RootAgentState[] = this.session.groupStates.map(
+      groupState => new QqGroupState(this.session, groupState.groupId),
+    );
+
+    if (this.session.ithomeNewsService) {
+      children.push(new IthomeState(this.session));
+    }
+    children.push(new ZoneOutState(this.session));
+
+    return children;
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [];
+  }
+
+  public async onFocus(): Promise<LlmMessage[]> {
+    return [];
+  }
+
+  public async onBlur(): Promise<LlmMessage[]> {
+    return [];
+  }
+
+  public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
     return {
-      kind: "portal",
+      shouldTriggerRound: false,
     };
   }
-
-  return cloneActiveSessionState(state);
 }
 
-function normalizeRestoredSessionState(
-  state: PersistedRootAgentSessionState,
-  groupStateById: Map<string, GroupChatState>,
-): RootAgentSessionState {
-  if (state.kind !== "waiting") {
-    return normalizeActiveSessionState(state, groupStateById);
+class QqGroupState implements RootAgentState {
+  private readonly session: RootAgentSession;
+  private readonly groupId: string;
+
+  public constructor(session: RootAgentSession, groupId: string) {
+    this.session = session;
+    this.groupId = groupId;
   }
 
+  public getId(): RootAgentStateId {
+    return createQqGroupStateId(this.groupId);
+  }
+
+  public getDisplayName(): string {
+    const groupName = this.session.groupStateById.get(this.groupId)?.getGroupName();
+    return groupName ? `QQ 群 ${groupName} (${this.groupId})` : `QQ 群 ${this.groupId}`;
+  }
+
+  public async getDescription(): Promise<string> {
+    const groupState = this.session.groupStateById.get(this.groupId);
+    if (!groupState) {
+      return "群状态不可用。";
+    }
+
+    if (groupState.getUnreadCount() > 0) {
+      return `未读 ${groupState.getUnreadCount()} 条消息。`;
+    }
+
+    if (!groupState.hasEntered()) {
+      return "尚未查看，可进去看看最近消息。";
+    }
+
+    return "未读 0 条消息。";
+  }
+
+  public async listChildren(): Promise<RootAgentState[]> {
+    return [];
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_group];
+  }
+
+  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
+    if (input.reason === "resume_wait") {
+      return [];
+    }
+
+    const groupState = this.session.groupStateById.get(this.groupId);
+    if (!groupState) {
+      return [];
+    }
+
+    const hasEnteredBefore = groupState.hasEntered();
+    const hydratedMessages = hasEnteredBefore
+      ? groupState.consumeUnreadTail()
+      : await this.session.fetchRecentMessages(this.groupId);
+    if (!hasEnteredBefore) {
+      groupState.clearUnreadMessages();
+    }
+
+    groupState.markEntered();
+    const hydratedMessage = createMergedGroupMessagesMessage(hydratedMessages);
+    return hydratedMessage ? [hydratedMessage] : [];
+  }
+
+  public async onBlur(): Promise<LlmMessage[]> {
+    return [];
+  }
+
+  public async handleEvent(input: {
+    event: Event;
+    isFocused: boolean;
+  }): Promise<RootAgentStateHandleEventResult> {
+    if (input.event.type !== "napcat_group_message" || input.event.data.groupId !== this.groupId) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    const groupState = this.session.groupStateById.get(this.groupId);
+    if (!groupState) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    if (input.isFocused) {
+      return {
+        shouldTriggerRound: true,
+        events: [input.event],
+      };
+    }
+
+    groupState.pushUnreadMessage(input.event.data);
+    return {
+      shouldTriggerRound: false,
+      stateChanged: true,
+    };
+  }
+}
+
+class IthomeState implements RootAgentState {
+  private readonly session: RootAgentSession;
+
+  public constructor(session: RootAgentSession) {
+    this.session = session;
+  }
+
+  public getId(): RootAgentStateId {
+    return "ithome";
+  }
+
+  public getDisplayName(): string {
+    return this.session.ithomeFeedState?.label ?? "IT 之家";
+  }
+
+  public async getDescription(): Promise<string> {
+    await this.session.ensureIthomeFeedStateLoaded();
+    if (!this.session.ithomeFeedState) {
+      return "资讯空间不可用。";
+    }
+
+    if (!this.session.ithomeFeedState.hasEntered) {
+      return "尚未查看，可进去看看最近文章。";
+    }
+
+    return this.session.ithomeFeedState.unreadCount > 0
+      ? `新文章 ${this.session.ithomeFeedState.unreadCount} 篇。`
+      : "暂无新文章，可进去看看最近文章。";
+  }
+
+  public async listChildren(): Promise<RootAgentState[]> {
+    return [];
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.ithome];
+  }
+
+  public async onFocus(): Promise<LlmMessage[]> {
+    if (!this.session.ithomeNewsService) {
+      return [];
+    }
+
+    const result = await this.session.ithomeNewsService.enterFeed();
+    this.session.ithomeFeedState = {
+      kind: "ithome",
+      label: result.displayName,
+      unreadCount: 0,
+      hasEntered: true,
+    };
+
+    return [
+      createIthomeArticleListMessage({
+        displayName: result.displayName,
+        mode: result.mode,
+        hiddenNewCount: result.hiddenNewCount,
+        articles: result.articles,
+      }),
+    ];
+  }
+
+  public async onBlur(): Promise<LlmMessage[]> {
+    return [];
+  }
+
+  public async handleEvent(input: {
+    event: Event;
+    isFocused: boolean;
+  }): Promise<RootAgentStateHandleEventResult> {
+    if (input.event.type !== "news_article_ingested") {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    await this.session.ensureIthomeFeedStateLoaded();
+    if (
+      !this.session.ithomeFeedState ||
+      input.event.data.sourceKey !== this.session.ithomeFeedState.kind
+    ) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    this.session.ithomeFeedState.unreadCount += 1;
+    return {
+      shouldTriggerRound: false,
+      stateChanged: true,
+    };
+  }
+}
+
+class ZoneOutState implements RootAgentState {
+  private readonly session: RootAgentSession;
+
+  public constructor(session: RootAgentSession) {
+    this.session = session;
+  }
+
+  public getId(): RootAgentStateId {
+    return "zone_out";
+  }
+
+  public getDisplayName(): string {
+    return "神游";
+  }
+
+  public async getDescription(): Promise<string> {
+    return "进入自由思考状态。";
+  }
+
+  public async listChildren(): Promise<RootAgentState[]> {
+    return [];
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.zone_out];
+  }
+
+  public async onFocus(): Promise<LlmMessage[]> {
+    return [createEnterZoneOutMessage()];
+  }
+
+  public async onBlur(input: { reason: BlurReason }): Promise<LlmMessage[]> {
+    return input.reason === "back" ? [createExitZoneOutMessage()] : [];
+  }
+
+  public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
+    return {
+      shouldTriggerRound: false,
+    };
+  }
+}
+
+function createQqGroupStateId(groupId: string): `qq_group:${string}` {
+  return `qq_group:${groupId}`;
+}
+
+function parseGroupIdFromStateId(stateId: string): string | undefined {
+  return stateId.startsWith("qq_group:") ? stateId.slice("qq_group:".length) : undefined;
+}
+
+function normalizeEnterInputToStateId(
+  input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+): string | null {
+  if ("kind" in input) {
+    if (input.kind === "qq_group") {
+      return input.id?.trim() ? createQqGroupStateId(input.id.trim()) : null;
+    }
+
+    return input.kind;
+  }
+
+  return input.id.trim();
+}
+
+function cloneGroupStates(
+  groups: CurrentPersistedRootAgentSessionSnapshot["groups"],
+): CurrentPersistedRootAgentSessionSnapshot["groups"] {
+  return groups.map(group => ({
+    groupId: group.groupId,
+    groupInfo: group.groupInfo ? structuredClone(group.groupInfo) : null,
+    unreadMessages: structuredClone(group.unreadMessages),
+    hasEntered: group.hasEntered,
+  }));
+}
+
+function normalizePersistedSnapshot(
+  snapshot: PersistedRootAgentSessionSnapshot,
+  groupStateById: Map<string, GroupChatState>,
+): {
+  stateStack: RootAgentStateId[];
+  waitOverlay: WaitOverlay | null;
+  groups: CurrentPersistedRootAgentSessionSnapshot["groups"];
+  ithomeFeedState: PortalFeedState | null;
+  groupInfoLoaded: boolean;
+} {
+  const normalizedStack = snapshot.stateStack
+    .map(stateId => normalizeStateId(stateId, groupStateById))
+    .filter((stateId): stateId is RootAgentStateId => stateId !== null);
+  const normalizedResumeStateStack =
+    snapshot.waitOverlay?.resumeStateStack
+      .map(stateId => normalizeStateId(stateId, groupStateById))
+      .filter((stateId): stateId is RootAgentStateId => stateId !== null) ?? [];
+
   return {
-    kind: "waiting",
-    deadlineAt: new Date(state.deadlineAt),
-    resumeState: normalizeActiveSessionState(state.resumeState, groupStateById),
+    stateStack: normalizedStack.length > 0 ? normalizedStack : ["portal"],
+    waitOverlay: snapshot.waitOverlay
+      ? {
+          deadlineAt: new Date(snapshot.waitOverlay.deadlineAt),
+          resumeStateStack:
+            normalizedResumeStateStack.length > 0 ? normalizedResumeStateStack : ["portal"],
+        }
+      : null,
+    groups: cloneGroupStates(snapshot.groups),
+    ithomeFeedState: snapshot.ithomeFeedState ? { ...snapshot.ithomeFeedState } : null,
+    groupInfoLoaded: snapshot.groups.some(group => group.groupInfo !== null),
   };
+}
+
+function normalizeStateId(
+  stateId: string,
+  groupStateById: Map<string, GroupChatState>,
+): RootAgentStateId | null {
+  if (stateId === "portal" || stateId === "ithome" || stateId === "zone_out") {
+    return stateId;
+  }
+
+  const groupId = parseGroupIdFromStateId(stateId);
+  if (groupId && groupStateById.has(groupId)) {
+    return createQqGroupStateId(groupId);
+  }
+
+  return null;
 }
