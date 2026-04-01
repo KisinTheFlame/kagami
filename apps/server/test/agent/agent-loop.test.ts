@@ -17,10 +17,17 @@ import { WaitTool } from "../../src/agent/runtime/root-agent/tools/wait.tool.js"
 import { BizError } from "../../src/common/errors/biz-error.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmMessage, Tool } from "../../src/llm/types.js";
+import type { MetricService } from "../../src/metric/application/metric.service.js";
 import type { PersistedRootAgentRuntimeSnapshot } from "../../src/agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 class StopLoopError extends Error {}
+
+function createMetricServiceMock(): MetricService {
+  return {
+    record: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -514,6 +521,97 @@ describe("RootLoopAgent", () => {
     expect(searchToolResultIndex).toBeGreaterThan(historyMessageIndex);
     expect(waitAssistantIndex).toBeGreaterThanOrEqual(0);
     expect(waitToolResultIndex).toBeGreaterThan(waitAssistantIndex);
+  });
+
+  it("should record tool call metric for invoke subtools", async () => {
+    const stopError = new StopLoopError("stop-loop");
+    const sleep = vi.fn().mockRejectedValue(stopError);
+    const metricService = createMetricServiceMock();
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 0,
+    });
+    const llmClient: LlmClient = {
+      chat: vi.fn().mockResolvedValue({
+        provider: "openai",
+        model: "gpt-test",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "invoke-1",
+              name: "invoke",
+              arguments: {
+                tool: "send_message",
+                message: "hello",
+              },
+            },
+          ],
+        },
+      }),
+      chatDirect: vi.fn(),
+      listAvailableProviders: vi.fn().mockResolvedValue([]),
+    };
+    const runtime = new RootLoopAgent({
+      llmClient,
+      context,
+      eventQueue: {
+        enqueue: vi.fn().mockReturnValue(1),
+        dequeue: vi.fn().mockReturnValue(null),
+        size: vi.fn().mockReturnValue(0),
+        clear: vi.fn().mockReturnValue(0),
+      },
+      session,
+      metricService,
+      tools: new ToolCatalog([
+        {
+          name: "invoke",
+          description: "invoke",
+          parameters: { type: "object", properties: {} },
+          kind: "business",
+          llmTool: {
+            name: "invoke",
+            description: "invoke",
+            parameters: { type: "object", properties: {} },
+          },
+          execute: vi.fn().mockResolvedValue({
+            content: JSON.stringify({ ok: true, message: "sent" }),
+            signal: "continue",
+          }),
+        } satisfies ToolComponent,
+      ]).pick(["invoke"]),
+      sleep,
+    });
+
+    await expect(runtime.run()).rejects.toBe(stopError);
+
+    expect(metricService.record).toHaveBeenCalledWith({
+      metricName: "agent.tool.call",
+      value: 1,
+      tags: {
+        tool: "invoke:send_message",
+        runtime: "agent",
+      },
+    });
   });
 
   it("should retry recoverable llm failures after the configured backoff", async () => {

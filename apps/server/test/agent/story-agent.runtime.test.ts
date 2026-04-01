@@ -6,7 +6,14 @@ import { BizError } from "../../src/common/errors/biz-error.js";
 import type { StoryService } from "../../src/agent/capabilities/story/application/story.service.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
+import type { MetricService } from "../../src/metric/application/metric.service.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
+
+function createMetricServiceMock(): MetricService {
+  return {
+    record: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe("StoryLoopAgent", () => {
   it("processes a batch when pending messages reach the batch threshold", async () => {
@@ -480,6 +487,7 @@ describe("StoryLoopAgent", () => {
 
   it("exposes story dashboard snapshot with runtime state and recent context", async () => {
     const summarize = vi.fn().mockResolvedValue("累计 story 摘要");
+    const metricService = createMetricServiceMock();
     const runtime = new StoryLoopAgent({
       llmClient: createStubLlmClient(
         [
@@ -579,6 +587,7 @@ describe("StoryLoopAgent", () => {
       contextCompactionTotalTokenThreshold: 2,
       batchSize: 1,
       idleFlushMs: 60_000,
+      metricService,
       sourceRuntimeKey: "root-agent",
       context: new DefaultAgentContext({
         systemPrompt: "story",
@@ -619,6 +628,14 @@ describe("StoryLoopAgent", () => {
     expect(snapshot.contextSummary.messageCount).toBeGreaterThan(0);
     expect(snapshot.contextSummary.recentItems.length).toBeGreaterThan(0);
     expect(summarize).toHaveBeenCalledOnce();
+    expect(metricService.record).toHaveBeenCalledWith({
+      metricName: "agent.tool.call",
+      value: 1,
+      tags: {
+        tool: "finish_story_batch",
+        runtime: "storyAgent",
+      },
+    });
   });
 
   it("retries recoverable llm failures without exiting the story loop", async () => {

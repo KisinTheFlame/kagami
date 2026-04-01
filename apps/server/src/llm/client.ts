@@ -217,6 +217,21 @@ async function executeChatAttempt({
         model: attempt.model,
         status: "success",
       });
+      void recordLlmChatLatencyMetric({
+        metricService,
+        usage,
+        provider: attempt.provider,
+        model: attempt.model,
+        status: "success",
+        latencyMs,
+      });
+      void recordLlmChatTotalTokensMetric({
+        metricService,
+        usage,
+        provider: attempt.provider,
+        model: attempt.model,
+        totalTokens: response.usage?.totalTokens,
+      });
     }
 
     if (recordCall) {
@@ -271,6 +286,14 @@ async function executeChatAttempt({
         provider: attempt.provider,
         model: attempt.model,
         status: "failed",
+      });
+      void recordLlmChatLatencyMetric({
+        metricService,
+        usage,
+        provider: attempt.provider,
+        model: attempt.model,
+        status: "failed",
+        latencyMs,
       });
     }
 
@@ -510,6 +533,61 @@ function recordLlmChatAttemptMetric({
       provider,
       model,
       status,
+    },
+  });
+}
+
+function recordLlmChatLatencyMetric({
+  metricService,
+  usage,
+  provider,
+  model,
+  status,
+  latencyMs,
+}: {
+  metricService: MetricService;
+  usage: LlmUsageId;
+  provider: LlmProviderId;
+  model: string;
+  status: "success" | "failed";
+  latencyMs: number;
+}): Promise<void> {
+  return metricService.record({
+    metricName: "llm.chat.latency_ms",
+    value: latencyMs,
+    tags: {
+      usage,
+      provider,
+      model,
+      status,
+    },
+  });
+}
+
+function recordLlmChatTotalTokensMetric({
+  metricService,
+  usage,
+  provider,
+  model,
+  totalTokens,
+}: {
+  metricService: MetricService;
+  usage: LlmUsageId;
+  provider: LlmProviderId;
+  model: string;
+  totalTokens: number | undefined;
+}): Promise<void> | undefined {
+  if (typeof totalTokens !== "number" || !Number.isFinite(totalTokens)) {
+    return undefined;
+  }
+
+  return metricService.record({
+    metricName: "llm.chat.total_tokens",
+    value: totalTokens,
+    tags: {
+      usage,
+      provider,
+      model,
     },
   });
 }

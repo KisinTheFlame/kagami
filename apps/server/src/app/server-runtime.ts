@@ -404,6 +404,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     batchSize: config.server.agent.story.batchSize,
     idleFlushMs: config.server.agent.story.idleFlushMs,
+    metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
@@ -416,6 +417,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     tools: rootAgentTools,
     contextSummaryOperation,
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
+    metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     summaryTools: [
       ...rootAgentTools.definitions(),

@@ -41,6 +41,16 @@ function createMetricServiceMock(): MetricService {
   };
 }
 
+function getMetricRecords(
+  metricService: MetricService,
+  metricName: string,
+): Record<string, unknown>[] {
+  return vi
+    .mocked(metricService.record)
+    .mock.calls.map(call => call[0])
+    .filter(record => record.metricName === metricName);
+}
+
 function createUsageConfig(
   overrides: Partial<Record<LlmUsageId, LlmUsageConfig>> = {},
 ): Record<LlmUsageId, LlmUsageConfig> {
@@ -526,27 +536,51 @@ describe("createLlmClient", () => {
     });
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
-    expect(metricService.record).toHaveBeenCalledTimes(2);
-    expect(metricService.record).toHaveBeenNthCalledWith(1, {
-      metricName: "llm.chat.attempt",
-      value: 1,
-      tags: {
-        usage: "agent",
-        provider: "openai",
-        model: "gpt-4o-mini",
-        status: "failed",
+    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
+      {
+        metricName: "llm.chat.attempt",
+        value: 1,
+        tags: {
+          usage: "agent",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "failed",
+        },
       },
-    });
-    expect(metricService.record).toHaveBeenNthCalledWith(2, {
-      metricName: "llm.chat.attempt",
-      value: 1,
-      tags: {
-        usage: "agent",
-        provider: "deepseek",
-        model: "deepseek-chat",
-        status: "success",
+      {
+        metricName: "llm.chat.attempt",
+        value: 1,
+        tags: {
+          usage: "agent",
+          provider: "deepseek",
+          model: "deepseek-chat",
+          status: "success",
+        },
       },
-    });
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
+      {
+        metricName: "llm.chat.latency_ms",
+        value: expect.any(Number),
+        tags: {
+          usage: "agent",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "failed",
+        },
+      },
+      {
+        metricName: "llm.chat.latency_ms",
+        value: expect.any(Number),
+        tags: {
+          usage: "agent",
+          provider: "deepseek",
+          model: "deepseek-chat",
+          status: "success",
+        },
+      },
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
 
     const errorRequestId = vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].requestId;
     const successRequestId = vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].requestId;
@@ -575,6 +609,76 @@ describe("createLlmClient", () => {
   it("should record llm chat attempt metric on successful chat", async () => {
     const provider: LlmProvider = {
       id: "openai",
+      chat: vi.fn().mockResolvedValue(
+        createProviderChatResult(
+          createChatResponse({
+            provider: "openai",
+            usage: {
+              totalTokens: 123,
+            },
+          }),
+        ),
+      ),
+    };
+    const metricService = createMetricServiceMock();
+    const { client } = createClient({
+      metricService,
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await client.chat(
+      {
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      },
+      {
+        usage: "vision",
+      },
+    );
+
+    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
+      {
+        metricName: "llm.chat.attempt",
+        value: 1,
+        tags: {
+          usage: "vision",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "success",
+        },
+      },
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
+      {
+        metricName: "llm.chat.latency_ms",
+        value: expect.any(Number),
+        tags: {
+          usage: "vision",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "success",
+        },
+      },
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([
+      {
+        metricName: "llm.chat.total_tokens",
+        value: 123,
+        tags: {
+          usage: "vision",
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+      },
+    ]);
+  });
+
+  it("should skip token metric when totalTokens is missing", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
       chat: vi
         .fn()
         .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
@@ -598,16 +702,7 @@ describe("createLlmClient", () => {
       },
     );
 
-    expect(metricService.record).toHaveBeenCalledWith({
-      metricName: "llm.chat.attempt",
-      value: 1,
-      tags: {
-        usage: "vision",
-        provider: "openai",
-        model: "gpt-4o-mini",
-        status: "success",
-      },
-    });
+    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
   });
 
   it("should continue after an unavailable usage attempt", async () => {
@@ -732,27 +827,51 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
-    expect(metricService.record).toHaveBeenCalledTimes(2);
-    expect(metricService.record).toHaveBeenNthCalledWith(1, {
-      metricName: "llm.chat.attempt",
-      value: 1,
-      tags: {
-        usage: "agent",
-        provider: "openai",
-        model: "gpt-4o-mini",
-        status: "failed",
+    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
+      {
+        metricName: "llm.chat.attempt",
+        value: 1,
+        tags: {
+          usage: "agent",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "failed",
+        },
       },
-    });
-    expect(metricService.record).toHaveBeenNthCalledWith(2, {
-      metricName: "llm.chat.attempt",
-      value: 1,
-      tags: {
-        usage: "agent",
-        provider: "deepseek",
-        model: "deepseek-chat",
-        status: "failed",
+      {
+        metricName: "llm.chat.attempt",
+        value: 1,
+        tags: {
+          usage: "agent",
+          provider: "deepseek",
+          model: "deepseek-chat",
+          status: "failed",
+        },
       },
-    });
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
+      {
+        metricName: "llm.chat.latency_ms",
+        value: expect.any(Number),
+        tags: {
+          usage: "agent",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "failed",
+        },
+      },
+      {
+        metricName: "llm.chat.latency_ms",
+        value: expect.any(Number),
+        tags: {
+          usage: "agent",
+          provider: "deepseek",
+          model: "deepseek-chat",
+          status: "failed",
+        },
+      },
+    ]);
+    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
   });
 
   it("should reject usage attempts when the configured model is not in provider models", async () => {

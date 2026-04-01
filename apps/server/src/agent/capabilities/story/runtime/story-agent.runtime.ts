@@ -26,6 +26,7 @@ import { renderLlmMessagePlainText } from "../../../runtime/context/context-item
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
+import type { MetricService } from "../../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
@@ -48,6 +49,7 @@ import {
   RewriteStoryTool,
   REWRITE_STORY_TOOL_NAME,
 } from "../task-agent/tools/rewrite-story.tool.js";
+import { NOOP_METRIC_SERVICE, recordToolCallMetric } from "../../../runtime/tool-call-metric.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
@@ -122,6 +124,7 @@ type StoryLoopAgentDeps = {
   contextCompactionTotalTokenThreshold: number;
   batchSize: number;
   idleFlushMs: number;
+  metricService?: MetricService;
   pollIntervalMs?: number;
   llmRetryBackoffMs?: number;
   now?: () => Date;
@@ -146,6 +149,7 @@ class StoryAgentHost {
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly batchSize: number;
   private readonly idleFlushMs: number;
+  private readonly metricService: MetricService;
   private readonly llmRetryBackoffMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => Date;
@@ -176,6 +180,7 @@ class StoryAgentHost {
     contextCompactionTotalTokenThreshold,
     batchSize,
     idleFlushMs,
+    metricService,
     llmRetryBackoffMs,
     now,
     sleep,
@@ -190,6 +195,7 @@ class StoryAgentHost {
     this.contextCompactionTotalTokenThreshold = contextCompactionTotalTokenThreshold;
     this.batchSize = batchSize;
     this.idleFlushMs = idleFlushMs;
+    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;
@@ -496,6 +502,13 @@ class StoryAgentHost {
     argumentsValue: Record<string, unknown>;
     resultContent: string;
   }): void {
+    void recordToolCallMetric({
+      metricService: this.metricService,
+      runtime: "storyAgent",
+      toolName: input.toolName,
+      argumentsValue: input.argumentsValue,
+    });
+
     this.lastToolCall = {
       name: input.toolName,
       argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),

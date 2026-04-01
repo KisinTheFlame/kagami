@@ -24,6 +24,7 @@ import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
 import { AppLogger } from "../../../logger/logger.js";
+import type { MetricService } from "../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
@@ -37,6 +38,7 @@ import {
   ROOT_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
 } from "./persistence/root-agent-runtime-snapshot.repository.js";
 import type { PersistedRootAgentRuntimeSnapshot } from "./persistence/root-agent-runtime-snapshot.js";
+import { NOOP_METRIC_SERVICE, recordToolCallMetric } from "../tool-call-metric.js";
 import type {
   RootAgentInvokeToolName,
   RootAgentPostToolEffects,
@@ -67,6 +69,7 @@ type RootAgentRuntimeDeps = {
   summaryPlanner?: ContextSummaryLike;
   summaryTools?: Tool[];
   contextCompactionTotalTokenThreshold?: number;
+  metricService?: MetricService;
   llmRetryBackoffMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
@@ -155,6 +158,7 @@ class RootAgentHost {
   private readonly summaryTools: Tool[];
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly llmRetryBackoffMs: number;
+  private readonly metricService: MetricService;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
@@ -180,6 +184,7 @@ class RootAgentHost {
     summaryPlanner,
     summaryTools,
     contextCompactionTotalTokenThreshold,
+    metricService,
     llmRetryBackoffMs,
     now,
     sleep,
@@ -193,6 +198,7 @@ class RootAgentHost {
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
+    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;
@@ -452,6 +458,13 @@ class RootAgentHost {
     argumentsValue: Record<string, unknown>;
     resultContent: string;
   }): void {
+    void recordToolCallMetric({
+      metricService: this.metricService,
+      runtime: "agent",
+      toolName: input.toolName,
+      argumentsValue: input.argumentsValue,
+    });
+
     this.lastToolCall = {
       name: input.toolName,
       argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
