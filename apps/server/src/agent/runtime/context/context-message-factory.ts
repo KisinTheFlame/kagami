@@ -35,6 +35,21 @@ export function createWakeReminderMessage(now: Date): UserMessage {
   );
 }
 
+export function createWaitResumeMessage(input: {
+  reason: "timeout" | "event";
+  resumedStateLabel: string;
+  eventSummary?: string;
+}): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/wait-resume.hbs", {
+      resumedStateLabel: input.resumedStateLabel,
+      isTimeout: input.reason === "timeout",
+      isEvent: input.reason === "event",
+      eventSummary: input.eventSummary?.trim(),
+    }),
+  );
+}
+
 export function createConversationSummaryMessage(summary: string): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/conversation-summary.hbs", {

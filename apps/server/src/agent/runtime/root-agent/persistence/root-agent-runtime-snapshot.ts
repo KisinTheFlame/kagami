@@ -76,13 +76,12 @@ const NapcatGroupMessageDataSchema: z.ZodType<NapcatGroupMessageData> = z.object
 });
 
 export const PersistedAgentContextSnapshotSchema = z.object({
-  systemPrompt: z.string(),
   messages: z.array(LlmMessageSchema),
 });
 
 export type PersistedAgentContextSnapshot = z.infer<typeof PersistedAgentContextSnapshotSchema>;
 
-const PersistedRootAgentSessionStateSchema = z.union([
+const PersistedRootAgentActiveSessionStateSchema = z.union([
   z.object({
     kind: z.literal("portal"),
   }),
@@ -96,9 +95,18 @@ const PersistedRootAgentSessionStateSchema = z.union([
   z.object({
     kind: z.literal("ithome"),
   }),
+]);
+
+export type PersistedRootAgentActiveSessionState = z.infer<
+  typeof PersistedRootAgentActiveSessionStateSchema
+>;
+
+const PersistedRootAgentSessionStateSchema = z.union([
+  PersistedRootAgentActiveSessionStateSchema,
   z.object({
     kind: z.literal("waiting"),
     deadlineAt: DateValueSchema,
+    resumeState: PersistedRootAgentActiveSessionStateSchema,
   }),
 ]);
 

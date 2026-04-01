@@ -1,0 +1,12 @@
+<system_reminder>
+{{#if isTimeout}}
+等待自然结束了。
+{{/if}}
+{{#if isEvent}}
+等待被新的外部事件打断了。
+{{/if}}
+你现在已回到：{{resumedStateLabel}}。
+{{#if eventSummary}}
+打断等待的事件：{{eventSummary}}。
+{{/if}}
+</system_reminder>

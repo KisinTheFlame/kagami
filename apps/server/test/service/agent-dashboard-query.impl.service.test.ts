@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { StoryLoopAgent } from "../../src/agent/capabilities/story/runtime/story-agent.runtime.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import type { RootLoopAgent } from "../../src/agent/runtime/root-agent/root-agent-runtime.js";
 import { DefaultAgentDashboardQueryService } from "../../src/ops/application/agent-dashboard-query.impl.service.js";
 
 describe("DefaultAgentDashboardQueryService", () => {
-  it("should compose a full agent dashboard snapshot", async () => {
+  it("should compose root and story agent dashboard snapshots", async () => {
     const rootAgentRuntime: Pick<RootLoopAgent, "getDashboardSnapshot"> = {
       getDashboardSnapshot: vi.fn().mockResolvedValue({
         initialized: true,
@@ -44,9 +45,17 @@ describe("DefaultAgentDashboardQueryService", () => {
           state: {
             kind: "waiting",
             deadlineAt: new Date("2026-03-30T08:01:00.000Z"),
+            resumeState: {
+              kind: "qq_group",
+              groupId: "group-1",
+            },
           },
           currentGroupId: null,
           waitingDeadlineAt: new Date("2026-03-30T08:01:00.000Z"),
+          waitingResumeTarget: {
+            kind: "qq_group",
+            groupId: "group-1",
+          },
           availableInvokeTools: [],
           groups: [
             {
@@ -60,6 +69,57 @@ describe("DefaultAgentDashboardQueryService", () => {
         availableInvokeTools: [],
       }),
     };
+    const storyAgentRuntime: Pick<StoryLoopAgent, "getDashboardSnapshot"> = {
+      getDashboardSnapshot: vi.fn().mockResolvedValue({
+        initialized: true,
+        loopState: "idle",
+        lastError: {
+          name: "BizError",
+          message: "临时失败",
+          updatedAt: new Date("2026-03-30T08:00:01.000Z"),
+        },
+        lastActivityAt: new Date("2026-03-30T08:00:02.000Z"),
+        lastRoundCompletedAt: new Date("2026-03-30T08:00:00.000Z"),
+        lastCompactionAt: new Date("2026-03-30T07:58:00.000Z"),
+        contextCompactionTotalTokenThreshold: 150_000,
+        contextSummary: {
+          messageCount: 4,
+          recentItems: [
+            {
+              kind: "llm_message",
+              label: "Assistant",
+              preview: "story summary",
+              truncated: false,
+            },
+          ],
+          recentItemsTruncated: false,
+        },
+        lastToolCall: {
+          name: "create_story",
+          argumentsPreview: '{"title":"权限交接吐槽"}',
+          updatedAt: new Date("2026-03-30T08:00:00.500Z"),
+        },
+        lastToolResultPreview: '{"ok":true}',
+        lastLlmCall: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          assistantContentPreview: "整理成记忆",
+          toolCallNames: ["create_story"],
+          totalTokens: 321,
+          updatedAt: new Date("2026-03-30T08:00:00.400Z"),
+        },
+        story: {
+          lastProcessedMessageSeq: 22,
+          pendingMessageCount: 5,
+          pendingBatch: {
+            firstSeq: 23,
+            lastSeq: 24,
+          },
+          batchSize: 10,
+          idleFlushMs: 60_000,
+        },
+      }),
+    };
     const eventQueue: AgentEventQueue = {
       enqueue: vi.fn(),
       dequeue: vi.fn(),
@@ -68,6 +128,7 @@ describe("DefaultAgentDashboardQueryService", () => {
     };
     const service = new DefaultAgentDashboardQueryService({
       rootAgentRuntime: rootAgentRuntime as RootLoopAgent,
+      storyAgentRuntime: storyAgentRuntime as StoryLoopAgent,
       eventQueue,
       listenGroupIds: ["group-1"],
       listAvailableAgentProviders: vi.fn().mockResolvedValue([
@@ -80,64 +141,131 @@ describe("DefaultAgentDashboardQueryService", () => {
 
     const snapshot = await service.getCurrentSnapshot();
 
-    expect(snapshot.runtime).toEqual({
-      initialized: true,
-      loopState: "waiting",
-      lastError: null,
-      lastActivityAt: "2026-03-30T08:00:00.000Z",
-      lastRoundCompletedAt: "2026-03-30T07:59:58.000Z",
-      lastCompactionAt: "2026-03-30T07:55:00.000Z",
-    });
-    expect(snapshot.session).toEqual({
-      kind: "waiting",
-      currentGroupId: null,
-      waitingDeadlineAt: "2026-03-30T08:01:00.000Z",
-      availableInvokeTools: [],
-    });
-    expect(snapshot.queue).toEqual({
-      pendingEventCount: 2,
-    });
-    expect(snapshot.groups).toEqual([
+    expect(snapshot.agents).toEqual([
       {
-        groupId: "group-1",
-        groupName: "产品群",
-        unreadCount: 3,
-        hasEntered: true,
-      },
-    ]);
-    expect(snapshot.context).toEqual({
-      messageCount: 12,
-      compactionTotalTokenThreshold: 150_000,
-      recentItems: [
-        {
-          kind: "llm_message",
-          label: "用户消息",
-          preview: "最近一条消息",
-          truncated: false,
+        id: "root",
+        label: "主 Agent",
+        kind: "root",
+        runtime: {
+          initialized: true,
+          loopState: "waiting",
+          lastError: null,
+          lastActivityAt: "2026-03-30T08:00:00.000Z",
+          lastRoundCompletedAt: "2026-03-30T07:59:58.000Z",
+          lastCompactionAt: "2026-03-30T07:55:00.000Z",
         },
-      ],
-      recentItemsTruncated: true,
-    });
-    expect(snapshot.activity).toEqual({
-      lastToolCall: {
-        name: "wait",
-        argumentsPreview: '{"minutes":1}',
-        updatedAt: "2026-03-30T07:59:59.000Z",
+        session: {
+          kind: "waiting",
+          currentGroupId: null,
+          waitingDeadlineAt: "2026-03-30T08:01:00.000Z",
+          waitingResumeTarget: {
+            kind: "qq_group",
+            groupId: "group-1",
+          },
+          availableInvokeTools: [],
+        },
+        queue: {
+          pendingEventCount: 2,
+        },
+        groups: [
+          {
+            groupId: "group-1",
+            groupName: "产品群",
+            unreadCount: 3,
+            hasEntered: true,
+          },
+        ],
+        context: {
+          messageCount: 12,
+          compactionTotalTokenThreshold: 150_000,
+          recentItems: [
+            {
+              kind: "llm_message",
+              label: "用户消息",
+              preview: "最近一条消息",
+              truncated: false,
+            },
+          ],
+          recentItemsTruncated: true,
+        },
+        activity: {
+          lastToolCall: {
+            name: "wait",
+            argumentsPreview: '{"minutes":1}',
+            updatedAt: "2026-03-30T07:59:59.000Z",
+          },
+          lastToolResultPreview: '{"ok":true}',
+          lastLlmCall: {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            assistantContentPreview: "正在等待",
+            toolCallNames: ["wait"],
+            totalTokens: 12_345,
+            updatedAt: "2026-03-30T07:59:59.000Z",
+          },
+        },
+        providers: [
+          {
+            id: "openai",
+            models: ["gpt-4o-mini"],
+          },
+        ],
       },
-      lastToolResultPreview: '{"ok":true}',
-      lastLlmCall: {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        assistantContentPreview: "正在等待",
-        toolCallNames: ["wait"],
-        totalTokens: 12_345,
-        updatedAt: "2026-03-30T07:59:59.000Z",
-      },
-    });
-    expect(snapshot.providers).toEqual([
       {
-        id: "openai",
-        models: ["gpt-4o-mini"],
+        id: "story",
+        label: "Story Agent",
+        kind: "story",
+        runtime: {
+          initialized: true,
+          loopState: "idle",
+          lastError: {
+            name: "BizError",
+            message: "临时失败",
+            updatedAt: "2026-03-30T08:00:01.000Z",
+          },
+          lastActivityAt: "2026-03-30T08:00:02.000Z",
+          lastRoundCompletedAt: "2026-03-30T08:00:00.000Z",
+          lastCompactionAt: "2026-03-30T07:58:00.000Z",
+        },
+        context: {
+          messageCount: 4,
+          compactionTotalTokenThreshold: 150_000,
+          recentItems: [
+            {
+              kind: "llm_message",
+              label: "Assistant",
+              preview: "story summary",
+              truncated: false,
+            },
+          ],
+          recentItemsTruncated: false,
+        },
+        activity: {
+          lastToolCall: {
+            name: "create_story",
+            argumentsPreview: '{"title":"权限交接吐槽"}',
+            updatedAt: "2026-03-30T08:00:00.500Z",
+          },
+          lastToolResultPreview: '{"ok":true}',
+          lastLlmCall: {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            assistantContentPreview: "整理成记忆",
+            toolCallNames: ["create_story"],
+            totalTokens: 321,
+            updatedAt: "2026-03-30T08:00:00.400Z",
+          },
+        },
+        story: {
+          lastProcessedMessageSeq: 22,
+          pendingMessageCount: 5,
+          pendingBatch: {
+            firstSeq: 23,
+            lastSeq: 24,
+          },
+          batchSize: 10,
+          idleFlushMs: 60_000,
+        },
       },
     ]);
     expect(snapshot.config).toEqual({

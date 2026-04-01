@@ -331,17 +331,18 @@ describe("RootAgentSession", () => {
     ).toBe(true);
   });
 
-  it("should interrupt waiting on new qq message and return to portal", async () => {
+  it("should interrupt waiting in qq group and surface same-group message immediately", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
     const session = createSession({ context });
 
     await session.initializeContext();
+    await session.enter({ kind: "qq_group", id: "group-1" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await session.wait({
       deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
     });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     const consumeResult = await session.consumeIncomingEvent(
       createGroupEvent("wake-up", "group-1"),
@@ -355,7 +356,8 @@ describe("RootAgentSession", () => {
       shouldTriggerRound: true,
     });
     expect(session.getState()).toEqual({
-      kind: "portal",
+      kind: "qq_group",
+      groupId: "group-1",
     });
 
     const snapshot = await context.getSnapshot();
@@ -363,24 +365,80 @@ describe("RootAgentSession", () => {
       snapshot.messages.some(
         message =>
           typeof message.content === "string" &&
-          message.content.includes(
-            'QQ 群 产品群（group-1），尚未查看，可通过 enter(kind="qq_group", id="group-1")',
-          ),
+          message.content.includes("等待被新的外部事件打断了") &&
+          message.content.includes("QQ 群 产品群（group-1）收到了新消息"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message => typeof message.content === "string" && message.content.includes("wake-up"),
       ),
     ).toBe(true);
   });
 
-  it("should finish waiting after timeout and return to portal", async () => {
+  it("should interrupt waiting in qq group on background message and keep unread state", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
     const session = createSession({ context });
 
     await session.initializeContext();
+    await session.enter({ kind: "qq_group", id: "group-1" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await session.wait({
       deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
     });
+
+    const consumeResult = await session.consumeIncomingEvent(
+      createGroupEvent("background-wake", "group-2"),
+    );
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(session.getState()).toEqual({
+      kind: "qq_group",
+      groupId: "group-1",
+    });
+
+    const dashboardSnapshot = session.getDashboardSnapshot();
+    expect(dashboardSnapshot.groups.find(group => group.groupId === "group-2")?.unreadCount).toBe(
+      1,
+    );
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("等待被新的外部事件打断了") &&
+          message.content.includes("QQ 群 测试群（group-2）收到了新消息"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("background-wake"),
+      ),
+    ).toBe(false);
+  });
+
+  it("should finish waiting after timeout and return to previous state", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.enter({ kind: "zone_out" });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
 
     const result = await session.finishWaitingIfExpired(new Date("2026-03-30T12:05:01.000Z"));
     const flushResult = await session.flushPendingIncomingEffects();
@@ -392,14 +450,16 @@ describe("RootAgentSession", () => {
       shouldTriggerRound: true,
     });
     expect(session.getState()).toEqual({
-      kind: "portal",
+      kind: "zone_out",
     });
 
     const snapshot = await context.getSnapshot();
     expect(
       snapshot.messages.some(
         message =>
-          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+          typeof message.content === "string" &&
+          message.content.includes("等待自然结束了") &&
+          message.content.includes("你现在已回到：神游状态"),
       ),
     ).toBe(true);
   });
@@ -481,7 +541,7 @@ describe("RootAgentSession", () => {
     ).toBe(true);
   });
 
-  it("should interrupt waiting on ithome news event and return to portal", async () => {
+  it("should interrupt waiting in ithome and restore ithome state", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -494,12 +554,20 @@ describe("RootAgentSession", () => {
           unreadCount: 0,
           hasEntered: true,
         }),
-        enterFeed: vi.fn(),
+        enterFeed: vi.fn().mockResolvedValue({
+          sourceKey: "ithome",
+          displayName: "IT之家",
+          mode: "latest",
+          hiddenNewCount: 0,
+          articles: [],
+        }),
         openArticle: vi.fn(),
       },
     });
 
     await session.initializeContext();
+    await session.enter({ kind: "ithome" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
     await session.wait({
       deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
     });
@@ -521,7 +589,79 @@ describe("RootAgentSession", () => {
       shouldTriggerRound: true,
     });
     expect(session.getState()).toEqual({
-      kind: "portal",
+      kind: "ithome",
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("等待被新的外部事件打断了") &&
+          message.content.includes("IT之家 有新文章《新文章》"),
+      ),
+    ).toBe(true);
+  });
+
+  it("should preserve waiting resume state when exporting and restoring session snapshot", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.enter({ kind: "qq_group", id: "group-1" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+
+    const exportedContext = await context.exportPersistedSnapshot();
+    const exportedSession = session.exportPersistedSnapshot();
+
+    const restoredContext = new DefaultAgentContext({
+      systemPromptFactory: () => "new-system-prompt",
+    });
+    await restoredContext.restorePersistedSnapshot(exportedContext);
+    const restoredSession = createSession({ context: restoredContext });
+    restoredSession.restorePersistedSnapshot(exportedSession);
+
+    expect(restoredSession.getState()).toEqual({
+      kind: "waiting",
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+      resumeState: {
+        kind: "qq_group",
+        groupId: "group-1",
+      },
+    });
+
+    const timeoutResult = await restoredSession.finishWaitingIfExpired(
+      new Date("2026-03-30T12:05:01.000Z"),
+    );
+    const flushResult = await restoredSession.flushPendingIncomingEffects();
+
+    expect(timeoutResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(restoredSession.getState()).toEqual({
+      kind: "qq_group",
+      groupId: "group-1",
+    });
+
+    const restoredSnapshot = await restoredContext.getSnapshot();
+    expect(
+      restoredSnapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("你现在已回到：QQ 群 产品群（group-1）"),
+      ),
+    ).toBe(true);
+    expect(restoredSession.getState()).toEqual({
+      kind: "qq_group",
+      groupId: "group-1",
     });
   });
 

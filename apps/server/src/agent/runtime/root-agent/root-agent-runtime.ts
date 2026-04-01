@@ -1197,10 +1197,15 @@ function createSessionDashboardSnapshot(
   return {
     state:
       state.kind === "waiting"
-        ? { kind: "waiting", deadlineAt: new Date(state.deadlineAt) }
+        ? {
+            kind: "waiting",
+            deadlineAt: new Date(state.deadlineAt),
+            resumeState: { ...state.resumeState },
+          }
         : state,
     currentGroupId: session.getCurrentGroupId() ?? null,
     waitingDeadlineAt: state.kind === "waiting" ? new Date(state.deadlineAt) : null,
+    waitingResumeTarget: state.kind === "waiting" ? { ...state.resumeState } : null,
     availableInvokeTools: session.getAvailableInvokeTools(),
     groups: [],
   };

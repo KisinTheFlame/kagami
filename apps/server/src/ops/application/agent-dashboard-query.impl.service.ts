@@ -1,12 +1,23 @@
 import type {
+  AgentDashboardAgentSnapshot,
   AgentDashboardLlmCall,
   AgentDashboardRuntimeError,
   AgentDashboardSnapshot,
   AgentDashboardToolCall,
+  RootAgentDashboardSnapshot,
+  StoryAgentDashboardSnapshot,
 } from "@kagami/shared/schemas/agent-dashboard";
+import type {
+  StoryAgentLlmCallSummary,
+  StoryAgentRuntimeDashboardSnapshot,
+  StoryAgentRuntimeErrorSummary,
+  StoryAgentToolCallSummary,
+  StoryLoopAgent,
+} from "../../agent/capabilities/story/runtime/story-agent.runtime.js";
 import type { AgentEventQueue } from "../../agent/runtime/event/event.queue.js";
 import type {
   RootAgentLlmCallSummary,
+  RootAgentRuntimeDashboardSnapshot,
   RootAgentRuntimeErrorSummary,
   RootAgentToolCallSummary,
   RootLoopAgent,
@@ -15,72 +26,52 @@ import type { AgentDashboardQueryService } from "./agent-dashboard-query.service
 
 type DefaultAgentDashboardQueryServiceDeps = {
   rootAgentRuntime: RootLoopAgent;
+  storyAgentRuntime: StoryLoopAgent;
   eventQueue: AgentEventQueue;
   listenGroupIds: string[];
-  listAvailableAgentProviders: () => Promise<AgentDashboardSnapshot["providers"]>;
+  listAvailableAgentProviders: () => Promise<RootAgentDashboardSnapshot["providers"]>;
 };
 
 export class DefaultAgentDashboardQueryService implements AgentDashboardQueryService {
   private readonly rootAgentRuntime: RootLoopAgent;
+  private readonly storyAgentRuntime: StoryLoopAgent;
   private readonly eventQueue: AgentEventQueue;
   private readonly listenGroupIds: string[];
-  private readonly listAvailableAgentProviders: () => Promise<AgentDashboardSnapshot["providers"]>;
+  private readonly listAvailableAgentProviders: () => Promise<
+    RootAgentDashboardSnapshot["providers"]
+  >;
 
   public constructor({
     rootAgentRuntime,
+    storyAgentRuntime,
     eventQueue,
     listenGroupIds,
     listAvailableAgentProviders,
   }: DefaultAgentDashboardQueryServiceDeps) {
     this.rootAgentRuntime = rootAgentRuntime;
+    this.storyAgentRuntime = storyAgentRuntime;
     this.eventQueue = eventQueue;
     this.listenGroupIds = listenGroupIds;
     this.listAvailableAgentProviders = listAvailableAgentProviders;
   }
 
   public async getCurrentSnapshot(): Promise<AgentDashboardSnapshot> {
-    const [runtimeSnapshot, providers] = await Promise.all([
+    const [rootRuntimeSnapshot, storyRuntimeSnapshot, providers] = await Promise.all([
       this.rootAgentRuntime.getDashboardSnapshot(),
+      this.storyAgentRuntime.getDashboardSnapshot(),
       this.listAvailableAgentProviders(),
     ]);
 
     return {
       generatedAt: new Date().toISOString(),
-      runtime: {
-        initialized: runtimeSnapshot.initialized,
-        loopState: runtimeSnapshot.loopState,
-        lastError: mapRuntimeError(runtimeSnapshot.lastError),
-        lastActivityAt: toIsoString(runtimeSnapshot.lastActivityAt),
-        lastRoundCompletedAt: toIsoString(runtimeSnapshot.lastRoundCompletedAt),
-        lastCompactionAt: toIsoString(runtimeSnapshot.lastCompactionAt),
-      },
-      session: {
-        kind: runtimeSnapshot.session.state.kind as AgentDashboardSnapshot["session"]["kind"],
-        currentGroupId: runtimeSnapshot.session.currentGroupId,
-        waitingDeadlineAt: toIsoString(runtimeSnapshot.session.waitingDeadlineAt),
-        availableInvokeTools: runtimeSnapshot.availableInvokeTools,
-      },
-      queue: {
-        pendingEventCount: this.eventQueue.size(),
-      },
-      groups: runtimeSnapshot.session.groups.map(group => ({
-        groupId: group.groupId,
-        ...(group.groupName ? { groupName: group.groupName } : {}),
-        unreadCount: group.unreadCount,
-        hasEntered: group.hasEntered,
-      })),
-      context: {
-        messageCount: runtimeSnapshot.contextSummary.messageCount,
-        compactionTotalTokenThreshold: runtimeSnapshot.contextCompactionTotalTokenThreshold,
-        recentItems: runtimeSnapshot.contextSummary.recentItems,
-        recentItemsTruncated: runtimeSnapshot.contextSummary.recentItemsTruncated,
-      },
-      activity: {
-        lastToolCall: mapToolCall(runtimeSnapshot.lastToolCall),
-        lastToolResultPreview: runtimeSnapshot.lastToolResultPreview,
-        lastLlmCall: mapLlmCall(runtimeSnapshot.lastLlmCall),
-      },
-      providers,
+      agents: [
+        mapRootAgentSnapshot({
+          runtimeSnapshot: rootRuntimeSnapshot,
+          pendingEventCount: this.eventQueue.size(),
+          providers,
+        }),
+        mapStoryAgentSnapshot(storyRuntimeSnapshot),
+      ],
       config: {
         listenGroupIds: [...this.listenGroupIds],
       },
@@ -88,8 +79,102 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
   }
 }
 
+function mapRootAgentSnapshot(input: {
+  runtimeSnapshot: RootAgentRuntimeDashboardSnapshot;
+  pendingEventCount: number;
+  providers: RootAgentDashboardSnapshot["providers"];
+}): RootAgentDashboardSnapshot {
+  const { runtimeSnapshot, pendingEventCount, providers } = input;
+
+  return {
+    id: "root",
+    label: "主 Agent",
+    kind: "root",
+    runtime: mapRuntime(runtimeSnapshot),
+    session: {
+      kind: runtimeSnapshot.session.state.kind as RootAgentDashboardSnapshot["session"]["kind"],
+      currentGroupId: runtimeSnapshot.session.currentGroupId,
+      waitingDeadlineAt: toIsoString(runtimeSnapshot.session.waitingDeadlineAt),
+      waitingResumeTarget:
+        runtimeSnapshot.session.waitingResumeTarget &&
+        mapWaitingResumeTarget(runtimeSnapshot.session.waitingResumeTarget),
+      availableInvokeTools: runtimeSnapshot.availableInvokeTools,
+    },
+    queue: {
+      pendingEventCount,
+    },
+    groups: runtimeSnapshot.session.groups.map(group => ({
+      groupId: group.groupId,
+      ...(group.groupName ? { groupName: group.groupName } : {}),
+      unreadCount: group.unreadCount,
+      hasEntered: group.hasEntered,
+    })),
+    context: {
+      messageCount: runtimeSnapshot.contextSummary.messageCount,
+      compactionTotalTokenThreshold: runtimeSnapshot.contextCompactionTotalTokenThreshold,
+      recentItems: runtimeSnapshot.contextSummary.recentItems,
+      recentItemsTruncated: runtimeSnapshot.contextSummary.recentItemsTruncated,
+    },
+    activity: {
+      lastToolCall: mapToolCall(runtimeSnapshot.lastToolCall),
+      lastToolResultPreview: runtimeSnapshot.lastToolResultPreview,
+      lastLlmCall: mapLlmCall(runtimeSnapshot.lastLlmCall),
+    },
+    providers,
+  };
+}
+
+function mapStoryAgentSnapshot(
+  runtimeSnapshot: StoryAgentRuntimeDashboardSnapshot,
+): StoryAgentDashboardSnapshot {
+  return {
+    id: "story",
+    label: "Story Agent",
+    kind: "story",
+    runtime: mapRuntime(runtimeSnapshot),
+    context: {
+      messageCount: runtimeSnapshot.contextSummary.messageCount,
+      compactionTotalTokenThreshold: runtimeSnapshot.contextCompactionTotalTokenThreshold,
+      recentItems: runtimeSnapshot.contextSummary.recentItems,
+      recentItemsTruncated: runtimeSnapshot.contextSummary.recentItemsTruncated,
+    },
+    activity: {
+      lastToolCall: mapToolCall(runtimeSnapshot.lastToolCall),
+      lastToolResultPreview: runtimeSnapshot.lastToolResultPreview,
+      lastLlmCall: mapLlmCall(runtimeSnapshot.lastLlmCall),
+    },
+    story: {
+      lastProcessedMessageSeq: runtimeSnapshot.story.lastProcessedMessageSeq,
+      pendingMessageCount: runtimeSnapshot.story.pendingMessageCount,
+      pendingBatch: runtimeSnapshot.story.pendingBatch,
+      batchSize: runtimeSnapshot.story.batchSize,
+      idleFlushMs: runtimeSnapshot.story.idleFlushMs,
+    },
+  };
+}
+
+function mapRuntime(value: {
+  initialized: boolean;
+  loopState:
+    | RootAgentRuntimeDashboardSnapshot["loopState"]
+    | StoryAgentRuntimeDashboardSnapshot["loopState"];
+  lastError: RootAgentRuntimeErrorSummary | StoryAgentRuntimeErrorSummary | null;
+  lastActivityAt: Date | null;
+  lastRoundCompletedAt: Date | null;
+  lastCompactionAt: Date | null;
+}): AgentDashboardAgentSnapshot["runtime"] {
+  return {
+    initialized: value.initialized,
+    loopState: value.loopState,
+    lastError: mapRuntimeError(value.lastError),
+    lastActivityAt: toIsoString(value.lastActivityAt),
+    lastRoundCompletedAt: toIsoString(value.lastRoundCompletedAt),
+    lastCompactionAt: toIsoString(value.lastCompactionAt),
+  };
+}
+
 function mapRuntimeError(
-  value: RootAgentRuntimeErrorSummary | null,
+  value: RootAgentRuntimeErrorSummary | StoryAgentRuntimeErrorSummary | null,
 ): AgentDashboardRuntimeError | null {
   if (!value) {
     return null;
@@ -102,7 +187,9 @@ function mapRuntimeError(
   };
 }
 
-function mapToolCall(value: RootAgentToolCallSummary | null): AgentDashboardToolCall | null {
+function mapToolCall(
+  value: RootAgentToolCallSummary | StoryAgentToolCallSummary | null,
+): AgentDashboardToolCall | null {
   if (!value) {
     return null;
   }
@@ -114,7 +201,9 @@ function mapToolCall(value: RootAgentToolCallSummary | null): AgentDashboardTool
   };
 }
 
-function mapLlmCall(value: RootAgentLlmCallSummary | null): AgentDashboardLlmCall | null {
+function mapLlmCall(
+  value: RootAgentLlmCallSummary | StoryAgentLlmCallSummary | null,
+): AgentDashboardLlmCall | null {
   if (!value) {
     return null;
   }
@@ -131,4 +220,10 @@ function mapLlmCall(value: RootAgentLlmCallSummary | null): AgentDashboardLlmCal
 
 function toIsoString(value: Date | null): string | null {
   return value ? value.toISOString() : null;
+}
+
+function mapWaitingResumeTarget(
+  value: NonNullable<RootAgentDashboardSnapshot["session"]["waitingResumeTarget"]>,
+): NonNullable<RootAgentDashboardSnapshot["session"]["waitingResumeTarget"]> {
+  return "groupId" in value ? { kind: value.kind, groupId: value.groupId } : { kind: value.kind };
 }

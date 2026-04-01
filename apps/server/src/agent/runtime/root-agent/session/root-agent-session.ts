@@ -7,6 +7,7 @@ import {
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
   createPortalSnapshotMessage,
+  createWaitResumeMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
 import type {
@@ -16,6 +17,7 @@ import type {
 import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import type {
+  PersistedRootAgentActiveSessionState,
   PersistedRootAgentSessionSnapshot,
   PersistedRootAgentSessionState,
 } from "../persistence/root-agent-runtime-snapshot.js";
@@ -35,6 +37,14 @@ export type RootAgentInvokeToolName =
   (typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE)[keyof typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE][number];
 
 export type RootAgentSessionState =
+  | RootAgentActiveSessionState
+  | {
+      kind: "waiting";
+      deadlineAt: Date;
+      resumeState: RootAgentActiveSessionState;
+    };
+
+export type RootAgentActiveSessionState =
   | {
       kind: "portal";
     }
@@ -47,10 +57,6 @@ export type RootAgentSessionState =
     }
   | {
       kind: "ithome";
-    }
-  | {
-      kind: "waiting";
-      deadlineAt: Date;
     };
 
 export type RootAgentPostToolEffects = {
@@ -69,6 +75,7 @@ export type RootAgentSessionDashboardSnapshot = {
   state: RootAgentSessionState;
   currentGroupId: string | null;
   waitingDeadlineAt: Date | null;
+  waitingResumeTarget: RootAgentActiveSessionState | null;
   availableInvokeTools: RootAgentInvokeToolName[];
   groups: RootAgentSessionDashboardGroup[];
 };
@@ -173,6 +180,8 @@ export class RootAgentSession implements RootAgentSessionController {
       state: cloneSessionState(this.state),
       currentGroupId: this.getCurrentGroupId() ?? null,
       waitingDeadlineAt: this.state.kind === "waiting" ? new Date(this.state.deadlineAt) : null,
+      waitingResumeTarget:
+        this.state.kind === "waiting" ? cloneActiveSessionState(this.state.resumeState) : null,
       availableInvokeTools: this.getAvailableInvokeTools(),
       groups: this.renderPortalGroups(),
     };
@@ -253,49 +262,12 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public async consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
-    if (event.type === "news_article_ingested") {
-      return await this.consumeNewsArticleIngestedEvent(event);
-    }
-
-    if (event.type !== "napcat_group_message") {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    const groupState = this.groupStateById.get(event.data.groupId);
-    if (!groupState) {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    if (this.state.kind === "qq_group" && this.state.groupId === groupState.groupId) {
-      this.pendingVisibleEvents.push(event);
-      return {
-        shouldTriggerRound: true,
-      };
-    }
-
-    groupState.pushUnreadMessage(event.data);
-    if (this.state.kind === "portal") {
-      this.portalSnapshotDirty = true;
-      return {
-        shouldTriggerRound: true,
-      };
-    }
 
     if (this.state.kind === "waiting") {
-      this.state = { kind: "portal" };
-      this.portalSnapshotDirty = true;
-      return {
-        shouldTriggerRound: true,
-      };
+      return await this.consumeIncomingEventWhileWaiting(event);
     }
 
-    return {
-      shouldTriggerRound: false,
-    };
+    return await this.consumeIncomingEventInActiveState(this.state, event);
   }
 
   public async flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }> {
@@ -470,7 +442,7 @@ export class RootAgentSession implements RootAgentSessionController {
   public async wait(input: { deadlineAt: Date }): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
-    if (this.state.kind !== "portal") {
+    if (this.state.kind === "waiting") {
       return {
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",
@@ -480,6 +452,7 @@ export class RootAgentSession implements RootAgentSessionController {
     this.state = {
       kind: "waiting",
       deadlineAt: new Date(input.deadlineAt),
+      resumeState: cloneActiveSessionState(this.state),
     };
 
     return {
@@ -497,8 +470,15 @@ export class RootAgentSession implements RootAgentSessionController {
       };
     }
 
-    this.state = { kind: "portal" };
-    this.portalSnapshotDirty = true;
+    const resumedState = this.exitWaiting();
+    await this.queueWaitResumeMessage({
+      reason: "timeout",
+      resumedState,
+    });
+    if (resumedState.kind === "portal") {
+      this.portalSnapshotDirty = true;
+    }
+
     return {
       shouldTriggerRound: true,
     };
@@ -600,7 +580,66 @@ export class RootAgentSession implements RootAgentSessionController {
     };
   }
 
-  private async consumeNewsArticleIngestedEvent(
+  private async consumeIncomingEventWhileWaiting(
+    event: Event,
+  ): Promise<{ shouldTriggerRound: boolean }> {
+    const resumedState = this.exitWaiting();
+    await this.queueWaitResumeMessage({
+      reason: "event",
+      resumedState,
+      event,
+    });
+    await this.consumeIncomingEventInActiveState(resumedState, event);
+
+    return {
+      shouldTriggerRound: true,
+    };
+  }
+
+  private async consumeIncomingEventInActiveState(
+    state: RootAgentActiveSessionState,
+    event: Event,
+  ): Promise<{ shouldTriggerRound: boolean }> {
+    if (event.type === "news_article_ingested") {
+      return await this.consumeNewsArticleIngestedEventInActiveState(state, event);
+    }
+
+    return this.consumeGroupMessageEventInActiveState(state, event);
+  }
+
+  private consumeGroupMessageEventInActiveState(
+    state: RootAgentActiveSessionState,
+    event: Extract<Event, { type: "napcat_group_message" }>,
+  ): { shouldTriggerRound: boolean } {
+    const groupState = this.groupStateById.get(event.data.groupId);
+    if (!groupState) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    if (state.kind === "qq_group" && state.groupId === groupState.groupId) {
+      this.pendingVisibleEvents.push(event);
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
+    groupState.pushUnreadMessage(event.data);
+    if (state.kind === "portal") {
+      this.portalSnapshotDirty = true;
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
+    return {
+      shouldTriggerRound: false,
+    };
+  }
+
+  private async consumeNewsArticleIngestedEventInActiveState(
+    state: RootAgentActiveSessionState,
     event: Extract<Event, { type: "news_article_ingested" }>,
   ): Promise<{ shouldTriggerRound: boolean }> {
     await this.ensureIthomeFeedStateLoaded();
@@ -611,17 +650,8 @@ export class RootAgentSession implements RootAgentSessionController {
     }
 
     this.ithomeFeedState.unreadCount += 1;
-    if (this.state.kind === "portal") {
+    if (state.kind === "portal") {
       this.pendingVisibleEvents.push(event);
-      this.portalSnapshotDirty = true;
-      return {
-        shouldTriggerRound: true,
-      };
-    }
-
-    if (this.state.kind === "waiting") {
-      this.pendingVisibleEvents.push(event);
-      this.state = { kind: "portal" };
       this.portalSnapshotDirty = true;
       return {
         shouldTriggerRound: true,
@@ -631,6 +661,65 @@ export class RootAgentSession implements RootAgentSessionController {
     return {
       shouldTriggerRound: false,
     };
+  }
+
+  private exitWaiting(): RootAgentActiveSessionState {
+    if (this.state.kind !== "waiting") {
+      return cloneActiveSessionState(this.state);
+    }
+
+    const resumedState = cloneActiveSessionState(this.state.resumeState);
+    this.state = resumedState;
+    return resumedState;
+  }
+
+  private async queueWaitResumeMessage(input: {
+    reason: "timeout" | "event";
+    resumedState: RootAgentActiveSessionState;
+    event?: Event;
+  }): Promise<void> {
+    const resumedStateLabel = await this.describeActiveState(input.resumedState);
+    const eventSummary = input.event ? await this.describeWakeEvent(input.event) : undefined;
+    this.pendingIncomingMessages.push(
+      createWaitResumeMessage({
+        reason: input.reason,
+        resumedStateLabel,
+        ...(eventSummary ? { eventSummary } : {}),
+      }),
+    );
+  }
+
+  private async describeActiveState(state: RootAgentActiveSessionState): Promise<string> {
+    if (state.kind === "portal") {
+      return "门户状态";
+    }
+
+    if (state.kind === "zone_out") {
+      return "神游状态";
+    }
+
+    if (state.kind === "ithome") {
+      await this.ensureIthomeFeedStateLoaded();
+      return this.ithomeFeedState?.label ?? "IT 之家状态";
+    }
+
+    await this.ensureGroupInfosLoaded();
+    const groupName = this.groupStateById.get(state.groupId)?.getGroupName();
+    return groupName ? `QQ 群 ${groupName}（${state.groupId}）` : `QQ 群 ${state.groupId}`;
+  }
+
+  private async describeWakeEvent(event: Event): Promise<string> {
+    if (event.type === "news_article_ingested") {
+      await this.ensureIthomeFeedStateLoaded();
+      const feedLabel = this.ithomeFeedState?.label ?? "IT 之家";
+      return `${feedLabel} 有新文章《${event.data.title}》`;
+    }
+
+    await this.ensureGroupInfosLoaded();
+    const groupName = this.groupStateById.get(event.data.groupId)?.getGroupName();
+    return groupName
+      ? `QQ 群 ${groupName}（${event.data.groupId}）收到了新消息`
+      : `QQ 群 ${event.data.groupId} 收到了新消息`;
   }
 
   private async fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]> {
@@ -701,26 +790,46 @@ export class RootAgentSession implements RootAgentSessionController {
   }
 }
 
-function cloneSessionState(state: RootAgentSessionState): RootAgentSessionState {
-  if (state.kind === "waiting") {
-    return {
-      kind: "waiting",
-      deadlineAt: new Date(state.deadlineAt),
-    };
-  }
-
+function cloneActiveSessionState(state: RootAgentActiveSessionState): RootAgentActiveSessionState {
   return { ...state };
 }
 
-function normalizeRestoredSessionState(
-  state: PersistedRootAgentSessionState,
+function cloneSessionState(state: RootAgentSessionState): RootAgentSessionState {
+  if (state.kind !== "waiting") {
+    return cloneActiveSessionState(state);
+  }
+
+  return {
+    kind: "waiting",
+    deadlineAt: new Date(state.deadlineAt),
+    resumeState: cloneActiveSessionState(state.resumeState),
+  };
+}
+
+function normalizeActiveSessionState(
+  state: PersistedRootAgentActiveSessionState,
   groupStateById: Map<string, GroupChatState>,
-): RootAgentSessionState {
+): RootAgentActiveSessionState {
   if (state.kind === "qq_group" && !groupStateById.has(state.groupId)) {
     return {
       kind: "portal",
     };
   }
 
-  return cloneSessionState(state);
+  return cloneActiveSessionState(state);
+}
+
+function normalizeRestoredSessionState(
+  state: PersistedRootAgentSessionState,
+  groupStateById: Map<string, GroupChatState>,
+): RootAgentSessionState {
+  if (state.kind !== "waiting") {
+    return normalizeActiveSessionState(state, groupStateById);
+  }
+
+  return {
+    kind: "waiting",
+    deadlineAt: new Date(state.deadlineAt),
+    resumeState: normalizeActiveSessionState(state.resumeState, groupStateById),
+  };
 }

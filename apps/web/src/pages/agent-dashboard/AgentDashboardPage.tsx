@@ -1,68 +1,34 @@
-import { AgentDashboardResetContextResponseSchema } from "@kagami/shared/schemas/agent-dashboard";
 import type {
+  AgentDashboardAgentSnapshot,
   AgentDashboardContextItem,
   AgentDashboardGroup,
-  AgentDashboardResetContextResponse,
   AgentLoopState,
+  RootAgentDashboardSnapshot,
+  StoryAgentDashboardSnapshot,
 } from "@kagami/shared/schemas/agent-dashboard";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { AGENT_DASHBOARD_QUERY_KEY, useAgentDashboardSnapshot } from "./useAgentDashboardSnapshot";
+import { useAgentDashboardSnapshot } from "./useAgentDashboardSnapshot";
 
-type DashboardTab = "overview" | "context" | "control";
-type ResetFeedback =
-  | {
-      kind: "success";
-      message: string;
-    }
-  | {
-      kind: "error";
-      message: string;
-    };
+type DashboardTab = "overview" | "context";
+type AgentId = AgentDashboardAgentSnapshot["id"];
 
 export function AgentDashboardPage() {
-  const queryClient = useQueryClient();
   const query = useAgentDashboardSnapshot();
   const snapshot = query.data;
   const isInitialLoading = query.isLoading && !snapshot;
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-  const [resetFeedback, setResetFeedback] = useState<ResetFeedback | null>(null);
-  const resetContextMutation = useMutation({
-    mutationFn: async (): Promise<AgentDashboardResetContextResponse> => {
-      const response = await apiRequest("/agent-dashboard/reset-context", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        throw new Error(formatApiError(response));
-      }
-
-      return AgentDashboardResetContextResponseSchema.parse(response.body);
-    },
-    onMutate: () => {
-      setResetFeedback(null);
-    },
-    onSuccess: async result => {
-      setResetFeedback({
-        kind: "success",
-        message: `上下文已重置，时间：${formatStableDateTime(result.resetAt) ?? result.resetAt}`,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: AGENT_DASHBOARD_QUERY_KEY,
-      });
-    },
-    onError: error => {
-      setResetFeedback({
-        kind: "error",
-        message: error instanceof Error ? error.message : "重置失败，请稍后再试。",
-      });
-    },
-  });
+  const [selectedAgentId, setSelectedAgentId] = useState<AgentId>("root");
+  const selectedAgentIdOrFallback = snapshot?.agents.some(agent => agent.id === selectedAgentId)
+    ? selectedAgentId
+    : (snapshot?.agents[0]?.id ?? "root");
+  const selectedAgent =
+    snapshot?.agents.find(agent => agent.id === selectedAgentIdOrFallback) ??
+    snapshot?.agents[0] ??
+    null;
 
   if (isInitialLoading) {
     return (
@@ -72,7 +38,7 @@ export function AgentDashboardPage() {
     );
   }
 
-  if (!snapshot) {
+  if (!snapshot || !selectedAgent) {
     return (
       <div className="flex h-full min-h-0 w-full items-center justify-center p-6">
         <p className="text-sm text-destructive">仪表盘加载失败，请检查后端服务是否运行。</p>
@@ -88,8 +54,11 @@ export function AgentDashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={getLoopStateClassName(snapshot.runtime.loopState)}>
-            {formatLoopState(snapshot.runtime.loopState)}
+          <Badge
+            variant="outline"
+            className={getLoopStateClassName(selectedAgent.runtime.loopState)}
+          >
+            {selectedAgent.label} · {formatLoopState(selectedAgent.runtime.loopState)}
           </Badge>
           <Badge
             variant={query.isError ? "destructive" : "secondary"}
@@ -103,7 +72,20 @@ export function AgentDashboardPage() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {snapshot.agents.map(agent => (
+          <Button
+            key={agent.id}
+            variant={agent.id === selectedAgent.id ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedAgentId(agent.id)}
+          >
+            {agent.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
         <TabButton
           active={activeTab === "overview"}
           onClick={() => setActiveTab("overview")}
@@ -112,12 +94,7 @@ export function AgentDashboardPage() {
         <TabButton
           active={activeTab === "context"}
           onClick={() => setActiveTab("context")}
-          label={`最近上下文 (${snapshot.context.recentItems.length})`}
-        />
-        <TabButton
-          active={activeTab === "control"}
-          onClick={() => setActiveTab("control")}
-          label="控制面板"
+          label={`最近上下文 (${selectedAgent.context.recentItems.length})`}
         />
       </div>
 
@@ -128,30 +105,15 @@ export function AgentDashboardPage() {
       ) : null}
 
       <div className="mt-4 min-h-0 flex-1 overflow-hidden">
-        {activeTab === "overview" ? <OverviewTab snapshot={snapshot} /> : null}
+        {activeTab === "overview" ? (
+          <OverviewTab agent={selectedAgent} listenGroupIds={snapshot.config.listenGroupIds} />
+        ) : null}
         {activeTab === "context" ? (
           <ContextTab
-            items={snapshot.context.recentItems}
-            totalCount={snapshot.context.recentItems.length}
-          />
-        ) : null}
-        {activeTab === "control" ? (
-          <ControlTab
-            loopState={snapshot.runtime.loopState}
-            pendingEventCount={snapshot.queue.pendingEventCount}
-            feedback={resetFeedback}
-            isResetting={resetContextMutation.isPending}
-            onReset={() => {
-              if (
-                !window.confirm(
-                  "确认重置 Agent 上下文吗？这会清空当前上下文、会话状态和待处理事件，并以当前 System Prompt 从新的初始态继续运行。",
-                )
-              ) {
-                return;
-              }
-
-              resetContextMutation.mutate();
-            }}
+            label={selectedAgent.label}
+            items={selectedAgent.context.recentItems}
+            totalCount={selectedAgent.context.recentItems.length}
+            truncated={selectedAgent.context.recentItemsTruncated}
           />
         ) : null}
       </div>
@@ -160,9 +122,25 @@ export function AgentDashboardPage() {
 }
 
 function OverviewTab({
-  snapshot,
+  agent,
+  listenGroupIds,
 }: {
-  snapshot: NonNullable<ReturnType<typeof useAgentDashboardSnapshot>["data"]>;
+  agent: AgentDashboardAgentSnapshot;
+  listenGroupIds: string[];
+}) {
+  if (agent.kind === "root") {
+    return <RootOverviewTab agent={agent} listenGroupIds={listenGroupIds} />;
+  }
+
+  return <StoryOverviewTab agent={agent} />;
+}
+
+function RootOverviewTab({
+  agent,
+  listenGroupIds,
+}: {
+  agent: RootAgentDashboardSnapshot;
+  listenGroupIds: string[];
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
@@ -170,22 +148,23 @@ function OverviewTab({
         <OverviewCard
           title="系统概览"
           rows={[
-            ["已初始化", snapshot.runtime.initialized ? "是" : "否"],
-            ["Loop 状态", formatLoopState(snapshot.runtime.loopState)],
-            ["待处理事件", String(snapshot.queue.pendingEventCount)],
-            ["最近活动", formatDateTime(snapshot.runtime.lastActivityAt) ?? "暂无"],
+            ["已初始化", agent.runtime.initialized ? "是" : "否"],
+            ["Loop 状态", formatLoopState(agent.runtime.loopState)],
+            ["待处理事件", String(agent.queue.pendingEventCount)],
+            ["最近活动", formatDateTime(agent.runtime.lastActivityAt) ?? "暂无"],
           ]}
         />
         <OverviewCard
           title="会话状态"
           rows={[
-            ["当前会话", snapshot.session.kind],
-            ["当前群", snapshot.session.currentGroupId ?? "无"],
-            ["等待截止", formatDateTime(snapshot.session.waitingDeadlineAt) ?? "无"],
+            ["当前会话", agent.session.kind],
+            ["当前群", agent.session.currentGroupId ?? "无"],
+            ["等待截止", formatDateTime(agent.session.waitingDeadlineAt) ?? "无"],
+            ["等待后返回", formatWaitingResumeTarget(agent.session.waitingResumeTarget) ?? "无"],
             [
               "可用工具",
-              snapshot.session.availableInvokeTools.length > 0
-                ? snapshot.session.availableInvokeTools.join(", ")
+              agent.session.availableInvokeTools.length > 0
+                ? agent.session.availableInvokeTools.join(", ")
                 : "无",
             ],
           ]}
@@ -193,29 +172,24 @@ function OverviewTab({
         <OverviewCard
           title="上下文状态"
           rows={[
-            ["消息数", String(snapshot.context.messageCount)],
-            ["总 Token 阈值", String(snapshot.context.compactionTotalTokenThreshold)],
-            ["最近压缩", formatDateTime(snapshot.runtime.lastCompactionAt) ?? "暂无"],
-            ["最近完成轮次", formatDateTime(snapshot.runtime.lastRoundCompletedAt) ?? "暂无"],
+            ["消息数", String(agent.context.messageCount)],
+            ["总 Token 阈值", String(agent.context.compactionTotalTokenThreshold)],
+            ["最近压缩", formatDateTime(agent.runtime.lastCompactionAt) ?? "暂无"],
+            ["最近完成轮次", formatDateTime(agent.runtime.lastRoundCompletedAt) ?? "暂无"],
           ]}
         />
         <OverviewCard
           title="Providers / 配置"
           rows={[
-            ["Provider 数量", String(snapshot.providers.length)],
+            ["Provider 数量", String(agent.providers.length)],
             [
               "Provider 列表",
-              snapshot.providers.length > 0
-                ? snapshot.providers.map(provider => provider.id).join(", ")
+              agent.providers.length > 0
+                ? agent.providers.map(provider => provider.id).join(", ")
                 : "无",
             ],
-            ["监听群数量", String(snapshot.config.listenGroupIds.length)],
-            [
-              "监听群 ID",
-              snapshot.config.listenGroupIds.length > 0
-                ? snapshot.config.listenGroupIds.join(", ")
-                : "无",
-            ],
+            ["监听群数量", String(listenGroupIds.length)],
+            ["监听群 ID", listenGroupIds.length > 0 ? listenGroupIds.join(", ") : "无"],
           ]}
         />
       </section>
@@ -226,81 +200,132 @@ function OverviewTab({
             <CardTitle>群状态</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {snapshot.groups.length === 0 ? (
+            {agent.groups.length === 0 ? (
               <EmptyBlock label="当前没有监听中的群" />
             ) : (
-              snapshot.groups.map(group => <GroupCard key={group.groupId} group={group} />)
+              agent.groups.map(group => <GroupCard key={group.groupId} group={group} />)
             )}
           </CardContent>
         </Card>
 
-        <Card className="min-h-0">
-          <CardHeader className="pb-4">
-            <CardTitle>最近活动</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-3">
-            <ActivityBlock
-              title="最近 LLM 调用"
-              value={
-                snapshot.activity.lastLlmCall
-                  ? [
-                      `${snapshot.activity.lastLlmCall.provider} / ${snapshot.activity.lastLlmCall.model}`,
-                      `总 Token：${snapshot.activity.lastLlmCall.totalTokens ?? "未知"}`,
-                      snapshot.activity.lastLlmCall.toolCallNames.length > 0
-                        ? `工具：${snapshot.activity.lastLlmCall.toolCallNames.join(", ")}`
-                        : "无工具调用",
-                      snapshot.activity.lastLlmCall.assistantContentPreview || "无文本输出",
-                      `时间：${formatDateTime(snapshot.activity.lastLlmCall.updatedAt) ?? "未知"}`,
-                    ].join("\n")
-                  : "暂无"
-              }
-            />
-            <ActivityBlock
-              title="最近工具调用"
-              value={
-                snapshot.activity.lastToolCall
-                  ? [
-                      `${snapshot.activity.lastToolCall.name}`,
-                      `参数：${snapshot.activity.lastToolCall.argumentsPreview || "{}"}`,
-                      snapshot.activity.lastToolResultPreview
-                        ? `结果：${snapshot.activity.lastToolResultPreview}`
-                        : "结果：无文本结果",
-                      `时间：${formatDateTime(snapshot.activity.lastToolCall.updatedAt) ?? "未知"}`,
-                    ].join("\n")
-                  : "暂无"
-              }
-            />
-            <ActivityBlock
-              title="最近错误"
-              value={
-                snapshot.runtime.lastError
-                  ? [
-                      `${snapshot.runtime.lastError.name}`,
-                      snapshot.runtime.lastError.message,
-                      `时间：${formatDateTime(snapshot.runtime.lastError.updatedAt) ?? "未知"}`,
-                    ].join("\n")
-                  : "暂无"
-              }
-              destructive={snapshot.runtime.lastError !== null}
-            />
-          </CardContent>
-        </Card>
+        <RecentActivityCard agent={agent} />
       </section>
     </div>
   );
 }
 
+function StoryOverviewTab({ agent }: { agent: StoryAgentDashboardSnapshot }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <OverviewCard
+          title="系统概览"
+          rows={[
+            ["已初始化", agent.runtime.initialized ? "是" : "否"],
+            ["Loop 状态", formatLoopState(agent.runtime.loopState)],
+            ["最近活动", formatDateTime(agent.runtime.lastActivityAt) ?? "暂无"],
+            ["最近完成轮次", formatDateTime(agent.runtime.lastRoundCompletedAt) ?? "暂无"],
+          ]}
+        />
+        <OverviewCard
+          title="处理进度"
+          rows={[
+            ["已处理到 Seq", String(agent.story.lastProcessedMessageSeq)],
+            ["待处理消息", String(agent.story.pendingMessageCount)],
+            ["当前批次", formatPendingBatch(agent.story.pendingBatch)],
+            ["批次大小", String(agent.story.batchSize)],
+            ["空闲冲刷", `${agent.story.idleFlushMs} ms`],
+          ]}
+        />
+        <OverviewCard
+          title="上下文状态"
+          rows={[
+            ["消息数", String(agent.context.messageCount)],
+            ["总 Token 阈值", String(agent.context.compactionTotalTokenThreshold)],
+            ["最近压缩", formatDateTime(agent.runtime.lastCompactionAt) ?? "暂无"],
+            ["上下文截断", agent.context.recentItemsTruncated ? "最近列表已截断" : "最近列表完整"],
+          ]}
+        />
+      </section>
+
+      <section className="min-h-0 flex-1">
+        <RecentActivityCard agent={agent} />
+      </section>
+    </div>
+  );
+}
+
+function RecentActivityCard({ agent }: { agent: AgentDashboardAgentSnapshot }) {
+  return (
+    <Card className="min-h-0">
+      <CardHeader className="pb-4">
+        <CardTitle>最近活动</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-3">
+        <ActivityBlock
+          title="最近 LLM 调用"
+          value={
+            agent.activity.lastLlmCall
+              ? [
+                  `${agent.activity.lastLlmCall.provider} / ${agent.activity.lastLlmCall.model}`,
+                  `总 Token：${agent.activity.lastLlmCall.totalTokens ?? "未知"}`,
+                  agent.activity.lastLlmCall.toolCallNames.length > 0
+                    ? `工具：${agent.activity.lastLlmCall.toolCallNames.join(", ")}`
+                    : "无工具调用",
+                  agent.activity.lastLlmCall.assistantContentPreview || "无文本输出",
+                  `时间：${formatDateTime(agent.activity.lastLlmCall.updatedAt) ?? "未知"}`,
+                ].join("\n")
+              : "暂无"
+          }
+        />
+        <ActivityBlock
+          title="最近工具调用"
+          value={
+            agent.activity.lastToolCall
+              ? [
+                  `${agent.activity.lastToolCall.name}`,
+                  `参数：${agent.activity.lastToolCall.argumentsPreview || "{}"}`,
+                  agent.activity.lastToolResultPreview
+                    ? `结果：${agent.activity.lastToolResultPreview}`
+                    : "结果：无文本结果",
+                  `时间：${formatDateTime(agent.activity.lastToolCall.updatedAt) ?? "未知"}`,
+                ].join("\n")
+              : "暂无"
+          }
+        />
+        <ActivityBlock
+          title="最近错误"
+          value={
+            agent.runtime.lastError
+              ? [
+                  `${agent.runtime.lastError.name}`,
+                  agent.runtime.lastError.message,
+                  `时间：${formatDateTime(agent.runtime.lastError.updatedAt) ?? "未知"}`,
+                ].join("\n")
+              : "暂无"
+          }
+          destructive={agent.runtime.lastError !== null}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 function ContextTab({
+  label,
   items,
   totalCount,
+  truncated,
 }: {
+  label: string;
   items: AgentDashboardContextItem[];
   totalCount: number;
+  truncated: boolean;
 }) {
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader className="pb-4">
-        <CardTitle>最近上下文</CardTitle>
+        <CardTitle>{label} · 最近上下文</CardTitle>
       </CardHeader>
       <CardContent className="min-h-0 flex-1 overflow-hidden">
         {items.length === 0 ? (
@@ -316,59 +341,8 @@ function ContextTab({
         )}
       </CardContent>
       <div className="border-t px-6 py-3 text-xs text-muted-foreground">
-        当前已拉取 {totalCount} 条上下文摘要
+        当前已拉取 {totalCount} 条上下文摘要{truncated ? "，更早内容已折叠" : ""}
       </div>
-    </Card>
-  );
-}
-
-function ControlTab({
-  loopState,
-  pendingEventCount,
-  feedback,
-  isResetting,
-  onReset,
-}: {
-  loopState: AgentLoopState;
-  pendingEventCount: number;
-  feedback: ResetFeedback | null;
-  isResetting: boolean;
-  onReset: () => void;
-}) {
-  return (
-    <Card className="flex h-full min-h-0 flex-col">
-      <CardHeader className="pb-4">
-        <CardTitle>控制面板</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">重置上下文</p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              适用于 System Prompt 更新后，希望 Agent 丢弃旧上下文重新开始的场景。
-              当前会清空上下文、session 和待处理事件队列，并立即生成新的初始 portal 上下文。
-            </p>
-            <p className="text-xs text-muted-foreground">
-              当前 Loop：{formatLoopState(loopState)}，待处理事件：{pendingEventCount}
-            </p>
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button variant="destructive" onClick={onReset} disabled={isResetting}>
-              {isResetting ? "重置中..." : "重置上下文"}
-            </Button>
-            {feedback ? (
-              <p
-                className={cn(
-                  "text-sm",
-                  feedback.kind === "error" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {feedback.message}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </CardContent>
     </Card>
   );
 }
@@ -449,19 +423,6 @@ function ActivityBlock({
   );
 }
 
-function formatApiError(response: Awaited<ReturnType<typeof apiRequest>>): string {
-  if (
-    response.body &&
-    typeof response.body === "object" &&
-    "message" in response.body &&
-    typeof response.body.message === "string"
-  ) {
-    return response.body.message;
-  }
-
-  return `API error ${response.status}: ${response.statusText}`;
-}
-
 function ContextItemCard({ item }: { item: AgentDashboardContextItem }) {
   return (
     <div className="rounded-md border bg-card p-3">
@@ -526,7 +487,12 @@ function formatDateTime(value: string | null): string | null {
     return null;
   }
 
-  return new Date(value).toLocaleString("zh-CN", {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("zh-CN", {
     hour12: false,
   });
 }
@@ -536,21 +502,43 @@ function formatStableDateTime(value: string | null): string | null {
     return null;
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  const hours = `${parsed.getHours()}`.padStart(2, "0");
+  const minutes = `${parsed.getMinutes()}`.padStart(2, "0");
+  const seconds = `${parsed.getSeconds()}`.padStart(2, "0");
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+}
+
+function formatWaitingResumeTarget(
+  value: RootAgentDashboardSnapshot["session"]["waitingResumeTarget"],
+): string | null {
+  if (!value) {
     return null;
   }
 
-  const year = date.getFullYear();
-  const month = pad2(date.getMonth() + 1);
-  const day = pad2(date.getDate());
-  const hour = pad2(date.getHours());
-  const minute = pad2(date.getMinutes());
-  const second = pad2(date.getSeconds());
-
-  return `${year}/${month}/${day} ${hour}:${minute}:${second}`;
+  switch (value.kind) {
+    case "portal":
+      return "portal";
+    case "qq_group":
+      return `qq_group:${value.groupId}`;
+    case "ithome":
+      return "ithome";
+    case "zone_out":
+      return "zone_out";
+  }
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
+function formatPendingBatch(value: StoryAgentDashboardSnapshot["story"]["pendingBatch"]): string {
+  if (!value) {
+    return "无";
+  }
+
+  return `${value.firstSeq} - ${value.lastSeq}`;
 }

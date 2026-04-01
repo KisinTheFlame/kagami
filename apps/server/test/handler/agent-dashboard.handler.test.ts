@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentDashboardCommandService } from "../../src/ops/application/agent-dashboard-command.service.js";
 import type { AgentDashboardQueryService } from "../../src/ops/application/agent-dashboard-query.service.js";
 import { AgentDashboardHandler } from "../../src/ops/http/agent-dashboard.handler.js";
 
@@ -18,36 +17,49 @@ describe("AgentDashboardHandler", () => {
   it("should return the current agent dashboard snapshot", async () => {
     const getCurrentSnapshot = vi.fn().mockResolvedValue({
       generatedAt: "2026-03-30T08:00:00.000Z",
-      runtime: {
-        initialized: true,
-        loopState: "idle",
-        lastError: null,
-        lastActivityAt: "2026-03-30T08:00:00.000Z",
-        lastRoundCompletedAt: null,
-        lastCompactionAt: null,
-      },
-      session: {
-        kind: "portal",
-        currentGroupId: null,
-        waitingDeadlineAt: null,
-        availableInvokeTools: [],
-      },
-      queue: {
-        pendingEventCount: 0,
-      },
-      groups: [],
-      context: {
-        messageCount: 0,
-        compactionTotalTokenThreshold: 150_000,
-        recentItems: [],
-        recentItemsTruncated: false,
-      },
-      activity: {
-        lastToolCall: null,
-        lastToolResultPreview: null,
-        lastLlmCall: null,
-      },
-      providers: [],
+      agents: [
+        {
+          id: "root",
+          label: "主 Agent",
+          kind: "root",
+          runtime: {
+            initialized: true,
+            loopState: "idle",
+            lastError: null,
+            lastActivityAt: "2026-03-30T08:00:00.000Z",
+            lastRoundCompletedAt: null,
+            lastCompactionAt: null,
+          },
+          session: {
+            kind: "portal",
+            currentGroupId: null,
+            waitingDeadlineAt: null,
+            waitingResumeTarget: null,
+            availableInvokeTools: [],
+          },
+          queue: {
+            pendingEventCount: 0,
+          },
+          groups: [],
+          context: {
+            messageCount: 0,
+            compactionTotalTokenThreshold: 150_000,
+            recentItems: [],
+            recentItemsTruncated: false,
+          },
+          activity: {
+            lastToolCall: null,
+            lastToolResultPreview: null,
+            lastLlmCall: null,
+          },
+          providers: [
+            {
+              id: "openai",
+              models: ["gpt-4o-mini"],
+            },
+          ],
+        },
+      ],
       config: {
         listenGroupIds: [],
       },
@@ -55,13 +67,8 @@ describe("AgentDashboardHandler", () => {
     const agentDashboardQueryService: AgentDashboardQueryService = {
       getCurrentSnapshot,
     };
-    const agentDashboardCommandService: AgentDashboardCommandService = {
-      resetContext: vi.fn(),
-    };
-
     const handler = new AgentDashboardHandler({
       agentDashboardQueryService,
-      agentDashboardCommandService,
     });
     handler.register(app);
 
@@ -73,72 +80,53 @@ describe("AgentDashboardHandler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       generatedAt: "2026-03-30T08:00:00.000Z",
-      runtime: {
-        initialized: true,
-        loopState: "idle",
-        lastError: null,
-        lastActivityAt: "2026-03-30T08:00:00.000Z",
-        lastRoundCompletedAt: null,
-        lastCompactionAt: null,
-      },
-      session: {
-        kind: "portal",
-        currentGroupId: null,
-        waitingDeadlineAt: null,
-        availableInvokeTools: [],
-      },
-      queue: {
-        pendingEventCount: 0,
-      },
-      groups: [],
-      context: {
-        messageCount: 0,
-        compactionTotalTokenThreshold: 150_000,
-        recentItems: [],
-        recentItemsTruncated: false,
-      },
-      activity: {
-        lastToolCall: null,
-        lastToolResultPreview: null,
-        lastLlmCall: null,
-      },
-      providers: [],
+      agents: [
+        {
+          id: "root",
+          label: "主 Agent",
+          kind: "root",
+          runtime: {
+            initialized: true,
+            loopState: "idle",
+            lastError: null,
+            lastActivityAt: "2026-03-30T08:00:00.000Z",
+            lastRoundCompletedAt: null,
+            lastCompactionAt: null,
+          },
+          session: {
+            kind: "portal",
+            currentGroupId: null,
+            waitingDeadlineAt: null,
+            waitingResumeTarget: null,
+            availableInvokeTools: [],
+          },
+          queue: {
+            pendingEventCount: 0,
+          },
+          groups: [],
+          context: {
+            messageCount: 0,
+            compactionTotalTokenThreshold: 150_000,
+            recentItems: [],
+            recentItemsTruncated: false,
+          },
+          activity: {
+            lastToolCall: null,
+            lastToolResultPreview: null,
+            lastLlmCall: null,
+          },
+          providers: [
+            {
+              id: "openai",
+              models: ["gpt-4o-mini"],
+            },
+          ],
+        },
+      ],
       config: {
         listenGroupIds: [],
       },
     });
     expect(getCurrentSnapshot).toHaveBeenCalledTimes(1);
-  });
-
-  it("should reset the current agent context", async () => {
-    const agentDashboardQueryService: AgentDashboardQueryService = {
-      getCurrentSnapshot: vi.fn(),
-    };
-    const resetContext = vi.fn().mockResolvedValue({
-      ok: true,
-      resetAt: "2026-03-30T08:00:00.000Z",
-    });
-    const agentDashboardCommandService: AgentDashboardCommandService = {
-      resetContext,
-    };
-
-    const handler = new AgentDashboardHandler({
-      agentDashboardQueryService,
-      agentDashboardCommandService,
-    });
-    handler.register(app);
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/agent-dashboard/reset-context",
-      payload: {},
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      ok: true,
-      resetAt: "2026-03-30T08:00:00.000Z",
-    });
-    expect(resetContext).toHaveBeenCalledTimes(1);
   });
 });
