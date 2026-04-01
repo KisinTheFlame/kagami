@@ -1,4 +1,5 @@
 import {
+  Activity,
   Brain,
   Bot,
   FileText,
@@ -21,6 +22,7 @@ export const navItems: readonly NavItem[] = [
   { to: "/agent-dashboard", label: "Agent 仪表盘", icon: Bot },
   { to: "/auth/codex", label: "内置登录", icon: KeyRound, matchPrefixes: ["/auth", "/auth/"] },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
+  { to: "/metric-charts", label: "Metric 图表", icon: Activity },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },

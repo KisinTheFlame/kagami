@@ -47,6 +47,32 @@ model AppLog {
   @@map("app_log")
 }
 
+model Metric {
+  id         Int      @id @default(autoincrement())
+  metricName String   @map("metric_name")
+  value      Float
+  tags       Json     @db.JsonB
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([metricName, occurredAt], map: "metric_metric_name_occurred_at_idx")
+  @@index([createdAt], map: "metric_created_at_idx")
+  @@map("metric")
+}
+
+model MetricChart {
+  id         Int      @id @default(autoincrement())
+  chartName  String   @unique(map: "metric_chart_chart_name_uq") @map("chart_name")
+  metricName String   @map("metric_name")
+  aggregator String
+  tagFilters Json?    @map("tag_filters") @db.JsonB
+  groupByTag String?  @map("group_by_tag")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("metric_chart")
+}
+
 model NapcatEvent {
   id          Int       @id @default(autoincrement())
   postType    String    @map("post_type")

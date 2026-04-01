@@ -103,6 +103,14 @@ import {
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { StoryHandler } from "../ops/http/story.handler.js";
+import type { MetricService } from "../metric/application/metric.service.js";
+import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
+import type { MetricChartService } from "../metric/application/metric-chart.service.js";
+import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
+import { PrismaMetricDao } from "../metric/infra/impl/prisma-metric.impl.dao.js";
+import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
+import type { MetricChartDao } from "../metric/infra/metric-chart.dao.js";
+import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -121,6 +129,9 @@ export type ServerRuntime = {
   claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler;
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
+  metricService: MetricService;
+  metricChartService: MetricChartService;
+  metricChartDao: MetricChartDao;
   restoredRootAgentSnapshot: boolean;
   port: number;
   listenGroupIds: string[];
@@ -145,6 +156,13 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
 
   const logDao = new PrismaLogDao({ database });
+  const metricDao = new PrismaMetricDao({ database });
+  const metricChartDao = new PrismaMetricChartDao({ database });
+  const metricService = new DefaultMetricService({ metricDao });
+  const metricChartService = new DefaultMetricChartService({
+    metricDao,
+    metricChartDao,
+  });
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
   });
@@ -226,6 +244,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   };
   const llmClient = createLlmClient({
     llmChatCallDao,
+    metricService,
     providers: llmProviders,
     providerConfigs: {
       deepseek: deepseekConfig,
@@ -445,6 +464,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new AppLogHandler({ appLogQueryService }),
+      new MetricChartHandler({ metricChartService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatGroupMessageHandler({ napcatGroupMessageQueryService }),
       new StoryHandler({ storyQueryService }),
@@ -462,6 +482,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     claudeCodeAuthRefreshScheduler: authModule.claudeCodeAuthRefreshScheduler,
     rootAgentRuntime,
     storyAgentRuntime,
+    metricService,
+    metricChartService,
+    metricChartDao,
     restoredRootAgentSnapshot,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,

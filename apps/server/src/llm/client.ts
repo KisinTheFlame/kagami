@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
 import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
 import type { Config } from "../config/config.loader.js";
+import type { MetricService } from "../metric/application/metric.service.js";
 import type { LlmChatCallDao } from "./dao/llm-chat-call.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
 import {
@@ -39,6 +40,7 @@ export interface LlmClient {
 
 type CreateLlmClientOptions = {
   llmChatCallDao: LlmChatCallDao;
+  metricService: MetricService;
   providers: Partial<Record<LlmProviderId, LlmProvider>>;
   providerConfigs: ProviderConfigs;
   usages: Record<LlmUsageId, LlmUsageConfig>;
@@ -108,9 +110,11 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
           try {
             const result = await executeChatAttempt({
               llmChatCallDao: options.llmChatCallDao,
+              metricService: options.metricService,
               providers: options.providers,
               providerConfigs: options.providerConfigs,
               request,
+              usage,
               attempt,
               requestId,
               seq: (seq += 1),
@@ -135,9 +139,11 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
 
       return await executeChatAttempt({
         llmChatCallDao: options.llmChatCallDao,
+        metricService: options.metricService,
         providers: options.providers,
         providerConfigs: options.providerConfigs,
         request,
+        usage: undefined,
         attempt: {
           provider: providerId,
           model,
@@ -154,9 +160,11 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
 
 async function executeChatAttempt({
   llmChatCallDao,
+  metricService,
   providers,
   providerConfigs,
   request,
+  usage,
   attempt,
   requestId,
   seq,
@@ -164,9 +172,11 @@ async function executeChatAttempt({
   onSettled,
 }: {
   llmChatCallDao: LlmChatCallDao;
+  metricService: MetricService;
   providers: Partial<Record<LlmProviderId, LlmProvider>>;
   providerConfigs: ProviderConfigs;
   request: LlmChatRequest;
+  usage: LlmUsageId | undefined;
   attempt: LlmUsageAttemptConfig;
   requestId: string;
   seq: number;
@@ -198,6 +208,16 @@ async function executeChatAttempt({
     response = providerResult.response;
     validateToolCalls(requestWithModel, response);
     const latencyMs = Date.now() - startedAt;
+
+    if (usage) {
+      void recordLlmChatAttemptMetric({
+        metricService,
+        usage,
+        provider: attempt.provider,
+        model: attempt.model,
+        status: "success",
+      });
+    }
 
     if (recordCall) {
       void llmChatCallDao
@@ -243,6 +263,16 @@ async function executeChatAttempt({
     const finishedAt = new Date();
     const failureContext = getLlmProviderFailureContext(error);
     const serializedError = serializeChatError(error);
+
+    if (usage) {
+      void recordLlmChatAttemptMetric({
+        metricService,
+        usage,
+        provider: attempt.provider,
+        model: attempt.model,
+        status: "failed",
+      });
+    }
 
     if (recordCall) {
       const actualModel =
@@ -457,6 +487,31 @@ function requireUsageConfig(
   }
 
   return usageConfig;
+}
+
+function recordLlmChatAttemptMetric({
+  metricService,
+  usage,
+  provider,
+  model,
+  status,
+}: {
+  metricService: MetricService;
+  usage: LlmUsageId;
+  provider: LlmProviderId;
+  model: string;
+  status: "success" | "failed";
+}): Promise<void> {
+  return metricService.record({
+    metricName: "llm.chat.attempt",
+    value: 1,
+    tags: {
+      usage,
+      provider,
+      model,
+      status,
+    },
+  });
 }
 
 function requireProviderId(providerId: LlmProviderId | undefined): LlmProviderId {

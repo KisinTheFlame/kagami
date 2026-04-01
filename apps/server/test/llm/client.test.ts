@@ -3,6 +3,7 @@ import type { Config } from "../../src/config/config.loader.js";
 import type { LlmChatCallDao } from "../../src/llm/dao/llm-chat-call.dao.js";
 import { BizError } from "../../src/common/errors/biz-error.js";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
+import type { MetricService } from "../../src/metric/application/metric.service.js";
 import {
   attachLlmProviderFailureContext,
   type LlmProvider,
@@ -31,6 +32,12 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
     listPage: vi.fn().mockResolvedValue([]),
     recordSuccess: vi.fn().mockResolvedValue(undefined),
     recordError: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createMetricServiceMock(): MetricService {
+  return {
+    record: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -118,20 +125,24 @@ function createProviderConfigs(): Record<LlmProviderId, LlmProviderConfig | Open
 
 function createClient(params?: {
   llmChatCallDao?: LlmChatCallDao;
+  metricService?: MetricService;
   providers?: Partial<Record<LlmProviderId, LlmProvider>>;
   providerConfigs?: Record<LlmProviderId, LlmProviderConfig | OpenAiCodexConfig>;
   usages?: Record<LlmUsageId, LlmUsageConfig>;
-}): { client: LlmClient; llmChatCallDao: LlmChatCallDao } {
+}): { client: LlmClient; llmChatCallDao: LlmChatCallDao; metricService: MetricService } {
   const llmChatCallDao = params?.llmChatCallDao ?? createLlmChatCallDaoMock();
+  const metricService = params?.metricService ?? createMetricServiceMock();
 
   return {
     client: createLlmClient({
       llmChatCallDao,
+      metricService,
       providers: params?.providers ?? {},
       providerConfigs: params?.providerConfigs ?? createProviderConfigs(),
       usages: params?.usages ?? createUsageConfig(),
     }),
     llmChatCallDao,
+    metricService,
   };
 }
 
@@ -226,7 +237,7 @@ describe("createLlmClient", () => {
         .fn()
         .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
     };
-    const { client, llmChatCallDao } = createClient({
+    const { client, llmChatCallDao, metricService } = createClient({
       providers: {
         openai: provider,
       },
@@ -247,6 +258,7 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
     expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
+    expect(metricService.record).not.toHaveBeenCalled();
   });
 
   it("should persist native request and response payloads on success", async () => {
@@ -438,6 +450,7 @@ describe("createLlmClient", () => {
 
   it("should retry next usage attempt, reuse requestId, and increment seq", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
+    const metricService = createMetricServiceMock();
     const openaiProvider: LlmProvider = {
       id: "openai",
       chat: vi.fn().mockRejectedValue(new Error("openai failed")),
@@ -460,6 +473,7 @@ describe("createLlmClient", () => {
     };
     const { client } = createClient({
       llmChatCallDao,
+      metricService,
       providers: {
         openai: openaiProvider,
         deepseek: deepseekProvider,
@@ -512,6 +526,27 @@ describe("createLlmClient", () => {
     });
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
+    expect(metricService.record).toHaveBeenCalledTimes(2);
+    expect(metricService.record).toHaveBeenNthCalledWith(1, {
+      metricName: "llm.chat.attempt",
+      value: 1,
+      tags: {
+        usage: "agent",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        status: "failed",
+      },
+    });
+    expect(metricService.record).toHaveBeenNthCalledWith(2, {
+      metricName: "llm.chat.attempt",
+      value: 1,
+      tags: {
+        usage: "agent",
+        provider: "deepseek",
+        model: "deepseek-chat",
+        status: "success",
+      },
+    });
 
     const errorRequestId = vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].requestId;
     const successRequestId = vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].requestId;
@@ -534,6 +569,44 @@ describe("createLlmClient", () => {
     ).toEqual({
       id: "native-deepseek-chat",
       model: "deepseek-chat",
+    });
+  });
+
+  it("should record llm chat attempt metric on successful chat", async () => {
+    const provider: LlmProvider = {
+      id: "openai",
+      chat: vi
+        .fn()
+        .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
+    };
+    const metricService = createMetricServiceMock();
+    const { client } = createClient({
+      metricService,
+      providers: {
+        openai: provider,
+      },
+    });
+
+    await client.chat(
+      {
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "none",
+      },
+      {
+        usage: "vision",
+      },
+    );
+
+    expect(metricService.record).toHaveBeenCalledWith({
+      metricName: "llm.chat.attempt",
+      value: 1,
+      tags: {
+        usage: "vision",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        status: "success",
+      },
     });
   });
 
@@ -610,10 +683,12 @@ describe("createLlmClient", () => {
 
   it("should throw the last error when all usage attempts fail", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
+    const metricService = createMetricServiceMock();
     const firstError = new Error("openai failed");
     const lastError = new Error("deepseek failed");
     const { client } = createClient({
       llmChatCallDao,
+      metricService,
       providers: {
         openai: {
           id: "openai",
@@ -657,6 +732,27 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
+    expect(metricService.record).toHaveBeenCalledTimes(2);
+    expect(metricService.record).toHaveBeenNthCalledWith(1, {
+      metricName: "llm.chat.attempt",
+      value: 1,
+      tags: {
+        usage: "agent",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        status: "failed",
+      },
+    });
+    expect(metricService.record).toHaveBeenNthCalledWith(2, {
+      metricName: "llm.chat.attempt",
+      value: 1,
+      tags: {
+        usage: "agent",
+        provider: "deepseek",
+        model: "deepseek-chat",
+        status: "failed",
+      },
+    });
   });
 
   it("should reject usage attempts when the configured model is not in provider models", async () => {
