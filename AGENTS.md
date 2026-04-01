@@ -230,6 +230,8 @@ Agent 相关补充约定：
 
 - 页面组件当前按业务域组织在 `apps/web/src/pages/*`。
 - 布局组件位于 `apps/web/src/components/layout/*`。
+- 需要新增或复用组件时，优先考虑使用 shadcn 现有组件，再评估是否自定义实现。
+- 如果缺少所需的 shadcn 组件，可以优先通过 shadcn CLI 下载并接入。
 - 当前 Vite 配置仅提供 `@ -> apps/web/src` 别名，没有内置开发代理。
 
 ### 共享包（`@kagami/shared`）
