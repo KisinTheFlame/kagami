@@ -1,4 +1,4 @@
-import { getLoggerRuntime, initLoggerRuntime } from "./logger/runtime.js";
+import { initLoggerRuntime } from "./logger/runtime.js";
 import { closeDb, type Database } from "./db/client.js";
 import { AppLogger } from "./logger/logger.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
@@ -8,6 +8,10 @@ import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.servi
 import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthRefreshScheduler } from "./auth/application/claude-code-auth-refresh.scheduler.js";
 import type { IthomePoller } from "./news/application/ithome-poller.js";
+import {
+  shutdownServerResources,
+  type AgentRuntimeController,
+} from "./app/server-shutdown.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -24,7 +28,8 @@ let ithomePoller: IthomePoller | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let authUsageCacheManager: AuthUsageCacheManager | null = null;
 let claudeCodeAuthRefreshScheduler: ClaudeCodeAuthRefreshScheduler | null = null;
-let storyAgentRuntime: { stop(): Promise<void> } | null = null;
+let rootAgentRuntime: AgentRuntimeController | null = null;
+let storyAgentRuntime: AgentRuntimeController | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -41,6 +46,7 @@ async function startAgentLoop(runtime: {
   rootAgentRuntime: {
     initialize(): Promise<void>;
     run(): Promise<void>;
+    stop(): Promise<void>;
   };
 }): Promise<void> {
   try {
@@ -84,96 +90,22 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   }
 
   isShuttingDown = true;
-
-  logger.info("Shutdown signal received", {
-    event: "server.shutdown.signal_received",
+  await shutdownServerResources({
     signal,
+    timeoutMs: SHUTDOWN_TIMEOUT_MS,
+    isServerStarted,
+    app,
+    database,
+    napcatGatewayService,
+    ithomePoller,
+    callbackServers,
+    authUsageCacheManager,
+    claudeCodeAuthRefreshScheduler,
+    rootAgentRuntime,
+    storyAgentRuntime,
+    closeLlmProviders,
+    closeDatabase: closeDb,
   });
-
-  const timeoutHandle = setTimeout(() => {
-    logger.error("Shutdown timed out", {
-      event: "server.shutdown.timeout",
-      timeoutMs: SHUTDOWN_TIMEOUT_MS,
-    });
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS);
-
-  try {
-    if (isServerStarted && app) {
-      await app.close();
-      logger.info("HTTP server closed", {
-        event: "server.shutdown.http_closed",
-      });
-    }
-
-    if (napcatGatewayService) {
-      await napcatGatewayService.stop();
-      logger.info("Napcat gateway closed", {
-        event: "server.shutdown.napcat_closed",
-      });
-    }
-
-    if (ithomePoller) {
-      ithomePoller.close();
-      logger.info("Ithome poller closed", {
-        event: "server.shutdown.ithome_poller_closed",
-      });
-    }
-
-    for (const callbackServer of callbackServers) {
-      await callbackServer.stop();
-    }
-
-    if (authUsageCacheManager) {
-      authUsageCacheManager.close();
-      logger.info("Auth usage cache manager closed", {
-        event: "server.shutdown.auth_usage_cache_closed",
-      });
-    }
-
-    if (claudeCodeAuthRefreshScheduler) {
-      claudeCodeAuthRefreshScheduler.close();
-      logger.info("Claude Code auth refresh scheduler closed", {
-        event: "server.shutdown.claude_code_auth_refresh_scheduler_closed",
-      });
-    }
-
-    if (storyAgentRuntime) {
-      await storyAgentRuntime.stop();
-      logger.info("Story agent runtime closed", {
-        event: "server.shutdown.story_agent_runtime_closed",
-      });
-    }
-
-    if (closeLlmProviders) {
-      await closeLlmProviders();
-      logger.info("LLM providers closed", {
-        event: "server.shutdown.llm_providers_closed",
-      });
-    }
-
-    if (database) {
-      logger.info("Database client closing", {
-        event: "server.shutdown.db_closing",
-      });
-    }
-
-    await getLoggerRuntime().close();
-
-    if (database) {
-      await closeDb(database);
-    }
-
-    clearTimeout(timeoutHandle);
-    process.exit(0);
-  } catch (error) {
-    clearTimeout(timeoutHandle);
-    logger.errorWithCause("Shutdown failed", error, {
-      event: "server.shutdown.failed",
-      signal,
-    });
-    process.exit(1);
-  }
 }
 
 process.on("SIGINT", () => {
@@ -193,6 +125,7 @@ try {
   callbackServers = runtime.callbackServers;
   authUsageCacheManager = runtime.authUsageCacheManager;
   claudeCodeAuthRefreshScheduler = runtime.claudeCodeAuthRefreshScheduler;
+  rootAgentRuntime = runtime.rootAgentRuntime;
   storyAgentRuntime = runtime.storyAgentRuntime;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
