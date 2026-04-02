@@ -22,9 +22,12 @@ describe("context-message-factory", () => {
   });
 
   it("should wrap conversation summaries in the conversation_summary tag", () => {
-    expect(createConversationSummaryMessage("  旧上下文摘要  ")).toEqual({
+    expect(
+      createConversationSummaryMessage("  ## 当前状态\n群里正在讨论权限\n## 待处理\n等下一轮接话  "),
+    ).toEqual({
       role: "user",
-      content: "<conversation_summary>\n旧上下文摘要\n</conversation_summary>",
+      content:
+        "<conversation_summary>\n## 当前状态\n群里正在讨论权限\n## 待处理\n等下一轮接话\n</conversation_summary>",
     });
   });
 

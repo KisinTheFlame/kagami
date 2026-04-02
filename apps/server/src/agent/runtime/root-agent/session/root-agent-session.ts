@@ -647,12 +647,40 @@ export class RootAgentSession implements RootAgentSessionController {
       return `${feedLabel} 有新文章《${event.data.title}》`;
     }
 
+    if (event.type === "napcat_group_message") {
+      return `${await this.resolveWakeEventGroupLabel(event.data.groupId)} 收到了新消息`;
+    }
+
     const targetState = this.resolveState(targetStateId);
     if (!targetState) {
-      return `QQ 群 ${event.data.groupId} 收到了新消息`;
+      return "收到了新的外部事件";
     }
 
     return `${targetState.getDisplayName()} 收到了新消息`;
+  }
+
+  private async resolveWakeEventGroupLabel(groupId: string): Promise<string> {
+    const groupState = this.groupStateById.get(groupId);
+    const cachedGroupName = groupState?.getGroupName();
+    if (cachedGroupName) {
+      return `QQ 群 ${cachedGroupName}`;
+    }
+
+    try {
+      const groupInfo = await this.napcatGatewayService.getGroupInfo({
+        groupId,
+      });
+      groupState?.setGroupInfo(groupInfo);
+
+      const groupName = groupInfo.groupName.trim();
+      if (groupName.length > 0) {
+        return `QQ 群 ${groupName}`;
+      }
+    } catch {
+      // Fallback to groupId-only rendering when group info is unavailable.
+    }
+
+    return `QQ 群 ${groupId}`;
   }
 
   private async renderFocusMessages(

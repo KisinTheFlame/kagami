@@ -79,6 +79,10 @@ import {
 } from "../agent/capabilities/web-search/tools/search-web.tool.js";
 import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
 import {
+  createRootContextSummarizerSystemPrompt,
+  createStoryContextSummarizerSystemPrompt,
+} from "../agent/capabilities/context-summary/operations/system-prompt.js";
+import {
   SummaryTool,
   SUMMARY_TOOL_NAME,
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
@@ -391,16 +395,22 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     SEARCH_MEMORY_TOOL_NAME,
   ]);
   const summaryToolExecutor = toolCatalog.pick([SUMMARY_TOOL_NAME]);
-  const contextSummaryOperation = new ContextSummaryOperation({
+  const rootContextSummaryOperation = new ContextSummaryOperation({
     llmClient,
     summaryToolExecutor,
+    systemPromptFactory: createRootContextSummarizerSystemPrompt,
+  });
+  const storyContextSummaryOperation = new ContextSummaryOperation({
+    llmClient,
+    summaryToolExecutor,
+    systemPromptFactory: createStoryContextSummarizerSystemPrompt,
   });
   const storyAgentRuntime = new StoryLoopAgent({
     llmClient,
     linearMessageLedgerDao,
     snapshotRepository: storyAgentRuntimeSnapshotRepository,
     storyService,
-    contextSummaryOperation,
+    contextSummaryOperation: storyContextSummaryOperation,
     summaryTools: summaryToolExecutor.definitions(),
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     batchSize: config.server.agent.story.batchSize,
@@ -416,7 +426,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     session: rootAgentSession,
     snapshotRepository: rootAgentRuntimeSnapshotRepository,
     tools: rootAgentTools,
-    contextSummaryOperation,
+    contextSummaryOperation: rootContextSummaryOperation,
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,

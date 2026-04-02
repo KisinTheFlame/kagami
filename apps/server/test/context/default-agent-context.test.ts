@@ -489,9 +489,12 @@ describe("DefaultAgentContext", () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
+    const sectionedSummary = ["## 当前状态", "群里正在讨论权限", "## 待处理", "等下一轮接话"].join(
+      "\n",
+    );
 
     await context.appendMessages([
-      createConversationSummaryMessage("累计摘要"),
+      createConversationSummaryMessage(sectionedSummary),
       {
         role: "assistant",
         content: "reply-after-summary",
@@ -502,7 +505,7 @@ describe("DefaultAgentContext", () => {
     const exported = await context.exportPersistedSnapshot();
     expect(exported).toEqual({
       messages: [
-        createConversationSummaryMessage("累计摘要"),
+        createConversationSummaryMessage(sectionedSummary),
         {
           role: "assistant",
           content: "reply-after-summary",
@@ -519,7 +522,7 @@ describe("DefaultAgentContext", () => {
     await expect(restored.getSnapshot()).resolves.toEqual({
       systemPrompt: "other-system-prompt",
       messages: [
-        createConversationSummaryMessage("累计摘要"),
+        createConversationSummaryMessage(sectionedSummary),
         {
           role: "assistant",
           content: "reply-after-summary",
@@ -536,7 +539,7 @@ describe("DefaultAgentContext", () => {
     await expect(restored.getSnapshot()).resolves.toEqual({
       systemPrompt: "other-system-prompt",
       messages: [
-        createConversationSummaryMessage("累计摘要"),
+        createConversationSummaryMessage(sectionedSummary),
         {
           role: "assistant",
           content: "reply-after-summary",

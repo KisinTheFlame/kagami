@@ -58,10 +58,19 @@ async function applyPostToolEffects(
 
 function createSession({
   context,
+  getGroupInfo = vi.fn().mockImplementation(async ({ groupId }) => ({
+    groupId,
+    groupName: groupId === "group-1" ? "产品群" : "测试群",
+    memberCount: 123,
+    maxMemberCount: 500,
+    groupRemark: "",
+    groupAllShut: false,
+  })),
   getRecentGroupMessages = vi.fn().mockResolvedValue([]),
   ithomeNewsService,
 }: {
   context: DefaultAgentContext;
+  getGroupInfo?: ReturnType<typeof vi.fn>;
   getRecentGroupMessages?: ReturnType<typeof vi.fn>;
   ithomeNewsService?: {
     getFeedOverview(): Promise<{
@@ -101,14 +110,7 @@ function createSession({
       start: vi.fn(),
       stop: vi.fn(),
       sendGroupMessage: vi.fn(),
-      getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
-        groupId,
-        groupName: groupId === "group-1" ? "产品群" : "测试群",
-        memberCount: 123,
-        maxMemberCount: 500,
-        groupRemark: "",
-        groupAllShut: false,
-      })),
+      getGroupInfo,
       getRecentGroupMessages,
     },
     listenGroupIds: ["group-1", "group-2"],
@@ -271,6 +273,54 @@ describe("RootAgentSession", () => {
           message.content.includes("你进入了 神游 节点"),
       ),
     ).toBe(true);
+  });
+
+  it("should show group name when wait is interrupted by a group message", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.enter({ id: "zone_out" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
+    });
+
+    const result = await session.consumeIncomingEvent(createGroupEvent("hello", "group-1"));
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(result).toEqual({
+      shouldTriggerRound: false,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("等待被新的外部事件打断了") &&
+          message.content.includes("打断等待的事件：QQ 群 产品群 收到了新消息。"),
+      ),
+    ).toBe(true);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("打断等待的事件：QQ 群 group-1 收到了新消息。"),
+      ),
+    ).toBe(false);
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" &&
+          message.content.includes("打断等待的事件：QQ 群 产品群 (group-1) 收到了新消息。"),
+      ),
+    ).toBe(false);
   });
 
   it("should restore persisted waiting snapshot in the current stack + wait overlay shape", async () => {

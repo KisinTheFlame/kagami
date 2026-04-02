@@ -254,3 +254,9 @@ Agent 相关补充约定：
 - 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
 - PostgreSQL 与 Napcat 作为宿主机外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
+
+# gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools directly.
+
+Available skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`

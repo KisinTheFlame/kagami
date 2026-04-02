@@ -1,7 +1,6 @@
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import type { Operation, ToolExecutor } from "@kagami/agent-runtime";
-import { createContextSummarizerSystemPrompt } from "./system-prompt.js";
 import { SUMMARY_TOOL_NAME } from "../tools/summary.tool.js";
 
 export type ContextSummaryInput = {
@@ -18,22 +17,26 @@ export class ContextSummaryOperation
 {
   private readonly llmClient: LlmClient;
   private readonly summaryToolExecutor: ToolExecutor;
+  private readonly systemPromptFactory: () => string;
 
   public constructor({
     llmClient,
     summaryToolExecutor,
+    systemPromptFactory,
   }: {
     llmClient: LlmClient;
     summaryToolExecutor: ToolExecutor;
+    systemPromptFactory: () => string;
   }) {
     this.llmClient = llmClient;
     this.summaryToolExecutor = summaryToolExecutor;
+    this.systemPromptFactory = systemPromptFactory;
   }
 
   public async execute(input: ContextSummaryInput): Promise<string | null> {
     const response = await this.llmClient.chat(
       {
-        system: createContextSummarizerSystemPrompt(),
+        system: this.systemPromptFactory(),
         messages: input.messages,
         tools: input.tools,
         toolChoice: { tool_name: SUMMARY_TOOL_NAME },

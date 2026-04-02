@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createStoryAgentSystemPrompt } from "../../src/agent/capabilities/story/task-agent/system-prompt.js";
-import { createContextSummarizerSystemPrompt } from "../../src/agent/capabilities/context-summary/operations/system-prompt.js";
+import {
+  createRootContextSummarizerSystemPrompt,
+  createStoryContextSummarizerSystemPrompt,
+} from "../../src/agent/capabilities/context-summary/operations/system-prompt.js";
 import { createVisionSystemPrompt } from "../../src/agent/capabilities/vision/application/system-prompt.js";
 import { createWebSearchSystemPrompt } from "../../src/agent/capabilities/web-search/task-agent/system-prompt.js";
 import { createAgentSystemPrompt } from "../../src/agent/runtime/root-agent/system-prompt.js";
@@ -62,6 +65,8 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).toContain("<invoke_tools>");
     expect(prompt).toContain("`send_message`");
     expect(prompt).toContain("适用状态：`qq_group:*`");
+    expect(prompt).toContain("可能按分段小标题组织");
+    expect(prompt).toContain("优先关注其中的状态、待处理和不确定性");
     expect(prompt).toContain("123456789");
     expect(prompt).toContain("测试创造者");
     expect(prompt).toContain("987654321");
@@ -87,10 +92,10 @@ describe("createAgentSystemPrompt", () => {
     );
   });
 
-  it("should render the context summarizer prompt from static template", () => {
-    expect(createContextSummarizerSystemPrompt()).toBe(
+  it("should render the root context summarizer prompt from static template", () => {
+    expect(createRootContextSummarizerSystemPrompt()).toBe(
       [
-        "你正在为同一个 agent 生成“继续工作用”的上下文摘要，而不是回复用户。",
+        "你正在为 root agent 生成“继续工作用”的上下文摘要，而不是回复用户。",
         "",
         "你的目标：",
         "- 提炼后续继续处理当前对话所必需的信息",
@@ -98,11 +103,48 @@ describe("createAgentSystemPrompt", () => {
         "- 如果上下文里已经有旧摘要，把它和后续消息整合成新的累计摘要",
         "- 忽略寒暄、重复内容、无关细节和冗余措辞",
         "",
+        "摘要结构要求：",
+        "- 使用 Markdown 二级标题，按固定顺序组织为：`## 当前状态`、`## 持续背景`、`## 近期进展`、`## 待处理`",
+        "- `## 当前状态` 写当前所处状态机位置、当前目标/群/文章/等待状态，以及最近一轮直接相关上下文",
+        "- `## 持续背景` 写跨轮仍然重要的事实、关系、约束、承诺、关键对象；如果没有可留空但标题保留",
+        "- `## 近期进展` 写最近重要消息、事件、工具结果、判断变化",
+        "- `## 待处理` 写未完成事项、待回应点、待跟进动作、下一步最自然的续接点",
+        "- 只有在确实存在冲突、信息不足、日期不明、意图不明时，才额外添加 `## 风险与不确定性`",
+        "",
         "输出要求：",
         "- 不要直接输出自然语言正文",
         "- 必须调用 `summary` 工具",
         "- `summary` 参数必须是简洁但信息完整的中文字符串",
+        "- 以上分段结构是强烈建议的输出格式，但不是参数级强校验",
         "- 摘要应面向“同一个 agent 稍后继续接手这段对话”",
+      ].join("\n"),
+    );
+  });
+
+  it("should render the story context summarizer prompt from static template", () => {
+    expect(createStoryContextSummarizerSystemPrompt()).toBe(
+      [
+        "你正在为 story runtime 生成“继续工作用”的上下文摘要，而不是回复用户。",
+        "",
+        "你的目标：",
+        "- 提炼后续继续归并叙事、重写 story、完成批处理所必需的信息",
+        "- 保留当前处理范围、已确认叙事、关键线索、重要判断、未完成事项",
+        "- 如果上下文里已经有旧摘要，把它和后续消息整合成新的累计摘要",
+        "- 忽略寒暄、重复内容、无关细节和冗余措辞",
+        "",
+        "摘要结构要求：",
+        "- 使用 Markdown 二级标题，按固定顺序组织为：`## 当前处理范围`、`## 已确认叙事`、`## 新增线索与判断`、`## 待完成事项`",
+        "- `## 当前处理范围` 写当前批次或当前压缩范围正在处理什么主题、消息簇或叙事簇",
+        "- `## 已确认叙事` 写已识别出的 story、归属关系、稳定判断；如果没有可留空但标题保留",
+        "- `## 新增线索与判断` 写本轮新增消息带来的 merge / split / rewrite / create 判断，以及关键工具结果",
+        "- `## 待完成事项` 写尚未完成的 create/rewrite/finish，以及仍有歧义的归并点",
+        "",
+        "输出要求：",
+        "- 不要直接输出自然语言正文",
+        "- 必须调用 `summary` 工具",
+        "- `summary` 参数必须是简洁但信息完整的中文字符串",
+        "- 以上分段结构是强烈建议的输出格式，但不是参数级强校验",
+        "- 摘要应面向“同一个 story runtime 稍后继续接手这段工作”",
       ].join("\n"),
     );
   });
@@ -114,6 +156,7 @@ describe("createAgentSystemPrompt", () => {
       "`时间`、`起因`、`经过`、`结果`、`影响` 必须非空。",
     );
     expect(createStoryAgentSystemPrompt()).toContain("如果工具返回格式错误");
+    expect(createStoryAgentSystemPrompt()).toContain("`<conversation_summary>` 表示较早上下文的压缩工作记忆");
   });
 
   it("should render the vision prompt from static template", () => {

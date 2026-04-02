@@ -10,13 +10,14 @@ const SummaryArgumentsSchema = z.object({
 export class SummaryTool extends ZodToolComponent<typeof SummaryArgumentsSchema> {
   public readonly name = SUMMARY_TOOL_NAME;
   public readonly description =
-    "写入供后续继续工作的对话摘要。只保留关键事实、当前目标、未完成事项、重要约束和必要上下文。";
+    "写入供后续继续工作的对话摘要。应尽量遵循当前 summarizer prompt 指定的分段结构，但这里只做字符串宽松接收，不做参数级强校验。";
   public readonly parameters = {
     type: "object",
     properties: {
       summary: {
         type: "string",
-        description: "面向同一个 agent 后续继续工作的累计上下文摘要。",
+        description:
+          "面向同一个 agent 后续继续工作的累计上下文摘要；应尽量遵循当前 summarizer prompt 指定的分段结构，但不会做参数级强校验。",
       },
     },
   } as const;

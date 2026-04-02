@@ -34,6 +34,7 @@ describe("ContextSummaryPlannerService", () => {
     const planner = new ContextSummaryPlannerService({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
+      systemPromptFactory: () => "root summary prompt",
     });
 
     await expect(
@@ -56,6 +57,7 @@ describe("ContextSummaryPlannerService", () => {
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
+        system: "root summary prompt",
         toolChoice: { tool_name: SUMMARY_TOOL_NAME },
         tools: expect.arrayContaining([
           expect.objectContaining({ name: "search_web" }),
@@ -85,6 +87,7 @@ describe("ContextSummaryPlannerService", () => {
     const planner = new ContextSummaryPlannerService({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
+      systemPromptFactory: () => "story summary prompt",
     });
 
     await expect(
