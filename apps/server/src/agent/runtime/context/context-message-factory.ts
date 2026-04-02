@@ -90,6 +90,18 @@ export function createConversationSummaryMessage(summary: string): UserMessage {
   );
 }
 
+export function createRootContextSummaryReminderMessage(): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/root-context-summary-reminder.hbs"),
+  );
+}
+
+export function createStoryContextSummaryReminderMessage(): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/story-context-summary-reminder.hbs"),
+  );
+}
+
 export function createPortalSnapshotMessage(
   groups: Array<{ groupId: string; groupName?: string; unreadCount: number; hasEntered: boolean }>,
   feeds: Array<{ kind: "ithome"; label: string; unreadCount: number; hasEntered: boolean }> = [],

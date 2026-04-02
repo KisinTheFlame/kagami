@@ -88,7 +88,11 @@ function createGroupHistoryMessage(message: string, groupId = "group-1") {
 function createRuntimeForCompactionTest(input: {
   context: DefaultAgentContext;
   contextSummaryOperation?: {
-    summarize(input: { messages: LlmMessage[]; tools: Tool[] }): Promise<string | null>;
+    summarize(input: {
+      systemPrompt: string;
+      messages: LlmMessage[];
+      tools: Tool[];
+    }): Promise<string | null>;
   };
   contextCompactionTotalTokenThreshold: number;
   completions?: Awaited<ReturnType<LlmClient["chat"]>>[];
@@ -876,6 +880,7 @@ describe("RootLoopAgent", () => {
 
     expect(summarize).toHaveBeenCalledTimes(1);
     const summarizeInput = summarize.mock.calls[0]?.[0];
+    expect(summarizeInput?.systemPrompt).toBe("system-prompt");
     expect(summarizeInput?.tools).toEqual([]);
     expect(summarizeInput?.messages.slice(0, 3)).toEqual([
       createUserMessage("alpha"),
@@ -884,7 +889,7 @@ describe("RootLoopAgent", () => {
     ]);
     expect(summarizeInput?.messages[3]).toMatchObject({
       role: "user",
-      content: expect.stringContaining("你当前处于门户状态"),
+      content: expect.stringContaining("你进入了 门户 节点"),
     });
 
     const snapshot = await context.getSnapshot();

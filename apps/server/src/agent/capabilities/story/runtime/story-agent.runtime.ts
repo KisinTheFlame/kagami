@@ -372,6 +372,7 @@ class StoryAgentHost {
       let summary: string | null;
       try {
         summary = await this.contextSummaryOperation.execute({
+          systemPrompt: snapshot.systemPrompt,
           messages: compactionPlan.messagesToSummarize,
           tools: this.summaryTools,
         });

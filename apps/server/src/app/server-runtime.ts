@@ -80,10 +80,6 @@ import {
 } from "../agent/capabilities/web-search/tools/search-web.tool.js";
 import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
 import {
-  createRootContextSummarizerSystemPrompt,
-  createStoryContextSummarizerSystemPrompt,
-} from "../agent/capabilities/context-summary/operations/system-prompt.js";
-import {
   SummaryTool,
   SUMMARY_TOOL_NAME,
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
@@ -116,6 +112,10 @@ import { PrismaMetricDao } from "../metric/infra/impl/prisma-metric.impl.dao.js"
 import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
 import type { MetricChartDao } from "../metric/infra/metric-chart.dao.js";
 import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
+import {
+  createRootContextSummaryReminderMessage,
+  createStoryContextSummaryReminderMessage,
+} from "../agent/runtime/context/context-message-factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "bootstrap" });
@@ -401,12 +401,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const rootContextSummaryOperation = new ContextSummaryOperation({
     llmClient,
     summaryToolExecutor,
-    systemPromptFactory: createRootContextSummarizerSystemPrompt,
+    reminderMessageFactory: createRootContextSummaryReminderMessage,
   });
   const storyContextSummaryOperation = new ContextSummaryOperation({
     llmClient,
     summaryToolExecutor,
-    systemPromptFactory: createStoryContextSummarizerSystemPrompt,
+    reminderMessageFactory: createStoryContextSummaryReminderMessage,
   });
   const storyAgentRuntime = new StoryLoopAgent({
     llmClient,

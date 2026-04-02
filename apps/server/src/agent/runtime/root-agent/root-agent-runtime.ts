@@ -51,6 +51,7 @@ type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
   | {
       summarize(input: {
+        systemPrompt: string;
         messages: import("../../../llm/types.js").LlmMessage[];
         tools: Tool[];
       }): Promise<string | null>;
@@ -529,10 +530,12 @@ class RootAgentHost {
         summary =
           "execute" in this.contextSummaryOperation
             ? await this.contextSummaryOperation.execute({
+                systemPrompt: snapshot.systemPrompt,
                 messages: compactionPlan.messagesToSummarize,
                 tools: this.summaryTools,
               })
             : await this.contextSummaryOperation.summarize({
+                systemPrompt: snapshot.systemPrompt,
                 messages: compactionPlan.messagesToSummarize,
                 tools: this.summaryTools,
               });

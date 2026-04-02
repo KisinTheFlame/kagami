@@ -603,6 +603,9 @@ describe("StoryLoopAgent", () => {
     expect(snapshot.contextSummary.messageCount).toBeGreaterThan(0);
     expect(snapshot.contextSummary.recentItems.length).toBeGreaterThan(0);
     expect(summarize).toHaveBeenCalledOnce();
+    expect(summarize.mock.calls[0]?.[0]).toMatchObject({
+      systemPrompt: "story",
+    });
     expect(metricService.record).toHaveBeenCalledWith({
       metricName: "agent.tool.call",
       value: 1,

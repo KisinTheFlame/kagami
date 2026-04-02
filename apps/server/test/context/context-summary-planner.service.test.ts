@@ -34,11 +34,15 @@ describe("ContextSummaryPlannerService", () => {
     const planner = new ContextSummaryPlannerService({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
-      systemPromptFactory: () => "root summary prompt",
+      reminderMessageFactory: () => ({
+        role: "user",
+        content: "<system_reminder>请整理 root 摘要</system_reminder>",
+      }),
     });
 
     await expect(
       planner.summarize({
+        systemPrompt: "runtime-system-prompt",
         messages: [{ role: "user", content: "旧消息" }],
         tools: [
           {
@@ -57,7 +61,11 @@ describe("ContextSummaryPlannerService", () => {
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: "root summary prompt",
+        system: "runtime-system-prompt",
+        messages: [
+          { role: "user", content: "旧消息" },
+          { role: "user", content: "<system_reminder>请整理 root 摘要</system_reminder>" },
+        ],
         toolChoice: { tool_name: SUMMARY_TOOL_NAME },
         tools: expect.arrayContaining([
           expect.objectContaining({ name: "search_web" }),
@@ -87,11 +95,15 @@ describe("ContextSummaryPlannerService", () => {
     const planner = new ContextSummaryPlannerService({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
-      systemPromptFactory: () => "story summary prompt",
+      reminderMessageFactory: () => ({
+        role: "user",
+        content: "<system_reminder>请整理 story 摘要</system_reminder>",
+      }),
     });
 
     await expect(
       planner.summarize({
+        systemPrompt: "story-system-prompt",
         messages: [],
         tools: [{ name: SUMMARY_TOOL_NAME, parameters: { type: "object", properties: {} } }],
       }),
