@@ -77,6 +77,8 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 
 ## 数据库与配置
 
+- 数据库操作可以使用 `psql`；连接信息统一以仓库根目录 `config.yaml` 中的 `server.databaseUrl` 为准。
+
 ### 数据库迁移
 
 ```bash
