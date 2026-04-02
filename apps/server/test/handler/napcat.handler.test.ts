@@ -39,8 +39,10 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -69,8 +71,10 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -99,8 +103,10 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -127,8 +133,10 @@ describe("NapcatHandler", () => {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage,
+      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -146,13 +154,16 @@ describe("NapcatHandler", () => {
     expect(sendGroupMessage).not.toHaveBeenCalled();
   });
 
-  it("should remove private send route", async () => {
+  it("should send private message via injected NapCat gateway", async () => {
+    const sendPrivateMessage = vi.fn().mockResolvedValue({ messageId: 7654321 });
     const napcatGatewayService: NapcatGatewayService = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      sendPrivateMessage,
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -167,6 +178,75 @@ describe("NapcatHandler", () => {
       },
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ messageId: 7654321 });
+    expect(sendPrivateMessage).toHaveBeenCalledWith({
+      userId: "123",
+      message: "hello",
+    });
+  });
+
+  it("should return 400 when private request payload is invalid", async () => {
+    const napcatGatewayService: NapcatGatewayService = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      getGroupInfo: vi.fn(),
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+    };
+
+    const handler = new NapcatHandler({ napcatGatewayService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/napcat/private/send",
+      payload: {
+        userId: "123",
+        message: "",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("should return 500 when private send fails", async () => {
+    const sendPrivateMessage = vi.fn().mockRejectedValue(
+      new BizError({
+        message: "NapCat 私聊发送失败",
+      }),
+    );
+    const napcatGatewayService: NapcatGatewayService = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
+      sendPrivateMessage,
+      getGroupInfo: vi.fn(),
+      getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+    };
+
+    const handler = new NapcatHandler({ napcatGatewayService });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/napcat/private/send",
+      payload: {
+        userId: "123",
+        message: "hello",
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      message: "NapCat 私聊发送失败",
+    });
+    expect(sendPrivateMessage).toHaveBeenCalledWith({
+      userId: "123",
+      message: "hello",
+    });
   });
 });

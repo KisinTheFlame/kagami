@@ -7,7 +7,12 @@ import {
   parseOptionalStringInput,
 } from "./base.js";
 
-export const NapcatGroupMessageListQuerySchema = PaginationQuerySchema.extend({
+export const NapcatQqMessageTypeSchema = z.enum(["group", "private"]);
+
+export type NapcatQqMessageType = z.infer<typeof NapcatQqMessageTypeSchema>;
+
+export const NapcatQqMessageListQuerySchema = PaginationQuerySchema.extend({
+  messageType: z.preprocess(parseOptionalStringInput, NapcatQqMessageTypeSchema.optional()),
   groupId: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   userId: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   nickname: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
@@ -28,11 +33,13 @@ export const NapcatGroupMessageListQuerySchema = PaginationQuerySchema.extend({
   }
 });
 
-export type NapcatGroupMessageListQuery = z.infer<typeof NapcatGroupMessageListQuerySchema>;
+export type NapcatQqMessageListQuery = z.infer<typeof NapcatQqMessageListQuerySchema>;
 
-export const NapcatGroupMessageItemSchema = z.object({
+export const NapcatQqMessageItemSchema = z.object({
   id: z.number().int().positive(),
-  groupId: z.string().min(1),
+  messageType: NapcatQqMessageTypeSchema,
+  subType: z.string().min(1),
+  groupId: z.string().min(1).nullable(),
   userId: z.string().min(1).nullable(),
   nickname: z.string().min(1).nullable(),
   messageId: z.number().int().positive().nullable(),
@@ -42,10 +49,9 @@ export const NapcatGroupMessageItemSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
-export type NapcatGroupMessageItem = z.infer<typeof NapcatGroupMessageItemSchema>;
+export type NapcatQqMessageItem = z.infer<typeof NapcatQqMessageItemSchema>;
 
-export const NapcatGroupMessageListResponseSchema = createPaginatedResponseSchema(
-  NapcatGroupMessageItemSchema,
-);
+export const NapcatQqMessageListResponseSchema =
+  createPaginatedResponseSchema(NapcatQqMessageItemSchema);
 
-export type NapcatGroupMessageListResponse = z.infer<typeof NapcatGroupMessageListResponseSchema>;
+export type NapcatQqMessageListResponse = z.infer<typeof NapcatQqMessageListResponseSchema>;

@@ -9,7 +9,7 @@ import { createDbClient, type Database } from "../db/client.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
-import { PrismaNapcatGroupMessageDao } from "../napcat/dao/impl/napcat-group-message.impl.dao.js";
+import { PrismaNapcatQqMessageDao } from "../napcat/dao/impl/napcat-group-message.impl.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
 import { toHttpErrorResponse } from "../common/errors/http-error.js";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
@@ -18,7 +18,7 @@ import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
-import { NapcatGroupMessageHandler } from "../ops/http/napcat-group-message.handler.js";
+import { NapcatQqMessageHandler } from "../ops/http/napcat-group-message.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { createLlmClient } from "../llm/client.js";
 import { createEmbeddingClient } from "../llm/embedding/client.js";
@@ -62,7 +62,7 @@ import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gate
 import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
-import { DefaultNapcatGroupMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
+import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { DefaultStoryQueryService } from "../ops/application/story-query.impl.service.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import {
@@ -184,7 +184,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
-  const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database });
+  const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
   const newsArticleDao = new PrismaNewsArticleDao({ database });
   const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
@@ -198,8 +198,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
     napcatEventDao,
   });
-  const napcatGroupMessageQueryService = new DefaultNapcatGroupMessageQueryService({
-    napcatGroupMessageDao,
+  const napcatQqMessageQueryService = new DefaultNapcatQqMessageQueryService({
+    napcatQqMessageDao,
   });
 
   const claudeCodeAuthStore = new ClaudeCodeAuthStore({
@@ -308,7 +308,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
-    napcatGroupMessageDao,
+    napcatQqMessageDao,
   });
   const eventQueue = new InMemoryAgentEventQueue();
   const ithomeNewsService = new IthomeNewsService({
@@ -482,7 +482,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new AppLogHandler({ appLogQueryService }),
       new MetricChartHandler({ metricChartService }),
       new NapcatEventHandler({ napcatEventQueryService }),
-      new NapcatGroupMessageHandler({ napcatGroupMessageQueryService }),
+      new NapcatQqMessageHandler({ napcatQqMessageQueryService }),
       new StoryHandler({ storyQueryService }),
       new NapcatHandler({ napcatGatewayService }),
     ],

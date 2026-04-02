@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
+  NapcatSendPrivateMessageRequestSchema,
+  NapcatSendPrivateMessageResponseSchema,
   NapcatSendGroupMessageRequestSchema,
   NapcatSendGroupMessageResponseSchema,
 } from "@kagami/shared/schemas/napcat-message";
@@ -27,6 +29,19 @@ export class NapcatHandler {
       execute: ({ body }) => {
         return this.napcatGatewayService.sendGroupMessage({
           groupId: body.groupId,
+          message: body.message,
+        });
+      },
+    });
+
+    registerCommandRoute({
+      app,
+      path: `${this.prefix}/private/send`,
+      bodySchema: NapcatSendPrivateMessageRequestSchema,
+      responseSchema: NapcatSendPrivateMessageResponseSchema,
+      execute: ({ body }) => {
+        return this.napcatGatewayService.sendPrivateMessage({
+          userId: body.userId,
           message: body.message,
         });
       },

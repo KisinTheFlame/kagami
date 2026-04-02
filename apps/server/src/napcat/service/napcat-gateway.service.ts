@@ -1,11 +1,15 @@
 import type { NapcatReceiveMessageSegment } from "./napcat-gateway/shared.js";
 import {
+  type NapcatSendPrivateMessageRequest,
+  type NapcatSendPrivateMessageResponse,
   type NapcatSendGroupMessageRequest,
   type NapcatSendGroupMessageResponse,
 } from "@kagami/shared/schemas/napcat-message";
 
 export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
 export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
+export type NapcatSendPrivateMessageInput = NapcatSendPrivateMessageRequest;
+export type NapcatSendPrivateMessageResult = NapcatSendPrivateMessageResponse;
 export type NapcatGetGroupInfoInput = {
   groupId: string;
 };
@@ -37,13 +41,32 @@ export type NapcatPersistableGroupMessageEvent = NapcatGroupMessageData & {
   payload: Record<string, unknown>;
 };
 
+export type NapcatPersistableQqMessage = {
+  messageType: "group" | "private";
+  subType: string;
+  groupId: string | null;
+  userId: string | null;
+  nickname: string | null;
+  rawMessage: string;
+  messageSegments: NapcatReceiveMessageSegment[];
+  messageId: number | null;
+  time: number | null;
+  payload: Record<string, unknown>;
+};
+
 export interface NapcatGatewayService {
   start(): Promise<void>;
   stop(): Promise<void>;
   sendGroupMessage(input: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult>;
+  sendPrivateMessage(input: NapcatSendPrivateMessageInput): Promise<NapcatSendPrivateMessageResult>;
   getGroupInfo(input: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult>;
   getRecentGroupMessages(input: {
     groupId: string;
     count: number;
   }): Promise<NapcatGroupMessageData[]>;
+  getRecentPrivateMessages(input: {
+    userId: string;
+    count: number;
+    messageSeq?: number;
+  }): Promise<NapcatPersistableQqMessage[]>;
 }

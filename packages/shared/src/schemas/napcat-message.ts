@@ -14,3 +14,20 @@ export const NapcatSendGroupMessageResponseSchema = z.object({
 });
 
 export type NapcatSendGroupMessageResponse = z.infer<typeof NapcatSendGroupMessageResponseSchema>;
+
+export const NapcatSendPrivateMessageRequestSchema = z
+  .object({
+    userId: z.string().min(1),
+    message: z.string().min(1),
+  })
+  .strict();
+
+export type NapcatSendPrivateMessageRequest = z.infer<typeof NapcatSendPrivateMessageRequestSchema>;
+
+export const NapcatSendPrivateMessageResponseSchema = z.object({
+  messageId: z.number().int().positive(),
+});
+
+export type NapcatSendPrivateMessageResponse = z.infer<
+  typeof NapcatSendPrivateMessageResponseSchema
+>;

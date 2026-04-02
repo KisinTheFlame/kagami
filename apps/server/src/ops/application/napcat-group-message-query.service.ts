@@ -1,8 +1,8 @@
 import {
-  type NapcatGroupMessageListQuery,
-  type NapcatGroupMessageListResponse,
+  type NapcatQqMessageListQuery,
+  type NapcatQqMessageListResponse,
 } from "@kagami/shared/schemas/napcat-group-message";
 
-export interface NapcatGroupMessageQueryService {
-  queryList(query: NapcatGroupMessageListQuery): Promise<NapcatGroupMessageListResponse>;
+export interface NapcatQqMessageQueryService {
+  queryList(query: NapcatQqMessageListQuery): Promise<NapcatQqMessageListResponse>;
 }

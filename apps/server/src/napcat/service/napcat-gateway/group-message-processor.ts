@@ -3,6 +3,7 @@ import type {
   NapcatGroupMessageData,
   NapcatGroupMessageEvent,
   NapcatPersistableGroupMessageEvent,
+  NapcatPersistableQqMessage,
 } from "../napcat-gateway.service.js";
 import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
@@ -69,6 +70,7 @@ export class NapcatGroupMessageProcessor {
 
   public async handle(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
+    qqMessage: NapcatPersistableQqMessage | null;
     groupMessageEvent: NapcatPersistableGroupMessageEvent | null;
   }> {
     const result = await this.process(eventPayload);
@@ -82,15 +84,18 @@ export class NapcatGroupMessageProcessor {
 
   public async process(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
+    qqMessage: NapcatPersistableQqMessage | null;
     groupMessageEvent: NapcatPersistableGroupMessageEvent | null;
   }> {
     const normalizedEvent = await this.normalize(eventPayload);
     this.logPrivateMessage(normalizedEvent);
 
+    const qqMessage = this.toPersistableQqMessage(normalizedEvent);
     const groupMessageEvent = this.toPersistableGroupMessageEvent(normalizedEvent);
 
     return {
       normalizedEvent,
+      qqMessage,
       groupMessageEvent,
     };
   }
@@ -98,25 +103,29 @@ export class NapcatGroupMessageProcessor {
   public async normalizeHistoricalGroupMessages(
     messagePayloads: Record<string, unknown>[],
   ): Promise<NapcatGroupMessageData[]> {
+    return await this.normalizeHistoricalMessages(messagePayloads, {
+      messageType: "group",
+      skipReasonEvent: "napcat.gateway.history_message_skipped",
+    });
+  }
+
+  public async normalizeHistoricalPrivateMessages(
+    messagePayloads: Record<string, unknown>[],
+  ): Promise<NapcatPersistableQqMessage[]> {
     const normalizedEntries = await Promise.all(
       messagePayloads.map(async (messagePayload, index) => {
         const normalizedEvent = await this.normalize({
           post_type: "message",
-          message_type: "group",
+          message_type: "private",
           ...messagePayload,
         });
-        const groupMessageData = this.toGroupMessageData(normalizedEvent, {
-          requireListenedGroup: false,
-          includeSelfMessages: true,
-          acceptedPostTypes: HISTORICAL_GROUP_MESSAGE_POST_TYPES,
-        });
+        const qqMessage = this.toHistoricalQqMessage(normalizedEvent);
 
-        if (!groupMessageData) {
-          logger.warn("Skipping malformed NapCat history message", {
-            event: "napcat.gateway.history_message_skipped",
-            groupId: toNullableId(messagePayload.group_id),
+        if (!qqMessage) {
+          logger.warn("Skipping malformed NapCat private history message", {
+            event: "napcat.gateway.private_history_message_skipped",
+            userId: toNullableId(messagePayload.user_id),
             messageId: toNullablePositiveInt(messagePayload.message_id),
-            skipReasons: explainSkippedHistoricalMessageReasons(normalizedEvent),
             payload: messagePayload,
           });
           return null;
@@ -124,14 +133,16 @@ export class NapcatGroupMessageProcessor {
 
         return {
           index,
-          data: groupMessageData,
+          data: qqMessage,
         };
       }),
     );
 
     return normalizedEntries
-      .filter((entry): entry is { index: number; data: NapcatGroupMessageData } => entry !== null)
-      .sort((left, right) => compareGroupMessageOrder(left, right))
+      .filter(
+        (entry): entry is { index: number; data: NapcatPersistableQqMessage } => entry !== null,
+      )
+      .sort((left, right) => compareMessageOrder(left, right))
       .map(entry => entry.data);
   }
 
@@ -197,6 +208,49 @@ export class NapcatGroupMessageProcessor {
 
     return {
       ...groupMessageData,
+      payload: event.payload,
+    };
+  }
+
+  private toPersistableQqMessage(
+    event: NapcatGatewayNormalizedPostTypeEvent,
+  ): NapcatPersistableQqMessage | null {
+    if (event.postType !== "message") {
+      return null;
+    }
+
+    return this.toHistoricalQqMessage(event);
+  }
+
+  private toHistoricalQqMessage(
+    event: NapcatGatewayNormalizedPostTypeEvent,
+  ): NapcatPersistableQqMessage | null {
+    if (!HISTORICAL_GROUP_MESSAGE_POST_TYPES.has(event.postType)) {
+      return null;
+    }
+
+    if (event.messageType !== "group" && event.messageType !== "private") {
+      return null;
+    }
+
+    if (event.rawMessage === null) {
+      return null;
+    }
+
+    if (event.messageType === "group" && !event.groupId) {
+      return null;
+    }
+
+    return {
+      messageType: event.messageType,
+      subType: event.subType ?? defaultSubTypeForMessageType(event.messageType),
+      groupId: event.groupId,
+      userId: event.userId,
+      nickname: event.nickname,
+      rawMessage: event.rawMessage,
+      messageSegments: event.messageSegments,
+      messageId: event.messageId,
+      time: event.time,
       payload: event.payload,
     };
   }
@@ -466,6 +520,50 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
   }
+
+  private async normalizeHistoricalMessages(
+    messagePayloads: Record<string, unknown>[],
+    options: {
+      messageType: "group";
+      skipReasonEvent: string;
+    },
+  ): Promise<NapcatGroupMessageData[]> {
+    const normalizedEntries = await Promise.all(
+      messagePayloads.map(async (messagePayload, index) => {
+        const normalizedEvent = await this.normalize({
+          post_type: "message",
+          message_type: options.messageType,
+          ...messagePayload,
+        });
+        const groupMessageData = this.toGroupMessageData(normalizedEvent, {
+          requireListenedGroup: false,
+          includeSelfMessages: true,
+          acceptedPostTypes: HISTORICAL_GROUP_MESSAGE_POST_TYPES,
+        });
+
+        if (!groupMessageData) {
+          logger.warn("Skipping malformed NapCat history message", {
+            event: options.skipReasonEvent,
+            groupId: toNullableId(messagePayload.group_id),
+            messageId: toNullablePositiveInt(messagePayload.message_id),
+            skipReasons: explainSkippedHistoricalMessageReasons(normalizedEvent),
+            payload: messagePayload,
+          });
+          return null;
+        }
+
+        return {
+          index,
+          data: groupMessageData,
+        };
+      }),
+    );
+
+    return normalizedEntries
+      .filter((entry): entry is { index: number; data: NapcatGroupMessageData } => entry !== null)
+      .sort((left, right) => compareMessageOrder(left, right))
+      .map(entry => entry.data);
+  }
 }
 
 function extractImageDescription(renderedText: string | undefined): string | null {
@@ -477,9 +575,9 @@ function extractImageDescription(renderedText: string | undefined): string | nul
   return matched?.[1]?.trim() || null;
 }
 
-function compareGroupMessageOrder(
-  left: { index: number; data: NapcatGroupMessageData },
-  right: { index: number; data: NapcatGroupMessageData },
+function compareMessageOrder(
+  left: { index: number; data: { time: number | null; messageId: number | null } },
+  right: { index: number; data: { time: number | null; messageId: number | null } },
 ): number {
   if (left.data.time !== null && right.data.time !== null && left.data.time !== right.data.time) {
     return left.data.time - right.data.time;
@@ -494,6 +592,10 @@ function compareGroupMessageOrder(
   }
 
   return left.index - right.index;
+}
+
+function defaultSubTypeForMessageType(messageType: "group" | "private"): string {
+  return messageType === "private" ? "friend" : "normal";
 }
 
 function explainSkippedHistoricalMessageReasons(

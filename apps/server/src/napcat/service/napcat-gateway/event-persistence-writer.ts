@@ -1,7 +1,7 @@
 import type { NapcatEventDao } from "../../dao/napcat-event.dao.js";
-import type { NapcatGroupMessageDao } from "../../dao/napcat-group-message.dao.js";
+import type { NapcatQqMessageDao } from "../../dao/napcat-group-message.dao.js";
 import { AppLogger } from "../../../logger/logger.js";
-import type { NapcatPersistableGroupMessageEvent } from "../napcat-gateway.service.js";
+import type { NapcatPersistableQqMessage } from "../napcat-gateway.service.js";
 import {
   BLOCKED_NAPCAT_EVENT_POST_TYPES,
   type NapcatGatewayNormalizedPostTypeEvent,
@@ -9,26 +9,23 @@ import {
 
 export interface NapcatGatewayPersistenceWriter {
   persistEvent(event: NapcatGatewayNormalizedPostTypeEvent): void;
-  persistGroupMessage(event: NapcatPersistableGroupMessageEvent, eventTime: Date | null): void;
+  persistQqMessage(event: NapcatPersistableQqMessage, eventTime: Date | null): void;
 }
 
 type NapcatEventPersistenceWriterOptions = {
   napcatEventDao?: NapcatEventDao;
-  napcatGroupMessageDao?: NapcatGroupMessageDao;
+  napcatQqMessageDao?: NapcatQqMessageDao;
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 
 export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWriter {
   private readonly napcatEventDao: NapcatEventDao | null;
-  private readonly napcatGroupMessageDao: NapcatGroupMessageDao | null;
+  private readonly napcatQqMessageDao: NapcatQqMessageDao | null;
 
-  public constructor({
-    napcatEventDao,
-    napcatGroupMessageDao,
-  }: NapcatEventPersistenceWriterOptions) {
+  public constructor({ napcatEventDao, napcatQqMessageDao }: NapcatEventPersistenceWriterOptions) {
     this.napcatEventDao = napcatEventDao ?? null;
-    this.napcatGroupMessageDao = napcatGroupMessageDao ?? null;
+    this.napcatQqMessageDao = napcatQqMessageDao ?? null;
   }
 
   public persistEvent(event: NapcatGatewayNormalizedPostTypeEvent): void {
@@ -60,16 +57,15 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
       });
   }
 
-  public persistGroupMessage(
-    event: NapcatPersistableGroupMessageEvent,
-    eventTime: Date | null,
-  ): void {
-    if (!this.napcatGroupMessageDao) {
+  public persistQqMessage(event: NapcatPersistableQqMessage, eventTime: Date | null): void {
+    if (!this.napcatQqMessageDao) {
       return;
     }
 
-    void this.napcatGroupMessageDao
+    void this.napcatQqMessageDao
       .insert({
+        messageType: event.messageType,
+        subType: event.subType,
         groupId: event.groupId,
         userId: event.userId,
         nickname: event.nickname,
@@ -79,8 +75,9 @@ export class NapcatEventPersistenceWriter implements NapcatGatewayPersistenceWri
         payload: event.payload,
       })
       .catch(error => {
-        logger.errorWithCause("Failed to persist NapCat group message", error, {
-          event: "napcat.gateway.group_message_persist_failed",
+        logger.errorWithCause("Failed to persist NapCat QQ message", error, {
+          event: "napcat.gateway.qq_message_persist_failed",
+          messageType: event.messageType,
           groupId: event.groupId,
           userId: event.userId,
           messageId: event.messageId,

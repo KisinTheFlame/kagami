@@ -1,26 +1,25 @@
 import {
-  type NapcatGroupMessageListQuery,
-  type NapcatGroupMessageListResponse,
+  type NapcatQqMessageListQuery,
+  type NapcatQqMessageListResponse,
 } from "@kagami/shared/schemas/napcat-group-message";
-import type { NapcatGroupMessageDao } from "../../napcat/dao/napcat-group-message.dao.js";
-import { mapNapcatGroupMessageList } from "../mappers/napcat-group-message.mapper.js";
-import type { NapcatGroupMessageQueryService } from "./napcat-group-message-query.service.js";
+import type { NapcatQqMessageDao } from "../../napcat/dao/napcat-group-message.dao.js";
+import { mapNapcatQqMessageList } from "../mappers/napcat-group-message.mapper.js";
+import type { NapcatQqMessageQueryService } from "./napcat-group-message-query.service.js";
 
-type DefaultNapcatGroupMessageQueryServiceDeps = {
-  napcatGroupMessageDao: NapcatGroupMessageDao;
+type DefaultNapcatQqMessageQueryServiceDeps = {
+  napcatQqMessageDao: NapcatQqMessageDao;
 };
 
-export class DefaultNapcatGroupMessageQueryService implements NapcatGroupMessageQueryService {
-  private readonly napcatGroupMessageDao: NapcatGroupMessageDao;
+export class DefaultNapcatQqMessageQueryService implements NapcatQqMessageQueryService {
+  private readonly napcatQqMessageDao: NapcatQqMessageDao;
 
-  public constructor({ napcatGroupMessageDao }: DefaultNapcatGroupMessageQueryServiceDeps) {
-    this.napcatGroupMessageDao = napcatGroupMessageDao;
+  public constructor({ napcatQqMessageDao }: DefaultNapcatQqMessageQueryServiceDeps) {
+    this.napcatQqMessageDao = napcatQqMessageDao;
   }
 
-  public async queryList(
-    query: NapcatGroupMessageListQuery,
-  ): Promise<NapcatGroupMessageListResponse> {
+  public async queryList(query: NapcatQqMessageListQuery): Promise<NapcatQqMessageListResponse> {
     const filters = {
+      messageType: query.messageType,
       groupId: query.groupId,
       userId: query.userId,
       nickname: query.nickname,
@@ -30,11 +29,11 @@ export class DefaultNapcatGroupMessageQueryService implements NapcatGroupMessage
     };
 
     const [total, items] = await Promise.all([
-      this.napcatGroupMessageDao.countByQuery(filters),
-      this.napcatGroupMessageDao.listByQueryPage(query),
+      this.napcatQqMessageDao.countByQuery(filters),
+      this.napcatQqMessageDao.listByQueryPage(query),
     ]);
 
-    return mapNapcatGroupMessageList({
+    return mapNapcatQqMessageList({
       page: query.page,
       pageSize: query.pageSize,
       total,

@@ -84,11 +84,13 @@ describe("NapcatEventPersistenceWriter", () => {
   it("should persist group message without indexing extra embedding data", async () => {
     const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const writer = new NapcatEventPersistenceWriter({
-      napcatGroupMessageDao,
+      napcatQqMessageDao: napcatGroupMessageDao,
     });
 
-    writer.persistGroupMessage(
+    writer.persistQqMessage(
       {
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         userId: "123456",
         nickname: "测试群名片",
@@ -120,6 +122,8 @@ describe("NapcatEventPersistenceWriter", () => {
 
     expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
       expect.objectContaining({
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         messageId: 9988,
         message: [

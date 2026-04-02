@@ -1,31 +1,31 @@
 import type { FastifyInstance } from "fastify";
 import {
-  NapcatGroupMessageListQuerySchema,
-  NapcatGroupMessageListResponseSchema,
+  NapcatQqMessageListQuerySchema,
+  NapcatQqMessageListResponseSchema,
 } from "@kagami/shared/schemas/napcat-group-message";
-import type { NapcatGroupMessageQueryService } from "../application/napcat-group-message-query.service.js";
+import type { NapcatQqMessageQueryService } from "../application/napcat-group-message-query.service.js";
 import { registerQueryRoute } from "../../common/http/route.helper.js";
 
-type NapcatGroupMessageHandlerDeps = {
-  napcatGroupMessageQueryService: NapcatGroupMessageQueryService;
+type NapcatQqMessageHandlerDeps = {
+  napcatQqMessageQueryService: NapcatQqMessageQueryService;
 };
 
-export class NapcatGroupMessageHandler {
+export class NapcatQqMessageHandler {
   public readonly prefix = "/napcat-group-message";
-  private readonly napcatGroupMessageQueryService: NapcatGroupMessageQueryService;
+  private readonly napcatQqMessageQueryService: NapcatQqMessageQueryService;
 
-  public constructor({ napcatGroupMessageQueryService }: NapcatGroupMessageHandlerDeps) {
-    this.napcatGroupMessageQueryService = napcatGroupMessageQueryService;
+  public constructor({ napcatQqMessageQueryService }: NapcatQqMessageHandlerDeps) {
+    this.napcatQqMessageQueryService = napcatQqMessageQueryService;
   }
 
   public register(app: FastifyInstance): void {
     registerQueryRoute({
       app,
       path: `${this.prefix}/query`,
-      querySchema: NapcatGroupMessageListQuerySchema,
-      responseSchema: NapcatGroupMessageListResponseSchema,
+      querySchema: NapcatQqMessageListQuerySchema,
+      responseSchema: NapcatQqMessageListResponseSchema,
       execute: ({ query }) => {
-        return this.napcatGroupMessageQueryService.queryList(query);
+        return this.napcatQqMessageQueryService.queryList(query);
       },
     });
   }

@@ -105,6 +105,7 @@ function createRuntimeForCompactionTest(input: {
       start: vi.fn(),
       stop: vi.fn(),
       sendGroupMessage: vi.fn(),
+      sendPrivateMessage: vi.fn(),
       getGroupInfo: vi.fn().mockResolvedValue({
         groupId: "group-1",
         groupName: "产品群",
@@ -114,6 +115,7 @@ function createRuntimeForCompactionTest(input: {
         groupAllShut: false,
       }),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     },
     listenGroupIds: ["group-1"],
     recentMessageLimit: 0,
@@ -201,6 +203,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockImplementation(async ({ groupId }) => ({
           groupId,
           groupName: groupId === "group-1" ? "产品群" : "测试群",
@@ -210,6 +213,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         })),
         getRecentGroupMessages,
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1", "group-2"],
       recentMessageLimit: 2,
@@ -409,6 +413,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -420,6 +425,7 @@ describe("RootLoopAgent", () => {
         getRecentGroupMessages: vi
           .fn()
           .mockResolvedValue([createGroupHistoryMessage("history message")]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 1,
@@ -540,6 +546,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -549,6 +556,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         }),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,
@@ -649,6 +657,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -658,6 +667,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         }),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,
@@ -780,6 +790,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -789,6 +800,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         }),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,
@@ -982,6 +994,7 @@ describe("RootLoopAgent", () => {
           start: vi.fn(),
           stop: vi.fn(),
           sendGroupMessage: vi.fn(),
+          sendPrivateMessage: vi.fn(),
           getGroupInfo: vi.fn().mockResolvedValue({
             groupId: "group-1",
             groupName: "产品群",
@@ -991,6 +1004,7 @@ describe("RootLoopAgent", () => {
             groupAllShut: false,
           }),
           getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+          getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
         },
         listenGroupIds: ["group-1"],
         recentMessageLimit: 0,
@@ -1097,6 +1111,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -1106,6 +1121,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         }),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,
@@ -1177,6 +1193,7 @@ describe("RootLoopAgent", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn().mockResolvedValue({
           groupId: "group-1",
           groupName: "产品群",
@@ -1186,6 +1203,7 @@ describe("RootLoopAgent", () => {
           groupAllShut: false,
         }),
         getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       listenGroupIds: ["group-1"],
       recentMessageLimit: 0,

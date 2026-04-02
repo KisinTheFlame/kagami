@@ -44,8 +44,10 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn(),
         getRecentGroupMessages,
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       rootAgentRuntime: {
         hydrateStartupEvents,
@@ -83,8 +85,10 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn(),
         getRecentGroupMessages,
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       rootAgentRuntime: {
         hydrateStartupEvents,
@@ -106,8 +110,10 @@ describe("startupContextHydrator", () => {
         start: vi.fn(),
         stop: vi.fn(),
         sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
         getGroupInfo: vi.fn(),
         getRecentGroupMessages,
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
       },
       rootAgentRuntime: {
         hydrateStartupEvents,

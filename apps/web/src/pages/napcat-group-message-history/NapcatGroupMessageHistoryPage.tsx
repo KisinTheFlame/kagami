@@ -1,4 +1,7 @@
-import { type NapcatGroupMessageItem } from "@kagami/shared/schemas/napcat-group-message";
+import {
+  type NapcatQqMessageItem,
+  type NapcatQqMessageType,
+} from "@kagami/shared/schemas/napcat-group-message";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,7 @@ import { useNapcatGroupMessageList } from "./useNapcatGroupMessageList";
 const PAGE_SIZE = 20;
 
 type FilterFormState = {
+  messageType: "" | NapcatQqMessageType;
   groupId: string;
   userId: string;
   nickname: string;
@@ -79,6 +83,26 @@ export function NapcatGroupMessageHistoryPage() {
           className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
+                消息类型
+              </span>
+              <select
+                value={formState.messageType}
+                onChange={event =>
+                  setFormState(prev => ({
+                    ...prev,
+                    messageType: event.target.value as FilterFormState["messageType"],
+                  }))
+                }
+                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">全部</option>
+                <option value="group">群聊</option>
+                <option value="private">单聊</option>
+              </select>
+            </label>
+
             <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">
                 Group ID
@@ -172,7 +196,8 @@ export function NapcatGroupMessageHistoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[160px]">事件时间</TableHead>
-                <TableHead className="w-[140px]">Group ID</TableHead>
+                <TableHead className="w-[96px]">类型</TableHead>
+                <TableHead className="w-[140px]">会话</TableHead>
                 <TableHead className="w-[140px]">User ID</TableHead>
                 <TableHead className="w-[140px]">昵称</TableHead>
                 <TableHead>消息内容</TableHead>
@@ -181,13 +206,13 @@ export function NapcatGroupMessageHistoryPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     加载中…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -202,8 +227,11 @@ export function NapcatGroupMessageHistoryPage() {
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {formatDate(item.eventTime)}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {formatMessageType(item.messageType)}
+                    </TableCell>
                     <TableCell className="truncate font-mono text-xs text-muted-foreground">
-                      {item.groupId}
+                      {formatConversationTarget(item)}
                     </TableCell>
                     <TableCell className="truncate font-mono text-xs text-muted-foreground">
                       {item.userId ?? "—"}
@@ -262,6 +290,7 @@ export function NapcatGroupMessageHistoryPage() {
 
 function parseFilters(params: URLSearchParams) {
   return {
+    messageType: normalizeMessageType(params.get("messageType")),
     groupId: normalizeOptionalText(params.get("groupId")),
     userId: normalizeOptionalText(params.get("userId")),
     nickname: normalizeOptionalText(params.get("nickname")),
@@ -273,6 +302,7 @@ function parseFilters(params: URLSearchParams) {
 
 function toFormState(params: URLSearchParams): FilterFormState {
   return {
+    messageType: normalizeMessageType(params.get("messageType")) ?? "",
     groupId: params.get("groupId") ?? "",
     userId: params.get("userId") ?? "",
     nickname: params.get("nickname") ?? "",
@@ -285,6 +315,7 @@ function toFormState(params: URLSearchParams): FilterFormState {
 function buildSearchParams(formState: FilterFormState): URLSearchParams {
   const nextParams = new URLSearchParams();
 
+  setIfNonEmpty(nextParams, "messageType", formState.messageType);
   setIfNonEmpty(nextParams, "groupId", formState.groupId);
   setIfNonEmpty(nextParams, "userId", formState.userId);
   setIfNonEmpty(nextParams, "nickname", formState.nickname);
@@ -305,6 +336,7 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
 
 function createEmptyFormState(): FilterFormState {
   return {
+    messageType: "",
     groupId: "",
     userId: "",
     nickname: "",
@@ -330,13 +362,18 @@ function formatDate(iso: string | null): string {
 }
 
 function getDetailTitle(
-  item: { groupId: string; nickname: string | null; userId: string | null } | null,
+  item: {
+    messageType: NapcatQqMessageType;
+    groupId: string | null;
+    nickname: string | null;
+    userId: string | null;
+  } | null,
 ): string {
   if (item === null) {
-    return "群聊消息详情";
+    return "QQ 消息详情";
   }
 
-  return `${item.groupId} · ${item.nickname ?? item.userId ?? "群聊消息"}`;
+  return `${formatMessageType(item.messageType)} · ${formatConversationTarget(item)} · ${item.nickname ?? item.userId ?? "QQ 消息"}`;
 }
 
 function NapcatGroupMessageMobileCard({
@@ -344,7 +381,7 @@ function NapcatGroupMessageMobileCard({
   isSelected,
   onClick,
 }: {
-  item: NapcatGroupMessageItem;
+  item: NapcatQqMessageItem;
   isSelected: boolean;
   onClick: () => void;
 }) {
@@ -352,7 +389,9 @@ function NapcatGroupMessageMobileCard({
     <MobileSelectCard isSelected={isSelected} onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-xs text-muted-foreground">{item.groupId}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {formatMessageType(item.messageType)} · {formatConversationTarget(item)}
+          </p>
           <p className="mt-2 text-sm font-medium">{item.nickname ?? item.userId ?? "匿名成员"}</p>
         </div>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
@@ -366,4 +405,24 @@ function NapcatGroupMessageMobileCard({
       <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.eventTime)}</p>
     </MobileSelectCard>
   );
+}
+
+function normalizeMessageType(value: string | null): NapcatQqMessageType | undefined {
+  return value === "group" || value === "private" ? value : undefined;
+}
+
+function formatMessageType(messageType: NapcatQqMessageType): string {
+  return messageType === "group" ? "群聊" : "单聊";
+}
+
+function formatConversationTarget(item: {
+  messageType: NapcatQqMessageType;
+  groupId: string | null;
+  userId: string | null;
+}): string {
+  if (item.messageType === "group") {
+    return item.groupId ?? "—";
+  }
+
+  return item.userId ?? "—";
 }

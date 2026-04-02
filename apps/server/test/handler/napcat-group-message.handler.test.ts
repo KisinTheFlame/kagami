@@ -1,9 +1,9 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NapcatGroupMessageQueryService } from "../../src/ops/application/napcat-group-message-query.service.js";
-import { NapcatGroupMessageHandler } from "../../src/ops/http/napcat-group-message.handler.js";
+import type { NapcatQqMessageQueryService } from "../../src/ops/application/napcat-group-message-query.service.js";
+import { NapcatQqMessageHandler } from "../../src/ops/http/napcat-group-message.handler.js";
 
-describe("NapcatGroupMessageHandler", () => {
+describe("NapcatQqMessageHandler", () => {
   let app = Fastify({ logger: false });
 
   beforeEach(() => {
@@ -14,7 +14,7 @@ describe("NapcatGroupMessageHandler", () => {
     await app.close();
   });
 
-  it("should query napcat group messages via injected service", async () => {
+  it("should query napcat qq messages via injected service", async () => {
     const result = {
       pagination: {
         page: 1,
@@ -24,6 +24,8 @@ describe("NapcatGroupMessageHandler", () => {
       items: [
         {
           id: 1,
+          messageType: "group",
+          subType: "normal",
           groupId: "987654",
           userId: "123456",
           nickname: "测试昵称",
@@ -47,16 +49,16 @@ describe("NapcatGroupMessageHandler", () => {
     };
 
     const queryList = vi.fn().mockResolvedValue(result);
-    const napcatGroupMessageQueryService: NapcatGroupMessageQueryService = {
+    const napcatQqMessageQueryService: NapcatQqMessageQueryService = {
       queryList,
     };
 
-    const handler = new NapcatGroupMessageHandler({ napcatGroupMessageQueryService });
+    const handler = new NapcatQqMessageHandler({ napcatQqMessageQueryService });
     handler.register(app);
 
     const response = await app.inject({
       method: "GET",
-      url: "/napcat-group-message/query?page=1&pageSize=20&groupId=987654&userId=123456&nickname=%E6%B5%8B%E8%AF%95",
+      url: "/napcat-group-message/query?page=1&pageSize=20&messageType=group&groupId=987654&userId=123456&nickname=%E6%B5%8B%E8%AF%95",
     });
 
     expect(response.statusCode).toBe(200);
@@ -65,6 +67,7 @@ describe("NapcatGroupMessageHandler", () => {
       expect.objectContaining({
         page: 1,
         pageSize: 20,
+        messageType: "group",
         groupId: "987654",
         userId: "123456",
         nickname: "测试",

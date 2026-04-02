@@ -3,7 +3,7 @@ import { type AgentEventQueue } from "../../src/agent/runtime/event/event.queue.
 import type { ConfigManager } from "../../src/config/config.manager.js";
 import type { Config } from "../../src/config/config.loader.js";
 import type { NapcatEventDao } from "../../src/napcat/dao/napcat-event.dao.js";
-import type { NapcatGroupMessageDao } from "../../src/napcat/dao/napcat-group-message.dao.js";
+import type { NapcatQqMessageDao } from "../../src/napcat/dao/napcat-group-message.dao.js";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
 
@@ -77,7 +77,7 @@ export function createNapcatEventDao(): NapcatEventDao & {
   };
 }
 
-export function createNapcatGroupMessageDao(): NapcatGroupMessageDao & {
+export function createNapcatGroupMessageDao(): NapcatQqMessageDao & {
   insert: ReturnType<typeof vi.fn>;
 } {
   return {

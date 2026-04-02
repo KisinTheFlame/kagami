@@ -166,12 +166,69 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should resolve sendPrivateMessage when NapCat returns success response", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const sendPromise = gateway.sendPrivateMessage({
+      userId: "123456",
+      message: "hello friend",
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      params: {
+        user_id: string;
+        message: unknown;
+      };
+    };
+
+    expect(sentPayload.params.user_id).toBe("123456");
+    expect(sentPayload.params.message).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "hello friend",
+        },
+      },
+    ]);
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          message_id: 9630,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(sendPromise).resolves.toEqual({ messageId: 9630 });
+    await gateway.stop();
+  });
+
   it("should publish listened group message events and persist them", async () => {
     const sockets: FakeWebSocket[] = [];
     const eventQueue = createAgentEventQueue();
     const napcatGroupMessageDao = createNapcatGroupMessageDao();
     const persistenceWriter = new NapcatEventPersistenceWriter({
-      napcatGroupMessageDao,
+      napcatQqMessageDao: napcatGroupMessageDao,
     });
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
@@ -256,6 +313,8 @@ describe("DefaultNapcatGatewayService", () => {
     );
     expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
       expect.objectContaining({
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         messageId: 9988,
       }),
@@ -299,6 +358,69 @@ describe("DefaultNapcatGatewayService", () => {
     expect(logs.some(log => log.metadata.event === "napcat.gateway.private_message_received")).toBe(
       true,
     );
+    await gateway.stop();
+  });
+
+  it("should persist private message events without enqueuing agent event", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({
+        napcatQqMessageDao: napcatGroupMessageDao,
+      }),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "private",
+        sub_type: "friend",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hi",
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "hi",
+            },
+          },
+        ],
+        time: 1710000000,
+        sender: {
+          nickname: "测试好友",
+        },
+      }),
+    );
+    await waitOneTick();
+
+    expect(eventQueue.enqueue).not.toHaveBeenCalled();
+    expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageType: "private",
+        subType: "friend",
+        groupId: null,
+        userId: "123456",
+        nickname: "测试好友",
+        messageId: 9988,
+      }),
+    );
+
     await gateway.stop();
   });
 
@@ -614,6 +736,119 @@ describe("DefaultNapcatGatewayService", () => {
         messageId: 1002,
         time: 1710000001,
       },
+    ]);
+
+    await gateway.stop();
+  });
+
+  it("should fetch recent private messages and normalize them into qq payloads", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const historyPromise = gateway.getRecentPrivateMessages({
+      userId: "123456",
+      count: 2,
+      messageSeq: 99,
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      action: string;
+      params: Record<string, unknown>;
+    };
+
+    expect(sentPayload.action).toBe("get_friend_msg_history");
+    expect(sentPayload.params).toEqual({
+      user_id: "123456",
+      count: 2,
+      message_seq: 99,
+    });
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          messages: [
+            {
+              post_type: "message_sent",
+              message_type: "private",
+              sub_type: "friend",
+              user_id: 123456,
+              self_id: 654321,
+              message_id: 1002,
+              raw_message: "bot reply",
+              message: [
+                {
+                  type: "text",
+                  data: {
+                    text: "bot reply",
+                  },
+                },
+              ],
+              time: 1710000001,
+              sender: {
+                nickname: "Kagami",
+              },
+            },
+            {
+              user_id: 123456,
+              self_id: 654321,
+              message_id: 1001,
+              raw_message: "hello",
+              message: [
+                {
+                  type: "text",
+                  data: {
+                    text: "hello",
+                  },
+                },
+              ],
+              time: 1710000000,
+              sender: {
+                nickname: "测试好友",
+              },
+            },
+          ],
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(historyPromise).resolves.toEqual([
+      expect.objectContaining({
+        messageType: "private",
+        subType: "friend",
+        groupId: null,
+        userId: "123456",
+        nickname: "测试好友",
+        messageId: 1001,
+        rawMessage: "hello",
+      }),
+      expect.objectContaining({
+        messageType: "private",
+        subType: "friend",
+        groupId: null,
+        userId: "123456",
+        nickname: "Kagami",
+        messageId: 1002,
+        rawMessage: "bot reply",
+      }),
     ]);
 
     await gateway.stop();

@@ -1,32 +1,34 @@
 import {
-  type NapcatGroupMessageItem,
-  type NapcatGroupMessageListResponse,
+  type NapcatQqMessageItem,
+  type NapcatQqMessageListResponse,
 } from "@kagami/shared/schemas/napcat-group-message";
-import type { NapcatGroupMessageItem as NapcatGroupMessageDaoItem } from "../../napcat/dao/napcat-group-message.dao.js";
+import type { NapcatQqMessageItem as NapcatQqMessageDaoItem } from "../../napcat/dao/napcat-group-message.dao.js";
 
-type MapNapcatGroupMessageListInput = {
+type MapNapcatQqMessageListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: NapcatGroupMessageDaoItem[];
+  items: NapcatQqMessageDaoItem[];
 };
 
-export function mapNapcatGroupMessageList(
-  input: MapNapcatGroupMessageListInput,
-): NapcatGroupMessageListResponse {
+export function mapNapcatQqMessageList(
+  input: MapNapcatQqMessageListInput,
+): NapcatQqMessageListResponse {
   return {
     pagination: {
       page: input.page,
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapNapcatGroupMessageItem),
+    items: input.items.map(mapNapcatQqMessageItem),
   };
 }
 
-function mapNapcatGroupMessageItem(item: NapcatGroupMessageDaoItem): NapcatGroupMessageItem {
+function mapNapcatQqMessageItem(item: NapcatQqMessageDaoItem): NapcatQqMessageItem {
   return {
     id: item.id,
+    messageType: item.messageType,
+    subType: item.subType,
     groupId: item.groupId,
     userId: item.userId,
     nickname: item.nickname,

@@ -15,6 +15,9 @@ import type {
   NapcatGroupMessageData,
   NapcatGatewayService,
   NapcatGroupMessageEvent,
+  NapcatPersistableQqMessage,
+  NapcatSendPrivateMessageInput,
+  NapcatSendPrivateMessageResult,
   NapcatSendGroupMessageInput,
   NapcatSendGroupMessageResult,
 } from "./napcat-gateway.service.js";
@@ -58,6 +61,7 @@ type OrderedPostTypeEventResult =
       normalizedEvent: Awaited<
         ReturnType<NapcatGroupMessageProcessor["process"]>
       >["normalizedEvent"];
+      qqMessage: Awaited<ReturnType<NapcatGroupMessageProcessor["process"]>>["qqMessage"];
       groupMessageEvent: Awaited<
         ReturnType<NapcatGroupMessageProcessor["process"]>
       >["groupMessageEvent"];
@@ -125,12 +129,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
           continue;
         }
 
+        if (result.qqMessage) {
+          persistenceWriter.persistQqMessage(result.qqMessage, result.normalizedEvent.eventTime);
+        }
         if (result.groupMessageEvent) {
           groupMessageProcessor.publishGroupMessageEvent(result.groupMessageEvent);
-          persistenceWriter.persistGroupMessage(
-            result.groupMessageEvent,
-            result.normalizedEvent.eventTime,
-          );
         }
         persistenceWriter.persistEvent(result.normalizedEvent);
       }
@@ -150,6 +153,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
             completedResults.set(sequence, {
               kind: "processed",
               normalizedEvent: result.normalizedEvent,
+              qqMessage: result.qqMessage,
               groupMessageEvent: result.groupMessageEvent,
             });
             flushCompletedResults();
@@ -186,6 +190,31 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     const messageSegments = parseOutgoingMessageSegments(message);
     const data = await this.transport.request("send_group_msg", {
       group_id: groupId,
+      message: messageSegments,
+    });
+
+    const messageIdResult = MessageIdSchema.safeParse(data?.message_id);
+    if (!messageIdResult.success) {
+      throw new BizError({
+        message: "NapCat 返回结果缺少 message_id",
+        meta: {
+          reason: "MISSING_MESSAGE_ID",
+        },
+      });
+    }
+
+    return {
+      messageId: messageIdResult.data,
+    };
+  }
+
+  public async sendPrivateMessage({
+    userId,
+    message,
+  }: NapcatSendPrivateMessageInput): Promise<NapcatSendPrivateMessageResult> {
+    const messageSegments = parseOutgoingMessageSegments(message);
+    const data = await this.transport.request("send_private_msg", {
+      user_id: userId,
       message: messageSegments,
     });
 
@@ -281,6 +310,56 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
 
     return await this.groupMessageProcessor.normalizeHistoricalGroupMessages(
+      historyResult.data.messages,
+    );
+  }
+
+  public async getRecentPrivateMessages(input: {
+    userId: string;
+    count: number;
+    messageSeq?: number;
+  }): Promise<NapcatPersistableQqMessage[]> {
+    const userIdResult = NonEmptyStringSchema.safeParse(input.userId);
+    if (!userIdResult.success) {
+      throw new BizError({
+        message: "userId 必须是非空字符串",
+        meta: {
+          reason: "INVALID_USER_ID",
+        },
+      });
+    }
+
+    const countResult = PositiveIntSchema.safeParse(input.count);
+    if (!countResult.success) {
+      throw new BizError({
+        message: "count 必须是正整数",
+        meta: {
+          reason: "INVALID_COUNT",
+        },
+      });
+    }
+
+    const params: Record<string, unknown> = {
+      user_id: userIdResult.data,
+      count: countResult.data,
+    };
+
+    if (typeof input.messageSeq === "number" && Number.isFinite(input.messageSeq)) {
+      params.message_seq = Math.trunc(input.messageSeq);
+    }
+
+    const data = await this.transport.request("get_friend_msg_history", params);
+    const historyResult = GroupMessageHistoryResponseSchema.safeParse(data ?? {});
+    if (!historyResult.success) {
+      throw new BizError({
+        message: "NapCat 返回的私聊历史消息结构无效",
+        meta: {
+          reason: "INVALID_PRIVATE_MESSAGE_HISTORY_RESPONSE",
+        },
+      });
+    }
+
+    return await this.groupMessageProcessor.normalizeHistoricalPrivateMessages(
       historyResult.data.messages,
     );
   }

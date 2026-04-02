@@ -1,12 +1,12 @@
 import {
-  NapcatGroupMessageListResponseSchema,
-  type NapcatGroupMessageListQuery,
+  NapcatQqMessageListResponseSchema,
+  type NapcatQqMessageListQuery,
 } from "@kagami/shared/schemas/napcat-group-message";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";
 
-type NapcatGroupMessageListFilters = Omit<NapcatGroupMessageListQuery, "page" | "pageSize">;
+type NapcatGroupMessageListFilters = Omit<NapcatQqMessageListQuery, "page" | "pageSize">;
 
 export function useNapcatGroupMessageList(
   page: number,
@@ -19,6 +19,7 @@ export function useNapcatGroupMessageList(
       const query = buildQueryString({
         page: String(page),
         pageSize: String(pageSize),
+        messageType: filters.messageType,
         groupId: filters.groupId,
         userId: filters.userId,
         nickname: filters.nickname,
@@ -28,7 +29,7 @@ export function useNapcatGroupMessageList(
       });
 
       const response = await apiFetch<unknown>(`/napcat-group-message/query?${query}`);
-      return NapcatGroupMessageListResponseSchema.parse(response);
+      return NapcatQqMessageListResponseSchema.parse(response);
     },
   });
 }

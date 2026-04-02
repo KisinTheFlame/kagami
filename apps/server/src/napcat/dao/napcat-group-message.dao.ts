@@ -1,8 +1,10 @@
 import { type JsonValue } from "@kagami/shared/schemas/base";
-import { type NapcatGroupMessageListQuery } from "@kagami/shared/schemas/napcat-group-message";
+import { type NapcatQqMessageListQuery } from "@kagami/shared/schemas/napcat-group-message";
 
-export type InsertNapcatGroupMessageItem = {
-  groupId: string;
+export type InsertNapcatQqMessageItem = {
+  messageType: "group" | "private";
+  subType: string;
+  groupId: string | null;
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
@@ -12,9 +14,11 @@ export type InsertNapcatGroupMessageItem = {
   createdAt?: Date;
 };
 
-export type NapcatGroupMessageItem = {
+export type NapcatQqMessageItem = {
   id: number;
-  groupId: string;
+  messageType: "group" | "private";
+  subType: string;
+  groupId: string | null;
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
@@ -24,7 +28,7 @@ export type NapcatGroupMessageItem = {
   createdAt: Date;
 };
 
-export type NapcatGroupMessageContextItem = {
+export type NapcatQqMessageContextItem = {
   id: number;
   groupId: string;
   userId: string | null;
@@ -34,20 +38,20 @@ export type NapcatGroupMessageContextItem = {
   createdAt: Date;
 };
 
-export type QueryNapcatGroupMessageListFilterInput = Omit<
-  NapcatGroupMessageListQuery,
+export type QueryNapcatQqMessageListFilterInput = Omit<
+  NapcatQqMessageListQuery,
   "page" | "pageSize"
 >;
-export type QueryNapcatGroupMessageListPageInput = NapcatGroupMessageListQuery;
+export type QueryNapcatQqMessageListPageInput = NapcatQqMessageListQuery;
 
-export interface NapcatGroupMessageDao {
-  insert(item: InsertNapcatGroupMessageItem): Promise<number>;
-  countByQuery(input: QueryNapcatGroupMessageListFilterInput): Promise<number>;
-  listByQueryPage(input: QueryNapcatGroupMessageListPageInput): Promise<NapcatGroupMessageItem[]>;
+export interface NapcatQqMessageDao {
+  insert(item: InsertNapcatQqMessageItem): Promise<number>;
+  countByQuery(input: QueryNapcatQqMessageListFilterInput): Promise<number>;
+  listByQueryPage(input: QueryNapcatQqMessageListPageInput): Promise<NapcatQqMessageItem[]>;
   listContextWindowById(input: {
     groupId: string;
     messageId: number;
     before: number;
     after: number;
-  }): Promise<NapcatGroupMessageContextItem[]>;
+  }): Promise<NapcatQqMessageContextItem[]>;
 }

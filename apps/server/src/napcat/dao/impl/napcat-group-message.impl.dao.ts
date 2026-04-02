@@ -2,28 +2,30 @@ import * as Prisma from "../../../generated/prisma/internal/prismaNamespace.js";
 import { type JsonValue } from "@kagami/shared/schemas/base";
 import type { Database } from "../../../db/client.js";
 import type {
-  InsertNapcatGroupMessageItem,
-  NapcatGroupMessageContextItem,
-  NapcatGroupMessageDao,
-  NapcatGroupMessageItem,
-  QueryNapcatGroupMessageListFilterInput,
-  QueryNapcatGroupMessageListPageInput,
+  InsertNapcatQqMessageItem,
+  NapcatQqMessageContextItem,
+  NapcatQqMessageDao,
+  NapcatQqMessageItem,
+  QueryNapcatQqMessageListFilterInput,
+  QueryNapcatQqMessageListPageInput,
 } from "../napcat-group-message.dao.js";
 
-type PrismaNapcatGroupMessageDaoDeps = {
+type PrismaNapcatQqMessageDaoDeps = {
   database: Database;
 };
 
-export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
+export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
   private readonly database: Database;
 
-  public constructor({ database }: PrismaNapcatGroupMessageDaoDeps) {
+  public constructor({ database }: PrismaNapcatQqMessageDaoDeps) {
     this.database = database;
   }
 
-  public async insert(item: InsertNapcatGroupMessageItem): Promise<number> {
-    const row = await this.database.napcatGroupMessage.create({
+  public async insert(item: InsertNapcatQqMessageItem): Promise<number> {
+    const row = await this.database.napcatQqMessage.create({
       data: {
+        messageType: item.messageType,
+        subType: item.subType,
         groupId: item.groupId,
         userId: item.userId,
         nickname: item.nickname,
@@ -41,18 +43,18 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     return row.id;
   }
 
-  public async countByQuery(input: QueryNapcatGroupMessageListFilterInput): Promise<number> {
+  public async countByQuery(input: QueryNapcatQqMessageListFilterInput): Promise<number> {
     if (input.keyword) {
       return this.countByKeywordQuery(input);
     }
 
     const where = buildWhereInput(input);
-    return this.database.napcatGroupMessage.count({ where });
+    return this.database.napcatQqMessage.count({ where });
   }
 
   public async listByQueryPage(
-    input: QueryNapcatGroupMessageListPageInput,
-  ): Promise<NapcatGroupMessageItem[]> {
+    input: QueryNapcatQqMessageListPageInput,
+  ): Promise<NapcatQqMessageItem[]> {
     if (input.keyword) {
       return this.listByKeywordQuery(input);
     }
@@ -60,7 +62,7 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     const where = buildWhereInput(input);
     const offset = (input.page - 1) * input.pageSize;
 
-    const rows = await this.database.napcatGroupMessage.findMany({
+    const rows = await this.database.napcatQqMessage.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: input.pageSize,
@@ -70,15 +72,13 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     return rows.map(mapPrismaRowToItem);
   }
 
-  private async countByKeywordQuery(
-    input: QueryNapcatGroupMessageListFilterInput,
-  ): Promise<number> {
+  private async countByKeywordQuery(input: QueryNapcatQqMessageListFilterInput): Promise<number> {
     const whereClause = buildKeywordSqlWhereClause(input);
     const rows = await this.database.$queryRaw<
       Array<{ total: bigint | number | string }>
     >(Prisma.sql`
       SELECT COUNT(*)::bigint AS "total"
-      FROM "napcat_group_message"
+      FROM "napcat_qq_message"
       ${whereClause}
     `);
 
@@ -86,14 +86,16 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
   }
 
   private async listByKeywordQuery(
-    input: QueryNapcatGroupMessageListPageInput,
-  ): Promise<NapcatGroupMessageItem[]> {
+    input: QueryNapcatQqMessageListPageInput,
+  ): Promise<NapcatQqMessageItem[]> {
     const whereClause = buildKeywordSqlWhereClause(input);
     const offset = (input.page - 1) * input.pageSize;
 
-    const rows = await this.database.$queryRaw<RawNapcatGroupMessageRow[]>(Prisma.sql`
+    const rows = await this.database.$queryRaw<RawNapcatQqMessageRow[]>(Prisma.sql`
       SELECT
         "id" AS "id",
+        "message_type" AS "messageType",
+        "sub_type" AS "subType",
         "group_id" AS "groupId",
         "user_id" AS "userId",
         "nickname" AS "nickname",
@@ -102,7 +104,7 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
         "event_time" AS "eventTime",
         "payload" AS "payload",
         "created_at" AS "createdAt"
-      FROM "napcat_group_message"
+      FROM "napcat_qq_message"
       ${whereClause}
       ORDER BY "created_at" DESC, "id" DESC
       LIMIT ${input.pageSize}
@@ -117,8 +119,8 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
     messageId: number;
     before: number;
     after: number;
-  }): Promise<NapcatGroupMessageContextItem[]> {
-    const rows = await this.database.$queryRaw<RawNapcatGroupMessageContextRow[]>(Prisma.sql`
+  }): Promise<NapcatQqMessageContextItem[]> {
+    const rows = await this.database.$queryRaw<RawNapcatQqMessageContextRow[]>(Prisma.sql`
       WITH ordered_messages AS (
         SELECT
           gm."id" AS "id",
@@ -135,8 +137,8 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
             PARTITION BY gm."group_id"
             ORDER BY COALESCE(gm."event_time", gm."created_at") ASC, gm."id" ASC
           ) AS "rowNumber"
-        FROM "napcat_group_message" AS gm
-        WHERE gm."group_id" = ${input.groupId}
+        FROM "napcat_qq_message" AS gm
+        WHERE gm."message_type" = 'group' AND gm."group_id" = ${input.groupId}
       ),
       center_message AS (
         SELECT "rowNumber"
@@ -164,10 +166,13 @@ export class PrismaNapcatGroupMessageDao implements NapcatGroupMessageDao {
 }
 
 function buildWhereInput(
-  input: QueryNapcatGroupMessageListFilterInput,
-): Prisma.NapcatGroupMessageWhereInput {
-  const where: Prisma.NapcatGroupMessageWhereInput = {};
+  input: QueryNapcatQqMessageListFilterInput,
+): Prisma.NapcatQqMessageWhereInput {
+  const where: Prisma.NapcatQqMessageWhereInput = {};
 
+  if (input.messageType) {
+    where.messageType = input.messageType;
+  }
   if (input.groupId) {
     where.groupId = input.groupId;
   }
@@ -195,9 +200,12 @@ function buildWhereInput(
   return where;
 }
 
-function buildKeywordSqlWhereClause(input: QueryNapcatGroupMessageListFilterInput): Prisma.Sql {
+function buildKeywordSqlWhereClause(input: QueryNapcatQqMessageListFilterInput): Prisma.Sql {
   const conditions: Prisma.Sql[] = [];
 
+  if (input.messageType) {
+    conditions.push(Prisma.sql`"message_type" = ${input.messageType}`);
+  }
   if (input.groupId) {
     conditions.push(Prisma.sql`"group_id" = ${input.groupId}`);
   }
@@ -226,7 +234,9 @@ function buildKeywordSqlWhereClause(input: QueryNapcatGroupMessageListFilterInpu
 
 function mapPrismaRowToItem(item: {
   id: number;
-  groupId: string;
+  messageType: string;
+  subType: string;
+  groupId: string | null;
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
@@ -234,9 +244,11 @@ function mapPrismaRowToItem(item: {
   eventTime: Date | null;
   payload: Prisma.JsonValue;
   createdAt: Date;
-}): NapcatGroupMessageItem {
+}): NapcatQqMessageItem {
   return {
     id: item.id,
+    messageType: toMessageType(item.messageType),
+    subType: item.subType,
     groupId: item.groupId,
     userId: item.userId,
     nickname: item.nickname,
@@ -248,9 +260,11 @@ function mapPrismaRowToItem(item: {
   };
 }
 
-type RawNapcatGroupMessageRow = {
+type RawNapcatQqMessageRow = {
   id: number;
-  groupId: string;
+  messageType: string;
+  subType: string;
+  groupId: string | null;
   userId: string | null;
   nickname: string | null;
   messageId: number | null;
@@ -260,7 +274,7 @@ type RawNapcatGroupMessageRow = {
   createdAt: Date;
 };
 
-type RawNapcatGroupMessageContextRow = {
+type RawNapcatQqMessageContextRow = {
   id: number;
   groupId: string;
   userId: string | null;
@@ -270,9 +284,11 @@ type RawNapcatGroupMessageContextRow = {
   createdAt: Date;
 };
 
-function mapRawRowToItem(row: RawNapcatGroupMessageRow): NapcatGroupMessageItem {
+function mapRawRowToItem(row: RawNapcatQqMessageRow): NapcatQqMessageItem {
   return {
     id: row.id,
+    messageType: toMessageType(row.messageType),
+    subType: row.subType,
     groupId: row.groupId,
     userId: row.userId,
     nickname: row.nickname,
@@ -284,9 +300,7 @@ function mapRawRowToItem(row: RawNapcatGroupMessageRow): NapcatGroupMessageItem 
   };
 }
 
-function mapRawContextRowToItem(
-  row: RawNapcatGroupMessageContextRow,
-): NapcatGroupMessageContextItem {
+function mapRawContextRowToItem(row: RawNapcatQqMessageContextRow): NapcatQqMessageContextItem {
   return {
     id: row.id,
     groupId: row.groupId,
@@ -369,4 +383,8 @@ function toCount(value: bigint | number | string): number {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toMessageType(value: string): "group" | "private" {
+  return value === "private" ? "private" : "group";
 }

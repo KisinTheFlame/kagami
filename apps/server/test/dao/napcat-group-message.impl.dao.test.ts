@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { type JsonValue } from "@kagami/shared/schemas/base";
 import type { Database } from "../../src/db/client.js";
-import { PrismaNapcatGroupMessageDao } from "../../src/napcat/dao/impl/napcat-group-message.impl.dao.js";
+import { PrismaNapcatQqMessageDao } from "../../src/napcat/dao/impl/napcat-group-message.impl.dao.js";
 
-describe("PrismaNapcatGroupMessageDao", () => {
+describe("PrismaNapcatQqMessageDao", () => {
   it("should persist structured message into message column", async () => {
     const create = vi.fn().mockResolvedValue({ id: 1 });
     const database = {
-      napcatGroupMessage: {
+      napcatQqMessage: {
         create,
       },
     } as unknown as Database;
 
-    const dao = new PrismaNapcatGroupMessageDao({ database });
+    const dao = new PrismaNapcatQqMessageDao({ database });
     const message: JsonValue = [
       {
         type: "text",
@@ -24,6 +24,8 @@ describe("PrismaNapcatGroupMessageDao", () => {
 
     await expect(
       dao.insert({
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         userId: "123456",
         nickname: "测试昵称",
@@ -40,6 +42,8 @@ describe("PrismaNapcatGroupMessageDao", () => {
 
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         userId: "123456",
         nickname: "测试昵称",
@@ -62,6 +66,8 @@ describe("PrismaNapcatGroupMessageDao", () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         id: 1,
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         userId: "123456",
         nickname: "测试昵称",
@@ -83,17 +89,18 @@ describe("PrismaNapcatGroupMessageDao", () => {
     ]);
     const queryRaw = vi.fn();
     const database = {
-      napcatGroupMessage: {
+      napcatQqMessage: {
         count,
         findMany,
       },
       $queryRaw: queryRaw,
     } as unknown as Database;
 
-    const dao = new PrismaNapcatGroupMessageDao({ database });
+    const dao = new PrismaNapcatQqMessageDao({ database });
 
     await expect(
       dao.countByQuery({
+        messageType: "group",
         groupId: "987654",
       }),
     ).resolves.toBe(1);
@@ -102,11 +109,14 @@ describe("PrismaNapcatGroupMessageDao", () => {
       dao.listByQueryPage({
         page: 1,
         pageSize: 20,
+        messageType: "group",
         groupId: "987654",
       }),
     ).resolves.toEqual([
       expect.objectContaining({
         id: 1,
+        messageType: "group",
+        subType: "normal",
         groupId: "987654",
         message: [
           {
@@ -133,6 +143,8 @@ describe("PrismaNapcatGroupMessageDao", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          messageType: "private",
+          subType: "friend",
           groupId: "987654",
           userId: "123456",
           nickname: "测试昵称",
@@ -159,17 +171,18 @@ describe("PrismaNapcatGroupMessageDao", () => {
         },
       ]);
     const database = {
-      napcatGroupMessage: {
+      napcatQqMessage: {
         count,
         findMany,
       },
       $queryRaw: queryRaw,
     } as unknown as Database;
 
-    const dao = new PrismaNapcatGroupMessageDao({ database });
+    const dao = new PrismaNapcatQqMessageDao({ database });
 
     await expect(
       dao.countByQuery({
+        messageType: "private",
         keyword: "10001",
       }),
     ).resolves.toBe(2);
@@ -178,11 +191,14 @@ describe("PrismaNapcatGroupMessageDao", () => {
       dao.listByQueryPage({
         page: 1,
         pageSize: 20,
+        messageType: "private",
         keyword: "10001",
       }),
     ).resolves.toEqual([
       expect.objectContaining({
         id: 1,
+        messageType: "private",
+        subType: "friend",
         message: [
           {
             type: "at",
@@ -227,7 +243,7 @@ describe("PrismaNapcatGroupMessageDao", () => {
       },
     ]);
     const database = {
-      napcatGroupMessage: {
+      napcatQqMessage: {
         create: vi.fn(),
         count: vi.fn(),
         findMany: vi.fn(),
@@ -235,7 +251,7 @@ describe("PrismaNapcatGroupMessageDao", () => {
       $queryRaw: queryRaw,
     } as unknown as Database;
 
-    const dao = new PrismaNapcatGroupMessageDao({ database });
+    const dao = new PrismaNapcatQqMessageDao({ database });
 
     await expect(
       dao.listContextWindowById({

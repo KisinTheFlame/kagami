@@ -1,8 +1,8 @@
-import { type NapcatGroupMessageItem } from "@kagami/shared/schemas/napcat-group-message";
+import { type NapcatQqMessageItem } from "@kagami/shared/schemas/napcat-group-message";
 import { safeStringify } from "./message-render";
 
 type NapcatGroupMessageDetailPanelProps = {
-  item: NapcatGroupMessageItem | null;
+  item: NapcatQqMessageItem | null;
 };
 
 export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetailPanelProps) {
@@ -21,7 +21,9 @@ export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetail
       <div className="border-b px-5 py-4">
         <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <MetaItem label="ID" value={String(item.id)} mono />
-          <MetaItem label="Group ID" value={item.groupId} mono />
+          <MetaItem label="消息类型" value={item.messageType === "group" ? "群聊" : "单聊"} />
+          <MetaItem label="子类型" value={item.subType} />
+          <MetaItem label="Group ID" value={item.groupId ?? "—"} mono />
           <MetaItem label="User ID" value={item.userId ?? "—"} mono />
           <MetaItem label="昵称" value={item.nickname ?? "—"} />
           <MetaItem label="Message ID" value={item.messageId ? String(item.messageId) : "—"} mono />
