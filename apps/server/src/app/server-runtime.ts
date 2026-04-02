@@ -22,6 +22,7 @@ import { NapcatGroupMessageHandler } from "../ops/http/napcat-group-message.hand
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { createLlmClient } from "../llm/client.js";
 import { createEmbeddingClient } from "../llm/embedding/client.js";
+import { PrismaEmbeddingCacheDao } from "../llm/embedding/prisma-embedding-cache.dao.js";
 import type { LlmProvider } from "../llm/provider.js";
 import { createDeepSeekProvider } from "../llm/providers/deepseek-provider.js";
 import { ClaudeCodeAuthStore } from "../llm/providers/claude-code-auth.js";
@@ -186,6 +187,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const napcatGroupMessageDao = new PrismaNapcatGroupMessageDao({ database });
   const newsArticleDao = new PrismaNewsArticleDao({ database });
   const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
+  const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
   const storyDao = new PrismaStoryDao({ database });
   const storyMemoryDocumentDao = new PrismaStoryMemoryDocumentDao({ database });
@@ -261,6 +263,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
 
   const embeddingClient = createEmbeddingClient({
     config: config.server.agent.story.memory.embedding,
+    cacheDao: embeddingCacheDao,
   });
   const storyMemoryIndexService = new StoryMemoryIndexService({
     storyMemoryDocumentDao,
