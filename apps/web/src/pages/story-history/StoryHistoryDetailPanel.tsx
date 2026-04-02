@@ -1,5 +1,6 @@
 import { type StoryItem } from "@kagami/shared/schemas/story";
 import type { ReactNode } from "react";
+import { formatStoryMatchedKinds, formatStoryScore } from "./story-display";
 
 export function StoryHistoryDetailPanel({ item }: { item: StoryItem | null }) {
   if (!item) {
@@ -24,9 +25,9 @@ export function StoryHistoryDetailPanel({ item }: { item: StoryItem | null }) {
             <div>
               来源消息：seq {item.sourceMessageSeqStart} - {item.sourceMessageSeqEnd}
             </div>
-            {item.score !== null ? <div>相关度：{item.score.toFixed(3)}</div> : null}
+            {item.score !== null ? <div>相关度：{formatStoryScore(item.score)}</div> : null}
             {item.matchedKinds.length > 0 ? (
-              <div>命中视角：{item.matchedKinds.join("、")}</div>
+              <div>命中视角：{formatStoryMatchedKinds(item.matchedKinds).join("、")}</div>
             ) : null}
           </div>
         </section>

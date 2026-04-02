@@ -2,6 +2,7 @@ import { type StoryItem } from "@kagami/shared/schemas/story";
 import { type FormEvent, useMemo, useState } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { MobileSelectCard } from "@/components/ui/mobile-select-card";
 import {
   SortableTableHead,
@@ -17,6 +18,7 @@ import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
 import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn, truncateText } from "@/lib/utils";
 import { StoryHistoryDetailPanel } from "./StoryHistoryDetailPanel";
+import { formatStoryMatchedKinds, formatStoryScore } from "./story-display";
 import { useStoryList } from "./useStoryList";
 
 const PAGE_SIZE = 20;
@@ -50,16 +52,21 @@ export function StoryHistoryPage() {
   });
   const [createdAtSort, setCreatedAtSort] = useState<TableSortDirection>("desc");
   const { data, isLoading, isError, refetch } = useStoryList(page, PAGE_SIZE, filters);
+  const hasQuery = Boolean(filters.query);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const items = useMemo(() => {
     const baseItems = data?.items ?? [];
+    if (hasQuery) {
+      return baseItems;
+    }
+
     return [...baseItems].sort((left, right) => {
       const leftTime = new Date(left.createdAt).getTime();
       const rightTime = new Date(right.createdAt).getTime();
       return createdAtSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [createdAtSort, data?.items]);
+  }, [createdAtSort, data?.items, hasQuery]);
   const selectedItem = useMemo(
     () => items.find(item => item.id === selectedId) ?? null,
     [items, selectedId],
@@ -106,31 +113,42 @@ export function StoryHistoryPage() {
           <Table className="min-w-[920px] table-fixed">
             <TableHeader>
               <TableRow>
-                <SortableTableHead
-                  label="创建时间"
-                  className="w-[180px]"
-                  active
-                  direction={createdAtSort}
-                  onToggle={() =>
-                    setCreatedAtSort(current => (current === "desc" ? "asc" : "desc"))
-                  }
-                />
+                {hasQuery ? (
+                  <TableHead className="w-[120px]">相关度</TableHead>
+                ) : (
+                  <SortableTableHead
+                    label="创建时间"
+                    className="w-[180px]"
+                    active
+                    direction={createdAtSort}
+                    onToggle={() =>
+                      setCreatedAtSort(current => (current === "desc" ? "asc" : "desc"))
+                    }
+                  />
+                )}
                 <TableHead className="w-[260px]">标题</TableHead>
                 <TableHead className="w-[180px]">场景</TableHead>
                 <TableHead className="w-[160px]">当前状态</TableHead>
+                {hasQuery ? <TableHead className="w-[220px]">命中 kind</TableHead> : null}
                 <TableHead>人物</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={hasQuery ? 6 : 5}
+                    className="h-24 text-center text-muted-foreground"
+                  >
                     加载中…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={hasQuery ? 6 : 5}
+                    className="h-24 text-center text-muted-foreground"
+                  >
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -142,9 +160,15 @@ export function StoryHistoryPage() {
                     className="cursor-pointer"
                     onClick={() => handleSelectItem(item.id)}
                   >
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDateTime(item.createdAt)}
-                    </TableCell>
+                    {hasQuery ? (
+                      <TableCell className="whitespace-nowrap text-sm font-medium tabular-nums">
+                        {formatStoryScore(item.score)}
+                      </TableCell>
+                    ) : (
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {formatDateTime(item.createdAt)}
+                      </TableCell>
+                    )}
                     <TableCell className="truncate text-sm font-medium">{item.title}</TableCell>
                     <TableCell className="truncate text-sm text-muted-foreground">
                       {item.scene || "—"}
@@ -152,6 +176,21 @@ export function StoryHistoryPage() {
                     <TableCell className="truncate text-sm text-muted-foreground">
                       {item.status || "—"}
                     </TableCell>
+                    {hasQuery ? (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {item.matchedKinds.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {formatStoryMatchedKinds(item.matchedKinds).map(kind => (
+                              <Badge key={`${item.id}-${kind}`} variant="secondary">
+                                {kind}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="truncate text-sm text-muted-foreground">
                       {item.people.length > 0 ? item.people.join("、") : "—"}
                     </TableCell>
@@ -180,6 +219,7 @@ export function StoryHistoryPage() {
                   item={item}
                   isSelected={selectedId === item.id}
                   onClick={() => handleSelectItem(item.id)}
+                  hasQuery={hasQuery}
                 />
               ))}
             </div>
@@ -205,17 +245,30 @@ function StoryMobileCard({
   item,
   isSelected,
   onClick,
+  hasQuery,
 }: {
   item: StoryItem;
   isSelected: boolean;
   onClick: () => void;
+  hasQuery: boolean;
 }) {
   return (
     <MobileSelectCard isSelected={isSelected} onClick={onClick}>
       <div className="space-y-2">
         <div className="text-sm font-medium leading-6">{item.title}</div>
-        <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
+        <div className="text-xs text-muted-foreground">
+          {hasQuery ? `相关度 ${formatStoryScore(item.score)}` : formatDateTime(item.createdAt)}
+        </div>
         <div className="text-xs text-muted-foreground">{truncateText(item.scene || "—", 48)}</div>
+        {hasQuery && item.matchedKinds.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {formatStoryMatchedKinds(item.matchedKinds).map(kind => (
+              <Badge key={`${item.id}-${kind}`} variant="secondary">
+                {kind}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
         <div className="text-xs text-muted-foreground">{truncateText(item.status || "—", 64)}</div>
       </div>
     </MobileSelectCard>
