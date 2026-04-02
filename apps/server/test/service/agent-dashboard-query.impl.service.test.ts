@@ -90,7 +90,8 @@ describe("DefaultAgentDashboardQueryService", () => {
         },
         lastToolCall: {
           name: "create_story",
-          argumentsPreview: '{"title":"权限交接吐槽"}',
+          argumentsPreview:
+            '{"markdown":"# 权限交接吐槽\\n- 时间：今天\\n- 场景：群聊\\n- 人物：Alice\\n- 影响：审批链路继续拖慢交接\\n\\n起因：继续吐槽流程\\n经过：\\n1. 提到 CEO 审批\\n结果：觉得流程离谱"}',
           updatedAt: new Date("2026-03-30T08:00:00.500Z"),
         },
         lastToolResultPreview: '{"ok":true}',
@@ -238,7 +239,8 @@ describe("DefaultAgentDashboardQueryService", () => {
         activity: {
           lastToolCall: {
             name: "create_story",
-            argumentsPreview: '{"title":"权限交接吐槽"}',
+            argumentsPreview:
+              '{"markdown":"# 权限交接吐槽\\n- 时间：今天\\n- 场景：群聊\\n- 人物：Alice\\n- 影响：审批链路继续拖慢交接\\n\\n起因：继续吐槽流程\\n经过：\\n1. 提到 CEO 审批\\n结果：觉得流程离谱"}',
             updatedAt: "2026-03-30T08:00:00.500Z",
           },
           lastToolResultPreview: '{"ok":true}',

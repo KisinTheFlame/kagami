@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { StoryLoopAgent } from "../../src/agent/capabilities/story/runtime/story-agent.runtime.js";
+import {
+  formatStoryMarkdown,
+  type StoryContent,
+} from "../../src/agent/capabilities/story/domain/story-markdown.js";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { createUserMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import { BizError } from "../../src/common/errors/biz-error.js";
@@ -15,24 +19,44 @@ function createMetricServiceMock(): MetricService {
   };
 }
 
+const DEFAULT_STORY_CONTENT: StoryContent = {
+  title: "权限交接吐槽",
+  time: "今天",
+  scene: "群聊",
+  people: ["Alice"],
+  cause: "继续吐槽流程",
+  process: ["提到 CEO 审批"],
+  result: "觉得流程离谱",
+  impact: "审批链路继续拖慢交接",
+};
+
+function createStoryMarkdown(content: StoryContent = DEFAULT_STORY_CONTENT): string {
+  return formatStoryMarkdown(content);
+}
+
+function createStoryRecord(overrides?: Partial<StoryContent>) {
+  const content = {
+    ...DEFAULT_STORY_CONTENT,
+    ...overrides,
+  } satisfies StoryContent;
+
+  return {
+    id: "story-1",
+    markdown: createStoryMarkdown(content),
+    content,
+    sourceMessageSeqStart: 1,
+    sourceMessageSeqEnd: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
 describe("StoryLoopAgent", () => {
   it("processes a batch when pending messages reach the batch threshold", async () => {
     const create = vi.fn().mockResolvedValue({
-      id: "story-1",
-      payload: {
-        title: "权限交接吐槽",
-        time: "今天",
-        scene: "群聊",
-        people: ["Alice"],
-        cause: "继续吐槽流程",
-        process: ["提到 CEO 审批"],
-        result: "觉得流程离谱",
-        status: "仍在延续",
-      },
+      ...createStoryRecord(),
       sourceMessageSeqStart: 11,
       sourceMessageSeqEnd: 12,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     });
     const save = vi.fn().mockResolvedValue(undefined);
     const runtime = new StoryLoopAgent({
@@ -45,14 +69,7 @@ describe("StoryLoopAgent", () => {
               id: "tool-call-1",
               name: "create_story",
               arguments: {
-                title: "权限交接吐槽",
-                time: "今天",
-                scene: "群聊",
-                people: ["Alice"],
-                cause: "继续吐槽流程",
-                process: ["提到 CEO 审批"],
-                result: "觉得流程离谱",
-                status: "仍在延续",
+                markdown: createStoryMarkdown(),
               },
             },
           ],
@@ -202,21 +219,9 @@ describe("StoryLoopAgent", () => {
 
   it("rewrites an existing story when the model requests it", async () => {
     const rewrite = vi.fn().mockResolvedValue({
-      id: "story-1",
-      payload: {
-        title: "权限交接吐槽",
-        time: "今天",
-        scene: "群聊",
-        people: ["Alice"],
-        cause: "继续吐槽流程",
-        process: ["提到 CEO 审批"],
-        result: "觉得流程离谱",
-        status: "仍在延续",
-      },
+      ...createStoryRecord(),
       sourceMessageSeqStart: 1,
       sourceMessageSeqEnd: 21,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     });
     const runtime = new StoryLoopAgent({
       llmClient: createStubLlmClient([
@@ -229,14 +234,7 @@ describe("StoryLoopAgent", () => {
               name: "rewrite_story",
               arguments: {
                 storyId: "story-1",
-                title: "权限交接吐槽",
-                time: "今天",
-                scene: "群聊",
-                people: ["Alice"],
-                cause: "继续吐槽流程",
-                process: ["提到 CEO 审批"],
-                result: "觉得流程离谱",
-                status: "仍在延续",
+                markdown: createStoryMarkdown(),
               },
             },
           ],
@@ -499,14 +497,7 @@ describe("StoryLoopAgent", () => {
                 id: "tool-call-1",
                 name: "create_story",
                 arguments: {
-                  title: "权限交接吐槽",
-                  time: "今天",
-                  scene: "群聊",
-                  people: ["Alice"],
-                  cause: "继续吐槽流程",
-                  process: ["提到 CEO 审批"],
-                  result: "觉得流程离谱",
-                  status: "仍在延续",
+                  markdown: createStoryMarkdown(),
                 },
               },
             ],
@@ -561,23 +552,7 @@ describe("StoryLoopAgent", () => {
         delete: vi.fn().mockResolvedValue(undefined),
       },
       storyService: {
-        create: vi.fn().mockResolvedValue({
-          id: "story-1",
-          payload: {
-            title: "权限交接吐槽",
-            time: "今天",
-            scene: "群聊",
-            people: ["Alice"],
-            cause: "继续吐槽流程",
-            process: ["提到 CEO 审批"],
-            result: "觉得流程离谱",
-            status: "仍在延续",
-          },
-          sourceMessageSeqStart: 1,
-          sourceMessageSeqEnd: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }),
+        create: vi.fn().mockResolvedValue(createStoryRecord()),
         rewrite: vi.fn(),
       } as unknown as StoryService,
       contextSummaryOperation: {

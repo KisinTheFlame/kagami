@@ -275,7 +275,7 @@ describe("RootLoopAgent", () => {
           message: {
             role: "assistant",
             content: "",
-            toolCalls: [{ id: "back-1", name: "back_to_portal", arguments: {} }],
+            toolCalls: [{ id: "back-1", name: "back", arguments: {} }],
           },
         })
         .mockResolvedValueOnce({
@@ -306,7 +306,7 @@ describe("RootLoopAgent", () => {
       context,
       eventQueue,
       session,
-      tools: toolCatalog.pick(["enter", "back_to_portal", "invoke", "wait", "search_web"]),
+      tools: toolCatalog.pick(["enter", "back", "invoke", "wait", "search_web"]),
       sleep,
     });
 
@@ -316,21 +316,21 @@ describe("RootLoopAgent", () => {
     expect(chatCalls).toHaveLength(3);
     expect(chatCalls[0]?.[0].tools.map(tool => tool.name)).toEqual([
       "enter",
-      "back_to_portal",
+      "back",
       "invoke",
       "wait",
       "search_web",
     ]);
     expect(chatCalls[1]?.[0].tools.map(tool => tool.name)).toEqual([
       "enter",
-      "back_to_portal",
+      "back",
       "invoke",
       "wait",
       "search_web",
     ]);
     expect(chatCalls[2]?.[0].tools.map(tool => tool.name)).toEqual([
       "enter",
-      "back_to_portal",
+      "back",
       "invoke",
       "wait",
       "search_web",
@@ -434,7 +434,7 @@ describe("RootLoopAgent", () => {
               name: "search_web",
               arguments: { question: "今天有什么热点" },
             },
-            { id: "back-1", name: "back_to_portal", arguments: {} },
+            { id: "back-1", name: "back", arguments: {} },
             { id: "wait-1", name: "wait", arguments: {} },
           ],
         },
@@ -460,7 +460,7 @@ describe("RootLoopAgent", () => {
         new WaitTool({
           now: () => waitNow,
         }),
-      ]).pick(["enter", "search_web", "back_to_portal", "wait"]),
+      ]).pick(["enter", "search_web", "back", "wait"]),
       sleep,
     });
 
@@ -550,24 +550,35 @@ describe("RootLoopAgent", () => {
       recentMessageLimit: 0,
     });
     const llmClient: LlmClient = {
-      chat: vi.fn().mockResolvedValue({
-        provider: "openai",
-        model: "gpt-test",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "invoke-1",
-              name: "invoke",
-              arguments: {
-                tool: "send_message",
-                message: "hello",
+      chat: vi
+        .fn()
+        .mockResolvedValueOnce({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "invoke-1",
+                name: "invoke",
+                arguments: {
+                  tool: "send_message",
+                  message: "hello",
+                },
               },
-            },
-          ],
-        },
-      }),
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          provider: "openai",
+          model: "gpt-test",
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "wait-1", name: "wait", arguments: {} }],
+          },
+        }),
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
@@ -598,7 +609,8 @@ describe("RootLoopAgent", () => {
             signal: "continue",
           }),
         } satisfies ToolComponent,
-      ]).pick(["invoke"]),
+        new WaitTool(),
+      ]).pick(["invoke", "wait"]),
       sleep,
     });
 

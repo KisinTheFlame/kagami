@@ -1,6 +1,6 @@
-import * as Prisma from "../../../../../generated/prisma/internal/prismaNamespace.js";
 import type { Database } from "../../../../../db/client.js";
-import { StorySchema, type Story, type StoryRecord } from "../../domain/story.js";
+import type { StoryRecord } from "../../domain/story.js";
+import { parseStoryMarkdown } from "../../domain/story-markdown.js";
 import type { StoryDao } from "../story.dao.js";
 
 export class PrismaStoryDao implements StoryDao {
@@ -11,13 +11,13 @@ export class PrismaStoryDao implements StoryDao {
   }
 
   public async create(input: {
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord> {
     const row = await this.database.story.create({
       data: {
-        payload: input.payload,
+        markdown: input.markdown,
         sourceMessageSeqStart: input.sourceMessageSeqStart,
         sourceMessageSeqEnd: input.sourceMessageSeqEnd,
       },
@@ -28,7 +28,7 @@ export class PrismaStoryDao implements StoryDao {
 
   public async update(input: {
     id: string;
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord> {
@@ -37,7 +37,7 @@ export class PrismaStoryDao implements StoryDao {
         id: input.id,
       },
       data: {
-        payload: input.payload,
+        markdown: input.markdown,
         sourceMessageSeqStart: input.sourceMessageSeqStart,
         sourceMessageSeqEnd: input.sourceMessageSeqEnd,
         updatedAt: new Date(),
@@ -97,7 +97,7 @@ export class PrismaStoryDao implements StoryDao {
 
 function mapStoryRow(row: {
   id: string;
-  payload: Prisma.JsonValue;
+  markdown: string;
   sourceMessageSeqStart: number;
   sourceMessageSeqEnd: number;
   createdAt: Date;
@@ -105,7 +105,8 @@ function mapStoryRow(row: {
 }): StoryRecord {
   return {
     id: row.id,
-    payload: StorySchema.parse(row.payload),
+    markdown: row.markdown,
+    content: parseStoryMarkdown(row.markdown),
     sourceMessageSeqStart: row.sourceMessageSeqStart,
     sourceMessageSeqEnd: row.sourceMessageSeqEnd,
     createdAt: row.createdAt,

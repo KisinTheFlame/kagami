@@ -1,28 +1,16 @@
-import { z } from "zod";
 import type { LlmMessage } from "../../../../llm/types.js";
+import type { StoryContent } from "./story-markdown.js";
 
 export const STORY_RUNTIME_KEY = "story-agent";
 export const STORY_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION = 1;
-
-export const StorySchema = z.object({
-  title: z.string().trim().min(1),
-  time: z.string().trim(),
-  scene: z.string().trim(),
-  people: z.array(z.string().trim().min(1)).default([]),
-  cause: z.string().trim(),
-  process: z.array(z.string().trim().min(1)).default([]),
-  result: z.string().trim(),
-  status: z.string().trim(),
-});
-
-export type Story = z.infer<typeof StorySchema>;
 
 export const STORY_MEMORY_DOCUMENT_KINDS = ["overview", "people_scene", "process"] as const;
 export type StoryMemoryDocumentKind = (typeof STORY_MEMORY_DOCUMENT_KINDS)[number];
 
 export type StoryRecord = {
   id: string;
-  payload: Story;
+  markdown: string;
+  content: StoryContent;
   sourceMessageSeqStart: number;
   sourceMessageSeqEnd: number;
   createdAt: Date;

@@ -1,7 +1,7 @@
 import {
-  type StoryItem,
   type StoryListQuery,
   type StoryListResponse,
+  StoryItemSchema,
 } from "@kagami/shared/schemas/story";
 import type { StoryRecallService } from "../../agent/capabilities/story/application/story-recall.service.js";
 import type { StoryRecord } from "../../agent/capabilities/story/domain/story.js";
@@ -76,29 +76,22 @@ export class DefaultStoryQueryService implements StoryQueryService {
   }
 }
 
-function mapStoryItem(input: {
-  story: StoryRecord;
-  score: number | null;
-  matchedKinds: string[];
-}): StoryItem {
-  return {
+function mapStoryItem(input: { story: StoryRecord; score: number | null; matchedKinds: string[] }) {
+  return StoryItemSchema.parse({
     id: input.story.id,
-    title: input.story.payload.title,
-    time: input.story.payload.time,
-    scene: input.story.payload.scene,
-    people: input.story.payload.people,
-    cause: input.story.payload.cause,
-    process: input.story.payload.process,
-    result: input.story.payload.result,
-    status: input.story.payload.status,
+    markdown: input.story.markdown,
+    title: input.story.content.title,
+    time: input.story.content.time,
+    scene: input.story.content.scene,
+    people: input.story.content.people,
+    impact: input.story.content.impact,
     sourceMessageSeqStart: input.story.sourceMessageSeqStart,
     sourceMessageSeqEnd: input.story.sourceMessageSeqEnd,
     createdAt: input.story.createdAt.toISOString(),
     updatedAt: input.story.updatedAt.toISOString(),
     score: input.score,
     matchedKinds: input.matchedKinds.filter(
-      (kind): kind is StoryItem["matchedKinds"][number] =>
-        kind === "overview" || kind === "people_scene" || kind === "process",
+      kind => kind === "overview" || kind === "people_scene" || kind === "process",
     ),
-  };
+  });
 }

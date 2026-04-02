@@ -61,24 +61,13 @@ function renderSearchMemoryMarkdown(
     "## Memory Search",
     "",
     ...results.flatMap((result, index) => {
-      const story = result.story.payload;
       return [
-        `### ${index + 1}. ${story.title}`,
+        `### ${index + 1}. ${result.story.content.title}`,
         `- storyId: \`${result.story.id}\``,
         `- score: \`${result.score.toFixed(3)}\``,
         `- matchedKinds: \`${result.matchedKinds.join(", ")}\``,
-        story.time ? `- 时间：${story.time}` : "",
-        story.scene ? `- 场景：${story.scene}` : "",
-        story.people.length > 0 ? `- 人物：${story.people.join("、")}` : "",
-        story.status ? `- 当前状态：${story.status}` : "",
         "",
-        story.cause ? `起因：${story.cause}` : "",
-        story.process.length > 0
-          ? ["经过：", ...story.process.map((step, stepIndex) => `${stepIndex + 1}. ${step}`)].join(
-              "\n",
-            )
-          : "",
-        story.result ? `结果：${story.result}` : "",
+        result.story.markdown,
         "",
       ].filter(Boolean);
     }),

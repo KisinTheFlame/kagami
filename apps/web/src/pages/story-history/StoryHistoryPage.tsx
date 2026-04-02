@@ -128,7 +128,7 @@ export function StoryHistoryPage() {
                 )}
                 <TableHead className="w-[260px]">标题</TableHead>
                 <TableHead className="w-[180px]">场景</TableHead>
-                <TableHead className="w-[160px]">当前状态</TableHead>
+                <TableHead className="w-[160px]">影响</TableHead>
                 {hasQuery ? <TableHead className="w-[220px]">命中 kind</TableHead> : null}
                 <TableHead>人物</TableHead>
               </TableRow>
@@ -174,7 +174,7 @@ export function StoryHistoryPage() {
                       {item.scene || "—"}
                     </TableCell>
                     <TableCell className="truncate text-sm text-muted-foreground">
-                      {item.status || "—"}
+                      {item.impact || "—"}
                     </TableCell>
                     {hasQuery ? (
                       <TableCell className="text-sm text-muted-foreground">
@@ -269,7 +269,7 @@ function StoryMobileCard({
             ))}
           </div>
         ) : null}
-        <div className="text-xs text-muted-foreground">{truncateText(item.status || "—", 64)}</div>
+        <div className="text-xs text-muted-foreground">{truncateText(item.impact || "—", 64)}</div>
       </div>
     </MobileSelectCard>
   );

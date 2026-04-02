@@ -1,14 +1,14 @@
-import type { Story, StoryRecord } from "../domain/story.js";
+import type { StoryRecord } from "../domain/story.js";
 
 export interface StoryDao {
   create(input: {
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord>;
   update(input: {
     id: string;
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord>;

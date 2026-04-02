@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createStoryAgentSystemPrompt } from "../../src/agent/capabilities/story/task-agent/system-prompt.js";
 import { createContextSummarizerSystemPrompt } from "../../src/agent/capabilities/context-summary/operations/system-prompt.js";
 import { createVisionSystemPrompt } from "../../src/agent/capabilities/vision/application/system-prompt.js";
 import { createWebSearchSystemPrompt } from "../../src/agent/capabilities/web-search/task-agent/system-prompt.js";
@@ -106,6 +107,15 @@ describe("createAgentSystemPrompt", () => {
     );
   });
 
+  it("should render the story agent prompt with fixed markdown rules", () => {
+    expect(createStoryAgentSystemPrompt()).toContain("story 的 canonical Markdown 结构固定为");
+    expect(createStoryAgentSystemPrompt()).toContain("`- 影响：...`");
+    expect(createStoryAgentSystemPrompt()).toContain(
+      "`时间`、`起因`、`经过`、`结果`、`影响` 必须非空。",
+    );
+    expect(createStoryAgentSystemPrompt()).toContain("如果工具返回格式错误");
+  });
+
   it("should render the vision prompt from static template", () => {
     expect(createVisionSystemPrompt()).toBe(
       [
@@ -117,5 +127,14 @@ describe("createAgentSystemPrompt", () => {
         "不要编造未出现的内容，不确定时省略或用简短措辞说明。",
       ].join("\n"),
     );
+  });
+
+  it("should render the story prompt with markdown requirements", () => {
+    const prompt = createStoryAgentSystemPrompt();
+
+    expect(prompt).toContain("`- 影响：...`");
+    expect(prompt).toContain("`结果：...`");
+    expect(prompt).toContain("`时间`、`起因`、`经过`、`结果`、`影响` 必须非空。");
+    expect(prompt).toContain("如果工具返回格式错误，必须根据错误提示修改 Markdown 后重新提交");
   });
 });

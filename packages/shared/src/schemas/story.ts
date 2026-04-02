@@ -18,14 +18,12 @@ export type StoryListQuery = z.infer<typeof StoryListQuerySchema>;
 export const StoryItemSchema = z
   .object({
     id: z.string().min(1),
+    markdown: z.string().min(1),
     title: z.string(),
     time: z.string(),
     scene: z.string(),
     people: z.array(z.string()),
-    cause: z.string(),
-    process: z.array(z.string()),
-    result: z.string(),
-    status: z.string(),
+    impact: z.string(),
     sourceMessageSeqStart: z.number().int().nonnegative(),
     sourceMessageSeqEnd: z.number().int().nonnegative(),
     createdAt: z.string().datetime(),

@@ -1,5 +1,6 @@
-import type { Story, StoryRecord } from "../domain/story.js";
+import type { StoryRecord } from "../domain/story.js";
 import type { StoryDao } from "../infra/story.dao.js";
+import { formatStoryMarkdown, parseStoryMarkdown } from "../domain/story-markdown.js";
 import { StoryMemoryIndexService } from "./story-memory-index.service.js";
 
 export class StoryService {
@@ -18,18 +19,22 @@ export class StoryService {
   }
 
   public async create(input: {
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord> {
-    const story = await this.storyDao.create(input);
+    const normalizedMarkdown = formatStoryMarkdown(parseStoryMarkdown(input.markdown));
+    const story = await this.storyDao.create({
+      ...input,
+      markdown: normalizedMarkdown,
+    });
     await this.storyMemoryIndexService.reindexStory(story);
     return story;
   }
 
   public async rewrite(input: {
     storyId: string;
-    payload: Story;
+    markdown: string;
     sourceMessageSeqStart: number;
     sourceMessageSeqEnd: number;
   }): Promise<StoryRecord> {
@@ -38,9 +43,10 @@ export class StoryService {
       throw new Error(`Story not found: ${input.storyId}`);
     }
 
+    const normalizedMarkdown = formatStoryMarkdown(parseStoryMarkdown(input.markdown));
     const story = await this.storyDao.update({
       id: input.storyId,
-      payload: input.payload,
+      markdown: normalizedMarkdown,
       sourceMessageSeqStart: Math.min(existing.sourceMessageSeqStart, input.sourceMessageSeqStart),
       sourceMessageSeqEnd: Math.max(existing.sourceMessageSeqEnd, input.sourceMessageSeqEnd),
     });

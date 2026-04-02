@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
-import { StorySchema } from "../../domain/story.js";
 import { StoryService } from "../../application/story.service.js";
+import { validateStoryMarkdown } from "../../domain/story-markdown.js";
 
 export const CREATE_STORY_TOOL_NAME = "create_story";
 
-const CreateStoryArgumentsSchema = StorySchema;
+const CreateStoryArgumentsSchema = z.object({
+  markdown: z.string().trim().min(1),
+});
 
 export class CreateStoryTool extends ZodToolComponent<typeof CreateStoryArgumentsSchema> {
   public readonly name = CREATE_STORY_TOOL_NAME;
@@ -13,18 +15,11 @@ export class CreateStoryTool extends ZodToolComponent<typeof CreateStoryArgument
   public readonly parameters = {
     type: "object",
     properties: {
-      title: { type: "string", description: "叙事标题。" },
-      time: { type: "string", description: "叙事发生时间。" },
-      scene: { type: "string", description: "叙事发生场景。" },
-      people: {
-        type: "array",
-        items: { type: "string" },
-        description: "相关人物。每一项必须使用 {qq昵称(qq号)} 的格式，例如 {小伊(3994058476)}。",
+      markdown: {
+        type: "string",
+        description:
+          "完整 story Markdown，必须严格符合固定模板：`# 标题`、`- 时间：`、`- 场景：`、`- 人物：`、`- 影响：`、空行、`起因：`、`经过：`、有序列表、`结果：`。",
       },
-      cause: { type: "string", description: "起因。" },
-      process: { type: "array", items: { type: "string" }, description: "经过。" },
-      result: { type: "string", description: "结果。" },
-      status: { type: "string", description: "当前状态。" },
     },
   } as const;
   public readonly kind: ToolKind = "business";
@@ -49,8 +44,17 @@ export class CreateStoryTool extends ZodToolComponent<typeof CreateStoryArgument
   }
 
   protected async executeTyped(input: z.infer<typeof CreateStoryArgumentsSchema>): Promise<string> {
+    const validation = validateStoryMarkdown(input.markdown);
+    if (!validation.ok) {
+      return JSON.stringify({
+        ok: false,
+        error: "INVALID_STORY_MARKDOWN",
+        details: validation.errors,
+      });
+    }
+
     const story = await this.storyService.create({
-      payload: input,
+      markdown: validation.normalizedMarkdown,
       sourceMessageSeqStart: this.sourceMessageSeqStart,
       sourceMessageSeqEnd: this.sourceMessageSeqEnd,
     });

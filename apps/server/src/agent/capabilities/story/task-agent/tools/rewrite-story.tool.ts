@@ -1,33 +1,28 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
-import { StorySchema } from "../../domain/story.js";
 import { StoryService } from "../../application/story.service.js";
+import { validateStoryMarkdown } from "../../domain/story-markdown.js";
 
 export const REWRITE_STORY_TOOL_NAME = "rewrite_story";
 
-const RewriteStoryArgumentsSchema = StorySchema.extend({
+const RewriteStoryArgumentsSchema = z.object({
   storyId: z.string().trim().min(1),
+  markdown: z.string().trim().min(1),
 });
 
 export class RewriteStoryTool extends ZodToolComponent<typeof RewriteStoryArgumentsSchema> {
   public readonly name = REWRITE_STORY_TOOL_NAME;
-  public readonly description = "当最新一批消息是在延续已有叙事时，整条重写该 story 的当前 JSON。";
+  public readonly description =
+    "当最新一批消息是在延续已有叙事时，整条重写该 story 的当前 Markdown。";
   public readonly parameters = {
     type: "object",
     properties: {
       storyId: { type: "string", description: "需要重写的 story id。" },
-      title: { type: "string", description: "叙事标题。" },
-      time: { type: "string", description: "叙事发生时间。" },
-      scene: { type: "string", description: "叙事发生场景。" },
-      people: {
-        type: "array",
-        items: { type: "string" },
-        description: "相关人物。每一项必须使用 {qq昵称(qq号)} 的格式，例如 {小伊(3994058476)}。",
+      markdown: {
+        type: "string",
+        description:
+          "重写后的完整 story Markdown，必须严格符合固定模板：`# 标题`、`- 时间：`、`- 场景：`、`- 人物：`、`- 影响：`、空行、`起因：`、`经过：`、有序列表、`结果：`。",
       },
-      cause: { type: "string", description: "起因。" },
-      process: { type: "array", items: { type: "string" }, description: "经过。" },
-      result: { type: "string", description: "结果。" },
-      status: { type: "string", description: "当前状态。" },
     },
   } as const;
   public readonly kind: ToolKind = "business";
@@ -54,10 +49,18 @@ export class RewriteStoryTool extends ZodToolComponent<typeof RewriteStoryArgume
   protected async executeTyped(
     input: z.infer<typeof RewriteStoryArgumentsSchema>,
   ): Promise<string> {
-    const { storyId, ...payload } = input;
+    const validation = validateStoryMarkdown(input.markdown);
+    if (!validation.ok) {
+      return JSON.stringify({
+        ok: false,
+        error: "INVALID_STORY_MARKDOWN",
+        details: validation.errors,
+      });
+    }
+
     const story = await this.storyService.rewrite({
-      storyId,
-      payload,
+      storyId: input.storyId,
+      markdown: validation.normalizedMarkdown,
       sourceMessageSeqStart: this.sourceMessageSeqStart,
       sourceMessageSeqEnd: this.sourceMessageSeqEnd,
     });

@@ -1,6 +1,7 @@
 import type { EmbeddingClient } from "../../../../llm/embedding/client.js";
-import type { Story, StoryMemoryDocumentKind, StoryRecord } from "../domain/story.js";
+import type { StoryMemoryDocumentKind, StoryRecord } from "../domain/story.js";
 import { STORY_MEMORY_DOCUMENT_KINDS, normalizeEmbedding } from "../domain/story.js";
+import type { StoryContent } from "../domain/story-markdown.js";
 import type { StoryMemoryDocumentDao } from "../infra/story-memory-document.dao.js";
 
 export class StoryMemoryIndexService {
@@ -23,7 +24,7 @@ export class StoryMemoryIndexService {
   }
 
   public async reindexStory(story: StoryRecord): Promise<void> {
-    const documents = buildStoryMemoryDocuments(story.payload);
+    const documents = buildStoryMemoryDocuments(story.content);
     const embeddedDocuments = await Promise.all(
       documents.map(async document => {
         const response = await this.embeddingClient.embed({
@@ -49,7 +50,7 @@ export class StoryMemoryIndexService {
   }
 }
 
-export function buildStoryMemoryDocuments(story: Story): Array<{
+export function buildStoryMemoryDocuments(story: StoryContent): Array<{
   kind: StoryMemoryDocumentKind;
   content: string;
 }> {
@@ -62,7 +63,7 @@ export function buildStoryMemoryDocuments(story: Story): Array<{
         story.scene ? `场景：${story.scene}` : "",
         story.cause ? `起因：${story.cause}` : "",
         story.result ? `结果：${story.result}` : "",
-        story.status ? `当前状态：${story.status}` : "",
+        story.impact ? `影响：${story.impact}` : "",
       ]
         .filter(Boolean)
         .join("\n"),

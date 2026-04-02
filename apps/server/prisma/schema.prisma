@@ -183,7 +183,7 @@ model LinearMessageLedger {
 
 model Story {
   id                    String     @id @default(uuid())
-  payload               Json       @db.JsonB
+  markdown              String
   sourceMessageSeqStart Int        @map("source_message_seq_start")
   sourceMessageSeqEnd   Int        @map("source_message_seq_end")
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
