@@ -17,6 +17,7 @@ type HistoryListPageLayoutProps = {
   page: number;
   total: number;
   totalPages: number;
+  isPaginationDisabled?: boolean;
   onPrevPage: () => void;
   onNextPage: () => void;
   onBackToList: () => void;
@@ -35,6 +36,7 @@ export function HistoryListPageLayout({
   page,
   total,
   totalPages,
+  isPaginationDisabled = false,
   onPrevPage,
   onNextPage,
   onBackToList,
@@ -54,12 +56,22 @@ export function HistoryListPageLayout({
           {isMobile ? mobileList : desktopList}
 
           <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={onPrevPage}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || isPaginationDisabled}
+              onClick={onPrevPage}
+            >
               <ChevronLeft className="h-4 w-4" />
               上一页
             </Button>
             <span className="text-sm text-muted-foreground">第 {page} 页</span>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={onNextPage}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || isPaginationDisabled}
+              onClick={onNextPage}
+            >
               下一页
               <ChevronRight className="h-4 w-4" />
             </Button>

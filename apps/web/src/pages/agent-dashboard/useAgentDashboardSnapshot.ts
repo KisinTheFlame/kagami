@@ -1,21 +1,21 @@
 import {
   AgentDashboardSnapshotSchema,
-  type AgentDashboardSnapshot,
 } from "@kagami/shared/schemas/agent-dashboard";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-
-export const AGENT_DASHBOARD_QUERY_KEY = ["agent-dashboard", "current"] as const;
+import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 
 export function useAgentDashboardSnapshot() {
-  return useQuery<AgentDashboardSnapshot>({
-    queryKey: AGENT_DASHBOARD_QUERY_KEY,
-    queryFn: async () => {
-      const response = await apiFetch<unknown>("/agent-dashboard/current");
-      return AgentDashboardSnapshotSchema.parse(response);
-    },
+  const queryOptions = createSchemaQueryOptions({
+      queryKey: queryKeys.agentDashboard.current(),
+      path: "/agent-dashboard/current",
+      schema: AgentDashboardSnapshotSchema,
+  });
+
+  return useQuery({
+    ...queryOptions,
     refetchInterval: 1000,
     refetchIntervalInBackground: false,
     retry: false,
+    staleTime: 0,
   });
 }

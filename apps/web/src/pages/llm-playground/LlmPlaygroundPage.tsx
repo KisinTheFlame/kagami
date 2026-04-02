@@ -36,7 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch, apiRequest, type ApiRequestResult } from "@/lib/api";
+import {
+  ApiError,
+  apiPost,
+  getApiErrorMessage,
+  type ApiRequestResult,
+} from "@/lib/api";
+import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import {
   getPlaygroundImportDraftFromLocationState,
   resolvePlaygroundImportDraft,
@@ -141,19 +147,19 @@ export function LlmPlaygroundPage() {
   const nativePayloadCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const providersQuery = useQuery({
-    queryKey: ["llm-providers"],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>("/llm/providers");
-      return LlmProviderListResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.llm.providers(),
+      path: "/llm/providers",
+      schema: LlmProviderListResponseSchema,
+    }),
   });
 
   const toolLibraryQuery = useQuery({
-    queryKey: ["llm-playground-tools"],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>("/llm/playground-tools");
-      return LlmPlaygroundToolListResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.llm.playgroundTools(),
+      path: "/llm/playground-tools",
+      schema: LlmPlaygroundToolListResponseSchema,
+    }),
   });
 
   const providers = providersQuery.data?.providers ?? EMPTY_PROVIDERS;
@@ -208,18 +214,20 @@ export function LlmPlaygroundPage() {
 
   const requestMutation = useMutation({
     mutationFn: async (payload: LlmPlaygroundChatRequest): Promise<PlaygroundResult> => {
-      const response = await apiRequest("/llm/chat", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      let response: ApiRequestResult;
+      try {
+        response = await apiPost("/llm/chat", payload);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          return {
+            payload,
+            response: error.result,
+            parsedResponse: null,
+            responseSchemaError: null,
+          };
+        }
 
-      if (!response.ok) {
-        return {
-          payload,
-          response,
-          parsedResponse: null,
-          responseSchemaError: null,
-        };
+        throw error;
       }
 
       const parsedResponse = LlmPlaygroundChatResponseSchema.safeParse(response.body);
@@ -254,7 +262,7 @@ export function LlmPlaygroundPage() {
       }
     },
     onError: error => {
-      setResponseError(error instanceof Error ? error.message : "发送请求失败，请稍后再试");
+      setResponseError(getApiErrorMessage(error));
     },
   });
 

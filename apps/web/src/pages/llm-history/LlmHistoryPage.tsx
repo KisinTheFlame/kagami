@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
-import { apiFetch } from "@/lib/api";
+import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
@@ -46,11 +46,11 @@ type FilterFormState = {
 
 export function LlmHistoryPage() {
   const providersQuery = useQuery({
-    queryKey: ["llm-providers"],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>("/llm/providers");
-      return LlmProviderListResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.llm.providers(),
+      path: "/llm/providers",
+      schema: LlmProviderListResponseSchema,
+    }),
   });
   const {
     isMobile,
@@ -74,7 +74,12 @@ export function LlmHistoryPage() {
       void refetch();
     },
   });
-  const { data, isLoading, isError, refetch } = useLlmChatCallList(page, PAGE_SIZE, filters);
+  const { data, isLoading, isFetching, isError, refetch } = useLlmChatCallList(
+    page,
+    PAGE_SIZE,
+    filters,
+  );
+  const isInitialLoading = isLoading && !data;
   const providerOptions = providersQuery.data?.providers ?? EMPTY_PROVIDERS;
   const modelOptions = useMemo(() => {
     if (formState.provider) {
@@ -238,7 +243,7 @@ export function LlmHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isInitialLoading ? (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                     加载中…
@@ -282,7 +287,7 @@ export function LlmHistoryPage() {
       }
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
               加载中…
             </div>
@@ -313,6 +318,7 @@ export function LlmHistoryPage() {
       page={page}
       total={total}
       totalPages={totalPages}
+      isPaginationDisabled={isFetching}
       onPrevPage={() => goToPage(page - 1)}
       onNextPage={() => goToPage(page + 1)}
       onBackToList={handleBackToList}

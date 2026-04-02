@@ -51,7 +51,8 @@ export function StoryHistoryPage() {
     },
   });
   const [createdAtSort, setCreatedAtSort] = useState<TableSortDirection>("desc");
-  const { data, isLoading, isError, refetch } = useStoryList(page, PAGE_SIZE, filters);
+  const { data, isLoading, isFetching, isError, refetch } = useStoryList(page, PAGE_SIZE, filters);
+  const isInitialLoading = isLoading && !data;
   const hasQuery = Boolean(filters.query);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -134,7 +135,7 @@ export function StoryHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isInitialLoading ? (
                 <TableRow>
                   <TableCell
                     colSpan={hasQuery ? 6 : 5}
@@ -203,7 +204,7 @@ export function StoryHistoryPage() {
       }
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
               加载中…
             </div>
@@ -234,6 +235,7 @@ export function StoryHistoryPage() {
       page={page}
       total={total}
       totalPages={totalPages}
+      isPaginationDisabled={isFetching}
       onPrevPage={() => goToPage(page - 1)}
       onNextPage={() => goToPage(page + 1)}
       onBackToList={handleBackToList}

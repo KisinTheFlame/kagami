@@ -55,7 +55,12 @@ export function NapcatEventHistoryPage() {
       void refetch();
     },
   });
-  const { data, isLoading, isError, refetch } = useNapcatEventList(page, PAGE_SIZE, filters);
+  const { data, isLoading, isFetching, isError, refetch } = useNapcatEventList(
+    page,
+    PAGE_SIZE,
+    filters,
+  );
+  const isInitialLoading = isLoading && !data;
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const items = data?.items ?? [];
@@ -169,7 +174,7 @@ export function NapcatEventHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isInitialLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     加载中…
@@ -211,7 +216,7 @@ export function NapcatEventHistoryPage() {
       }
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
               加载中…
             </div>
@@ -241,6 +246,7 @@ export function NapcatEventHistoryPage() {
       page={page}
       total={total}
       totalPages={totalPages}
+      isPaginationDisabled={isFetching}
       onPrevPage={() => goToPage(page - 1)}
       onNextPage={() => goToPage(page + 1)}
       onBackToList={handleBackToList}

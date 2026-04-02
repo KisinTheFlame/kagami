@@ -3,8 +3,7 @@ import {
   type NapcatQqMessageListQuery,
 } from "@kagami/shared/schemas/napcat-group-message";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { buildQueryString } from "@/lib/search-params";
+import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
 type NapcatGroupMessageListFilters = Omit<NapcatQqMessageListQuery, "page" | "pageSize">;
 
@@ -13,23 +12,24 @@ export function useNapcatGroupMessageList(
   pageSize: number,
   filters: NapcatGroupMessageListFilters,
 ) {
-  return useQuery({
-    queryKey: ["napcat-group-message", page, pageSize, filters],
-    queryFn: async () => {
-      const query = buildQueryString({
-        page: String(page),
-        pageSize: String(pageSize),
-        messageType: filters.messageType,
-        groupId: filters.groupId,
-        userId: filters.userId,
-        nickname: filters.nickname,
-        keyword: filters.keyword,
-        startAt: filters.startAt,
-        endAt: filters.endAt,
-      });
+  const params = {
+    page: String(page),
+    pageSize: String(pageSize),
+    messageType: filters.messageType,
+    groupId: filters.groupId,
+    userId: filters.userId,
+    nickname: filters.nickname,
+    keyword: filters.keyword,
+    startAt: filters.startAt,
+    endAt: filters.endAt,
+  } satisfies Record<string, string | undefined>;
 
-      const response = await apiFetch<unknown>(`/napcat-group-message/query?${query}`);
-      return NapcatQqMessageListResponseSchema.parse(response);
-    },
-  });
+  return useQuery(
+    createHistoryListQueryOptions({
+      queryKey: queryKeys.napcatGroupMessage.historyList(params),
+      path: "/napcat-group-message/query",
+      schema: NapcatQqMessageListResponseSchema,
+      params,
+    }),
+  );
 }

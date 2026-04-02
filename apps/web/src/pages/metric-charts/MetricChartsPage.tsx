@@ -43,8 +43,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch, apiRequest } from "@/lib/api";
-import { buildQueryString, isoToLocalDateTime, localDateTimeToIso } from "@/lib/search-params";
+import {
+  apiPost,
+  apiPostWithSchema,
+  getApiErrorMessage,
+} from "@/lib/api";
+import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
+import { isoToLocalDateTime, localDateTimeToIso } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 
 type AppliedRange =
@@ -143,26 +148,16 @@ export function MetricChartsPage() {
   });
 
   const chartListQuery = useQuery({
-    queryKey: ["metric-chart-list"],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>("/metric-chart/list");
-      return MetricChartListResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.metricChart.list(),
+      path: "/metric-chart/list",
+      schema: MetricChartListResponseSchema,
+    }),
   });
 
   const createChartMutation = useMutation({
-    mutationFn: async (input: MetricChartCreateRequest) => {
-      const response = await apiRequest("/metric-chart/create", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-
-      if (!response.ok) {
-        throw new Error(extractApiErrorMessage(response));
-      }
-
-      return MetricChartCreateResponseSchema.parse(response.body);
-    },
+    mutationFn: async (input: MetricChartCreateRequest) =>
+      apiPostWithSchema("/metric-chart/create", input, MetricChartCreateResponseSchema),
     onSuccess: async () => {
       setCreateForm({
         chartName: "",
@@ -172,36 +167,28 @@ export function MetricChartsPage() {
         tagFiltersText: "",
       });
       setCreateError(null);
-      await queryClient.invalidateQueries({ queryKey: ["metric-chart-list"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.metricChart.list() });
     },
   });
 
   const deleteChartMutation = useMutation({
     mutationFn: async (chartName: string) => {
-      const response = await apiRequest("/metric-chart/delete", {
-        method: "POST",
-        body: JSON.stringify({ chartName }),
-      });
-
-      if (!response.ok) {
-        throw new Error(extractApiErrorMessage(response));
-      }
-
+      const response = await apiPost("/metric-chart/delete", { chartName });
       return response.body;
     },
     onSuccess: async () => {
       setChartPendingDelete(null);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["metric-chart-list"] }),
-        queryClient.invalidateQueries({ queryKey: ["metric-chart-data"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.metricChart.list() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.metricChart.dataRoot() }),
       ]);
     },
   });
 
   async function handleManualRefresh() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["metric-chart-list"] }),
-      queryClient.invalidateQueries({ queryKey: ["metric-chart-data"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.metricChart.list() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.metricChart.dataRoot() }),
     ]);
   }
 
@@ -598,25 +585,21 @@ function MetricChartCard({
   onDelete: () => void;
 }) {
   const query = useQuery({
-    queryKey: ["metric-chart-data", chart.chartName, bucket, appliedRange],
-    queryFn: async () => {
-      const request = buildMetricChartDataQuery(chart.chartName, bucket, appliedRange);
-      const queryString = buildQueryString({
-        chartName: request.chartName,
-        bucket: request.bucket,
-        rangePreset: request.rangePreset,
-        startAt: request.startAt,
-        endAt: request.endAt,
-      });
-
-      const response = await apiRequest(`/metric-chart/data?${queryString}`);
-
-      if (!response.ok) {
-        throw new Error(extractApiErrorMessage(response));
-      }
-
-      return MetricChartDataResponseSchema.parse(response.body);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.metricChart.data(chart.chartName, bucket, appliedRange),
+      path: "/metric-chart/data",
+      schema: MetricChartDataResponseSchema,
+      params: (() => {
+        const request = buildMetricChartDataQuery(chart.chartName, bucket, appliedRange);
+        return {
+          chartName: request.chartName,
+          bucket: request.bucket,
+          rangePreset: request.rangePreset,
+          startAt: request.startAt,
+          endAt: request.endAt,
+        } satisfies Record<string, string | undefined>;
+      })(),
+    }),
   });
 
   const chartData = query.data;
@@ -914,21 +897,6 @@ function formatMetricValue(value: number | string): string {
   });
 }
 
-function extractApiErrorMessage(result: Awaited<ReturnType<typeof apiRequest>>): string {
-  if (typeof result.body === "object" && result.body !== null && "message" in result.body) {
-    const message = result.body.message;
-    if (typeof message === "string" && message.length > 0) {
-      return message;
-    }
-  }
-
-  return `请求失败 (${result.status})`;
-}
-
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "未知错误";
+  return getApiErrorMessage(error);
 }

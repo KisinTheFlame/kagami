@@ -28,7 +28,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { apiFetch, apiRequest } from "@/lib/api";
+import { apiPost, apiPostWithSchema } from "@/lib/api";
+import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 type PrimaryAuthStatus = Exclude<AuthStatus, "refresh_failed">;
@@ -104,43 +105,38 @@ export function AuthPage() {
   const message = searchParams.get("message");
 
   const statusQuery = useQuery({
-    queryKey: ["auth-status", providerConfig.key],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>(buildAuthEndpoint(providerConfig.key, "status"));
-      return AuthStatusResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.auth.status(providerConfig.key),
+      path: buildAuthEndpoint(providerConfig.key, "status"),
+      schema: AuthStatusResponseSchema,
+    }),
   });
 
   const usageLimitsQuery = useQuery({
-    queryKey: ["auth-usage-limits", providerConfig.key],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>(
-        buildAuthEndpoint(providerConfig.key, "usage-limits"),
-      );
-      return AuthUsageLimitsResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.auth.usageLimits(providerConfig.key),
+      path: buildAuthEndpoint(providerConfig.key, "usage-limits"),
+      schema: AuthUsageLimitsResponseSchema,
+    }),
   });
   const usageTrendQuery = useQuery({
-    queryKey: ["auth-usage-trend", providerConfig.key, trendRange],
-    queryFn: async () => {
-      const response = await apiFetch<unknown>(
-        `${buildAuthEndpoint(providerConfig.key, "usage-trend")}?range=${trendRange}`,
-      );
-      return AuthUsageTrendResponseSchema.parse(response);
-    },
+    ...createSchemaQueryOptions({
+      queryKey: queryKeys.auth.usageTrend(providerConfig.key, trendRange),
+      path: buildAuthEndpoint(providerConfig.key, "usage-trend"),
+      schema: AuthUsageTrendResponseSchema,
+      params: {
+        range: trendRange,
+      },
+    }),
   });
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "login-url"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        throw new Error(formatApiError(response.status, response.statusText));
-      }
-
-      return AuthLoginUrlResponseSchema.parse(response.body);
+      return apiPostWithSchema(
+        buildAuthEndpoint(providerConfig.key, "login-url"),
+        {},
+        AuthLoginUrlResponseSchema,
+      );
     },
     onSuccess: data => {
       window.location.assign(data.loginUrl);
@@ -148,54 +144,23 @@ export function AuthPage() {
   });
 
   const refreshMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "refresh"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        throw new Error(formatApiError(response.status, response.statusText));
-      }
-
-      return AuthRefreshResponseSchema.parse(response.body);
-    },
+    mutationFn: async () =>
+      apiPostWithSchema(buildAuthEndpoint(providerConfig.key, "refresh"), {}, AuthRefreshResponseSchema),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["auth-status", providerConfig.key],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["auth-usage-limits", providerConfig.key],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["auth-usage-trend", providerConfig.key],
-        }),
-      ]);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.auth.provider(providerConfig.key),
+      });
     },
   });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(buildAuthEndpoint(providerConfig.key, "logout"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        throw new Error(formatApiError(response.status, response.statusText));
-      }
+      await apiPost(buildAuthEndpoint(providerConfig.key, "logout"), {});
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["auth-status", providerConfig.key],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["auth-usage-limits", providerConfig.key],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["auth-usage-trend", providerConfig.key],
-        }),
-      ]);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.auth.provider(providerConfig.key),
+      });
     },
   });
 
@@ -812,10 +777,6 @@ function formatDateTime(value: string | null | undefined): string {
     minute: "2-digit",
     second: "2-digit",
   }).format(date);
-}
-
-function formatApiError(status: number, statusText: string): string {
-  return `API error ${status}: ${statusText}`;
 }
 
 function clampPercent(value: number): number {
