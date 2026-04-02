@@ -65,9 +65,6 @@ describe("AgentDashboardHandler", () => {
           ],
         },
       ],
-      config: {
-        listenGroupIds: [],
-      },
     });
     const agentDashboardQueryService: AgentDashboardQueryService = {
       getCurrentSnapshot,
@@ -133,9 +130,6 @@ describe("AgentDashboardHandler", () => {
           ],
         },
       ],
-      config: {
-        listenGroupIds: [],
-      },
     });
     expect(getCurrentSnapshot).toHaveBeenCalledTimes(1);
   });

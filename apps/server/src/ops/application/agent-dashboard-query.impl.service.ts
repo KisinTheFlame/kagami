@@ -28,7 +28,6 @@ type DefaultAgentDashboardQueryServiceDeps = {
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
   eventQueue: AgentEventQueue;
-  listenGroupIds: string[];
   listAvailableAgentProviders: () => Promise<RootAgentDashboardSnapshot["providers"]>;
 };
 
@@ -36,7 +35,6 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
   private readonly rootAgentRuntime: RootLoopAgent;
   private readonly storyAgentRuntime: StoryLoopAgent;
   private readonly eventQueue: AgentEventQueue;
-  private readonly listenGroupIds: string[];
   private readonly listAvailableAgentProviders: () => Promise<
     RootAgentDashboardSnapshot["providers"]
   >;
@@ -45,13 +43,11 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
     rootAgentRuntime,
     storyAgentRuntime,
     eventQueue,
-    listenGroupIds,
     listAvailableAgentProviders,
   }: DefaultAgentDashboardQueryServiceDeps) {
     this.rootAgentRuntime = rootAgentRuntime;
     this.storyAgentRuntime = storyAgentRuntime;
     this.eventQueue = eventQueue;
-    this.listenGroupIds = listenGroupIds;
     this.listAvailableAgentProviders = listAvailableAgentProviders;
   }
 
@@ -72,9 +68,6 @@ export class DefaultAgentDashboardQueryService implements AgentDashboardQuerySer
         }),
         mapStoryAgentSnapshot(storyRuntimeSnapshot),
       ],
-      config: {
-        listenGroupIds: [...this.listenGroupIds],
-      },
     };
   }
 }

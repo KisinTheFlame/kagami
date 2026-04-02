@@ -125,7 +125,6 @@ describe("DefaultAgentDashboardQueryService", () => {
       rootAgentRuntime: rootAgentRuntime as RootLoopAgent,
       storyAgentRuntime: storyAgentRuntime as StoryLoopAgent,
       eventQueue,
-      listenGroupIds: ["group-1"],
       listAvailableAgentProviders: vi.fn().mockResolvedValue([
         {
           id: "openai",
@@ -265,9 +264,6 @@ describe("DefaultAgentDashboardQueryService", () => {
         },
       },
     ]);
-    expect(snapshot.config).toEqual({
-      listenGroupIds: ["group-1"],
-    });
     expect(snapshot.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

@@ -104,9 +104,7 @@ export function AgentDashboardPage() {
       ) : null}
 
       <div className="mt-4 min-h-0 flex-1 overflow-hidden">
-        {activeTab === "overview" ? (
-          <OverviewTab agent={selectedAgent} listenGroupIds={snapshot.config.listenGroupIds} />
-        ) : null}
+        {activeTab === "overview" ? <OverviewTab agent={selectedAgent} /> : null}
         {activeTab === "context" ? (
           <ContextTab
             label={selectedAgent.label}
@@ -120,27 +118,15 @@ export function AgentDashboardPage() {
   );
 }
 
-function OverviewTab({
-  agent,
-  listenGroupIds,
-}: {
-  agent: AgentDashboardAgentSnapshot;
-  listenGroupIds: string[];
-}) {
+function OverviewTab({ agent }: { agent: AgentDashboardAgentSnapshot }) {
   if (agent.kind === "root") {
-    return <RootOverviewTab agent={agent} listenGroupIds={listenGroupIds} />;
+    return <RootOverviewTab agent={agent} />;
   }
 
   return <StoryOverviewTab agent={agent} />;
 }
 
-function RootOverviewTab({
-  agent,
-  listenGroupIds,
-}: {
-  agent: RootAgentDashboardSnapshot;
-  listenGroupIds: string[];
-}) {
+function RootOverviewTab({ agent }: { agent: RootAgentDashboardSnapshot }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-4">
@@ -190,8 +176,6 @@ function RootOverviewTab({
                 ? agent.providers.map(provider => provider.id).join(", ")
                 : "无",
             ],
-            ["监听群数量", String(listenGroupIds.length)],
-            ["监听群 ID", listenGroupIds.length > 0 ? listenGroupIds.join(", ") : "无"],
           ]}
         />
       </section>

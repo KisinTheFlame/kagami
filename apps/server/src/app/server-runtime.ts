@@ -464,7 +464,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     rootAgentRuntime,
     storyAgentRuntime,
     eventQueue,
-    listenGroupIds: config.server.napcat.listenGroupIds,
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },

@@ -204,11 +204,6 @@ export const AgentDashboardSnapshotSchema = z
   .object({
     generatedAt: z.string().datetime(),
     agents: z.array(AgentDashboardAgentSnapshotSchema),
-    config: z
-      .object({
-        listenGroupIds: z.array(z.string().min(1)),
-      })
-      .strict(),
   })
   .strict();
 
