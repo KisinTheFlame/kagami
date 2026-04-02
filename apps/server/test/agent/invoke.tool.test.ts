@@ -113,6 +113,9 @@ describe("invoke tool", () => {
       availableTools: ["zone_out"],
     });
     expect(JSON.parse(result.content).message).toContain("不能在当前状态 zone_out 下调用");
+    expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
+    expect(JSON.parse(result.content).message).toContain("`zone_out`");
+    expect(JSON.parse(result.content).message).toContain("`thought` (string)");
   });
 
   it("should allow zone_out only in zone_out state", async () => {
@@ -232,6 +235,45 @@ describe("invoke tool", () => {
       articleId: 999,
       availableTools: ["open_ithome_article"],
     });
-    expect(JSON.parse(result.content).message).toBe("当前 IT 之家列表中找不到该文章 ID。");
+    expect(JSON.parse(result.content).message).toContain("当前 IT 之家列表中找不到该文章 ID。");
+    expect(JSON.parse(result.content).message).toContain("当前子工具说明：");
+    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
+    expect(JSON.parse(result.content).message).toContain("`articleId` (number)");
+  });
+
+  it("should describe available tools when invoke subtool does not exist", async () => {
+    const tool = new InvokeTool({
+      tools: [
+        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new ZoneOutTool(),
+        new OpenIthomeArticleTool(),
+      ],
+    });
+
+    const result = await tool.execute(
+      {
+        tool: "unknown_tool",
+      },
+      {
+        rootAgentSession: {
+          getState: () => ({
+            focusedStateId: "ithome" as const,
+            stateStack: ["portal", "ithome"] as const,
+            waiting: null,
+          }),
+          getAvailableInvokeTools: () => ["open_ithome_article"],
+        },
+      } as Parameters<typeof tool.execute>[1],
+    );
+
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      error: "INVOKE_TOOL_NOT_FOUND",
+      availableTools: ["open_ithome_article"],
+    });
+    expect(JSON.parse(result.content).message).toContain("invoke 子工具 unknown_tool 不存在。");
+    expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
+    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
   });
 });

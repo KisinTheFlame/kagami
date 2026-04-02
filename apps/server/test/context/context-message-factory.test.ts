@@ -73,31 +73,14 @@ describe("context-message-factory", () => {
     expect(
       createStateSystemReminderMessage({
         displayName: "QQ 群 程序喵AI竞技场 (253631878)",
-        availableInvokeTools: [
-          {
-            name: "send_message",
-            description: "向当前监听的 QQ 群发送一条文本消息。",
-            parameters: {
-              type: "object",
-              properties: {
-                message: {
-                  type: "string",
-                  description: "要发送到群里的文本内容。",
-                },
-              },
-            },
-          },
-        ],
+        availableInvokeTools: ["send_message"],
       }),
     ).toEqual({
       role: "user",
       content: [
         "<system_reminder>",
         "你进入了 QQ 群 程序喵AI竞技场 (253631878) 节点",
-        "当前可用的 invoke 工具：",
-        "- send_message: 向当前监听的 QQ 群发送一条文本消息。",
-        "  参数：",
-        "  - message (string): 要发送到群里的文本内容。",
+        "当前可用的 invoke 工具：send_message",
         "</system_reminder>",
       ].join("\n"),
     });

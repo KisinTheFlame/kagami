@@ -10,6 +10,47 @@ describe("createAgentSystemPrompt", () => {
       botQQ: "123456789",
       creatorName: "测试创造者",
       creatorQQ: "987654321",
+      invokeToolDefinitions: [
+        {
+          name: "send_message",
+          description: "向当前监听的 QQ 群发送一条文本消息。",
+          parameters: {
+            type: "object",
+            properties: {
+              message: {
+                type: "string",
+                description: "要发送到群里的文本内容。",
+              },
+            },
+          },
+        },
+        {
+          name: "open_ithome_article",
+          description: "在 IT 之家资讯空间里打开一篇文章的全文视图，只能在 ithome 状态下调用。",
+          parameters: {
+            type: "object",
+            properties: {
+              articleId: {
+                type: "number",
+                description: "要打开的文章 ID，来自当前 IT 之家文章列表。",
+              },
+            },
+          },
+        },
+        {
+          name: "zone_out",
+          description: "在神游状态里记录一段当下的思路，不产生外部副作用。",
+          parameters: {
+            type: "object",
+            properties: {
+              thought: {
+                type: "string",
+                description: "这次神游里想的内容。",
+              },
+            },
+          },
+        },
+      ],
     });
 
     expect(prompt).toContain("<input_format>");
@@ -17,6 +58,9 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).toContain("<system_reminder>");
     expect(prompt).toContain("<system_instruction>");
     expect(prompt).toContain("<conversation_summary>");
+    expect(prompt).toContain("<invoke_tools>");
+    expect(prompt).toContain("`send_message`");
+    expect(prompt).toContain("适用状态：`qq_group:*`");
     expect(prompt).toContain("123456789");
     expect(prompt).toContain("测试创造者");
     expect(prompt).toContain("987654321");

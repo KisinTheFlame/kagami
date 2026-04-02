@@ -1,6 +1,5 @@
 import type { Event } from "../event/event.js";
 import type { LlmMessage } from "../../../llm/types.js";
-import type { RootAgentInvokeToolDefinition } from "../root-agent/session/root-agent-session.js";
 import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
@@ -58,7 +57,7 @@ export function createStateSystemReminderMessage(input: {
     displayName: string;
     description: string;
   }>;
-  availableInvokeTools?: RootAgentInvokeToolDefinition[];
+  availableInvokeTools?: string[];
 }): UserMessage {
   const children = input.children ?? [];
   const availableInvokeTools = input.availableInvokeTools ?? [];
@@ -76,47 +75,11 @@ export function createStateSystemReminderMessage(input: {
   if (availableInvokeTools.length === 0) {
     lines.push("当前可用的 invoke 工具：无");
   } else {
-    lines.push("当前可用的 invoke 工具：");
-    for (const tool of availableInvokeTools) {
-      lines.push(`- ${tool.name}: ${tool.description ?? "无说明。"}`);
-      const parameterLines = renderInvokeToolParameterLines(tool);
-      if (parameterLines.length === 0) {
-        lines.push("  参数：无");
-        continue;
-      }
-
-      lines.push("  参数：");
-      for (const parameterLine of parameterLines) {
-        lines.push(`  - ${parameterLine}`);
-      }
-    }
+    lines.push(`当前可用的 invoke 工具：${availableInvokeTools.join("、")}`);
   }
   lines.push("</system_reminder>");
 
   return createUserMessage(lines.join("\n"));
-}
-
-function renderInvokeToolParameterLines(tool: RootAgentInvokeToolDefinition): string[] {
-  return Object.entries(tool.parameters.properties).map(([parameterName, propertySchema]) => {
-    if (!isRecord(propertySchema)) {
-      return parameterName;
-    }
-
-    const propertyType =
-      typeof propertySchema.type === "string" && propertySchema.type.length > 0
-        ? ` (${propertySchema.type})`
-        : "";
-    const description =
-      typeof propertySchema.description === "string" && propertySchema.description.length > 0
-        ? `: ${propertySchema.description}`
-        : "";
-
-    return `${parameterName}${propertyType}${description}`;
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function createConversationSummaryMessage(summary: string): UserMessage {

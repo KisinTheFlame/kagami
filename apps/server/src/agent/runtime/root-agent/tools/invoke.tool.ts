@@ -4,12 +4,14 @@ import {
   type JsonSchema,
   type ToolComponent,
   type ToolContext,
+  type ToolDefinition,
   type ToolExecutor,
   type ToolExecutionResult,
   type ToolKind,
   ZodToolComponent,
 } from "@kagami/agent-runtime";
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
+import { renderInvokeToolGuide } from "./invoke-tool-docs.js";
 
 export const INVOKE_TOOL_NAME = "invoke";
 
@@ -32,12 +34,14 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   protected readonly inputSchema = InvokeArgumentsSchema;
   private readonly invokeToolSet: ToolExecutor;
   private readonly invokeToolNames: Set<string>;
+  private readonly invokeToolDefinitionByName: ReadonlyMap<string, ToolDefinition>;
 
   public constructor({ tools }: { tools: ToolComponent[] }) {
     super();
     this.parameters = buildInvokeParameters(tools);
     this.invokeToolSet = new ToolCatalog(tools).pick(tools.map(tool => tool.name));
     this.invokeToolNames = new Set(tools.map(tool => tool.name));
+    this.invokeToolDefinitionByName = new Map(tools.map(tool => [tool.name, tool.llmTool]));
   }
 
   protected async executeTyped(
@@ -60,6 +64,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     const state = rootAgentSession.getState();
     const availableTools = rootAgentSession.getAvailableInvokeTools();
     if (!this.invokeToolNames.has(input.tool)) {
+      const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
       return {
         content: JSON.stringify({
           ok: false,
@@ -67,7 +72,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
           tool: input.tool,
           message: buildInvokeToolNotFoundMessage({
             tool: input.tool,
-            availableTools,
+            availableToolDefinitions,
           }),
           availableTools,
         }),
@@ -76,6 +81,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     }
 
     if (!availableTools.includes(input.tool as (typeof availableTools)[number])) {
+      const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
       return {
         content: JSON.stringify({
           ok: false,
@@ -85,7 +91,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
           message: buildInvokeToolUnavailableMessage({
             tool: input.tool,
             state: state.waiting ? "waiting" : state.focusedStateId,
-            availableTools,
+            availableToolDefinitions,
           }),
           availableTools,
         }),
@@ -101,8 +107,15 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
         tool,
         content: result.content,
         availableTools,
+        currentToolDefinition: this.invokeToolDefinitionByName.get(tool),
       }),
     };
+  }
+
+  private getToolDefinitionsByNames(toolNames: string[]): ToolDefinition[] {
+    return toolNames
+      .map(toolName => this.invokeToolDefinitionByName.get(toolName))
+      .filter((definition): definition is ToolDefinition => definition !== undefined);
   }
 }
 
@@ -161,30 +174,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function buildInvokeToolNotFoundMessage(input: { tool: string; availableTools: string[] }): string {
-  const availableText =
-    input.availableTools.length > 0
-      ? input.availableTools.join("、")
-      : "当前没有可用的 invoke 子工具";
-  return `invoke 子工具 ${input.tool} 不存在。${availableText}。`;
+function buildInvokeToolNotFoundMessage(input: {
+  tool: string;
+  availableToolDefinitions: ToolDefinition[];
+}): string {
+  return [
+    `invoke 子工具 ${input.tool} 不存在。`,
+    buildAvailableInvokeToolsDescription(input.availableToolDefinitions),
+  ].join("\n");
 }
 
 function buildInvokeToolUnavailableMessage(input: {
   tool: string;
   state: string;
-  availableTools: string[];
+  availableToolDefinitions: ToolDefinition[];
 }): string {
-  const availableText =
-    input.availableTools.length > 0
-      ? input.availableTools.join("、")
-      : "当前没有可用的 invoke 子工具";
-  return `invoke 子工具 ${input.tool} 不能在当前状态 ${input.state} 下调用。${availableText}。`;
+  return [
+    `invoke 子工具 ${input.tool} 不能在当前状态 ${input.state} 下调用。`,
+    buildAvailableInvokeToolsDescription(input.availableToolDefinitions),
+  ].join("\n");
 }
 
 function normalizeInvokeFailureContent(input: {
   tool: string;
   content: string;
   availableTools: string[];
+  currentToolDefinition?: ToolDefinition;
 }): string {
   try {
     const parsed = JSON.parse(input.content) as Record<string, unknown>;
@@ -198,13 +213,14 @@ function normalizeInvokeFailureContent(input: {
       ...parsed,
       message:
         typeof parsed.message === "string"
-          ? parsed.message
+          ? appendInvokeToolDefinitionMessage(parsed.message, input.currentToolDefinition)
           : buildInvokeSubtoolFailureMessage({
               tool: input.tool,
               error: typeof parsed.error === "string" ? parsed.error : undefined,
               details: Array.isArray(parsed.details)
                 ? parsed.details.filter((item): item is string => typeof item === "string")
                 : [],
+              currentToolDefinition: input.currentToolDefinition,
             }),
       availableTools: input.availableTools,
     });
@@ -217,23 +233,58 @@ function buildInvokeSubtoolFailureMessage(input: {
   tool: string;
   error?: string;
   details: string[];
+  currentToolDefinition?: ToolDefinition;
 }): string {
   if (input.error === "INVALID_ARGUMENTS") {
     const detailsText = input.details.length > 0 ? ` ${input.details.join("；")}` : "";
-    return `invoke 子工具 ${input.tool} 参数不合法。${detailsText}`.trim();
+    return appendInvokeToolDefinitionMessage(
+      `invoke 子工具 ${input.tool} 参数不合法。${detailsText}`.trim(),
+      input.currentToolDefinition,
+    );
   }
 
   if (input.error === "GROUP_CONTEXT_UNAVAILABLE") {
-    return `当前缺少可发消息的群聊上下文，不能调用 ${input.tool}。`;
+    return appendInvokeToolDefinitionMessage(
+      `当前缺少可发消息的群聊上下文，不能调用 ${input.tool}。`,
+      input.currentToolDefinition,
+    );
   }
 
   if (input.error === "ARTICLE_NOT_FOUND") {
-    return "当前 IT 之家列表中找不到该文章 ID。";
+    return appendInvokeToolDefinitionMessage(
+      "当前 IT 之家列表中找不到该文章 ID。",
+      input.currentToolDefinition,
+    );
   }
 
   if (input.error) {
-    return `invoke 子工具 ${input.tool} 调用失败：${input.error}。`;
+    return appendInvokeToolDefinitionMessage(
+      `invoke 子工具 ${input.tool} 调用失败：${input.error}。`,
+      input.currentToolDefinition,
+    );
   }
 
-  return `invoke 子工具 ${input.tool} 调用失败。`;
+  return appendInvokeToolDefinitionMessage(
+    `invoke 子工具 ${input.tool} 调用失败。`,
+    input.currentToolDefinition,
+  );
+}
+
+function buildAvailableInvokeToolsDescription(availableToolDefinitions: ToolDefinition[]): string {
+  if (availableToolDefinitions.length === 0) {
+    return "当前状态没有可用的 invoke 子工具。";
+  }
+
+  return `当前状态可用的 invoke 工具说明：\n${renderInvokeToolGuide(availableToolDefinitions)}`;
+}
+
+function appendInvokeToolDefinitionMessage(
+  baseMessage: string,
+  currentToolDefinition?: ToolDefinition,
+): string {
+  if (!currentToolDefinition) {
+    return baseMessage;
+  }
+
+  return `${baseMessage}\n当前子工具说明：\n${renderInvokeToolGuide([currentToolDefinition])}`;
 }

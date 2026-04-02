@@ -1,6 +1,5 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
-import type { ToolDefinition } from "@kagami/agent-runtime";
 import {
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
@@ -50,8 +49,6 @@ export type RootAgentPostToolEffects = {
   messages: LlmMessage[];
   events: Event[];
 };
-
-export type RootAgentInvokeToolDefinition = ToolDefinition;
 
 export type RootAgentSessionDashboardSnapshot = {
   focusedStateId: RootAgentStateId;
@@ -103,7 +100,6 @@ type RootAgentSessionDeps = {
   listenGroupIds: string[];
   recentMessageLimit: number;
   ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
-  invokeToolDefinitions?: RootAgentInvokeToolDefinition[];
 };
 
 type PortalFeedState = PersistedRootAgentIthomeFeedState;
@@ -147,7 +143,6 @@ export class RootAgentSession implements RootAgentSessionController {
   > | null;
   public readonly groupStates: GroupChatState[];
   public readonly groupStateById: Map<string, GroupChatState>;
-  private readonly invokeToolDefinitionByName: ReadonlyMap<string, RootAgentInvokeToolDefinition>;
   private readonly pendingVisibleEvents: Event[] = [];
   private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
@@ -164,7 +159,6 @@ export class RootAgentSession implements RootAgentSessionController {
     listenGroupIds,
     recentMessageLimit,
     ithomeNewsService,
-    invokeToolDefinitions,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
@@ -178,9 +172,6 @@ export class RootAgentSession implements RootAgentSessionController {
         }),
     );
     this.groupStateById = new Map(this.groupStates.map(state => [state.groupId, state]));
-    this.invokeToolDefinitionByName = new Map(
-      (invokeToolDefinitions ?? []).map(definition => [definition.name, definition]),
-    );
   }
 
   public getState(): RootAgentSessionState {
@@ -216,14 +207,6 @@ export class RootAgentSession implements RootAgentSessionController {
 
     const focusedState = this.requireState(this.getFocusedStateId());
     return [...focusedState.getAvailableInvokeTools()];
-  }
-
-  public getAvailableInvokeToolDefinitions(): RootAgentInvokeToolDefinition[] {
-    if (this.waitOverlay) {
-      return [];
-    }
-
-    return this.getInvokeToolDefinitionsForState(this.requireState(this.getFocusedStateId()));
   }
 
   public async getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot> {
@@ -693,19 +676,8 @@ export class RootAgentSession implements RootAgentSessionController {
           description: await child.getDescription(),
         })),
       ),
-      availableInvokeTools: this.getInvokeToolDefinitionsForState(state),
+      availableInvokeTools: state.getAvailableInvokeTools(),
     });
-  }
-
-  private getInvokeToolDefinitionsForState(
-    state: Pick<RootAgentState, "getAvailableInvokeTools">,
-  ): RootAgentInvokeToolDefinition[] {
-    return state
-      .getAvailableInvokeTools()
-      .map(toolName => this.invokeToolDefinitionByName.get(toolName))
-      .filter(
-        (definition): definition is RootAgentInvokeToolDefinition => definition !== undefined,
-      );
   }
 
   private resolveState(stateId: string): RootAgentState | null {

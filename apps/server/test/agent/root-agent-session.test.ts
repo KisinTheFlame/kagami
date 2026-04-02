@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
-import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
-import { ZoneOutTool } from "../../src/agent/runtime/root-agent/tools/zone-out.tool.js";
 
 function createGroupEvent(message: string, groupId: string) {
   return {
@@ -117,15 +114,6 @@ function createSession({
     listenGroupIds: ["group-1", "group-2"],
     recentMessageLimit: 2,
     ithomeNewsService,
-    invokeToolDefinitions: [
-      new SendMessageTool({
-        agentMessageService: {
-          sendGroupMessage: vi.fn(),
-        },
-      }).llmTool,
-      new ZoneOutTool().llmTool,
-      new OpenIthomeArticleTool().llmTool,
-    ],
   });
 }
 
@@ -181,9 +169,9 @@ describe("RootAgentSession", () => {
     const stateReminder = snapshotAfterEnter.messages.find(
       message =>
         typeof message.content === "string" &&
-        message.content.includes("- send_message: 向当前监听的 QQ 群发送一条文本消息。"),
+        message.content.includes("当前可用的 invoke 工具：send_message"),
     );
-    expect(stateReminder?.content).toContain("message (string): 要发送到群里的文本内容。");
+    expect(stateReminder?.content).not.toContain("要发送到群里的文本内容。");
 
     await expect(session.back()).resolves.toMatchObject({
       ok: true,

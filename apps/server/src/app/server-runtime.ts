@@ -283,14 +283,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
   });
-  const agentSystemPromptFactory = async () => {
-    return createAgentSystemPrompt({
-      botQQ: config.server.bot.qq,
-      creatorName: config.server.bot.creator.name,
-      creatorQQ: config.server.bot.creator.qq,
-    });
-  };
-
   const webSearchService = new TavilyWebSearchService({
     apiKey: config.server.tavily.apiKey,
   });
@@ -343,13 +335,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const agentMessageService = new DefaultAgentMessageService({
     napcatGatewayService,
   });
-  const context = new LinearMessageLedgerAgentContext({
-    inner: new DefaultAgentContext({
-      systemPromptFactory: agentSystemPromptFactory,
-    }),
-    linearMessageLedgerDao,
-    runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
-  });
   const invokeSubtools = [
     new SendMessageTool({
       agentMessageService,
@@ -357,13 +342,27 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     new ZoneOutTool(),
     new OpenIthomeArticleTool(),
   ];
+  const agentSystemPromptFactory = async () => {
+    return createAgentSystemPrompt({
+      botQQ: config.server.bot.qq,
+      creatorName: config.server.bot.creator.name,
+      creatorQQ: config.server.bot.creator.qq,
+      invokeToolDefinitions: invokeSubtools.map(tool => tool.llmTool),
+    });
+  };
+  const context = new LinearMessageLedgerAgentContext({
+    inner: new DefaultAgentContext({
+      systemPromptFactory: agentSystemPromptFactory,
+    }),
+    linearMessageLedgerDao,
+    runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
+  });
   const rootAgentSession = new RootAgentSession({
     context,
     napcatGatewayService,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     ithomeNewsService,
-    invokeToolDefinitions: invokeSubtools.map(tool => tool.llmTool),
   });
   const toolCatalog = new ToolCatalog([
     new EnterTool(),
