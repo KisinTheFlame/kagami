@@ -11,3 +11,4 @@ coverage
 .vscode
 TODO.md
 apps/server/src/generated/prisma
+.claude/worktrees
