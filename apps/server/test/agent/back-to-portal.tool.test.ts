@@ -2,6 +2,31 @@ import { describe, expect, it } from "vitest";
 import { BackTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 
 describe("back tool", () => {
+  it("should return exit message when back succeeds", async () => {
+    const tool = new BackTool();
+    const toolContext = {
+      rootAgentSession: {
+        back: async () => ({
+          ok: true,
+          id: "qq_group:group-1",
+          displayName: "QQ 群 产品群 (group-1)",
+          message: "已退出QQ 群 产品群 (group-1)",
+        }),
+      },
+    } as Parameters<typeof tool.execute>[1];
+
+    const result = await tool.execute({}, toolContext);
+
+    expect(tool.name).toBe("back");
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      id: "qq_group:group-1",
+      displayName: "QQ 群 产品群 (group-1)",
+      message: "已退出QQ 群 产品群 (group-1)",
+    });
+  });
+
   it("should return state transition error when current state is root", async () => {
     const tool = new BackTool();
     const toolContext = {

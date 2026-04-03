@@ -13,6 +13,8 @@ describe("enter tool", () => {
           enter: async (input: { id: string }) => ({
             ok: true,
             ...input,
+            displayName: "QQ 群 产品群 (group-1)",
+            message: "已进入QQ 群 产品群 (group-1)",
           }),
         },
       } as Parameters<typeof tool.execute>[1],
@@ -23,6 +25,8 @@ describe("enter tool", () => {
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
       id: "qq_group:group-1",
+      displayName: "QQ 群 产品群 (group-1)",
+      message: "已进入QQ 群 产品群 (group-1)",
     });
   });
 

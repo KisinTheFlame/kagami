@@ -159,6 +159,8 @@ describe("RootAgentSession", () => {
     await expect(session.enter({ id: "qq_group:group-1" })).resolves.toMatchObject({
       ok: true,
       id: "qq_group:group-1",
+      displayName: "QQ 群 产品群 (group-1)",
+      message: "已进入QQ 群 产品群 (group-1)",
     });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
@@ -180,6 +182,8 @@ describe("RootAgentSession", () => {
     await expect(session.back()).resolves.toMatchObject({
       ok: true,
       id: "qq_group:group-1",
+      displayName: "QQ 群 产品群 (group-1)",
+      message: "已退出QQ 群 产品群 (group-1)",
     });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 

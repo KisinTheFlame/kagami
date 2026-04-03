@@ -410,9 +410,12 @@ export class RootAgentSession implements RootAgentSessionController {
       ...(await this.renderFocusMessages(targetState.getId(), "enter")),
     );
 
+    const displayName = targetState.getDisplayName();
     return {
       ok: true,
       id: targetState.getId(),
+      displayName,
+      message: `已进入${displayName}`,
     };
   }
 
@@ -484,9 +487,12 @@ export class RootAgentSession implements RootAgentSessionController {
       ...(await this.renderFocusMessages(resumedStateId, "resume_back")),
     );
 
+    const displayName = currentState.getDisplayName();
     return {
       ok: true,
       id: exitedStateId,
+      displayName,
+      message: `已退出${displayName}`,
     };
   }
 
