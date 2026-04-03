@@ -636,16 +636,36 @@ export class RootAgentSession implements RootAgentSessionController {
   private async consumeIncomingEventWhileWaiting(
     event: Event,
   ): Promise<{ shouldTriggerRound: boolean }> {
-    await this.resumeFromWait({
-      reason: "event",
-      event,
+    const resumedStateId = this.clearWaitOverlay();
+    const consumeResult = await this.consumeIncomingEventInActiveState(event, {
+      skipReminderRefresh: true,
     });
-    return await this.consumeIncomingEventInActiveState(event);
+
+    if (resumedStateId !== null) {
+      this.pendingIncomingMessages.push(
+        await this.createWaitResumeMessage({
+          reason: "event",
+          resumedStateId,
+          event,
+        }),
+      );
+      this.pendingIncomingMessages.push(
+        ...(await this.renderFocusMessages(resumedStateId, "resume_wait")),
+      );
+    }
+
+    return {
+      shouldTriggerRound: consumeResult.shouldTriggerRound || resumedStateId !== null,
+    };
   }
 
   private async consumeIncomingEventInActiveState(
     event: Event,
+    options?: {
+      skipReminderRefresh?: boolean;
+    },
   ): Promise<{ shouldTriggerRound: boolean }> {
+    const skipReminderRefresh = options?.skipReminderRefresh ?? false;
     const targetStateId = this.resolveEventStateId(event);
     if (!targetStateId) {
       return {
@@ -684,15 +704,14 @@ export class RootAgentSession implements RootAgentSessionController {
           state: focusedState,
           targetStateId,
         }));
-      if (needsReminderRefresh) {
+      if (needsReminderRefresh && !skipReminderRefresh) {
         this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
         shouldTriggerRound = true;
       }
 
-      // Push cross-state notification for non-focused state changes,
-      // but skip when focused on portal (portal reminder already shows unread)
-      // and skip ithome target events (news is not urgent).
-      if (!isFocused && focusedStateId !== "portal" && targetStateId !== "ithome") {
+      // Push cross-state notification for non-focused state changes.
+      // Skip when focused on portal (portal reminder already shows unread).
+      if (!isFocused && focusedStateId !== "portal") {
         const summary = this.buildNotificationSummary(event);
         if (summary) {
           this.notificationAccumulator.push({
@@ -735,13 +754,10 @@ export class RootAgentSession implements RootAgentSessionController {
     reason: "timeout" | "event";
     event?: Event;
   }): Promise<RootAgentStateId | null> {
-    if (!this.waitOverlay) {
+    const resumedStateId = this.clearWaitOverlay();
+    if (resumedStateId === null) {
       return null;
     }
-
-    const resumedStateId = this.waitOverlay.resumeStateStack.at(-1) ?? "portal";
-    this.stateStack = [...this.waitOverlay.resumeStateStack];
-    this.waitOverlay = null;
 
     this.pendingIncomingMessages.push(
       await this.createWaitResumeMessage({
@@ -754,6 +770,17 @@ export class RootAgentSession implements RootAgentSessionController {
       ...(await this.renderFocusMessages(resumedStateId, "resume_wait")),
     );
 
+    return resumedStateId;
+  }
+
+  private clearWaitOverlay(): RootAgentStateId | null {
+    if (!this.waitOverlay) {
+      return null;
+    }
+
+    const resumedStateId = this.waitOverlay.resumeStateStack.at(-1) ?? "portal";
+    this.stateStack = [...this.waitOverlay.resumeStateStack];
+    this.waitOverlay = null;
     return resumedStateId;
   }
 
