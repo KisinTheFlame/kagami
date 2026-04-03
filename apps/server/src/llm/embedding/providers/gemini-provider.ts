@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { BizError } from "../../../common/errors/biz-error.js";
 import type { EmbeddingProvider } from "../provider.js";
 import type { EmbeddingRequest, EmbeddingResponse } from "../types.js";
 
@@ -35,7 +36,10 @@ export function createGeminiEmbeddingProvider(
 
       const values = response.embeddings?.[0]?.values;
       if (!Array.isArray(values) || values.some(value => typeof value !== "number")) {
-        throw new Error("Gemini embedding response is missing embedding values");
+        throw new BizError({
+          message: "Gemini embedding response is missing embedding values",
+          statusCode: 502,
+        });
       }
 
       return {

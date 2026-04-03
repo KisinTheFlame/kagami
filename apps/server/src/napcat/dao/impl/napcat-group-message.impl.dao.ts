@@ -1,5 +1,6 @@
 import * as Prisma from "../../../generated/prisma/internal/prismaNamespace.js";
 import { type JsonValue } from "@kagami/shared/schemas/base";
+import { normalizeInputJsonValue, toJsonRecord } from "../../../common/prisma-json.js";
 import type { Database } from "../../../db/client.js";
 import type {
   InsertNapcatQqMessageItem,
@@ -30,9 +31,9 @@ export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
         userId: item.userId,
         nickname: item.nickname,
         messageId: item.messageId,
-        message: toInputJsonValue(item.message),
+        message: normalizeInputJsonValue(item.message),
         eventTime: item.eventTime,
-        payload: toInputJsonValue(item.payload),
+        payload: normalizeInputJsonValue(item.payload),
         createdAt: item.createdAt,
       },
       select: {
@@ -312,61 +313,8 @@ function mapRawContextRowToItem(row: RawNapcatQqMessageContextRow): NapcatQqMess
   };
 }
 
-function toJsonRecord(value: unknown): Record<string, unknown> {
-  const normalized = toJsonValue(value);
-  if (isRecord(normalized)) {
-    return normalized;
-  }
-
-  return {
-    value: normalized,
-  };
-}
-
 function toJsonValue(value: unknown): JsonValue {
-  return normalizeJsonValue(value) as JsonValue;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toInputJsonValue(value: unknown): Prisma.InputJsonValue {
-  return normalizeJsonValue(value);
-}
-
-function normalizeJsonValue(value: unknown): Prisma.InputJsonValue {
-  try {
-    const serialized = JSON.stringify(value, (_key, currentValue) => {
-      if (currentValue instanceof Date) {
-        return currentValue.toISOString();
-      }
-      if (typeof currentValue === "bigint") {
-        return currentValue.toString();
-      }
-      if (typeof currentValue === "function" || typeof currentValue === "symbol") {
-        return String(currentValue);
-      }
-      return currentValue;
-    });
-
-    if (serialized === undefined) {
-      return "undefined";
-    }
-
-    const parsed = JSON.parse(serialized) as unknown;
-    if (parsed === null) {
-      return "null";
-    }
-
-    return parsed as Prisma.InputJsonValue;
-  } catch {
-    if (value instanceof Error) {
-      return value.message;
-    }
-
-    return String(value);
-  }
+  return normalizeInputJsonValue(value) as JsonValue;
 }
 
 function toContainsPattern(value: string): string {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BizError } from "../../../../common/errors/biz-error.js";
 import type { WebSearchInput, WebSearchResult, WebSearchService } from "./web-search.service.js";
 
 const DEFAULT_BASE_URL = "https://api.tavily.com";
@@ -70,23 +71,30 @@ export class TavilyWebSearchService implements WebSearchService {
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Tavily 请求失败 (${response.status}): ${truncateText(responseText, 200) || "unknown error"}`,
-      );
+      throw new BizError({
+        message: `Tavily 请求失败 (${response.status}): ${truncateText(responseText, 200) || "unknown error"}`,
+        statusCode: 502,
+        meta: { httpStatus: response.status },
+      });
     }
 
     let payload: unknown;
     try {
       payload = JSON.parse(responseText);
     } catch (error) {
-      throw new Error(
-        `Tavily 返回了无法解析的 JSON：${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new BizError({
+        message: `Tavily 返回了无法解析的 JSON：${error instanceof Error ? error.message : String(error)}`,
+        statusCode: 502,
+        cause: error,
+      });
     }
 
     const parsed = TavilySearchResponseSchema.safeParse(payload);
     if (!parsed.success) {
-      throw new Error("Tavily 返回的数据结构不符合预期");
+      throw new BizError({
+        message: "Tavily 返回的数据结构不符合预期",
+        statusCode: 502,
+      });
     }
 
     return {

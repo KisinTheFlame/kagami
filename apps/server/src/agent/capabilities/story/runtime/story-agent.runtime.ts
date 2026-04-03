@@ -757,11 +757,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
   }
 }
 
-/**
- * @deprecated Use StoryLoopAgent instead.
- */
-export class StoryAgentRuntime extends StoryLoopAgent {}
-
 class StoryLlmTelemetryExtension implements ReActKernelExtension<
   LlmMessage,
   "storyAgent",

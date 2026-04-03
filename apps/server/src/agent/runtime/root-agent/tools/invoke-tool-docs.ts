@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "@kagami/agent-runtime";
+import { isRecord } from "../../../../common/prisma-json.js";
 
 export function renderInvokeToolGuide(
   tools: ToolDefinition[],
@@ -66,8 +67,4 @@ function getInvokeToolApplicableStateText(toolName: string): string {
   }
 
   return "未知";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

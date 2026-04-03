@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isRecord } from "../../../common/prisma-json.js";
 import {
   type NapcatSendAtSegment,
   type NapcatSendMessageSegment,
@@ -96,10 +97,6 @@ export function extractSenderNickname(payload: Record<string, unknown>): string 
   }
 
   return toNullableString(sender.nickname);
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function toNullableString(value: unknown): string | null {

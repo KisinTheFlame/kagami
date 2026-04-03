@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { BizError } from "../../common/errors/biz-error.js";
 import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -331,7 +332,11 @@ export async function fetchClaudeCodeUsageLimitsFromApi(
   });
 
   if (!response.ok) {
-    throw new Error(`Claude Code usage request failed: ${response.status}`);
+    throw new BizError({
+      message: `Claude Code usage request failed: ${response.status}`,
+      statusCode: 502,
+      meta: { httpStatus: response.status },
+    });
   }
 
   const data = (await response.json()) as Record<string, unknown>;

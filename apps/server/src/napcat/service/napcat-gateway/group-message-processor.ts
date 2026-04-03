@@ -156,7 +156,7 @@ export class NapcatGroupMessageProcessor {
     const userId = toNullableId(eventPayload.user_id);
     const selfId = toNullableId(eventPayload.self_id);
     const groupId = toNullableId(eventPayload.group_id);
-    const payload = eventPayload as unknown as Record<string, unknown>;
+    const payload: Record<string, unknown> = eventPayload;
     const { rawMessage, messageSegments } = await this.normalizeMessageContent({
       payload,
       groupId,

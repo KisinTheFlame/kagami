@@ -1,3 +1,4 @@
+import { isRecord } from "../common/prisma-json.js";
 import type { LogMetadata } from "./types.js";
 
 export function serializeMetadata(metadata: LogMetadata): LogMetadata {
@@ -62,8 +63,4 @@ function jsonReplacer(_key: string, value: unknown): unknown {
   }
 
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

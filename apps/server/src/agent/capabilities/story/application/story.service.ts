@@ -1,3 +1,4 @@
+import { BizError } from "../../../../common/errors/biz-error.js";
 import type { StoryRecord } from "../domain/story.js";
 import type { StoryDao } from "../infra/story.dao.js";
 import { formatStoryMarkdown, parseStoryMarkdown } from "../domain/story-markdown.js";
@@ -40,7 +41,11 @@ export class StoryService {
   }): Promise<StoryRecord> {
     const existing = await this.storyDao.findById(input.storyId);
     if (!existing) {
-      throw new Error(`Story not found: ${input.storyId}`);
+      throw new BizError({
+        message: `Story not found: ${input.storyId}`,
+        statusCode: 404,
+        meta: { storyId: input.storyId },
+      });
     }
 
     const normalizedMarkdown = formatStoryMarkdown(parseStoryMarkdown(input.markdown));

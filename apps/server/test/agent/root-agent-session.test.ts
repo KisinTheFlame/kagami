@@ -404,8 +404,7 @@ describe("RootAgentSession", () => {
     const notificationMessage = [...snapshot.messages]
       .reverse()
       .find(
-        message =>
-          typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+        message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
       );
 
     expect(notificationMessage?.content).toContain("QQ 群 测试群 (group-2)：未读 1 条消息。");
@@ -436,8 +435,7 @@ describe("RootAgentSession", () => {
 
     const snapshot = await context.getSnapshot();
     const notificationMessages = snapshot.messages.filter(
-      message =>
-        typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+      message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
     );
 
     expect(notificationMessages).toHaveLength(1);
@@ -735,8 +733,7 @@ describe("RootAgentSession", () => {
     const notificationMessage = [...snapshot.messages]
       .reverse()
       .find(
-        message =>
-          typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+        message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
       );
 
     expect(notificationMessage?.content).toContain("QQ 私聊 好友备注 (user-1)：未读 1 条消息。");

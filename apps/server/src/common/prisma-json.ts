@@ -1,8 +1,12 @@
-import type * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
+import type * as Prisma from "../generated/prisma/internal/prismaNamespace.js";
 
-export function toJsonRecord(value: Prisma.JsonValue): Record<string, unknown> {
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function toJsonRecord(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) {
+    return value;
   }
 
   return {
@@ -12,7 +16,7 @@ export function toJsonRecord(value: Prisma.JsonValue): Record<string, unknown> {
 
 export function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
   const normalized = normalizeInputJsonValue(value);
-  if (typeof normalized === "object" && !Array.isArray(normalized)) {
+  if (typeof normalized === "object" && normalized !== null && !Array.isArray(normalized)) {
     return normalized as Prisma.InputJsonObject;
   }
 
@@ -21,7 +25,7 @@ export function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJ
   };
 }
 
-function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
+export function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
   try {
     const serialized = JSON.stringify(value, (_key, currentValue) => {
       if (currentValue instanceof Date) {
@@ -31,7 +35,7 @@ function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
         return currentValue.toString();
       }
       if (typeof currentValue === "function" || typeof currentValue === "symbol") {
-        return String(currentValue);
+        return undefined;
       }
       return currentValue;
     });

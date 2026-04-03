@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
 import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
+import { AppLogger } from "../logger/logger.js";
 import type { Config } from "../config/config.loader.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import type { LlmChatCallDao } from "./dao/llm-chat-call.dao.js";
@@ -16,6 +17,8 @@ import type {
   LlmChatResponsePayload,
   LlmToolChoice,
 } from "./types.js";
+
+const llmClientLogger = new AppLogger({ source: "llm.client" });
 
 type LlmProviderConfig = {
   apiKey?: string;
@@ -250,7 +253,12 @@ async function executeChatAttempt({
           nativeRequestPayload: providerResult.nativeRequestPayload,
           nativeResponsePayload: providerResult.nativeResponsePayload,
         })
-        .catch(() => {});
+        .catch((e: unknown) => {
+          llmClientLogger.warn("Failed to record LLM chat call success", {
+            event: "llm.record_success_failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+        });
     }
 
     if (onSettled) {
@@ -324,7 +332,12 @@ async function executeChatAttempt({
           nativeError: failureContext?.nativeError ?? null,
           error,
         })
-        .catch(() => {});
+        .catch((e: unknown) => {
+          llmClientLogger.warn("Failed to record LLM chat call error", {
+            event: "llm.record_error_failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+        });
     }
 
     if (onSettled) {

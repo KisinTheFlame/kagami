@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BizError } from "../../../../common/errors/biz-error.js";
 
 const STORY_MARKDOWN_FIELD_LABELS = {
   time: "时间",
@@ -250,7 +251,10 @@ export function validateStoryMarkdown(markdown: string): StoryMarkdownValidation
 export function parseStoryMarkdown(markdown: string): StoryContent {
   const result = validateStoryMarkdown(markdown);
   if (!result.ok) {
-    throw new Error(`Invalid story markdown: ${result.errors.join("；")}`);
+    throw new BizError({
+      message: `Invalid story markdown: ${result.errors.join("；")}`,
+      statusCode: 400,
+    });
   }
 
   return result.story;

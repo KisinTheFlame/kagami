@@ -6,6 +6,7 @@ import {
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
 } from "@kagami/shared/schemas/auth";
+import { BizError } from "../../common/errors/biz-error.js";
 import { SharedOAuthServiceCore } from "../shared/service.js";
 import type {
   OAuthCallbackInput,
@@ -263,7 +264,11 @@ export function assertInternalAuthProvider(provider: string): InternalAuthProvid
   const publicProvider =
     provider === "openai-codex" || provider === "claude-code" ? provider : null;
   if (!publicProvider) {
-    throw new Error(`Unsupported auth provider: ${provider}`);
+    throw new BizError({
+      message: `Unsupported auth provider: ${provider}`,
+      statusCode: 400,
+      meta: { provider },
+    });
   }
 
   return publicProvider;

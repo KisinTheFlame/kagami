@@ -6,7 +6,7 @@ import type {
   NewsArticleRecord,
   NewsArticleContentStatus,
 } from "../application/news-article.dao.js";
-import { toInputJsonObject, toJsonRecord } from "./prisma-news-json.js";
+import { toInputJsonObject, toJsonRecord } from "../../common/prisma-json.js";
 
 export class PrismaNewsArticleDao implements NewsArticleDao {
   private readonly database: Database;
