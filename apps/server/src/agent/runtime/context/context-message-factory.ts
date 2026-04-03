@@ -4,7 +4,10 @@ import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
 } from "../../../napcat/service/napcat-gateway/shared.js";
-import type { NapcatGroupMessageData } from "../../../napcat/service/napcat-gateway.service.js";
+import type {
+  NapcatGroupMessageData,
+  NapcatPrivateMessageData,
+} from "../../../napcat/service/napcat-gateway.service.js";
 import { renderServerStaticTemplate } from "../../../common/runtime/read-static-text.js";
 
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
@@ -130,6 +133,44 @@ export function createPortalSnapshotMessage(
   );
 }
 
+export function createBackgroundQqNotificationMessage(input: {
+  groups: Array<{
+    groupId: string;
+    groupName?: string;
+    unreadCount: number;
+  }>;
+  privateChats?: Array<{
+    userId: string;
+    displayName: string;
+    unreadCount: number;
+  }>;
+}): UserMessage {
+  const lines = [
+    "<system_reminder>",
+    "后台有新的 QQ 消息到来。",
+    "如果想继续处理某个会话，调用 enter 进入对应状态。",
+    "待处理会话：",
+  ];
+
+  for (const group of input.groups) {
+    const groupLabel = group.groupName
+      ? `QQ 群 ${group.groupName} (${group.groupId})`
+      : `QQ 群 ${group.groupId}`;
+    lines.push(
+      `- ${groupLabel}，未读 ${group.unreadCount} 条，可通过 enter(kind="qq_group", id="${group.groupId}") 进入`,
+    );
+  }
+
+  for (const privateChat of input.privateChats ?? []) {
+    lines.push(
+      `- QQ 私聊 ${privateChat.displayName} (${privateChat.userId})，未读 ${privateChat.unreadCount} 条，可通过 enter(kind="qq_private", id="${privateChat.userId}") 进入`,
+    );
+  }
+
+  lines.push("</system_reminder>");
+  return createUserMessage(lines.join("\n"));
+}
+
 export function createEnterZoneOutMessage(): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/enter-zone-out.hbs"),
@@ -205,6 +246,14 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
       }
 
       return [createUserMessage(renderGroupMessagePlainText(event.data))];
+    case "napcat_private_message":
+      if ((event.data.messageSegments?.length ?? 0) === 0) {
+        return [];
+      }
+
+      return [createUserMessage(renderPrivateMessagePlainText(event.data))];
+    case "napcat_friend_list_updated":
+      return [];
     case "news_article_ingested":
       return [];
     default:
@@ -224,27 +273,86 @@ export function createMergedGroupMessagesMessage(
   );
 }
 
+export function createMergedPrivateMessagesMessage(
+  messages: NapcatPrivateMessageData[],
+): UserMessage | null {
+  if (messages.length === 0) {
+    return null;
+  }
+
+  return createUserMessage(
+    messages.map(message => renderPrivateMessagePlainText(message)).join("\n\n"),
+  );
+}
+
 export function renderGroupMessagePlainText(input: {
   nickname: string;
   userId: string;
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
 }): string {
-  const renderedMessage = renderGroupMessageBody(input);
+  return renderQqMessagePlainText({
+    displayName: input.nickname,
+    userId: input.userId,
+    rawMessage: input.rawMessage,
+    messageSegments: input.messageSegments,
+  });
+}
+
+export function renderPrivateMessagePlainText(input: {
+  nickname: string;
+  remark: string | null;
+  userId: string;
+  rawMessage: string;
+  messageSegments?: NapcatReceiveMessageSegment[];
+}): string {
+  return renderQqMessagePlainText({
+    displayName: formatPrivateChatDisplayName(input),
+    userId: input.userId,
+    rawMessage: input.rawMessage,
+    messageSegments: input.messageSegments,
+  });
+}
+
+export function formatPrivateChatDisplayName(input: {
+  nickname: string;
+  remark: string | null;
+  userId: string;
+}): string {
+  const remark = input.remark?.trim();
+  if (remark) {
+    return remark;
+  }
+
+  const nickname = input.nickname.trim();
+  if (nickname) {
+    return nickname;
+  }
+
+  return input.userId;
+}
+
+function renderQqMessagePlainText(input: {
+  displayName: string;
+  userId: string;
+  rawMessage: string;
+  messageSegments?: NapcatReceiveMessageSegment[];
+}): string {
+  const renderedMessage = renderQqMessageBody(input);
   return renderServerStaticTemplate(import.meta.url, "context/qq-message.hbs", {
-    nickname: input.nickname,
+    nickname: input.displayName,
     userId: input.userId,
     messageBody: renderedMessage,
   });
 }
 
-function renderGroupMessageBody(input: {
+function renderQqMessageBody(input: {
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
 }): string {
   const segments = input.messageSegments ?? [];
   if (segments.length === 0) {
-    return "";
+    return input.rawMessage.trim();
   }
 
   const rendered = renderSupportedMessageSegments(segments);

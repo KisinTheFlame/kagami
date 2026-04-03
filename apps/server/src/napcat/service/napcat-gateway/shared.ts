@@ -45,7 +45,7 @@ export type NapcatReceiveTextOrAtSegment = NapcatReceiveTextSegment | NapcatRece
 export const ActionResponseSchema = z.object({
   status: z.string(),
   retcode: z.number(),
-  data: z.record(z.string(), z.unknown()).nullable().optional(),
+  data: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]).nullable().optional(),
   message: z.string().optional(),
   wording: z.string().optional(),
   echo: z.string(),
@@ -66,6 +66,7 @@ export const PostTypeEventSchema = z
   .passthrough();
 
 export type NapcatGatewayActionResponse = z.infer<typeof ActionResponseSchema>;
+export type NapcatGatewayActionResponseData = NapcatGatewayActionResponse["data"];
 export type NapcatGatewayPostTypeEventPayload = z.infer<typeof PostTypeEventSchema>;
 
 export function toNullableId(value: unknown): string | null {

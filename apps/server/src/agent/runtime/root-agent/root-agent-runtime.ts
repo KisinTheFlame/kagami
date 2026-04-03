@@ -356,7 +356,7 @@ class RootAgentHost {
       },
       tools,
       toolContext: {
-        groupId: this.session.getCurrentGroupId(),
+        chatTarget: this.session.getCurrentChatTarget(),
         systemPrompt: snapshot.systemPrompt,
         messages: [...snapshot.messages],
         agentContext: this.context,

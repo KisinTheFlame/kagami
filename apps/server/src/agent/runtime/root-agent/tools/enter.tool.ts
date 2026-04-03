@@ -4,9 +4,15 @@ import type { RootAgentSessionController } from "../session/root-agent-session.j
 
 export const ENTER_TOOL_NAME = "enter";
 
-const EnterArgumentsSchema = z.object({
-  id: z.string().trim().min(1),
-});
+const EnterArgumentsSchema = z.union([
+  z.object({
+    kind: z.enum(["qq_group", "qq_private", "ithome", "zone_out"]),
+    id: z.string().trim().min(1).optional(),
+  }),
+  z.object({
+    id: z.string().trim().min(1),
+  }),
+]);
 
 type EnterToolContext = ToolContext & {
   rootAgentSession?: RootAgentSessionController;
@@ -20,7 +26,13 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
     properties: {
       id: {
         type: "string",
-        description: '目标状态的唯一 ID，例如 "qq_group:123456"、"ithome" 或 "zone_out"。',
+        description:
+          '目标状态的唯一 ID，例如 "qq_group:123456"、"qq_private:123456"、"ithome" 或 "zone_out"。',
+      },
+      kind: {
+        type: "string",
+        description:
+          '目标状态类型，可选值为 "qq_group"、"qq_private"、"ithome" 或 "zone_out"；传完整状态 ID 时可省略。',
       },
     },
   } as const;
@@ -40,9 +52,7 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
     }
 
     return JSON.stringify(
-      await rootAgentSession.enter({
-        id: input.id,
-      }),
+      await rootAgentSession.enter("kind" in input ? input : { id: input.id }),
     );
   }
 }

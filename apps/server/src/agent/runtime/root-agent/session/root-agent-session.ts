@@ -4,18 +4,24 @@ import {
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
+  createMergedPrivateMessagesMessage,
   createEnterZoneOutMessage,
   createExitZoneOutMessage,
   createStateSystemReminderMessage,
   createWaitResumeMessage,
+  formatPrivateChatDisplayName,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
 import type {
+  NapcatChatTarget,
+  NapcatFriendInfo,
   NapcatGatewayService,
   NapcatGroupMessageData,
+  NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
 import { GroupChatState } from "./group-chat-state.js";
+import { PrivateChatState } from "./private-chat-state.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
   PersistedRootAgentIthomeFeedState,
@@ -24,11 +30,15 @@ import type {
 
 export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome", "zone_out"] as const;
 export type RootAgentStaticStateId = (typeof ROOT_AGENT_STATIC_STATE_IDS)[number];
-export type RootAgentStateId = RootAgentStaticStateId | `qq_group:${string}`;
+export type RootAgentStateId =
+  | RootAgentStaticStateId
+  | `qq_group:${string}`
+  | `qq_private:${string}`;
 
 export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   portal: [],
   qq_group: ["send_message"],
+  qq_private: ["send_message"],
   ithome: ["open_ithome_article"],
   zone_out: ["zone_out"],
 } as const;
@@ -74,6 +84,7 @@ export type RootAgentSessionDashboardSnapshot = {
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getFocusedStateId(): RootAgentStateId;
+  getCurrentChatTarget(): NapcatChatTarget | undefined;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
   getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot>;
@@ -85,7 +96,9 @@ export type RootAgentSessionController = {
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
   enter(
-    input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+    input:
+      | { id: string }
+      | { kind: "qq_group" | "qq_private" | "ithome" | "zone_out"; id?: string },
   ): Promise<Record<string, unknown>>;
   openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>>;
   back(): Promise<Record<string, unknown>>;
@@ -143,6 +156,8 @@ export class RootAgentSession implements RootAgentSessionController {
   > | null;
   public readonly groupStates: GroupChatState[];
   public readonly groupStateById: Map<string, GroupChatState>;
+  public readonly privateChatStates: PrivateChatState[] = [];
+  public readonly privateChatStateByUserId = new Map<string, PrivateChatState>();
   private readonly pendingVisibleEvents: Event[] = [];
   private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
@@ -191,13 +206,34 @@ export class RootAgentSession implements RootAgentSessionController {
     return this.stateStack.at(-1) ?? "portal";
   }
 
-  public getCurrentGroupId(): string | undefined {
+  public getCurrentChatTarget(): NapcatChatTarget | undefined {
     if (this.waitOverlay) {
       return undefined;
     }
 
     const focusedStateId = this.getFocusedStateId();
-    return parseGroupIdFromStateId(focusedStateId);
+    const groupId = parseGroupIdFromStateId(focusedStateId);
+    if (groupId) {
+      return {
+        chatType: "group",
+        groupId,
+      };
+    }
+
+    const userId = parsePrivateUserIdFromStateId(focusedStateId);
+    if (userId) {
+      return {
+        chatType: "private",
+        userId,
+      };
+    }
+
+    return undefined;
+  }
+
+  public getCurrentGroupId(): string | undefined {
+    const chatTarget = this.getCurrentChatTarget();
+    return chatTarget?.chatType === "group" ? chatTarget.groupId : undefined;
   }
 
   public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
@@ -257,12 +293,22 @@ export class RootAgentSession implements RootAgentSessionController {
         unreadMessages: groupState.getUnreadMessages(),
         hasEntered: groupState.hasEntered(),
       })),
+      privateChats: this.privateChatStates.map(privateChatState => ({
+        userId: privateChatState.userId,
+        friendInfo: privateChatState.getFriendInfo(),
+        unreadMessages: privateChatState.getUnreadMessages(),
+        hasEntered: privateChatState.hasEntered(),
+      })),
       ithomeFeedState: this.ithomeFeedState ? { ...this.ithomeFeedState } : null,
     };
   }
 
   public restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void {
-    const normalizedSnapshot = normalizePersistedSnapshot(snapshot, this.groupStateById);
+    const normalizedSnapshot = normalizePersistedSnapshot(
+      snapshot,
+      this.groupStateById,
+      this.privateChatStateByUserId,
+    );
 
     for (const groupState of this.groupStates) {
       groupState.restoreSnapshot({
@@ -271,6 +317,9 @@ export class RootAgentSession implements RootAgentSessionController {
         hasEntered: false,
       });
     }
+
+    this.privateChatStates.splice(0, this.privateChatStates.length);
+    this.privateChatStateByUserId.clear();
 
     for (const persistedGroupState of normalizedSnapshot.groups) {
       const groupState = this.groupStateById.get(persistedGroupState.groupId);
@@ -282,6 +331,18 @@ export class RootAgentSession implements RootAgentSessionController {
         groupInfo: persistedGroupState.groupInfo,
         unreadMessages: persistedGroupState.unreadMessages,
         hasEntered: persistedGroupState.hasEntered,
+      });
+    }
+
+    for (const persistedPrivateChat of normalizedSnapshot.privateChats) {
+      const privateChatState = this.ensurePrivateChatState({
+        userId: persistedPrivateChat.userId,
+        friendInfo: persistedPrivateChat.friendInfo,
+      });
+      privateChatState.restoreSnapshot({
+        friendInfo: persistedPrivateChat.friendInfo,
+        unreadMessages: persistedPrivateChat.unreadMessages,
+        hasEntered: persistedPrivateChat.hasEntered,
       });
     }
 
@@ -300,6 +361,8 @@ export class RootAgentSession implements RootAgentSessionController {
     for (const groupState of this.groupStates) {
       groupState.reset();
     }
+    this.privateChatStates.splice(0, this.privateChatStates.length);
+    this.privateChatStateByUserId.clear();
 
     this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
@@ -327,6 +390,13 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public async consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
+
+    if (event.type === "napcat_friend_list_updated") {
+      this.syncPrivateChatsFromFriendList(event.data.friends);
+      return {
+        shouldTriggerRound: false,
+      };
+    }
 
     if (this.waitOverlay) {
       return await this.consumeIncomingEventWhileWaiting(event);
@@ -366,7 +436,9 @@ export class RootAgentSession implements RootAgentSessionController {
   }
 
   public async enter(
-    input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+    input:
+      | { id: string }
+      | { kind: "qq_group" | "qq_private" | "ithome" | "zone_out"; id?: string },
   ): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
@@ -657,6 +729,14 @@ export class RootAgentSession implements RootAgentSessionController {
       return `${await this.resolveWakeEventGroupLabel(event.data.groupId)} 收到了新消息`;
     }
 
+    if (event.type === "napcat_private_message") {
+      return `${this.resolveWakeEventPrivateLabel(event.data)} 收到了新消息`;
+    }
+
+    if (event.type === "napcat_friend_list_updated") {
+      return "QQ 好友列表已更新";
+    }
+
     const targetState = this.resolveState(targetStateId);
     if (!targetState) {
       return "收到了新的外部事件";
@@ -728,11 +808,16 @@ export class RootAgentSession implements RootAgentSessionController {
     }
 
     const groupId = parseGroupIdFromStateId(stateId);
-    if (!groupId || !this.groupStateById.has(groupId)) {
-      return null;
+    if (groupId && this.groupStateById.has(groupId)) {
+      return new QqGroupState(this, groupId);
     }
 
-    return new QqGroupState(this, groupId);
+    const userId = parsePrivateUserIdFromStateId(stateId);
+    if (userId && this.privateChatStateByUserId.has(userId)) {
+      return new QqPrivateState(this, userId);
+    }
+
+    return null;
   }
 
   private requireState(stateId: RootAgentStateId): RootAgentState {
@@ -749,9 +834,25 @@ export class RootAgentSession implements RootAgentSessionController {
       return event.data.sourceKey === "ithome" && this.ithomeNewsService ? "ithome" : null;
     }
 
-    return this.groupStateById.has(event.data.groupId)
-      ? createQqGroupStateId(event.data.groupId)
-      : null;
+    if (event.type === "napcat_group_message") {
+      return this.groupStateById.has(event.data.groupId)
+        ? createQqGroupStateId(event.data.groupId)
+        : null;
+    }
+
+    if (event.type === "napcat_friend_list_updated") {
+      return null;
+    }
+
+    const privateChatState = this.ensurePrivateChatState({
+      userId: event.data.userId,
+      friendInfo: {
+        userId: event.data.userId,
+        nickname: event.data.nickname,
+        remark: event.data.remark,
+      },
+    });
+    return createQqPrivateStateId(privateChatState.userId);
   }
 
   private async hasDescendantState(input: {
@@ -788,6 +889,33 @@ export class RootAgentSession implements RootAgentSessionController {
     });
   }
 
+  public async fetchRecentPrivateMessages(userId: string): Promise<NapcatPrivateMessageData[]> {
+    if (this.recentMessageLimit === 0) {
+      return [];
+    }
+
+    const friendInfo = this.privateChatStateByUserId.get(userId)?.getFriendInfo();
+    const messages = await this.napcatGatewayService.getRecentPrivateMessages({
+      userId,
+      count: this.recentMessageLimit,
+    });
+
+    return messages
+      .filter(
+        (message): message is typeof message & { userId: string } =>
+          message.messageType === "private" && message.userId === userId,
+      )
+      .map(message => ({
+        userId,
+        nickname: message.nickname ?? friendInfo?.nickname ?? userId,
+        remark: friendInfo?.remark ?? null,
+        rawMessage: message.rawMessage,
+        messageSegments: message.messageSegments,
+        messageId: message.messageId,
+        time: message.time,
+      }));
+  }
+
   public async ensureGroupInfosLoaded(): Promise<void> {
     if (this.groupInfoLoaded) {
       return;
@@ -821,6 +949,47 @@ export class RootAgentSession implements RootAgentSessionController {
       hasEntered: overview.hasEntered,
     };
   }
+
+  public syncPrivateChatsFromFriendList(friendList: NapcatFriendInfo[]): void {
+    for (const friendInfo of friendList) {
+      this.ensurePrivateChatState({
+        userId: friendInfo.userId,
+        friendInfo,
+      });
+    }
+  }
+
+  public ensurePrivateChatState(input: {
+    userId: string;
+    friendInfo?: NapcatFriendInfo | null;
+  }): PrivateChatState {
+    const existing = this.privateChatStateByUserId.get(input.userId);
+    if (existing) {
+      if (input.friendInfo) {
+        existing.setFriendInfo(input.friendInfo);
+      }
+      return existing;
+    }
+
+    const privateChatState = new PrivateChatState({
+      userId: input.userId,
+      unreadLimit: this.recentMessageLimit,
+    });
+    if (input.friendInfo) {
+      privateChatState.setFriendInfo(input.friendInfo);
+    }
+    this.privateChatStates.push(privateChatState);
+    this.privateChatStateByUserId.set(input.userId, privateChatState);
+    return privateChatState;
+  }
+
+  public resolveWakeEventPrivateLabel(input: {
+    userId: string;
+    nickname: string;
+    remark: string | null;
+  }): string {
+    return `QQ 私聊 ${formatPrivateChatDisplayName(input)}`;
+  }
 }
 
 class PortalState implements RootAgentState {
@@ -839,7 +1008,7 @@ class PortalState implements RootAgentState {
   }
 
   public async getDescription(): Promise<string> {
-    return "主入口，可从这里进入群聊、资讯和神游。";
+    return "主入口，可从这里进入群聊、私聊、资讯和神游。";
   }
 
   public async listChildren(): Promise<RootAgentState[]> {
@@ -848,6 +1017,11 @@ class PortalState implements RootAgentState {
 
     const children: RootAgentState[] = this.session.groupStates.map(
       groupState => new QqGroupState(this.session, groupState.groupId),
+    );
+    children.push(
+      ...this.session.privateChatStates.map(
+        privateChatState => new QqPrivateState(this.session, privateChatState.userId),
+      ),
     );
 
     if (this.session.ithomeNewsService) {
@@ -972,6 +1146,111 @@ class QqGroupState implements RootAgentState {
     }
 
     groupState.pushUnreadMessage(input.event.data);
+    return {
+      shouldTriggerRound: false,
+      stateChanged: true,
+    };
+  }
+}
+
+class QqPrivateState implements RootAgentState {
+  private readonly session: RootAgentSession;
+  private readonly userId: string;
+
+  public constructor(session: RootAgentSession, userId: string) {
+    this.session = session;
+    this.userId = userId;
+  }
+
+  public getId(): RootAgentStateId {
+    return createQqPrivateStateId(this.userId);
+  }
+
+  public getDisplayName(): string {
+    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
+    const displayName = privateChatState?.getDisplayName() ?? this.userId;
+    return `QQ 私聊 ${displayName} (${this.userId})`;
+  }
+
+  public async getDescription(): Promise<string> {
+    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
+    if (!privateChatState) {
+      return "私聊状态不可用。";
+    }
+
+    if (privateChatState.getUnreadCount() > 0) {
+      return `未读 ${privateChatState.getUnreadCount()} 条消息。`;
+    }
+
+    if (!privateChatState.hasEntered()) {
+      return "尚未查看，可进去看看最近消息。";
+    }
+
+    return "未读 0 条消息。";
+  }
+
+  public async listChildren(): Promise<RootAgentState[]> {
+    return [];
+  }
+
+  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
+    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_private];
+  }
+
+  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
+    if (input.reason === "resume_wait") {
+      return [];
+    }
+
+    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
+    if (!privateChatState) {
+      return [];
+    }
+
+    const hasEnteredBefore = privateChatState.hasEntered();
+    const hydratedMessages = hasEnteredBefore
+      ? privateChatState.consumeUnreadTail()
+      : await this.session.fetchRecentPrivateMessages(this.userId);
+    if (!hasEnteredBefore) {
+      privateChatState.clearUnreadMessages();
+    }
+
+    privateChatState.markEntered();
+    const hydratedMessage = createMergedPrivateMessagesMessage(hydratedMessages);
+    return hydratedMessage ? [hydratedMessage] : [];
+  }
+
+  public async onBlur(): Promise<LlmMessage[]> {
+    return [];
+  }
+
+  public async handleEvent(input: {
+    event: Event;
+    isFocused: boolean;
+  }): Promise<RootAgentStateHandleEventResult> {
+    if (input.event.type !== "napcat_private_message" || input.event.data.userId !== this.userId) {
+      return {
+        shouldTriggerRound: false,
+      };
+    }
+
+    const privateChatState = this.session.ensurePrivateChatState({
+      userId: input.event.data.userId,
+      friendInfo: {
+        userId: input.event.data.userId,
+        nickname: input.event.data.nickname,
+        remark: input.event.data.remark,
+      },
+    });
+
+    if (input.isFocused) {
+      return {
+        shouldTriggerRound: true,
+        events: [input.event],
+      };
+    }
+
+    privateChatState.pushUnreadMessage(input.event.data);
     return {
       shouldTriggerRound: false,
       stateChanged: true,
@@ -1118,16 +1397,28 @@ function createQqGroupStateId(groupId: string): `qq_group:${string}` {
   return `qq_group:${groupId}`;
 }
 
+function createQqPrivateStateId(userId: string): `qq_private:${string}` {
+  return `qq_private:${userId}`;
+}
+
 function parseGroupIdFromStateId(stateId: string): string | undefined {
   return stateId.startsWith("qq_group:") ? stateId.slice("qq_group:".length) : undefined;
 }
 
+function parsePrivateUserIdFromStateId(stateId: string): string | undefined {
+  return stateId.startsWith("qq_private:") ? stateId.slice("qq_private:".length) : undefined;
+}
+
 function normalizeEnterInputToStateId(
-  input: { id: string } | { kind: "qq_group" | "ithome" | "zone_out"; id?: string },
+  input: { id: string } | { kind: "qq_group" | "qq_private" | "ithome" | "zone_out"; id?: string },
 ): string | null {
   if ("kind" in input) {
     if (input.kind === "qq_group") {
       return input.id?.trim() ? createQqGroupStateId(input.id.trim()) : null;
+    }
+
+    if (input.kind === "qq_private") {
+      return input.id?.trim() ? createQqPrivateStateId(input.id.trim()) : null;
     }
 
     return input.kind;
@@ -1147,22 +1438,39 @@ function cloneGroupStates(
   }));
 }
 
+function clonePrivateChatStates(
+  privateChats: CurrentPersistedRootAgentSessionSnapshot["privateChats"],
+): CurrentPersistedRootAgentSessionSnapshot["privateChats"] {
+  return privateChats.map(privateChat => ({
+    userId: privateChat.userId,
+    friendInfo: privateChat.friendInfo ? structuredClone(privateChat.friendInfo) : null,
+    unreadMessages: structuredClone(privateChat.unreadMessages),
+    hasEntered: privateChat.hasEntered,
+  }));
+}
+
 function normalizePersistedSnapshot(
   snapshot: PersistedRootAgentSessionSnapshot,
   groupStateById: Map<string, GroupChatState>,
+  privateChatStateByUserId: Map<string, PrivateChatState>,
 ): {
   stateStack: RootAgentStateId[];
   waitOverlay: WaitOverlay | null;
   groups: CurrentPersistedRootAgentSessionSnapshot["groups"];
+  privateChats: CurrentPersistedRootAgentSessionSnapshot["privateChats"];
   ithomeFeedState: PortalFeedState | null;
   groupInfoLoaded: boolean;
 } {
+  const knownPrivateUserIds = new Set([
+    ...privateChatStateByUserId.keys(),
+    ...snapshot.privateChats.map(privateChat => privateChat.userId),
+  ]);
   const normalizedStack = snapshot.stateStack
-    .map(stateId => normalizeStateId(stateId, groupStateById))
+    .map(stateId => normalizeStateId(stateId, groupStateById, knownPrivateUserIds))
     .filter((stateId): stateId is RootAgentStateId => stateId !== null);
   const normalizedResumeStateStack =
     snapshot.waitOverlay?.resumeStateStack
-      .map(stateId => normalizeStateId(stateId, groupStateById))
+      .map(stateId => normalizeStateId(stateId, groupStateById, knownPrivateUserIds))
       .filter((stateId): stateId is RootAgentStateId => stateId !== null) ?? [];
 
   return {
@@ -1175,6 +1483,7 @@ function normalizePersistedSnapshot(
         }
       : null,
     groups: cloneGroupStates(snapshot.groups),
+    privateChats: clonePrivateChatStates(snapshot.privateChats),
     ithomeFeedState: snapshot.ithomeFeedState ? { ...snapshot.ithomeFeedState } : null,
     groupInfoLoaded: snapshot.groups.some(group => group.groupInfo !== null),
   };
@@ -1183,6 +1492,7 @@ function normalizePersistedSnapshot(
 function normalizeStateId(
   stateId: string,
   groupStateById: Map<string, GroupChatState>,
+  knownPrivateUserIds: ReadonlySet<string>,
 ): RootAgentStateId | null {
   if (stateId === "portal" || stateId === "ithome" || stateId === "zone_out") {
     return stateId;
@@ -1191,6 +1501,11 @@ function normalizeStateId(
   const groupId = parseGroupIdFromStateId(stateId);
   if (groupId && groupStateById.has(groupId)) {
     return createQqGroupStateId(groupId);
+  }
+
+  const userId = parsePrivateUserIdFromStateId(stateId);
+  if (userId && knownPrivateUserIds.has(userId)) {
+    return createQqPrivateStateId(userId);
   }
 
   return null;

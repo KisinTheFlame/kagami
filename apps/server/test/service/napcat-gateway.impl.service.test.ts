@@ -18,6 +18,15 @@ function expectEnqueuedGroupMessage(data: Record<string, unknown>) {
   });
 }
 
+function expectEnqueuedFriendListUpdated(friends: Array<Record<string, unknown>>) {
+  return expect.objectContaining({
+    type: "napcat_friend_list_updated",
+    data: {
+      friends,
+    },
+  });
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -27,6 +36,27 @@ function createDeferred<T>() {
   });
 
   return { promise, resolve, reject };
+}
+
+function emitActionResponse(socket: FakeWebSocket, payloadIndex: number, data: unknown): void {
+  const sentPayload = JSON.parse(socket.sentPayloads[payloadIndex]) as {
+    echo: string;
+  };
+
+  socket.emitMessage(
+    JSON.stringify({
+      status: "ok",
+      retcode: 0,
+      data,
+      message: "",
+      echo: sentPayload.echo,
+    }),
+  );
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe("DefaultNapcatGatewayService", () => {
@@ -223,6 +253,151 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should refresh cached friend list every 10 seconds", async () => {
+    vi.useFakeTimers();
+
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const getFriendListPromise = gateway.getFriendList();
+    emitActionResponse(socket, 0, [
+      {
+        user_id: 123456,
+        nickname: "初始好友",
+        remark: null,
+      },
+    ]);
+    await flushMicrotasks();
+    await expect(getFriendListPromise).resolves.toEqual([
+      {
+        userId: "123456",
+        nickname: "初始好友",
+        remark: null,
+      },
+    ]);
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      1,
+      expectEnqueuedFriendListUpdated([
+        {
+          userId: "123456",
+          nickname: "初始好友",
+          remark: null,
+        },
+      ]),
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(socket.sentPayloads).toHaveLength(2);
+    emitActionResponse(socket, 1, [
+      {
+        user_id: 123456,
+        nickname: "初始好友",
+        remark: null,
+      },
+      {
+        user_id: 234567,
+        nickname: "新增好友",
+        remark: "新备注",
+      },
+    ]);
+    await flushMicrotasks();
+
+    await expect(gateway.getFriendList()).resolves.toEqual([
+      {
+        userId: "123456",
+        nickname: "初始好友",
+        remark: null,
+      },
+      {
+        userId: "234567",
+        nickname: "新增好友",
+        remark: "新备注",
+      },
+    ]);
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      2,
+      expectEnqueuedFriendListUpdated([
+        {
+          userId: "123456",
+          nickname: "初始好友",
+          remark: null,
+        },
+        {
+          userId: "234567",
+          nickname: "新增好友",
+          remark: "新备注",
+        },
+      ]),
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(socket.sentPayloads).toHaveLength(3);
+    emitActionResponse(socket, 2, [
+      {
+        user_id: 123456,
+        nickname: "初始好友",
+        remark: "更新后的备注",
+      },
+      {
+        user_id: 234567,
+        nickname: "新增好友",
+        remark: "新备注",
+      },
+    ]);
+    await flushMicrotasks();
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      3,
+      expectEnqueuedFriendListUpdated([
+        {
+          userId: "123456",
+          nickname: "初始好友",
+          remark: "更新后的备注",
+        },
+        {
+          userId: "234567",
+          nickname: "新增好友",
+          remark: "新备注",
+        },
+      ]),
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(socket.sentPayloads).toHaveLength(4);
+    emitActionResponse(socket, 3, [
+      {
+        user_id: 123456,
+        nickname: "初始好友",
+        remark: "更新后的备注",
+      },
+      {
+        user_id: 234567,
+        nickname: "新增好友",
+        remark: "新备注",
+      },
+    ]);
+    await flushMicrotasks();
+    expect(eventQueue.enqueue).toHaveBeenCalledTimes(3);
+
+    await gateway.stop();
+  });
+
   it("should publish listened group message events and persist them", async () => {
     const sockets: FakeWebSocket[] = [];
     const eventQueue = createAgentEventQueue();
@@ -361,7 +536,7 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
-  it("should persist private message events without enqueuing agent event", async () => {
+  it("should enqueue private message events from NapCat when sender is in friend list", async () => {
     const sockets: FakeWebSocket[] = [];
     const eventQueue = createAgentEventQueue();
     const napcatGroupMessageDao = createNapcatGroupMessageDao();
@@ -408,8 +583,37 @@ describe("DefaultNapcatGatewayService", () => {
       }),
     );
     await waitOneTick();
+    emitActionResponse(socket, 0, [
+      {
+        user_id: 123456,
+        nickname: "测试好友",
+        remark: "好友备注",
+      },
+    ]);
+    await waitOneTick();
+    await waitOneTick();
 
-    expect(eventQueue.enqueue).not.toHaveBeenCalled();
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expectEnqueuedFriendListUpdated([
+        {
+          userId: "123456",
+          nickname: "测试好友",
+          remark: "好友备注",
+        },
+      ]),
+    );
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "napcat_private_message",
+        data: expect.objectContaining({
+          userId: "123456",
+          nickname: "测试好友",
+          remark: "好友备注",
+          rawMessage: "hi",
+          messageId: 9988,
+        }),
+      }),
+    );
     expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         messageType: "private",
@@ -420,6 +624,78 @@ describe("DefaultNapcatGatewayService", () => {
         messageId: 9988,
       }),
     );
+
+    await gateway.stop();
+  });
+
+  it("should persist private message events without enqueuing agent event for non-friends", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({
+        napcatQqMessageDao: napcatGroupMessageDao,
+      }),
+      imageMessageAnalyzer,
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "private",
+        sub_type: "friend",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hi",
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "hi",
+            },
+          },
+        ],
+        time: 1710000000,
+        sender: {
+          nickname: "测试好友",
+        },
+      }),
+    );
+    await waitOneTick();
+    emitActionResponse(socket, 0, []);
+    await waitOneTick();
+    await waitOneTick();
+    await waitOneTick();
+
+    expect(eventQueue.enqueue).toHaveBeenCalledTimes(1);
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(expectEnqueuedFriendListUpdated([]));
+    expect(eventQueue.enqueue).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "napcat_private_message",
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(napcatGroupMessageDao.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageType: "private",
+          userId: "123456",
+          nickname: "测试好友",
+        }),
+      );
+    });
 
     await gateway.stop();
   });

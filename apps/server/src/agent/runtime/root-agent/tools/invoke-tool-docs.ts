@@ -54,7 +54,7 @@ function renderInvokeToolParameterLines(tool: ToolDefinition): string[] {
 
 function getInvokeToolApplicableStateText(toolName: string): string {
   if (toolName === "send_message") {
-    return "qq_group:*";
+    return "qq_group:* | qq_private:*";
   }
 
   if (toolName === "open_ithome_article") {

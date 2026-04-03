@@ -10,12 +10,14 @@ import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-mess
 import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
+  NapcatAgentEvent,
+  NapcatFriendInfo,
   NapcatGetGroupInfoInput,
   NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
   NapcatGatewayService,
-  NapcatGroupMessageEvent,
   NapcatPersistableQqMessage,
+  NapcatPrivateMessageEvent,
   NapcatSendPrivateMessageInput,
   NapcatSendPrivateMessageResult,
   NapcatSendGroupMessageInput,
@@ -24,7 +26,7 @@ import type {
 
 type CreateNapcatGatewayOptions = {
   configManager: ConfigManager;
-  enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
+  enqueueGroupMessageEvent: (event: NapcatAgentEvent) => number | Promise<number>;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
@@ -32,7 +34,7 @@ type CreateNapcatGatewayOptions = {
 
 type NapcatGatewayOptions = {
   config: Config["server"]["napcat"];
-  enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
+  enqueueGroupMessageEvent: (event: NapcatAgentEvent) => number | Promise<number>;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   createWebSocket?: (url: string) => WebSocketLike;
@@ -45,6 +47,20 @@ const NonEmptyStringSchema = z.string().min(1);
 const GroupMessageHistoryResponseSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())),
 });
+const FriendListResponseSchema = z.array(
+  z.object({
+    user_id: z.union([NonEmptyStringSchema, PositiveIntSchema]).transform(value => String(value)),
+    nickname: z.string().default(""),
+    remark: z
+      .string()
+      .nullable()
+      .optional()
+      .transform(value => {
+        const normalized = value?.trim() ?? "";
+        return normalized.length > 0 ? normalized : null;
+      }),
+  }),
+);
 const GroupInfoResponseSchema = z.object({
   group_all_shut: z.union([z.boolean(), NonNegativeIntSchema]),
   group_remark: z.string().optional().default(""),
@@ -54,6 +70,7 @@ const GroupInfoResponseSchema = z.object({
   max_member_count: NonNegativeIntSchema,
 });
 const logger = new AppLogger({ source: "service.napcat-gateway" });
+const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
 
 type OrderedPostTypeEventResult =
   | {
@@ -65,6 +82,7 @@ type OrderedPostTypeEventResult =
       groupMessageEvent: Awaited<
         ReturnType<NapcatGroupMessageProcessor["process"]>
       >["groupMessageEvent"];
+      privateMessageEvent: NapcatPrivateMessageEvent | null;
     }
   | {
       kind: "failed";
@@ -73,6 +91,10 @@ type OrderedPostTypeEventResult =
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly transport: NapcatGatewayTransport;
   private readonly groupMessageProcessor: NapcatGroupMessageProcessor;
+  private readonly enqueueAgentEvent: (event: NapcatAgentEvent) => number | Promise<number>;
+  private friendInfoByUserId: Map<string, NapcatFriendInfo> | null = null;
+  private friendListRefreshTimer: NodeJS.Timeout | null = null;
+  private friendListRefreshPromise: Promise<void> | null = null;
 
   public static async create({
     configManager,
@@ -110,11 +132,17 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     });
     const groupMessageProcessor = new NapcatGroupMessageProcessor({
       listenGroupIds: config.listenGroupIds,
-      actionRequester: transport,
+      actionRequester: {
+        request: async (action, params) => {
+          const data = await transport.request(action, params);
+          return Array.isArray(data) ? null : (data ?? null);
+        },
+      },
       enqueueGroupMessageEvent,
       imageMessageAnalyzer,
     });
     this.groupMessageProcessor = groupMessageProcessor;
+    this.enqueueAgentEvent = enqueueGroupMessageEvent;
     let nextSequence = 0;
     let nextFlushSequence = 0;
     const completedResults = new Map<number, OrderedPostTypeEventResult>();
@@ -135,6 +163,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         if (result.groupMessageEvent) {
           groupMessageProcessor.publishGroupMessageEvent(result.groupMessageEvent);
         }
+        if (result.privateMessageEvent) {
+          this.publishAgentEvent(result.privateMessageEvent);
+        }
         persistenceWriter.persistEvent(result.normalizedEvent);
       }
     };
@@ -149,12 +180,14 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
         void groupMessageProcessor
           .process(eventPayload)
-          .then(result => {
+          .then(async result => {
+            const privateMessageEvent = await this.toPrivateMessageEvent(result.normalizedEvent);
             completedResults.set(sequence, {
               kind: "processed",
               normalizedEvent: result.normalizedEvent,
               qqMessage: result.qqMessage,
               groupMessageEvent: result.groupMessageEvent,
+              privateMessageEvent,
             });
             flushCompletedResults();
           })
@@ -177,9 +210,11 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
   public async start(): Promise<void> {
     await this.transport.start();
+    this.startFriendListRefreshTimer();
   }
 
   public async stop(): Promise<void> {
+    this.stopFriendListRefreshTimer();
     await this.transport.stop();
   }
 
@@ -193,7 +228,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       message: messageSegments,
     });
 
-    const messageIdResult = MessageIdSchema.safeParse(data?.message_id);
+    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
+    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
     if (!messageIdResult.success) {
       throw new BizError({
         message: "NapCat 返回结果缺少 message_id",
@@ -218,7 +254,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       message: messageSegments,
     });
 
-    const messageIdResult = MessageIdSchema.safeParse(data?.message_id);
+    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
+    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
     if (!messageIdResult.success) {
       throw new BizError({
         message: "NapCat 返回结果缺少 message_id",
@@ -231,6 +268,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return {
       messageId: messageIdResult.data,
     };
+  }
+
+  public async getFriendList(): Promise<NapcatFriendInfo[]> {
+    return [...(await this.loadFriendInfoByUserId()).values()].map(friend => ({ ...friend }));
   }
 
   public async getGroupInfo({
@@ -363,4 +404,233 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       historyResult.data.messages,
     );
   }
+
+  private async toPrivateMessageEvent(input: {
+    postType: string;
+    messageType: string | null;
+    userId: string | null;
+    selfId: string | null;
+    nickname: string | null;
+    rawMessage: string | null;
+    messageSegments: NapcatPersistableQqMessage["messageSegments"];
+    messageId: number | null;
+    time: number | null;
+  }): Promise<NapcatPrivateMessageEvent | null> {
+    if (input.postType !== "message" || input.messageType !== "private") {
+      return null;
+    }
+
+    if (!input.userId || input.rawMessage === null) {
+      return null;
+    }
+
+    if (input.selfId !== null && input.selfId === input.userId) {
+      return null;
+    }
+
+    const friendInfo = await this.findFriendByUserId(input.userId);
+    if (!friendInfo) {
+      logger.info("Ignoring NapCat private message from non-friend user", {
+        event: "napcat.gateway.private_message_ignored_non_friend",
+        userId: input.userId,
+        messageId: input.messageId,
+      });
+      return null;
+    }
+
+    const nickname = input.nickname?.trim() || friendInfo.nickname || input.userId;
+    return {
+      type: "napcat_private_message",
+      data: {
+        userId: input.userId,
+        nickname,
+        remark: friendInfo.remark,
+        rawMessage: input.rawMessage,
+        messageSegments: input.messageSegments,
+        messageId: input.messageId,
+        time: input.time,
+      },
+    };
+  }
+
+  private async findFriendByUserId(userId: string): Promise<NapcatFriendInfo | null> {
+    const hadCachedFriendList = this.friendInfoByUserId !== null;
+    const cachedFriend = (await this.loadFriendInfoByUserId()).get(userId);
+    if (cachedFriend) {
+      return cachedFriend;
+    }
+
+    if (!hadCachedFriendList) {
+      return null;
+    }
+
+    return (await this.loadFriendInfoByUserId({ refresh: true })).get(userId) ?? null;
+  }
+
+  private async loadFriendInfoByUserId(input?: {
+    refresh?: boolean;
+  }): Promise<Map<string, NapcatFriendInfo>> {
+    if (!input?.refresh && this.friendInfoByUserId) {
+      return this.friendInfoByUserId;
+    }
+
+    const data = await this.transport.request("get_friend_list", {});
+    const friendListResult = FriendListResponseSchema.safeParse(data ?? []);
+    if (!friendListResult.success) {
+      throw new BizError({
+        message: "NapCat 返回的好友列表结构无效",
+        meta: {
+          reason: "INVALID_FRIEND_LIST_RESPONSE",
+        },
+      });
+    }
+
+    const normalizedFriendList = normalizeFriendList(
+      friendListResult.data.map(friend => ({
+        userId: friend.user_id,
+        nickname: friend.nickname.trim(),
+        remark: friend.remark,
+      })),
+    );
+    const previousFriendInfoByUserId = this.friendInfoByUserId;
+    this.friendInfoByUserId = new Map(normalizedFriendList.map(friend => [friend.userId, friend]));
+
+    if (hasFriendListChanged(previousFriendInfoByUserId, this.friendInfoByUserId)) {
+      this.publishAgentEvent({
+        type: "napcat_friend_list_updated",
+        data: {
+          friends: normalizedFriendList.map(friend => ({ ...friend })),
+        },
+      });
+    }
+
+    return this.friendInfoByUserId;
+  }
+
+  private startFriendListRefreshTimer(): void {
+    if (this.friendListRefreshTimer) {
+      return;
+    }
+
+    this.friendListRefreshTimer = setInterval(() => {
+      void this.refreshFriendList({
+        force: true,
+        reason: "interval",
+      });
+    }, FRIEND_LIST_REFRESH_INTERVAL_MS);
+  }
+
+  private stopFriendListRefreshTimer(): void {
+    if (!this.friendListRefreshTimer) {
+      return;
+    }
+
+    clearInterval(this.friendListRefreshTimer);
+    this.friendListRefreshTimer = null;
+  }
+
+  private async refreshFriendList(input?: { force?: boolean; reason?: "interval" }): Promise<void> {
+    if (this.friendListRefreshPromise) {
+      return await this.friendListRefreshPromise;
+    }
+
+    const refreshPromise = this.loadFriendInfoByUserId({
+      refresh: input?.force ?? false,
+    })
+      .then(() => undefined)
+      .catch(error => {
+        logger.warn("Failed to refresh NapCat friend list", {
+          event: "napcat.gateway.friend_list_refresh_failed",
+          reason: input?.reason ?? "interval",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (this.friendListRefreshPromise === refreshPromise) {
+          this.friendListRefreshPromise = null;
+        }
+      });
+
+    this.friendListRefreshPromise = refreshPromise;
+    await refreshPromise;
+  }
+
+  private publishAgentEvent(event: NapcatAgentEvent): void {
+    try {
+      const result = this.enqueueAgentEvent(event);
+      void Promise.resolve(result).catch(error => {
+        logger.errorWithCause("Failed to publish agent message event", error, {
+          event: "napcat.gateway.agent_message_publish_failed",
+          messageType: toAgentEventMessageType(event),
+          groupId: event.type === "napcat_group_message" ? event.data.groupId : null,
+          userId: event.type === "napcat_friend_list_updated" ? null : event.data.userId,
+          messageId: event.type === "napcat_friend_list_updated" ? null : event.data.messageId,
+        });
+      });
+    } catch (error) {
+      logger.errorWithCause("Failed to publish agent message event", error, {
+        event: "napcat.gateway.agent_message_publish_failed",
+        messageType: toAgentEventMessageType(event),
+        groupId: event.type === "napcat_group_message" ? event.data.groupId : null,
+        userId: event.type === "napcat_friend_list_updated" ? null : event.data.userId,
+        messageId: event.type === "napcat_friend_list_updated" ? null : event.data.messageId,
+      });
+    }
+  }
+}
+
+function normalizeFriendList(friendList: NapcatFriendInfo[]): NapcatFriendInfo[] {
+  return [...friendList]
+    .map(friend => ({
+      userId: friend.userId,
+      nickname: friend.nickname.trim(),
+      remark: normalizeRemark(friend.remark),
+    }))
+    .sort((left, right) => left.userId.localeCompare(right.userId));
+}
+
+function hasFriendListChanged(
+  previous: Map<string, NapcatFriendInfo> | null,
+  current: Map<string, NapcatFriendInfo>,
+): boolean {
+  if (!previous) {
+    return true;
+  }
+
+  if (previous.size !== current.size) {
+    return true;
+  }
+
+  for (const [userId, currentFriend] of current.entries()) {
+    const previousFriend = previous.get(userId);
+    if (!previousFriend) {
+      return true;
+    }
+
+    if (
+      previousFriend.nickname !== currentFriend.nickname ||
+      normalizeRemark(previousFriend.remark) !== normalizeRemark(currentFriend.remark)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function normalizeRemark(remark: string | null): string | null {
+  const normalized = remark?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+function toAgentEventMessageType(event: NapcatAgentEvent): "group" | "private" | "friend_list" {
+  if (event.type === "napcat_group_message") {
+    return "group";
+  }
+
+  if (event.type === "napcat_private_message") {
+    return "private";
+  }
+
+  return "friend_list";
 }

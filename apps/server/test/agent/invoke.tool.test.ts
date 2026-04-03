@@ -4,14 +4,19 @@ import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/se
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 import { ZoneOutTool } from "../../src/agent/runtime/root-agent/tools/zone-out.tool.js";
 
+function createAgentMessageService() {
+  return {
+    sendGroupMessage: vi.fn(),
+    sendPrivateMessage: vi.fn(),
+  };
+}
+
 describe("invoke tool", () => {
   it("should expose flattened invoke parameters", () => {
     const tool = new InvokeTool({
       tools: [
         new SendMessageTool({
-          agentMessageService: {
-            sendGroupMessage: vi.fn(),
-          },
+          agentMessageService: createAgentMessageService(),
         }),
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
@@ -28,7 +33,7 @@ describe("invoke tool", () => {
         },
         message: {
           type: "string",
-          description: "仅 send_message 使用。要发送到群里的文本内容。",
+          description: "仅 send_message 使用。要发送到当前会话里的文本内容。",
         },
         thought: {
           type: "string",
@@ -43,9 +48,8 @@ describe("invoke tool", () => {
   });
 
   it("should invoke send_message in qq group state", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 9527 }),
-    };
+    const agentMessageService = createAgentMessageService();
+    agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = new InvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
     });
@@ -56,7 +60,10 @@ describe("invoke tool", () => {
         message: "  hello group  ",
       },
       {
-        groupId: "group-1",
+        chatTarget: {
+          chatType: "group",
+          groupId: "group-1",
+        },
         rootAgentSession: {
           getState: () => ({
             focusedStateId: "qq_group:group-1" as const,
@@ -75,15 +82,55 @@ describe("invoke tool", () => {
     expect(result.signal).toBe("continue");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
+      chatType: "group",
       groupId: "group-1",
       messageId: 9527,
     });
   });
 
+  it("should invoke send_message in qq private state", async () => {
+    const agentMessageService = createAgentMessageService();
+    agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
+    const tool = new InvokeTool({
+      tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+    });
+
+    const result = await tool.execute(
+      {
+        tool: "send_message",
+        message: "  hello private  ",
+      },
+      {
+        chatTarget: {
+          chatType: "private",
+          userId: "user-1",
+        },
+        rootAgentSession: {
+          getState: () => ({
+            focusedStateId: "qq_private:user-1" as const,
+            stateStack: ["portal", "qq_private:user-1"] as const,
+            waiting: null,
+          }),
+          getAvailableInvokeTools: () => ["send_message"],
+        },
+      } as Parameters<typeof tool.execute>[1],
+    );
+
+    expect(agentMessageService.sendPrivateMessage).toHaveBeenCalledWith({
+      userId: "user-1",
+      message: "hello private",
+    });
+    expect(result.signal).toBe("continue");
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      chatType: "private",
+      userId: "user-1",
+      messageId: 9630,
+    });
+  });
+
   it("should return agent-friendly message when subtool is unavailable in current state", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn(),
-    };
+    const agentMessageService = createAgentMessageService();
     const tool = new InvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
     });
@@ -122,9 +169,7 @@ describe("invoke tool", () => {
     const tool = new InvokeTool({
       tools: [
         new SendMessageTool({
-          agentMessageService: {
-            sendGroupMessage: vi.fn(),
-          },
+          agentMessageService: createAgentMessageService(),
         }),
         new ZoneOutTool(),
       ],
@@ -162,7 +207,7 @@ describe("invoke tool", () => {
     });
     const tool = new InvokeTool({
       tools: [
-        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
@@ -200,7 +245,7 @@ describe("invoke tool", () => {
   it("should return agent-friendly message when ithome article does not exist", async () => {
     const tool = new InvokeTool({
       tools: [
-        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
@@ -244,7 +289,7 @@ describe("invoke tool", () => {
   it("should describe available tools when invoke subtool does not exist", async () => {
     const tool = new InvokeTool({
       tools: [
-        new SendMessageTool({ agentMessageService: { sendGroupMessage: vi.fn() } }),
+        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],

@@ -7,8 +7,10 @@ import type {
   LlmToolCall,
 } from "../../../../llm/types.js";
 import type {
+  NapcatFriendInfo,
   NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
+  NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import { NapcatReceiveMessageSegmentSchema } from "../../../../napcat/schema/napcat-segment.js";
 
@@ -65,10 +67,26 @@ const NapcatGetGroupInfoResultSchema: z.ZodType<NapcatGetGroupInfoResult> = z.ob
   groupAllShut: z.boolean(),
 });
 
+const NapcatFriendInfoSchema: z.ZodType<NapcatFriendInfo> = z.object({
+  userId: z.string().min(1),
+  nickname: z.string(),
+  remark: z.string().nullable(),
+});
+
 const NapcatGroupMessageDataSchema: z.ZodType<NapcatGroupMessageData> = z.object({
   groupId: z.string().min(1),
   userId: z.string().min(1),
   nickname: z.string(),
+  rawMessage: z.string(),
+  messageSegments: z.array(NapcatReceiveMessageSegmentSchema),
+  messageId: z.number().int().nullable(),
+  time: z.number().int().nullable(),
+});
+
+const NapcatPrivateMessageDataSchema: z.ZodType<NapcatPrivateMessageData> = z.object({
+  userId: z.string().min(1),
+  nickname: z.string(),
+  remark: z.string().nullable(),
   rawMessage: z.string(),
   messageSegments: z.array(NapcatReceiveMessageSegmentSchema),
   messageId: z.number().int().nullable(),
@@ -90,6 +108,17 @@ const PersistedRootAgentSessionGroupStateSchema = z.object({
 
 export type PersistedRootAgentSessionGroupState = z.infer<
   typeof PersistedRootAgentSessionGroupStateSchema
+>;
+
+const PersistedRootAgentSessionPrivateChatStateSchema = z.object({
+  userId: z.string().min(1),
+  friendInfo: NapcatFriendInfoSchema.nullable(),
+  unreadMessages: z.array(NapcatPrivateMessageDataSchema),
+  hasEntered: z.boolean(),
+});
+
+export type PersistedRootAgentSessionPrivateChatState = z.infer<
+  typeof PersistedRootAgentSessionPrivateChatStateSchema
 >;
 
 const PersistedRootAgentIthomeFeedStateSchema = z.object({
@@ -114,6 +143,7 @@ export const PersistedRootAgentSessionSnapshotSchema = z.object({
   stateStack: z.array(z.string().min(1)).min(1),
   waitOverlay: PersistedRootAgentWaitOverlaySchema.nullable(),
   groups: z.array(PersistedRootAgentSessionGroupStateSchema),
+  privateChats: z.array(PersistedRootAgentSessionPrivateChatStateSchema).default([]),
   ithomeFeedState: PersistedRootAgentIthomeFeedStateSchema.nullable(),
 });
 

@@ -13,6 +13,11 @@ export type NapcatSendPrivateMessageResult = NapcatSendPrivateMessageResponse;
 export type NapcatGetGroupInfoInput = {
   groupId: string;
 };
+export type NapcatFriendInfo = {
+  userId: string;
+  nickname: string;
+  remark: string | null;
+};
 export type NapcatGetGroupInfoResult = {
   groupId: string;
   groupName: string;
@@ -37,6 +42,43 @@ export type NapcatGroupMessageEvent = {
   data: NapcatGroupMessageData;
 };
 
+export type NapcatPrivateMessageData = {
+  userId: string;
+  nickname: string;
+  remark: string | null;
+  rawMessage: string;
+  messageSegments: NapcatReceiveMessageSegment[];
+  messageId: number | null;
+  time: number | null;
+};
+
+export type NapcatPrivateMessageEvent = {
+  type: "napcat_private_message";
+  data: NapcatPrivateMessageData;
+};
+
+export type NapcatFriendListUpdatedEvent = {
+  type: "napcat_friend_list_updated";
+  data: {
+    friends: NapcatFriendInfo[];
+  };
+};
+
+export type NapcatAgentEvent =
+  | NapcatGroupMessageEvent
+  | NapcatPrivateMessageEvent
+  | NapcatFriendListUpdatedEvent;
+
+export type NapcatChatTarget =
+  | {
+      chatType: "group";
+      groupId: string;
+    }
+  | {
+      chatType: "private";
+      userId: string;
+    };
+
 export type NapcatPersistableGroupMessageEvent = NapcatGroupMessageData & {
   payload: Record<string, unknown>;
 };
@@ -59,6 +101,7 @@ export interface NapcatGatewayService {
   stop(): Promise<void>;
   sendGroupMessage(input: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult>;
   sendPrivateMessage(input: NapcatSendPrivateMessageInput): Promise<NapcatSendPrivateMessageResult>;
+  getFriendList?(): Promise<NapcatFriendInfo[]>;
   getGroupInfo(input: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult>;
   getRecentGroupMessages(input: {
     groupId: string;

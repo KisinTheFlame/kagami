@@ -1,6 +1,9 @@
 import type { LlmMessage } from "../../../llm/types.js";
 import { createAgentSystemPrompt } from "../root-agent/system-prompt.js";
-import { renderGroupMessagePlainText } from "./context-message-factory.js";
+import {
+  renderGroupMessagePlainText,
+  renderPrivateMessagePlainText,
+} from "./context-message-factory.js";
 import type {
   AgentContext,
   AgentContextDashboardItem,
@@ -178,6 +181,32 @@ function summarizeEvent(event: Event, previewLength: number): AgentContextDashbo
         truncated: preview.truncated,
       };
     }
+    case "napcat_private_message": {
+      const preview = truncateText(
+        renderPrivateMessagePlainText({
+          nickname: event.data.nickname,
+          remark: event.data.remark,
+          userId: event.data.userId,
+          rawMessage: event.data.rawMessage,
+          messageSegments: event.data.messageSegments,
+        }),
+        previewLength,
+      );
+
+      return {
+        kind: "event",
+        label: "QQ私聊消息事件",
+        preview: preview.text,
+        truncated: preview.truncated,
+      };
+    }
+    case "napcat_friend_list_updated":
+      return {
+        kind: "event",
+        label: "好友列表刷新事件",
+        preview: "",
+        truncated: false,
+      };
     case "news_article_ingested":
       return {
         kind: "event",

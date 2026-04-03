@@ -71,7 +71,7 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
       });
     }
 
-    if (!rootAgentSession.getCurrentGroupId()) {
+    if (!rootAgentSession.getCurrentChatTarget()) {
       return JSON.stringify({
         ok: false,
         error: "STATE_TRANSITION_NOT_ALLOWED",

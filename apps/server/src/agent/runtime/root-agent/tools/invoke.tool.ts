@@ -243,9 +243,9 @@ function buildInvokeSubtoolFailureMessage(input: {
     );
   }
 
-  if (input.error === "GROUP_CONTEXT_UNAVAILABLE") {
+  if (input.error === "CHAT_CONTEXT_UNAVAILABLE") {
     return appendInvokeToolDefinitionMessage(
-      `当前缺少可发消息的群聊上下文，不能调用 ${input.tool}。`,
+      `当前缺少可发消息的 QQ 会话上下文，不能调用 ${input.tool}。`,
       input.currentToolDefinition,
     );
   }

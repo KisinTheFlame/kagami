@@ -17,7 +17,10 @@ describe("search_web tool", () => {
     const toolContext = {
       agentContext,
       rootAgentSession: {
-        getCurrentGroupId: () => "group-1",
+        getCurrentChatTarget: () => ({
+          chatType: "group" as const,
+          groupId: "group-1",
+        }),
       },
       systemPrompt: "runtime-system-prompt",
       messages: [{ role: "user" as const, content: "这份消息应该优先透传" }],
@@ -93,7 +96,7 @@ describe("search_web tool", () => {
     const toolContext = {
       agentContext,
       rootAgentSession: {
-        getCurrentGroupId: () => undefined,
+        getCurrentChatTarget: () => undefined,
       },
     } as Parameters<typeof tool.execute>[1];
 
@@ -127,7 +130,10 @@ describe("search_web tool", () => {
     const toolContext = {
       agentContext,
       rootAgentSession: {
-        getCurrentGroupId: () => "group-1",
+        getCurrentChatTarget: () => ({
+          chatType: "group" as const,
+          groupId: "group-1",
+        }),
       },
       systemPrompt: undefined,
       messages: undefined,

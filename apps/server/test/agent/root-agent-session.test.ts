@@ -43,6 +43,43 @@ function createHistoryMessage(message: string, groupId: string) {
   };
 }
 
+function createPrivateEvent(message: string, userId: string) {
+  return {
+    type: "napcat_private_message" as const,
+    data: {
+      userId,
+      nickname: "测试好友",
+      remark: "好友备注",
+      rawMessage: message,
+      messageSegments: [
+        {
+          type: "text" as const,
+          data: {
+            text: message,
+          },
+        },
+      ],
+      messageId: 3001,
+      time: 1710000200,
+    },
+  };
+}
+
+function createFriendListUpdatedEvent(
+  friends: Array<{
+    userId: string;
+    nickname: string;
+    remark: string | null;
+  }>,
+) {
+  return {
+    type: "napcat_friend_list_updated" as const,
+    data: {
+      friends,
+    },
+  };
+}
+
 async function applyPostToolEffects(
   context: DefaultAgentContext,
   effects: Awaited<ReturnType<RootAgentSession["flushPendingPostToolEffects"]>>,
@@ -67,11 +104,15 @@ function createSession({
     groupAllShut: false,
   })),
   getRecentGroupMessages = vi.fn().mockResolvedValue([]),
+  getRecentPrivateMessages = vi.fn().mockResolvedValue([]),
+  getFriendList = vi.fn().mockResolvedValue([]),
   ithomeNewsService,
 }: {
   context: DefaultAgentContext;
   getGroupInfo?: ReturnType<typeof vi.fn>;
   getRecentGroupMessages?: ReturnType<typeof vi.fn>;
+  getRecentPrivateMessages?: ReturnType<typeof vi.fn>;
+  getFriendList?: ReturnType<typeof vi.fn>;
   ithomeNewsService?: {
     getFeedOverview(): Promise<{
       sourceKey: "ithome";
@@ -111,9 +152,10 @@ function createSession({
       stop: vi.fn(),
       sendGroupMessage: vi.fn(),
       sendPrivateMessage: vi.fn(),
+      getFriendList,
       getGroupInfo,
       getRecentGroupMessages,
-      getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getRecentPrivateMessages,
     },
     listenGroupIds: ["group-1", "group-2"],
     recentMessageLimit: 2,
@@ -362,6 +404,7 @@ describe("RootAgentSession", () => {
           hasEntered: false,
         },
       ],
+      privateChats: [],
       ithomeFeedState: null,
     });
 
@@ -434,5 +477,157 @@ describe("RootAgentSession", () => {
         }),
       ]),
     );
+  });
+
+  it("should list qq private child states after consuming friend list update event", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    const snapshotBeforeEvent = await context.getSnapshot();
+    const consumeResult = await session.consumeIncomingEvent(
+      createFriendListUpdatedEvent([
+        {
+          userId: "user-2",
+          nickname: "新好友",
+          remark: "新备注",
+        },
+      ]),
+    );
+    const flushResult = await session.flushPendingIncomingEffects();
+    const dashboard = await session.getDashboardSnapshot();
+    const snapshotAfterEvent = await context.getSnapshot();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: false,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: false,
+    });
+    expect(snapshotAfterEvent.messages).toEqual(snapshotBeforeEvent.messages);
+    expect(dashboard.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "qq_private:user-2",
+          displayName: "QQ 私聊 新备注 (user-2)",
+        }),
+      ]),
+    );
+  });
+
+  it("should update private chat display name after consuming friend list update event", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    await session.consumeIncomingEvent(
+      createFriendListUpdatedEvent([
+        {
+          userId: "user-2",
+          nickname: "老昵称",
+          remark: null,
+        },
+      ]),
+    );
+    await session.flushPendingIncomingEffects();
+
+    await session.consumeIncomingEvent(
+      createFriendListUpdatedEvent([
+        {
+          userId: "user-2",
+          nickname: "新昵称",
+          remark: "新备注",
+        },
+      ]),
+    );
+    await session.flushPendingIncomingEffects();
+
+    const dashboard = await session.getDashboardSnapshot();
+    expect(dashboard.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "qq_private:user-2",
+          displayName: "QQ 私聊 新备注 (user-2)",
+        }),
+      ]),
+    );
+  });
+
+  it("should create qq private child state from incoming private message and enter it", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      getRecentPrivateMessages: vi.fn().mockResolvedValue([
+        {
+          messageType: "private",
+          subType: "friend",
+          groupId: null,
+          userId: "user-1",
+          nickname: "测试好友",
+          rawMessage: "history-private",
+          messageSegments: [
+            {
+              type: "text",
+              data: {
+                text: "history-private",
+              },
+            },
+          ],
+          messageId: 4001,
+          time: 1710000300,
+          payload: {},
+        },
+      ]),
+    });
+
+    await session.initializeContext();
+    const consumeResult = await session.consumeIncomingEvent(
+      createPrivateEvent("hello-private", "user-1"),
+    );
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: true,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+
+    const dashboard = await session.getDashboardSnapshot();
+    expect(dashboard.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "qq_private:user-1",
+          displayName: "QQ 私聊 好友备注 (user-1)",
+        }),
+      ]),
+    );
+
+    await expect(session.enter({ id: "qq_private:user-1" })).resolves.toMatchObject({
+      ok: true,
+      id: "qq_private:user-1",
+    });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    expect(session.getCurrentChatTarget()).toEqual({
+      chatType: "private",
+      userId: "user-1",
+    });
+    expect(session.getCurrentGroupId()).toBeUndefined();
+    expect(session.getAvailableInvokeTools()).toEqual(["send_message"]);
+
+    const snapshot = await context.getSnapshot();
+    expect(
+      snapshot.messages.some(
+        message =>
+          typeof message.content === "string" && message.content.includes("history-private"),
+      ),
+    ).toBe(true);
   });
 });

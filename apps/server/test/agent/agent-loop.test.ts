@@ -355,14 +355,14 @@ describe("RootLoopAgent", () => {
     expect(
       snapshot.messages.some(
         message =>
-          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+          typeof message.content === "string" && message.content.includes("你进入了 门户 节点"),
       ),
     ).toBe(true);
     expect(
       snapshot.messages.some(
         message =>
           typeof message.content === "string" &&
-          message.content.includes("QQ 群 产品群 (group-1)，未读 0 条"),
+          message.content.includes("QQ 群 产品群 (group-1) (qq_group:group-1)"),
       ),
     ).toBe(true);
     const enterAssistantIndex = snapshot.messages.findIndex(
@@ -483,7 +483,7 @@ describe("RootLoopAgent", () => {
         contextMessages: expect.arrayContaining([
           expect.objectContaining({
             role: "user",
-            content: expect.stringContaining("你当前处于门户状态"),
+            content: expect.stringContaining("你进入了 门户 节点"),
           }),
           expect.objectContaining({
             role: "user",
@@ -1150,7 +1150,9 @@ describe("RootLoopAgent", () => {
 
     expect(result.resetAt).toBeInstanceOf(Date);
     expect(session.getState()).toEqual({
-      kind: "portal",
+      focusedStateId: "portal",
+      stateStack: ["portal"],
+      waiting: null,
     });
     expect(eventQueue.size()).toBe(0);
     expect(
@@ -1162,15 +1164,17 @@ describe("RootLoopAgent", () => {
     expect(
       snapshot.messages.some(
         message =>
-          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+          typeof message.content === "string" && message.content.includes("你进入了 门户 节点"),
       ),
     ).toBe(true);
     expect(repository.snapshot).toMatchObject({
       runtimeKey: "root-agent",
       sessionSnapshot: {
-        state: {
-          kind: "portal",
-        },
+        stateStack: ["portal"],
+        waitOverlay: null,
+        groups: expect.any(Array),
+        privateChats: [],
+        ithomeFeedState: null,
       },
       lastWakeReminderAt: null,
     });
@@ -1259,7 +1263,7 @@ describe("RootLoopAgent", () => {
     expect(
       snapshot.messages.some(
         message =>
-          typeof message.content === "string" && message.content.includes("你当前处于门户状态"),
+          typeof message.content === "string" && message.content.includes("你进入了 门户 节点"),
       ),
     ).toBe(true);
   });

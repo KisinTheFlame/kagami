@@ -3,13 +3,14 @@ import { BizError } from "../../../common/errors/biz-error.js";
 import { AppLogger } from "../../../logger/logger.js";
 import {
   type NapcatGatewayActionResponse,
+  type NapcatGatewayActionResponseData,
   type WebSocketLike,
   WS_OPEN_READY_STATE,
 } from "./shared.js";
 
 type PendingRequest = {
   timeout: NodeJS.Timeout;
-  resolve: (result: Record<string, unknown> | null) => void;
+  resolve: (result: NapcatGatewayActionResponseData) => void;
   reject: (error: Error) => void;
 };
 
@@ -95,7 +96,7 @@ export class NapcatGatewayTransport {
   public async request(
     action: string,
     params: Record<string, unknown>,
-  ): Promise<Record<string, unknown> | null> {
+  ): Promise<NapcatGatewayActionResponseData> {
     const activeSocket = this.socket;
     if (!activeSocket || activeSocket.readyState !== WS_OPEN_READY_STATE) {
       throw new BizError({

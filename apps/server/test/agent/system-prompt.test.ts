@@ -60,7 +60,7 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).toContain("<conversation_summary>");
     expect(prompt).toContain("<invoke_tools>");
     expect(prompt).toContain("`send_message`");
-    expect(prompt).toContain("适用状态：`qq_group:*`");
+    expect(prompt).toContain("适用状态：`qq_group:* | qq_private:*`");
     expect(prompt).toContain("可能按分段小标题组织");
     expect(prompt).toContain("优先关注其中的状态、待处理和不确定性");
     expect(prompt).toContain("123456789");
