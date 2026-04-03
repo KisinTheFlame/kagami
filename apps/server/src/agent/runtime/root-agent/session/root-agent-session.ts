@@ -122,6 +122,7 @@ type RootAgentSessionDeps = {
 const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
 const NOTIFICATION_PREVIEW_MAX_LENGTH = 50;
 
+
 type PortalFeedState = PersistedRootAgentIthomeFeedState;
 
 type WaitOverlay = {
@@ -151,6 +152,7 @@ type RootAgentState = {
     event: Event;
     isFocused: boolean;
   }): Promise<RootAgentStateHandleEventResult>;
+  buildNotificationSummary(event: Event): string | null;
 };
 
 export class RootAgentSession implements RootAgentSessionController {
@@ -712,7 +714,7 @@ export class RootAgentSession implements RootAgentSessionController {
       // Push cross-state notification for non-focused state changes.
       // Skip when focused on portal (portal reminder already shows unread).
       if (!isFocused && focusedStateId !== "portal") {
-        const summary = this.buildNotificationSummary(event);
+        const summary = targetState.buildNotificationSummary(event);
         if (summary) {
           this.notificationAccumulator.push({
             stateId: targetStateId,
@@ -727,27 +729,6 @@ export class RootAgentSession implements RootAgentSessionController {
     return {
       shouldTriggerRound,
     };
-  }
-
-  private buildNotificationSummary(event: Event): string | null {
-    if (event.type === "napcat_group_message") {
-      const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
-        0,
-        NOTIFICATION_PREVIEW_MAX_LENGTH,
-      );
-      return `${event.data.nickname}：${preview}`;
-    }
-
-    if (event.type === "napcat_private_message") {
-      const displayName = event.data.remark?.trim() || event.data.nickname;
-      const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
-        0,
-        NOTIFICATION_PREVIEW_MAX_LENGTH,
-      );
-      return `${displayName}：${preview}`;
-    }
-
-    return null;
   }
 
   private async resumeFromWait(input: {
@@ -1133,6 +1114,10 @@ class PortalState implements RootAgentState {
       shouldTriggerRound: false,
     };
   }
+
+  public buildNotificationSummary(): string | null {
+    return null;
+  }
 }
 
 class QqGroupState implements RootAgentState {
@@ -1234,6 +1219,17 @@ class QqGroupState implements RootAgentState {
       shouldTriggerRound: false,
       stateChanged: true,
     };
+  }
+
+  public buildNotificationSummary(event: Event): string | null {
+    if (event.type !== "napcat_group_message") {
+      return null;
+    }
+    const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
+      0,
+      NOTIFICATION_PREVIEW_MAX_LENGTH,
+    );
+    return `${event.data.nickname}：${preview}`;
   }
 }
 
@@ -1340,6 +1336,18 @@ class QqPrivateState implements RootAgentState {
       stateChanged: true,
     };
   }
+
+  public buildNotificationSummary(event: Event): string | null {
+    if (event.type !== "napcat_private_message") {
+      return null;
+    }
+    const displayName = event.data.remark?.trim() || event.data.nickname;
+    const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
+      0,
+      NOTIFICATION_PREVIEW_MAX_LENGTH,
+    );
+    return `${displayName}：${preview}`;
+  }
 }
 
 class IthomeState implements RootAgentState {
@@ -1433,6 +1441,10 @@ class IthomeState implements RootAgentState {
       stateChanged: true,
     };
   }
+
+  public buildNotificationSummary(): string | null {
+    return null;
+  }
 }
 
 class ZoneOutState implements RootAgentState {
@@ -1474,6 +1486,10 @@ class ZoneOutState implements RootAgentState {
     return {
       shouldTriggerRound: false,
     };
+  }
+
+  public buildNotificationSummary(): string | null {
+    return null;
   }
 }
 
