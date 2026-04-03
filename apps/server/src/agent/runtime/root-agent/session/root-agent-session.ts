@@ -13,7 +13,6 @@ import {
   formatPrivateChatDisplayName,
 } from "../../context/context-message-factory.js";
 import { NotificationAccumulator } from "../notification/notification-accumulator.js";
-import { renderSupportedMessageSegments } from "../../../../napcat/service/napcat-gateway/shared.js";
 import type { Event } from "../../event/event.js";
 import type {
   NapcatChatTarget,
@@ -120,7 +119,6 @@ type RootAgentSessionDeps = {
 };
 
 const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
-const NOTIFICATION_PREVIEW_MAX_LENGTH = 50;
 
 type PortalFeedState = PersistedRootAgentIthomeFeedState;
 
@@ -1224,11 +1222,8 @@ class QqGroupState implements RootAgentState {
     if (event.type !== "napcat_group_message") {
       return null;
     }
-    const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
-      0,
-      NOTIFICATION_PREVIEW_MAX_LENGTH,
-    );
-    return `${event.data.nickname}：${preview}`;
+    const unreadCount = this.session.groupStateById.get(this.groupId)?.getUnreadCount();
+    return `未读 ${unreadCount ?? 0} 条消息。`;
   }
 }
 
@@ -1340,12 +1335,8 @@ class QqPrivateState implements RootAgentState {
     if (event.type !== "napcat_private_message") {
       return null;
     }
-    const displayName = event.data.remark?.trim() || event.data.nickname;
-    const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
-      0,
-      NOTIFICATION_PREVIEW_MAX_LENGTH,
-    );
-    return `${displayName}：${preview}`;
+    const unreadCount = this.session.privateChatStateByUserId.get(this.userId)?.getUnreadCount();
+    return `未读 ${unreadCount ?? 0} 条消息。`;
   }
 }
 

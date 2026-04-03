@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
+import { initTestLoggerRuntime } from "../helpers/logger.js";
+
+initTestLoggerRuntime();
 
 function createGroupEvent(message: string, groupId: string) {
   return {
@@ -107,12 +110,14 @@ function createSession({
   getRecentPrivateMessages = vi.fn().mockResolvedValue([]),
   getFriendList = vi.fn().mockResolvedValue([]),
   ithomeNewsService,
+  notificationTimeWindowMs,
 }: {
   context: DefaultAgentContext;
   getGroupInfo?: ReturnType<typeof vi.fn>;
   getRecentGroupMessages?: ReturnType<typeof vi.fn>;
   getRecentPrivateMessages?: ReturnType<typeof vi.fn>;
   getFriendList?: ReturnType<typeof vi.fn>;
+  notificationTimeWindowMs?: number;
   ithomeNewsService?: {
     getFeedOverview(): Promise<{
       sourceKey: "ithome";
@@ -159,6 +164,7 @@ function createSession({
     },
     listenGroupIds: ["group-1", "group-2"],
     recentMessageLimit: 2,
+    notificationTimeWindowMs,
     ithomeNewsService,
   });
 }
@@ -369,6 +375,75 @@ describe("RootAgentSession", () => {
           message.content.includes("打断等待的事件：QQ 群 产品群 (group-1) 收到了新消息。"),
       ),
     ).toBe(false);
+  });
+
+  it("should show unread count instead of preview in cross-state group notifications", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      notificationTimeWindowMs: 0,
+    });
+
+    await session.initializeContext();
+    await session.enter({ id: "zone_out" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const consumeResult = await session.consumeIncomingEvent(createGroupEvent("hello", "group-2"));
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: false,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+
+    const snapshot = await context.getSnapshot();
+    const notificationMessage = [...snapshot.messages]
+      .reverse()
+      .find(
+        message =>
+          typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+      );
+
+    expect(notificationMessage?.content).toContain("QQ 群 测试群 (group-2)：未读 1 条消息。");
+    expect(notificationMessage?.content).not.toContain("测试昵称");
+    expect(notificationMessage?.content).not.toContain("hello");
+  });
+
+  it("should show latest total unread count for repeated group notifications in the same batch", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      notificationTimeWindowMs: 0,
+    });
+
+    await session.initializeContext();
+    await session.enter({ id: "zone_out" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    await session.consumeIncomingEvent(createGroupEvent("hello-1", "group-2"));
+    await session.consumeIncomingEvent(createGroupEvent("hello-2", "group-2"));
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+
+    const snapshot = await context.getSnapshot();
+    const notificationMessages = snapshot.messages.filter(
+      message =>
+        typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+    );
+
+    expect(notificationMessages).toHaveLength(1);
+    expect(notificationMessages[0]?.content).toContain("QQ 群 测试群 (group-2)：未读 2 条消息。");
+    expect(notificationMessages[0]?.content).not.toContain("hello-1");
+    expect(notificationMessages[0]?.content).not.toContain("hello-2");
   });
 
   it("should restore persisted waiting snapshot in the current stack + wait overlay shape", async () => {
@@ -629,5 +704,43 @@ describe("RootAgentSession", () => {
           typeof message.content === "string" && message.content.includes("history-private"),
       ),
     ).toBe(true);
+  });
+
+  it("should show unread count instead of preview in cross-state private notifications", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({
+      context,
+      notificationTimeWindowMs: 0,
+    });
+
+    await session.initializeContext();
+    await session.enter({ id: "zone_out" });
+    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
+
+    const consumeResult = await session.consumeIncomingEvent(
+      createPrivateEvent("hello-private", "user-1"),
+    );
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({
+      shouldTriggerRound: false,
+    });
+    expect(flushResult).toEqual({
+      shouldTriggerRound: true,
+    });
+
+    const snapshot = await context.getSnapshot();
+    const notificationMessage = [...snapshot.messages]
+      .reverse()
+      .find(
+        message =>
+          typeof message.content === "string" && message.content.includes("[跨状态通知]"),
+      );
+
+    expect(notificationMessage?.content).toContain("QQ 私聊 好友备注 (user-1)：未读 1 条消息。");
+    expect(notificationMessage?.content).not.toContain("测试好友");
+    expect(notificationMessage?.content).not.toContain("hello-private");
   });
 });
