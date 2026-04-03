@@ -22,13 +22,14 @@ export function useLlmChatCallList(
   } satisfies Record<string, string | undefined>;
 
   return useQuery(
-    createHistoryListQueryOptions<LlmChatCallListResponse, ReturnType<typeof queryKeys.llm.historyList>>(
-      {
-        queryKey: queryKeys.llm.historyList(params),
-        path: "/llm-chat-call/query",
-        schema: LlmChatCallListResponseSchema,
-        params,
-      },
-    ),
+    createHistoryListQueryOptions<
+      LlmChatCallListResponse,
+      ReturnType<typeof queryKeys.llm.historyList>
+    >({
+      queryKey: queryKeys.llm.historyList(params),
+      path: "/llm-chat-call/query",
+      schema: LlmChatCallListResponseSchema,
+      params,
+    }),
   );
 }

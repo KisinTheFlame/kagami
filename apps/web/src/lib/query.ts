@@ -1,9 +1,4 @@
-import {
-  QueryClient,
-  keepPreviousData,
-  queryOptions,
-  type QueryKey,
-} from "@tanstack/react-query";
+import { QueryClient, keepPreviousData, queryOptions, type QueryKey } from "@tanstack/react-query";
 import { apiGetWithSchema } from "@/lib/api";
 import { buildQueryString } from "@/lib/search-params";
 

@@ -8,11 +8,7 @@ import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
 type StoryListFilters = Omit<StoryListQuery, "page" | "pageSize">;
 
-export function useStoryList(
-  page: number,
-  pageSize: number,
-  filters: StoryListFilters,
-) {
+export function useStoryList(page: number, pageSize: number, filters: StoryListFilters) {
   const params = {
     page: String(page),
     pageSize: String(pageSize),
@@ -20,13 +16,14 @@ export function useStoryList(
   } satisfies Record<string, string | undefined>;
 
   return useQuery(
-    createHistoryListQueryOptions<StoryListResponse, ReturnType<typeof queryKeys.story.historyList>>(
-      {
-        queryKey: queryKeys.story.historyList(params),
-        path: "/story/query",
-        schema: StoryListResponseSchema,
-        params,
-      },
-    ),
+    createHistoryListQueryOptions<
+      StoryListResponse,
+      ReturnType<typeof queryKeys.story.historyList>
+    >({
+      queryKey: queryKeys.story.historyList(params),
+      path: "/story/query",
+      schema: StoryListResponseSchema,
+      params,
+    }),
   );
 }

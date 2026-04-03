@@ -45,7 +45,10 @@ export type NapcatReceiveTextOrAtSegment = NapcatReceiveTextSegment | NapcatRece
 export const ActionResponseSchema = z.object({
   status: z.string(),
   retcode: z.number(),
-  data: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]).nullable().optional(),
+  data: z
+    .union([z.record(z.string(), z.unknown()), z.array(z.unknown())])
+    .nullable()
+    .optional(),
   message: z.string().optional(),
   wording: z.string().optional(),
   echo: z.string(),

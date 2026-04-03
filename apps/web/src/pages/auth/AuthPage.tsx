@@ -145,7 +145,11 @@ export function AuthPage() {
 
   const refreshMutation = useMutation({
     mutationFn: async () =>
-      apiPostWithSchema(buildAuthEndpoint(providerConfig.key, "refresh"), {}, AuthRefreshResponseSchema),
+      apiPostWithSchema(
+        buildAuthEndpoint(providerConfig.key, "refresh"),
+        {},
+        AuthRefreshResponseSchema,
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.provider(providerConfig.key),

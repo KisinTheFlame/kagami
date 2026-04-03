@@ -8,10 +8,7 @@ import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.servi
 import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthRefreshScheduler } from "./auth/application/claude-code-auth-refresh.scheduler.js";
 import type { IthomePoller } from "./news/application/ithome-poller.js";
-import {
-  shutdownServerResources,
-  type AgentRuntimeController,
-} from "./app/server-shutdown.js";
+import { shutdownServerResources, type AgentRuntimeController } from "./app/server-shutdown.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 

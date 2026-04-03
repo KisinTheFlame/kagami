@@ -122,7 +122,6 @@ type RootAgentSessionDeps = {
 const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
 const NOTIFICATION_PREVIEW_MAX_LENGTH = 50;
 
-
 type PortalFeedState = PersistedRootAgentIthomeFeedState;
 
 type WaitOverlay = {

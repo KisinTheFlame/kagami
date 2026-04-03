@@ -66,11 +66,7 @@ export function AppLogHistoryPage() {
       void refetch();
     },
   });
-  const { data, isLoading, isFetching, isError, refetch } = useAppLogList(
-    page,
-    PAGE_SIZE,
-    filters,
-  );
+  const { data, isLoading, isFetching, isError, refetch } = useAppLogList(page, PAGE_SIZE, filters);
   const isInitialLoading = isLoading && !data;
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

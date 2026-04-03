@@ -51,8 +51,6 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
       });
     }
 
-    return JSON.stringify(
-      await rootAgentSession.enter("kind" in input ? input : { id: input.id }),
-    );
+    return JSON.stringify(await rootAgentSession.enter("kind" in input ? input : { id: input.id }));
   }
 }

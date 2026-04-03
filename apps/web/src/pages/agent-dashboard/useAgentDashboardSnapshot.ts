@@ -1,14 +1,12 @@
-import {
-  AgentDashboardSnapshotSchema,
-} from "@kagami/shared/schemas/agent-dashboard";
+import { AgentDashboardSnapshotSchema } from "@kagami/shared/schemas/agent-dashboard";
 import { useQuery } from "@tanstack/react-query";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 
 export function useAgentDashboardSnapshot() {
   const queryOptions = createSchemaQueryOptions({
-      queryKey: queryKeys.agentDashboard.current(),
-      path: "/agent-dashboard/current",
-      schema: AgentDashboardSnapshotSchema,
+    queryKey: queryKeys.agentDashboard.current(),
+    path: "/agent-dashboard/current",
+    schema: AgentDashboardSnapshotSchema,
   });
 
   return useQuery({
