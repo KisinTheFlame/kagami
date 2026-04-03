@@ -340,7 +340,7 @@ describe("RootAgentSession", () => {
     const flushResult = await session.flushPendingIncomingEffects();
 
     expect(result).toEqual({
-      shouldTriggerRound: false,
+      shouldTriggerRound: true,
     });
     expect(flushResult).toEqual({
       shouldTriggerRound: true,

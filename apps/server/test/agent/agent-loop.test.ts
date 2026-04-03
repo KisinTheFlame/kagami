@@ -533,6 +533,53 @@ describe("RootLoopAgent", () => {
     expect(waitToolResultIndex).toBeGreaterThan(waitAssistantIndex);
   });
 
+  it("should not duplicate the portal reminder when wait resumes on a child event", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = new RootAgentSession({
+      context,
+      napcatGatewayService: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        sendGroupMessage: vi.fn(),
+        sendPrivateMessage: vi.fn(),
+        getGroupInfo: vi.fn().mockResolvedValue({
+          groupId: "group-1",
+          groupName: "产品群",
+          memberCount: 123,
+          maxMemberCount: 500,
+          groupRemark: "",
+          groupAllShut: false,
+        }),
+        getRecentGroupMessages: vi.fn().mockResolvedValue([]),
+        getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      },
+      listenGroupIds: ["group-1"],
+      recentMessageLimit: 1,
+    });
+
+    await session.initializeContext();
+    await session.wait({
+      deadlineAt: new Date("2026-03-30T12:10:00.000Z"),
+    });
+    await session.consumeIncomingEvent(createGroupEvent("hello"));
+    await session.flushPendingIncomingEffects();
+
+    const snapshot = await context.getSnapshot();
+    const portalReminders = snapshot.messages.filter(
+      message =>
+        message.role === "user" &&
+        typeof message.content === "string" &&
+        message.content.includes("你进入了 门户 节点"),
+    );
+
+    expect(portalReminders).toHaveLength(2);
+    expect(portalReminders.at(-1)).toMatchObject({
+      content: expect.stringContaining("未读 1 条消息。"),
+    });
+  });
+
   it("should record tool call metric for invoke subtools", async () => {
     const stopError = new StopLoopError("stop-loop");
     const sleep = vi.fn().mockRejectedValue(stopError);
