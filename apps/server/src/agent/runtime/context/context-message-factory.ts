@@ -133,40 +133,26 @@ export function createPortalSnapshotMessage(
   );
 }
 
-export function createBackgroundQqNotificationMessage(input: {
-  groups: Array<{
-    groupId: string;
-    groupName?: string;
-    unreadCount: number;
-  }>;
-  privateChats?: Array<{
-    userId: string;
-    displayName: string;
-    unreadCount: number;
-  }>;
-}): UserMessage {
+export type CrossStateNotification = {
+  stateId: string;
+  displayName: string;
+  summary: string;
+};
+
+export function createCrossStateNotificationMessage(
+  notifications: CrossStateNotification[],
+): UserMessage {
   const lines = [
     "<system_reminder>",
-    "后台有新的 QQ 消息到来。",
-    "如果想继续处理某个会话，调用 enter 进入对应状态。",
-    "待处理会话：",
+    "[跨状态通知]",
+    "以下状态有新的活动，你可以决定是否需要切换过去处理：",
   ];
 
-  for (const group of input.groups) {
-    const groupLabel = group.groupName
-      ? `QQ 群 ${group.groupName} (${group.groupId})`
-      : `QQ 群 ${group.groupId}`;
-    lines.push(
-      `- ${groupLabel}，未读 ${group.unreadCount} 条，可通过 enter(kind="qq_group", id="${group.groupId}") 进入`,
-    );
+  for (const notification of notifications) {
+    lines.push(`- ${notification.displayName}：${notification.summary}`);
   }
 
-  for (const privateChat of input.privateChats ?? []) {
-    lines.push(
-      `- QQ 私聊 ${privateChat.displayName} (${privateChat.userId})，未读 ${privateChat.unreadCount} 条，可通过 enter(kind="qq_private", id="${privateChat.userId}") 进入`,
-    );
-  }
-
+  lines.push("你可以使用 back 工具返回门户，再 enter 到需要处理的状态。也可以继续当前对话。");
   lines.push("</system_reminder>");
   return createUserMessage(lines.join("\n"));
 }

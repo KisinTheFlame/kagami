@@ -5,6 +5,7 @@ server:
     contextCompactionTotalTokenThreshold: 150000
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
+    notificationBatchWindowMs: 30000
     story:
       batchSize: 24
       idleFlushMs: 120000

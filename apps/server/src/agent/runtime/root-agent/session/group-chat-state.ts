@@ -44,6 +44,10 @@ export class GroupChatState {
     this.groupInfo = groupInfo;
   }
 
+  public getDisplayName(): string {
+    return this.getGroupName() ?? String(this.groupId);
+  }
+
   public getGroupName(): string | null {
     return this.groupInfo?.groupName?.trim() || null;
   }

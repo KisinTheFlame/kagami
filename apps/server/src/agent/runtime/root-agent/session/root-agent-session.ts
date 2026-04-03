@@ -1,6 +1,7 @@
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
+  createCrossStateNotificationMessage,
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
@@ -11,6 +12,8 @@ import {
   createWaitResumeMessage,
   formatPrivateChatDisplayName,
 } from "../../context/context-message-factory.js";
+import { NotificationAccumulator } from "../notification/notification-accumulator.js";
+import { renderSupportedMessageSegments } from "../../../../napcat/service/napcat-gateway/shared.js";
 import type { Event } from "../../event/event.js";
 import type {
   NapcatChatTarget,
@@ -112,8 +115,12 @@ type RootAgentSessionDeps = {
   napcatGatewayService: NapcatGatewayService;
   listenGroupIds: string[];
   recentMessageLimit: number;
+  notificationTimeWindowMs?: number;
   ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
 };
+
+const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
+const NOTIFICATION_PREVIEW_MAX_LENGTH = 50;
 
 type PortalFeedState = PersistedRootAgentIthomeFeedState;
 
@@ -167,18 +174,23 @@ export class RootAgentSession implements RootAgentSessionController {
   private initialized = false;
   private groupInfoLoaded = false;
   public ithomeFeedState: PortalFeedState | null = null;
+  private readonly notificationAccumulator: NotificationAccumulator;
 
   public constructor({
     context,
     napcatGatewayService,
     listenGroupIds,
     recentMessageLimit,
+    notificationTimeWindowMs,
     ithomeNewsService,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
     this.recentMessageLimit = recentMessageLimit;
     this.ithomeNewsService = ithomeNewsService ?? null;
+    this.notificationAccumulator = new NotificationAccumulator({
+      timeWindowMs: notificationTimeWindowMs ?? DEFAULT_NOTIFICATION_TIME_WINDOW_MS,
+    });
     this.groupStates = listenGroupIds.map(
       groupId =>
         new GroupChatState({
@@ -408,6 +420,13 @@ export class RootAgentSession implements RootAgentSessionController {
   public async flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
 
+    // Flush cross-state notifications BEFORE shouldTriggerRound calculation.
+    // This ensures notification messages are counted in shouldTriggerRound.
+    const flushedNotifications = this.notificationAccumulator.tryFlush();
+    if (flushedNotifications !== null && flushedNotifications.length > 0) {
+      this.pendingIncomingMessages.push(createCrossStateNotificationMessage(flushedNotifications));
+    }
+
     const shouldTriggerRound =
       this.pendingIncomingMessages.length > 0 || this.pendingVisibleEvents.length > 0;
 
@@ -478,6 +497,7 @@ export class RootAgentSession implements RootAgentSessionController {
 
     this.pendingPostToolMessages.push(...(await focusedState.onBlur({ reason: "enter_child" })));
     this.stateStack.push(targetState.getId());
+    this.notificationAccumulator.clearForState(targetState.getId());
     this.pendingPostToolMessages.push(
       ...(await this.renderFocusMessages(targetState.getId(), "enter")),
     );
@@ -656,9 +676,10 @@ export class RootAgentSession implements RootAgentSessionController {
     let shouldTriggerRound = result.shouldTriggerRound;
 
     if (result.stateChanged) {
+      const isFocused = focusedStateId === targetStateId;
       const focusedState = this.requireState(focusedStateId);
       const needsReminderRefresh =
-        focusedStateId === targetStateId ||
+        isFocused ||
         (await this.hasDescendantState({
           state: focusedState,
           targetStateId,
@@ -667,11 +688,47 @@ export class RootAgentSession implements RootAgentSessionController {
         this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
         shouldTriggerRound = true;
       }
+
+      // Push cross-state notification for non-focused state changes,
+      // but skip when focused on portal (portal reminder already shows unread)
+      // and skip ithome target events (news is not urgent).
+      if (!isFocused && focusedStateId !== "portal" && targetStateId !== "ithome") {
+        const summary = this.buildNotificationSummary(event);
+        if (summary) {
+          this.notificationAccumulator.push({
+            stateId: targetStateId,
+            displayName: targetState.getDisplayName(),
+            summary,
+            timestamp: Date.now(),
+          });
+        }
+      }
     }
 
     return {
       shouldTriggerRound,
     };
+  }
+
+  private buildNotificationSummary(event: Event): string | null {
+    if (event.type === "napcat_group_message") {
+      const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
+        0,
+        NOTIFICATION_PREVIEW_MAX_LENGTH,
+      );
+      return `${event.data.nickname}：${preview}`;
+    }
+
+    if (event.type === "napcat_private_message") {
+      const displayName = event.data.remark?.trim() || event.data.nickname;
+      const preview = renderSupportedMessageSegments(event.data.messageSegments).slice(
+        0,
+        NOTIFICATION_PREVIEW_MAX_LENGTH,
+      );
+      return `${displayName}：${preview}`;
+    }
+
+    return null;
   }
 
   private async resumeFromWait(input: {

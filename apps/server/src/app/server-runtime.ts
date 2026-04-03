@@ -369,6 +369,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatGatewayService,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
+    notificationTimeWindowMs: config.server.agent.notificationBatchWindowMs,
     ithomeNewsService,
   });
   const toolCatalog = new ToolCatalog([

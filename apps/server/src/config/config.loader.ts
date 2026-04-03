@@ -12,6 +12,7 @@ const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS = 30_000;
 const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
 const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -167,6 +168,9 @@ const ConfigSchema = z.object({
           ),
           llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
           waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+          notificationBatchWindowMs: PositiveIntSchema.default(
+            DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS,
+          ),
           story: z.object({
             batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
             idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
@@ -203,6 +207,7 @@ const ConfigSchema = z.object({
           contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
           llmRetryBackoffMs: value.llmRetryBackoffMs,
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
+          notificationBatchWindowMs: value.notificationBatchWindowMs,
           story: value.story,
         })),
     ),
