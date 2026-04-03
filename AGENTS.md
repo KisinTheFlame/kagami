@@ -1,5 +1,7 @@
 # 指示
 
+你的一切交流和汇报，使用简体中文。
+
 ## 项目定位
 
 Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含四个工作空间包：
