@@ -8,6 +8,7 @@ import {
   type NapcatReceiveAtSegment,
   type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
+  type NapcatReceiveReplySegment,
   type NapcatReceiveTextSegment,
 } from "../../schema/napcat-segment.js";
 
@@ -187,6 +188,10 @@ export function renderSupportedMessageSegments(
         );
       }
 
+      if (segment.type === "reply") {
+        return formatReplySegment(segment);
+      }
+
       return "";
     })
     .join("");
@@ -266,6 +271,37 @@ export function extractDisplayNameFromGroupMemberInfo(
   }
 
   return toNullableString(data.nickname);
+}
+
+export function formatReplySegment(segment: NapcatReceiveReplySegment): string {
+  const nickname = toNullableString(segment.data.senderNickname);
+  const userId = toNullableString(segment.data.senderUserId);
+  const preview = toNullableString(segment.data.messagePreview);
+
+  if (nickname && userId && preview) {
+    return `\n<reference>\n回复 ${nickname} (${userId}):\n${preview}\n</reference>\n`;
+  }
+
+  return "\n<reference />\n";
+}
+
+export function withReplyHydration(
+  segment: NapcatReceiveReplySegment,
+  hydration: {
+    senderNickname: string;
+    senderUserId: string;
+    messagePreview: string;
+  },
+): NapcatReceiveReplySegment {
+  return {
+    ...segment,
+    data: {
+      ...segment.data,
+      senderNickname: hydration.senderNickname,
+      senderUserId: hydration.senderUserId,
+      messagePreview: hydration.messagePreview,
+    },
+  };
 }
 
 function createOutgoingTextSegment(text: string): NapcatSendTextSegment {

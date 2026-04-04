@@ -487,6 +487,9 @@ export type NapcatReceiveReplySegment = {
   type: "reply";
   data: {
     id: string;
+    senderNickname?: string;
+    senderUserId?: string;
+    messagePreview?: string;
   };
 };
 
@@ -655,6 +658,9 @@ export const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegmen
   type: z.literal("reply"),
   data: z.object({
     id: NonEmptyStringSchema,
+    senderNickname: z.string().optional(),
+    senderUserId: z.string().optional(),
+    messagePreview: z.string().optional(),
   }),
 });
 

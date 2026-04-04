@@ -6,6 +6,7 @@ import { AppLogger } from "../../logger/logger.js";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
+import type { NapcatQqMessageDao } from "../dao/napcat-group-message.dao.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
 import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
@@ -29,6 +30,7 @@ type CreateNapcatGatewayOptions = {
   enqueueGroupMessageEvent: (event: NapcatAgentEvent) => number | Promise<number>;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  qqMessageDao: NapcatQqMessageDao;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -37,6 +39,7 @@ type NapcatGatewayOptions = {
   enqueueGroupMessageEvent: (event: NapcatAgentEvent) => number | Promise<number>;
   persistenceWriter: NapcatGatewayPersistenceWriter;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  qqMessageDao: NapcatQqMessageDao;
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
@@ -101,6 +104,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     enqueueGroupMessageEvent,
     persistenceWriter,
     imageMessageAnalyzer,
+    qqMessageDao,
     createWebSocket,
   }: CreateNapcatGatewayOptions): Promise<DefaultNapcatGatewayService> {
     const config = await configManager.config();
@@ -110,6 +114,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       enqueueGroupMessageEvent,
       persistenceWriter,
       imageMessageAnalyzer,
+      qqMessageDao,
       createWebSocket,
     });
   }
@@ -119,6 +124,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     enqueueGroupMessageEvent,
     persistenceWriter,
     imageMessageAnalyzer,
+    qqMessageDao,
     createWebSocket,
   }: NapcatGatewayOptions) {
     const transport = new NapcatGatewayTransport({
@@ -140,6 +146,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       },
       enqueueGroupMessageEvent,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
     this.groupMessageProcessor = groupMessageProcessor;
     this.enqueueAgentEvent = enqueueGroupMessageEvent;

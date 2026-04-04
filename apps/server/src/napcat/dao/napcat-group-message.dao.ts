@@ -46,6 +46,7 @@ export type QueryNapcatQqMessageListPageInput = NapcatQqMessageListQuery;
 
 export interface NapcatQqMessageDao {
   insert(item: InsertNapcatQqMessageItem): Promise<number>;
+  findByNapcatMessageId(messageId: number): Promise<NapcatQqMessageItem | null>;
   countByQuery(input: QueryNapcatQqMessageListFilterInput): Promise<number>;
   listByQueryPage(input: QueryNapcatQqMessageListPageInput): Promise<NapcatQqMessageItem[]>;
   listContextWindowById(input: {

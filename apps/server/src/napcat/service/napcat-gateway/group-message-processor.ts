@@ -17,11 +17,13 @@ import {
   toNullableString,
   toNullableId,
   withAtSegmentName,
+  withReplyHydration,
   type NapcatGatewayNormalizedPostTypeEvent,
   type NapcatGatewayPostTypeEventPayload,
   type NapcatReceiveMessageSegment,
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
+import type { NapcatQqMessageDao } from "../../dao/napcat-group-message.dao.js";
 import type { NapcatImageMessageAnalyzer } from "./image-message-analyzer.js";
 
 type GroupMemberDisplayNameCacheEntry = {
@@ -38,6 +40,7 @@ type NapcatGroupMessageProcessorOptions = {
   actionRequester: NapcatActionRequester;
   enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  qqMessageDao: NapcatQqMessageDao;
 };
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
@@ -51,6 +54,7 @@ export class NapcatGroupMessageProcessor {
     event: NapcatGroupMessageEvent,
   ) => number | Promise<number>;
   private readonly imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  private readonly qqMessageDao: NapcatQqMessageDao;
   private readonly groupMemberDisplayNameCache = new Map<
     string,
     GroupMemberDisplayNameCacheEntry
@@ -61,11 +65,13 @@ export class NapcatGroupMessageProcessor {
     actionRequester,
     enqueueGroupMessageEvent,
     imageMessageAnalyzer,
+    qqMessageDao,
   }: NapcatGroupMessageProcessorOptions) {
     this.listenGroupIds = new Set(listenGroupIds);
     this.actionRequester = actionRequester;
     this.enqueueGroupMessageEvent = enqueueGroupMessageEvent;
     this.imageMessageAnalyzer = imageMessageAnalyzer;
+    this.qqMessageDao = qqMessageDao;
   }
 
   public async handle(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
@@ -215,7 +221,7 @@ export class NapcatGroupMessageProcessor {
   private toPersistableQqMessage(
     event: NapcatGatewayNormalizedPostTypeEvent,
   ): NapcatPersistableQqMessage | null {
-    if (event.postType !== "message") {
+    if (!HISTORICAL_GROUP_MESSAGE_POST_TYPES.has(event.postType)) {
       return null;
     }
 
@@ -353,10 +359,11 @@ export class NapcatGroupMessageProcessor {
       };
     }
 
-    const hydratedSegments = await this.hydrateAtSegmentNames({
+    const atHydratedSegments = await this.hydrateAtSegmentNames({
       groupId,
       messageSegments,
     });
+    const hydratedSegments = await this.hydrateReplySegments(atHydratedSegments);
     const renderedImageSegments = await this.renderImageSegments(hydratedSegments);
     const normalizedSegments = this.hydrateImageSegmentSummaries({
       messageSegments: hydratedSegments,
@@ -451,6 +458,51 @@ export class NapcatGroupMessageProcessor {
         }
 
         return withAtSegmentName(segment, displayName);
+      }),
+    );
+  }
+
+  private async hydrateReplySegments(
+    messageSegments: NapcatReceiveMessageSegment[],
+  ): Promise<NapcatReceiveMessageSegment[]> {
+    return await Promise.all(
+      messageSegments.map(async segment => {
+        if (segment.type !== "reply") {
+          return segment;
+        }
+
+        try {
+          const messageId = Number(segment.data.id);
+          if (!Number.isFinite(messageId) || messageId <= 0) {
+            return segment;
+          }
+
+          const message = await this.qqMessageDao.findByNapcatMessageId(messageId);
+          if (!message) {
+            return segment;
+          }
+
+          const nickname = message.nickname ?? message.userId ?? null;
+          const userId = message.userId;
+          if (!nickname || !userId) {
+            return segment;
+          }
+
+          const rawMessage = toNullableString(message.payload?.raw_message as string) ?? "";
+          const preview = rawMessage.length > 50 ? rawMessage.slice(0, 50) + "…" : rawMessage;
+
+          return withReplyHydration(segment, {
+            senderNickname: nickname,
+            senderUserId: userId,
+            messagePreview: preview,
+          });
+        } catch (error) {
+          logger.errorWithCause("Failed to hydrate reply segment", error, {
+            event: "napcat.gateway.reply_hydration_failed",
+            replyMessageId: segment.data.id,
+          });
+          return segment;
+        }
       }),
     );
   }

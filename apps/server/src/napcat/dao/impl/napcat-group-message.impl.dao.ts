@@ -44,6 +44,19 @@ export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
     return row.id;
   }
 
+  public async findByNapcatMessageId(messageId: number): Promise<NapcatQqMessageItem | null> {
+    const row = await this.database.napcatQqMessage.findFirst({
+      where: { messageId },
+      orderBy: { id: "desc" },
+    });
+
+    if (!row) {
+      return null;
+    }
+
+    return mapPrismaRowToItem(row);
+  }
+
   public async countByQuery(input: QueryNapcatQqMessageListFilterInput): Promise<number> {
     if (input.keyword) {
       return this.countByKeywordQuery(input);

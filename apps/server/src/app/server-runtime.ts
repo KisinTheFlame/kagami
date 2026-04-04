@@ -338,6 +338,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     enqueueGroupMessageEvent: event => eventQueue.enqueue(event),
     persistenceWriter: napcatPersistenceWriter,
     imageMessageAnalyzer,
+    qqMessageDao: napcatQqMessageDao,
   });
   const agentMessageService = new DefaultAgentMessageService({
     napcatGatewayService,

@@ -16,6 +16,14 @@ describe("NapcatGroupMessageProcessor", () => {
     analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 一只橘猫趴在键盘上]"),
   };
 
+  const qqMessageDao = {
+    insert: vi.fn(),
+    findByNapcatMessageId: vi.fn().mockResolvedValue(null),
+    countByQuery: vi.fn(),
+    listByQueryPage: vi.fn(),
+    listContextWindowById: vi.fn(),
+  };
+
   beforeEach(() => {
     logs = initTestLogger();
     imageMessageAnalyzer.analyzeImageSegment.mockClear();
@@ -39,6 +47,7 @@ describe("NapcatGroupMessageProcessor", () => {
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const result = await processor.handle({
@@ -137,6 +146,7 @@ describe("NapcatGroupMessageProcessor", () => {
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const payload = {
@@ -220,6 +230,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const result = await processor.handle({
@@ -255,6 +266,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const result = await processor.handle({
@@ -293,6 +305,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     await expect(
@@ -346,6 +359,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     await processor.handle({
@@ -413,6 +427,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     await processor.handle({
@@ -469,6 +484,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     await processor.handle({
@@ -523,6 +539,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     await processor.handle({
@@ -583,6 +600,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const result = await processor.handle({
@@ -643,6 +661,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: vi.fn(),
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const historyPayload = {
@@ -681,6 +700,7 @@ describe("NapcatGroupMessageProcessor", () => {
       },
       enqueueGroupMessageEvent: vi.fn(),
       imageMessageAnalyzer,
+      qqMessageDao,
     });
 
     const result = await processor.normalizeHistoricalGroupMessages([

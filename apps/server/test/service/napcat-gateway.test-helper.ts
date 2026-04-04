@@ -82,6 +82,7 @@ export function createNapcatGroupMessageDao(): NapcatQqMessageDao & {
 } {
   return {
     insert: vi.fn().mockResolvedValue(1),
+    findByNapcatMessageId: vi.fn().mockResolvedValue(null),
     countByQuery: vi.fn().mockResolvedValue(0),
     listByQueryPage: vi.fn().mockResolvedValue([]),
     listContextWindowById: vi.fn().mockResolvedValue([]),

@@ -83,6 +83,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -140,6 +141,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -203,6 +205,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -263,6 +266,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: eventQueue.enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -410,6 +414,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: eventQueue.enqueue,
       persistenceWriter,
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -505,6 +510,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -547,6 +553,7 @@ describe("DefaultNapcatGatewayService", () => {
         napcatQqMessageDao: napcatGroupMessageDao,
       }),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -639,6 +646,7 @@ describe("DefaultNapcatGatewayService", () => {
         napcatQqMessageDao: napcatGroupMessageDao,
       }),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -710,6 +718,7 @@ describe("DefaultNapcatGatewayService", () => {
         napcatEventDao,
       }),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -758,6 +767,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: eventQueue.enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer: orderedImageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -871,6 +881,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -1024,6 +1035,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -1137,6 +1149,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -1199,6 +1212,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
@@ -1233,6 +1247,7 @@ describe("DefaultNapcatGatewayService", () => {
       enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
       persistenceWriter: new NapcatEventPersistenceWriter({}),
       imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
       createWebSocket: () => {
         const socket = new FakeWebSocket();
         sockets.push(socket);
