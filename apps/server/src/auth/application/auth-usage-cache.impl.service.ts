@@ -317,6 +317,10 @@ function toRemainingPercent(usedPercent: number): number {
   return Math.max(0, Math.min(100, 100 - usedPercent));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export async function fetchClaudeCodeUsageLimitsFromApi(
   auth: ClaudeCodeProviderAuth,
 ): Promise<ClaudeCodeUsageLimitsResponse> {
@@ -341,10 +345,38 @@ export async function fetchClaudeCodeUsageLimitsFromApi(
 
   const data = (await response.json()) as Record<string, unknown>;
   return ClaudeCodeUsageLimitsResponseSchema.parse({
-    five_hour: data.five_hour ?? null,
-    seven_day: data.seven_day ?? null,
-    extra_usage: data.extra_usage ?? null,
+    five_hour: normalizeClaudeCodeUsageLimitWindow(data.five_hour),
+    seven_day: normalizeClaudeCodeUsageLimitWindow(data.seven_day),
+    extra_usage: normalizeClaudeCodeExtraUsage(data.extra_usage),
   });
+}
+
+function normalizeClaudeCodeUsageLimitWindow(
+  value: unknown,
+): ClaudeCodeUsageLimitsResponse["five_hour"] {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    utilization: value.utilization as number,
+    resets_at: (value.resets_at ?? null) as string | null,
+  };
+}
+
+function normalizeClaudeCodeExtraUsage(
+  value: unknown,
+): ClaudeCodeUsageLimitsResponse["extra_usage"] {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    is_enabled: value.is_enabled as boolean,
+    monthly_limit: (value.monthly_limit ?? null) as number | null,
+    used_credits: (value.used_credits ?? null) as number | null,
+    utilization: (value.utilization ?? null) as number | null,
+  };
 }
 
 export async function fetchCodexUsageLimitsViaAppServer({
