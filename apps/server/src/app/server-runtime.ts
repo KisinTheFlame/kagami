@@ -39,8 +39,11 @@ import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import type { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
-import { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
-import { OAuthAuthRefreshScheduler } from "../auth/application/oauth-auth-refresh.scheduler.js";
+import { buildAuthScheduledTasks } from "../auth/application/auth-scheduled-tasks.js";
+import { buildNewsScheduledTasks } from "../news/application/news-scheduled-tasks.js";
+import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
+import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
+import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
@@ -76,10 +79,8 @@ export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
   napcatGatewayService: NapcatGatewayService;
-  ithomePoller: IthomePoller;
+  taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
-  authUsageCacheManager: AuthUsageCacheManager;
-  authRefreshSchedulers: OAuthAuthRefreshScheduler[];
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
   metricService: MetricService;
@@ -257,6 +258,26 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyEventQueue,
   });
 
+  const taskScheduler = new TaskScheduler();
+  const [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler] =
+    authModule.authRefreshSchedulers;
+  if (!codexAuthRefreshScheduler || !claudeCodeAuthRefreshScheduler) {
+    throw new Error("auth module did not provide both OAuth refresh schedulers");
+  }
+  for (const task of buildAuthScheduledTasks({
+    codexAuthRefreshScheduler,
+    claudeCodeAuthRefreshScheduler,
+    authUsageCacheManager: authModule.authUsageCacheManager,
+  })) {
+    taskScheduler.register(task);
+  }
+  for (const task of buildNewsScheduledTasks({ ithomePoller })) {
+    taskScheduler.register(task);
+  }
+  for (const task of buildDataRetentionTasks({ db: database, metricService })) {
+    taskScheduler.register(task);
+  }
+
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
@@ -275,6 +296,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         storyReindexService: agentRuntime.storyReindexService,
       }),
       new NapcatHandler({ napcatGatewayService }),
+      new SchedulerHandler({ taskScheduler }),
     ],
   });
 
@@ -282,10 +304,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     app,
     database,
     napcatGatewayService,
-    ithomePoller,
+    taskScheduler,
     callbackServers: authModule.callbackServers,
-    authUsageCacheManager: authModule.authUsageCacheManager,
-    authRefreshSchedulers: authModule.authRefreshSchedulers,
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
     metricService,

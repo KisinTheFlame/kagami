@@ -9,9 +9,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("OAuthAuthRefreshScheduler", () => {
-  it("should refresh immediately when the session is within the refresh leeway window", async () => {
-    vi.useFakeTimers();
+describe("OAuthAuthRefreshScheduler.runOnce", () => {
+  it("calls refresh when the session is within the refresh leeway window", async () => {
     const refresh = vi.fn().mockResolvedValue({
       provider: "claude-code",
       success: true,
@@ -26,34 +25,19 @@ describe("OAuthAuthRefreshScheduler", () => {
       },
     });
     const service = createAuthService({
-      getStatus: vi
-        .fn()
-        .mockResolvedValueOnce(
-          createStatus({
-            status: "active",
-            session: {
-              provider: "claude-code",
-              accountId: "user_123",
-              email: "claude@example.com",
-              expiresAt: new Date(Date.now() + 30_000).toISOString(),
-              lastRefreshAt: new Date().toISOString(),
-              lastError: null,
-            },
-          }),
-        )
-        .mockResolvedValue(
-          createStatus({
-            status: "active",
-            session: {
-              provider: "claude-code",
-              accountId: "user_123",
-              email: "claude@example.com",
-              expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-              lastRefreshAt: new Date().toISOString(),
-              lastError: null,
-            },
-          }),
-        ),
+      getStatus: vi.fn().mockResolvedValue(
+        createStatus({
+          status: "active",
+          session: {
+            provider: "claude-code",
+            accountId: "user_123",
+            email: "claude@example.com",
+            expiresAt: new Date(Date.now() + 30_000).toISOString(),
+            lastRefreshAt: new Date().toISOString(),
+            lastError: null,
+          },
+        }),
+      ),
       refresh,
     });
     const scheduler = new OAuthAuthRefreshScheduler({
@@ -64,19 +48,12 @@ describe("OAuthAuthRefreshScheduler", () => {
       refreshLeewayMs: 60_000,
     });
 
-    scheduler.start();
-    await flushMicrotasks();
+    await scheduler.runOnce();
 
     expect(refresh).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(refresh).toHaveBeenCalledTimes(1);
-
-    scheduler.close();
   });
 
-  it("should skip refresh when the session is not close to expiring", async () => {
-    vi.useFakeTimers();
+  it("skips refresh when the session is not close to expiring", async () => {
     const refresh = vi.fn();
     const scheduler = new OAuthAuthRefreshScheduler({
       authService: createAuthService({
@@ -101,72 +78,12 @@ describe("OAuthAuthRefreshScheduler", () => {
       refreshLeewayMs: 60_000,
     });
 
-    scheduler.start();
-    await flushMicrotasks();
+    await scheduler.runOnce();
 
     expect(refresh).not.toHaveBeenCalled();
-    scheduler.close();
   });
 
-  it("should not start a second refresh while the previous refresh is still in flight", async () => {
-    vi.useFakeTimers();
-    let resolveRefresh!: () => void;
-    const refresh = vi.fn().mockImplementation(async () => {
-      await new Promise<void>(resolve => {
-        resolveRefresh = resolve;
-      });
-      return {
-        provider: "claude-code",
-        success: true as const,
-        status: "active" as const,
-        session: {
-          provider: "claude-code",
-          accountId: "user_123",
-          email: "claude@example.com",
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-          lastRefreshAt: new Date().toISOString(),
-          lastError: null,
-        },
-      };
-    });
-    const scheduler = new OAuthAuthRefreshScheduler({
-      authService: createAuthService({
-        getStatus: vi.fn().mockResolvedValue(
-          createStatus({
-            status: "active",
-            session: {
-              provider: "claude-code",
-              accountId: "user_123",
-              email: "claude@example.com",
-              expiresAt: new Date(Date.now() + 30_000).toISOString(),
-              lastRefreshAt: new Date().toISOString(),
-              lastError: null,
-            },
-          }),
-        ),
-        refresh,
-      }),
-      displayName: "Claude Code",
-      logEventPrefix: "claude_code_auth_refresh_scheduler",
-      refreshCheckIntervalMs: 60_000,
-      refreshLeewayMs: 60_000,
-    });
-
-    scheduler.start();
-    await flushMicrotasks();
-
-    expect(refresh).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(refresh).toHaveBeenCalledTimes(1);
-
-    resolveRefresh();
-    await flushMicrotasks();
-    scheduler.close();
-  });
-
-  it("should log structured refresh failure details with the configured event prefix", async () => {
-    vi.useFakeTimers();
+  it("logs structured refresh failure details with the configured event prefix", async () => {
     const logs = initTestLogger();
     const refresh = vi.fn().mockRejectedValue(
       new BizError({
@@ -211,8 +128,7 @@ describe("OAuthAuthRefreshScheduler", () => {
       refreshLeewayMs: 60_000,
     });
 
-    scheduler.start();
-    await flushMicrotasks();
+    await scheduler.runOnce();
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(logs).toEqual([
@@ -254,8 +170,6 @@ describe("OAuthAuthRefreshScheduler", () => {
         }),
       }),
     ]);
-
-    scheduler.close();
   });
 });
 
@@ -301,9 +215,4 @@ function createStatus(overrides?: Partial<Awaited<ReturnType<OAuthAuthService["g
     },
     ...overrides,
   };
-}
-
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
 }

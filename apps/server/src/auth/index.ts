@@ -179,10 +179,6 @@ export async function createAuthModule({
       limits: await authUsageCacheManager.getClaudeCodeUsageLimits(),
     };
   });
-  codexAuthRefreshScheduler.start();
-  claudeCodeAuthRefreshScheduler.start();
-  authUsageCacheManager.start();
-
   const authServices: AuthModule["authServices"] = {
     codex: codexAuthService,
     "claude-code": claudeCodeAuthService,
