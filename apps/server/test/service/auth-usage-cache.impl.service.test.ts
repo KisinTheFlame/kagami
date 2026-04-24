@@ -481,6 +481,7 @@ describe("fetchClaudeCodeUsageLimitsFromApi", () => {
               monthly_limit: 100,
               used_credits: 15.5,
               utilization: 15.5,
+              currency: "USD",
             },
           }),
           {
