@@ -27,9 +27,7 @@ afterEach(async () => {
 });
 
 describe("AuthUsageCacheManager", () => {
-  it("should refresh both caches immediately and on interval", async () => {
-    vi.useFakeTimers();
-
+  it("refreshAll populates both caches and records snapshots", async () => {
     const claudeFetch = vi.fn().mockResolvedValue({
       five_hour: {
         utilization: 25,
@@ -59,8 +57,7 @@ describe("AuthUsageCacheManager", () => {
       fetchCodexUsageLimits: codexFetch,
     });
 
-    manager.start();
-    await flushMicrotasks();
+    await manager.refreshAll();
 
     expect(await manager.getClaudeCodeUsageLimits()).toEqual(
       expect.objectContaining({
@@ -103,13 +100,6 @@ describe("AuthUsageCacheManager", () => {
         }),
       ]),
     );
-
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(claudeFetch).toHaveBeenCalledTimes(2);
-    expect(codexFetch).toHaveBeenCalledTimes(2);
-
-    manager.close();
   });
 
   it("should keep the last successful cache when a refresh fails", async () => {
@@ -685,9 +675,4 @@ function createAuthUsageSnapshotDao(
     listByRange: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
-}
-
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
 }

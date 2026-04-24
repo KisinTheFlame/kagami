@@ -33,11 +33,9 @@ export class OAuthAuthRefreshScheduler {
   private readonly authService: OAuthAuthService;
   private readonly displayName: string;
   private readonly logEventPrefix: string;
-  private readonly refreshCheckIntervalMs: number;
+  public readonly refreshCheckIntervalMs: number;
   private readonly refreshLeewayMs: number;
   private readonly now: () => Date;
-  private timer: NodeJS.Timeout | null = null;
-  private refreshPromise: Promise<void> | null = null;
 
   public constructor({
     authService,
@@ -55,45 +53,13 @@ export class OAuthAuthRefreshScheduler {
     this.now = now ?? (() => new Date());
   }
 
-  public start(): void {
-    if (this.timer) {
-      return;
-    }
-
-    void this.tick();
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, this.refreshCheckIntervalMs);
-    if (typeof this.timer.unref === "function") {
-      this.timer.unref();
-    }
-  }
-
-  public close(): void {
-    if (!this.timer) {
-      return;
-    }
-
-    clearInterval(this.timer);
-    this.timer = null;
-  }
-
-  private async tick(): Promise<void> {
-    if (this.refreshPromise) {
-      return;
-    }
-
+  public async runOnce(): Promise<void> {
     const refreshContext = await this.getPendingRefreshContext();
     if (!refreshContext) {
       return;
     }
 
-    this.refreshPromise = this.runRefresh(refreshContext);
-    try {
-      await this.refreshPromise;
-    } finally {
-      this.refreshPromise = null;
-    }
+    await this.runRefresh(refreshContext);
   }
 
   private async runRefresh(refreshContext: PendingOAuthRefreshContext): Promise<void> {

@@ -43,29 +43,14 @@ describe("shutdownServerResources", () => {
         order.push("napcatGateway.stop");
       }),
     };
-    const ithomePoller = {
-      close: vi.fn(() => {
-        order.push("ithomePoller.close");
+    const taskScheduler = {
+      stop: vi.fn(async () => {
+        order.push("taskScheduler.stop");
       }),
     };
     const callbackServer = {
       stop: vi.fn(async () => {
         order.push("callbackServer.stop");
-      }),
-    };
-    const authUsageCacheManager = {
-      close: vi.fn(() => {
-        order.push("authUsageCacheManager.close");
-      }),
-    };
-    const codexAuthRefreshScheduler = {
-      close: vi.fn(() => {
-        order.push("codexAuthRefreshScheduler.close");
-      }),
-    };
-    const claudeCodeAuthRefreshScheduler = {
-      close: vi.fn(() => {
-        order.push("claudeCodeAuthRefreshScheduler.close");
       }),
     };
     const rootAgentRuntime = createAgentRuntimeStub(order, "rootAgentRuntime.stop");
@@ -90,13 +75,8 @@ describe("shutdownServerResources", () => {
       app,
       database: {} as never,
       napcatGatewayService: napcatGatewayService as never,
-      ithomePoller: ithomePoller as never,
+      taskScheduler: taskScheduler as never,
       callbackServers: [callbackServer],
-      authUsageCacheManager: authUsageCacheManager as never,
-      authRefreshSchedulers: [
-        codexAuthRefreshScheduler as never,
-        claudeCodeAuthRefreshScheduler as never,
-      ],
       rootAgentRuntime,
       storyAgentRuntime,
       closeLlmProviders,
@@ -111,11 +91,8 @@ describe("shutdownServerResources", () => {
     expect(order).toEqual([
       "app.close",
       "napcatGateway.stop",
-      "ithomePoller.close",
+      "taskScheduler.stop",
       "callbackServer.stop",
-      "authUsageCacheManager.close",
-      "codexAuthRefreshScheduler.close",
-      "claudeCodeAuthRefreshScheduler.close",
       "rootAgentRuntime.stop",
       "storyAgentRuntime.stop",
       "closeLlmProviders",
@@ -141,10 +118,8 @@ describe("shutdownServerResources", () => {
       app: null,
       database: {} as never,
       napcatGatewayService: null,
-      ithomePoller: null,
+      taskScheduler: null,
       callbackServers: [],
-      authUsageCacheManager: null,
-      authRefreshSchedulers: [],
       rootAgentRuntime: null,
       storyAgentRuntime,
       closeLlmProviders: null,
@@ -174,10 +149,8 @@ describe("shutdownServerResources", () => {
       app: null,
       database: null,
       napcatGatewayService: null,
-      ithomePoller: null,
+      taskScheduler: null,
       callbackServers: [],
-      authUsageCacheManager: null,
-      authRefreshSchedulers: [],
       rootAgentRuntime,
       storyAgentRuntime: null,
       closeLlmProviders: null,
@@ -216,10 +189,8 @@ describe("shutdownServerResources", () => {
       app: null,
       database: {} as never,
       napcatGatewayService: null,
-      ithomePoller: null,
+      taskScheduler: null,
       callbackServers: [],
-      authUsageCacheManager: null,
-      authRefreshSchedulers: [],
       rootAgentRuntime,
       storyAgentRuntime,
       closeLlmProviders,

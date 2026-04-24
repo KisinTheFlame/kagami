@@ -4,9 +4,7 @@ import { closeDb as defaultCloseDb } from "../db/client.js";
 import { AppLogger } from "../logger/logger.js";
 import { getLoggerRuntime } from "../logger/runtime.js";
 import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
-import type { AuthUsageCacheManager } from "../auth/application/auth-usage-cache.impl.service.js";
-import type { OAuthAuthRefreshScheduler } from "../auth/application/oauth-auth-refresh.scheduler.js";
-import type { IthomePoller } from "../news/application/ithome-poller.js";
+import type { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 
 export type AgentRuntimeController = {
   stop(): Promise<void>;
@@ -24,10 +22,8 @@ type ShutdownServerResourcesOptions = {
   app: FastifyInstance | null;
   database: Database | null;
   napcatGatewayService: NapcatGatewayService | null;
-  ithomePoller: IthomePoller | null;
+  taskScheduler: TaskScheduler | null;
   callbackServers: Array<{ stop(): Promise<void> }>;
-  authUsageCacheManager: AuthUsageCacheManager | null;
-  authRefreshSchedulers: OAuthAuthRefreshScheduler[];
   rootAgentRuntime: AgentRuntimeController | null;
   storyAgentRuntime: AgentRuntimeController | null;
   closeLlmProviders: (() => Promise<void>) | null;
@@ -48,10 +44,8 @@ export async function shutdownServerResources({
   app,
   database,
   napcatGatewayService,
-  ithomePoller,
+  taskScheduler,
   callbackServers,
-  authUsageCacheManager,
-  authRefreshSchedulers,
   rootAgentRuntime,
   storyAgentRuntime,
   closeLlmProviders,
@@ -94,32 +88,15 @@ export async function shutdownServerResources({
       });
     }
 
-    if (ithomePoller) {
-      ithomePoller.close();
-      shutdownLogger.info("Ithome poller closed", {
-        event: "server.shutdown.ithome_poller_closed",
+    if (taskScheduler) {
+      await taskScheduler.stop();
+      shutdownLogger.info("Task scheduler closed", {
+        event: "server.shutdown.task_scheduler_closed",
       });
     }
 
     for (const callbackServer of callbackServers) {
       await callbackServer.stop();
-    }
-
-    if (authUsageCacheManager) {
-      authUsageCacheManager.close();
-      shutdownLogger.info("Auth usage cache manager closed", {
-        event: "server.shutdown.auth_usage_cache_closed",
-      });
-    }
-
-    for (const scheduler of authRefreshSchedulers) {
-      scheduler.close();
-    }
-    if (authRefreshSchedulers.length > 0) {
-      shutdownLogger.info("Auth refresh schedulers closed", {
-        event: "server.shutdown.auth_refresh_schedulers_closed",
-        count: authRefreshSchedulers.length,
-      });
     }
 
     if (rootAgentRuntime) {

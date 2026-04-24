@@ -64,14 +64,13 @@ export class AuthUsageCacheManager {
   private readonly codexAuthService: CodexAuthService;
   private readonly codexBinaryPath: string;
   private readonly authUsageSnapshotDao: AuthUsageSnapshotDao | null;
-  private readonly refreshIntervalMs: number;
+  public readonly refreshIntervalMs: number;
   private readonly fetchClaudeUsageLimits: (
     auth: ClaudeCodeProviderAuth,
   ) => Promise<ClaudeCodeUsageLimitsResponse>;
   private readonly fetchCodexUsageLimits: (
     input: FetchCodexUsageLimitsViaAppServerInput,
   ) => Promise<CodexUsageLimitsResponse>;
-  private timer: NodeJS.Timeout | null = null;
   private claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
   private codexUsageLimits = EMPTY_CODEX_USAGE_LIMITS;
   private isRefreshingClaudeCode = false;
@@ -93,29 +92,6 @@ export class AuthUsageCacheManager {
     this.refreshIntervalMs = refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
     this.fetchClaudeUsageLimits = fetchClaudeUsageLimits ?? fetchClaudeCodeUsageLimitsFromApi;
     this.fetchCodexUsageLimits = fetchCodexUsageLimits ?? fetchCodexUsageLimitsViaAppServer;
-  }
-
-  public start(): void {
-    if (this.timer) {
-      return;
-    }
-
-    void this.refreshAll();
-    this.timer = setInterval(() => {
-      void this.refreshAll();
-    }, this.refreshIntervalMs);
-    if (typeof this.timer.unref === "function") {
-      this.timer.unref();
-    }
-  }
-
-  public close(): void {
-    if (!this.timer) {
-      return;
-    }
-
-    clearInterval(this.timer);
-    this.timer = null;
   }
 
   public async getClaudeCodeUsageLimits(): Promise<ClaudeCodeUsageLimitsResponse> {

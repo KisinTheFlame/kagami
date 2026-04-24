@@ -5,9 +5,7 @@ import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { buildServerRuntime } from "./app/server-runtime.js";
 import type { FastifyInstance } from "fastify";
 import type { NapcatGatewayService } from "./napcat/service/napcat-gateway.service.js";
-import type { AuthUsageCacheManager } from "./auth/application/auth-usage-cache.impl.service.js";
-import type { OAuthAuthRefreshScheduler } from "./auth/application/oauth-auth-refresh.scheduler.js";
-import type { IthomePoller } from "./news/application/ithome-poller.js";
+import type { TaskScheduler } from "./scheduler/application/task-scheduler.js";
 import { shutdownServerResources, type AgentRuntimeController } from "./app/server-shutdown.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -21,10 +19,8 @@ const logger = new AppLogger({ source: "bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let napcatGatewayService: NapcatGatewayService | null = null;
-let ithomePoller: IthomePoller | null = null;
+let taskScheduler: TaskScheduler | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
-let authUsageCacheManager: AuthUsageCacheManager | null = null;
-let authRefreshSchedulers: OAuthAuthRefreshScheduler[] = [];
 let rootAgentRuntime: AgentRuntimeController | null = null;
 let storyAgentRuntime: AgentRuntimeController | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
@@ -94,10 +90,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     app,
     database,
     napcatGatewayService,
-    ithomePoller,
+    taskScheduler,
     callbackServers,
-    authUsageCacheManager,
-    authRefreshSchedulers,
     rootAgentRuntime,
     storyAgentRuntime,
     closeLlmProviders,
@@ -118,10 +112,8 @@ try {
   app = runtime.app;
   database = runtime.database;
   napcatGatewayService = runtime.napcatGatewayService;
-  ithomePoller = runtime.ithomePoller;
+  taskScheduler = runtime.taskScheduler;
   callbackServers = runtime.callbackServers;
-  authUsageCacheManager = runtime.authUsageCacheManager;
-  authRefreshSchedulers = runtime.authRefreshSchedulers;
   rootAgentRuntime = runtime.rootAgentRuntime;
   storyAgentRuntime = runtime.storyAgentRuntime;
   closeLlmProviders = runtime.closeLlmProviders;
@@ -129,7 +121,7 @@ try {
 
   await runtime.napcatGatewayService.start();
   await runtime.app.listen({ host: "0.0.0.0", port: runtime.port });
-  runtime.ithomePoller.start();
+  runtime.taskScheduler.start();
   isServerStarted = true;
 
   const providers = await runtime.listAvailableAgentProviders();
