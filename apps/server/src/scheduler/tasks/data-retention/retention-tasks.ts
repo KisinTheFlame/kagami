@@ -64,7 +64,7 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
   {
     displayName: "llm_chat_call",
     field: "createdAt",
-    days: 7,
+    days: 3,
     offsetMinutes: 5,
     getDelegate: db => db.llmChatCall as unknown as PrismaRetentionDelegate,
   },
