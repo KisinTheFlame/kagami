@@ -18,7 +18,7 @@ import type {
  *
  * `runOnce` is abstract. Subclasses decide what "one iteration" means. The
  * canonical pattern is: drain any pending events into the context, then run
- * one ReAct round. Inside that round, tools may block on an EventQueue —
+ * one ReAct round. Inside that round, tools may suspend on a Queue —
  * this is how the agent "pauses" when there is nothing to do.
  *
  * There is no tick, no polling, no "sleep between iterations". If the loop

@@ -113,9 +113,10 @@ describe("DefaultAgentDashboardQueryService", () => {
     const eventQueue: AgentEventQueue = {
       enqueue: vi.fn(),
       dequeue: vi.fn(),
+      take: vi.fn().mockResolvedValue(undefined),
       size: vi.fn().mockReturnValue(2),
       clear: vi.fn().mockReturnValue(0),
-      waitForEvent: vi.fn().mockResolvedValue(undefined),
+      waitNonEmpty: vi.fn().mockResolvedValue(undefined),
     };
     const service = new DefaultAgentDashboardQueryService({
       rootAgentRuntime: rootAgentRuntime as RootLoopAgent,

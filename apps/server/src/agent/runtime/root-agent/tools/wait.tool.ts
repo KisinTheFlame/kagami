@@ -56,7 +56,7 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
       // message, an ithome article, a reset-triggered wake, a stop-triggered
       // wake, or our own timer's wake. We don't care which — we just wake up
       // and let the next iteration of the loop drain the queue.
-      await this.eventQueue.waitForEvent();
+      await this.eventQueue.waitNonEmpty();
     } finally {
       // Always clear the timer: if the loop woke up for any reason other
       // than our timer firing, we don't want a stale setTimeout handle

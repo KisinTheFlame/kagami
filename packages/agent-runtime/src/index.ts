@@ -3,7 +3,8 @@ import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
 import { BaseLoopAgent } from "./base-loop-agent.js";
-import { InMemoryEventQueue, type EventQueue } from "./event-queue.js";
+import { InMemoryQueue, type Queue } from "./queue.js";
+import { SerialExecutor } from "./serial-executor.js";
 import {
   ReActKernel,
   type ReActKernelExtension,
@@ -44,14 +45,15 @@ import {
 export {
   BaseLoopAgent,
   BaseTaskAgent,
-  InMemoryEventQueue,
+  InMemoryQueue,
   ReActKernel,
+  SerialExecutor,
   TaskAgentRuntime,
   ToolCatalog,
   ToolSet,
   ZodToolComponent,
   type AgentRuntime,
-  type EventQueue,
+  type Queue,
   type LoopAgent,
   type LoopAgentExtension,
   type TaskAgent,
