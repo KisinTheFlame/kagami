@@ -1,4 +1,4 @@
-import { ToolCatalog, type EventQueue } from "@kagami/agent-runtime";
+import { ToolCatalog, type Queue } from "@kagami/agent-runtime";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
 import type { LlmClient } from "../llm/client.js";
@@ -87,8 +87,8 @@ type BuildAgentRuntimeInput = {
   metricService: MetricService;
   napcatGatewayService: NapcatGatewayService;
   ithomeNewsService: IthomeNewsService;
-  eventQueue: EventQueue<Event>;
-  storyEventQueue: EventQueue<StoryAgentEvent>;
+  eventQueue: Queue<Event>;
+  storyEventQueue: Queue<StoryAgentEvent>;
 };
 
 export type AgentRuntimeBundle = {

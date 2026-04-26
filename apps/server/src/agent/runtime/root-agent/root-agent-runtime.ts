@@ -5,6 +5,7 @@ import {
   type ReActKernelExtension,
   type ReActKernelRunRoundInput,
   type ReActRoundResult,
+  SerialExecutor,
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
@@ -186,7 +187,7 @@ class RootAgentHost {
   private lastToolResultPreview: string | null = null;
   private lastLlmCall: RootAgentLlmCallSummary | null = null;
   private lastPersistedSnapshotFingerprint: string | null = null;
-  private serializedMutationChain: Promise<void> = Promise.resolve();
+  private readonly mutationExecutor = new SerialExecutor();
 
   public constructor({
     context,
@@ -226,7 +227,7 @@ class RootAgentHost {
     this.transitionTo("starting");
 
     try {
-      await this.runSerializedMutation(async () => {
+      await this.mutationExecutor.submit(async () => {
         if (this.initialized) {
           return;
         }
@@ -245,7 +246,7 @@ class RootAgentHost {
   public async restorePersistedSnapshot(
     snapshot: PersistedRootAgentRuntimeSnapshot,
   ): Promise<void> {
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
       this.session.restorePersistedSnapshot(snapshot.sessionSnapshot);
       const pendingEffectsResult = await this.session.flushPendingIncomingEffects();
@@ -260,7 +261,7 @@ class RootAgentHost {
 
   public async resetContext(): Promise<{ resetAt: Date }> {
     const resetAt = this.now();
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       await this.deletePersistedSnapshot();
       this.eventQueue.clear();
       await this.context.reset();
@@ -277,7 +278,7 @@ class RootAgentHost {
   }
 
   public async hydrateStartupEvents(events: Event[]): Promise<void> {
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       for (const event of events) {
         await this.session.consumeIncomingEvent(event);
       }
@@ -320,7 +321,7 @@ class RootAgentHost {
   }
 
   public async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
-    return await this.runSerializedMutation(async () => {
+    return await this.mutationExecutor.submit(async () => {
       this.transitionTo("consuming_events");
       let consumedEventCount = 0;
 
@@ -398,7 +399,7 @@ class RootAgentHost {
       },
     }));
 
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       await this.persistRoundState({
         assistantMessage: assistantToPersist,
         toolPersistences,
@@ -411,7 +412,7 @@ class RootAgentHost {
 
   public async appendWakeReminderIfNeeded(): Promise<void> {
     const now = this.now();
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {
         return;
       }
@@ -428,7 +429,7 @@ class RootAgentHost {
   }
 
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
-    await this.runSerializedMutation(async () => {
+    await this.mutationExecutor.submit(async () => {
       await this.context.appendMessages(messages);
       this.touchActivity();
     });
@@ -616,22 +617,6 @@ class RootAgentHost {
       sessionSnapshot: this.session.exportPersistedSnapshot(),
       lastWakeReminderAt: cloneDate(this.lastWakeReminderAt),
     };
-  }
-
-  private async runSerializedMutation<T>(callback: () => Promise<T>): Promise<T> {
-    const previous = this.serializedMutationChain;
-    let releaseCurrent!: () => void;
-    this.serializedMutationChain = new Promise<void>(resolve => {
-      releaseCurrent = resolve;
-    });
-
-    await previous.catch(() => undefined);
-
-    try {
-      return await callback();
-    } finally {
-      releaseCurrent();
-    }
   }
 
   private async deletePersistedSnapshot(): Promise<void> {
@@ -1007,7 +992,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   protected override onStopRequested(): void {
-    // Unblock any tool currently awaiting eventQueue.waitForEvent() so the
+    // Unblock any tool currently awaiting eventQueue.waitNonEmpty() so the
     // round can end and the loop can notice stopRequested.
     this.eventQueue.enqueue({ type: "wake" });
   }
@@ -1022,7 +1007,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     await this.awaitPendingReset();
 
     // Step 2: run one ReAct round. The LLM may call blocking tools like
-    // wait / finish_story_batch; those block inside eventQueue.waitForEvent
+    // wait / finish_story_batch; those block inside eventQueue.waitNonEmpty
     // until a producer (real event or timer-enqueued wake) resolves them.
     await this.runReactRound();
   }

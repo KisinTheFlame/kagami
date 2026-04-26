@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { InMemoryEventQueue } from "@kagami/agent-runtime";
+import { InMemoryQueue } from "@kagami/agent-runtime";
 import { DefaultConfigManager } from "../config/config.impl.manager.js";
 import { loadStaticConfig } from "../config/config.loader.js";
 import { createDbClient, type Database } from "../db/client.js";
@@ -215,8 +215,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatEventDao,
     napcatQqMessageDao,
   });
-  const eventQueue = new InMemoryEventQueue<Event>();
-  const storyEventQueue = new InMemoryEventQueue<StoryAgentEvent>();
+  const eventQueue = new InMemoryQueue<Event>();
+  const storyEventQueue = new InMemoryQueue<StoryAgentEvent>();
   const ithomeNewsService = new IthomeNewsService({
     articleDao: newsArticleDao,
     cursorDao: newsFeedCursorDao,

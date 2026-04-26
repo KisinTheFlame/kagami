@@ -1,6 +1,6 @@
 import {
   BaseLoopAgent,
-  type EventQueue,
+  type Queue,
   type LoopAgentExtension,
   ReActKernel,
   ToolCatalog,
@@ -131,7 +131,7 @@ type StoryLoopAgentDeps = {
   runtimeKey?: string;
   sourceRuntimeKey: string;
   context?: AgentContext;
-  eventQueue: EventQueue<StoryAgentEvent>;
+  eventQueue: Queue<StoryAgentEvent>;
 };
 
 type StoryPendingBatch = {
@@ -578,7 +578,7 @@ class StoryAgentHost {
 export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", StoryCompletion> {
   private readonly host: StoryAgentHost;
   private readonly tools: ToolExecutor<LlmMessage>;
-  private readonly eventQueue: EventQueue<StoryAgentEvent>;
+  private readonly eventQueue: Queue<StoryAgentEvent>;
 
   public constructor({
     llmClient,
@@ -719,7 +719,7 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     }
 
     this.host.transitionTo("idle");
-    await this.eventQueue.waitForEvent();
+    await this.eventQueue.waitNonEmpty();
   }
 
   protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
