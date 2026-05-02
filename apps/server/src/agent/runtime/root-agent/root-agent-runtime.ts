@@ -2,7 +2,6 @@ import {
   BaseLoopAgent,
   type LoopAgentExtension,
   ReActKernel,
-  type ReActKernelExtension,
   type ReActKernelRunRoundInput,
   type ReActRoundResult,
   SerialExecutor,
@@ -17,7 +16,6 @@ import type {
 } from "../context/agent-context.js";
 import {
   createConversationSummaryMessage,
-  createMessagesFromEvent,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
@@ -48,6 +46,14 @@ import type {
   RootAgentSessionDashboardSnapshot,
 } from "./session/root-agent-session.js";
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
+import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
+import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
+import { RootLlmTelemetryExtension } from "./extensions/llm-telemetry.extension.js";
+import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
+import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
+import { RootToolExecutionStateExtension } from "./extensions/tool-execution-state.extension.js";
+import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
+import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
 
 type ContextSummaryLike =
   | Pick<ContextSummaryOperation, "execute">
@@ -108,7 +114,7 @@ export type RootAgentCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
 export type RootLoopExtensionContext = {
   host: Pick<
-    RootAgentHost,
+    RootAgentExtensionHost,
     | "appendWakeReminderIfNeeded"
     | "compactContextIfNeeded"
     | "persistSnapshotIfChanged"
@@ -163,7 +169,7 @@ export type RootAgentRuntimeDashboardSnapshot = {
   availableInvokeTools: RootAgentInvokeToolName[];
 };
 
-class RootAgentHost {
+class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
@@ -660,192 +666,6 @@ class RootAgentHost {
   }
 }
 
-class WakeReminderExtension implements LoopAgentExtension<
-  RootLoopExtensionContext,
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.appendWakeReminderIfNeeded();
-  }
-}
-
-class ContextCompactionExtension implements LoopAgentExtension<
-  RootLoopExtensionContext,
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  public async onAfterCommit(input: {
-    context: RootLoopExtensionContext;
-    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>;
-  }): Promise<void> {
-    const compacted = await input.context.host.compactContextIfNeeded(
-      input.result.completion.usage?.totalTokens,
-    );
-    if (compacted) {
-      await input.context.notifyContextCompacted();
-    }
-  }
-}
-
-class SnapshotPersistenceExtension implements LoopAgentExtension<
-  RootLoopExtensionContext,
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  public async onInitialize(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.persistSnapshotIfChanged();
-  }
-
-  public async onBeforeRound(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.persistSnapshotIfChanged();
-  }
-
-  public async onAfterCommit(input: { context: RootLoopExtensionContext }): Promise<void> {
-    await input.context.host.persistSnapshotIfChanged();
-  }
-
-  public async onAfterReset(context: RootLoopExtensionContext): Promise<void> {
-    await context.host.persistSnapshotIfChanged({
-      suppressError: false,
-    });
-  }
-}
-
-class RootLlmTelemetryExtension implements ReActKernelExtension<
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  private readonly host: RootAgentHost;
-
-  public constructor({ host }: { host: RootAgentHost }) {
-    this.host = host;
-  }
-
-  public onAfterModel(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
-    completion: RootAgentCompletion;
-  }): void {
-    this.host.recordLlmCall(input.completion);
-  }
-}
-
-class RootToolExecutionStateExtension implements ReActKernelExtension<
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  private readonly host: RootAgentHost;
-
-  public constructor({ host }: { host: RootAgentHost }) {
-    this.host = host;
-  }
-
-  public onBeforeToolExecution(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
-    completion: RootAgentCompletion;
-    toolCall: {
-      id: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    };
-  }): void {
-    void input;
-    this.host.transitionTo("executing_tool");
-  }
-}
-
-class RootToolFallbackExtension implements ReActKernelExtension<
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  private readonly host: RootAgentHost;
-
-  public constructor({ host }: { host: RootAgentHost }) {
-    this.host = host;
-  }
-
-  public async onToolError(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
-    toolCall: {
-      name: string;
-    };
-    error: unknown;
-  }): Promise<{ handled: boolean; result: ToolSetExecutionResult }> {
-    this.host.recordRecoverableError(input.error);
-    logger.warn("Root agent tool call failed; returning temporary failure result", {
-      event: "agent.root_agent_runtime.tool_temporary_failure",
-      toolName: input.toolCall.name,
-      errorName: input.error instanceof Error ? input.error.name : "Error",
-      errorMessage: input.error instanceof Error ? input.error.message : String(input.error),
-    });
-
-    return {
-      handled: true,
-      result: createTemporaryToolFailureResult({
-        toolName: input.toolCall.name,
-        kind: input.request.tools.getKind(input.toolCall.name) ?? "business",
-        error: input.error,
-      }),
-    };
-  }
-}
-
-class RootPostToolEffectsExtension implements ReActKernelExtension<
-  LlmMessage,
-  "agent",
-  RootAgentCompletion,
-  RootAgentToolExecutionData
-> {
-  private readonly host: RootAgentHost;
-
-  public constructor({ host }: { host: RootAgentHost }) {
-    this.host = host;
-  }
-
-  public async onAfterToolExecution(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
-    completion: RootAgentCompletion;
-    toolCall: {
-      name: string;
-      arguments: Record<string, unknown>;
-    };
-    result: ToolSetExecutionResult;
-  }): Promise<{
-    appendedMessages?: LlmMessage[];
-    extensionData?: RootAgentToolExecutionData;
-  }> {
-    this.host.recordToolCall({
-      toolName: input.toolCall.name,
-      argumentsValue: input.toolCall.arguments,
-      resultContent: input.result.content,
-    });
-
-    const postToolEffects = await this.host.flushPendingPostToolEffects();
-
-    return {
-      appendedMessages: [
-        ...postToolEffects.messages,
-        ...postToolEffects.events.flatMap(createMessagesFromEvent),
-      ],
-      extensionData: {
-        postToolEffects,
-      },
-    };
-  }
-}
-
 export class RootLoopAgent extends BaseLoopAgent<
   LlmMessage,
   "agent",
@@ -1157,24 +977,6 @@ function createPreview(content: string): string {
   }
 
   return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
-}
-
-function createTemporaryToolFailureResult(input: {
-  toolName: string;
-  kind: ToolSetExecutionResult["kind"];
-  error: unknown;
-}): ToolSetExecutionResult {
-  return {
-    kind: input.kind,
-    content: JSON.stringify({
-      ok: false,
-      error: "TEMPORARY_TOOL_FAILURE",
-      retryable: true,
-      toolName: input.toolName,
-      message: `工具 ${input.toolName} 暂时调用失败了，请稍后重试，或换一种方式继续。`,
-      details: input.error instanceof Error ? input.error.message : String(input.error),
-    }),
-  };
 }
 
 function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot): string {

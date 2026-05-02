@@ -49,7 +49,7 @@ export class DefaultAgentContext implements AgentContext {
   public async getSnapshot(): Promise<AgentContextSnapshot> {
     return {
       systemPrompt: await this.getSystemPrompt(),
-      messages: this.items.flatMap(renderContextItemToMessages),
+      messages: cloneMessages(this.items.flatMap(renderContextItemToMessages)),
     };
   }
 
@@ -59,7 +59,7 @@ export class DefaultAgentContext implements AgentContext {
       systemPrompt: snapshot.systemPrompt,
     });
 
-    await forkedContext.appendMessages(cloneMessages(snapshot.messages));
+    await forkedContext.appendMessages(snapshot.messages);
 
     return forkedContext;
   }
@@ -67,7 +67,7 @@ export class DefaultAgentContext implements AgentContext {
   public async exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot> {
     const snapshot = await this.getSnapshot();
     return {
-      messages: cloneMessages(snapshot.messages),
+      messages: snapshot.messages,
     };
   }
 
