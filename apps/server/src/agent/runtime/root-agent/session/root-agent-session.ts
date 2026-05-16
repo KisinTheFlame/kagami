@@ -3,11 +3,6 @@ import type { LlmMessage } from "../../../../llm/types.js";
 import {
   createCrossStateNotificationMessage,
   createIthomeArticleDetailMessage,
-  createIthomeArticleListMessage,
-  createMergedGroupMessagesMessage,
-  createMergedPrivateMessagesMessage,
-  createEnterZoneOutMessage,
-  createExitZoneOutMessage,
   createStateSystemReminderMessage,
 } from "../../context/context-message-factory.js";
 import { NotificationAccumulator } from "../notification/notification-accumulator.js";
@@ -23,30 +18,31 @@ import type { IthomeNewsService } from "../../../../news/application/ithome-news
 import type { TerminalService } from "../../../capabilities/terminal/application/terminal.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import { PrivateChatState } from "./private-chat-state.js";
+import { normalizePersistedSnapshot } from "./persistence-normalize.js";
+import {
+  createQqGroupStateId,
+  createQqPrivateStateId,
+  normalizeEnterInputToStateId,
+  parseGroupIdFromStateId,
+  parsePrivateUserIdFromStateId,
+} from "./state-id.js";
+import {
+  type RootAgentInvokeToolName,
+  type RootAgentState,
+  type RootAgentStateHost,
+  type RootAgentStateId,
+} from "./state.types.js";
+import { IthomeState } from "./states/ithome.state.js";
+import { PortalState } from "./states/portal.state.js";
+import { QqGroupState } from "./states/qq-group.state.js";
+import { QqPrivateState } from "./states/qq-private.state.js";
+import { TerminalStateNode } from "./states/terminal.state.js";
+import { ZoneOutState } from "./states/zone-out.state.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
   PersistedRootAgentIthomeFeedState,
   PersistedRootAgentSessionSnapshot,
 } from "../persistence/root-agent-runtime-snapshot.js";
-
-export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome", "zone_out", "terminal"] as const;
-export type RootAgentStaticStateId = (typeof ROOT_AGENT_STATIC_STATE_IDS)[number];
-export type RootAgentStateId =
-  | RootAgentStaticStateId
-  | `qq_group:${string}`
-  | `qq_private:${string}`;
-
-export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
-  portal: [],
-  qq_group: ["send_message"],
-  qq_private: ["send_message"],
-  ithome: ["open_ithome_article"],
-  zone_out: ["zone_out"],
-  terminal: ["bash", "read_bash_output"],
-} as const;
-
-export type RootAgentInvokeToolName =
-  (typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE)[keyof typeof ROOT_AGENT_INVOKE_TOOLS_BY_STATE][number];
 
 export type RootAgentSessionState = {
   focusedStateId: RootAgentStateId;
@@ -113,34 +109,7 @@ type RootAgentSessionDeps = {
 
 const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
 
-type PortalFeedState = PersistedRootAgentIthomeFeedState;
-
-type FocusReason = "initialize" | "enter" | "resume_back";
-type BlurReason = "enter_child" | "back";
-
-type RootAgentStateHandleEventResult = {
-  shouldTriggerRound: boolean;
-  messages?: LlmMessage[];
-  events?: Event[];
-  stateChanged?: boolean;
-};
-
-type RootAgentState = {
-  getId(): RootAgentStateId;
-  getDisplayName(): string;
-  getDescription(): Promise<string>;
-  listChildren(): Promise<RootAgentState[]>;
-  getAvailableInvokeTools(): RootAgentInvokeToolName[];
-  onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]>;
-  onBlur(input: { reason: BlurReason }): Promise<LlmMessage[]>;
-  handleEvent(input: {
-    event: Event;
-    isFocused: boolean;
-  }): Promise<RootAgentStateHandleEventResult>;
-  buildNotificationSummary(event: Event): string | null;
-};
-
-export class RootAgentSession implements RootAgentSessionController {
+export class RootAgentSession implements RootAgentSessionController, RootAgentStateHost {
   private readonly context: AgentContext;
   private readonly napcatGatewayService: NapcatGatewayService;
   private readonly recentMessageLimit: number;
@@ -160,7 +129,7 @@ export class RootAgentSession implements RootAgentSessionController {
   private stateStack: RootAgentStateId[] = ["portal"];
   private initialized = false;
   private groupInfoLoaded = false;
-  public ithomeFeedState: PortalFeedState | null = null;
+  public ithomeFeedState: PersistedRootAgentIthomeFeedState | null = null;
   private readonly notificationAccumulator: NotificationAccumulator;
 
   public constructor({
@@ -554,185 +523,6 @@ export class RootAgentSession implements RootAgentSessionController {
     return await this.back();
   }
 
-  private async consumeIncomingEventInActiveState(
-    event: Event,
-  ): Promise<{ shouldTriggerRound: boolean }> {
-    const targetStateId = this.resolveEventStateId(event);
-    if (!targetStateId) {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    const targetState = this.resolveState(targetStateId);
-    if (!targetState) {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    const focusedStateId = this.getFocusedStateId();
-    const result = await targetState.handleEvent({
-      event,
-      isFocused: focusedStateId === targetStateId,
-    });
-
-    if (result.messages && result.messages.length > 0) {
-      this.pendingIncomingMessages.push(...result.messages);
-    }
-    if (result.events && result.events.length > 0) {
-      this.pendingVisibleEvents.push(...result.events);
-    }
-
-    let shouldTriggerRound = result.shouldTriggerRound;
-
-    if (result.stateChanged) {
-      const isFocused = focusedStateId === targetStateId;
-      const focusedState = this.requireState(focusedStateId);
-      const needsReminderRefresh =
-        isFocused ||
-        (await this.hasDescendantState({
-          state: focusedState,
-          targetStateId,
-        }));
-      if (needsReminderRefresh) {
-        this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
-        shouldTriggerRound = true;
-      }
-
-      // Push cross-state notification for non-focused state changes.
-      // Skip when focused on portal (portal reminder already shows unread).
-      if (!isFocused && focusedStateId !== "portal") {
-        const summary = targetState.buildNotificationSummary(event);
-        if (summary) {
-          this.notificationAccumulator.push({
-            stateId: targetStateId,
-            displayName: targetState.getDisplayName(),
-            summary,
-            timestamp: Date.now(),
-          });
-        }
-      }
-    }
-
-    return {
-      shouldTriggerRound,
-    };
-  }
-
-  private async renderFocusMessages(
-    stateId: RootAgentStateId,
-    reason: FocusReason,
-  ): Promise<LlmMessage[]> {
-    const state = this.requireState(stateId);
-    return [await this.createStateReminderMessage(stateId), ...(await state.onFocus({ reason }))];
-  }
-
-  private async createStateReminderMessage(stateId: RootAgentStateId): Promise<LlmMessage> {
-    const state = this.requireState(stateId);
-    const children = await state.listChildren();
-
-    return createStateSystemReminderMessage({
-      displayName: state.getDisplayName(),
-      children: await Promise.all(
-        children.map(async child => ({
-          id: child.getId(),
-          displayName: child.getDisplayName(),
-          description: await child.getDescription(),
-        })),
-      ),
-      availableInvokeTools: state.getAvailableInvokeTools(),
-    });
-  }
-
-  private resolveState(stateId: string): RootAgentState | null {
-    if (stateId === "portal") {
-      return new PortalState(this);
-    }
-
-    if (stateId === "ithome") {
-      return this.ithomeNewsService ? new IthomeState(this) : null;
-    }
-
-    if (stateId === "zone_out") {
-      return new ZoneOutState(this);
-    }
-
-    if (stateId === "terminal") {
-      return this.terminalService ? new TerminalStateNode(this) : null;
-    }
-
-    const groupId = parseGroupIdFromStateId(stateId);
-    if (groupId && this.groupStateById.has(groupId)) {
-      return new QqGroupState(this, groupId);
-    }
-
-    const userId = parsePrivateUserIdFromStateId(stateId);
-    if (userId && this.privateChatStateByUserId.has(userId)) {
-      return new QqPrivateState(this, userId);
-    }
-
-    return null;
-  }
-
-  private requireState(stateId: RootAgentStateId): RootAgentState {
-    const state = this.resolveState(stateId);
-    if (!state) {
-      throw new Error(`Unknown root agent state: ${stateId}`);
-    }
-
-    return state;
-  }
-
-  private resolveEventStateId(event: Event): RootAgentStateId | null {
-    if (event.type === "news_article_ingested") {
-      return event.data.sourceKey === "ithome" && this.ithomeNewsService ? "ithome" : null;
-    }
-
-    if (event.type === "napcat_group_message") {
-      return this.groupStateById.has(event.data.groupId)
-        ? createQqGroupStateId(event.data.groupId)
-        : null;
-    }
-
-    if (event.type === "napcat_friend_list_updated" || event.type === "wake") {
-      return null;
-    }
-
-    const privateChatState = this.ensurePrivateChatState({
-      userId: event.data.userId,
-      friendInfo: {
-        userId: event.data.userId,
-        nickname: event.data.nickname,
-        remark: event.data.remark,
-      },
-    });
-    return createQqPrivateStateId(privateChatState.userId);
-  }
-
-  private async hasDescendantState(input: {
-    state: RootAgentState;
-    targetStateId: RootAgentStateId;
-  }): Promise<boolean> {
-    const children = await input.state.listChildren();
-    for (const child of children) {
-      if (child.getId() === input.targetStateId) {
-        return true;
-      }
-
-      if (
-        (await this.hasDescendantState({
-          state: child,
-          targetStateId: input.targetStateId,
-        })) === true
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   public async fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]> {
     if (this.recentMessageLimit === 0) {
       return [];
@@ -837,593 +627,183 @@ export class RootAgentSession implements RootAgentSessionController {
     this.privateChatStateByUserId.set(input.userId, privateChatState);
     return privateChatState;
   }
-}
 
-class PortalState implements RootAgentState {
-  private readonly session: RootAgentSession;
-
-  public constructor(session: RootAgentSession) {
-    this.session = session;
-  }
-
-  public getId(): RootAgentStateId {
-    return "portal";
-  }
-
-  public getDisplayName(): string {
-    return "门户";
-  }
-
-  public async getDescription(): Promise<string> {
-    return "主入口，可从这里进入群聊、私聊、资讯和神游。";
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    await this.session.ensureGroupInfosLoaded();
-    await this.session.ensureIthomeFeedStateLoaded();
-
-    const children: RootAgentState[] = this.session.groupStates.map(
-      groupState => new QqGroupState(this.session, groupState.groupId),
-    );
-    children.push(
-      ...this.session.privateChatStates.map(
-        privateChatState => new QqPrivateState(this.session, privateChatState.userId),
-      ),
-    );
-
-    if (this.session.ithomeNewsService) {
-      children.push(new IthomeState(this.session));
-    }
-    children.push(new ZoneOutState(this.session));
-    if (this.session.terminalService) {
-      children.push(new TerminalStateNode(this.session));
-    }
-
-    return children;
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [];
-  }
-
-  public async onFocus(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async onBlur(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
-    return {
-      shouldTriggerRound: false,
-    };
-  }
-
-  public buildNotificationSummary(): string | null {
-    return null;
-  }
-}
-
-class QqGroupState implements RootAgentState {
-  private readonly session: RootAgentSession;
-  private readonly groupId: string;
-
-  public constructor(session: RootAgentSession, groupId: string) {
-    this.session = session;
-    this.groupId = groupId;
-  }
-
-  public getId(): RootAgentStateId {
-    return createQqGroupStateId(this.groupId);
-  }
-
-  public getDisplayName(): string {
-    const groupName = this.session.groupStateById.get(this.groupId)?.getGroupName();
-    return groupName ? `QQ 群 ${groupName} (${this.groupId})` : `QQ 群 ${this.groupId}`;
-  }
-
-  public async getDescription(): Promise<string> {
-    const groupState = this.session.groupStateById.get(this.groupId);
-    if (!groupState) {
-      return "群状态不可用。";
-    }
-
-    if (groupState.getUnreadCount() > 0) {
-      return `未读 ${groupState.getUnreadCount()} 条消息。`;
-    }
-
-    if (!groupState.hasEntered()) {
-      return "尚未查看，可进去看看最近消息。";
-    }
-
-    return "未读 0 条消息。";
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    return [];
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_group];
-  }
-
-  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
-    void input;
-    const groupState = this.session.groupStateById.get(this.groupId);
-    if (!groupState) {
-      return [];
-    }
-
-    const hasEnteredBefore = groupState.hasEntered();
-    const hydratedMessages = hasEnteredBefore
-      ? groupState.consumeUnreadTail()
-      : await this.session.fetchRecentMessages(this.groupId);
-    if (!hasEnteredBefore) {
-      groupState.clearUnreadMessages();
-    }
-
-    groupState.markEntered();
-    const hydratedMessage = createMergedGroupMessagesMessage(hydratedMessages);
-    return hydratedMessage ? [hydratedMessage] : [];
-  }
-
-  public async onBlur(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async handleEvent(input: {
-    event: Event;
-    isFocused: boolean;
-  }): Promise<RootAgentStateHandleEventResult> {
-    if (input.event.type !== "napcat_group_message" || input.event.data.groupId !== this.groupId) {
+  private async consumeIncomingEventInActiveState(
+    event: Event,
+  ): Promise<{ shouldTriggerRound: boolean }> {
+    const targetStateId = this.resolveEventStateId(event);
+    if (!targetStateId) {
       return {
         shouldTriggerRound: false,
       };
     }
 
-    const groupState = this.session.groupStateById.get(this.groupId);
-    if (!groupState) {
+    const targetState = this.resolveState(targetStateId);
+    if (!targetState) {
       return {
         shouldTriggerRound: false,
       };
     }
 
-    if (input.isFocused) {
-      return {
-        shouldTriggerRound: true,
-        events: [input.event],
-      };
-    }
-
-    groupState.pushUnreadMessage(input.event.data);
-    return {
-      shouldTriggerRound: false,
-      stateChanged: true,
-    };
-  }
-
-  public buildNotificationSummary(event: Event): string | null {
-    if (event.type !== "napcat_group_message") {
-      return null;
-    }
-    const unreadCount = this.session.groupStateById.get(this.groupId)?.getUnreadCount();
-    return `未读 ${unreadCount ?? 0} 条消息。`;
-  }
-}
-
-class QqPrivateState implements RootAgentState {
-  private readonly session: RootAgentSession;
-  private readonly userId: string;
-
-  public constructor(session: RootAgentSession, userId: string) {
-    this.session = session;
-    this.userId = userId;
-  }
-
-  public getId(): RootAgentStateId {
-    return createQqPrivateStateId(this.userId);
-  }
-
-  public getDisplayName(): string {
-    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
-    const displayName = privateChatState?.getDisplayName() ?? this.userId;
-    return `QQ 私聊 ${displayName} (${this.userId})`;
-  }
-
-  public async getDescription(): Promise<string> {
-    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
-    if (!privateChatState) {
-      return "私聊状态不可用。";
-    }
-
-    if (privateChatState.getUnreadCount() > 0) {
-      return `未读 ${privateChatState.getUnreadCount()} 条消息。`;
-    }
-
-    if (!privateChatState.hasEntered()) {
-      return "尚未查看，可进去看看最近消息。";
-    }
-
-    return "未读 0 条消息。";
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    return [];
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_private];
-  }
-
-  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
-    void input;
-    const privateChatState = this.session.privateChatStateByUserId.get(this.userId);
-    if (!privateChatState) {
-      return [];
-    }
-
-    const hasEnteredBefore = privateChatState.hasEntered();
-    const hydratedMessages = hasEnteredBefore
-      ? privateChatState.consumeUnreadTail()
-      : await this.session.fetchRecentPrivateMessages(this.userId);
-    if (!hasEnteredBefore) {
-      privateChatState.clearUnreadMessages();
-    }
-
-    privateChatState.markEntered();
-    const hydratedMessage = createMergedPrivateMessagesMessage(hydratedMessages);
-    return hydratedMessage ? [hydratedMessage] : [];
-  }
-
-  public async onBlur(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async handleEvent(input: {
-    event: Event;
-    isFocused: boolean;
-  }): Promise<RootAgentStateHandleEventResult> {
-    if (input.event.type !== "napcat_private_message" || input.event.data.userId !== this.userId) {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    const privateChatState = this.session.ensurePrivateChatState({
-      userId: input.event.data.userId,
-      friendInfo: {
-        userId: input.event.data.userId,
-        nickname: input.event.data.nickname,
-        remark: input.event.data.remark,
-      },
+    const focusedStateId = this.getFocusedStateId();
+    const result = await targetState.handleEvent({
+      event,
+      isFocused: focusedStateId === targetStateId,
     });
 
-    if (input.isFocused) {
-      return {
-        shouldTriggerRound: true,
-        events: [input.event],
-      };
+    if (result.messages && result.messages.length > 0) {
+      this.pendingIncomingMessages.push(...result.messages);
+    }
+    if (result.events && result.events.length > 0) {
+      this.pendingVisibleEvents.push(...result.events);
     }
 
-    privateChatState.pushUnreadMessage(input.event.data);
+    let shouldTriggerRound = result.shouldTriggerRound;
+
+    if (result.stateChanged) {
+      const isFocused = focusedStateId === targetStateId;
+      const focusedState = this.requireState(focusedStateId);
+      const needsReminderRefresh =
+        isFocused ||
+        (await this.hasDescendantState({
+          state: focusedState,
+          targetStateId,
+        }));
+      if (needsReminderRefresh) {
+        this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
+        shouldTriggerRound = true;
+      }
+
+      // Push cross-state notification for non-focused state changes.
+      // Skip when focused on portal (portal reminder already shows unread).
+      if (!isFocused && focusedStateId !== "portal") {
+        const summary = targetState.buildNotificationSummary(event);
+        if (summary) {
+          this.notificationAccumulator.push({
+            stateId: targetStateId,
+            displayName: targetState.getDisplayName(),
+            summary,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
+
     return {
-      shouldTriggerRound: false,
-      stateChanged: true,
+      shouldTriggerRound,
     };
   }
 
-  public buildNotificationSummary(event: Event): string | null {
-    if (event.type !== "napcat_private_message") {
+  private async renderFocusMessages(
+    stateId: RootAgentStateId,
+    reason: "initialize" | "enter" | "resume_back",
+  ): Promise<LlmMessage[]> {
+    const state = this.requireState(stateId);
+    return [await this.createStateReminderMessage(stateId), ...(await state.onFocus({ reason }))];
+  }
+
+  private async createStateReminderMessage(stateId: RootAgentStateId): Promise<LlmMessage> {
+    const state = this.requireState(stateId);
+    const children = await state.listChildren();
+
+    return createStateSystemReminderMessage({
+      displayName: state.getDisplayName(),
+      children: await Promise.all(
+        children.map(async child => ({
+          id: child.getId(),
+          displayName: child.getDisplayName(),
+          description: await child.getDescription(),
+        })),
+      ),
+      availableInvokeTools: state.getAvailableInvokeTools(),
+    });
+  }
+
+  private resolveState(stateId: string): RootAgentState | null {
+    if (stateId === "portal") {
+      return new PortalState(this);
+    }
+
+    if (stateId === "ithome") {
+      return this.ithomeNewsService ? new IthomeState(this) : null;
+    }
+
+    if (stateId === "zone_out") {
+      return new ZoneOutState();
+    }
+
+    if (stateId === "terminal") {
+      return this.terminalService ? new TerminalStateNode(this) : null;
+    }
+
+    const groupId = parseGroupIdFromStateId(stateId);
+    if (groupId && this.groupStateById.has(groupId)) {
+      return new QqGroupState(this, groupId);
+    }
+
+    const userId = parsePrivateUserIdFromStateId(stateId);
+    if (userId && this.privateChatStateByUserId.has(userId)) {
+      return new QqPrivateState(this, userId);
+    }
+
+    return null;
+  }
+
+  private requireState(stateId: RootAgentStateId): RootAgentState {
+    const state = this.resolveState(stateId);
+    if (!state) {
+      throw new Error(`Unknown root agent state: ${stateId}`);
+    }
+
+    return state;
+  }
+
+  private resolveEventStateId(event: Event): RootAgentStateId | null {
+    if (event.type === "news_article_ingested") {
+      return event.data.sourceKey === "ithome" && this.ithomeNewsService ? "ithome" : null;
+    }
+
+    if (event.type === "napcat_group_message") {
+      return this.groupStateById.has(event.data.groupId)
+        ? createQqGroupStateId(event.data.groupId)
+        : null;
+    }
+
+    if (event.type === "napcat_friend_list_updated" || event.type === "wake") {
       return null;
     }
-    const unreadCount = this.session.privateChatStateByUserId.get(this.userId)?.getUnreadCount();
-    return `未读 ${unreadCount ?? 0} 条消息。`;
-  }
-}
 
-class IthomeState implements RootAgentState {
-  private readonly session: RootAgentSession;
-
-  public constructor(session: RootAgentSession) {
-    this.session = session;
-  }
-
-  public getId(): RootAgentStateId {
-    return "ithome";
-  }
-
-  public getDisplayName(): string {
-    return this.session.ithomeFeedState?.label ?? "IT 之家";
-  }
-
-  public async getDescription(): Promise<string> {
-    await this.session.ensureIthomeFeedStateLoaded();
-    if (!this.session.ithomeFeedState) {
-      return "资讯空间不可用。";
-    }
-
-    if (!this.session.ithomeFeedState.hasEntered) {
-      return "尚未查看，可进去看看最近文章。";
-    }
-
-    return this.session.ithomeFeedState.unreadCount > 0
-      ? `新文章 ${this.session.ithomeFeedState.unreadCount} 篇。`
-      : "暂无新文章，可进去看看最近文章。";
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    return [];
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.ithome];
-  }
-
-  public async onFocus(): Promise<LlmMessage[]> {
-    if (!this.session.ithomeNewsService) {
-      return [];
-    }
-
-    const result = await this.session.ithomeNewsService.enterFeed();
-    this.session.ithomeFeedState = {
-      kind: "ithome",
-      label: result.displayName,
-      unreadCount: 0,
-      hasEntered: true,
-    };
-
-    return [
-      createIthomeArticleListMessage({
-        displayName: result.displayName,
-        mode: result.mode,
-        hiddenNewCount: result.hiddenNewCount,
-        articles: result.articles,
-      }),
-    ];
-  }
-
-  public async onBlur(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async handleEvent(input: {
-    event: Event;
-    isFocused: boolean;
-  }): Promise<RootAgentStateHandleEventResult> {
-    if (input.event.type !== "news_article_ingested") {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    await this.session.ensureIthomeFeedStateLoaded();
-    if (
-      !this.session.ithomeFeedState ||
-      input.event.data.sourceKey !== this.session.ithomeFeedState.kind
-    ) {
-      return {
-        shouldTriggerRound: false,
-      };
-    }
-
-    this.session.ithomeFeedState.unreadCount += 1;
-    return {
-      shouldTriggerRound: false,
-      stateChanged: true,
-    };
-  }
-
-  public buildNotificationSummary(): string | null {
-    return null;
-  }
-}
-
-class ZoneOutState implements RootAgentState {
-  private readonly session: RootAgentSession;
-
-  public constructor(session: RootAgentSession) {
-    this.session = session;
-  }
-
-  public getId(): RootAgentStateId {
-    return "zone_out";
-  }
-
-  public getDisplayName(): string {
-    return "神游";
-  }
-
-  public async getDescription(): Promise<string> {
-    return "进入自由思考状态。";
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    return [];
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.zone_out];
-  }
-
-  public async onFocus(): Promise<LlmMessage[]> {
-    return [createEnterZoneOutMessage()];
-  }
-
-  public async onBlur(input: { reason: BlurReason }): Promise<LlmMessage[]> {
-    return input.reason === "back" ? [createExitZoneOutMessage()] : [];
-  }
-
-  public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
-    return {
-      shouldTriggerRound: false,
-    };
-  }
-
-  public buildNotificationSummary(): string | null {
-    return null;
-  }
-}
-
-class TerminalStateNode implements RootAgentState {
-  private readonly session: RootAgentSession;
-
-  public constructor(session: RootAgentSession) {
-    this.session = session;
-  }
-
-  public getId(): RootAgentStateId {
-    return "terminal";
-  }
-
-  public getDisplayName(): string {
-    return "终端";
-  }
-
-  public async getDescription(): Promise<string> {
-    const cwd = this.session.terminalService?.getCwd() ?? "(未初始化)";
-    return `你在终端里，当前目录：${cwd}`;
-  }
-
-  public async listChildren(): Promise<RootAgentState[]> {
-    return [];
-  }
-
-  public getAvailableInvokeTools(): RootAgentInvokeToolName[] {
-    return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.terminal];
-  }
-
-  public async onFocus(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async onBlur(): Promise<LlmMessage[]> {
-    return [];
-  }
-
-  public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
-    return {
-      shouldTriggerRound: false,
-    };
-  }
-
-  public buildNotificationSummary(): string | null {
-    return null;
-  }
-}
-
-function createQqGroupStateId(groupId: string): `qq_group:${string}` {
-  return `qq_group:${groupId}`;
-}
-
-function createQqPrivateStateId(userId: string): `qq_private:${string}` {
-  return `qq_private:${userId}`;
-}
-
-function parseGroupIdFromStateId(stateId: string): string | undefined {
-  return stateId.startsWith("qq_group:") ? stateId.slice("qq_group:".length) : undefined;
-}
-
-function parsePrivateUserIdFromStateId(stateId: string): string | undefined {
-  return stateId.startsWith("qq_private:") ? stateId.slice("qq_private:".length) : undefined;
-}
-
-function normalizeEnterInputToStateId(
-  input:
-    | { id: string }
-    | {
-        kind: "qq_group" | "qq_private" | "ithome" | "zone_out" | "terminal";
-        id?: string;
+    const privateChatState = this.ensurePrivateChatState({
+      userId: event.data.userId,
+      friendInfo: {
+        userId: event.data.userId,
+        nickname: event.data.nickname,
+        remark: event.data.remark,
       },
-): string | null {
-  if ("kind" in input) {
-    if (input.kind === "qq_group") {
-      return input.id?.trim() ? createQqGroupStateId(input.id.trim()) : null;
+    });
+    return createQqPrivateStateId(privateChatState.userId);
+  }
+
+  private async hasDescendantState(input: {
+    state: RootAgentState;
+    targetStateId: RootAgentStateId;
+  }): Promise<boolean> {
+    const children = await input.state.listChildren();
+    for (const child of children) {
+      if (child.getId() === input.targetStateId) {
+        return true;
+      }
+
+      if (
+        (await this.hasDescendantState({
+          state: child,
+          targetStateId: input.targetStateId,
+        })) === true
+      ) {
+        return true;
+      }
     }
 
-    if (input.kind === "qq_private") {
-      return input.id?.trim() ? createQqPrivateStateId(input.id.trim()) : null;
-    }
-
-    return input.kind;
+    return false;
   }
-
-  return input.id.trim();
-}
-
-function cloneGroupStates(
-  groups: CurrentPersistedRootAgentSessionSnapshot["groups"],
-): CurrentPersistedRootAgentSessionSnapshot["groups"] {
-  return groups.map(group => ({
-    groupId: group.groupId,
-    groupInfo: group.groupInfo ? structuredClone(group.groupInfo) : null,
-    unreadMessages: structuredClone(group.unreadMessages),
-    hasEntered: group.hasEntered,
-  }));
-}
-
-function clonePrivateChatStates(
-  privateChats: CurrentPersistedRootAgentSessionSnapshot["privateChats"],
-): CurrentPersistedRootAgentSessionSnapshot["privateChats"] {
-  return privateChats.map(privateChat => ({
-    userId: privateChat.userId,
-    friendInfo: privateChat.friendInfo ? structuredClone(privateChat.friendInfo) : null,
-    unreadMessages: structuredClone(privateChat.unreadMessages),
-    hasEntered: privateChat.hasEntered,
-  }));
-}
-
-function normalizePersistedSnapshot(
-  snapshot: PersistedRootAgentSessionSnapshot,
-  groupStateById: Map<string, GroupChatState>,
-  privateChatStateByUserId: Map<string, PrivateChatState>,
-): {
-  stateStack: RootAgentStateId[];
-  groups: CurrentPersistedRootAgentSessionSnapshot["groups"];
-  privateChats: CurrentPersistedRootAgentSessionSnapshot["privateChats"];
-  ithomeFeedState: PortalFeedState | null;
-  groupInfoLoaded: boolean;
-} {
-  const knownPrivateUserIds = new Set([
-    ...privateChatStateByUserId.keys(),
-    ...snapshot.privateChats.map(privateChat => privateChat.userId),
-  ]);
-  const normalizedStack = snapshot.stateStack
-    .map(stateId => normalizeStateId(stateId, groupStateById, knownPrivateUserIds))
-    .filter((stateId): stateId is RootAgentStateId => stateId !== null);
-
-  return {
-    stateStack: normalizedStack.length > 0 ? normalizedStack : ["portal"],
-    groups: cloneGroupStates(snapshot.groups),
-    privateChats: clonePrivateChatStates(snapshot.privateChats),
-    ithomeFeedState: snapshot.ithomeFeedState ? { ...snapshot.ithomeFeedState } : null,
-    groupInfoLoaded: snapshot.groups.some(group => group.groupInfo !== null),
-  };
-}
-
-function normalizeStateId(
-  stateId: string,
-  groupStateById: Map<string, GroupChatState>,
-  knownPrivateUserIds: ReadonlySet<string>,
-): RootAgentStateId | null {
-  if (
-    stateId === "portal" ||
-    stateId === "ithome" ||
-    stateId === "zone_out" ||
-    stateId === "terminal"
-  ) {
-    return stateId;
-  }
-
-  const groupId = parseGroupIdFromStateId(stateId);
-  if (groupId && groupStateById.has(groupId)) {
-    return createQqGroupStateId(groupId);
-  }
-
-  const userId = parsePrivateUserIdFromStateId(stateId);
-  if (userId && knownPrivateUserIds.has(userId)) {
-    return createQqPrivateStateId(userId);
-  }
-
-  return null;
 }
