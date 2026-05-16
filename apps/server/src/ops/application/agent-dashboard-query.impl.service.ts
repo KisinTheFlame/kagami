@@ -8,12 +8,14 @@ import type {
   StoryAgentDashboardSnapshot,
 } from "@kagami/shared/schemas/agent-dashboard";
 import type {
-  StoryAgentLlmCallSummary,
   StoryAgentRuntimeDashboardSnapshot,
-  StoryAgentRuntimeErrorSummary,
-  StoryAgentToolCallSummary,
   StoryLoopAgent,
 } from "../../agent/capabilities/story/runtime/story-agent.runtime.js";
+import type {
+  StoryAgentLlmCallSummary,
+  StoryAgentRuntimeErrorSummary,
+  StoryAgentToolCallSummary,
+} from "../../agent/capabilities/story/runtime/story-runtime-telemetry.js";
 import type { AgentEventQueue } from "../../agent/runtime/event/event.queue.js";
 import type {
   RootAgentLlmCallSummary,
