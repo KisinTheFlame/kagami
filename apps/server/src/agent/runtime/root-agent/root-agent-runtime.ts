@@ -40,11 +40,11 @@ import {
 import type { PersistedRootAgentRuntimeSnapshot } from "./persistence/root-agent-runtime-snapshot.js";
 import { NOOP_METRIC_SERVICE, recordToolCallMetric } from "../tool-call-metric.js";
 import type {
-  RootAgentInvokeToolName,
   RootAgentPostToolEffects,
   RootAgentSessionController,
   RootAgentSessionDashboardSnapshot,
 } from "./session/root-agent-session.js";
+import type { RootAgentInvokeToolName } from "./session/state.types.js";
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
