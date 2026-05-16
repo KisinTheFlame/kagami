@@ -33,10 +33,7 @@ import { StoryTelemetryKernelExtension } from "./extensions/telemetry.kernel-ext
 import type { StoryAgentRuntimeSnapshotRepository } from "./persistence/story-agent-runtime-snapshot.repository.js";
 import {
   StoryRuntimeTelemetry,
-  type StoryAgentLlmCallSummary,
-  type StoryAgentLoopState,
-  type StoryAgentRuntimeErrorSummary,
-  type StoryAgentToolCallSummary,
+  type StoryRuntimeTelemetryView,
 } from "./story-runtime-telemetry.js";
 import type { Tool } from "../../../../llm/types.js";
 import {
@@ -54,18 +51,10 @@ type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
 const logger = new AppLogger({ source: "agent.story-runtime" });
 
-export type StoryAgentRuntimeDashboardSnapshot = {
+export type StoryAgentRuntimeDashboardSnapshot = StoryRuntimeTelemetryView & {
   initialized: boolean;
-  loopState: StoryAgentLoopState;
-  lastError: StoryAgentRuntimeErrorSummary | null;
-  lastActivityAt: Date | null;
-  lastRoundCompletedAt: Date | null;
-  lastCompactionAt: Date | null;
   contextCompactionTotalTokenThreshold: number;
   contextSummary: AgentContextDashboardSummary;
-  lastToolCall: StoryAgentToolCallSummary | null;
-  lastToolResultPreview: string | null;
-  lastLlmCall: StoryAgentLlmCallSummary | null;
   story: {
     lastProcessedMessageSeq: number;
     pendingMessageCount: number;
@@ -227,23 +216,15 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
 
   public async getDashboardSnapshot(): Promise<StoryAgentRuntimeDashboardSnapshot> {
     const pendingMessageCount = await this.batchPreparer.countPendingMessages();
-    const telemetryView = this.telemetry.view();
     return {
+      ...this.telemetry.view(),
       initialized: this.hostInitialized,
-      loopState: telemetryView.loopState,
-      lastError: telemetryView.lastError,
-      lastActivityAt: telemetryView.lastActivityAt,
-      lastRoundCompletedAt: telemetryView.lastRoundCompletedAt,
-      lastCompactionAt: telemetryView.lastCompactionAt,
       contextCompactionTotalTokenThreshold:
         this.contextLifecycle.getContextCompactionTotalTokenThreshold(),
       contextSummary: await this.contextLifecycle.getDashboardSummary({
         limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
         previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
       }),
-      lastToolCall: telemetryView.lastToolCall,
-      lastToolResultPreview: telemetryView.lastToolResultPreview,
-      lastLlmCall: telemetryView.lastLlmCall,
       story: {
         lastProcessedMessageSeq: this.batchPreparer.getLastProcessedMessageSeq(),
         pendingMessageCount,
@@ -341,7 +322,11 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
   ): Promise<void> {
     const outcome = this.batchPreparer.commitRound(result);
     if (outcome.kind === "completed") {
+      // 先把消息写入 context，再 markCommitted 推进游标。append 抛错时
+      // pendingBatch 维持原状，下轮 runOnce 会重试这一批，避免游标已前进
+      // 但消息未落入 context 导致的丢批问题。
       await this.contextLifecycle.appendMessages(outcome.messagesToAppend);
+      this.batchPreparer.markCommitted(outcome.lastSeq);
       this.telemetry.recordRoundCompleted();
     }
   }

@@ -86,7 +86,9 @@ export class StoryBatchPreparer {
   }
 
   public getPendingBatchRoundMessages(): readonly LlmMessage[] | null {
-    return this.pendingBatch ? this.pendingBatch.roundMessages : null;
+    // 返回浅拷贝，避免外部持有内部数组的实时引用后误改。spread 在 buildRoundInput
+    // 里也只是一次性消费，clone 的成本可忽略。
+    return this.pendingBatch ? [...this.pendingBatch.roundMessages] : null;
   }
 
   public async countPendingMessages(): Promise<number> {
@@ -157,8 +159,10 @@ export class StoryBatchPreparer {
   }
 
   /**
-   * 处理一轮 ReAct kernel 输出。BatchPreparer 自己更新内部 roundMessages，并判定 batch 是否结束。
-   * 若结束，返回 completed 状态 + 应 append 到 context 的全部消息；否则返回 pending。
+   * 处理一轮 ReAct kernel 输出：把最新一轮消息累加进 pendingBatch.roundMessages，
+   * 并判定 batch 是否结束。若结束，返回 completed outcome 但**不 mutate** seq / pendingBatch ——
+   * 调用方需要在 append 到 context 成功后调用 {@link markCommitted} 才会真正前进游标。
+   * 这保留了原始单体 host 的不变量：context 写成功 → 才认这批已消费。
    */
   public commitRound(
     result: ReActRoundResult<LlmMessage, StoryCompletion, unknown>,
@@ -175,13 +179,22 @@ export class StoryBatchPreparer {
       return { kind: "pending" };
     }
 
-    const completedBatch = this.pendingBatch;
-    this.lastProcessedMessageSeq = completedBatch.lastSeq;
-    this.pendingBatch = null;
     return {
       kind: "completed",
-      messagesToAppend: completedBatch.roundMessages,
-      lastSeq: completedBatch.lastSeq,
+      messagesToAppend: [...this.pendingBatch.roundMessages],
+      lastSeq: this.pendingBatch.lastSeq,
     };
+  }
+
+  /**
+   * 在 LoopAgent 把 commit outcome 写入 context 成功后调用，正式推进游标并释放 pendingBatch。
+   * append 抛错时此方法不应被调用，pendingBatch 维持原状以便下一轮重试。
+   */
+  public markCommitted(lastSeq: number): void {
+    if (!this.pendingBatch || this.pendingBatch.lastSeq !== lastSeq) {
+      return;
+    }
+    this.lastProcessedMessageSeq = lastSeq;
+    this.pendingBatch = null;
   }
 }
