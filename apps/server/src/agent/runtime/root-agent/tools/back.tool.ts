@@ -3,7 +3,6 @@ import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const BACK_TOOL_NAME = "back";
-export const BACK_TO_PORTAL_TOOL_NAME = BACK_TOOL_NAME;
 
 const BackArgumentsSchema = z.object({});
 
@@ -36,5 +35,3 @@ export class BackTool extends ZodToolComponent<typeof BackArgumentsSchema> {
     return JSON.stringify(await rootAgentSession.back());
   }
 }
-
-export { BackTool as BackToPortalTool };

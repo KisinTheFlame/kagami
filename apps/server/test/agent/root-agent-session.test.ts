@@ -188,7 +188,6 @@ describe("RootAgentSession", () => {
     expect(lastMessage?.content).toContain("<system_reminder>");
     expect(lastMessage?.content).toContain("你进入了 门户 节点");
     expect(lastMessage?.content).toContain("QQ 群 产品群 (group-1) (qq_group:group-1)");
-    expect(lastMessage?.content).toContain("当前可用的 invoke 工具：无");
   });
 
   it("should enter child state by state id and back one level", async () => {
@@ -221,7 +220,7 @@ describe("RootAgentSession", () => {
     const stateReminder = snapshotAfterEnter.messages.find(
       message =>
         typeof message.content === "string" &&
-        message.content.includes("当前可用的 invoke 工具：send_message"),
+        message.content.includes("你进入了 QQ 群 产品群 (group-1) 节点"),
     );
     expect(stateReminder?.content).not.toContain("要发送到群里的文本内容。");
 

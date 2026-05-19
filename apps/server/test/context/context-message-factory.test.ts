@@ -119,18 +119,16 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should render invoke tool descriptions and parameter descriptions in state reminders", () => {
+  it("should render state reminder without invoke tools section", () => {
     expect(
       createStateSystemReminderMessage({
         displayName: "QQ 群 程序喵AI竞技场 (253631878)",
-        availableInvokeTools: ["send_message"],
       }),
     ).toEqual({
       role: "user",
       content: [
         "<system_reminder>",
         "你进入了 QQ 群 程序喵AI竞技场 (253631878) 节点",
-        "当前可用的 invoke 工具：send_message",
         "</system_reminder>",
       ].join("\n"),
     });

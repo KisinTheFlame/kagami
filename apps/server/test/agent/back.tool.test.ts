@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BackTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
+import { BackTool } from "../../src/agent/runtime/root-agent/tools/back.tool.js";
 
 describe("back tool", () => {
   it("should return exit message when back succeeds", async () => {

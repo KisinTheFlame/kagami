@@ -743,7 +743,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
           description: await child.getDescription(),
         })),
       ),
-      availableInvokeTools: state.getAvailableInvokeTools(),
     });
   }
 
