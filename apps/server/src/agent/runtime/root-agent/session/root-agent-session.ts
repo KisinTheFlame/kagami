@@ -5,6 +5,7 @@ import {
   createCrossStateNotificationMessage,
   createIthomeArticleDetailMessage,
   createStateSystemReminderMessage,
+  createStoryRecallMessage,
 } from "../../context/context-message-factory.js";
 import { NotificationAccumulator } from "../notification/notification-accumulator.js";
 import type { Event } from "../../event/event.js";
@@ -373,6 +374,13 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       // dequeuing it already woke any consumer; session does nothing.
       return {
         shouldTriggerRound: false,
+      };
+    }
+
+    if (event.type === "story_recall_completed") {
+      this.pendingIncomingMessages.push(createStoryRecallMessage(event.data.stories));
+      return {
+        shouldTriggerRound: true,
       };
     }
 
@@ -791,7 +799,11 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
         : null;
     }
 
-    if (event.type === "napcat_friend_list_updated" || event.type === "wake") {
+    if (
+      event.type === "napcat_friend_list_updated" ||
+      event.type === "wake" ||
+      event.type === "story_recall_completed"
+    ) {
       return null;
     }
 
