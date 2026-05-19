@@ -143,7 +143,7 @@ export class StoryRecallExtension implements LoopAgentExtension<
         system: snapshot.systemPrompt,
         messages,
         tools: this.availableTools,
-        toolChoice: { tool_name: "search_memory" },
+        toolChoice: "auto",
       },
       { usage: "agent" },
     );

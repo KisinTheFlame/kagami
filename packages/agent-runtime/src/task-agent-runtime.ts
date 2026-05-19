@@ -3,6 +3,7 @@ import {
   ReActKernel,
   type AssistantLikeMessage,
   type ReActModel,
+  type ReActModelToolChoice,
   type ToolLikeMessage,
 } from "./react-kernel.js";
 import type { ToolExecutor } from "./tool/tool-catalog.js";
@@ -36,11 +37,13 @@ export abstract class BaseTaskAgent<
   public constructor({
     kernel,
     model,
+    toolChoice,
     taskTools,
     terminalToolNames,
   }: {
     kernel?: ReActKernel<TMessage, TUsage>;
     model?: TaskAgentModel<TMessage, TUsage>;
+    toolChoice?: ReActModelToolChoice;
     taskTools: ToolExecutor<TMessage>;
     /**
      * Names of the tools whose invocation marks the task as complete.
@@ -55,7 +58,12 @@ export abstract class BaseTaskAgent<
     if (terminalToolNames.length === 0) {
       throw new Error("BaseTaskAgent requires at least one terminalToolName");
     }
-    this.kernel = kernel ?? new ReActKernel({ model: model ?? failMissingTaskAgentModel() });
+    this.kernel =
+      kernel ??
+      new ReActKernel({
+        model: model ?? failMissingTaskAgentModel(),
+        ...(toolChoice !== undefined ? { toolChoice } : {}),
+      });
     this.taskTools = taskTools;
     this.terminalToolNames = new Set(terminalToolNames);
   }
