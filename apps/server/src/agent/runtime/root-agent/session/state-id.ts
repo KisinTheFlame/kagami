@@ -18,7 +18,7 @@ export function normalizeEnterInputToStateId(
   input:
     | { id: string }
     | {
-        kind: "qq_group" | "qq_private" | "ithome" | "zone_out" | "terminal";
+        kind: "qq_group" | "qq_private" | "ithome" | "terminal";
         id?: string;
       },
 ): string | null {

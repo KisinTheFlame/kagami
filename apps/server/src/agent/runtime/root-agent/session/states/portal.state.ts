@@ -10,7 +10,6 @@ import { IthomeState } from "./ithome.state.js";
 import { QqGroupState } from "./qq-group.state.js";
 import { QqPrivateState } from "./qq-private.state.js";
 import { TerminalStateNode } from "./terminal.state.js";
-import { ZoneOutState } from "./zone-out.state.js";
 
 export class PortalState implements RootAgentState {
   private readonly host: RootAgentStateHost;
@@ -28,7 +27,7 @@ export class PortalState implements RootAgentState {
   }
 
   public async getDescription(): Promise<string> {
-    return "主入口，可从这里进入群聊、私聊、资讯和神游。";
+    return "主入口，可从这里进入群聊、私聊和资讯。";
   }
 
   public async listChildren(): Promise<RootAgentState[]> {
@@ -47,7 +46,6 @@ export class PortalState implements RootAgentState {
     if (this.host.ithomeNewsService) {
       children.push(new IthomeState(this.host));
     }
-    children.push(new ZoneOutState());
     if (this.host.terminalService) {
       children.push(new TerminalStateNode(this.host));
     }

@@ -36,7 +36,6 @@ import {
 import { EnterTool, ENTER_TOOL_NAME } from "../agent/runtime/root-agent/tools/enter.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import { ZoneOutTool } from "../agent/runtime/root-agent/tools/zone-out.tool.js";
 import {
   createRootContextSummaryReminderMessage,
   createStoryContextSummaryReminderMessage,
@@ -198,7 +197,6 @@ export async function buildAgentRuntime({
     new SendMessageTool({
       agentMessageService,
     }),
-    new ZoneOutTool(),
     new OpenIthomeArticleTool(),
     new BashTool({ terminalService }),
     new ReadBashOutputTool({ terminalService }),
