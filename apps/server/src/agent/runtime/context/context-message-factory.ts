@@ -60,10 +60,8 @@ export function createStateSystemReminderMessage(input: {
     displayName: string;
     description: string;
   }>;
-  availableInvokeTools?: string[];
 }): UserMessage {
   const children = input.children ?? [];
-  const availableInvokeTools = input.availableInvokeTools ?? [];
   const lines = ["<system_reminder>"];
 
   if (children.length > 0) {
@@ -75,11 +73,6 @@ export function createStateSystemReminderMessage(input: {
     lines.push(`你进入了 ${input.displayName} 节点`);
   }
 
-  if (availableInvokeTools.length === 0) {
-    lines.push("当前可用的 invoke 工具：无");
-  } else {
-    lines.push(`当前可用的 invoke 工具：${availableInvokeTools.join("、")}`);
-  }
   lines.push("</system_reminder>");
 
   return createUserMessage(lines.join("\n"));

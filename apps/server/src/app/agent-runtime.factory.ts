@@ -29,6 +29,7 @@ import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
+import { BackTool, BACK_TOOL_NAME } from "../agent/runtime/root-agent/tools/back.tool.js";
 import {
   BackToPortalTool,
   BACK_TO_PORTAL_TOOL_NAME,
@@ -83,6 +84,7 @@ import {
   SearchMemoryTool,
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
+import { CalcApp } from "../agent/apps/calc/calc.app.js";
 
 type BuildAgentRuntimeInput = {
   config: Config;
@@ -193,6 +195,11 @@ export async function buildAgentRuntime({
   });
   await terminalService.initialize();
 
+  // App 框架：先建 AppManager 并注册 Apps，再把它们的 tools 拼进 invokeSubtools。
+  // 这个顺序保证 App 的工具能被 InvokeTool 调度到。
+  const appManager = new AppManager();
+  appManager.register(new CalcApp());
+
   const invokeSubtools = [
     new SendMessageTool({
       agentMessageService,
@@ -200,11 +207,9 @@ export async function buildAgentRuntime({
     new OpenIthomeArticleTool(),
     new BashTool({ terminalService }),
     new ReadBashOutputTool({ terminalService }),
+    // App 提供的工具：每个已注册 App 的 tools 在这里被 flat 进总集合
+    ...appManager.getAllApps().flatMap(app => [...app.tools]),
   ];
-
-  // App 框架 Phase 1：建一个空的 AppManager。当前没有任何 App 注册，
-  // 框架代码就位等待 Phase 2 注册第一个 App。
-  const appManager = new AppManager();
 
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
@@ -238,7 +243,8 @@ export async function buildAgentRuntime({
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
   });
   const toolCatalog = new ToolCatalog([
-    new EnterTool(),
+    new EnterTool({ appManager }),
+    new BackTool(),
     new BackToPortalTool(),
     new WaitTool({
       eventQueue,
@@ -260,6 +266,7 @@ export async function buildAgentRuntime({
   ]);
   const rootAgentTools = toolCatalog.pick([
     ENTER_TOOL_NAME,
+    BACK_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
@@ -337,7 +344,9 @@ export async function buildAgentRuntime({
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEARCH_MEMORY_TOOL_NAME,
+        BACK_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
+        HELP_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])
       .definitions(),

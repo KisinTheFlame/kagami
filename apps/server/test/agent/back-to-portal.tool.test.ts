@@ -1,48 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { BackTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
+import { BackToPortalTool } from "../../src/agent/runtime/root-agent/tools/back-to-portal.tool.js";
 
-describe("back tool", () => {
-  it("should return exit message when back succeeds", async () => {
-    const tool = new BackTool();
-    const toolContext = {
+describe("back_to_portal tool", () => {
+  it("should clear currentApp and report exit when in an App", async () => {
+    const tool = new BackToPortalTool();
+    const clearCalls: number[] = [];
+    const result = await tool.execute({}, {
       rootAgentSession: {
-        back: async () => ({
-          ok: true,
-          id: "qq_group:group-1",
-          displayName: "QQ 群 产品群 (group-1)",
-          message: "已退出QQ 群 产品群 (group-1)",
-        }),
+        getCurrentApp: () => "calc",
+        clearCurrentApp: () => {
+          clearCalls.push(1);
+        },
       },
-    } as Parameters<typeof tool.execute>[1];
+    } as Parameters<typeof tool.execute>[1]);
 
-    const result = await tool.execute({}, toolContext);
-
-    expect(tool.name).toBe("back");
+    expect(clearCalls).toHaveLength(1);
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
-      id: "qq_group:group-1",
-      displayName: "QQ 群 产品群 (group-1)",
-      message: "已退出QQ 群 产品群 (group-1)",
+      exitedApp: "calc",
     });
   });
 
-  it("should return state transition error when current state is root", async () => {
-    const tool = new BackTool();
-    const toolContext = {
+  it("should reject when not in any App", async () => {
+    const tool = new BackToPortalTool();
+    const result = await tool.execute({}, {
       rootAgentSession: {
-        back: async () => ({
-          ok: false,
-          error: "STATE_TRANSITION_NOT_ALLOWED",
-        }),
+        getCurrentApp: () => undefined,
+        clearCurrentApp: () => {
+          throw new Error("should not be called when not in App");
+        },
       },
-    } as Parameters<typeof tool.execute>[1];
+    } as Parameters<typeof tool.execute>[1]);
 
-    const result = await tool.execute({}, toolContext);
-
-    expect(tool.name).toBe("back");
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
-      error: "STATE_TRANSITION_NOT_ALLOWED",
+      error: "NOT_IN_APP",
     });
   });
 });
