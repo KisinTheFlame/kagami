@@ -274,6 +274,7 @@ export async function buildAgentRuntime({
     llmClient,
     summaryToolExecutor,
     reminderMessageFactory: createRootContextSummaryReminderMessage,
+    toolChoice: "auto",
   });
   const storyContextSummaryOperation = new ContextSummaryOperation({
     llmClient,

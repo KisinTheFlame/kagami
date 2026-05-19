@@ -19,6 +19,8 @@ export type ToolLikeMessage = {
   content: string;
 };
 
+export type ReActModelToolChoice = "required" | "auto";
+
 export interface ReActModel<
   TMessage extends { role: string },
   TUsage extends string = string,
@@ -33,7 +35,7 @@ export interface ReActModel<
       system?: string;
       messages: TMessage[];
       tools: ToolDefinition[];
-      toolChoice: "required";
+      toolChoice: ReActModelToolChoice;
     },
     options: {
       usage: TUsage;
@@ -146,16 +148,20 @@ export class ReActKernel<
     TCompletion,
     TExtensionData
   >[];
+  private readonly toolChoice: ReActModelToolChoice;
 
   public constructor({
     model,
     extensions,
+    toolChoice,
   }: {
     model: ReActModel<TMessage, TUsage, TCompletion>;
     extensions?: ReActKernelExtension<TMessage, TUsage, TCompletion, TExtensionData>[];
+    toolChoice?: ReActModelToolChoice;
   }) {
     this.model = model;
     this.extensions = extensions ?? [];
+    this.toolChoice = toolChoice ?? "required";
   }
 
   public async runRound(
@@ -172,7 +178,7 @@ export class ReActKernel<
           system: request.state.systemPrompt,
           messages: [...request.state.messages],
           tools: request.tools.definitions(),
-          toolChoice: "required",
+          toolChoice: this.toolChoice,
         },
         {
           usage: request.usage,
