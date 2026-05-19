@@ -285,4 +285,67 @@ describe("invoke tool", () => {
     expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
     expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
   });
+
+  it("should bypass state-tree availableTools check for App-owned tools", async () => {
+    // 回归测试：之前 InvokeTool 把 App 工具也走状态树 availableTools 检查，
+    // 导致 Kagami 进 calc 后调 calculate 被"Portal 没有 invoke 子工具"挡住。
+    const { CalcApp } = await import("../../src/agent/apps/calc/calc.app.js");
+    const appManager = new AppManager();
+    appManager.register(new CalcApp());
+
+    const calcTool = appManager.getApp("calc")!.tools[0];
+    const tool = new InvokeTool({
+      tools: [calcTool],
+      appManager,
+    });
+
+    const result = await tool.execute({ tool: "calculate", a: 6, op: "*", b: 7 }, {
+      rootAgentSession: {
+        getState: () => ({
+          focusedStateId: "portal" as const,
+          stateStack: ["portal"] as const,
+          waiting: null,
+        }),
+        // Portal 状态树视野下 availableTools 是空的
+        getAvailableInvokeTools: () => [],
+        // 但 Kagami 已经 enter 进了 calc App
+        getCurrentApp: () => "calc",
+      },
+    } as Parameters<typeof tool.execute>[1]);
+
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      result: 42,
+    });
+  });
+
+  it("should reject App-owned tool with APP_GUARD when not in the owning App", async () => {
+    const { CalcApp } = await import("../../src/agent/apps/calc/calc.app.js");
+    const appManager = new AppManager();
+    appManager.register(new CalcApp());
+
+    const calcTool = appManager.getApp("calc")!.tools[0];
+    const tool = new InvokeTool({
+      tools: [calcTool],
+      appManager,
+    });
+
+    const result = await tool.execute({ tool: "calculate", a: 1, op: "+", b: 1 }, {
+      rootAgentSession: {
+        getState: () => ({
+          focusedStateId: "portal" as const,
+          stateStack: ["portal"] as const,
+          waiting: null,
+        }),
+        getAvailableInvokeTools: () => [],
+        // 没在 calc 里
+        getCurrentApp: () => undefined,
+      },
+    } as Parameters<typeof tool.execute>[1]);
+
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      error: "INVOKE_TOOL_APP_GUARD",
+    });
+  });
 });

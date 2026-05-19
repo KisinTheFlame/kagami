@@ -82,7 +82,26 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
       };
     }
 
-    if (!availableTools.includes(input.tool as (typeof availableTools)[number])) {
+    // 工具分流：App 工具走 AppManager.canInvoke，非 App 工具走状态树 availableTools
+    // 检查。两个来源不能用同一个 union 列表判，因为 App 工具不在 state.getAvailableInvokeTools()
+    // 视野里。
+    const isAppTool = this.appManager.ownsTool(input.tool);
+    if (isAppTool) {
+      const canInvokeResult = this.appManager.canInvoke(
+        input.tool,
+        rootAgentSession.getCurrentApp(),
+      );
+      if (!canInvokeResult.ok) {
+        return {
+          content: JSON.stringify({
+            ok: false,
+            error: "INVOKE_TOOL_APP_GUARD",
+            tool: input.tool,
+            message: canInvokeResult.reason,
+          }),
+        };
+      }
+    } else if (!availableTools.includes(input.tool as (typeof availableTools)[number])) {
       const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
       return {
         content: JSON.stringify({
@@ -95,21 +114,6 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
             state: state.focusedStateId,
             availableToolDefinitions,
           }),
-          availableTools,
-        }),
-      };
-    }
-
-    // App 框架 canInvoke 检查：若 input.tool 属于某个 App，由 AppManager 决定
-    // 现在能不能调。当前未注册任何 App，所有非 App 工具都会直接 ok。
-    const canInvokeResult = this.appManager.canInvoke(input.tool, rootAgentSession.getCurrentApp());
-    if (!canInvokeResult.ok) {
-      return {
-        content: JSON.stringify({
-          ok: false,
-          error: "INVOKE_TOOL_APP_GUARD",
-          tool: input.tool,
-          message: canInvokeResult.reason,
           availableTools,
         }),
       };
