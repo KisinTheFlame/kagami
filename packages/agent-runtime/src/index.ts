@@ -2,6 +2,8 @@ import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
+import { AppManager, type App, type AppId, type CanInvokeResult } from "./app/app.js";
+import { HELP_TOOL_NAME, HelpTool, type HelpToolDeps } from "./app/help-tool.js";
 import { BaseLoopAgent } from "./base-loop-agent.js";
 import { InMemoryQueue, type Queue } from "./queue.js";
 import { SerialExecutor } from "./serial-executor.js";
@@ -43,8 +45,11 @@ import {
 } from "./tool/tool-component.js";
 
 export {
+  AppManager,
   BaseLoopAgent,
   BaseTaskAgent,
+  HELP_TOOL_NAME,
+  HelpTool,
   InMemoryQueue,
   ReActKernel,
   SerialExecutor,
@@ -53,6 +58,10 @@ export {
   ToolSet,
   ZodToolComponent,
   type AgentRuntime,
+  type App,
+  type AppId,
+  type CanInvokeResult,
+  type HelpToolDeps,
   type Queue,
   type LoopAgent,
   type LoopAgentExtension,
