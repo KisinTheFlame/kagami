@@ -90,10 +90,23 @@ export class AppManager {
   }
 
   /**
+   * 给 InvokeTool 用：判断 toolName 是否被某个注册过的 App 拥有。
+   *
+   * 返回 true → 该工具的可用性完全由 AppManager.canInvoke 决定，跳过状态树
+   *            availableTools 检查（App 工具不存在于状态树视野里）
+   * 返回 false → 该工具是状态树时代的旧工具，走原状态树 availableTools 判
+   */
+  public ownsTool(toolName: string): boolean {
+    return this.toolOwners.has(toolName);
+  }
+
+  /**
    * 给 InvokeTool 用：判断 toolName 是否可以在 currentApp 下被调用。
    *
+   * 调用前提：调用方已经通过 ownsTool 确认 toolName 属于某 App。
+   *
    * 规则：
-   * 1. 不属于任何注册过的 App → ok（不限制，留给原有 flat 工具系统）
+   * 1. 不属于任何注册过的 App → ok（理论上不会走到这里，调用方应先用 ownsTool 判）
    * 2. 属于某 App，但 Kagami 不在该 App → not ok，返回提示
    * 3. 属于当前 App，但 App 自己说 "不能调" → not ok
    */
