@@ -238,6 +238,7 @@ export async function buildAgentRuntime({
     notificationTimeWindowMs: config.server.agent.notificationBatchWindowMs,
     ithomeNewsService,
     terminalService,
+    appManager,
   });
   const helpTool = new HelpTool({
     appManager,

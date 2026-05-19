@@ -15,6 +15,9 @@ export interface App {
   /** 唯一短串识别符，用作 Registry key 与外部 enter 目标 id。 */
   readonly id: AppId;
 
+  /** 给 Kagami 看的人类可读短名，例如 "计算器"。在 Portal 列出 App 时使用。 */
+  readonly displayName: string;
+
   /**
    * 这个 App 贡献给 InvokeTool 的子工具集合。
    *

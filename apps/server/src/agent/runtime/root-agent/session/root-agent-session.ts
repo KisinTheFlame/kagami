@@ -1,4 +1,4 @@
-import type { AppId } from "@kagami/agent-runtime";
+import type { AppId, AppManager } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
@@ -113,6 +113,8 @@ type RootAgentSessionDeps = {
   notificationTimeWindowMs?: number;
   ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
   terminalService?: Pick<TerminalService, "getCwd">;
+  /** App 框架。Portal 渲染时需要枚举已注册 Apps 喂给 reminder 消息。 */
+  appManager?: AppManager;
 };
 
 const DEFAULT_NOTIFICATION_TIME_WINDOW_MS = 30_000;
@@ -144,6 +146,8 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
    * 仅在内存中持有；不进 snapshot；reset 时一并清空。
    */
   private currentApp: AppId | undefined = undefined;
+  /** Portal 渲染时枚举已注册 Apps。可选；undefined 时退化为不展示 Apps 段落。 */
+  private readonly appManager: AppManager | null;
 
   public constructor({
     context,
@@ -153,11 +157,13 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     notificationTimeWindowMs,
     ithomeNewsService,
     terminalService,
+    appManager,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
     this.recentMessageLimit = recentMessageLimit;
     this.ithomeNewsService = ithomeNewsService ?? null;
+    this.appManager = appManager ?? null;
     this.terminalService = terminalService ?? null;
     this.notificationAccumulator = new NotificationAccumulator({
       timeWindowMs: notificationTimeWindowMs ?? DEFAULT_NOTIFICATION_TIME_WINDOW_MS,
@@ -741,6 +747,16 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     const state = this.requireState(stateId);
     const children = await state.listChildren();
 
+    // 只在 Portal 状态下列 Apps。其他状态都是状态树深处，Apps 不在视野里
+    // （进 App 强制要求先 back 回 Portal，这一约束跟 EnterTool 的闸门一致）。
+    const apps =
+      stateId === "portal"
+        ? (this.appManager?.getAllApps() ?? []).map(app => ({
+            id: app.id,
+            displayName: app.displayName,
+          }))
+        : undefined;
+
     return createStateSystemReminderMessage({
       displayName: state.getDisplayName(),
       children: await Promise.all(
@@ -750,6 +766,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
           description: await child.getDescription(),
         })),
       ),
+      apps,
     });
   }
 
