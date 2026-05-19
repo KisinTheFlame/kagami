@@ -1,3 +1,4 @@
+import type { AppId } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
@@ -73,6 +74,13 @@ export type RootAgentSessionDashboardSnapshot = {
 export type RootAgentSessionController = {
   getState(): RootAgentSessionState;
   getFocusedStateId(): RootAgentStateId;
+  /**
+   * 当前 Kagami 已 enter 的 App。未进入任何 App 时返回 undefined。
+   * App 框架 Phase 1 字段。不进 snapshot，重启回 undefined（即 Portal）。
+   */
+  getCurrentApp(): AppId | undefined;
+  setCurrentApp(appId: AppId): void;
+  clearCurrentApp(): void;
   getCurrentChatTarget(): NapcatChatTarget | undefined;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
@@ -131,6 +139,11 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
   private groupInfoLoaded = false;
   public ithomeFeedState: PersistedRootAgentIthomeFeedState | null = null;
   private readonly notificationAccumulator: NotificationAccumulator;
+  /**
+   * App 框架 Phase 1 字段：当前 Kagami 已 enter 的 App id。
+   * 仅在内存中持有；不进 snapshot；reset 时一并清空。
+   */
+  private currentApp: AppId | undefined = undefined;
 
   public constructor({
     context,
@@ -168,6 +181,18 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
   public getFocusedStateId(): RootAgentStateId {
     return this.stateStack.at(-1) ?? "portal";
+  }
+
+  public getCurrentApp(): AppId | undefined {
+    return this.currentApp;
+  }
+
+  public setCurrentApp(appId: AppId): void {
+    this.currentApp = appId;
+  }
+
+  public clearCurrentApp(): void {
+    this.currentApp = undefined;
   }
 
   public getCurrentChatTarget(): NapcatChatTarget | undefined {
@@ -299,6 +324,8 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     this.ithomeFeedState = normalizedSnapshot.ithomeFeedState;
     this.initialized = true;
     this.stateStack = normalizedSnapshot.stateStack;
+    // currentApp 不进 snapshot，重启统一回到 undefined（即 Portal）。
+    this.currentApp = undefined;
   }
 
   public reset(): void {
@@ -316,6 +343,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     this.ithomeFeedState = null;
     this.initialized = false;
     this.stateStack = ["portal"];
+    this.currentApp = undefined;
   }
 
   public async initializeContext(): Promise<void> {

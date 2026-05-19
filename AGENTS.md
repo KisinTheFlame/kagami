@@ -29,6 +29,19 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 对应到运行时，`AgentContext` 只暴露两个会改动 message 列表的操作：`appendMessages`（保留前缀）与 `replaceMessages`（明确破坏并重建前缀）。新功能如果既不是追加也不是压缩，就要警惕。
 
+### 工具组织：InvokeTool 是顶层工具集的稳定壳
+
+`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`enter` / `back-to-portal` / `wait` / `invoke` / `help` 这一类结构性能力），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
+
+如果不通过 InvokeTool，每加一个工具都要在 LLM 的 tools 参数里多一个 entry，这是稳定前缀的一部分，意味着每加一个新工具都会让所有进行中的会话从零换入。InvokeTool 把"加新东西就触发一次前缀失效"的代价从"每加一个工具一次"压缩到"几乎不会发生"。
+
+具体工具的能力 / 参数 / 用法有两种披露方式：
+
+- **早期方案**：把全部子工具的文档塞进 InvokeTool 自己的 description 里。前缀里有完整子工具索引，但加新子工具会改 InvokeTool description 一次（仍然比加顶层工具便宜）。
+- **渐进式披露**（App 框架的目标）：前缀里几乎不写子工具信息，Kagami 通过 `enter(<appId>)` + `help` 两个动作在运行时按需探索能做什么。每个 App 的工具只在 Kagami 真正"进入"该 App 时通过 help 询问才会被披露。前缀对 App 数量完全不敏感。
+
+写新 capability 或 App 时记住：**任何想暴露给 Agent 的能力，第一反应都应该是"做成 InvokeTool 的子工具"，而不是"加一个顶层工具"**。新增顶层工具需要明确的设计理由：它必须是结构性的元能力（像 enter / help 这种调度 / 导航工具），而不是某个具体业务能力。
+
 ### 现有实现里的三个范例
 
 写新 capability 前，先读这三处代码，它们是 KV 缓存友好的参考实现：
