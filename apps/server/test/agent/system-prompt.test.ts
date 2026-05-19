@@ -37,19 +37,6 @@ describe("createAgentSystemPrompt", () => {
             },
           },
         },
-        {
-          name: "zone_out",
-          description: "在神游状态里记录一段当下的思路，不产生外部副作用。",
-          parameters: {
-            type: "object",
-            properties: {
-              thought: {
-                type: "string",
-                description: "这次神游里想的内容。",
-              },
-            },
-          },
-        },
       ],
     });
 

@@ -38,7 +38,6 @@ import { PortalState } from "./states/portal.state.js";
 import { QqGroupState } from "./states/qq-group.state.js";
 import { QqPrivateState } from "./states/qq-private.state.js";
 import { TerminalStateNode } from "./states/terminal.state.js";
-import { ZoneOutState } from "./states/zone-out.state.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
   PersistedRootAgentIthomeFeedState,
@@ -96,7 +95,7 @@ export type RootAgentSessionController = {
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome" | "zone_out" | "terminal";
+          kind: "qq_group" | "qq_private" | "ithome" | "terminal";
           id?: string;
         },
   ): Promise<Record<string, unknown>>;
@@ -421,7 +420,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome" | "zone_out" | "terminal";
+          kind: "qq_group" | "qq_private" | "ithome" | "terminal";
           id?: string;
         },
   ): Promise<Record<string, unknown>> {
@@ -753,10 +752,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
     if (stateId === "ithome") {
       return this.ithomeNewsService ? new IthomeState(this) : null;
-    }
-
-    if (stateId === "zone_out") {
-      return new ZoneOutState();
     }
 
     if (stateId === "terminal") {

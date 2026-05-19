@@ -284,7 +284,7 @@ describe("RootAgentSession", () => {
     });
 
     await session.initializeContext();
-    await session.enter({ id: "zone_out" });
+    await session.enter({ id: "qq_group:group-1" });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     const consumeResult = await session.consumeIncomingEvent(createGroupEvent("hello", "group-2"));
@@ -319,7 +319,7 @@ describe("RootAgentSession", () => {
     });
 
     await session.initializeContext();
-    await session.enter({ id: "zone_out" });
+    await session.enter({ id: "qq_group:group-1" });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     await session.consumeIncomingEvent(createGroupEvent("hello-1", "group-2"));
@@ -435,9 +435,6 @@ describe("RootAgentSession", () => {
         }),
         expect.objectContaining({
           id: "ithome",
-        }),
-        expect.objectContaining({
-          id: "zone_out",
         }),
       ]),
     );
@@ -605,7 +602,7 @@ describe("RootAgentSession", () => {
     });
 
     await session.initializeContext();
-    await session.enter({ id: "zone_out" });
+    await session.enter({ id: "qq_group:group-1" });
     await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
     const consumeResult = await session.consumeIncomingEvent(

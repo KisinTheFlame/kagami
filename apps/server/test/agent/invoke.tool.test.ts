@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
-import { ZoneOutTool } from "../../src/agent/runtime/root-agent/tools/zone-out.tool.js";
 
 function createAgentMessageService() {
   return {
@@ -19,7 +18,6 @@ describe("invoke tool", () => {
         new SendMessageTool({
           agentMessageService: createAgentMessageService(),
         }),
-        new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
       appManager: new AppManager(),
@@ -30,16 +28,11 @@ describe("invoke tool", () => {
       properties: {
         tool: {
           type: "string",
-          description:
-            '要调用的子工具名，例如 "send_message"、"open_ithome_article" 或 "zone_out"。',
+          description: '要调用的子工具名，例如 "send_message" 或 "open_ithome_article"。',
         },
         message: {
           type: "string",
           description: "仅 send_message 使用。要发送到当前会话里的文本内容。",
-        },
-        thought: {
-          type: "string",
-          description: "仅 zone_out 使用。这次神游里想的内容。",
         },
         articleId: {
           type: "number",
@@ -53,7 +46,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = new InvokeTool({
-      tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      tools: [new SendMessageTool({ agentMessageService })],
       appManager: new AppManager(),
     });
 
@@ -95,7 +88,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = new InvokeTool({
-      tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      tools: [new SendMessageTool({ agentMessageService })],
       appManager: new AppManager(),
     });
 
@@ -136,7 +129,7 @@ describe("invoke tool", () => {
   it("should return agent-friendly message when subtool is unavailable in current state", async () => {
     const agentMessageService = createAgentMessageService();
     const tool = new InvokeTool({
-      tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      tools: [new SendMessageTool({ agentMessageService }), new OpenIthomeArticleTool()],
       appManager: new AppManager(),
     });
 
@@ -148,11 +141,11 @@ describe("invoke tool", () => {
       {
         rootAgentSession: {
           getState: () => ({
-            focusedStateId: "zone_out" as const,
-            stateStack: ["portal", "zone_out"] as const,
+            focusedStateId: "ithome" as const,
+            stateStack: ["portal", "ithome"] as const,
             waiting: null,
           }),
-          getAvailableInvokeTools: () => ["zone_out"],
+          getAvailableInvokeTools: () => ["open_ithome_article"],
           getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
@@ -162,47 +155,12 @@ describe("invoke tool", () => {
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_AVAILABLE",
-      availableTools: ["zone_out"],
+      availableTools: ["open_ithome_article"],
     });
-    expect(JSON.parse(result.content).message).toContain("不能在当前状态 zone_out 下调用");
+    expect(JSON.parse(result.content).message).toContain("不能在当前状态 ithome 下调用");
     expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
-    expect(JSON.parse(result.content).message).toContain("`zone_out`");
-    expect(JSON.parse(result.content).message).toContain("`thought` (string)");
-  });
-
-  it("should allow zone_out only in zone_out state", async () => {
-    const tool = new InvokeTool({
-      tools: [
-        new SendMessageTool({
-          agentMessageService: createAgentMessageService(),
-        }),
-        new ZoneOutTool(),
-      ],
-      appManager: new AppManager(),
-    });
-
-    const result = await tool.execute(
-      {
-        tool: "zone_out",
-        thought: "  先发会呆  ",
-      },
-      {
-        rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "zone_out" as const,
-            stateStack: ["portal", "zone_out"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["zone_out"],
-          getCurrentApp: () => undefined,
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
-
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      thought: "先发会呆",
-    });
+    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
+    expect(JSON.parse(result.content).message).toContain("`articleId` (number)");
   });
 
   it("should invoke open_ithome_article in ithome state", async () => {
@@ -214,7 +172,6 @@ describe("invoke tool", () => {
     const tool = new InvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
       appManager: new AppManager(),
@@ -253,7 +210,6 @@ describe("invoke tool", () => {
     const tool = new InvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
       appManager: new AppManager(),
@@ -298,7 +254,6 @@ describe("invoke tool", () => {
     const tool = new InvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
       appManager: new AppManager(),

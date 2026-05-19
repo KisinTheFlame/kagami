@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createConversationSummaryMessage,
-  createEnterZoneOutMessage,
-  createExitZoneOutMessage,
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
@@ -113,7 +111,6 @@ describe("context-message-factory", () => {
         '- QQ 群 测试群 (10001)，未读 3 条，可通过 enter(kind="qq_group", id="10001") 进入',
         '- QQ 群 10002，尚未查看，可通过 enter(kind="qq_group", id="10002") 进去看看最近消息',
         '- IT之家(kind="ithome")，新文章 2 篇，可通过 enter(kind="ithome") 进入',
-        '- 神游(kind="zone_out")，可通过 enter(kind="zone_out") 进入自由思考状态',
         "</system_reminder>",
       ].join("\n"),
     });
@@ -196,27 +193,6 @@ describe("context-message-factory", () => {
         "正文：",
         "正文内容",
         "</ithome_article>",
-      ].join("\n"),
-    });
-  });
-
-  it("should render zone out transition messages", () => {
-    expect(createEnterZoneOutMessage()).toEqual({
-      role: "user",
-      content: [
-        "<system_instruction>",
-        "你已进入神游状态。",
-        '现在不能看群消息，也不能直接搜索或发群消息；如果要继续思考，请调用 invoke(tool="zone_out", thought="...")，如果想回到上一级状态，调用 back。',
-        "</system_instruction>",
-      ].join("\n"),
-    });
-    expect(createExitZoneOutMessage()).toEqual({
-      role: "user",
-      content: [
-        "<system_instruction>",
-        "你已结束神游，回到门户状态。",
-        "如需进入某个目标，请调用 enter。",
-        "</system_instruction>",
       ].join("\n"),
     });
   });
