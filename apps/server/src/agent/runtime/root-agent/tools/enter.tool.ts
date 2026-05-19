@@ -6,7 +6,7 @@ export const ENTER_TOOL_NAME = "enter";
 
 const EnterArgumentsSchema = z.union([
   z.object({
-    kind: z.enum(["qq_group", "qq_private", "ithome", "zone_out", "terminal"]),
+    kind: z.enum(["qq_group", "qq_private", "ithome", "terminal"]),
     id: z.string().trim().min(1).optional(),
   }),
   z.object({
@@ -27,12 +27,12 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
       id: {
         type: "string",
         description:
-          '目标状态的唯一 ID，例如 "qq_group:123456"、"qq_private:123456"、"ithome"、"zone_out" 或 "terminal"。',
+          '目标状态的唯一 ID，例如 "qq_group:123456"、"qq_private:123456"、"ithome" 或 "terminal"。',
       },
       kind: {
         type: "string",
         description:
-          '目标状态类型，可选值为 "qq_group"、"qq_private"、"ithome"、"zone_out" 或 "terminal"；传完整状态 ID 时可省略。',
+          '目标状态类型，可选值为 "qq_group"、"qq_private"、"ithome" 或 "terminal"；传完整状态 ID 时可省略。',
       },
     },
   } as const;

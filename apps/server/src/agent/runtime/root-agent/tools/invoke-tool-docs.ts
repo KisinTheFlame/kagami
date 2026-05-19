@@ -62,10 +62,6 @@ function getInvokeToolApplicableStateText(toolName: string): string {
     return "ithome";
   }
 
-  if (toolName === "zone_out") {
-    return "zone_out";
-  }
-
   if (toolName === "bash" || toolName === "read_bash_output") {
     return "terminal";
   }

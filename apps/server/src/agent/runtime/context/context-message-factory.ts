@@ -157,18 +157,6 @@ export function createCrossStateNotificationMessage(
   return createUserMessage(lines.join("\n"));
 }
 
-export function createEnterZoneOutMessage(): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/enter-zone-out.hbs"),
-  );
-}
-
-export function createExitZoneOutMessage(): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/exit-zone-out.hbs"),
-  );
-}
-
 export function createWebSearchInstructionMessage(question: string): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/web-search-instruction.hbs", {
