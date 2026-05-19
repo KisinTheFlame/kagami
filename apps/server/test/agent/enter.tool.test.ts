@@ -5,6 +5,7 @@ import { EnterTool } from "../../src/agent/runtime/root-agent/tools/enter.tool.j
 function createFakeApp(id: string): App {
   return {
     id,
+    displayName: id,
     tools: [],
     canInvoke: () => true,
     help: async () => `you are in ${id}`,

@@ -12,6 +12,7 @@ export const CALC_APP_ID = "calc";
  */
 export class CalcApp implements App {
   public readonly id = CALC_APP_ID;
+  public readonly displayName = "计算器";
   public readonly tools = [new CalculateTool()];
 
   public canInvoke(): boolean {

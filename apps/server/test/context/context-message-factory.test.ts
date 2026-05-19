@@ -131,6 +131,44 @@ describe("context-message-factory", () => {
     });
   });
 
+  it("should render apps section when apps are provided", () => {
+    expect(
+      createStateSystemReminderMessage({
+        displayName: "门户",
+        children: [
+          {
+            id: "qq_group:123",
+            displayName: "QQ 群 测试群",
+            description: "聊天",
+          },
+        ],
+        apps: [{ id: "calc", displayName: "计算器" }],
+      }),
+    ).toEqual({
+      role: "user",
+      content: [
+        "<system_reminder>",
+        "你进入了 门户 节点，有以下子节点可进入：",
+        "- QQ 群 测试群 (qq_group:123): 聊天",
+        "也可以进入以下 App：",
+        "- calc：计算器",
+        "</system_reminder>",
+      ].join("\n"),
+    });
+  });
+
+  it("should omit apps section when apps array is empty", () => {
+    expect(
+      createStateSystemReminderMessage({
+        displayName: "门户",
+        apps: [],
+      }),
+    ).toEqual({
+      role: "user",
+      content: ["<system_reminder>", "你进入了 门户 节点", "</system_reminder>"].join("\n"),
+    });
+  });
+
   it("should render ithome article list and detail messages", () => {
     expect(
       createIthomeArticleListMessage({

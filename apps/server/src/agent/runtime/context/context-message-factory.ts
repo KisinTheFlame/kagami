@@ -60,8 +60,13 @@ export function createStateSystemReminderMessage(input: {
     displayName: string;
     description: string;
   }>;
+  apps?: Array<{
+    id: string;
+    displayName: string;
+  }>;
 }): UserMessage {
   const children = input.children ?? [];
+  const apps = input.apps ?? [];
   const lines = ["<system_reminder>"];
 
   if (children.length > 0) {
@@ -71,6 +76,13 @@ export function createStateSystemReminderMessage(input: {
     }
   } else {
     lines.push(`你进入了 ${input.displayName} 节点`);
+  }
+
+  if (apps.length > 0) {
+    lines.push("也可以进入以下 App：");
+    for (const app of apps) {
+      lines.push(`- ${app.id}：${app.displayName}`);
+    }
   }
 
   lines.push("</system_reminder>");
