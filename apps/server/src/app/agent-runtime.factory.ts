@@ -79,6 +79,7 @@ import { StoryRecallService } from "../agent/capabilities/story/application/stor
 import { StoryService } from "../agent/capabilities/story/application/story.service.js";
 import { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
 import { StoryRecallExtension } from "../agent/capabilities/story/runtime/story-recall.extension.js";
+import { StoryRecallScheduler } from "../agent/capabilities/story/runtime/story-recall.scheduler.js";
 import {
   SearchMemoryTool,
   SEARCH_MEMORY_TOOL_NAME,
@@ -294,12 +295,17 @@ export async function buildAgentRuntime({
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     eventQueue: storyEventQueue,
   });
-  const storyRecallExtension = new StoryRecallExtension({
+  const storyRecallScheduler = new StoryRecallScheduler({
     llmClient,
     storyRecallService,
+    agentContext: context,
+    eventQueue,
     availableTools: rootAgentTools.definitions(),
     topK: config.server.agent.story.recall.topK,
     scoreThreshold: config.server.agent.story.recall.scoreThreshold,
+  });
+  const storyRecallExtension = new StoryRecallExtension({
+    scheduler: storyRecallScheduler,
   });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,

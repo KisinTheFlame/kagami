@@ -157,6 +157,24 @@ export function createCrossStateNotificationMessage(
   return createUserMessage(lines.join("\n"));
 }
 
+export function createStoryRecallMessage(
+  stories: Array<{ id: string; markdown: string; createdAt: Date }>,
+): UserMessage {
+  const parts = stories.map(story => {
+    const date = formatStoryRecallDate(story.createdAt);
+    return [`你想起了一件发生在 ${date} 的事情：`, "", story.markdown].join("\n");
+  });
+
+  return createUserMessage(["<story_recall>", ...parts, "</story_recall>"].join("\n"));
+}
+
+function formatStoryRecallDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function createWebSearchInstructionMessage(question: string): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/web-search-instruction.hbs", {
