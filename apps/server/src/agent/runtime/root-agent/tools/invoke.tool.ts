@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isRecord } from "../../../../common/prisma-json.js";
 import {
+  AppManager,
   ToolCatalog,
   type JsonSchema,
   type ToolComponent,
@@ -36,13 +37,15 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   private readonly invokeToolSet: ToolExecutor;
   private readonly invokeToolNames: Set<string>;
   private readonly invokeToolDefinitionByName: ReadonlyMap<string, ToolDefinition>;
+  private readonly appManager: AppManager;
 
-  public constructor({ tools }: { tools: ToolComponent[] }) {
+  public constructor({ tools, appManager }: { tools: ToolComponent[]; appManager: AppManager }) {
     super();
     this.parameters = buildInvokeParameters(tools);
     this.invokeToolSet = new ToolCatalog(tools).pick(tools.map(tool => tool.name));
     this.invokeToolNames = new Set(tools.map(tool => tool.name));
     this.invokeToolDefinitionByName = new Map(tools.map(tool => [tool.name, tool.llmTool]));
+    this.appManager = appManager;
   }
 
   protected async executeTyped(
@@ -92,6 +95,21 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
             state: state.focusedStateId,
             availableToolDefinitions,
           }),
+          availableTools,
+        }),
+      };
+    }
+
+    // App 框架 canInvoke 检查：若 input.tool 属于某个 App，由 AppManager 决定
+    // 现在能不能调。当前未注册任何 App，所有非 App 工具都会直接 ok。
+    const canInvokeResult = this.appManager.canInvoke(input.tool, rootAgentSession.getCurrentApp());
+    if (!canInvokeResult.ok) {
+      return {
+        content: JSON.stringify({
+          ok: false,
+          error: "INVOKE_TOOL_APP_GUARD",
+          tool: input.tool,
+          message: canInvokeResult.reason,
           availableTools,
         }),
       };

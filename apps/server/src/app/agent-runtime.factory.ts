@@ -1,4 +1,10 @@
-import { ToolCatalog, type Queue } from "@kagami/agent-runtime";
+import {
+  AppManager,
+  HELP_TOOL_NAME,
+  HelpTool,
+  ToolCatalog,
+  type Queue,
+} from "@kagami/agent-runtime";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
 import type { LlmClient } from "../llm/client.js";
@@ -197,6 +203,11 @@ export async function buildAgentRuntime({
     new BashTool({ terminalService }),
     new ReadBashOutputTool({ terminalService }),
   ];
+
+  // App 框架 Phase 1：建一个空的 AppManager。当前没有任何 App 注册，
+  // 框架代码就位等待 Phase 2 注册第一个 App。
+  const appManager = new AppManager();
+
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
       botQQ: config.server.bot.qq,
@@ -224,6 +235,10 @@ export async function buildAgentRuntime({
     ithomeNewsService,
     terminalService,
   });
+  const helpTool = new HelpTool({
+    appManager,
+    getCurrentApp: () => rootAgentSession.getCurrentApp(),
+  });
   const toolCatalog = new ToolCatalog([
     new EnterTool(),
     new BackToPortalTool(),
@@ -233,6 +248,7 @@ export async function buildAgentRuntime({
     }),
     new InvokeTool({
       tools: invokeSubtools,
+      appManager,
     }),
     new SearchWebTool({
       webSearchTaskAgent,
@@ -242,6 +258,7 @@ export async function buildAgentRuntime({
       topK: config.server.agent.story.memory.retrieval.topK,
     }),
     new SummaryTool(),
+    helpTool,
   ]);
   const rootAgentTools = toolCatalog.pick([
     ENTER_TOOL_NAME,
@@ -250,6 +267,7 @@ export async function buildAgentRuntime({
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
+    HELP_TOOL_NAME,
   ]);
   const summaryToolExecutor = toolCatalog.pick([SUMMARY_TOOL_NAME]);
   const rootContextSummaryOperation = new ContextSummaryOperation({

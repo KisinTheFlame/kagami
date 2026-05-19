@@ -1,3 +1,4 @@
+import { AppManager } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
@@ -21,6 +22,7 @@ describe("invoke tool", () => {
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
+      appManager: new AppManager(),
     });
 
     expect(tool.parameters).toEqual({
@@ -52,6 +54,7 @@ describe("invoke tool", () => {
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = new InvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -71,6 +74,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["send_message"],
+          getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -92,6 +96,7 @@ describe("invoke tool", () => {
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = new InvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -111,6 +116,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["send_message"],
+          getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -131,6 +137,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     const tool = new InvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new ZoneOutTool()],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -146,6 +153,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["zone_out"],
+          getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -170,6 +178,7 @@ describe("invoke tool", () => {
         }),
         new ZoneOutTool(),
       ],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -185,6 +194,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["zone_out"],
+          getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -207,6 +217,7 @@ describe("invoke tool", () => {
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -222,6 +233,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["open_ithome_article"],
+          getCurrentApp: () => undefined,
           openIthomeArticle,
         },
       } as Parameters<typeof tool.execute>[1],
@@ -244,6 +256,7 @@ describe("invoke tool", () => {
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -259,6 +272,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["open_ithome_article"],
+          getCurrentApp: () => undefined,
           openIthomeArticle: vi.fn().mockResolvedValue({
             ok: false,
             error: "ARTICLE_NOT_FOUND",
@@ -287,6 +301,7 @@ describe("invoke tool", () => {
         new ZoneOutTool(),
         new OpenIthomeArticleTool(),
       ],
+      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -301,6 +316,7 @@ describe("invoke tool", () => {
             waiting: null,
           }),
           getAvailableInvokeTools: () => ["open_ithome_article"],
+          getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
     );
