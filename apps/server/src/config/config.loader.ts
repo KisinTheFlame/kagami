@@ -360,6 +360,11 @@ const ConfigSchema = z.object({
         qq: StringLikeSchema,
       }),
     }),
+    /**
+     * 每个 App 的配置切片，key 是 App.id。结构由各 App 自己的 configSchema 在
+     * AppManager.startupAll 阶段校验，loader 这一层不解读。
+     */
+    apps: z.record(z.string(), z.unknown()).default({}),
   }),
 });
 
