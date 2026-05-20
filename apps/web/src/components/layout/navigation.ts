@@ -2,6 +2,7 @@ import {
   Activity,
   Brain,
   Bot,
+  CalendarClock,
   FileText,
   FlaskConical,
   History,
@@ -19,7 +20,8 @@ type NavItem = {
 };
 
 export const navItems: readonly NavItem[] = [
-  { to: "/agent-dashboard", label: "Agent 仪表盘", icon: Bot },
+  { to: "/main-agent-context", label: "主 Agent 上下文", icon: Bot },
+  { to: "/scheduler-tasks", label: "调度任务", icon: CalendarClock },
   { to: "/auth/codex", label: "内置登录", icon: KeyRound, matchPrefixes: ["/auth", "/auth/"] },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/metric-charts", label: "Metric 图表", icon: Activity },

@@ -5,9 +5,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 const AuthPage = lazy(() =>
   import("@/pages/auth/AuthPage").then(module => ({ default: module.AuthPage })),
 );
-const AgentDashboardPage = lazy(() =>
-  import("@/pages/agent-dashboard/AgentDashboardPage").then(module => ({
-    default: module.AgentDashboardPage,
+const MainAgentContextPage = lazy(() =>
+  import("@/pages/main-agent-context/MainAgentContextPage").then(module => ({
+    default: module.MainAgentContextPage,
+  })),
+);
+const SchedulerTasksPage = lazy(() =>
+  import("@/pages/scheduler-tasks/SchedulerTasksPage").then(module => ({
+    default: module.SchedulerTasksPage,
   })),
 );
 const LlmPlaygroundPage = lazy(() =>
@@ -49,10 +54,11 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/agent-dashboard" replace />} />
+          <Route index element={<Navigate to="/main-agent-context" replace />} />
           <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
           <Route path="/auth/:provider" element={<AuthPage />} />
-          <Route path="/agent-dashboard" element={<AgentDashboardPage />} />
+          <Route path="/main-agent-context" element={<MainAgentContextPage />} />
+          <Route path="/scheduler-tasks" element={<SchedulerTasksPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
