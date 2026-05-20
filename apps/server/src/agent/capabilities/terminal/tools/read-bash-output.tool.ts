@@ -39,17 +39,19 @@ export class ReadBashOutputTool extends ZodToolComponent<typeof ReadBashOutputAr
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = ReadBashOutputArgumentsSchema;
-  private readonly terminalService: TerminalService;
+  // TerminalService 由所属 TerminalApp 在 onStartup 阶段实例化，所以这里用闭包延迟取，
+  // 不在工具构造期就要求拿到实例。
+  private readonly getTerminalService: () => TerminalService;
 
-  public constructor({ terminalService }: { terminalService: TerminalService }) {
+  public constructor({ getTerminalService }: { getTerminalService: () => TerminalService }) {
     super();
-    this.terminalService = terminalService;
+    this.getTerminalService = getTerminalService;
   }
 
   protected async executeTyped(
     input: z.infer<typeof ReadBashOutputArgumentsSchema>,
   ): Promise<string> {
-    const result = await this.terminalService.readOutput({
+    const result = await this.getTerminalService().readOutput({
       outputId: input.output_id,
       stream: input.stream,
       offset: input.offset,

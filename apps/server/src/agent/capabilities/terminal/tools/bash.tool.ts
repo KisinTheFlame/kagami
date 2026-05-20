@@ -25,15 +25,17 @@ export class BashTool extends ZodToolComponent<typeof BashArgumentsSchema> {
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = BashArgumentsSchema;
-  private readonly terminalService: TerminalService;
+  // TerminalService 由所属 TerminalApp 在 onStartup 阶段实例化，所以这里用闭包延迟取，
+  // 不在工具构造期就要求拿到实例。
+  private readonly getTerminalService: () => TerminalService;
 
-  public constructor({ terminalService }: { terminalService: TerminalService }) {
+  public constructor({ getTerminalService }: { getTerminalService: () => TerminalService }) {
     super();
-    this.terminalService = terminalService;
+    this.getTerminalService = getTerminalService;
   }
 
   protected async executeTyped(input: z.infer<typeof BashArgumentsSchema>): Promise<string> {
-    const result = await this.terminalService.runBash({ command: input.command });
+    const result = await this.getTerminalService().runBash({ command: input.command });
     if (result.ok) {
       return JSON.stringify({
         ok: true,

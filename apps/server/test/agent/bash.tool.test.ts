@@ -31,22 +31,23 @@ function createStubService(
 describe("bash tool", () => {
   it("serializes success result with snake_case fields", async () => {
     const tool = new BashTool({
-      terminalService: createStubService(
-        {
-          ok: true,
-          exitCode: 0,
-          outputId: "out_abc",
-          stdoutPreview: "hi",
-          stdoutTruncated: false,
-          stdoutTotalBytes: 2,
-          stderrPreview: "",
-          stderrTruncated: false,
-          stderrTotalBytes: 0,
-          cwd: "/tmp",
-          durationMs: 3,
-        },
-        { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
-      ),
+      getTerminalService: () =>
+        createStubService(
+          {
+            ok: true,
+            exitCode: 0,
+            outputId: "out_abc",
+            stdoutPreview: "hi",
+            stdoutTruncated: false,
+            stdoutTotalBytes: 2,
+            stderrPreview: "",
+            stderrTruncated: false,
+            stderrTotalBytes: 0,
+            cwd: "/tmp",
+            durationMs: 3,
+          },
+          { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
+        ),
     });
     expect(tool.name).toBe(BASH_TOOL_NAME);
     const result = await tool.execute(
@@ -63,21 +64,22 @@ describe("bash tool", () => {
 
   it("serializes failure result with snake_case fields", async () => {
     const tool = new BashTool({
-      terminalService: createStubService(
-        {
-          ok: false,
-          error: TERMINAL_ERROR.TIMEOUT,
-          message: "timed out",
-          outputId: "out_partial",
-          stdoutPreview: "part",
-          stderrPreview: "",
-          exitCode: null,
-          signal: "SIGKILL",
-          cwd: "/tmp",
-          durationMs: 100,
-        },
-        { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
-      ),
+      getTerminalService: () =>
+        createStubService(
+          {
+            ok: false,
+            error: TERMINAL_ERROR.TIMEOUT,
+            message: "timed out",
+            outputId: "out_partial",
+            stdoutPreview: "part",
+            stderrPreview: "",
+            exitCode: null,
+            signal: "SIGKILL",
+            cwd: "/tmp",
+            durationMs: 100,
+          },
+          { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
+        ),
     });
     const result = await tool.execute(
       { command: "sleep 100" },
@@ -92,22 +94,23 @@ describe("bash tool", () => {
 
   it("rejects empty command via zod schema", async () => {
     const tool = new BashTool({
-      terminalService: createStubService(
-        {
-          ok: true,
-          exitCode: 0,
-          outputId: null,
-          stdoutPreview: "",
-          stdoutTruncated: false,
-          stdoutTotalBytes: 0,
-          stderrPreview: "",
-          stderrTruncated: false,
-          stderrTotalBytes: 0,
-          cwd: "/tmp",
-          durationMs: 0,
-        },
-        { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
-      ),
+      getTerminalService: () =>
+        createStubService(
+          {
+            ok: true,
+            exitCode: 0,
+            outputId: null,
+            stdoutPreview: "",
+            stdoutTruncated: false,
+            stdoutTotalBytes: 0,
+            stderrPreview: "",
+            stderrTruncated: false,
+            stderrTotalBytes: 0,
+            cwd: "/tmp",
+            durationMs: 0,
+          },
+          { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "n/a" },
+        ),
     });
     const result = await tool.execute({ command: "" }, {} as Parameters<typeof tool.execute>[1]);
     const parsed = JSON.parse(result.content) as Record<string, unknown>;
@@ -118,32 +121,33 @@ describe("bash tool", () => {
 describe("read_bash_output tool", () => {
   it("serializes a paginated read", async () => {
     const tool = new ReadBashOutputTool({
-      terminalService: createStubService(
-        {
-          ok: true,
-          exitCode: 0,
-          outputId: "x",
-          stdoutPreview: "",
-          stdoutTruncated: false,
-          stdoutTotalBytes: 0,
-          stderrPreview: "",
-          stderrTruncated: false,
-          stderrTotalBytes: 0,
-          cwd: "/",
-          durationMs: 0,
-        },
-        {
-          ok: true,
-          outputId: "out_abc",
-          stream: "stdout",
-          offset: 0,
-          size: 4,
-          totalBytes: 10,
-          content: "abcd",
-          nextOffset: 4,
-          eof: false,
-        },
-      ),
+      getTerminalService: () =>
+        createStubService(
+          {
+            ok: true,
+            exitCode: 0,
+            outputId: "x",
+            stdoutPreview: "",
+            stdoutTruncated: false,
+            stdoutTotalBytes: 0,
+            stderrPreview: "",
+            stderrTruncated: false,
+            stderrTotalBytes: 0,
+            cwd: "/",
+            durationMs: 0,
+          },
+          {
+            ok: true,
+            outputId: "out_abc",
+            stream: "stdout",
+            offset: 0,
+            size: 4,
+            totalBytes: 10,
+            content: "abcd",
+            nextOffset: 4,
+            eof: false,
+          },
+        ),
     });
     expect(tool.name).toBe(READ_BASH_OUTPUT_TOOL_NAME);
     const result = await tool.execute(
@@ -159,22 +163,23 @@ describe("read_bash_output tool", () => {
 
   it("serializes a not-found failure", async () => {
     const tool = new ReadBashOutputTool({
-      terminalService: createStubService(
-        {
-          ok: true,
-          exitCode: 0,
-          outputId: "x",
-          stdoutPreview: "",
-          stdoutTruncated: false,
-          stdoutTotalBytes: 0,
-          stderrPreview: "",
-          stderrTruncated: false,
-          stderrTotalBytes: 0,
-          cwd: "/",
-          durationMs: 0,
-        },
-        { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "missing" },
-      ),
+      getTerminalService: () =>
+        createStubService(
+          {
+            ok: true,
+            exitCode: 0,
+            outputId: "x",
+            stdoutPreview: "",
+            stdoutTruncated: false,
+            stdoutTotalBytes: 0,
+            stderrPreview: "",
+            stderrTruncated: false,
+            stderrTotalBytes: 0,
+            cwd: "/",
+            durationMs: 0,
+          },
+          { ok: false, error: TERMINAL_ERROR.OUTPUT_NOT_FOUND, message: "missing" },
+        ),
     });
     const result = await tool.execute(
       { output_id: "out_missing" },

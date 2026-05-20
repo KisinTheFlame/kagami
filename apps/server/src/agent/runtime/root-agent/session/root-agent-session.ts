@@ -17,7 +17,6 @@ import type {
   NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
-import type { TerminalService } from "../../../capabilities/terminal/application/terminal.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import { PrivateChatState } from "./private-chat-state.js";
 import { normalizePersistedSnapshot } from "./persistence-normalize.js";
@@ -38,7 +37,6 @@ import { IthomeState } from "./states/ithome.state.js";
 import { PortalState } from "./states/portal.state.js";
 import { QqGroupState } from "./states/qq-group.state.js";
 import { QqPrivateState } from "./states/qq-private.state.js";
-import { TerminalStateNode } from "./states/terminal.state.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
   PersistedRootAgentIthomeFeedState,
@@ -58,7 +56,6 @@ export type RootAgentPostToolEffects = {
 export type RootAgentSessionDashboardSnapshot = {
   focusedStateId: RootAgentStateId;
   focusedStateDisplayName: string;
-  focusedStateDescription: string;
   stateStack: Array<{
     id: RootAgentStateId;
     displayName: string;
@@ -96,7 +93,7 @@ export type RootAgentSessionController = {
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome" | "terminal";
+          kind: "qq_group" | "qq_private" | "ithome";
           id?: string;
         },
   ): Promise<Record<string, unknown>>;
@@ -112,7 +109,6 @@ type RootAgentSessionDeps = {
   recentMessageLimit: number;
   notificationTimeWindowMs?: number;
   ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
-  terminalService?: Pick<TerminalService, "getCwd">;
   /** App 框架。Portal 渲染时需要枚举已注册 Apps 喂给 reminder 消息。 */
   appManager?: AppManager;
 };
@@ -127,7 +123,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     IthomeNewsService,
     "getFeedOverview" | "enterFeed" | "openArticle"
   > | null;
-  public readonly terminalService: Pick<TerminalService, "getCwd"> | null;
   public readonly groupStates: GroupChatState[];
   public readonly groupStateById: Map<string, GroupChatState>;
   public readonly privateChatStates: PrivateChatState[] = [];
@@ -156,7 +151,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     recentMessageLimit,
     notificationTimeWindowMs,
     ithomeNewsService,
-    terminalService,
     appManager,
   }: RootAgentSessionDeps) {
     this.context = context;
@@ -164,7 +158,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     this.recentMessageLimit = recentMessageLimit;
     this.ithomeNewsService = ithomeNewsService ?? null;
     this.appManager = appManager ?? null;
-    this.terminalService = terminalService ?? null;
     this.notificationAccumulator = new NotificationAccumulator({
       timeWindowMs: notificationTimeWindowMs ?? DEFAULT_NOTIFICATION_TIME_WINDOW_MS,
     });
@@ -241,7 +234,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     return {
       focusedStateId: focusedState.getId(),
       focusedStateDisplayName: focusedState.getDisplayName(),
-      focusedStateDescription: await focusedState.getDescription(),
       stateStack: this.stateStack.map(stateId => {
         const state = this.requireState(stateId);
         return {
@@ -434,7 +426,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome" | "terminal";
+          kind: "qq_group" | "qq_private" | "ithome";
           id?: string;
         },
   ): Promise<Record<string, unknown>> {
@@ -777,10 +769,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
     if (stateId === "ithome") {
       return this.ithomeNewsService ? new IthomeState(this) : null;
-    }
-
-    if (stateId === "terminal") {
-      return this.terminalService ? new TerminalStateNode(this) : null;
     }
 
     const groupId = parseGroupIdFromStateId(stateId);

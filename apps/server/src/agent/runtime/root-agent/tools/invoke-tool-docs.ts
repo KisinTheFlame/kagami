@@ -1,14 +1,7 @@
 import type { ToolDefinition } from "@kagami/agent-runtime";
 import { isRecord } from "../../../../common/prisma-json.js";
 
-export function renderInvokeToolGuide(
-  tools: readonly ToolDefinition[],
-  options: {
-    includeApplicableStates: boolean;
-  } = {
-    includeApplicableStates: false,
-  },
-): string {
+export function renderInvokeToolGuide(tools: readonly ToolDefinition[]): string {
   return tools
     .map(tool => {
       const lines = [`- \`${tool.name}\`: ${tool.description ?? "无说明。"}`];
@@ -21,10 +14,6 @@ export function renderInvokeToolGuide(
         for (const parameterLine of parameterLines) {
           lines.push(`    - ${parameterLine}`);
         }
-      }
-
-      if (options.includeApplicableStates) {
-        lines.push(`  - 适用状态：\`${getInvokeToolApplicableStateText(tool.name)}\``);
       }
 
       return lines.join("\n");
@@ -51,20 +40,4 @@ function renderInvokeToolParameterLines(tool: ToolDefinition): string[] {
 
       return `\`${parameterName}\`${propertyType}${description}`;
     });
-}
-
-function getInvokeToolApplicableStateText(toolName: string): string {
-  if (toolName === "send_message") {
-    return "qq_group:* | qq_private:*";
-  }
-
-  if (toolName === "open_ithome_article") {
-    return "ithome";
-  }
-
-  if (toolName === "bash" || toolName === "read_bash_output") {
-    return "terminal";
-  }
-
-  return "未知";
 }
