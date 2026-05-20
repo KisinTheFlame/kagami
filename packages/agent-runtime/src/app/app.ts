@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type { ToolComponent } from "../tool/tool-component.js";
 
 /** App 的唯一标识符。 */
@@ -10,8 +11,13 @@ export type AppId = string;
  * 框架不窥探 App 内部状态。所有 view focus、缓存、计时器等都由 App 自己管理。
  *
  * 设计依据见仓库根 CLAUDE.md "工具组织：InvokeTool 是顶层工具集的稳定壳"。
+ *
+ * 泛型参数 TConfig 让 App 可以声明自己的配置 schema（zod），框架在 startup
+ * 时按 schema 解析 `config.apps.<id>` 段落，并把验证后的强类型 config 传给
+ * onStartup。无 config 的 App 使用默认 TConfig=void，onStartup 拿到的
+ * config 是 undefined。
  */
-export interface App {
+export interface App<TConfig = void> {
   /** 唯一短串识别符，用作 Registry key 与外部 enter 目标 id。 */
   readonly id: AppId;
 
@@ -25,6 +31,17 @@ export interface App {
    * 友好的"稳定前缀"原则。
    */
   readonly tools: readonly ToolComponent[];
+
+  /**
+   * App 自己的配置 schema。框架在 startup 时按 `config.apps.<id>` 段落解析。
+   * 缺省（schema 未声明）时表示 App 不需要 config，onStartup 的 ctx.config
+   * 为 undefined。
+   *
+   * 解析失败会在 startup 阶段抛错并附 App id，避免运行时才发现配置错误。
+   */
+  // 输入侧用 unknown：rawAppsConfig 的切片是 unknown，且允许 z.object().default({})
+  // 这类 schema（输入侧带 undefined）作为合法的 configSchema 写法。
+  readonly configSchema?: z.ZodType<TConfig, z.ZodTypeDef, unknown>;
 
   /**
    * 由 AppManager 在分发某个本 App 拥有的工具之前调用。
@@ -41,11 +58,20 @@ export interface App {
    */
   help(): Promise<string>;
 
-  /** 进程启动时调用一次。App 可以在这里做初始化 / 起后台 timer。 */
-  onStartup?(): Promise<void>;
+  /**
+   * 进程启动时调用一次。App 可以在这里做初始化 / 起后台 timer。
+   * ctx.config 是按 configSchema 解析后的强类型配置；未声明 schema 的 App
+   * 拿到的是 undefined。
+   */
+  onStartup?(ctx: AppStartupContext<TConfig>): Promise<void>;
 
   /** 进程关停时反向调用一次。App 应在这里清理 timer / 连接。 */
   onShutdown?(): Promise<void>;
+}
+
+/** App.onStartup 的入参，目前只含解析后的配置。未来可能扩展（logger / 共享服务等）。 */
+export interface AppStartupContext<TConfig = void> {
+  readonly config: TConfig;
 }
 
 /** AppManager.canInvoke 的返回。 */
@@ -59,11 +85,12 @@ export type CanInvokeResult = { ok: true } | { ok: false; reason: string };
  * RootAgentSession）持有并以参数形式传入。
  */
 export class AppManager {
-  private readonly apps = new Map<AppId, App>();
-  private readonly toolOwners = new Map<string, App>();
+  // 内部存的是 App<unknown>，泛型擦除。各 App 实例自己负责 TConfig 的类型安全。
+  private readonly apps = new Map<AppId, App<unknown>>();
+  private readonly toolOwners = new Map<string, App<unknown>>();
 
   /** 注册一个 App。同 id 重复注册会抛错。 */
-  public register(app: App): void {
+  public register<TConfig>(app: App<TConfig>): void {
     if (this.apps.has(app.id)) {
       throw new Error(`App "${app.id}" 已注册`);
     }
@@ -75,17 +102,18 @@ export class AppManager {
         );
       }
     }
-    this.apps.set(app.id, app);
+    const erased = app as App<unknown>;
+    this.apps.set(app.id, erased);
     for (const tool of app.tools) {
-      this.toolOwners.set(tool.name, app);
+      this.toolOwners.set(tool.name, erased);
     }
   }
 
-  public getApp(id: AppId): App | undefined {
+  public getApp(id: AppId): App<unknown> | undefined {
     return this.apps.get(id);
   }
 
-  public getAllApps(): readonly App[] {
+  public getAllApps(): readonly App<unknown>[] {
     return [...this.apps.values()];
   }
 
@@ -130,10 +158,31 @@ export class AppManager {
     return { ok: true };
   }
 
-  /** 顺序调用所有 App 的 onStartup。 */
-  public async startupAll(): Promise<void> {
+  /**
+   * 顺序调用所有 App 的 onStartup，并按 configSchema 解析对应配置切片。
+   *
+   * rawAppsConfig 通常来自 config.yaml 的 `server.apps` 段落（结构 unknown，
+   * 由 App 自己的 schema 校验）。某 App 不在 raw 里时按空对象处理，让 schema
+   * 的默认值生效。
+   *
+   * 校验失败的 App 会以包含 App id 的错误信息抛出，避免运行时才发现配置错误。
+   */
+  public async startupAll(rawAppsConfig: Record<string, unknown> = {}): Promise<void> {
     for (const app of this.apps.values()) {
-      await app.onStartup?.();
+      const raw = rawAppsConfig[app.id] ?? {};
+      let config: unknown = undefined;
+      if (app.configSchema) {
+        const parsed = app.configSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new Error(
+            `App "${app.id}" 配置不合法（config.apps.${app.id}）：${parsed.error.message}`,
+          );
+        }
+        config = parsed.data;
+      }
+      // App<unknown> 的 onStartup 期望 ctx.config: unknown，cast 是必要的。
+      // 每个 App 自己的 TConfig 类型由它的实现保证（register<TConfig> 时类型已校验）。
+      await app.onStartup?.({ config });
     }
   }
 

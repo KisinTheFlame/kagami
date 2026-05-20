@@ -198,10 +198,12 @@ export async function buildAgentRuntime({
   });
   await terminalService.initialize();
 
-  // App 框架：先建 AppManager 并注册 Apps，再把它们的 tools 拼进 invokeSubtools。
-  // 这个顺序保证 App 的工具能被 InvokeTool 调度到。
+  // App 框架：先建 AppManager 并注册 Apps，再按各 App 自带的 configSchema
+  // 校验 config.server.apps 的对应切片并调用 onStartup，最后把它们的 tools 拼
+  // 进 invokeSubtools。这个顺序保证 App 在贡献工具前已经完成自己的初始化。
   const appManager = new AppManager();
   appManager.register(new CalcApp());
+  await appManager.startupAll(config.server.apps);
 
   const invokeSubtools = [
     new SendMessageTool({
