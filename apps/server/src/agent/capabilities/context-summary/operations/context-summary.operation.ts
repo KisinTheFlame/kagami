@@ -1,5 +1,5 @@
 import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage, LlmToolChoice, Tool } from "../../../../llm/types.js";
+import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import type { Operation, ToolExecutor } from "@kagami/agent-runtime";
 import { SUMMARY_TOOL_NAME } from "../tools/summary.tool.js";
 
@@ -19,23 +19,19 @@ export class ContextSummaryOperation
   private readonly llmClient: LlmClient;
   private readonly summaryToolExecutor: ToolExecutor;
   private readonly reminderMessageFactory: () => Extract<LlmMessage, { role: "user" }>;
-  private readonly toolChoice: LlmToolChoice;
 
   public constructor({
     llmClient,
     summaryToolExecutor,
     reminderMessageFactory,
-    toolChoice,
   }: {
     llmClient: LlmClient;
     summaryToolExecutor: ToolExecutor;
     reminderMessageFactory: () => Extract<LlmMessage, { role: "user" }>;
-    toolChoice?: LlmToolChoice;
   }) {
     this.llmClient = llmClient;
     this.summaryToolExecutor = summaryToolExecutor;
     this.reminderMessageFactory = reminderMessageFactory;
-    this.toolChoice = toolChoice ?? { tool_name: SUMMARY_TOOL_NAME };
   }
 
   public async execute(input: ContextSummaryInput): Promise<string | null> {
@@ -44,7 +40,7 @@ export class ContextSummaryOperation
         system: input.systemPrompt,
         messages: [...input.messages, this.reminderMessageFactory()],
         tools: input.tools,
-        toolChoice: this.toolChoice,
+        toolChoice: { tool_name: SUMMARY_TOOL_NAME },
       },
       {
         usage: "contextSummarizer",
