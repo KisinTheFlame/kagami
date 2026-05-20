@@ -171,7 +171,7 @@ export class StoryRecallScheduler {
         system: snapshot.systemPrompt,
         messages,
         tools: this.availableTools,
-        toolChoice: "auto",
+        toolChoice: { tool_name: "search_memory" },
       },
       { usage: "agent" },
     );

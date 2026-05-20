@@ -704,7 +704,6 @@ export class RootLoopAgent extends BaseLoopAgent<
       RootAgentToolExecutionData
     >({
       model: llmClient,
-      toolChoice: "auto",
       extensions: [
         new RootLlmTelemetryExtension({
           host,
