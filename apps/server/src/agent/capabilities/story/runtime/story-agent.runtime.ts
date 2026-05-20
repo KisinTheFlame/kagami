@@ -7,11 +7,8 @@ import {
   type ToolExecutor,
 } from "@kagami/agent-runtime";
 import type { StoryAgentEvent } from "./story-event.js";
-import type {
-  AgentContext,
-  AgentContextDashboardSummary,
-  AgentContextSnapshot,
-} from "../../../runtime/context/agent-context.js";
+import { NOOP_METRIC_SERVICE } from "../../../runtime/tool-call-metric.js";
+import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
 import { createUserMessage } from "../../../runtime/context/context-message-factory.js";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage } from "../../../../llm/types.js";
@@ -29,19 +26,10 @@ import { StoryBatchPreparer } from "./story-batch-preparer.js";
 import { StoryContextLifecycle } from "./story-context-lifecycle.js";
 import { StoryContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import { StorySnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
-import { StoryTelemetryKernelExtension } from "./extensions/telemetry.kernel-extension.js";
+import { StoryToolCallMetricKernelExtension } from "./extensions/telemetry.kernel-extension.js";
 import type { StoryAgentRuntimeSnapshotRepository } from "./persistence/story-agent-runtime-snapshot.repository.js";
-import {
-  StoryRuntimeTelemetry,
-  type StoryRuntimeTelemetryView,
-} from "./story-runtime-telemetry.js";
 import type { Tool } from "../../../../llm/types.js";
-import {
-  DEFAULT_DASHBOARD_CONTEXT_LIMIT,
-  DEFAULT_DASHBOARD_PREVIEW_LENGTH,
-  createSleep,
-  renderStoryBatchMessage,
-} from "./story-runtime.utils.js";
+import { createSleep, renderStoryBatchMessage } from "./story-runtime.utils.js";
 import {
   createStoryBatchToolDefinitions,
   StoryBatchToolExecutor,
@@ -50,22 +38,6 @@ import {
 type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
 const logger = new AppLogger({ source: "agent.story-runtime" });
-
-export type StoryAgentRuntimeDashboardSnapshot = StoryRuntimeTelemetryView & {
-  initialized: boolean;
-  contextCompactionTotalTokenThreshold: number;
-  contextSummary: AgentContextDashboardSummary;
-  story: {
-    lastProcessedMessageSeq: number;
-    pendingMessageCount: number;
-    pendingBatch: {
-      firstSeq: number;
-      lastSeq: number;
-    } | null;
-    batchSize: number;
-    idleFlushMs: number;
-  };
-};
 
 type StoryLoopAgentDeps = {
   llmClient: LlmClient;
@@ -88,19 +60,16 @@ type StoryLoopAgentDeps = {
 };
 
 /**
- * Story 子 Agent 的运行时入口。本类是一个**薄协调层**，三个职责完全委托给独立组件：
+ * Story 子 Agent 的运行时入口。本类是一个**薄协调层**，两个职责完全委托给独立组件：
  *
- * - {@link StoryRuntimeTelemetry}：所有面向 Dashboard 的可观测状态。
  * - {@link StoryBatchPreparer}：从 ledger 切批、维护批次游标、判定 batch 完成。
  * - {@link StoryContextLifecycle}：AgentContext snapshot 装载/回写、上下文压缩。
  */
 export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", StoryCompletion> {
-  private readonly telemetry: StoryRuntimeTelemetry;
   private readonly batchPreparer: StoryBatchPreparer;
   private readonly contextLifecycle: StoryContextLifecycle;
   private readonly tools: ToolExecutor<LlmMessage>;
   private readonly eventQueue: Queue<StoryAgentEvent>;
-  private hostInitialized = false;
 
   public constructor({
     llmClient,
@@ -123,11 +92,8 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
   }: StoryLoopAgentDeps) {
     const resolvedSleep = sleep ?? createSleep;
     const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
+    const resolvedMetricService = metricService ?? NOOP_METRIC_SERVICE;
 
-    const telemetry = new StoryRuntimeTelemetry({
-      metricService,
-      now,
-    });
     const batchPreparer = new StoryBatchPreparer({
       linearMessageLedgerDao,
       sourceRuntimeKey,
@@ -140,7 +106,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
       contextSummaryOperation,
       summaryTools,
       contextCompactionTotalTokenThreshold,
-      telemetry,
       llmRetryBackoffMs: resolvedRetryBackoffMs,
       now,
       sleep: resolvedSleep,
@@ -157,14 +122,10 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     const kernel = new ReActKernel<LlmMessage, "storyAgent", StoryCompletion>({
       model: llmClient,
       extensions: [
-        new StoryTelemetryKernelExtension({ telemetry }),
+        new StoryToolCallMetricKernelExtension({ metricService: resolvedMetricService }),
         new LoopLlmRetryExtension({
           backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
           sleep: resolvedSleep,
-          onRecoverableError: error => {
-            telemetry.recordRecoverableError(error);
-            telemetry.transitionTo("idle");
-          },
           onBeforeRetry: ({ error, delayMs, attempt }) => {
             logger.warn("Story agent LLM call failed; scheduling retry", {
               event: "agent.story_runtime.llm_retry_scheduled",
@@ -174,9 +135,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
               errorMessage: error instanceof Error ? error.message : String(error),
             });
           },
-          onSuccessfulModelCall: () => {
-            telemetry.clearRecoverableError();
-          },
         }),
       ],
     });
@@ -184,10 +142,7 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     super({
       kernel,
       extensions: [
-        new StoryContextCompactionExtension({
-          contextLifecycle,
-          telemetry,
-        }),
+        new StoryContextCompactionExtension({ contextLifecycle }),
         new StorySnapshotPersistenceExtension({
           contextLifecycle,
           batchPreparer,
@@ -195,7 +150,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
       ],
     });
 
-    this.telemetry = telemetry;
     this.batchPreparer = batchPreparer;
     this.contextLifecycle = contextLifecycle;
     this.tools = tools;
@@ -214,27 +168,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     return await this.contextLifecycle.getSnapshot();
   }
 
-  public async getDashboardSnapshot(): Promise<StoryAgentRuntimeDashboardSnapshot> {
-    const pendingMessageCount = await this.batchPreparer.countPendingMessages();
-    return {
-      ...this.telemetry.view(),
-      initialized: this.hostInitialized,
-      contextCompactionTotalTokenThreshold:
-        this.contextLifecycle.getContextCompactionTotalTokenThreshold(),
-      contextSummary: await this.contextLifecycle.getDashboardSummary({
-        limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
-        previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
-      }),
-      story: {
-        lastProcessedMessageSeq: this.batchPreparer.getLastProcessedMessageSeq(),
-        pendingMessageCount,
-        pendingBatch: this.batchPreparer.getPendingBatchSeqRange(),
-        batchSize: this.batchPreparer.getBatchSize(),
-        idleFlushMs: this.batchPreparer.getIdleFlushMs(),
-      },
-    };
-  }
-
   public async resetPersistedState(): Promise<void> {
     await this.ensureInitialized();
     await this.contextLifecycle.resetPersistedState();
@@ -242,21 +175,8 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
   }
 
   protected override async initializeHostIfNeeded(): Promise<void> {
-    if (this.hostInitialized) {
-      return;
-    }
-
-    this.telemetry.transitionTo("starting");
-    try {
-      const { lastProcessedMessageSeq } = await this.contextLifecycle.initialize();
-      this.batchPreparer.restoreLastProcessedMessageSeq(lastProcessedMessageSeq);
-      this.hostInitialized = true;
-      this.telemetry.touchActivity();
-      this.telemetry.transitionTo("idle");
-    } catch (error) {
-      this.telemetry.recordCrash(error);
-      throw error;
-    }
+    const { lastProcessedMessageSeq } = await this.contextLifecycle.initialize();
+    this.batchPreparer.restoreLastProcessedMessageSeq(lastProcessedMessageSeq);
   }
 
   protected override createLoopExtensionContext(): void {
@@ -292,7 +212,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
       return;
     }
 
-    this.telemetry.transitionTo("idle");
     await this.eventQueue.waitNonEmpty();
   }
 
@@ -306,7 +225,6 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     }
 
     const snapshot = await this.contextLifecycle.getSnapshot();
-    this.telemetry.transitionTo("calling_llm");
     return {
       state: {
         systemPrompt: snapshot.systemPrompt,
@@ -327,12 +245,10 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
       // 但消息未落入 context 导致的丢批问题。
       await this.contextLifecycle.appendMessages(outcome.messagesToAppend);
       this.batchPreparer.markCommitted(outcome.lastSeq);
-      this.telemetry.recordRoundCompleted();
     }
   }
 
   protected override async onUnhandledError(error: unknown): Promise<void> {
-    this.telemetry.recordCrash(error);
     const pendingBatch = this.batchPreparer.getPendingBatchSeqRange();
     logger.errorWithCause("Story agent loop crashed", error, {
       event: "agent.story_runtime.crashed",

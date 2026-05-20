@@ -21,10 +21,10 @@ import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.serv
 import type { IthomeNewsService } from "../news/application/ithome-news.service.js";
 import type { StoryQueryService } from "../ops/application/story-query.service.js";
 import type { StoryReindexService } from "../ops/application/story-reindex.service.js";
-import type { AgentDashboardQueryService } from "../ops/application/agent-dashboard-query.service.js";
+import type { MainAgentContextQueryService } from "../ops/application/main-agent-context-query.service.js";
 import { DefaultStoryQueryService } from "../ops/application/story-query.impl.service.js";
 import { DefaultStoryReindexService } from "../ops/application/story-reindex.impl.service.js";
-import { DefaultAgentDashboardQueryService } from "../ops/application/agent-dashboard-query.impl.service.js";
+import { DefaultMainAgentContextQueryService } from "../ops/application/main-agent-context-query.impl.service.js";
 import { DefaultAgentContext } from "../agent/runtime/context/default-agent-context.js";
 import { LinearMessageLedgerAgentContext } from "../agent/runtime/context/linear-message-ledger-agent-context.js";
 import type { Event } from "../agent/runtime/event/event.js";
@@ -98,7 +98,7 @@ export type AgentRuntimeBundle = {
   storyAgentRuntime: StoryLoopAgent;
   storyQueryService: StoryQueryService;
   storyReindexService: StoryReindexService;
-  agentDashboardQueryService: AgentDashboardQueryService;
+  mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
   restoredRootAgentSnapshot: boolean;
   hydrateColdStartAgentContext: () => Promise<void>;
@@ -429,13 +429,8 @@ export async function buildAgentRuntime({
       ])
       .definitions(),
   });
-  const agentDashboardQueryService = new DefaultAgentDashboardQueryService({
+  const mainAgentContextQueryService = new DefaultMainAgentContextQueryService({
     rootAgentRuntime,
-    storyAgentRuntime,
-    eventQueue,
-    listAvailableAgentProviders: async () => {
-      return await llmClient.listAvailableProviders({ usage: "agent" });
-    },
   });
 
   return {
@@ -443,7 +438,7 @@ export async function buildAgentRuntime({
     storyAgentRuntime,
     storyQueryService,
     storyReindexService,
-    agentDashboardQueryService,
+    mainAgentContextQueryService,
     llmPlaygroundService,
     restoredRootAgentSnapshot,
     hydrateColdStartAgentContext: async () => {

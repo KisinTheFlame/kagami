@@ -42,16 +42,12 @@ import { NOOP_METRIC_SERVICE, recordToolCallMetric } from "../tool-call-metric.j
 import type {
   RootAgentPostToolEffects,
   RootAgentSessionController,
-  RootAgentSessionDashboardSnapshot,
 } from "./session/root-agent-session.js";
-import type { RootAgentInvokeToolName } from "./session/state.types.js";
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
-import { RootLlmTelemetryExtension } from "./extensions/llm-telemetry.extension.js";
 import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
-import { RootToolExecutionStateExtension } from "./extensions/tool-execution-state.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
 
@@ -124,51 +120,6 @@ export type RootLoopExtensionContext = {
   notifyContextCompacted: () => Promise<void>;
 };
 
-export type RootAgentLoopState =
-  | "starting"
-  | "idle"
-  | "consuming_events"
-  | "calling_llm"
-  | "executing_tool"
-  | "crashed";
-
-export type RootAgentRuntimeErrorSummary = {
-  name: string;
-  message: string;
-  updatedAt: Date;
-};
-
-export type RootAgentToolCallSummary = {
-  name: string;
-  argumentsPreview: string;
-  updatedAt: Date;
-};
-
-export type RootAgentLlmCallSummary = {
-  provider: string;
-  model: string;
-  assistantContentPreview: string;
-  toolCallNames: string[];
-  totalTokens: number | null;
-  updatedAt: Date;
-};
-
-export type RootAgentRuntimeDashboardSnapshot = {
-  initialized: boolean;
-  loopState: RootAgentLoopState;
-  lastError: RootAgentRuntimeErrorSummary | null;
-  lastActivityAt: Date | null;
-  lastRoundCompletedAt: Date | null;
-  lastCompactionAt: Date | null;
-  contextCompactionTotalTokenThreshold: number;
-  contextSummary: AgentContextDashboardSummary;
-  lastToolCall: RootAgentToolCallSummary | null;
-  lastToolResultPreview: string | null;
-  lastLlmCall: RootAgentLlmCallSummary | null;
-  session: RootAgentSessionDashboardSnapshot;
-  availableInvokeTools: RootAgentInvokeToolName[];
-};
-
 class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
@@ -184,14 +135,6 @@ class RootAgentHost implements RootAgentExtensionHost {
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
   private initialized = false;
-  private loopState: RootAgentLoopState = "starting";
-  private lastError: RootAgentRuntimeErrorSummary | null = null;
-  private lastActivityAt: Date | null = null;
-  private lastRoundCompletedAt: Date | null = null;
-  private lastCompactionAt: Date | null = null;
-  private lastToolCall: RootAgentToolCallSummary | null = null;
-  private lastToolResultPreview: string | null = null;
-  private lastLlmCall: RootAgentLlmCallSummary | null = null;
   private lastPersistedSnapshotFingerprint: string | null = null;
   private readonly mutationExecutor = new SerialExecutor();
 
@@ -230,23 +173,14 @@ class RootAgentHost implements RootAgentExtensionHost {
       return;
     }
 
-    this.transitionTo("starting");
+    await this.mutationExecutor.submit(async () => {
+      if (this.initialized) {
+        return;
+      }
 
-    try {
-      await this.mutationExecutor.submit(async () => {
-        if (this.initialized) {
-          return;
-        }
-
-        await this.session.initializeContext();
-        this.initialized = true;
-        this.touchActivity();
-        this.transitionTo("idle");
-      });
-    } catch (error) {
-      this.recordCrash(error);
-      throw error;
-    }
+      await this.session.initializeContext();
+      this.initialized = true;
+    });
   }
 
   public async restorePersistedSnapshot(
@@ -255,13 +189,9 @@ class RootAgentHost implements RootAgentExtensionHost {
     await this.mutationExecutor.submit(async () => {
       await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
       this.session.restorePersistedSnapshot(snapshot.sessionSnapshot);
-      const pendingEffectsResult = await this.session.flushPendingIncomingEffects();
+      await this.session.flushPendingIncomingEffects();
       this.lastWakeReminderAt = cloneDate(snapshot.lastWakeReminderAt);
       this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
-      if (pendingEffectsResult.shouldTriggerRound) {
-        this.touchActivity();
-      }
-      this.transitionTo("idle");
     });
   }
 
@@ -272,10 +202,9 @@ class RootAgentHost implements RootAgentExtensionHost {
       this.eventQueue.clear();
       await this.context.reset();
       this.session.reset();
-      this.resetRuntimeState(resetAt);
+      this.resetRuntimeState();
       await this.session.initializeContext();
       this.initialized = true;
-      this.transitionTo("idle");
     });
 
     return {
@@ -289,48 +218,22 @@ class RootAgentHost implements RootAgentExtensionHost {
         await this.session.consumeIncomingEvent(event);
       }
       await this.session.flushPendingIncomingEffects();
-      if (events.length > 0) {
-        this.touchActivity();
-      }
     });
   }
 
-  public async getDashboardSnapshot(): Promise<RootAgentRuntimeDashboardSnapshot> {
-    const sessionSnapshot = await this.session.getDashboardSnapshot();
-
-    return {
-      initialized: this.initialized,
-      loopState: this.loopState,
-      lastError: cloneErrorSummary(this.lastError),
-      lastActivityAt: cloneDate(this.lastActivityAt),
-      lastRoundCompletedAt: cloneDate(this.lastRoundCompletedAt),
-      lastCompactionAt: cloneDate(this.lastCompactionAt),
-      contextCompactionTotalTokenThreshold: this.contextCompactionTotalTokenThreshold,
-      contextSummary: await this.context.getDashboardSummary({
-        limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
-        previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
-      }),
-      lastToolCall: cloneToolCallSummary(this.lastToolCall),
-      lastToolResultPreview: this.lastToolResultPreview,
-      lastLlmCall: cloneLlmCallSummary(this.lastLlmCall),
-      session: sessionSnapshot,
-      availableInvokeTools: this.session.getAvailableInvokeTools(),
-    };
+  public async getRecentContextSummary(): Promise<AgentContextDashboardSummary> {
+    return await this.context.getDashboardSummary({
+      limit: DEFAULT_DASHBOARD_CONTEXT_LIMIT,
+      previewLength: DEFAULT_DASHBOARD_PREVIEW_LENGTH,
+    });
   }
 
   public getSessionState() {
     return this.session.getState();
   }
 
-  public transitionTo(loopState: RootAgentLoopState): void {
-    this.loopState = loopState;
-  }
-
   public async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
     return await this.mutationExecutor.submit(async () => {
-      this.transitionTo("consuming_events");
-      let consumedEventCount = 0;
-
       while (true) {
         const event = this.eventQueue.dequeue();
         if (!event) {
@@ -338,14 +241,9 @@ class RootAgentHost implements RootAgentExtensionHost {
         }
 
         await this.session.consumeIncomingEvent(event);
-        consumedEventCount += 1;
       }
 
       const result = await this.session.flushPendingIncomingEffects();
-      if (consumedEventCount > 0 || result.shouldTriggerRound) {
-        this.touchActivity();
-      }
-
       return {
         shouldTriggerRound: result.shouldTriggerRound,
       };
@@ -356,7 +254,6 @@ class RootAgentHost implements RootAgentExtensionHost {
     tools: ToolExecutor<LlmMessage>,
   ): Promise<ReActKernelRunRoundInput<LlmMessage, "agent">> {
     const snapshot = await this.context.getSnapshot();
-    this.transitionTo("calling_llm");
 
     return {
       state: {
@@ -410,9 +307,6 @@ class RootAgentHost implements RootAgentExtensionHost {
         assistantMessage: assistantToPersist,
         toolPersistences,
       });
-      this.lastRoundCompletedAt = this.now();
-      this.touchActivity();
-      this.transitionTo("idle");
     });
   }
 
@@ -425,7 +319,6 @@ class RootAgentHost implements RootAgentExtensionHost {
 
       await this.context.appendMessages([createWakeReminderMessage(now)]);
       this.lastWakeReminderAt = new Date(now);
-      this.touchActivity();
       await this.persistSnapshotIfChanged();
     });
   }
@@ -437,46 +330,12 @@ class RootAgentHost implements RootAgentExtensionHost {
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
     await this.mutationExecutor.submit(async () => {
       await this.context.appendMessages(messages);
-      this.touchActivity();
     });
-  }
-
-  public recordCrash(error: unknown): void {
-    this.loopState = "crashed";
-    this.lastError = {
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
-  }
-
-  public recordRecoverableError(error: unknown): void {
-    this.lastError = {
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
-  }
-
-  public recordLlmCall(completion: RootAgentCompletion): void {
-    this.clearRecoverableError();
-    this.lastLlmCall = {
-      provider: completion.provider,
-      model: completion.model,
-      assistantContentPreview: createPreview(completion.message.content),
-      toolCallNames: completion.message.toolCalls.map(toolCall => toolCall.name),
-      totalTokens: completion.usage?.totalTokens ?? null,
-      updatedAt: this.now(),
-    };
-    this.touchActivity();
   }
 
   public recordToolCall(input: {
     toolName: string;
     argumentsValue: Record<string, unknown>;
-    resultContent: string;
   }): void {
     void recordToolCallMetric({
       metricService: this.metricService,
@@ -484,15 +343,6 @@ class RootAgentHost implements RootAgentExtensionHost {
       toolName: input.toolName,
       argumentsValue: input.argumentsValue,
     });
-
-    this.lastToolCall = {
-      name: input.toolName,
-      argumentsPreview: createPreview(safeJsonStringify(input.argumentsValue)),
-      updatedAt: this.now(),
-    };
-    this.lastToolResultPreview =
-      input.resultContent.trim().length > 0 ? createPreview(input.resultContent) : null;
-    this.touchActivity();
   }
 
   private async persistRoundState(input: {
@@ -564,7 +414,6 @@ class RootAgentHost implements RootAgentExtensionHost {
           throw error;
         }
 
-        this.recordRecoverableError(error);
         logger.warn("Context summary failed; scheduling retry", {
           event: "agent.root_agent_runtime.context_summary_retry_scheduled",
           retryBackoffMs: this.llmRetryBackoffMs,
@@ -575,7 +424,6 @@ class RootAgentHost implements RootAgentExtensionHost {
         continue;
       }
 
-      this.clearRecoverableError();
       if (!summary) {
         return false;
       }
@@ -584,8 +432,6 @@ class RootAgentHost implements RootAgentExtensionHost {
         createConversationSummaryMessage(summary),
         ...compactionPlan.messagesToKeep,
       ]);
-      this.lastCompactionAt = this.now();
-      this.touchActivity();
       return true;
     }
   }
@@ -643,26 +489,10 @@ class RootAgentHost implements RootAgentExtensionHost {
     }
   }
 
-  private resetRuntimeState(resetAt: Date): void {
+  private resetRuntimeState(): void {
     this.lastWakeReminderAt = null;
     this.initialized = false;
-    this.lastError = null;
-    this.lastActivityAt = new Date(resetAt);
-    this.lastRoundCompletedAt = null;
-    this.lastCompactionAt = null;
-    this.lastToolCall = null;
-    this.lastToolResultPreview = null;
-    this.lastLlmCall = null;
     this.lastPersistedSnapshotFingerprint = null;
-    this.transitionTo("starting");
-  }
-
-  private touchActivity(): void {
-    this.lastActivityAt = this.now();
-  }
-
-  private clearRecoverableError(): void {
-    this.lastError = null;
   }
 }
 
@@ -705,16 +535,9 @@ export class RootLoopAgent extends BaseLoopAgent<
     >({
       model: llmClient,
       extensions: [
-        new RootLlmTelemetryExtension({
-          host,
-        }),
         new LoopLlmRetryExtension({
           backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
           sleep: resolvedSleep,
-          onRecoverableError: error => {
-            host.recordRecoverableError(error);
-            host.transitionTo("idle");
-          },
           onBeforeRetry: ({ error, delayMs }) => {
             logger.warn("Root agent LLM call failed; scheduling retry", {
               event: "agent.root_agent_runtime.llm_retry_scheduled",
@@ -724,12 +547,7 @@ export class RootLoopAgent extends BaseLoopAgent<
             });
           },
         }),
-        new RootToolExecutionStateExtension({
-          host,
-        }),
-        new RootToolFallbackExtension({
-          host,
-        }),
+        new RootToolFallbackExtension(),
         new RootPostToolEffectsExtension({
           host,
         }),
@@ -796,8 +614,8 @@ export class RootLoopAgent extends BaseLoopAgent<
     await this.host.hydrateStartupEvents(events);
   }
 
-  public async getDashboardSnapshot(): Promise<RootAgentRuntimeDashboardSnapshot> {
-    return await this.host.getDashboardSnapshot();
+  public async getRecentContextSummary(): Promise<AgentContextDashboardSummary> {
+    return await this.host.getRecentContextSummary();
   }
 
   protected override async initializeHostIfNeeded(): Promise<void> {
@@ -846,7 +664,9 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   protected override async onUnhandledError(error: unknown): Promise<void> {
-    this.host.recordCrash(error);
+    logger.errorWithCause("Root agent loop crashed", error, {
+      event: "agent.root_agent_runtime.crashed",
+    });
   }
 
   private async awaitPendingReset(): Promise<void> {
@@ -921,62 +741,6 @@ function createWakeReminderMinuteKey(now: Date): string {
 
 function cloneDate(value: Date | null): Date | null {
   return value ? new Date(value) : null;
-}
-
-function cloneErrorSummary(
-  value: RootAgentRuntimeErrorSummary | null,
-): RootAgentRuntimeErrorSummary | null {
-  if (!value) {
-    return null;
-  }
-
-  return {
-    ...value,
-    updatedAt: new Date(value.updatedAt),
-  };
-}
-
-function cloneToolCallSummary(
-  value: RootAgentToolCallSummary | null,
-): RootAgentToolCallSummary | null {
-  if (!value) {
-    return null;
-  }
-
-  return {
-    ...value,
-    updatedAt: new Date(value.updatedAt),
-  };
-}
-
-function cloneLlmCallSummary(
-  value: RootAgentLlmCallSummary | null,
-): RootAgentLlmCallSummary | null {
-  if (!value) {
-    return null;
-  }
-
-  return {
-    ...value,
-    updatedAt: new Date(value.updatedAt),
-  };
-}
-
-function safeJsonStringify(value: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[unserializable]";
-  }
-}
-
-function createPreview(content: string): string {
-  const trimmed = content.trim();
-  if (trimmed.length <= DEFAULT_DASHBOARD_PREVIEW_LENGTH) {
-    return trimmed;
-  }
-
-  return `${trimmed.slice(0, DEFAULT_DASHBOARD_PREVIEW_LENGTH - 1)}…`;
 }
 
 function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot): string {

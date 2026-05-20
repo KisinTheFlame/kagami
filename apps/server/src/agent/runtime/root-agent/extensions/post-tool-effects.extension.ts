@@ -42,7 +42,6 @@ export class RootPostToolEffectsExtension implements ReActKernelExtension<
     this.host.recordToolCall({
       toolName: input.toolCall.name,
       argumentsValue: input.toolCall.arguments,
-      resultContent: input.result.content,
     });
 
     const postToolEffects = await this.host.flushPendingPostToolEffects();

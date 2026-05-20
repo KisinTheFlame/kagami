@@ -424,7 +424,7 @@ describe("RootAgentSession", () => {
     });
 
     await session.initializeContext();
-    const dashboard = await session.getDashboardSnapshot();
+    const dashboard = await session.getStateView();
 
     expect(dashboard.focusedStateId).toBe("portal");
     expect(dashboard.stateStack).toEqual([{ id: "portal", displayName: "门户" }]);
@@ -458,7 +458,7 @@ describe("RootAgentSession", () => {
       ]),
     );
     const flushResult = await session.flushPendingIncomingEffects();
-    const dashboard = await session.getDashboardSnapshot();
+    const dashboard = await session.getStateView();
     const snapshotAfterEvent = await context.getSnapshot();
 
     expect(consumeResult).toEqual({
@@ -507,7 +507,7 @@ describe("RootAgentSession", () => {
     );
     await session.flushPendingIncomingEffects();
 
-    const dashboard = await session.getDashboardSnapshot();
+    const dashboard = await session.getStateView();
     expect(dashboard.children).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -560,7 +560,7 @@ describe("RootAgentSession", () => {
       shouldTriggerRound: true,
     });
 
-    const dashboard = await session.getDashboardSnapshot();
+    const dashboard = await session.getStateView();
     expect(dashboard.children).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

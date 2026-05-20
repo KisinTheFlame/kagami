@@ -6,7 +6,6 @@ import type {
 import type { LlmMessage } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
 import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-agent-runtime.js";
-import type { RootAgentExtensionHost } from "./extension-host.js";
 
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });
 
@@ -16,12 +15,6 @@ export class RootToolFallbackExtension implements ReActKernelExtension<
   RootAgentCompletion,
   RootAgentToolExecutionData
 > {
-  private readonly host: Pick<RootAgentExtensionHost, "recordRecoverableError">;
-
-  public constructor({ host }: { host: Pick<RootAgentExtensionHost, "recordRecoverableError"> }) {
-    this.host = host;
-  }
-
   public async onToolError(input: {
     request: ReActKernelRunRoundInput<LlmMessage, "agent">;
     toolCall: {
@@ -29,7 +22,6 @@ export class RootToolFallbackExtension implements ReActKernelExtension<
     };
     error: unknown;
   }): Promise<{ handled: boolean; result: ToolSetExecutionResult }> {
-    this.host.recordRecoverableError(input.error);
     logger.warn("Root agent tool call failed; returning temporary failure result", {
       event: "agent.root_agent_runtime.tool_temporary_failure",
       toolName: input.toolCall.name,
