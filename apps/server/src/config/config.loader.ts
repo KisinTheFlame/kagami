@@ -45,12 +45,6 @@ const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
 const DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K = 3;
 const DEFAULT_STORY_RECALL_TOP_K = 2;
 const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
-const DEFAULT_TERMINAL_COMMAND_TIMEOUT_MS = 30_000;
-const DEFAULT_TERMINAL_PREVIEW_BYTES = 2048;
-const DEFAULT_TERMINAL_MAX_OUTPUT_BYTES = 1_048_576;
-const DEFAULT_TERMINAL_MAX_COMMAND_LENGTH = 4096;
-const DEFAULT_TERMINAL_SHELL = "/bin/sh";
-const DEFAULT_TERMINAL_READ_OUTPUT_MAX_SIZE = 4096;
 
 const UrlSchema = z.string().url();
 const NonEmptyStringSchema = z.string().trim().min(1);
@@ -236,17 +230,6 @@ const ConfigSchema = z.object({
               })
               .default({}),
           }),
-          terminal: z
-            .object({
-              initialCwd: NonEmptyStringSchema.optional(),
-              commandTimeoutMs: PositiveIntSchema.default(DEFAULT_TERMINAL_COMMAND_TIMEOUT_MS),
-              previewBytes: PositiveIntSchema.default(DEFAULT_TERMINAL_PREVIEW_BYTES),
-              maxOutputBytes: PositiveIntSchema.default(DEFAULT_TERMINAL_MAX_OUTPUT_BYTES),
-              maxCommandLength: PositiveIntSchema.default(DEFAULT_TERMINAL_MAX_COMMAND_LENGTH),
-              readOutputMaxSize: PositiveIntSchema.default(DEFAULT_TERMINAL_READ_OUTPUT_MAX_SIZE),
-              shell: NonEmptyStringSchema.default(DEFAULT_TERMINAL_SHELL),
-            })
-            .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),
         })
         .superRefine((value, ctx) => {
@@ -265,7 +248,6 @@ const ConfigSchema = z.object({
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
           notificationBatchWindowMs: value.notificationBatchWindowMs,
           story: value.story,
-          terminal: value.terminal,
         })),
     ),
     news: z

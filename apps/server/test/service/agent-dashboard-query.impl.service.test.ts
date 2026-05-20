@@ -44,7 +44,6 @@ describe("DefaultAgentDashboardQueryService", () => {
         session: {
           focusedStateId: "portal",
           focusedStateDisplayName: "门户",
-          focusedStateDescription: "主入口",
           stateStack: [{ id: "portal", displayName: "门户" }],
           children: [
             {
@@ -148,7 +147,6 @@ describe("DefaultAgentDashboardQueryService", () => {
         session: {
           focusedStateId: "portal",
           focusedStateDisplayName: "门户",
-          focusedStateDescription: "主入口",
           stateStack: [{ id: "portal", displayName: "门户" }],
           children: [
             {

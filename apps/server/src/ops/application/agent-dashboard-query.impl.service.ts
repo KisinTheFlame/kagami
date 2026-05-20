@@ -89,7 +89,6 @@ function mapRootAgentSnapshot(input: {
     session: {
       focusedStateId: runtimeSnapshot.session.focusedStateId,
       focusedStateDisplayName: runtimeSnapshot.session.focusedStateDisplayName,
-      focusedStateDescription: runtimeSnapshot.session.focusedStateDescription,
       stateStack: runtimeSnapshot.session.stateStack.map(item => ({
         id: item.id,
         displayName: item.displayName,

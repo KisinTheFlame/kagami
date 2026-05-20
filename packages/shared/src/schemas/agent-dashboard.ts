@@ -119,7 +119,6 @@ export const RootAgentDashboardSessionSchema = z
   .object({
     focusedStateId: z.string().min(1),
     focusedStateDisplayName: z.string().min(1),
-    focusedStateDescription: z.string(),
     stateStack: z.array(RootAgentDashboardStateStackItemSchema),
     children: z.array(RootAgentDashboardChildStateSchema),
     availableInvokeTools: z.array(z.string().min(1)),

@@ -119,14 +119,6 @@ export function createConfigManager(): ConfigManager {
             scoreThreshold: 0.65,
           },
         },
-        terminal: {
-          commandTimeoutMs: 30_000,
-          previewBytes: 2048,
-          maxOutputBytes: 1_048_576,
-          maxCommandLength: 4096,
-          readOutputMaxSize: 4096,
-          shell: "/bin/sh",
-        },
       },
       news: {
         ithome: {

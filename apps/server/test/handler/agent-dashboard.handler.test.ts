@@ -33,7 +33,6 @@ describe("AgentDashboardHandler", () => {
           session: {
             focusedStateId: "portal",
             focusedStateDisplayName: "门户",
-            focusedStateDescription: "主入口",
             stateStack: [{ id: "portal", displayName: "门户" }],
             children: [],
             availableInvokeTools: [],
@@ -93,7 +92,6 @@ describe("AgentDashboardHandler", () => {
           session: {
             focusedStateId: "portal",
             focusedStateDisplayName: "门户",
-            focusedStateDescription: "主入口",
             stateStack: [{ id: "portal", displayName: "门户" }],
             children: [],
             availableInvokeTools: [],

@@ -62,14 +62,9 @@ import {
   SUMMARY_TOOL_NAME,
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
 import { OpenIthomeArticleTool } from "../agent/capabilities/news/tools/open-ithome-article.tool.js";
-import {
-  TerminalService,
-  resolveTerminalInitialCwd,
-} from "../agent/capabilities/terminal/application/terminal.service.js";
 import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/prisma-terminal-state.dao.js";
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
-import { BashTool } from "../agent/capabilities/terminal/tools/bash.tool.js";
-import { ReadBashOutputTool } from "../agent/capabilities/terminal/tools/read-bash-output.tool.js";
+import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
@@ -194,28 +189,15 @@ export async function buildAgentRuntime({
   });
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
-  const terminalConfig = config.server.agent.terminal;
-  const terminalService = new TerminalService({
-    config: {
-      initialCwd: resolveTerminalInitialCwd({ initialCwd: terminalConfig.initialCwd }),
-      commandTimeoutMs: terminalConfig.commandTimeoutMs,
-      previewBytes: terminalConfig.previewBytes,
-      maxOutputBytes: terminalConfig.maxOutputBytes,
-      maxCommandLength: terminalConfig.maxCommandLength,
-      readOutputMaxSize: terminalConfig.readOutputMaxSize,
-      shell: terminalConfig.shell,
-    },
-    terminalStateDao,
-    terminalOutputDao,
-  });
-  await terminalService.initialize();
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 自带的 configSchema
   // 校验 config.server.apps 的对应切片并调用 onStartup；最后由
   // createAppSubtoolOwner 在内部摊平 App 的工具，挂到主 Agent 的 InvokeTool 上。
-  // 这个顺序保证 App 在贡献工具前已经完成自己的初始化。
+  // 这个顺序保证 App 在贡献工具前已经完成自己的初始化（例如 TerminalApp 的
+  // TerminalService 实例化 + mkdir initialCwd 都在 startupAll 里跑完）。
   const appManager = new AppManager();
   appManager.register(new CalcApp());
+  appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   await appManager.startupAll(config.server.apps);
 
   // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
@@ -226,8 +208,6 @@ export async function buildAgentRuntime({
       agentMessageService,
     }),
     new OpenIthomeArticleTool(),
-    new BashTool({ terminalService }),
-    new ReadBashOutputTool({ terminalService }),
   ];
 
   const agentSystemPromptFactory = async () => {
@@ -254,7 +234,6 @@ export async function buildAgentRuntime({
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     notificationTimeWindowMs: config.server.agent.notificationBatchWindowMs,
     ithomeNewsService,
-    terminalService,
     appManager,
   });
   const helpTool = new HelpTool({

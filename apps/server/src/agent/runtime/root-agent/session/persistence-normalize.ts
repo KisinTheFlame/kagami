@@ -70,7 +70,7 @@ function normalizeStateId(
   groupStateById: ReadonlyMap<string, GroupChatState>,
   knownPrivateUserIds: ReadonlySet<string>,
 ): RootAgentStateId | null {
-  if (stateId === "portal" || stateId === "ithome" || stateId === "terminal") {
+  if (stateId === "portal" || stateId === "ithome") {
     return stateId;
   }
 

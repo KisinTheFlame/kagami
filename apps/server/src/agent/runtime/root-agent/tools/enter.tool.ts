@@ -11,7 +11,7 @@ export const ENTER_TOOL_NAME = "enter";
 
 const EnterArgumentsSchema = z.union([
   z.object({
-    kind: z.enum(["qq_group", "qq_private", "ithome", "terminal"]),
+    kind: z.enum(["qq_group", "qq_private", "ithome"]),
     id: z.string().trim().min(1).optional(),
   }),
   z.object({
@@ -32,12 +32,12 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
       id: {
         type: "string",
         description:
-          '目标的唯一 ID。可以是状态树节点，例如 "qq_group:123456"、"qq_private:123456"、"ithome" 或 "terminal"；也可以是已注册的 App id，例如 "calc"。',
+          '目标的唯一 ID。可以是状态树节点，例如 "qq_group:123456"、"qq_private:123456" 或 "ithome"；也可以是已注册的 App id，例如 "calc"、"terminal"。',
       },
       kind: {
         type: "string",
         description:
-          '状态节点的 kind 提示，可选值 "qq_group"、"qq_private"、"ithome"、"terminal"。仅状态树用，App 不需要传 kind，只传 id 即可。',
+          '状态节点的 kind 提示，可选值 "qq_group"、"qq_private"、"ithome"。仅状态树用，App 不需要传 kind，只传 id 即可。',
       },
     },
   } as const;

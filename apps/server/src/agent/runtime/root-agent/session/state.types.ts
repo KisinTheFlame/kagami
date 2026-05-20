@@ -5,13 +5,12 @@ import type {
   NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
 import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
-import type { TerminalService } from "../../../capabilities/terminal/application/terminal.service.js";
 import type { Event } from "../../event/event.js";
 import type { GroupChatState } from "./group-chat-state.js";
 import type { PrivateChatState } from "./private-chat-state.js";
 import type { PersistedRootAgentIthomeFeedState } from "../persistence/root-agent-runtime-snapshot.js";
 
-export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome", "terminal"] as const;
+export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome"] as const;
 export type RootAgentStaticStateId = (typeof ROOT_AGENT_STATIC_STATE_IDS)[number];
 export type RootAgentStateId =
   | RootAgentStaticStateId
@@ -23,7 +22,6 @@ export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   qq_group: ["send_message"],
   qq_private: ["send_message"],
   ithome: ["open_ithome_article"],
-  terminal: ["bash", "read_bash_output"],
 } as const;
 
 export type RootAgentInvokeToolName =
@@ -67,7 +65,6 @@ export interface RootAgentStateHost {
     IthomeNewsService,
     "getFeedOverview" | "enterFeed" | "openArticle"
   > | null;
-  readonly terminalService: Pick<TerminalService, "getCwd"> | null;
   ithomeFeedState: PersistedRootAgentIthomeFeedState | null;
   ensureGroupInfosLoaded(): Promise<void>;
   ensureIthomeFeedStateLoaded(): Promise<void>;
