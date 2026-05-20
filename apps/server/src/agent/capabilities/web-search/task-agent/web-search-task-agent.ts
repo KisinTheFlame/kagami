@@ -28,7 +28,7 @@ export class WebSearchTaskAgent
     super({
       model: llmClient,
       taskTools: taskTools ?? searchTools ?? failMissingTaskTools(),
-      terminalToolNames: [FINALIZE_WEB_SEARCH_TOOL_NAME],
+      terminalToolPredicate: toolCall => toolCall.name === FINALIZE_WEB_SEARCH_TOOL_NAME,
     });
   }
 

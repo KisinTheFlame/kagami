@@ -219,7 +219,6 @@ export async function buildAgentRuntime({
       botQQ: config.server.bot.qq,
       creatorName: config.server.bot.creator.name,
       creatorQQ: config.server.bot.creator.qq,
-      invokeToolDefinitions: invokeSubtools.map(tool => tool.llmTool),
     });
   };
   const context = new LinearMessageLedgerAgentContext({

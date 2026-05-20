@@ -10,34 +10,6 @@ describe("createAgentSystemPrompt", () => {
       botQQ: "123456789",
       creatorName: "测试创造者",
       creatorQQ: "987654321",
-      invokeToolDefinitions: [
-        {
-          name: "send_message",
-          description: "向当前监听的 QQ 群发送一条文本消息。",
-          parameters: {
-            type: "object",
-            properties: {
-              message: {
-                type: "string",
-                description: "要发送到群里的文本内容。",
-              },
-            },
-          },
-        },
-        {
-          name: "open_ithome_article",
-          description: "在 IT 之家资讯空间里打开一篇文章的全文视图，只能在 ithome 状态下调用。",
-          parameters: {
-            type: "object",
-            properties: {
-              articleId: {
-                type: "number",
-                description: "要打开的文章 ID，来自当前 IT 之家文章列表。",
-              },
-            },
-          },
-        },
-      ],
     });
 
     expect(prompt).toContain("<input_format>");
@@ -45,14 +17,25 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).toContain("<system_reminder>");
     expect(prompt).toContain("<system_instruction>");
     expect(prompt).toContain("<conversation_summary>");
-    expect(prompt).toContain("<invoke_tools>");
-    expect(prompt).toContain("`send_message`");
-    expect(prompt).toContain("适用状态：`qq_group:* | qq_private:*`");
     expect(prompt).toContain("可能按分段小标题组织");
     expect(prompt).toContain("优先关注其中的状态、待处理和不确定性");
     expect(prompt).toContain("123456789");
     expect(prompt).toContain("测试创造者");
     expect(prompt).toContain("987654321");
+  });
+
+  it("should not enumerate invoke subtools in the prompt", () => {
+    // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
+    // 不会让 system prompt 漂移。子工具说明走 invoke 错误返回回带。
+    const prompt = createAgentSystemPrompt({
+      botQQ: "123456789",
+      creatorName: "测试创造者",
+      creatorQQ: "987654321",
+    });
+
+    expect(prompt).not.toContain("<invoke_tools>");
+    expect(prompt).not.toContain("send_message");
+    expect(prompt).not.toContain("open_ithome_article");
   });
 
   it("should render the web search system prompt from static template", () => {

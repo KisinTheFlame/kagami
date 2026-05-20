@@ -54,7 +54,10 @@ function createTestInvokeTool(opts: {
 }
 
 describe("invoke tool", () => {
-  it("should expose flattened invoke parameters", () => {
+  it("should expose minimal invoke parameters that do not depend on subtool list", () => {
+    // 暴露给 LLM 的 schema 只声明 tool 字段，子工具参数走 additionalProperties。
+    // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
+    // 不会让这一份 schema 漂移。
     const tool = createTestInvokeTool({
       tools: [
         new SendMessageTool({
@@ -69,17 +72,10 @@ describe("invoke tool", () => {
       properties: {
         tool: {
           type: "string",
-          description: '要调用的子工具名，例如 "send_message" 或 "open_ithome_article"。',
-        },
-        message: {
-          type: "string",
-          description: "仅 send_message 使用。要发送到当前会话里的文本内容。",
-        },
-        articleId: {
-          type: "number",
-          description: "仅 open_ithome_article 使用。要打开的文章 ID，来自当前 IT 之家文章列表。",
+          description: "要调用的子工具名。",
         },
       },
+      additionalProperties: true,
     });
   });
 

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { isRecord } from "../../../../common/prisma-json.js";
 import {
   ToolCatalog,
   type InvokeSubtoolOwner,
@@ -37,8 +36,20 @@ type InvokeToolContext = ToolContext & {
 export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   public readonly name = INVOKE_TOOL_NAME;
   public readonly description =
-    "调用当前状态下可用的动态子工具，例如群聊里的 send_message 或 IT 之家的 open_ithome_article。";
-  public readonly parameters: JsonSchema;
+    "调用一个动态子工具。子工具名通过 tool 字段指定，其余字段按目标子工具自身的参数规约传入。子工具的清单和参数说明不在 system prompt 里固定枚举；如果调错或不熟悉，错误返回里会包含当前可用工具的说明。";
+  // InvokeTool 暴露给 LLM 的 schema 只声明 tool 字段，子工具参数走 additionalProperties。
+  // 这样无论项目里有多少子工具、各自参数多复杂，这一份 schema 都不会因子工具变更而漂移，
+  // 保住主 Agent 顶层 tools 数组的 KV cache 稳定性。
+  public readonly parameters: JsonSchema = {
+    type: "object",
+    properties: {
+      tool: {
+        type: "string",
+        description: "要调用的子工具名。",
+      },
+    },
+    additionalProperties: true,
+  };
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = InvokeArgumentsSchema;
   private readonly invokeToolSet: ToolExecutor;
@@ -54,7 +65,6 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     owners: readonly InvokeSubtoolOwner[];
   }) {
     super();
-    this.parameters = buildInvokeParameters(tools);
     this.invokeToolSet = new ToolCatalog(tools).pick(tools.map(tool => tool.name));
     this.invokeToolNames = new Set(tools.map(tool => tool.name));
     this.invokeToolDefinitionByName = new Map(tools.map(tool => [tool.name, tool.llmTool]));
@@ -141,57 +151,6 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
       .map(toolName => this.invokeToolDefinitionByName.get(toolName))
       .filter((definition): definition is ToolDefinition => definition !== undefined);
   }
-}
-
-function buildInvokeParameters(tools: ToolComponent[]): JsonSchema {
-  const properties: Record<string, unknown> = {
-    tool: {
-      type: "string",
-      description: '要调用的子工具名，例如 "send_message" 或 "open_ithome_article"。',
-    },
-  };
-
-  for (const tool of tools) {
-    for (const [propertyName, propertySchema] of Object.entries(tool.parameters.properties)) {
-      if (propertyName === "tool") {
-        throw new Error(`Invoke 子工具 ${tool.name} 不能声明保留参数名 tool`);
-      }
-
-      if (propertyName in properties) {
-        throw new Error(`Invoke 子工具参数名冲突: ${propertyName}`);
-      }
-
-      properties[propertyName] = appendInvokePropertyDescription({
-        toolName: tool.name,
-        propertySchema,
-      });
-    }
-  }
-
-  return {
-    type: "object",
-    properties,
-  };
-}
-
-function appendInvokePropertyDescription(input: {
-  toolName: string;
-  propertySchema: unknown;
-}): unknown {
-  if (!isRecord(input.propertySchema)) {
-    return input.propertySchema;
-  }
-
-  const descriptionPrefix = `仅 ${input.toolName} 使用。`;
-  const description = input.propertySchema.description;
-
-  return {
-    ...input.propertySchema,
-    description:
-      typeof description === "string" && description.length > 0
-        ? `${descriptionPrefix}${description}`
-        : descriptionPrefix,
-  };
 }
 
 function buildInvokeToolNotFoundMessage(input: {

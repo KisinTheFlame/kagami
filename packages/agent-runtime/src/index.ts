@@ -26,6 +26,7 @@ import {
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
+  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolLikeMessage,
 } from "./task-agent-runtime.js";
@@ -85,6 +86,7 @@ export {
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
+  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolComponent,
   type ToolContext,
