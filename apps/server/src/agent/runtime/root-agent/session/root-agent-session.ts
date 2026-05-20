@@ -53,7 +53,7 @@ export type RootAgentPostToolEffects = {
   events: Event[];
 };
 
-export type RootAgentSessionDashboardSnapshot = {
+export type RootAgentSessionStateView = {
   focusedStateId: RootAgentStateId;
   focusedStateDisplayName: string;
   stateStack: Array<{
@@ -81,7 +81,7 @@ export type RootAgentSessionController = {
   getCurrentChatTarget(): NapcatChatTarget | undefined;
   getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
-  getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot>;
+  getStateView(): Promise<RootAgentSessionStateView>;
   exportPersistedSnapshot(): CurrentPersistedRootAgentSessionSnapshot;
   restorePersistedSnapshot(snapshot: PersistedRootAgentSessionSnapshot): void;
   reset(): void;
@@ -225,7 +225,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     return [...focusedState.getAvailableInvokeTools()];
   }
 
-  public async getDashboardSnapshot(): Promise<RootAgentSessionDashboardSnapshot> {
+  public async getStateView(): Promise<RootAgentSessionStateView> {
     await this.initializeContext();
 
     const focusedState = this.requireState(this.getFocusedStateId());

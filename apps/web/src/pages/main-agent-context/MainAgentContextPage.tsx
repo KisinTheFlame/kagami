@@ -1,7 +1,4 @@
-import type {
-  AgentDashboardContextItem,
-  RootAgentDashboardSnapshot,
-} from "@kagami/shared/schemas/agent-dashboard";
+import type { MainAgentContextItem } from "@kagami/shared/schemas/main-agent-context";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMainAgentContext } from "./useMainAgentContext";
@@ -11,10 +8,6 @@ export function MainAgentContextPage() {
   const snapshot = query.data;
   const isInitialLoading = query.isLoading && !snapshot;
 
-  const rootAgent = snapshot?.agents.find(
-    (agent): agent is RootAgentDashboardSnapshot => agent.kind === "root",
-  );
-
   if (isInitialLoading) {
     return (
       <div className="flex h-full min-h-0 w-full items-center justify-center p-6">
@@ -23,7 +16,7 @@ export function MainAgentContextPage() {
     );
   }
 
-  if (!snapshot || !rootAgent) {
+  if (!snapshot) {
     return (
       <div className="flex h-full min-h-0 w-full items-center justify-center p-6">
         <p className="text-sm text-destructive">加载失败，请检查后端服务是否运行。</p>
@@ -31,8 +24,8 @@ export function MainAgentContextPage() {
     );
   }
 
-  const items = rootAgent.context.recentItems;
-  const truncated = rootAgent.context.recentItemsTruncated;
+  const items = snapshot.recentItems;
+  const truncated = snapshot.recentItemsTruncated;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-3 md:p-6">
@@ -60,7 +53,7 @@ export function MainAgentContextPage() {
       <div className="mt-4 min-h-0 flex-1 overflow-hidden">
         <Card className="flex h-full min-h-0 flex-col overflow-hidden">
           <CardHeader className="pb-4">
-            <CardTitle>{rootAgent.label} · 最近上下文</CardTitle>
+            <CardTitle>主 Agent · 最近上下文</CardTitle>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-hidden">
             {items.length === 0 ? (
@@ -86,7 +79,7 @@ export function MainAgentContextPage() {
   );
 }
 
-function ContextItemCard({ item }: { item: AgentDashboardContextItem }) {
+function ContextItemCard({ item }: { item: MainAgentContextItem }) {
   return (
     <div className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-2">

@@ -43,7 +43,7 @@ export class LoopLlmRetryExtension<
 > implements ReActKernelExtension<TMessage, TUsage, TCompletion, TExtensionData> {
   private readonly backoffPolicy: RetryBackoffPolicy;
   private readonly sleep: (ms: number) => Promise<void>;
-  private readonly onRecoverableError: (error: unknown) => Promise<void> | void;
+  private readonly onRecoverableError?: ((error: unknown) => Promise<void> | void) | undefined;
   private readonly onBeforeRetry?:
     | ((input: {
         request: ReActKernelRunRoundInput<TMessage, TUsage>;
@@ -63,7 +63,7 @@ export class LoopLlmRetryExtension<
   public constructor(input: {
     backoffPolicy: RetryBackoffPolicy;
     sleep: (ms: number) => Promise<void>;
-    onRecoverableError: (error: unknown) => Promise<void> | void;
+    onRecoverableError?: (error: unknown) => Promise<void> | void;
     onBeforeRetry?: (input: {
       request: ReActKernelRunRoundInput<TMessage, TUsage>;
       error: unknown;
@@ -104,7 +104,7 @@ export class LoopLlmRetryExtension<
       attempt: this.retryAttempt,
     });
 
-    await this.onRecoverableError(input.error);
+    await this.onRecoverableError?.(input.error);
     await this.onBeforeRetry?.({
       request: input.request,
       error: input.error,

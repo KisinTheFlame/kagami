@@ -12,7 +12,7 @@ import { PrismaNapcatQqMessageDao } from "../napcat/dao/impl/napcat-group-messag
 import { BizError } from "../common/errors/biz-error.js";
 import { toHttpErrorResponse } from "../common/errors/http-error.js";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
-import { AgentDashboardHandler } from "../ops/http/agent-dashboard.handler.js";
+import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
@@ -283,8 +283,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new HealthHandler(),
       authModule.authHandler,
       new LlmHandler({ llmPlaygroundService: agentRuntime.llmPlaygroundService }),
-      new AgentDashboardHandler({
-        agentDashboardQueryService: agentRuntime.agentDashboardQueryService,
+      new MainAgentContextHandler({
+        mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new AppLogHandler({ appLogQueryService }),

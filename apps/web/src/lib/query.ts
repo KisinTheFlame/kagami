@@ -49,8 +49,8 @@ export const queryKeys = {
     data: (chartName: string, bucket: string, appliedRange: unknown) =>
       ["metric-chart", "data", chartName, bucket, appliedRange] as const,
   },
-  agentDashboard: {
-    current: () => ["agent-dashboard", "current"] as const,
+  mainAgentContext: {
+    recent: () => ["main-agent-context", "recent"] as const,
   },
 };
 
