@@ -3,6 +3,7 @@ import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
 import { AppManager, type App, type AppId, type CanInvokeResult } from "./app/app.js";
+import { createAppSubtoolOwner } from "./app/app-subtool-owner.js";
 import { HELP_TOOL_NAME, HelpTool, type HelpToolDeps } from "./app/help-tool.js";
 import { BaseLoopAgent } from "./base-loop-agent.js";
 import { InMemoryQueue, type Queue } from "./queue.js";
@@ -44,11 +45,13 @@ import {
   type ToolExecutionResult,
   type ToolKind,
 } from "./tool/tool-component.js";
+import type { InvokeSubtoolOwner, SubtoolGuardResult } from "./tool/subtool-owner.js";
 
 export {
   AppManager,
   BaseLoopAgent,
   BaseTaskAgent,
+  createAppSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
   InMemoryQueue,
@@ -63,6 +66,8 @@ export {
   type AppId,
   type CanInvokeResult,
   type HelpToolDeps,
+  type InvokeSubtoolOwner,
+  type SubtoolGuardResult,
   type Queue,
   type LoopAgent,
   type LoopAgentExtension,

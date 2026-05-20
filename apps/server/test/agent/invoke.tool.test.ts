@@ -1,8 +1,14 @@
-import { AppManager } from "@kagami/agent-runtime";
+import {
+  AppManager,
+  createAppSubtoolOwner,
+  type ToolComponent,
+  type ToolContext,
+} from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
+import { createStateTreeSubtoolOwner } from "../../src/agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
 
 function createAgentMessageService() {
   return {
@@ -11,16 +17,51 @@ function createAgentMessageService() {
   };
 }
 
+/**
+ * 测试用 InvokeTool 工厂。模拟 factory 的 owners 装配：
+ *   - appOwner：用提供的 AppManager 控制
+ *   - stateTreeOwner：catch-all，依赖 ctx 里挂的 mock session 的
+ *     getAvailableInvokeTools
+ *
+ * 如果不传 appManager，默认建一个空的。
+ */
+function createTestInvokeTool(opts: {
+  tools: ToolComponent[];
+  appManager?: AppManager;
+}): InvokeTool {
+  const appManager = opts.appManager ?? new AppManager();
+  const invokeToolDefinitionByName = new Map(opts.tools.map(t => [t.name, t.llmTool]));
+  return new InvokeTool({
+    tools: opts.tools,
+    owners: [
+      createAppSubtoolOwner({
+        appManager,
+        getCurrentApp: (ctx: ToolContext) => {
+          const session = (
+            ctx as ToolContext & {
+              rootAgentSession?: { getCurrentApp(): string | undefined };
+            }
+          ).rootAgentSession;
+          return session?.getCurrentApp();
+        },
+      }),
+      createStateTreeSubtoolOwner({
+        appManager,
+        invokeToolDefinitionByName,
+      }),
+    ],
+  });
+}
+
 describe("invoke tool", () => {
   it("should expose flattened invoke parameters", () => {
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [
         new SendMessageTool({
           agentMessageService: createAgentMessageService(),
         }),
         new OpenIthomeArticleTool(),
       ],
-      appManager: new AppManager(),
     });
 
     expect(tool.parameters).toEqual({
@@ -45,9 +86,8 @@ describe("invoke tool", () => {
   it("should invoke send_message in qq group state", async () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [new SendMessageTool({ agentMessageService })],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -87,9 +127,8 @@ describe("invoke tool", () => {
   it("should invoke send_message in qq private state", async () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [new SendMessageTool({ agentMessageService })],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -128,9 +167,8 @@ describe("invoke tool", () => {
 
   it("should return agent-friendly message when subtool is unavailable in current state", async () => {
     const agentMessageService = createAgentMessageService();
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [new SendMessageTool({ agentMessageService }), new OpenIthomeArticleTool()],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -169,12 +207,11 @@ describe("invoke tool", () => {
       kind: "ithome_article",
       articleId: 123,
     });
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -207,12 +244,11 @@ describe("invoke tool", () => {
   });
 
   it("should return agent-friendly message when ithome article does not exist", async () => {
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -251,12 +287,11 @@ describe("invoke tool", () => {
   });
 
   it("should describe available tools when invoke subtool does not exist", async () => {
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
-      appManager: new AppManager(),
     });
 
     const result = await tool.execute(
@@ -294,7 +329,7 @@ describe("invoke tool", () => {
     appManager.register(new CalcApp());
 
     const calcTool = appManager.getApp("calc")!.tools[0];
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [calcTool],
       appManager,
     });
@@ -325,7 +360,7 @@ describe("invoke tool", () => {
     appManager.register(new CalcApp());
 
     const calcTool = appManager.getApp("calc")!.tools[0];
-    const tool = new InvokeTool({
+    const tool = createTestInvokeTool({
       tools: [calcTool],
       appManager,
     });

@@ -1,10 +1,12 @@
 import {
   AppManager,
+  createAppSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
   ToolCatalog,
   type Queue,
 } from "@kagami/agent-runtime";
+import { createStateTreeSubtoolOwner } from "../agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
 import type { LlmClient } from "../llm/client.js";
@@ -244,6 +246,20 @@ export async function buildAgentRuntime({
     appManager,
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
   });
+  // Invoke 子工具的所有者：App 工具走 AppManager，剩下的状态树工具走 catch-all。
+  // 顺序很重要：InvokeTool 用 owners.find 找第一个匹配的 owner，App 在前确保
+  // App 工具不会被 catch-all 抢走。
+  const invokeToolDefinitionByName = new Map(invokeSubtools.map(tool => [tool.name, tool.llmTool]));
+  const subtoolOwners = [
+    createAppSubtoolOwner({
+      appManager,
+      getCurrentApp: () => rootAgentSession.getCurrentApp(),
+    }),
+    createStateTreeSubtoolOwner({
+      appManager,
+      invokeToolDefinitionByName,
+    }),
+  ];
   const toolCatalog = new ToolCatalog([
     new EnterTool({ appManager }),
     new BackTool(),
@@ -254,7 +270,7 @@ export async function buildAgentRuntime({
     }),
     new InvokeTool({
       tools: invokeSubtools,
-      appManager,
+      owners: subtoolOwners,
     }),
     new SearchWebTool({
       webSearchTaskAgent,
