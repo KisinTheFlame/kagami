@@ -211,6 +211,7 @@ export function createConfigManager(): ConfigManager {
           qq: "10000",
         },
       },
+      apps: {},
     },
   };
 

@@ -210,10 +210,13 @@ export async function buildAgentRuntime({
   });
   await terminalService.initialize();
 
-  // App 框架：先建 AppManager 并注册 Apps，再让 createAppSubtoolOwner 在内部
-  // 摊平 App 的工具。
+  // App 框架：先建 AppManager 并注册 Apps，再按各 App 自带的 configSchema
+  // 校验 config.server.apps 的对应切片并调用 onStartup；最后由
+  // createAppSubtoolOwner 在内部摊平 App 的工具，挂到主 Agent 的 InvokeTool 上。
+  // 这个顺序保证 App 在贡献工具前已经完成自己的初始化。
   const appManager = new AppManager();
   appManager.register(new CalcApp());
+  await appManager.startupAll(config.server.apps);
 
   // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
   // owner-driven 模型下不再有"全局 invokeSubtools 列表"——每个 owner 自己负责

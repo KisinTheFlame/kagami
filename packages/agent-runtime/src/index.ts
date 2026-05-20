@@ -2,7 +2,13 @@ import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
-import { AppManager, type App, type AppId, type CanInvokeResult } from "./app/app.js";
+import {
+  AppManager,
+  type App,
+  type AppId,
+  type AppStartupContext,
+  type CanInvokeResult,
+} from "./app/app.js";
 import { createAppSubtoolOwner } from "./app/app-subtool-owner.js";
 import { HELP_TOOL_NAME, HelpTool, type HelpToolDeps } from "./app/help-tool.js";
 import { BaseLoopAgent } from "./base-loop-agent.js";
@@ -66,6 +72,7 @@ export {
   type AgentRuntime,
   type App,
   type AppId,
+  type AppStartupContext,
   type CanInvokeResult,
   type HelpToolDeps,
   type InvokeSubtoolOwner,

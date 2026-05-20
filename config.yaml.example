@@ -110,3 +110,9 @@ server:
     creator:
       name: "创造者"
       qq: "10000"
+  # 每个 App 的配置切片。key 是 App.id，结构由各 App 自己的 configSchema 校验。
+  # 没列出来的 App 走 schema 默认值；schema 不接受的字段会在启动时报错。
+  apps:
+    calc:
+      # 计算结果保留的小数位数（0–20）。省略 / null 表示不做四舍五入。
+      precision: 6
