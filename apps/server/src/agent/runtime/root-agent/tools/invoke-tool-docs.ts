@@ -2,7 +2,7 @@ import type { ToolDefinition } from "@kagami/agent-runtime";
 import { isRecord } from "../../../../common/prisma-json.js";
 
 export function renderInvokeToolGuide(
-  tools: ToolDefinition[],
+  tools: readonly ToolDefinition[],
   options: {
     includeApplicableStates: boolean;
   } = {

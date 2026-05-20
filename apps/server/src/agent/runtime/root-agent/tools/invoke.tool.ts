@@ -1,17 +1,13 @@
 import { z } from "zod";
 import {
-  ToolCatalog,
   type InvokeSubtoolOwner,
   type JsonSchema,
-  type ToolComponent,
   type ToolContext,
   type ToolDefinition,
-  type ToolExecutor,
   type ToolExecutionResult,
   type ToolKind,
   ZodToolComponent,
 } from "@kagami/agent-runtime";
-import type { RootAgentSessionController } from "../session/root-agent-session.js";
 import { renderInvokeToolGuide } from "./invoke-tool-docs.js";
 
 export const INVOKE_TOOL_NAME = "invoke";
@@ -22,24 +18,25 @@ const InvokeArgumentsSchema = z
   })
   .passthrough();
 
-type InvokeToolContext = ToolContext & {
-  rootAgentSession?: RootAgentSessionController;
-};
-
 /**
- * InvokeTool 不再自己判断"这个工具能不能调"，而是把这件事委派给一个 owner 列表。
- * 每个 owner 实现 InvokeSubtoolOwner 协议，声明它拥有哪些工具以及在当前 ctx 下
- * 能不能调。InvokeTool 的主路径就是：找到 owner → 让 owner gate → 执行。
+ * InvokeTool 是顶层工具集里 dispatcher 的位置。它本身不持有任何子工具集合、
+ * 不知道任何 session / state / app / scope 这些业务概念。所有这些都被收敛到
+ * 一组 InvokeSubtoolOwner 里：每个 owner 负责自己旗下子工具的拥有声明、当前
+ * 上下文是否可调、以及实际执行。
  *
- * 设计动机见 packages/agent-runtime/src/tool/subtool-owner.ts 的注释。
+ * 构造期 InvokeTool 遍历 owners 的 listOwnedTools 摊平成一张 (name → owner)
+ * 索引，重复声明的工具名直接抛错。运行期就是按这张索引找 owner → owner
+ * gate → owner execute 三步。
+ *
+ * 暴露给 LLM 的 schema 是稳定常量（只声明 tool 字段，其余走 additionalProperties）。
+ * 这条不变量配合 owner-driven dispatch 一起，让"主 Agent 和 task agent 各自挂
+ * 不同 owner 列表的 InvokeTool 实例"产出字节相等的 LLM 工具定义，保住 KV
+ * cache 命中前提。
  */
 export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   public readonly name = INVOKE_TOOL_NAME;
   public readonly description =
     "调用一个动态子工具。子工具名通过 tool 字段指定，其余字段按目标子工具自身的参数规约传入。子工具的清单和参数说明不在 system prompt 里固定枚举；如果调错或不熟悉，错误返回里会包含当前可用工具的说明。";
-  // InvokeTool 暴露给 LLM 的 schema 只声明 tool 字段，子工具参数走 additionalProperties。
-  // 这样无论项目里有多少子工具、各自参数多复杂，这一份 schema 都不会因子工具变更而漂移，
-  // 保住主 Agent 顶层 tools 数组的 KV cache 稳定性。
   public readonly parameters: JsonSchema = {
     type: "object",
     properties: {
@@ -52,44 +49,37 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   };
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = InvokeArgumentsSchema;
-  private readonly invokeToolSet: ToolExecutor;
-  private readonly invokeToolNames: Set<string>;
-  private readonly invokeToolDefinitionByName: ReadonlyMap<string, ToolDefinition>;
-  private readonly owners: readonly InvokeSubtoolOwner[];
 
-  public constructor({
-    tools,
-    owners,
-  }: {
-    tools: ToolComponent[];
-    owners: readonly InvokeSubtoolOwner[];
-  }) {
+  private readonly owners: readonly InvokeSubtoolOwner[];
+  private readonly ownerByToolName: ReadonlyMap<string, InvokeSubtoolOwner>;
+  private readonly definitionByToolName: ReadonlyMap<string, ToolDefinition>;
+
+  public constructor({ owners }: { owners: readonly InvokeSubtoolOwner[] }) {
     super();
-    this.invokeToolSet = new ToolCatalog(tools).pick(tools.map(tool => tool.name));
-    this.invokeToolNames = new Set(tools.map(tool => tool.name));
-    this.invokeToolDefinitionByName = new Map(tools.map(tool => [tool.name, tool.llmTool]));
+    const ownerByToolName = new Map<string, InvokeSubtoolOwner>();
+    const definitionByToolName = new Map<string, ToolDefinition>();
+    for (const owner of owners) {
+      for (const definition of owner.listOwnedTools()) {
+        if (ownerByToolName.has(definition.name)) {
+          throw new Error(
+            `Invoke 子工具 ${definition.name} 被多个 owner 同时声明，请检查 InvokeTool 装配。`,
+          );
+        }
+        ownerByToolName.set(definition.name, owner);
+        definitionByToolName.set(definition.name, definition);
+      }
+    }
     this.owners = owners;
+    this.ownerByToolName = ownerByToolName;
+    this.definitionByToolName = definitionByToolName;
   }
 
   protected async executeTyped(
     input: z.infer<typeof InvokeArgumentsSchema>,
     context: ToolContext,
   ): Promise<ToolExecutionResult> {
-    const rootAgentSession = (context as InvokeToolContext).rootAgentSession;
-    if (!rootAgentSession) {
-      return {
-        content: JSON.stringify({
-          ok: false,
-          error: "SESSION_UNAVAILABLE",
-          message: "当前会话不可用，暂时无法调用 invoke 子工具。",
-          availableTools: [],
-        }),
-      };
-    }
-
-    const availableTools = rootAgentSession.getAvailableInvokeTools();
-    if (!this.invokeToolNames.has(input.tool)) {
-      const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
+    const owner = this.ownerByToolName.get(input.tool);
+    if (!owner) {
       return {
         content: JSON.stringify({
           ok: false,
@@ -97,25 +87,9 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
           tool: input.tool,
           message: buildInvokeToolNotFoundMessage({
             tool: input.tool,
-            availableToolDefinitions,
+            availableToolDefinitions: this.listAllDefinitions(),
           }),
-          availableTools,
-        }),
-      };
-    }
-
-    // Owner-driven dispatch：找到拥有该工具的 owner，让 owner 做 gate 决策。
-    const owner = this.owners.find(o => o.ownsTool(input.tool));
-    if (!owner) {
-      // 理论上不会走到这里：tool 已在 invokeToolNames 里，意味着它在 master 列表里，
-      // 而 master 列表里的工具必然被某个 owner 拥有（AppManager.ownsTool 或 catch-all）。
-      // 留一个保护性兜底，方便排查 owners 配置错误。
-      return {
-        content: JSON.stringify({
-          ok: false,
-          error: "INVOKE_TOOL_NO_OWNER",
-          tool: input.tool,
-          message: `invoke 子工具 ${input.tool} 没有匹配的 owner，这可能是 owners 配置错误。`,
+          availableTools: this.listAllDefinitions().map(definition => definition.name),
         }),
       };
     }
@@ -134,28 +108,25 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     }
 
     const { tool, ...toolArguments } = input;
-    const result = await this.invokeToolSet.execute(tool, toolArguments, context);
+    const result = await owner.execute(tool, toolArguments, context);
     return {
       ...result,
-      content: normalizeInvokeFailureContent({
+      content: enrichSubtoolFailureContent({
         tool,
         content: result.content,
-        availableTools,
-        currentToolDefinition: this.invokeToolDefinitionByName.get(tool),
+        currentToolDefinition: this.definitionByToolName.get(tool),
       }),
     };
   }
 
-  private getToolDefinitionsByNames(toolNames: readonly string[]): ToolDefinition[] {
-    return toolNames
-      .map(toolName => this.invokeToolDefinitionByName.get(toolName))
-      .filter((definition): definition is ToolDefinition => definition !== undefined);
+  private listAllDefinitions(): readonly ToolDefinition[] {
+    return this.owners.flatMap(owner => [...owner.listOwnedTools()]);
   }
 }
 
 function buildInvokeToolNotFoundMessage(input: {
   tool: string;
-  availableToolDefinitions: ToolDefinition[];
+  availableToolDefinitions: readonly ToolDefinition[];
 }): string {
   return [
     `invoke 子工具 ${input.tool} 不存在。`,
@@ -163,10 +134,17 @@ function buildInvokeToolNotFoundMessage(input: {
   ].join("\n");
 }
 
-function normalizeInvokeFailureContent(input: {
+/**
+ * 当 owner.execute 直接吐出失败内容（典型：ZodToolComponent 的 INVALID_ARGUMENTS、
+ * 或者子工具自身业务失败）时，把当前子工具的 schema 补在 message 末尾，让 LLM
+ * 下一轮能照着 schema 修正参数。
+ *
+ * 这条路径只补 docs，不再像旧版那样塞 availableTools 字段——owner.canInvokeNow
+ * 那一支才是负责"提示别的可选项"的地方，本路径只关心当前这个工具怎么调。
+ */
+function enrichSubtoolFailureContent(input: {
   tool: string;
   content: string;
-  availableTools: readonly string[];
   currentToolDefinition?: ToolDefinition;
 }): string {
   try {
@@ -190,7 +168,6 @@ function normalizeInvokeFailureContent(input: {
                 : [],
               currentToolDefinition: input.currentToolDefinition,
             }),
-      availableTools: input.availableTools,
     });
   } catch {
     return input.content;
@@ -238,12 +215,14 @@ function buildInvokeSubtoolFailureMessage(input: {
   );
 }
 
-function buildAvailableInvokeToolsDescription(availableToolDefinitions: ToolDefinition[]): string {
+function buildAvailableInvokeToolsDescription(
+  availableToolDefinitions: readonly ToolDefinition[],
+): string {
   if (availableToolDefinitions.length === 0) {
-    return "当前状态没有可用的 invoke 子工具。";
+    return "当前没有可用的 invoke 子工具。";
   }
 
-  return `当前状态可用的 invoke 工具说明：\n${renderInvokeToolGuide(availableToolDefinitions)}`;
+  return `当前可用的 invoke 工具说明：\n${renderInvokeToolGuide(availableToolDefinitions)}`;
 }
 
 function appendInvokeToolDefinitionMessage(

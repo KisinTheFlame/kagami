@@ -45,6 +45,7 @@ import {
   type ToolExecutionResult,
   type ToolKind,
 } from "./tool/tool-component.js";
+import { OutOfScopeTool } from "./tool/out-of-scope-tool.js";
 import type { InvokeSubtoolOwner, SubtoolGuardResult } from "./tool/subtool-owner.js";
 
 export {
@@ -55,6 +56,7 @@ export {
   HELP_TOOL_NAME,
   HelpTool,
   InMemoryQueue,
+  OutOfScopeTool,
   ReActKernel,
   SerialExecutor,
   TaskAgentRuntime,

@@ -3,10 +3,13 @@ import {
   createAppSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
+  OutOfScopeTool,
   ToolCatalog,
   type Queue,
+  type ToolComponent,
 } from "@kagami/agent-runtime";
 import { createStateTreeSubtoolOwner } from "../agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
+import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
 import type { LlmClient } from "../llm/client.js";
@@ -46,14 +49,8 @@ import {
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
-import {
-  SearchWebRawTool,
-  SEARCH_WEB_RAW_TOOL_NAME,
-} from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
-import {
-  FinalizeWebSearchTool,
-  FINALIZE_WEB_SEARCH_TOOL_NAME,
-} from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
+import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
+import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
 import { WebSearchTaskAgent } from "../agent/capabilities/web-search/task-agent/web-search-task-agent.js";
 import {
   SearchWebTool,
@@ -164,19 +161,34 @@ export async function buildAgentRuntime({
   const webSearchService = new TavilyWebSearchService({
     apiKey: config.server.tavily.apiKey,
   });
-  const webSearchInternalToolCatalog = new ToolCatalog([
-    new SearchWebRawTool({
-      webSearchService,
-    }),
+  // 网页搜索 task agent 自己的子工具：search_web_raw 和 finalize_web_search。
+  // 它们被一个独立的 webSearchSubtoolOwner 持有，挂在 WebSearchTaskAgent 自己
+  // 的 InvokeTool 实例上；主 Agent 视野永远看不到它们。
+  const webSearchSubtools: ToolComponent[] = [
+    new SearchWebRawTool({ webSearchService }),
     new FinalizeWebSearchTool(),
-  ]);
-  const webSearchTaskAgent = new WebSearchTaskAgent({
-    llmClient,
-    taskTools: webSearchInternalToolCatalog.pick([
-      SEARCH_WEB_RAW_TOOL_NAME,
-      FINALIZE_WEB_SEARCH_TOOL_NAME,
-    ]),
+  ];
+  const webSearchInvokeTool = new InvokeTool({
+    owners: [createWebSearchSubtoolOwner({ tools: webSearchSubtools })],
   });
+
+  // WebSearchTaskAgent 的 taskTools 需要等到主 Agent rootAgentTools 装配完才能
+  // 拼出来（要拿 enter / back / wait / search_web / search_memory / help 等
+  // 主 Agent 顶层工具实例，包成 OutOfScopeTool）。这里先打一个延迟引用，等下
+  // 面真实 webSearchTaskAgent 构造好再回填。SearchWebTool 调用时通过这个 ref
+  // 转发——执行时 webSearchTaskAgent 必然已经就位。
+  const webSearchTaskAgentRef: { current: WebSearchTaskAgent | undefined } = {
+    current: undefined,
+  };
+  const webSearchTaskAgentInvoker = {
+    invoke: async (input: Parameters<WebSearchTaskAgent["invoke"]>[0]) => {
+      const taskAgent = webSearchTaskAgentRef.current;
+      if (!taskAgent) {
+        throw new Error("WebSearchTaskAgent 尚未装配完成，不能调用");
+      }
+      return await taskAgent.invoke(input);
+    },
+  };
   const agentMessageService = new DefaultAgentMessageService({
     napcatGatewayService,
   });
@@ -198,20 +210,21 @@ export async function buildAgentRuntime({
   });
   await terminalService.initialize();
 
-  // App 框架：先建 AppManager 并注册 Apps，再把它们的 tools 拼进 invokeSubtools。
-  // 这个顺序保证 App 的工具能被 InvokeTool 调度到。
+  // App 框架：先建 AppManager 并注册 Apps，再让 createAppSubtoolOwner 在内部
+  // 摊平 App 的工具。
   const appManager = new AppManager();
   appManager.register(new CalcApp());
 
-  const invokeSubtools = [
+  // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
+  // owner-driven 模型下不再有"全局 invokeSubtools 列表"——每个 owner 自己负责
+  // 列出自己拥有的工具。
+  const stateTreeSubtools = [
     new SendMessageTool({
       agentMessageService,
     }),
     new OpenIthomeArticleTool(),
     new BashTool({ terminalService }),
     new ReadBashOutputTool({ terminalService }),
-    // App 提供的工具：每个已注册 App 的 tools 在这里被 flat 进总集合
-    ...appManager.getAllApps().flatMap(app => [...app.tools]),
   ];
 
   const agentSystemPromptFactory = async () => {
@@ -245,40 +258,46 @@ export async function buildAgentRuntime({
     appManager,
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
   });
-  // Invoke 子工具的所有者：App 工具走 AppManager，剩下的状态树工具走 catch-all。
-  // 顺序很重要：InvokeTool 用 owners.find 找第一个匹配的 owner，App 在前确保
-  // App 工具不会被 catch-all 抢走。
-  const invokeToolDefinitionByName = new Map(invokeSubtools.map(tool => [tool.name, tool.llmTool]));
-  const subtoolOwners = [
+  // 主 Agent 的 invoke 子工具所有者：App 工具的所有权和 gate 由 AppManager
+  // 把握；状态树工具显式列出。InvokeTool 构造期校验 owners 之间无同名工具。
+  const mainSubtoolOwners = [
     createAppSubtoolOwner({
       appManager,
       getCurrentApp: () => rootAgentSession.getCurrentApp(),
     }),
     createStateTreeSubtoolOwner({
-      appManager,
-      invokeToolDefinitionByName,
+      tools: stateTreeSubtools,
     }),
   ];
+
+  // 主 Agent 的顶层工具实例。WebSearchTaskAgent 之后会复用这些实例的 llmTool
+  // 定义（通过 OutOfScopeTool 包一层），保证两个 agent 暴露给 LLM 的 tools
+  // 字段字节相等，命中 KV cache。
+  const enterTool = new EnterTool({ appManager });
+  const backTool = new BackTool();
+  const backToPortalTool = new BackToPortalTool();
+  const waitTool = new WaitTool({
+    eventQueue,
+    maxWaitMs: config.server.agent.waitToolMaxWaitMs,
+  });
+  const mainInvokeTool = new InvokeTool({ owners: mainSubtoolOwners });
+  const searchWebTool = new SearchWebTool({
+    webSearchTaskAgent: webSearchTaskAgentInvoker,
+  });
+  const searchMemoryTool = new SearchMemoryTool({
+    storyRecallService,
+    topK: config.server.agent.story.memory.retrieval.topK,
+  });
+  const summaryTool = new SummaryTool();
   const toolCatalog = new ToolCatalog([
-    new EnterTool({ appManager }),
-    new BackTool(),
-    new BackToPortalTool(),
-    new WaitTool({
-      eventQueue,
-      maxWaitMs: config.server.agent.waitToolMaxWaitMs,
-    }),
-    new InvokeTool({
-      tools: invokeSubtools,
-      owners: subtoolOwners,
-    }),
-    new SearchWebTool({
-      webSearchTaskAgent,
-    }),
-    new SearchMemoryTool({
-      storyRecallService,
-      topK: config.server.agent.story.memory.retrieval.topK,
-    }),
-    new SummaryTool(),
+    enterTool,
+    backTool,
+    backToPortalTool,
+    waitTool,
+    mainInvokeTool,
+    searchWebTool,
+    searchMemoryTool,
+    summaryTool,
     helpTool,
   ]);
   const rootAgentTools = toolCatalog.pick([
@@ -291,6 +310,62 @@ export async function buildAgentRuntime({
     SEARCH_MEMORY_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
+
+  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 8 个工具的
+  // name / description / parameters / llmTool），但执行语义完全隔离——
+  //  - invoke 换成 webSearchInvokeTool（owner = webSearchSubtoolOwner，只识别
+  //    search_web_raw / finalize_web_search）
+  //  - 其余 7 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
+  //    不会真的改主 Agent 的 session / 触发嵌套搜索
+  // 这是 prompt cache 字节相等 + 行为隔离的关键搭配。
+  const webSearchAgentToolCatalog = new ToolCatalog([
+    new OutOfScopeTool({
+      inner: enterTool,
+      reason:
+        '在网页搜索子任务中不可调用 enter。请用 invoke(tool="search_web_raw", ...) 检索，必要时反复，信息足够后用 invoke(tool="finalize_web_search", summary=...) 输出最终摘要。',
+    }),
+    new OutOfScopeTool({
+      inner: backTool,
+      reason: "在网页搜索子任务中不可调用 back。",
+    }),
+    new OutOfScopeTool({
+      inner: backToPortalTool,
+      reason: "在网页搜索子任务中不可调用 back_to_portal。",
+    }),
+    new OutOfScopeTool({
+      inner: waitTool,
+      reason: "在网页搜索子任务中不可调用 wait。",
+    }),
+    webSearchInvokeTool,
+    new OutOfScopeTool({
+      inner: searchWebTool,
+      reason: "网页搜索子任务内禁止再次调用 search_web，否则会无限嵌套。",
+    }),
+    new OutOfScopeTool({
+      inner: searchMemoryTool,
+      reason: "在网页搜索子任务中不可调用 search_memory。",
+    }),
+    new OutOfScopeTool({
+      inner: helpTool,
+      reason: "在网页搜索子任务中不可调用 help。",
+    }),
+  ]);
+  const webSearchAgentTools = webSearchAgentToolCatalog.pick([
+    ENTER_TOOL_NAME,
+    BACK_TOOL_NAME,
+    BACK_TO_PORTAL_TOOL_NAME,
+    WAIT_TOOL_NAME,
+    INVOKE_TOOL_NAME,
+    SEARCH_WEB_TOOL_NAME,
+    SEARCH_MEMORY_TOOL_NAME,
+    HELP_TOOL_NAME,
+  ]);
+
+  // 现在所有依赖都就位了，真正构造 WebSearchTaskAgent 并回填 ref。
+  webSearchTaskAgentRef.current = new WebSearchTaskAgent({
+    llmClient,
+    taskTools: webSearchAgentTools,
+  });
   const summaryToolExecutor = toolCatalog.pick([SUMMARY_TOOL_NAME]);
   const rootContextSummaryOperation = new ContextSummaryOperation({
     llmClient,

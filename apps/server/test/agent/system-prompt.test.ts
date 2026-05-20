@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createStoryAgentSystemPrompt } from "../../src/agent/capabilities/story/task-agent/system-prompt.js";
 import { createVisionSystemPrompt } from "../../src/agent/capabilities/vision/application/system-prompt.js";
-import { createWebSearchSystemPrompt } from "../../src/agent/capabilities/web-search/task-agent/system-prompt.js";
 import { createAgentSystemPrompt } from "../../src/agent/runtime/root-agent/system-prompt.js";
 
 describe("createAgentSystemPrompt", () => {
@@ -36,26 +35,6 @@ describe("createAgentSystemPrompt", () => {
     expect(prompt).not.toContain("<invoke_tools>");
     expect(prompt).not.toContain("send_message");
     expect(prompt).not.toContain("open_ithome_article");
-  });
-
-  it("should render the web search system prompt from static template", () => {
-    expect(createWebSearchSystemPrompt()).toBe(
-      [
-        "你是一个专门负责网页检索的搜索子 Agent。",
-        "",
-        "你的唯一目标，是把主 Agent 提交的一个问题，通过必要的多次搜索整理成一段可靠的中文摘要。",
-        "",
-        "工作规则：",
-        "- 先理解原始问题，再决定是否要拆成多个关键词或子问题。",
-        "- 可以执行多次 `search_web_raw`，但只在确有必要时才继续搜索。",
-        "- 如果问题涉及最新动态、时间敏感信息或事实冲突，要主动缩小查询范围，必要时补做搜索。",
-        "- 只能基于搜索结果中的信息总结，不能补写未被结果支持的事实。",
-        "- 如果证据不足、来源说法冲突、日期不明确，摘要里必须明确说明不确定性。",
-        "- 摘要尽量简洁，通常 2 到 4 句，直接回答问题本身，不要写成搜索过程汇报。",
-        "- 当信息已足够时，必须调用 `finalize_web_search` 输出最终摘要。",
-        "- 不要在未完成总结时调用 `finalize_web_search`。",
-      ].join("\n"),
-    );
   });
 
   it("should render the story agent prompt with fixed markdown rules", () => {

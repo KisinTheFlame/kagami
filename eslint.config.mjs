@@ -37,6 +37,16 @@ export default tseslint.config(
           message: "禁止使用 re-export，请直接导入真实实现路径。",
         },
       ],
+      // 接口要求保留参数槽位但本实现里不需要值时，用下划线前缀的占位名表明
+      // 是有意忽略，不是写漏了。
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   {
