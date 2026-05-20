@@ -236,20 +236,16 @@ describe("context-message-factory", () => {
   });
 
   it("should render the web search instruction message", () => {
-    expect(createWebSearchInstructionMessage(" OpenAI 最近有什么新动态？ ")).toEqual({
-      role: "user",
-      content: [
-        "<system_instruction>",
-        "你正在继承主 agent 当前上下文，临时执行一次网页检索子任务。",
-        "这次不是群聊发言决策，也不是直接回复群消息；本轮唯一目标是为主 agent 搜集信息，并给回一段可复用的中文摘要。",
-        "你应该基于当前上下文理解这个问题在指什么，再决定搜索策略，而不是把问题孤立地当成一句无上下文文本。",
-        "当前要检索的问题：OpenAI 最近有什么新动态？",
-        "你可以按需把问题拆成多个关键词或子问题，并多次调用 search_web_raw。",
-        "如果信息已经足够，调用 finalize_web_search 输出最终摘要；摘要必须基于检索结果，且在证据不足、结果冲突或时间不明确时明确保留不确定性。",
-        "不要直接输出自由文本回答，不要复述思考过程，只通过工具调用推进本轮任务。",
-        "</system_instruction>",
-      ].join("\n"),
-    });
+    const message = createWebSearchInstructionMessage(" OpenAI 最近有什么新动态？ ");
+    expect(message.role).toBe("user");
+    expect(typeof message.content).toBe("string");
+    const content = message.content as string;
+    expect(content).toContain("<system_instruction>");
+    expect(content).toContain("当前要检索的问题：OpenAI 最近有什么新动态？");
+    // 本轮使用 invoke 调用子工具，不再用顶层 search_web_raw / finalize_web_search。
+    expect(content).toContain('invoke(tool="search_web_raw"');
+    expect(content).toContain('invoke(tool="finalize_web_search"');
+    expect(content).toContain("</system_instruction>");
   });
 
   it("should render qq messages from structured message bodies", () => {

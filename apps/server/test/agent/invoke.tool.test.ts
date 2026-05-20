@@ -19,20 +19,19 @@ function createAgentMessageService() {
 
 /**
  * 测试用 InvokeTool 工厂。模拟 factory 的 owners 装配：
- *   - appOwner：用提供的 AppManager 控制
- *   - stateTreeOwner：catch-all，依赖 ctx 里挂的 mock session 的
- *     getAvailableInvokeTools
+ *   - appOwner：从传入的 AppManager 摊平所有 App tools
+ *   - stateTreeOwner：显式接收状态树工具列表，依赖 ctx 里挂的 mock session 的
+ *     getAvailableInvokeTools 做 gate
  *
- * 如果不传 appManager，默认建一个空的。
+ * App 工具放到 appManager 里；状态树工具走 stateTreeTools。
  */
 function createTestInvokeTool(opts: {
-  tools: ToolComponent[];
+  stateTreeTools?: ToolComponent[];
   appManager?: AppManager;
 }): InvokeTool {
   const appManager = opts.appManager ?? new AppManager();
-  const invokeToolDefinitionByName = new Map(opts.tools.map(t => [t.name, t.llmTool]));
+  const stateTreeTools = opts.stateTreeTools ?? [];
   return new InvokeTool({
-    tools: opts.tools,
     owners: [
       createAppSubtoolOwner({
         appManager,
@@ -46,17 +45,19 @@ function createTestInvokeTool(opts: {
         },
       }),
       createStateTreeSubtoolOwner({
-        appManager,
-        invokeToolDefinitionByName,
+        tools: stateTreeTools,
       }),
     ],
   });
 }
 
 describe("invoke tool", () => {
-  it("should expose flattened invoke parameters", () => {
+  it("should expose minimal invoke parameters that do not depend on subtool list", () => {
+    // 暴露给 LLM 的 schema 只声明 tool 字段，子工具参数走 additionalProperties。
+    // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
+    // 不会让这一份 schema 漂移。
     const tool = createTestInvokeTool({
-      tools: [
+      stateTreeTools: [
         new SendMessageTool({
           agentMessageService: createAgentMessageService(),
         }),
@@ -69,17 +70,10 @@ describe("invoke tool", () => {
       properties: {
         tool: {
           type: "string",
-          description: '要调用的子工具名，例如 "send_message" 或 "open_ithome_article"。',
-        },
-        message: {
-          type: "string",
-          description: "仅 send_message 使用。要发送到当前会话里的文本内容。",
-        },
-        articleId: {
-          type: "number",
-          description: "仅 open_ithome_article 使用。要打开的文章 ID，来自当前 IT 之家文章列表。",
+          description: "要调用的子工具名。",
         },
       },
+      additionalProperties: true,
     });
   });
 
@@ -87,7 +81,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = createTestInvokeTool({
-      tools: [new SendMessageTool({ agentMessageService })],
+      stateTreeTools: [new SendMessageTool({ agentMessageService })],
     });
 
     const result = await tool.execute(
@@ -128,7 +122,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = createTestInvokeTool({
-      tools: [new SendMessageTool({ agentMessageService })],
+      stateTreeTools: [new SendMessageTool({ agentMessageService })],
     });
 
     const result = await tool.execute(
@@ -168,7 +162,7 @@ describe("invoke tool", () => {
   it("should return agent-friendly message when subtool is unavailable in current state", async () => {
     const agentMessageService = createAgentMessageService();
     const tool = createTestInvokeTool({
-      tools: [new SendMessageTool({ agentMessageService }), new OpenIthomeArticleTool()],
+      stateTreeTools: [new SendMessageTool({ agentMessageService }), new OpenIthomeArticleTool()],
     });
 
     const result = await tool.execute(
@@ -208,7 +202,7 @@ describe("invoke tool", () => {
       articleId: 123,
     });
     const tool = createTestInvokeTool({
-      tools: [
+      stateTreeTools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
@@ -245,7 +239,7 @@ describe("invoke tool", () => {
 
   it("should return agent-friendly message when ithome article does not exist", async () => {
     const tool = createTestInvokeTool({
-      tools: [
+      stateTreeTools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
@@ -274,11 +268,12 @@ describe("invoke tool", () => {
       } as Parameters<typeof tool.execute>[1],
     );
 
+    // 子工具执行失败的回带只附 message + 当前子工具 schema（"如何修正这次调用"）。
+    // 不再无脑塞 availableTools 字段——owner.canInvokeNow 分支才管"提示别的可选项"。
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "ARTICLE_NOT_FOUND",
       articleId: 999,
-      availableTools: ["open_ithome_article"],
     });
     expect(JSON.parse(result.content).message).toContain("当前 IT 之家列表中找不到该文章 ID。");
     expect(JSON.parse(result.content).message).toContain("当前子工具说明：");
@@ -288,7 +283,7 @@ describe("invoke tool", () => {
 
   it("should describe available tools when invoke subtool does not exist", async () => {
     const tool = createTestInvokeTool({
-      tools: [
+      stateTreeTools: [
         new SendMessageTool({ agentMessageService: createAgentMessageService() }),
         new OpenIthomeArticleTool(),
       ],
@@ -311,13 +306,17 @@ describe("invoke tool", () => {
       } as Parameters<typeof tool.execute>[1],
     );
 
+    // NOT_FOUND 列出本 InvokeTool 实例所有 owner 拥有的工具全集（不再按 session
+    // 当前状态过滤）。owner-driven 模型下 InvokeTool 本身不再耦合 session 状态，
+    // 状态化的"当前能用"提示走 owner.canInvokeNow → NOT_AVAILABLE 那一支。
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_FOUND",
-      availableTools: ["open_ithome_article"],
+      availableTools: ["send_message", "open_ithome_article"],
     });
     expect(JSON.parse(result.content).message).toContain("invoke 子工具 unknown_tool 不存在。");
-    expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
+    expect(JSON.parse(result.content).message).toContain("当前可用的 invoke 工具说明：");
+    expect(JSON.parse(result.content).message).toContain("`send_message`");
     expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
   });
 
@@ -328,9 +327,7 @@ describe("invoke tool", () => {
     const appManager = new AppManager();
     appManager.register(new CalcApp());
 
-    const calcTool = appManager.getApp("calc")!.tools[0];
     const tool = createTestInvokeTool({
-      tools: [calcTool],
       appManager,
     });
 
@@ -359,9 +356,7 @@ describe("invoke tool", () => {
     const appManager = new AppManager();
     appManager.register(new CalcApp());
 
-    const calcTool = appManager.getApp("calc")!.tools[0];
     const tool = createTestInvokeTool({
-      tools: [calcTool],
       appManager,
     });
 

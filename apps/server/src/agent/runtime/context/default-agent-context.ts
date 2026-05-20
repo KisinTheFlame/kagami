@@ -41,7 +41,6 @@ export class DefaultAgentContext implements AgentContext {
         botQQ: "unknown",
         creatorName: "unknown",
         creatorQQ: "unknown",
-        invokeToolDefinitions: [],
       });
     this.systemPrompt = this.defaultSystemPrompt;
   }

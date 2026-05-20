@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ToolCatalog } from "@kagami/agent-runtime";
 import {
   FINALIZE_WEB_SEARCH_TOOL_NAME,
   FinalizeWebSearchTool,
@@ -7,12 +8,23 @@ import {
   SEARCH_WEB_RAW_TOOL_NAME,
   SearchWebRawTool,
 } from "../../src/agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
+import { createWebSearchSubtoolOwner } from "../../src/agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import { WebSearchTaskAgent as WebSearchAgent } from "../../src/agent/capabilities/web-search/task-agent/web-search-task-agent.js";
 import { createWebSearchInstructionMessage } from "../../src/agent/runtime/context/context-message-factory.js";
+import {
+  InvokeTool,
+  INVOKE_TOOL_NAME,
+} from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 import type { LlmClient } from "../../src/llm/client.js";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
-import { ToolCatalog } from "@kagami/agent-runtime";
 
+/**
+ * 构造一个聚焦于 WebSearchTaskAgent invoke 调度 + 终止判定的最小测试装配。
+ *
+ * 真实工厂里 taskTools 是 8 个顶层工具（7 个 OutOfScopeTool wrapper + 1 个
+ * webSearchInvokeTool），这里只放 invokeTool 一个就够了——本测试只关心 invoke
+ * 这一支的语义，OutOfScope wrapper 是另一类测试的话题。
+ */
 function createWebSearchAgent(params?: {
   chat?: ReturnType<typeof vi.fn>;
   search?: ReturnType<typeof vi.fn>;
@@ -39,20 +51,44 @@ function createWebSearchAgent(params?: {
         ],
       }),
   };
-  const toolCatalog = new ToolCatalog([
-    new SearchWebRawTool({
-      webSearchService,
-    }),
-    new FinalizeWebSearchTool(),
-  ]);
+  const invokeTool = new InvokeTool({
+    owners: [
+      createWebSearchSubtoolOwner({
+        tools: [new SearchWebRawTool({ webSearchService }), new FinalizeWebSearchTool()],
+      }),
+    ],
+  });
+  const toolCatalog = new ToolCatalog([invokeTool]);
 
   return {
     agent: new WebSearchAgent({
       llmClient,
-      searchTools: toolCatalog.pick([SEARCH_WEB_RAW_TOOL_NAME, FINALIZE_WEB_SEARCH_TOOL_NAME]),
+      taskTools: toolCatalog.pick([INVOKE_TOOL_NAME]),
     }),
     chat,
     webSearchService,
+  };
+}
+
+function makeInvokeToolCall(input: {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+}): LlmChatResponsePayload {
+  return {
+    provider: "openai",
+    model: "gpt-4o-mini",
+    message: {
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        {
+          id: input.id,
+          name: INVOKE_TOOL_NAME,
+          arguments: { tool: input.tool, ...input.args },
+        },
+      ],
+    },
   };
 }
 
@@ -60,42 +96,20 @@ describe("WebSearchAgent", () => {
   it("should search once and return the final summary", async () => {
     const chat = vi
       .fn()
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "raw-1",
-              name: SEARCH_WEB_RAW_TOOL_NAME,
-              arguments: {
-                query: "OpenAI 最新新闻",
-                topic: "news",
-                timeRange: "week",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "final-1",
-              name: FINALIZE_WEB_SEARCH_TOOL_NAME,
-              arguments: {
-                summary: "OpenAI 近期有新动态，但具体细节仍需以原始报道为准。",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload);
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "raw-1",
+          tool: SEARCH_WEB_RAW_TOOL_NAME,
+          args: { query: "OpenAI 最新新闻", topic: "news", timeRange: "week" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "final-1",
+          tool: FINALIZE_WEB_SEARCH_TOOL_NAME,
+          args: { summary: "OpenAI 近期有新动态，但具体细节仍需以原始报道为准。" },
+        }),
+      );
     const { agent, webSearchService } = createWebSearchAgent({ chat });
 
     await expect(
@@ -123,10 +137,7 @@ describe("WebSearchAgent", () => {
           createWebSearchInstructionMessage("OpenAI 最近有什么新动态？"),
         ],
         toolChoice: "required",
-        tools: expect.arrayContaining([
-          expect.objectContaining({ name: SEARCH_WEB_RAW_TOOL_NAME }),
-          expect.objectContaining({ name: FINALIZE_WEB_SEARCH_TOOL_NAME }),
-        ]),
+        tools: expect.arrayContaining([expect.objectContaining({ name: INVOKE_TOOL_NAME })]),
       },
       {
         usage: "webSearchAgent",
@@ -138,57 +149,27 @@ describe("WebSearchAgent", () => {
   it("should support multiple searches before finalizing", async () => {
     const chat = vi
       .fn()
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "raw-1",
-              name: SEARCH_WEB_RAW_TOOL_NAME,
-              arguments: {
-                query: "苹果发布会 时间",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "raw-2",
-              name: SEARCH_WEB_RAW_TOOL_NAME,
-              arguments: {
-                query: "苹果发布会 新产品",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "final-1",
-              name: FINALIZE_WEB_SEARCH_TOOL_NAME,
-              arguments: {
-                summary: "苹果发布会时间与新品信息来自不同搜索结果，摘要已综合两次检索。",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload);
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "raw-1",
+          tool: SEARCH_WEB_RAW_TOOL_NAME,
+          args: { query: "苹果发布会 时间" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "raw-2",
+          tool: SEARCH_WEB_RAW_TOOL_NAME,
+          args: { query: "苹果发布会 新产品" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "final-1",
+          tool: FINALIZE_WEB_SEARCH_TOOL_NAME,
+          args: { summary: "苹果发布会时间与新品信息来自不同搜索结果，摘要已综合两次检索。" },
+        }),
+      );
     const search = vi
       .fn()
       .mockResolvedValueOnce({
@@ -221,40 +202,20 @@ describe("WebSearchAgent", () => {
   it("should return uncertainty summary when results are sparse", async () => {
     const chat = vi
       .fn()
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "raw-empty",
-              name: SEARCH_WEB_RAW_TOOL_NAME,
-              arguments: {
-                query: "冷门问题",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload)
-      .mockResolvedValueOnce({
-        provider: "openai",
-        model: "gpt-4o-mini",
-        message: {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: "final-empty",
-              name: FINALIZE_WEB_SEARCH_TOOL_NAME,
-              arguments: {
-                summary: "目前公开搜索结果较少，暂时没有足够证据给出确定结论。",
-              },
-            },
-          ],
-        },
-      } satisfies LlmChatResponsePayload);
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "raw-empty",
+          tool: SEARCH_WEB_RAW_TOOL_NAME,
+          args: { query: "冷门问题" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeInvokeToolCall({
+          id: "final-empty",
+          tool: FINALIZE_WEB_SEARCH_TOOL_NAME,
+          args: { summary: "目前公开搜索结果较少，暂时没有足够证据给出确定结论。" },
+        }),
+      );
     const search = vi.fn().mockResolvedValue({
       query: "冷门问题",
       answer: undefined,

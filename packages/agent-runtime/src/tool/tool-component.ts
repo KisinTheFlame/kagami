@@ -3,6 +3,7 @@ import { z } from "zod";
 export type JsonSchema = {
   type: "object";
   properties: Record<string, unknown>;
+  additionalProperties?: boolean | Record<string, unknown>;
 };
 
 export type ToolDefinition = {

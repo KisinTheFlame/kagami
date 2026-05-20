@@ -32,6 +32,7 @@ import {
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
+  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolLikeMessage,
 } from "./task-agent-runtime.js";
@@ -50,6 +51,7 @@ import {
   type ToolExecutionResult,
   type ToolKind,
 } from "./tool/tool-component.js";
+import { OutOfScopeTool } from "./tool/out-of-scope-tool.js";
 import type { InvokeSubtoolOwner, SubtoolGuardResult } from "./tool/subtool-owner.js";
 
 export {
@@ -60,6 +62,7 @@ export {
   HELP_TOOL_NAME,
   HelpTool,
   InMemoryQueue,
+  OutOfScopeTool,
   ReActKernel,
   SerialExecutor,
   TaskAgentRuntime,
@@ -92,6 +95,7 @@ export {
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
+  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolComponent,
   type ToolContext,
