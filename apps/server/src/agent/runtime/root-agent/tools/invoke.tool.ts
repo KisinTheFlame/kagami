@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { isRecord } from "../../../../common/prisma-json.js";
 import {
-  AppManager,
   ToolCatalog,
+  type InvokeSubtoolOwner,
   type JsonSchema,
   type ToolComponent,
   type ToolContext,
@@ -27,6 +27,13 @@ type InvokeToolContext = ToolContext & {
   rootAgentSession?: RootAgentSessionController;
 };
 
+/**
+ * InvokeTool 不再自己判断"这个工具能不能调"，而是把这件事委派给一个 owner 列表。
+ * 每个 owner 实现 InvokeSubtoolOwner 协议，声明它拥有哪些工具以及在当前 ctx 下
+ * 能不能调。InvokeTool 的主路径就是：找到 owner → 让 owner gate → 执行。
+ *
+ * 设计动机见 packages/agent-runtime/src/tool/subtool-owner.ts 的注释。
+ */
 export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   public readonly name = INVOKE_TOOL_NAME;
   public readonly description =
@@ -37,15 +44,21 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
   private readonly invokeToolSet: ToolExecutor;
   private readonly invokeToolNames: Set<string>;
   private readonly invokeToolDefinitionByName: ReadonlyMap<string, ToolDefinition>;
-  private readonly appManager: AppManager;
+  private readonly owners: readonly InvokeSubtoolOwner[];
 
-  public constructor({ tools, appManager }: { tools: ToolComponent[]; appManager: AppManager }) {
+  public constructor({
+    tools,
+    owners,
+  }: {
+    tools: ToolComponent[];
+    owners: readonly InvokeSubtoolOwner[];
+  }) {
     super();
     this.parameters = buildInvokeParameters(tools);
     this.invokeToolSet = new ToolCatalog(tools).pick(tools.map(tool => tool.name));
     this.invokeToolNames = new Set(tools.map(tool => tool.name));
     this.invokeToolDefinitionByName = new Map(tools.map(tool => [tool.name, tool.llmTool]));
-    this.appManager = appManager;
+    this.owners = owners;
   }
 
   protected async executeTyped(
@@ -64,7 +77,6 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
       };
     }
 
-    const state = rootAgentSession.getState();
     const availableTools = rootAgentSession.getAvailableInvokeTools();
     if (!this.invokeToolNames.has(input.tool)) {
       const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
@@ -82,39 +94,31 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
       };
     }
 
-    // 工具分流：App 工具走 AppManager.canInvoke，非 App 工具走状态树 availableTools
-    // 检查。两个来源不能用同一个 union 列表判，因为 App 工具不在 state.getAvailableInvokeTools()
-    // 视野里。
-    const isAppTool = this.appManager.ownsTool(input.tool);
-    if (isAppTool) {
-      const canInvokeResult = this.appManager.canInvoke(
-        input.tool,
-        rootAgentSession.getCurrentApp(),
-      );
-      if (!canInvokeResult.ok) {
-        return {
-          content: JSON.stringify({
-            ok: false,
-            error: "INVOKE_TOOL_APP_GUARD",
-            tool: input.tool,
-            message: canInvokeResult.reason,
-          }),
-        };
-      }
-    } else if (!availableTools.includes(input.tool as (typeof availableTools)[number])) {
-      const availableToolDefinitions = this.getToolDefinitionsByNames(availableTools);
+    // Owner-driven dispatch：找到拥有该工具的 owner，让 owner 做 gate 决策。
+    const owner = this.owners.find(o => o.ownsTool(input.tool));
+    if (!owner) {
+      // 理论上不会走到这里：tool 已在 invokeToolNames 里，意味着它在 master 列表里，
+      // 而 master 列表里的工具必然被某个 owner 拥有（AppManager.ownsTool 或 catch-all）。
+      // 留一个保护性兜底，方便排查 owners 配置错误。
       return {
         content: JSON.stringify({
           ok: false,
-          error: "INVOKE_TOOL_NOT_AVAILABLE",
+          error: "INVOKE_TOOL_NO_OWNER",
           tool: input.tool,
-          state: state.focusedStateId,
-          message: buildInvokeToolUnavailableMessage({
-            tool: input.tool,
-            state: state.focusedStateId,
-            availableToolDefinitions,
-          }),
-          availableTools,
+          message: `invoke 子工具 ${input.tool} 没有匹配的 owner，这可能是 owners 配置错误。`,
+        }),
+      };
+    }
+
+    const guard = owner.canInvokeNow(input.tool, context);
+    if (!guard.ok) {
+      return {
+        content: JSON.stringify({
+          ok: false,
+          error: guard.error,
+          tool: input.tool,
+          message: guard.message,
+          ...(guard.extras ?? {}),
         }),
       };
     }
@@ -132,7 +136,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     };
   }
 
-  private getToolDefinitionsByNames(toolNames: string[]): ToolDefinition[] {
+  private getToolDefinitionsByNames(toolNames: readonly string[]): ToolDefinition[] {
     return toolNames
       .map(toolName => this.invokeToolDefinitionByName.get(toolName))
       .filter((definition): definition is ToolDefinition => definition !== undefined);
@@ -200,21 +204,10 @@ function buildInvokeToolNotFoundMessage(input: {
   ].join("\n");
 }
 
-function buildInvokeToolUnavailableMessage(input: {
-  tool: string;
-  state: string;
-  availableToolDefinitions: ToolDefinition[];
-}): string {
-  return [
-    `invoke 子工具 ${input.tool} 不能在当前状态 ${input.state} 下调用。`,
-    buildAvailableInvokeToolsDescription(input.availableToolDefinitions),
-  ].join("\n");
-}
-
 function normalizeInvokeFailureContent(input: {
   tool: string;
   content: string;
-  availableTools: string[];
+  availableTools: readonly string[];
   currentToolDefinition?: ToolDefinition;
 }): string {
   try {
