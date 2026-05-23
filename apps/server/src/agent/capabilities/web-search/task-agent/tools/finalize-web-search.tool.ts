@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
+import {
+  TERMINATE_EFFECT_TYPE,
+  ZodToolComponent,
+  type ToolExecutionResult,
+  type ToolKind,
+} from "@kagami/agent-runtime";
 
 export const FINALIZE_WEB_SEARCH_TOOL_NAME = "finalize_web_search";
 
@@ -7,6 +12,10 @@ const FinalizeWebSearchArgumentsSchema = z.object({
   summary: z.string().trim().min(1),
 });
 
+/**
+ * WebSearchTaskAgent 的终止工具。产 `terminate` Effect 让 BaseTaskAgent 退出
+ * invoke 循环；content 是最终摘要，作为 buildResult 入参。
+ */
 export class FinalizeWebSearchTool extends ZodToolComponent<
   typeof FinalizeWebSearchArgumentsSchema
 > {
@@ -30,6 +39,7 @@ export class FinalizeWebSearchTool extends ZodToolComponent<
   ): Promise<ToolExecutionResult> {
     return {
       content: input.summary.trim(),
+      effects: [{ type: TERMINATE_EFFECT_TYPE }],
     };
   }
 }

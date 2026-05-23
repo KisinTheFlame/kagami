@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../../../llm/types.js";
+import type { RootAgentEffect } from "../../../effect/root-agent-effect.js";
 import {
   type RootAgentInvokeToolName,
   type RootAgentState,
@@ -6,7 +6,6 @@ import {
   type RootAgentStateHost,
   type RootAgentStateId,
 } from "../state.types.js";
-import { IthomeState } from "./ithome.state.js";
 import { QqGroupState } from "./qq-group.state.js";
 import { QqPrivateState } from "./qq-private.state.js";
 
@@ -31,7 +30,6 @@ export class PortalState implements RootAgentState {
 
   public async listChildren(): Promise<RootAgentState[]> {
     await this.host.ensureGroupInfosLoaded();
-    await this.host.ensureIthomeFeedStateLoaded();
 
     const children: RootAgentState[] = this.host.groupStates.map(
       groupState => new QqGroupState(this.host, groupState.groupId),
@@ -42,10 +40,6 @@ export class PortalState implements RootAgentState {
       ),
     );
 
-    if (this.host.ithomeNewsService) {
-      children.push(new IthomeState(this.host));
-    }
-
     return children;
   }
 
@@ -53,18 +47,16 @@ export class PortalState implements RootAgentState {
     return [];
   }
 
-  public async onFocus(): Promise<LlmMessage[]> {
+  public async onFocus(): Promise<readonly RootAgentEffect[]> {
     return [];
   }
 
-  public async onBlur(): Promise<LlmMessage[]> {
+  public async onBlur(): Promise<readonly RootAgentEffect[]> {
     return [];
   }
 
   public async handleEvent(): Promise<RootAgentStateHandleEventResult> {
-    return {
-      shouldTriggerRound: false,
-    };
+    return { effects: [] };
   }
 
   public buildNotificationSummary(): string | null {

@@ -3,15 +3,17 @@ import {
   ZodToolComponent,
   type AppManager,
   type ToolContext,
+  type ToolExecutionResult,
   type ToolKind,
 } from "@kagami/agent-runtime";
+import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const ENTER_TOOL_NAME = "enter";
 
 const EnterArgumentsSchema = z.union([
   z.object({
-    kind: z.enum(["qq_group", "qq_private", "ithome"]),
+    kind: z.enum(["qq_group", "qq_private"]),
     id: z.string().trim().min(1).optional(),
   }),
   z.object({
@@ -32,12 +34,12 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
       id: {
         type: "string",
         description:
-          '目标的唯一 ID。可以是状态树节点，例如 "qq_group:123456"、"qq_private:123456" 或 "ithome"；也可以是已注册的 App id，例如 "calc"、"terminal"。',
+          '目标的唯一 ID。可以是状态树节点，例如 "qq_group:123456"、"qq_private:123456"；也可以是已注册的 App id，例如 "calc"、"terminal"、"ithome"。',
       },
       kind: {
         type: "string",
         description:
-          '状态节点的 kind 提示，可选值 "qq_group"、"qq_private"、"ithome"。仅状态树用，App 不需要传 kind，只传 id 即可。',
+          '状态节点的 kind 提示，可选值 "qq_group"、"qq_private"。仅状态树用，App 不需要传 kind，只传 id 即可。',
       },
     },
   } as const;
@@ -54,7 +56,7 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
   protected async executeTyped(
     input: z.infer<typeof EnterArgumentsSchema>,
     context: ToolContext,
-  ): Promise<string> {
+  ): Promise<string | ToolExecutionResult> {
     const rootAgentSession = (context as EnterToolContext).rootAgentSession;
     if (!rootAgentSession) {
       return JSON.stringify({
@@ -85,13 +87,28 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
             message: `你已经在 App "${currentApp}" 里。先 back_to_portal 退出，再进入 "${targetApp.id}"。`,
           });
         }
-        rootAgentSession.setCurrentApp(targetApp.id);
-        return JSON.stringify({
-          ok: true,
-          type: "app",
-          enteredApp: targetApp.id,
-          message: `已进入 ${targetApp.id} App。调用 help 查看可用工具。`,
-        });
+        // 进 App 的副作用走 Effect 模型，通过 ToolExecutionResult.effects 透传：
+        // 1. switch_app 切焦点
+        // 2. 展开 app.onFocus() 拿到的 Effect（通常是 append_message 把"屏幕"
+        //    内容追加到上下文）
+        // 数组顺序 = apply 顺序：switch_app 必须在 append_message 之前，否则
+        //   "屏幕"会出现在切焦点之前。
+        // 实际执行由 RootEffectsApplyExtension 在 onAfterToolExecution 阶段
+        // 调 Interpreter 完成。
+        const onFocusEffects = (await targetApp.onFocus?.()) ?? [];
+        const effects: RootAgentEffect[] = [
+          { type: "switch_app", appId: targetApp.id },
+          ...(onFocusEffects as readonly RootAgentEffect[]),
+        ];
+        return {
+          content: JSON.stringify({
+            ok: true,
+            type: "app",
+            enteredApp: targetApp.id,
+            message: `已进入 ${targetApp.id} App。调用 help 查看可用工具。`,
+          }),
+          effects,
+        };
       }
     }
 

@@ -1,5 +1,8 @@
-import type { LlmMessage } from "../../../../../llm/types.js";
-import { createMergedPrivateMessagesMessage } from "../../../context/context-message-factory.js";
+import {
+  renderMergedPrivateMessagesContent,
+  renderPrivateMessagePlainText,
+} from "../../../context/context-message-factory.js";
+import type { RootAgentEffect } from "../../../effect/root-agent-effect.js";
 import type { Event } from "../../../event/event.js";
 import { createQqPrivateStateId } from "../state-id.js";
 import {
@@ -56,7 +59,7 @@ export class QqPrivateState implements RootAgentState {
     return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_private];
   }
 
-  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
+  public async onFocus(input: { reason: FocusReason }): Promise<readonly RootAgentEffect[]> {
     void input;
     const privateChatState = this.host.privateChatStateByUserId.get(this.userId);
     if (!privateChatState) {
@@ -72,11 +75,11 @@ export class QqPrivateState implements RootAgentState {
     }
 
     privateChatState.markEntered();
-    const hydratedMessage = createMergedPrivateMessagesMessage(hydratedMessages);
-    return hydratedMessage ? [hydratedMessage] : [];
+    const content = renderMergedPrivateMessagesContent(hydratedMessages);
+    return content === null ? [] : [{ type: "append_message", content }];
   }
 
-  public async onBlur(): Promise<LlmMessage[]> {
+  public async onBlur(): Promise<readonly RootAgentEffect[]> {
     return [];
   }
 
@@ -85,9 +88,7 @@ export class QqPrivateState implements RootAgentState {
     isFocused: boolean;
   }): Promise<RootAgentStateHandleEventResult> {
     if (input.event.type !== "napcat_private_message" || input.event.data.userId !== this.userId) {
-      return {
-        shouldTriggerRound: false,
-      };
+      return { effects: [] };
     }
 
     const privateChatState = this.host.ensurePrivateChatState({
@@ -101,14 +102,15 @@ export class QqPrivateState implements RootAgentState {
 
     if (input.isFocused) {
       return {
-        shouldTriggerRound: true,
-        events: [input.event],
+        effects: [
+          { type: "append_message", content: renderPrivateMessagePlainText(input.event.data) },
+        ],
       };
     }
 
     privateChatState.pushUnreadMessage(input.event.data);
     return {
-      shouldTriggerRound: false,
+      effects: [],
       stateChanged: true,
     };
   }

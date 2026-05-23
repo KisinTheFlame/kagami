@@ -3,10 +3,11 @@ import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
   createCrossStateNotificationMessage,
-  createIthomeArticleDetailMessage,
   createStateSystemReminderMessage,
   createStoryRecallMessage,
+  createUserMessage,
 } from "../../context/context-message-factory.js";
+import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 import { NotificationAccumulator } from "../notification/notification-accumulator.js";
 import type { Event } from "../../event/event.js";
 import type {
@@ -16,7 +17,6 @@ import type {
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
-import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
 import { GroupChatState } from "./group-chat-state.js";
 import { PrivateChatState } from "./private-chat-state.js";
 import { normalizePersistedSnapshot } from "./persistence-normalize.js";
@@ -33,13 +33,11 @@ import {
   type RootAgentStateHost,
   type RootAgentStateId,
 } from "./state.types.js";
-import { IthomeState } from "./states/ithome.state.js";
 import { PortalState } from "./states/portal.state.js";
 import { QqGroupState } from "./states/qq-group.state.js";
 import { QqPrivateState } from "./states/qq-private.state.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
-  PersistedRootAgentIthomeFeedState,
   PersistedRootAgentSessionSnapshot,
 } from "../persistence/root-agent-runtime-snapshot.js";
 
@@ -50,7 +48,6 @@ export type RootAgentSessionState = {
 
 export type RootAgentPostToolEffects = {
   messages: LlmMessage[];
-  events: Event[];
 };
 
 export type RootAgentSessionStateView = {
@@ -93,11 +90,10 @@ export type RootAgentSessionController = {
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome";
+          kind: "qq_group" | "qq_private";
           id?: string;
         },
   ): Promise<Record<string, unknown>>;
-  openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>>;
   back(): Promise<Record<string, unknown>>;
   backToPortal?(): Promise<Record<string, unknown>>;
 };
@@ -108,7 +104,6 @@ type RootAgentSessionDeps = {
   listenGroupIds: string[];
   recentMessageLimit: number;
   notificationTimeWindowMs?: number;
-  ithomeNewsService?: Pick<IthomeNewsService, "getFeedOverview" | "enterFeed" | "openArticle">;
   /** App 框架。Portal 渲染时需要枚举已注册 Apps 喂给 reminder 消息。 */
   appManager?: AppManager;
 };
@@ -119,22 +114,15 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
   private readonly context: AgentContext;
   private readonly napcatGatewayService: NapcatGatewayService;
   private readonly recentMessageLimit: number;
-  public readonly ithomeNewsService: Pick<
-    IthomeNewsService,
-    "getFeedOverview" | "enterFeed" | "openArticle"
-  > | null;
   public readonly groupStates: GroupChatState[];
   public readonly groupStateById: Map<string, GroupChatState>;
   public readonly privateChatStates: PrivateChatState[] = [];
   public readonly privateChatStateByUserId = new Map<string, PrivateChatState>();
-  private readonly pendingVisibleEvents: Event[] = [];
   private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
-  private readonly pendingPostToolEvents: Event[] = [];
   private stateStack: RootAgentStateId[] = ["portal"];
   private initialized = false;
   private groupInfoLoaded = false;
-  public ithomeFeedState: PersistedRootAgentIthomeFeedState | null = null;
   private readonly notificationAccumulator: NotificationAccumulator;
   /**
    * App 框架 Phase 1 字段：当前 Kagami 已 enter 的 App id。
@@ -150,13 +138,11 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     listenGroupIds,
     recentMessageLimit,
     notificationTimeWindowMs,
-    ithomeNewsService,
     appManager,
   }: RootAgentSessionDeps) {
     this.context = context;
     this.napcatGatewayService = napcatGatewayService;
     this.recentMessageLimit = recentMessageLimit;
-    this.ithomeNewsService = ithomeNewsService ?? null;
     this.appManager = appManager ?? null;
     this.notificationAccumulator = new NotificationAccumulator({
       timeWindowMs: notificationTimeWindowMs ?? DEFAULT_NOTIFICATION_TIME_WINDOW_MS,
@@ -267,7 +253,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
         unreadMessages: privateChatState.getUnreadMessages(),
         hasEntered: privateChatState.hasEntered(),
       })),
-      ithomeFeedState: this.ithomeFeedState ? { ...this.ithomeFeedState } : null,
     };
   }
 
@@ -314,12 +299,9 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       });
     }
 
-    this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
-    this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
     this.groupInfoLoaded = normalizedSnapshot.groupInfoLoaded;
-    this.ithomeFeedState = normalizedSnapshot.ithomeFeedState;
     this.initialized = true;
     this.stateStack = normalizedSnapshot.stateStack;
     // currentApp 不进 snapshot，重启统一回到 undefined（即 Portal）。
@@ -333,12 +315,9 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     this.privateChatStates.splice(0, this.privateChatStates.length);
     this.privateChatStateByUserId.clear();
 
-    this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
-    this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length);
     this.groupInfoLoaded = false;
-    this.ithomeFeedState = null;
     this.initialized = false;
     this.stateStack = ["portal"];
     this.currentApp = undefined;
@@ -350,7 +329,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     }
 
     await this.ensureGroupInfosLoaded();
-    await this.ensureIthomeFeedStateLoaded();
     await this.context.appendMessages(
       await this.renderFocusMessages(this.getFocusedStateId(), "initialize"),
     );
@@ -395,17 +373,11 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       this.pendingIncomingMessages.push(createCrossStateNotificationMessage(flushedNotifications));
     }
 
-    const shouldTriggerRound =
-      this.pendingIncomingMessages.length > 0 || this.pendingVisibleEvents.length > 0;
+    const shouldTriggerRound = this.pendingIncomingMessages.length > 0;
 
     if (this.pendingIncomingMessages.length > 0) {
       await this.context.appendMessages(this.pendingIncomingMessages);
       this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
-    }
-
-    if (this.pendingVisibleEvents.length > 0) {
-      await this.context.appendEvents(this.pendingVisibleEvents);
-      this.pendingVisibleEvents.splice(0, this.pendingVisibleEvents.length);
     }
 
     return {
@@ -418,7 +390,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
     return {
       messages: this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length),
-      events: this.pendingPostToolEvents.splice(0, this.pendingPostToolEvents.length),
     };
   }
 
@@ -426,7 +397,7 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     input:
       | { id: string }
       | {
-          kind: "qq_group" | "qq_private" | "ithome";
+          kind: "qq_group" | "qq_private";
           id?: string;
         },
   ): Promise<Record<string, unknown>> {
@@ -459,7 +430,9 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       };
     }
 
-    this.pendingPostToolMessages.push(...(await focusedState.onBlur({ reason: "enter_child" })));
+    this.pendingPostToolMessages.push(
+      ...this.effectsToAppendMessages(await focusedState.onBlur({ reason: "enter_child" })),
+    );
     this.stateStack.push(targetState.getId());
     this.notificationAccumulator.clearForState(targetState.getId());
     this.pendingPostToolMessages.push(
@@ -475,56 +448,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     };
   }
 
-  public async openIthomeArticle(input: { articleId: number }): Promise<Record<string, unknown>> {
-    await this.initializeContext();
-
-    if (this.getFocusedStateId() !== "ithome") {
-      return {
-        ok: false,
-        error: "STATE_TRANSITION_NOT_ALLOWED",
-      };
-    }
-
-    if (!this.ithomeNewsService) {
-      return {
-        ok: false,
-        error: "ENTER_TARGET_NOT_AVAILABLE",
-        id: "ithome",
-      };
-    }
-
-    const article = await this.ithomeNewsService.openArticle({
-      articleId: input.articleId,
-    });
-    if (!article) {
-      return {
-        ok: false,
-        error: "ARTICLE_NOT_FOUND",
-        articleId: input.articleId,
-      };
-    }
-
-    this.pendingPostToolMessages.push(
-      createIthomeArticleDetailMessage({
-        title: article.title,
-        url: article.url,
-        publishedAt: article.publishedAt,
-        content: article.content,
-        contentSource: article.contentSource,
-        truncated: article.truncated,
-        maxChars: article.maxChars,
-      }),
-    );
-
-    return {
-      ok: true,
-      kind: "ithome_article",
-      articleId: article.articleId,
-      contentSource: article.contentSource,
-      truncated: article.truncated,
-    };
-  }
-
   public async back(): Promise<Record<string, unknown>> {
     await this.initializeContext();
 
@@ -536,7 +459,9 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     }
 
     const currentState = this.requireState(this.getFocusedStateId());
-    this.pendingPostToolMessages.push(...(await currentState.onBlur({ reason: "back" })));
+    this.pendingPostToolMessages.push(
+      ...this.effectsToAppendMessages(await currentState.onBlur({ reason: "back" })),
+    );
     const exitedStateId = this.stateStack.pop() ?? "portal";
     const resumedStateId = this.getFocusedStateId();
     this.pendingPostToolMessages.push(
@@ -614,20 +539,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     this.groupInfoLoaded = true;
   }
 
-  public async ensureIthomeFeedStateLoaded(): Promise<void> {
-    if (!this.ithomeNewsService || this.ithomeFeedState) {
-      return;
-    }
-
-    const overview = await this.ithomeNewsService.getFeedOverview();
-    this.ithomeFeedState = {
-      kind: "ithome",
-      label: overview.displayName,
-      unreadCount: overview.unreadCount,
-      hasEntered: overview.hasEntered,
-    };
-  }
-
   public syncPrivateChatsFromFriendList(friendList: NapcatFriendInfo[]): void {
     for (const friendInfo of friendList) {
       this.ensurePrivateChatState({
@@ -684,14 +595,13 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       isFocused: focusedStateId === targetStateId,
     });
 
-    if (result.messages && result.messages.length > 0) {
-      this.pendingIncomingMessages.push(...result.messages);
-    }
-    if (result.events && result.events.length > 0) {
-      this.pendingVisibleEvents.push(...result.events);
+    const effectMessages = this.effectsToAppendMessages(result.effects);
+    if (effectMessages.length > 0) {
+      this.pendingIncomingMessages.push(...effectMessages);
     }
 
-    let shouldTriggerRound = result.shouldTriggerRound;
+    // 触发下一轮：state.handleEvent 产了 append_message Effect 就跑。
+    let shouldTriggerRound = effectMessages.length > 0;
 
     if (result.stateChanged) {
       const isFocused = focusedStateId === targetStateId;
@@ -732,7 +642,32 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     reason: "initialize" | "enter" | "resume_back",
   ): Promise<LlmMessage[]> {
     const state = this.requireState(stateId);
-    return [await this.createStateReminderMessage(stateId), ...(await state.onFocus({ reason }))];
+    const focusEffects = await state.onFocus({ reason });
+    return [
+      await this.createStateReminderMessage(stateId),
+      ...this.effectsToAppendMessages(focusEffects),
+    ];
+  }
+
+  /**
+   * 把 state 钩子返回的 Effect[] 转成实际的 LlmMessage[]，由 session 内部 push
+   * 到合适的 pending 收纳箱再走 commit 路径。只处理 `append_message` Effect；
+   * 其他类型（switch_app / switch_state）在 state 钩子上下文里不应出现——
+   * 如果出现说明 state 实现越权，直接抛错。
+   */
+  private effectsToAppendMessages(effects: readonly RootAgentEffect[]): LlmMessage[] {
+    const messages: LlmMessage[] = [];
+    for (const effect of effects) {
+      if (effect.type === "append_message") {
+        messages.push(createUserMessage(effect.content));
+        continue;
+      }
+      throw new Error(
+        `state hook produced unsupported Effect "${effect.type}". ` +
+          `State hooks may only produce "append_message"; switch_* effects belong to enter/back tools.`,
+      );
+    }
+    return messages;
   }
 
   private async createStateReminderMessage(stateId: RootAgentStateId): Promise<LlmMessage> {
@@ -767,10 +702,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       return new PortalState(this);
     }
 
-    if (stateId === "ithome") {
-      return this.ithomeNewsService ? new IthomeState(this) : null;
-    }
-
     const groupId = parseGroupIdFromStateId(stateId);
     if (groupId && this.groupStateById.has(groupId)) {
       return new QqGroupState(this, groupId);
@@ -795,7 +726,9 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
   private resolveEventStateId(event: Event): RootAgentStateId | null {
     if (event.type === "news_article_ingested") {
-      return event.data.sourceKey === "ithome" && this.ithomeNewsService ? "ithome" : null;
+      // news 事件不再走状态树——IthomeApp 自己管 unread 计数（PoC 阶段未实现，
+      // 等通知系统设计成熟后再处理）。这里直接忽略。
+      return null;
     }
 
     if (event.type === "napcat_group_message") {

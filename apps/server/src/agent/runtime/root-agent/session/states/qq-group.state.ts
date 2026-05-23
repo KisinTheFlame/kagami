@@ -1,5 +1,8 @@
-import type { LlmMessage } from "../../../../../llm/types.js";
-import { createMergedGroupMessagesMessage } from "../../../context/context-message-factory.js";
+import {
+  renderGroupMessagePlainText,
+  renderMergedGroupMessagesContent,
+} from "../../../context/context-message-factory.js";
+import type { RootAgentEffect } from "../../../effect/root-agent-effect.js";
 import type { Event } from "../../../event/event.js";
 import { createQqGroupStateId } from "../state-id.js";
 import {
@@ -55,7 +58,7 @@ export class QqGroupState implements RootAgentState {
     return [...ROOT_AGENT_INVOKE_TOOLS_BY_STATE.qq_group];
   }
 
-  public async onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]> {
+  public async onFocus(input: { reason: FocusReason }): Promise<readonly RootAgentEffect[]> {
     void input;
     const groupState = this.host.groupStateById.get(this.groupId);
     if (!groupState) {
@@ -71,11 +74,11 @@ export class QqGroupState implements RootAgentState {
     }
 
     groupState.markEntered();
-    const hydratedMessage = createMergedGroupMessagesMessage(hydratedMessages);
-    return hydratedMessage ? [hydratedMessage] : [];
+    const content = renderMergedGroupMessagesContent(hydratedMessages);
+    return content === null ? [] : [{ type: "append_message", content }];
   }
 
-  public async onBlur(): Promise<LlmMessage[]> {
+  public async onBlur(): Promise<readonly RootAgentEffect[]> {
     return [];
   }
 
@@ -84,28 +87,28 @@ export class QqGroupState implements RootAgentState {
     isFocused: boolean;
   }): Promise<RootAgentStateHandleEventResult> {
     if (input.event.type !== "napcat_group_message" || input.event.data.groupId !== this.groupId) {
-      return {
-        shouldTriggerRound: false,
-      };
+      return { effects: [] };
     }
 
     const groupState = this.host.groupStateById.get(this.groupId);
     if (!groupState) {
-      return {
-        shouldTriggerRound: false,
-      };
+      return { effects: [] };
     }
 
     if (input.isFocused) {
+      // 焦点群：消息渲染追加上下文（一个 append_message Effect）。
       return {
-        shouldTriggerRound: true,
-        events: [input.event],
+        effects: [
+          { type: "append_message", content: renderGroupMessagePlainText(input.event.data) },
+        ],
       };
     }
 
+    // 非焦点群：累积进 state 私有的 unreadMessages，通知 session "我变了"（让
+    // session 决定要不要刷 reminder / 聚合通知）。
     groupState.pushUnreadMessage(input.event.data);
     return {
-      shouldTriggerRound: false,
+      effects: [],
       stateChanged: true,
     };
   }

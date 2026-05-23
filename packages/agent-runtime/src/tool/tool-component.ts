@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Effect } from "../effect.js";
 
 export type JsonSchema = {
   type: "object";
@@ -21,7 +22,14 @@ export type ToolContext<TMessage = unknown> = {
 };
 
 export type ToolExecutionResult = {
+  /** 必返。给 LLM 看的字符串，落到 tool_result 里（ReAct 协议要求每个 tool_call 都跟一个 tool_result）。 */
   content: string;
+  /**
+   * 可选。结构化副作用描述，由 Agent 的 EffectInterpreter 按数组顺序解释。
+   * Effect 是开放接口；具体类型由调用方 Agent 解释。
+   * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
+   */
+  effects?: readonly Effect[];
 };
 
 export interface ToolComponent<TMessage = unknown> {

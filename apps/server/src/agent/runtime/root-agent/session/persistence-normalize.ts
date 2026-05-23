@@ -9,7 +9,6 @@ import {
 import type { RootAgentStateId } from "./state.types.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
-  PersistedRootAgentIthomeFeedState,
   PersistedRootAgentSessionSnapshot,
 } from "../persistence/root-agent-runtime-snapshot.js";
 
@@ -17,7 +16,6 @@ export type NormalizedPersistedSnapshot = {
   stateStack: RootAgentStateId[];
   groups: CurrentPersistedRootAgentSessionSnapshot["groups"];
   privateChats: CurrentPersistedRootAgentSessionSnapshot["privateChats"];
-  ithomeFeedState: PersistedRootAgentIthomeFeedState | null;
   groupInfoLoaded: boolean;
 };
 
@@ -60,7 +58,6 @@ export function normalizePersistedSnapshot(
     stateStack: normalizedStack.length > 0 ? normalizedStack : ["portal"],
     groups: cloneGroupStates(snapshot.groups),
     privateChats: clonePrivateChatStates(snapshot.privateChats),
-    ithomeFeedState: snapshot.ithomeFeedState ? { ...snapshot.ithomeFeedState } : null,
     groupInfoLoaded: snapshot.groups.some(group => group.groupInfo !== null),
   };
 }
@@ -70,8 +67,14 @@ function normalizeStateId(
   groupStateById: ReadonlyMap<string, GroupChatState>,
   knownPrivateUserIds: ReadonlySet<string>,
 ): RootAgentStateId | null {
-  if (stateId === "portal" || stateId === "ithome") {
+  if (stateId === "portal") {
     return stateId;
+  }
+  // 旧 snapshot 里 stateStack 可能有 "ithome"——state tree 时代的焦点状态。
+  // ithome 现在归 IthomeApp 管，状态树没有这个节点了。归一化时丢弃这种值，
+  // 让外层兜底回 ["portal"]。
+  if (stateId === "ithome") {
+    return null;
   }
 
   const groupId = parseGroupIdFromStateId(stateId);

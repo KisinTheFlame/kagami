@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { LlmMessage, LlmToolCall } from "../../src/llm/types.js";
-import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import {
   CONSECUTIVE_WAIT_BLOCK_THRESHOLD,
   WaitTool,
@@ -23,19 +22,8 @@ function userMessage(content = "ping"): LlmMessage {
   return { role: "user", content };
 }
 
-function createWaitTool(): {
-  tool: WaitTool;
-  waitNonEmpty: ReturnType<typeof vi.fn>;
-  enqueue: ReturnType<typeof vi.fn>;
-} {
-  const waitNonEmpty = vi.fn(async () => {});
-  const enqueue = vi.fn();
-  const eventQueue = {
-    waitNonEmpty,
-    enqueue,
-  } as unknown as AgentEventQueue;
-  const tool = new WaitTool({ eventQueue, maxWaitMs: 1_000 });
-  return { tool, waitNonEmpty, enqueue };
+function createWaitTool(): WaitTool {
+  return new WaitTool({ maxWaitMs: 1_000 });
 }
 
 function executeWait(tool: WaitTool, messages: LlmMessage[]): ReturnType<WaitTool["execute"]> {
@@ -120,26 +108,27 @@ describe("WaitTool", () => {
     expect(CONSECUTIVE_WAIT_BLOCK_THRESHOLD).toBe(3);
   });
 
-  it("blocks on eventQueue when no prior wait exists (first wait)", async () => {
-    const { tool, waitNonEmpty } = createWaitTool();
+  it("produces wait_for_event Effect on first wait (no prior wait)", async () => {
+    const tool = createWaitTool();
     const result = await executeWait(tool, []);
-    expect(waitNonEmpty).toHaveBeenCalledOnce();
+    // Effect 模型阶段 6：工具自己不阻塞，产 wait_for_event Effect 让 Interpreter 接管。
+    expect(result.effects).toEqual([{ type: "wait_for_event", maxWaitMs: 1_000 }]);
     expect(result.content).toBe("休息结束了");
   });
 
-  it("blocks on eventQueue on the 2nd consecutive wait", async () => {
-    const { tool, waitNonEmpty } = createWaitTool();
+  it("produces wait_for_event Effect on the 2nd consecutive wait", async () => {
+    const tool = createWaitTool();
     const messages: LlmMessage[] = [
       assistantWith(makeToolCall("wait", "t1")),
       toolResult("t1", "休息结束了"),
     ];
     const result = await executeWait(tool, messages);
-    expect(waitNonEmpty).toHaveBeenCalledOnce();
+    expect(result.effects).toEqual([{ type: "wait_for_event", maxWaitMs: 1_000 }]);
     expect(result.content).toBe("休息结束了");
   });
 
-  it("short-circuits on the 3rd consecutive wait without blocking", async () => {
-    const { tool, waitNonEmpty, enqueue } = createWaitTool();
+  it("short-circuits on the 3rd consecutive wait without producing wait_for_event", async () => {
+    const tool = createWaitTool();
     const messages: LlmMessage[] = [
       assistantWith(makeToolCall("wait", "t1")),
       toolResult("t1", "休息结束了"),
@@ -147,14 +136,14 @@ describe("WaitTool", () => {
       toolResult("t2", "休息结束了"),
     ];
     const result = await executeWait(tool, messages);
-    expect(waitNonEmpty).not.toHaveBeenCalled();
-    expect(enqueue).not.toHaveBeenCalled();
+    // 短路路径：不产 Effect，Interpreter 不接管阻塞，content 直接返提示。
+    expect(result.effects).toBeUndefined();
     expect(result.content).toContain("<wait_blocked>");
     expect(result.content).toContain("3");
   });
 
   it("still short-circuits if waits are interleaved with napcat user messages", async () => {
-    const { tool, waitNonEmpty } = createWaitTool();
+    const tool = createWaitTool();
     const messages: LlmMessage[] = [
       assistantWith(makeToolCall("wait", "t1")),
       toolResult("t1", "休息结束了"),
@@ -164,12 +153,12 @@ describe("WaitTool", () => {
       userMessage("再来一条"),
     ];
     const result = await executeWait(tool, messages);
-    expect(waitNonEmpty).not.toHaveBeenCalled();
+    expect(result.effects).toBeUndefined();
     expect(result.content).toContain("<wait_blocked>");
   });
 
   it("does not short-circuit when a non-wait tool call breaks the streak", async () => {
-    const { tool, waitNonEmpty } = createWaitTool();
+    const tool = createWaitTool();
     const messages: LlmMessage[] = [
       assistantWith(makeToolCall("wait", "t1")),
       toolResult("t1", "休息结束了"),
@@ -179,7 +168,8 @@ describe("WaitTool", () => {
       toolResult("t3", "休息结束了"),
     ];
     const result = await executeWait(tool, messages);
-    expect(waitNonEmpty).toHaveBeenCalledOnce();
+    // streak 中断，连续计数从 0 重新开始。本次 wait 是新的第 1 次。
+    expect(result.effects).toEqual([{ type: "wait_for_event", maxWaitMs: 1_000 }]);
     expect(result.content).toBe("休息结束了");
   });
 });

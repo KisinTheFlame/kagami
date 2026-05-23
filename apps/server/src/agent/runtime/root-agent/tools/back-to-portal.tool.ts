@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent-runtime";
+import {
+  ZodToolComponent,
+  type AppManager,
+  type ToolContext,
+  type ToolExecutionResult,
+  type ToolKind,
+} from "@kagami/agent-runtime";
+import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 import type { RootAgentSessionController } from "../session/root-agent-session.js";
 
 export const BACK_TO_PORTAL_TOOL_NAME = "back_to_portal";
@@ -29,10 +36,17 @@ export class BackToPortalTool extends ZodToolComponent<typeof BackToPortalArgume
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = BackToPortalArgumentsSchema;
 
+  private readonly appManager: AppManager;
+
+  public constructor({ appManager }: { appManager: AppManager }) {
+    super();
+    this.appManager = appManager;
+  }
+
   protected async executeTyped(
     _input: z.infer<typeof BackToPortalArgumentsSchema>,
     context: ToolContext,
-  ): Promise<string> {
+  ): Promise<string | ToolExecutionResult> {
     const rootAgentSession = (context as BackToPortalToolContext).rootAgentSession;
     if (!rootAgentSession) {
       return JSON.stringify({ ok: false, error: "SESSION_UNAVAILABLE" });
@@ -47,11 +61,23 @@ export class BackToPortalTool extends ZodToolComponent<typeof BackToPortalArgume
       });
     }
 
-    rootAgentSession.clearCurrentApp();
-    return JSON.stringify({
-      ok: true,
-      exitedApp: currentApp,
-      message: `已退出 ${currentApp} App，回到桌面。`,
-    });
+    // 退出 App 走 Effect 模型：
+    // 1. 展开当前 App.onBlur() 拿到的 Effect（通常空数组，可能有"再见"屏幕）
+    // 2. switch_app{null} 把 currentApp 置回 undefined
+    // 顺序：先 onBlur（在还认 currentApp 的状态下产 Effect），再 switch。
+    const targetApp = this.appManager.getApp(currentApp);
+    const onBlurEffects = (await targetApp?.onBlur?.()) ?? [];
+    const effects: RootAgentEffect[] = [
+      ...(onBlurEffects as readonly RootAgentEffect[]),
+      { type: "switch_app", appId: null },
+    ];
+    return {
+      content: JSON.stringify({
+        ok: true,
+        exitedApp: currentApp,
+        message: `已退出 ${currentApp} App，回到桌面。`,
+      }),
+      effects,
+    };
   }
 }

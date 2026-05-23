@@ -121,17 +121,6 @@ export type PersistedRootAgentSessionPrivateChatState = z.infer<
   typeof PersistedRootAgentSessionPrivateChatStateSchema
 >;
 
-const PersistedRootAgentIthomeFeedStateSchema = z.object({
-  kind: z.literal("ithome"),
-  label: z.string().min(1),
-  unreadCount: z.number().int().nonnegative(),
-  hasEntered: z.boolean(),
-});
-
-export type PersistedRootAgentIthomeFeedState = z.infer<
-  typeof PersistedRootAgentIthomeFeedStateSchema
->;
-
 export const PersistedRootAgentSessionSnapshotSchema = z.object({
   stateStack: z.array(z.string().min(1)).min(1),
   // Legacy field: the old polling-based design persisted a wait overlay
@@ -140,7 +129,9 @@ export const PersistedRootAgentSessionSnapshotSchema = z.object({
   waitOverlay: z.unknown().optional(),
   groups: z.array(PersistedRootAgentSessionGroupStateSchema),
   privateChats: z.array(PersistedRootAgentSessionPrivateChatStateSchema).default([]),
-  ithomeFeedState: PersistedRootAgentIthomeFeedStateSchema.nullable(),
+  // Legacy field: state tree 时代持久化的 ithome 焦点状态。news 现在归 IthomeApp
+  // 管，unread 不再持久化。接受旧 snapshot 里的字段但反序列化后忽略。
+  ithomeFeedState: z.unknown().optional(),
 });
 
 export type PersistedRootAgentSessionSnapshot = z.infer<
