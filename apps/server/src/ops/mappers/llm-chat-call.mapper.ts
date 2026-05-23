@@ -1,14 +1,18 @@
 import {
-  type LlmChatCallItem,
+  type LlmChatCallDetailResponse,
   type LlmChatCallListResponse,
+  type LlmChatCallSummary,
 } from "@kagami/shared/schemas/llm-chat";
-import type { LlmChatCallItem as LlmChatCallDaoItem } from "../../llm/dao/llm-chat-call.dao.js";
+import type {
+  LlmChatCallItem as LlmChatCallDaoItem,
+  LlmChatCallSummary as LlmChatCallDaoSummary,
+} from "../../llm/dao/llm-chat-call.dao.js";
 
 type MapLlmChatCallListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: LlmChatCallDaoItem[];
+  items: LlmChatCallDaoSummary[];
 };
 
 export function mapLlmChatCallList(input: MapLlmChatCallListInput): LlmChatCallListResponse {
@@ -18,11 +22,11 @@ export function mapLlmChatCallList(input: MapLlmChatCallListInput): LlmChatCallL
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapLlmChatCallItem),
+    items: input.items.map(mapLlmChatCallSummary),
   };
 }
 
-export function mapLlmChatCallItem(item: LlmChatCallDaoItem): LlmChatCallItem {
+export function mapLlmChatCallSummary(item: LlmChatCallDaoSummary): LlmChatCallSummary {
   return {
     id: item.id,
     requestId: item.requestId,
@@ -31,13 +35,19 @@ export function mapLlmChatCallItem(item: LlmChatCallDaoItem): LlmChatCallItem {
     model: item.model,
     extension: item.extension,
     status: item.status,
+    latencyMs: item.latencyMs,
+    createdAt: item.createdAt.toISOString(),
+  };
+}
+
+export function mapLlmChatCallDetail(item: LlmChatCallDaoItem): LlmChatCallDetailResponse {
+  return {
+    ...mapLlmChatCallSummary(item),
     requestPayload: item.requestPayload,
     responsePayload: item.responsePayload,
     nativeRequestPayload: item.nativeRequestPayload,
     nativeResponsePayload: item.nativeResponsePayload,
     error: item.error,
     nativeError: item.nativeError,
-    latencyMs: item.latencyMs,
-    createdAt: item.createdAt.toISOString(),
   };
 }

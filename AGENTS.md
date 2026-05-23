@@ -295,7 +295,7 @@ Agent 相关补充约定：
 - OAuth 与配额管理：`/auth/:provider/status`、`/auth/:provider/login-url`、`/auth/:provider/logout`、`/auth/:provider/refresh`、`/auth/:provider/usage-limits`、`/auth/:provider/usage-trend`
 - LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
 - Napcat 主动发送：`/napcat/group/send`
-- 观测与历史查询：`/app-log/query`、`/llm-chat-call/query`、`/napcat-event/query`、`/napcat-group-message/query`、`/story/query`
+- 观测与历史查询：`/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query`、`/story/query`
 - Agent 状态与指标：`/agent-dashboard/*`、`/metric-chart/*`
 
 ### 前端（`@kagami/web`）

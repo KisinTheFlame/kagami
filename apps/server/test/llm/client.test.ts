@@ -30,6 +30,7 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
   return {
     countByQuery: vi.fn().mockResolvedValue(0),
     listPage: vi.fn().mockResolvedValue([]),
+    findById: vi.fn().mockResolvedValue(null),
     recordSuccess: vi.fn().mockResolvedValue(undefined),
     recordError: vi.fn().mockResolvedValue(undefined),
   };

@@ -2,7 +2,7 @@ import type { LlmProviderId } from "../../common/contracts/llm.js";
 
 export type LlmChatCallStatus = "success" | "failed";
 
-export type LlmChatCallItem = {
+export type LlmChatCallSummary = {
   id: number;
   requestId: string;
   seq: number;
@@ -10,14 +10,17 @@ export type LlmChatCallItem = {
   model: string;
   extension: Record<string, unknown> | null;
   status: LlmChatCallStatus;
+  latencyMs: number | null;
+  createdAt: Date;
+};
+
+export type LlmChatCallItem = LlmChatCallSummary & {
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown> | null;
   nativeRequestPayload: Record<string, unknown> | null;
   nativeResponsePayload: Record<string, unknown> | null;
   error: Record<string, unknown> | null;
   nativeError: Record<string, unknown> | null;
-  latencyMs: number | null;
-  createdAt: Date;
 };
 
 export type QueryLlmChatCallListInput = {
@@ -52,7 +55,8 @@ export type RecordLlmChatCallErrorInput = LlmChatCallBaseInput & {
 
 export interface LlmChatCallDao {
   countByQuery(input: QueryLlmChatCallListInput): Promise<number>;
-  listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]>;
+  listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallSummary[]>;
+  findById(id: number): Promise<LlmChatCallItem | null>;
   recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void>;
   recordError(input: RecordLlmChatCallErrorInput): Promise<void>;
 }
