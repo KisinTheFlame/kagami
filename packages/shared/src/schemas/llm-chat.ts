@@ -129,7 +129,7 @@ export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
 
 export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
 
-export const LlmChatCallItemSchema = z.object({
+export const LlmChatCallSummarySchema = z.object({
   id: z.number().int().positive(),
   requestId: z.string().min(1),
   seq: z.number().int().positive(),
@@ -137,21 +137,31 @@ export const LlmChatCallItemSchema = z.object({
   model: z.string().min(1),
   extension: JsonRecordSchema.nullable(),
   status: LlmChatCallStatusSchema,
+  latencyMs: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+});
+
+export type LlmChatCallSummary = z.infer<typeof LlmChatCallSummarySchema>;
+
+export const LlmChatCallItemSchema = LlmChatCallSummarySchema.extend({
   requestPayload: JsonRecordSchema,
   responsePayload: JsonRecordSchema.nullable(),
   nativeRequestPayload: JsonRecordSchema.nullable(),
   nativeResponsePayload: JsonRecordSchema.nullable(),
   error: JsonRecordSchema.nullable(),
   nativeError: JsonRecordSchema.nullable(),
-  latencyMs: z.number().int().nullable(),
-  createdAt: z.string().datetime(),
 });
 
 export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
 
-export const LlmChatCallListResponseSchema = createPaginatedResponseSchema(LlmChatCallItemSchema);
+export const LlmChatCallListResponseSchema =
+  createPaginatedResponseSchema(LlmChatCallSummarySchema);
 
 export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
+
+export const LlmChatCallDetailResponseSchema = LlmChatCallItemSchema;
+
+export type LlmChatCallDetailResponse = z.infer<typeof LlmChatCallDetailResponseSchema>;
 
 export const LlmProviderOptionSchema = z
   .object({

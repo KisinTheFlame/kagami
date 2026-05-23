@@ -240,6 +240,78 @@ describe("PrismaLlmChatCallDao", () => {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 10,
       skip: 10,
+      select: {
+        id: true,
+        requestId: true,
+        seq: true,
+        provider: true,
+        model: true,
+        extension: true,
+        status: true,
+        latencyMs: true,
+        createdAt: true,
+      },
+    });
+  });
+
+  it("findById should return null when prisma returns null", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const database = {
+      llmChatCall: {
+        findUnique,
+      },
+    } as unknown as Database;
+
+    const dao = new PrismaLlmChatCallDao({ database });
+    const result = await dao.findById(999);
+
+    expect(result).toBeNull();
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: 999 } });
+  });
+
+  it("findById should map full record into LlmChatCallItem", async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      id: 42,
+      requestId: "req-42",
+      seq: 1,
+      provider: "openai",
+      model: "gpt-test",
+      extension: { metadata: { actualModel: "gpt-test-2026-03-17" } },
+      status: "success",
+      requestPayload: { messages: [] },
+      responsePayload: { ok: true },
+      nativeRequestPayload: { native: "req" },
+      nativeResponsePayload: { native: "resp" },
+      error: null,
+      nativeError: null,
+      latencyMs: 17,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
+    });
+    const database = {
+      llmChatCall: {
+        findUnique,
+      },
+    } as unknown as Database;
+
+    const dao = new PrismaLlmChatCallDao({ database });
+    const result = await dao.findById(42);
+
+    expect(result).toEqual({
+      id: 42,
+      requestId: "req-42",
+      seq: 1,
+      provider: "openai",
+      model: "gpt-test",
+      extension: { metadata: { actualModel: "gpt-test-2026-03-17" } },
+      status: "success",
+      requestPayload: { messages: [] },
+      responsePayload: { ok: true },
+      nativeRequestPayload: { native: "req" },
+      nativeResponsePayload: { native: "resp" },
+      error: null,
+      nativeError: null,
+      latencyMs: 17,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
     });
   });
 

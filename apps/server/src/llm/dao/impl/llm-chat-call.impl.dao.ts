@@ -5,6 +5,8 @@ import { AppLogger } from "../../../logger/logger.js";
 import type {
   LlmChatCallItem,
   LlmChatCallDao,
+  LlmChatCallStatus,
+  LlmChatCallSummary,
   QueryLlmChatCallListInput,
   RecordLlmChatCallErrorInput,
   RecordLlmChatCallSuccessInput,
@@ -29,13 +31,24 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
     });
   }
 
-  public async listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallItem[]> {
+  public async listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallSummary[]> {
     const offset = (input.page - 1) * input.pageSize;
     const rows = await this.database.llmChatCall.findMany({
       where: toWhereInput(input),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: input.pageSize,
       skip: offset,
+      select: {
+        id: true,
+        requestId: true,
+        seq: true,
+        provider: true,
+        model: true,
+        extension: true,
+        status: true,
+        latencyMs: true,
+        createdAt: true,
+      },
     });
 
     return rows.map(item => ({
@@ -45,7 +58,28 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       provider: item.provider,
       model: item.model,
       extension: toOptionalJsonRecord(item.extension),
-      status: item.status as LlmChatCallItem["status"],
+      status: item.status as LlmChatCallStatus,
+      latencyMs: item.latencyMs,
+      createdAt: item.createdAt,
+    }));
+  }
+
+  public async findById(id: number): Promise<LlmChatCallItem | null> {
+    const item = await this.database.llmChatCall.findUnique({
+      where: { id },
+    });
+    if (item === null) {
+      return null;
+    }
+
+    return {
+      id: item.id,
+      requestId: item.requestId,
+      seq: item.seq,
+      provider: item.provider,
+      model: item.model,
+      extension: toOptionalJsonRecord(item.extension),
+      status: item.status as LlmChatCallStatus,
       requestPayload: toJsonRecord(item.requestPayload),
       responsePayload: toOptionalJsonRecord(item.responsePayload),
       nativeRequestPayload: toOptionalJsonRecord(item.nativeRequestPayload),
@@ -54,7 +88,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       nativeError: toOptionalJsonRecord(item.nativeError),
       latencyMs: item.latencyMs,
       createdAt: item.createdAt,
-    }));
+    };
   }
 
   public async recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void> {

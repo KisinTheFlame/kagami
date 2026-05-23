@@ -13,6 +13,18 @@ type QueryRouteDef<TQuerySchema extends z.ZodTypeAny, TResponseSchema extends z.
   }) => Promise<z.infer<TResponseSchema>> | z.infer<TResponseSchema>;
 };
 
+type ParamRouteDef<TParamSchema extends z.ZodTypeAny, TResponseSchema extends z.ZodTypeAny> = {
+  app: FastifyInstance;
+  path: string;
+  paramSchema: TParamSchema;
+  responseSchema: TResponseSchema;
+  execute: (params: {
+    params: z.infer<TParamSchema>;
+    request: FastifyRequest;
+    reply: FastifyReply;
+  }) => Promise<z.infer<TResponseSchema>> | z.infer<TResponseSchema>;
+};
+
 type CommandRouteDef<TBodySchema extends z.ZodTypeAny, TResponseSchema extends z.ZodTypeAny> = {
   app: FastifyInstance;
   path: string;
@@ -39,6 +51,23 @@ export function registerQueryRoute<
   app.get(path, async (request, reply) => {
     const query = querySchema.parse(request.query);
     const result = await execute({ query, request, reply });
+    return responseSchema.parse(result);
+  });
+}
+
+export function registerParamRoute<
+  TParamSchema extends z.ZodTypeAny,
+  TResponseSchema extends z.ZodTypeAny,
+>({
+  app,
+  path,
+  paramSchema,
+  responseSchema,
+  execute,
+}: ParamRouteDef<TParamSchema, TResponseSchema>): void {
+  app.get(path, async (request, reply) => {
+    const params = paramSchema.parse(request.params);
+    const result = await execute({ params, request, reply });
     return responseSchema.parse(result);
   });
 }

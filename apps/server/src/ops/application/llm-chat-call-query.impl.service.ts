@@ -1,10 +1,12 @@
 import {
+  type LlmChatCallDetailResponse,
   type LlmChatCallListQuery,
   type LlmChatCallListResponse,
 } from "@kagami/shared/schemas/llm-chat";
 import type { LlmChatCallDao } from "../../llm/dao/llm-chat-call.dao.js";
 import type { LlmChatCallQueryService } from "./llm-chat-call-query.service.js";
-import { mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
+import { mapLlmChatCallDetail, mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
+import { BizError } from "../../common/errors/biz-error.js";
 
 type DefaultLlmChatCallQueryServiceDeps = {
   llmChatCallDao: LlmChatCallDao;
@@ -29,5 +31,21 @@ export class DefaultLlmChatCallQueryService implements LlmChatCallQueryService {
       total,
       items,
     });
+  }
+
+  public async getDetail(id: number): Promise<LlmChatCallDetailResponse> {
+    const item = await this.llmChatCallDao.findById(id);
+    if (item === null) {
+      throw new BizError({
+        message: "LLM 调用记录不存在",
+        meta: {
+          reason: "LLM_CHAT_CALL_NOT_FOUND",
+          id,
+        },
+        statusCode: 404,
+      });
+    }
+
+    return mapLlmChatCallDetail(item);
   }
 }

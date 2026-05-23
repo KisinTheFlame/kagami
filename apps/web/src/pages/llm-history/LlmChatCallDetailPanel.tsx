@@ -1,7 +1,12 @@
-import { type LlmChatCallItem } from "@kagami/shared/schemas/llm-chat";
+import {
+  type LlmChatCallItem,
+  type LlmChatCallStatus,
+  type LlmChatCallSummary,
+} from "@kagami/shared/schemas/llm-chat";
 import { FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +23,22 @@ import {
   type ParsedLlmRequestMessage,
   type ParsedLlmUserContentPart,
 } from "./llm-chat-call-detail-parser";
+import { useLlmChatCallDetail } from "./useLlmChatCallDetail";
 
 type LlmChatCallDetailPanelProps = {
-  item: LlmChatCallItem | null;
+  id: number | null;
+  summary: LlmChatCallSummary | null;
+};
+
+type DetailHeaderInfo = {
+  requestId: string;
+  seq: number;
+  provider: string;
+  model: string;
+  extension: Record<string, unknown> | null;
+  status: LlmChatCallStatus;
+  latencyMs: number | null;
+  createdAt: string;
 };
 
 type InputEntry =
@@ -34,13 +52,16 @@ type InputEntry =
       originalIndex: number;
     };
 
-export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
+export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelProps) {
   const navigate = useNavigate();
   const [inputOrder, setInputOrder] = useState<"asc" | "desc">("desc");
   const [activeCopyPanelKey, setActiveCopyPanelKey] = useState<string | null>(null);
   const [activeCopyItemId, setActiveCopyItemId] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<JsonPanelCopyStatus>("idle");
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailQuery = useLlmChatCallDetail(id);
+  const item: LlmChatCallItem | null = detailQuery.data ?? null;
+  const headerInfo: DetailHeaderInfo | null = item ?? summary;
   const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
   const importDraft = useMemo(() => {
     if (item === null || !parsed?.request) {
@@ -165,7 +186,7 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
     }, 1800);
   }
 
-  if (item === null || parsed === null) {
+  if (id === null) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex flex-1 items-center justify-center px-6">
@@ -175,18 +196,43 @@ export function LlmChatCallDetailPanel({ item }: LlmChatCallDetailPanelProps) {
     );
   }
 
+  if (detailQuery.isError) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex flex-1 items-center justify-center px-6">
+          <p className="text-sm text-destructive">
+            加载详情失败：{getApiErrorMessage(detailQuery.error)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (item === null || parsed === null || headerInfo === null) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex flex-1 items-center justify-center px-6">
+          <p className="text-sm text-muted-foreground">详情加载中…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-5 py-4">
         <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-          <MetaItem label="Request ID" value={item.requestId} mono />
-          <MetaItem label="Attempt Seq" value={`#${item.seq}`} mono />
-          <MetaItem label="Provider" value={item.provider} />
-          <MetaItem label="Model" value={item.model} />
-          <MetaItem label="实际 Model" value={readActualModel(item.extension) ?? "—"} />
-          <MetaItem label="状态" value={toStatusLabel(item.status)} />
-          <MetaItem label="延迟" value={item.latencyMs === null ? "—" : `${item.latencyMs} ms`} />
-          <MetaItem label="时间" value={formatDate(item.createdAt)} />
+          <MetaItem label="Request ID" value={headerInfo.requestId} mono />
+          <MetaItem label="Attempt Seq" value={`#${headerInfo.seq}`} mono />
+          <MetaItem label="Provider" value={headerInfo.provider} />
+          <MetaItem label="Model" value={headerInfo.model} />
+          <MetaItem label="实际 Model" value={readActualModel(headerInfo.extension) ?? "—"} />
+          <MetaItem label="状态" value={toStatusLabel(headerInfo.status)} />
+          <MetaItem
+            label="延迟"
+            value={headerInfo.latencyMs === null ? "—" : `${headerInfo.latencyMs} ms`}
+          />
+          <MetaItem label="时间" value={formatDate(headerInfo.createdAt)} />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -530,7 +576,7 @@ function formatDate(iso: string): string {
   });
 }
 
-function toStatusLabel(status: LlmChatCallItem["status"]): string {
+function toStatusLabel(status: LlmChatCallStatus): string {
   return status === "success" ? "成功" : "失败";
 }
 

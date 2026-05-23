@@ -1,7 +1,7 @@
 import {
   LlmProviderListResponseSchema,
-  type LlmChatCallItem,
   type LlmChatCallStatus,
+  type LlmChatCallSummary,
 } from "@kagami/shared/schemas/llm-chat";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useMemo } from "react";
@@ -29,7 +29,6 @@ import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
-import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallList } from "./useLlmChatCallList";
 
 const PAGE_SIZE = 20;
@@ -90,17 +89,10 @@ export function LlmHistoryPage() {
   }, [formState.provider, providerOptions]);
   const total = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const rows = useMemo(
-    () =>
-      (data?.items ?? []).map(item => ({
-        item,
-        detailParse: parseLlmChatCallDetail(item),
-      })),
-    [data?.items],
-  );
-  const selectedItem = useMemo(
-    () => rows.find(row => row.item.id === selectedId)?.item ?? null,
-    [rows, selectedId],
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const selectedSummary = useMemo(
+    () => items.find(item => item.id === selectedId) ?? null,
+    [items, selectedId],
   );
 
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
@@ -249,14 +241,14 @@ export function LlmHistoryPage() {
                     加载中…
                   </TableCell>
                 </TableRow>
-              ) : rows.length === 0 ? (
+              ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                     暂无数据
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map(({ item, detailParse }) => (
+                items.map(item => (
                   <TableRow
                     key={item.id}
                     data-state={selectedId === item.id ? "selected" : undefined}
@@ -272,11 +264,6 @@ export function LlmHistoryPage() {
                       <Badge variant={item.status === "success" ? "default" : "destructive"}>
                         {toStatusLabel(item.status)}
                       </Badge>
-                      {detailParse.hasSchemaError ? (
-                        <Badge variant="outline" className="ml-2">
-                          解析失败
-                        </Badge>
-                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))
@@ -291,17 +278,16 @@ export function LlmHistoryPage() {
             <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
               加载中…
             </div>
-          ) : rows.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
               暂无数据
             </div>
           ) : (
             <div className="space-y-3">
-              {rows.map(({ item, detailParse }) => (
+              {items.map(item => (
                 <LlmHistoryMobileCard
                   key={item.id}
                   item={item}
-                  hasSchemaError={detailParse.hasSchemaError}
                   isSelected={selectedId === item.id}
                   onClick={() => handleSelectItem(item.id)}
                 />
@@ -310,8 +296,8 @@ export function LlmHistoryPage() {
           )}
         </div>
       }
-      detailPanel={<LlmChatCallDetailPanel item={selectedItem} />}
-      detailTitle={getDetailTitle(selectedItem)}
+      detailPanel={<LlmChatCallDetailPanel id={selectedId} summary={selectedSummary} />}
+      detailTitle={getDetailTitle(selectedSummary)}
       isMobile={isMobile}
       showMobileDetail={showMobileDetail}
       isError={isError}
@@ -388,7 +374,7 @@ function toStatusLabel(status: LlmChatCallStatus): string {
   return status === "success" ? "成功" : "失败";
 }
 
-function getDetailTitle(item: LlmChatCallItem | null): string {
+function getDetailTitle(item: LlmChatCallSummary | null): string {
   if (item === null) {
     return "LLM 调用详情";
   }
@@ -398,12 +384,10 @@ function getDetailTitle(item: LlmChatCallItem | null): string {
 
 function LlmHistoryMobileCard({
   item,
-  hasSchemaError,
   isSelected,
   onClick,
 }: {
-  item: LlmChatCallItem;
-  hasSchemaError: boolean;
+  item: LlmChatCallSummary;
   isSelected: boolean;
   onClick: () => void;
 }) {
@@ -418,7 +402,6 @@ function LlmHistoryMobileCard({
           <Badge variant={item.status === "success" ? "default" : "destructive"}>
             {toStatusLabel(item.status)}
           </Badge>
-          {hasSchemaError ? <Badge variant="outline">解析失败</Badge> : null}
         </div>
       </div>
 
