@@ -9,6 +9,5 @@ build
 coverage
 .DS_Store
 .vscode
-TODOS.md
 apps/server/src/generated/prisma
 .claude/worktrees
