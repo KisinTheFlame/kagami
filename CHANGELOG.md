@@ -9,6 +9,7 @@
 
 ### Changed
 
+- agent: `wait` 工具在连续第 3 次调用时短路返回 `<wait_blocked>` 提醒，不再阻塞事件队列，让 Agent 在长时间无外部事件时被迫跳出空等死循环、转去复盘 story / 读新闻 / 主动发起话题（[#74](https://github.com/KisinTheFlame/kagami/pull/74)）
 - llm-history: 拆分 LLM 调用历史列表 / 详情接口，`/llm-chat-call/query` 列表只返回 summary 字段，新增 `GET /llm-chat-call/:id` 详情接口；前端列表改为按选中 id 单独 fetch detail，降低列表响应体大小（[#72](https://github.com/KisinTheFlame/kagami/pull/72)）
 
 ## 2026-05
