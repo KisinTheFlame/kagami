@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -472,6 +472,20 @@ function resolveConfigPath(): string {
     }
   }
 
+  const worktreeSearchRoots = [
+    process.cwd(),
+    fileURLToPath(new URL("../../../..", import.meta.url)),
+  ];
+  for (const root of worktreeSearchRoots) {
+    const mainRoot = findGitWorktreeMainRoot(root);
+    if (mainRoot) {
+      const candidate = path.join(mainRoot, "config.yaml");
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
   throw new BizError({
     message: "未找到 config.yaml",
     meta: {
@@ -479,4 +493,20 @@ function resolveConfigPath(): string {
       reason: "CONFIG_NOT_FOUND",
     },
   });
+}
+
+function findGitWorktreeMainRoot(repoRoot: string): string | null {
+  const dotGit = path.join(repoRoot, ".git");
+  if (!existsSync(dotGit) || !statSync(dotGit).isFile()) return null;
+
+  const content = readFileSync(dotGit, "utf8");
+  const match = content.match(/^gitdir:\s*(.+)$/m);
+  if (!match) return null;
+
+  const gitDir = path.resolve(repoRoot, match[1].trim());
+  const commondirFile = path.join(gitDir, "commondir");
+  if (!existsSync(commondirFile)) return null;
+
+  const commondirContent = readFileSync(commondirFile, "utf8").trim();
+  return path.dirname(path.resolve(gitDir, commondirContent));
 }
