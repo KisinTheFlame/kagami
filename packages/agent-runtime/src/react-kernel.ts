@@ -1,3 +1,4 @@
+import type { EffectInterpreter } from "./effect.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "./tool/tool-catalog.js";
 import type { ToolContext, ToolDefinition } from "./tool/tool-component.js";
 
@@ -66,12 +67,14 @@ export type ReActRoundResult<
     message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
   },
   TExtensionData = unknown,
+  TControl = never,
 > = {
   completion: TCompletion;
   assistantMessage: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
   toolExecutions: ReActToolExecution<TMessage, TExtensionData>[];
   appendedMessages: TMessage[];
   shouldCommit: boolean;
+  control?: TControl;
 };
 
 export type ReActKernelModelErrorDecision = {
@@ -129,6 +132,14 @@ export interface ReActKernelExtension<
     | void;
 }
 
+/**
+ * 当一轮内某个 tool 的 Interpreter.apply 返了 control 信号后，剩余 tool_call 会
+ * 被跳过执行；kernel 用这段字符串作为占位 tool_result 的 content，维护 ReAct
+ * 协议 "每个 tool_call 必须对应一个 tool_result"。
+ */
+const SKIPPED_TOOL_RESULT_CONTENT =
+  "<skipped>Tool execution skipped because an earlier tool in this round produced a control signal.</skipped>";
+
 export class ReActKernel<
   TMessage extends { role: string },
   TUsage extends string = string,
@@ -138,8 +149,10 @@ export class ReActKernel<
     message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
   },
   TExtensionData = unknown,
+  TControl = never,
 > {
   private readonly model: ReActModel<TMessage, TUsage, TCompletion>;
+  private readonly interpreter: EffectInterpreter<TMessage, TControl>;
   private readonly extensions: ReActKernelExtension<
     TMessage,
     TUsage,
@@ -149,18 +162,30 @@ export class ReActKernel<
 
   public constructor({
     model,
+    interpreter,
     extensions,
   }: {
     model: ReActModel<TMessage, TUsage, TCompletion>;
+    /**
+     * Effect → 系统变更 的翻译器。kernel 每个 tool 跑完后立即把它的 `effects`
+     * 喂给本 interpreter，拿到 `appendedMessages`（走原子提交）和可选的
+     * `control`（透传到 `ReActRoundResult.control`，外层 Agent 用来决定循环
+     * 走向）。
+     *
+     * Effect 是 `ToolExecutionResult` 的一等字段，跟 `content` 平级，kernel
+     * 内置消费它——不再走 extension hook。
+     */
+    interpreter: EffectInterpreter<TMessage, TControl>;
     extensions?: ReActKernelExtension<TMessage, TUsage, TCompletion, TExtensionData>[];
   }) {
     this.model = model;
+    this.interpreter = interpreter;
     this.extensions = extensions ?? [];
   }
 
   public async runRound(
     request: ReActKernelRunRoundInput<TMessage, TUsage>,
-  ): Promise<ReActRoundResult<TMessage, TCompletion, TExtensionData>> {
+  ): Promise<ReActRoundResult<TMessage, TCompletion, TExtensionData, TControl>> {
     for (const extension of this.extensions) {
       await extension.onBeforeModel?.(request);
     }
@@ -220,8 +245,32 @@ export class ReActKernel<
     const toolContext = request.toolContext ?? {};
     const assistantMessage = completion.message;
     const toolContextMessages = [...request.state.messages];
+    let capturedControl: TControl | undefined;
 
     for (const toolCall of assistantMessage.toolCalls) {
+      if (capturedControl !== undefined) {
+        // 已有 control 信号——跳过剩余 tool 执行，给它们造 synthetic tool_result
+        // 维护 ReAct 协议（每个 tool_call 必有对应 tool_result）。
+        const skippedResult: ToolSetExecutionResult = {
+          content: SKIPPED_TOOL_RESULT_CONTENT,
+          kind: "control",
+        };
+        const skippedToolMessages = [
+          {
+            role: "tool",
+            toolCallId: toolCall.id,
+            content: SKIPPED_TOOL_RESULT_CONTENT,
+          } as unknown as Extract<TMessage, { role: "tool" }>,
+        ];
+        appendedMessages.push(...skippedToolMessages);
+        toolExecutions.push({
+          toolCall,
+          result: skippedResult,
+          appendedMessages: skippedToolMessages,
+        });
+        continue;
+      }
+
       for (const extension of this.extensions) {
         await extension.onBeforeToolExecution?.({
           request,
@@ -266,6 +315,15 @@ export class ReActKernel<
             ]
           : [];
 
+      // 内置消费 effects：interpreter 把 effects 翻译成 appendedMessages
+      // （走原子提交）和可选 control（透传到 round result）。effects 原始数据
+      // 仍保留在 toolExecutions[].result.effects 里，谁要扫谁自己扫。
+      const interpretation = await this.interpreter.apply(result.effects ?? []);
+      const interpretedMessages = [...interpretation.appendedMessages];
+      if (interpretation.control !== undefined) {
+        capturedControl = interpretation.control;
+      }
+
       let extensionData: TExtensionData | undefined;
       const extraMessages: TMessage[] = [];
       for (const extension of this.extensions) {
@@ -288,9 +346,9 @@ export class ReActKernel<
         }
       }
 
-      const combinedMessages = [...toolMessages, ...extraMessages];
+      const combinedMessages = [...toolMessages, ...interpretedMessages, ...extraMessages];
       appendedMessages.push(...combinedMessages);
-      toolContextMessages.push(...extraMessages);
+      toolContextMessages.push(...interpretedMessages, ...extraMessages);
       toolExecutions.push({
         toolCall,
         result,
@@ -305,6 +363,7 @@ export class ReActKernel<
       toolExecutions,
       appendedMessages,
       shouldCommit: true,
+      ...(capturedControl !== undefined ? { control: capturedControl } : {}),
     };
   }
 

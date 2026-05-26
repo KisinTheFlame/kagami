@@ -1,4 +1,4 @@
-import { ReActKernel, ToolCatalog } from "@kagami/agent-runtime";
+import { NoopEffectInterpreter, ReActKernel, ToolCatalog } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { BizError } from "../../src/common/errors/biz-error.js";
 import {
@@ -44,6 +44,7 @@ describe("LoopLlmRetryExtension", () => {
             }),
           ),
       },
+      interpreter: new NoopEffectInterpreter<LlmMessage>(),
       extensions: [
         new LoopLlmRetryExtension({
           backoffPolicy,
