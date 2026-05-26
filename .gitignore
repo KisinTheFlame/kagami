@@ -11,3 +11,4 @@ coverage
 .vscode
 apps/server/src/generated/prisma
 .claude/worktrees
+.gstack

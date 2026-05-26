@@ -5,3 +5,4 @@ build
 coverage
 apps/server/src/generated/prisma
 apps/server/static/**/*.hbs
+.gstack
