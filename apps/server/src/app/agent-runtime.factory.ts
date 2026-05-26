@@ -80,6 +80,7 @@ import {
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
+import { ClockApp } from "../agent/apps/clock/clock.app.js";
 
 type BuildAgentRuntimeInput = {
   config: Config;
@@ -199,6 +200,7 @@ export async function buildAgentRuntime({
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeNewsService }));
+  appManager.register(new ClockApp());
   await appManager.startupAll(config.server.apps);
 
   // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
