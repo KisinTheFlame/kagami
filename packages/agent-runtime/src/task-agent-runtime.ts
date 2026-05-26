@@ -1,4 +1,5 @@
 import type { TaskAgent } from "./agent-runtime.js";
+import type { Effect } from "./effect.js";
 import {
   ReActKernel,
   type AssistantLikeMessage,
@@ -24,14 +25,12 @@ export type TaskAgentInvocationState<TMessage extends { role: string }, TUsage e
   usage: TUsage;
 };
 
-/**
- * 判定一次 tool call 是否标志任务完成。
- *
- * 旧版本只能比 toolCall.name（顶层工具名）；新版本下子工具可能埋在 args 里
- * （比如 invoke({tool: "finalize_web_search"}) 这种 dispatcher 形态），需要让
- * task agent 自己定义匹配规则。返回 true 即终止 invoke 循环、走 buildResult。
- */
-export type TaskAgentTerminalPredicate = (toolCall: ReActToolCall) => boolean;
+/** TaskAgent 终止 Effect 的 type 字面量。 */
+export const TERMINATE_EFFECT_TYPE = "terminate";
+
+function isTerminateEffect(effect: Effect): boolean {
+  return effect.type === TERMINATE_EFFECT_TYPE;
+}
 
 export abstract class BaseTaskAgent<
   TInput,
@@ -41,24 +40,26 @@ export abstract class BaseTaskAgent<
 > implements TaskAgent<TInput, TOutput> {
   private readonly kernel: ReActKernel<TMessage, TUsage>;
   private readonly taskTools: ToolExecutor<TMessage>;
-  private readonly terminalToolPredicate: TaskAgentTerminalPredicate;
 
   public constructor({
     kernel,
     model,
     taskTools,
-    terminalToolPredicate,
   }: {
     kernel?: ReActKernel<TMessage, TUsage>;
     model?: TaskAgentModel<TMessage, TUsage>;
     taskTools: ToolExecutor<TMessage>;
-    terminalToolPredicate: TaskAgentTerminalPredicate;
   }) {
     this.kernel = kernel ?? new ReActKernel({ model: model ?? failMissingTaskAgentModel() });
     this.taskTools = taskTools;
-    this.terminalToolPredicate = terminalToolPredicate;
   }
 
+  /**
+   * 一直跑直到某次工具调用返回的 `effects` 数组里包含 `{ type: "terminate" }`。
+   * 该终止工具的 content 字符串作为 buildResult 的入参。
+   *
+   * 设计依据：[docs/effect-model.md](docs/effect-model.md) 场景 2 / 阶段 2。
+   */
   public async invoke(input: TInput): Promise<TOutput> {
     const invocation = await this.createInvocation(input);
     const messages = [...invocation.messages];
@@ -77,10 +78,10 @@ export abstract class BaseTaskAgent<
         messages.push(roundResult.assistantMessage, ...roundResult.appendedMessages);
       }
 
-      // Check if any of the executed tool calls is a terminal tool.
-      // The first terminal hit provides the result content for buildResult.
+      // 找第一个产 terminate Effect 的 tool execution。它的 content 是
+      // buildResult 的入参（通常是 task 的最终输出 summary）。
       const terminalExecution = roundResult.toolExecutions.find(execution =>
-        this.terminalToolPredicate(execution.toolCall),
+        (execution.result.effects ?? []).some(isTerminateEffect),
       );
       if (terminalExecution) {
         return await this.buildResult({

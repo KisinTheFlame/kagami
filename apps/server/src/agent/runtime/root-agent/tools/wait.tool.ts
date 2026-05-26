@@ -6,7 +6,7 @@ import {
   type ToolKind,
 } from "@kagami/agent-runtime";
 import type { LlmMessage } from "../../../../llm/types.js";
-import type { AgentEventQueue } from "../../event/event.queue.js";
+import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 
 export const WAIT_TOOL_NAME = "wait";
 const DEFAULT_MAX_WAIT_MS = 10 * 60 * 1000;
@@ -14,6 +14,19 @@ export const CONSECUTIVE_WAIT_BLOCK_THRESHOLD = 3;
 
 const WaitArgumentsSchema = z.object({});
 
+/**
+ * 暂停当前 Agent 主循环、等待事件。
+ *
+ * 两层逻辑：
+ *
+ * 1. **死循环防御**：扫 `context.messages` 末尾连续 wait 调用数（PR #74）。
+ *    达到阈值就返 `<wait_blocked>` 错误内容，**不产 Effect**——本回合不阻塞，
+ *    Agent 被迫重新决策。
+ * 2. **正常等待（Effect 模型阶段 6）**：返 `wait_for_event` Effect 让
+ *    Interpreter 接管挂起语义。工具自己不阻塞、不持事件队列。
+ *
+ * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 6。
+ */
 export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema, LlmMessage> {
   public readonly name = WAIT_TOOL_NAME;
   public readonly description: string;
@@ -23,18 +36,10 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema, LlmMe
   } as const;
   public readonly kind: ToolKind = "control";
   protected readonly inputSchema = WaitArgumentsSchema;
-  private readonly eventQueue: AgentEventQueue;
   private readonly maxWaitMs: number;
 
-  public constructor({
-    eventQueue,
-    maxWaitMs,
-  }: {
-    eventQueue: AgentEventQueue;
-    maxWaitMs?: number;
-  }) {
+  public constructor({ maxWaitMs }: { maxWaitMs?: number }) {
     super();
-    this.eventQueue = eventQueue;
     this.maxWaitMs = maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
     this.description = `在当前状态进入最多 ${formatWaitDuration(this.maxWaitMs)} 的等待，直到新的外部事件出现或等待自然结束。`;
   }
@@ -45,28 +50,26 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema, LlmMe
   ): Promise<ToolExecutionResult> {
     void _input;
 
-    // ToolContext.messages 在工具执行时只包含本轮 assistant message 之前的历史，
-    // 当前这次 wait 调用本身还没进消息列表。所以连续次数 = 历史尾部 wait 数 + 1。
+    // 死循环防御：context.messages 在工具执行时只包含本轮 assistant message 之前
+    // 的历史，当前这次 wait 调用本身还没进消息列表。所以连续次数 = 历史尾部
+    // wait 数 + 1。
     const trailingWaitCount = countTrailingWaitToolCalls(context.messages ?? []);
     const consecutiveWaitCount = trailingWaitCount + 1;
     if (consecutiveWaitCount >= CONSECUTIVE_WAIT_BLOCK_THRESHOLD) {
+      // 短路：不产 wait_for_event Effect，content 直接给 Agent "请做别的事"提示。
       return {
         content: buildWaitBlockedContent(consecutiveWaitCount),
       };
     }
 
-    const timerHandle = setTimeout(() => {
-      this.eventQueue.enqueue({ type: "wake" });
-    }, this.maxWaitMs);
-
-    try {
-      await this.eventQueue.waitNonEmpty();
-    } finally {
-      clearTimeout(timerHandle);
-    }
-
+    // 正常路径：产 wait_for_event Effect。Interpreter 接管阻塞——本工具不再持
+    // eventQueue、不再 await waitNonEmpty。content 是占位 tool_result（ReAct 协议
+    // 要求每个 tool_call 都跟一个 tool_result）。真正"事件来了"的描述由后续
+    // LoopAgent 主循环消费事件时产出（state.handleEvent → append_message）。
+    const effects: RootAgentEffect[] = [{ type: "wait_for_event", maxWaitMs: this.maxWaitMs }];
     return {
       content: "休息结束了",
+      effects,
     };
   }
 }

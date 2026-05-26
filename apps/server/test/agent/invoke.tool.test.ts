@@ -5,7 +5,6 @@ import {
   type ToolContext,
 } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { OpenIthomeArticleTool } from "../../src/agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 import { createStateTreeSubtoolOwner } from "../../src/agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
@@ -61,7 +60,6 @@ describe("invoke tool", () => {
         new SendMessageTool({
           agentMessageService: createAgentMessageService(),
         }),
-        new OpenIthomeArticleTool(),
       ],
     });
 
@@ -159,134 +157,9 @@ describe("invoke tool", () => {
     });
   });
 
-  it("should return agent-friendly message when subtool is unavailable in current state", async () => {
-    const agentMessageService = createAgentMessageService();
-    const tool = createTestInvokeTool({
-      stateTreeTools: [new SendMessageTool({ agentMessageService }), new OpenIthomeArticleTool()],
-    });
-
-    const result = await tool.execute(
-      {
-        tool: "send_message",
-        message: "hello",
-      },
-      {
-        rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "ithome" as const,
-            stateStack: ["portal", "ithome"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["open_ithome_article"],
-          getCurrentApp: () => undefined,
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
-
-    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "INVOKE_TOOL_NOT_AVAILABLE",
-      availableTools: ["open_ithome_article"],
-    });
-    expect(JSON.parse(result.content).message).toContain("不能在当前状态 ithome 下调用");
-    expect(JSON.parse(result.content).message).toContain("当前状态可用的 invoke 工具说明：");
-    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
-    expect(JSON.parse(result.content).message).toContain("`articleId` (number)");
-  });
-
-  it("should invoke open_ithome_article in ithome state", async () => {
-    const openIthomeArticle = vi.fn().mockResolvedValue({
-      ok: true,
-      kind: "ithome_article",
-      articleId: 123,
-    });
-    const tool = createTestInvokeTool({
-      stateTreeTools: [
-        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new OpenIthomeArticleTool(),
-      ],
-    });
-
-    const result = await tool.execute(
-      {
-        tool: "open_ithome_article",
-        articleId: 123,
-      },
-      {
-        rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "ithome" as const,
-            stateStack: ["portal", "ithome"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["open_ithome_article"],
-          getCurrentApp: () => undefined,
-          openIthomeArticle,
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
-
-    expect(openIthomeArticle).toHaveBeenCalledWith({
-      articleId: 123,
-    });
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      kind: "ithome_article",
-      articleId: 123,
-    });
-  });
-
-  it("should return agent-friendly message when ithome article does not exist", async () => {
-    const tool = createTestInvokeTool({
-      stateTreeTools: [
-        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new OpenIthomeArticleTool(),
-      ],
-    });
-
-    const result = await tool.execute(
-      {
-        tool: "open_ithome_article",
-        articleId: 999,
-      },
-      {
-        rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "ithome" as const,
-            stateStack: ["portal", "ithome"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["open_ithome_article"],
-          getCurrentApp: () => undefined,
-          openIthomeArticle: vi.fn().mockResolvedValue({
-            ok: false,
-            error: "ARTICLE_NOT_FOUND",
-            articleId: 999,
-          }),
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
-
-    // 子工具执行失败的回带只附 message + 当前子工具 schema（"如何修正这次调用"）。
-    // 不再无脑塞 availableTools 字段——owner.canInvokeNow 分支才管"提示别的可选项"。
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "ARTICLE_NOT_FOUND",
-      articleId: 999,
-    });
-    expect(JSON.parse(result.content).message).toContain("当前 IT 之家列表中找不到该文章 ID。");
-    expect(JSON.parse(result.content).message).toContain("当前子工具说明：");
-    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
-    expect(JSON.parse(result.content).message).toContain("`articleId` (number)");
-  });
-
   it("should describe available tools when invoke subtool does not exist", async () => {
     const tool = createTestInvokeTool({
-      stateTreeTools: [
-        new SendMessageTool({ agentMessageService: createAgentMessageService() }),
-        new OpenIthomeArticleTool(),
-      ],
+      stateTreeTools: [new SendMessageTool({ agentMessageService: createAgentMessageService() })],
     });
 
     const result = await tool.execute(
@@ -296,11 +169,11 @@ describe("invoke tool", () => {
       {
         rootAgentSession: {
           getState: () => ({
-            focusedStateId: "ithome" as const,
-            stateStack: ["portal", "ithome"] as const,
+            focusedStateId: "qq_group:group-1" as const,
+            stateStack: ["portal", "qq_group:group-1"] as const,
             waiting: null,
           }),
-          getAvailableInvokeTools: () => ["open_ithome_article"],
+          getAvailableInvokeTools: () => ["send_message"],
           getCurrentApp: () => undefined,
         },
       } as Parameters<typeof tool.execute>[1],
@@ -312,12 +185,11 @@ describe("invoke tool", () => {
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_FOUND",
-      availableTools: ["send_message", "open_ithome_article"],
+      availableTools: ["send_message"],
     });
     expect(JSON.parse(result.content).message).toContain("invoke 子工具 unknown_tool 不存在。");
     expect(JSON.parse(result.content).message).toContain("当前可用的 invoke 工具说明：");
     expect(JSON.parse(result.content).message).toContain("`send_message`");
-    expect(JSON.parse(result.content).message).toContain("`open_ithome_article`");
   });
 
   it("should bypass state-tree availableTools check for App-owned tools", async () => {

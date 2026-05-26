@@ -1,4 +1,5 @@
 import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
+import type { Effect } from "./effect.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
@@ -28,11 +29,11 @@ import {
 import {
   BaseTaskAgent,
   TaskAgentRuntime,
+  TERMINATE_EFFECT_TYPE,
   type AssistantLikeMessage,
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
-  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolLikeMessage,
 } from "./task-agent-runtime.js";
@@ -66,6 +67,7 @@ export {
   ReActKernel,
   SerialExecutor,
   TaskAgentRuntime,
+  TERMINATE_EFFECT_TYPE,
   ToolCatalog,
   ToolSet,
   ZodToolComponent,
@@ -74,6 +76,7 @@ export {
   type AppId,
   type AppStartupContext,
   type CanInvokeResult,
+  type Effect,
   type HelpToolDeps,
   type InvokeSubtoolOwner,
   type SubtoolGuardResult,
@@ -95,7 +98,6 @@ export {
   type TaskAgentInvoker,
   type TaskAgentInvocationState,
   type TaskAgentModel,
-  type TaskAgentTerminalPredicate,
   type TaskAgentToolCall,
   type ToolComponent,
   type ToolContext,

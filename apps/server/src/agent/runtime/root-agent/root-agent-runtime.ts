@@ -46,6 +46,8 @@ import type {
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
+import { RootEffectInterpreter } from "../effect/root-effect-interpreter.js";
+import { RootEffectsApplyExtension } from "./extensions/effects-apply.extension.js";
 import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
@@ -124,6 +126,7 @@ class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
+  private readonly interpreter: RootEffectInterpreter;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
   private readonly contextSummaryOperation?: ContextSummaryLike;
@@ -156,6 +159,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     this.context = context;
     this.eventQueue = eventQueue;
     this.session = session;
+    this.interpreter = new RootEffectInterpreter({ session, context, eventQueue });
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
@@ -361,10 +365,6 @@ class RootAgentHost implements RootAgentExtensionHost {
       if (toolPersistence.postToolEffects.messages.length > 0) {
         await this.context.appendMessages(toolPersistence.postToolEffects.messages);
       }
-
-      if (toolPersistence.postToolEffects.events.length > 0) {
-        await this.context.appendEvents(toolPersistence.postToolEffects.events);
-      }
     }
   }
 
@@ -428,9 +428,13 @@ class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      await this.context.replaceMessages([
-        createConversationSummaryMessage(summary),
-        ...compactionPlan.messagesToKeep,
+      // 阶段 5：compact 通过 Effect 模型收口，不再直接 context.replaceMessages。
+      // Interpreter 是 Agent 状态变更的唯一入口（参见 docs/effect-model.md）。
+      await this.interpreter.applyAll([
+        {
+          type: "replace_messages",
+          messages: [createConversationSummaryMessage(summary), ...compactionPlan.messagesToKeep],
+        },
       ]);
       return true;
     }
@@ -516,6 +520,8 @@ export class RootLoopAgent extends BaseLoopAgent<
     sleep,
     eventQueue,
     loopExtensions,
+    session,
+    context,
     ...rest
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
@@ -523,10 +529,13 @@ export class RootLoopAgent extends BaseLoopAgent<
     const resolvedTools = tools ?? agentTools ?? failMissingTools();
     const host = new RootAgentHost({
       ...rest,
+      context,
+      session,
       eventQueue,
       llmRetryBackoffMs: resolvedRetryBackoffMs,
       sleep: resolvedSleep,
     });
+    const interpreter = new RootEffectInterpreter({ session, context, eventQueue });
     const kernel = new ReActKernel<
       LlmMessage,
       "agent",
@@ -551,6 +560,7 @@ export class RootLoopAgent extends BaseLoopAgent<
         new RootPostToolEffectsExtension({
           host,
         }),
+        new RootEffectsApplyExtension({ interpreter }),
       ],
     });
 

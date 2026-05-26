@@ -53,12 +53,11 @@ describe("enter tool", () => {
     });
   });
 
-  it("should enter App and set currentApp when id matches a registered App", async () => {
+  it("should enter App and emit switch_app effect when id matches a registered App", async () => {
     const appManager = new AppManager();
     appManager.register(createFakeApp("calc"));
     const tool = new EnterTool({ appManager });
 
-    const setCurrentAppCalls: string[] = [];
     const result = await tool.execute({ id: "calc" }, {
       rootAgentSession: {
         enter: async () => {
@@ -66,13 +65,16 @@ describe("enter tool", () => {
         },
         getFocusedStateId: () => "portal",
         getCurrentApp: () => undefined,
-        setCurrentApp: (id: string) => {
-          setCurrentAppCalls.push(id);
+        setCurrentApp: () => {
+          throw new Error("EnterTool must not call setCurrentApp directly; goes through effects");
         },
       },
     } as Parameters<typeof tool.execute>[1]);
 
-    expect(setCurrentAppCalls).toEqual(["calc"]);
+    // Effect 模型下 EnterTool 不直接调 session.setCurrentApp，而是产
+    // switch_app Effect 让 Interpreter 应用。createFakeApp 没有 onFocus，所以
+    // effects 数组只有 switch_app。
+    expect(result.effects).toEqual([{ type: "switch_app", appId: "calc" }]);
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
       type: "app",

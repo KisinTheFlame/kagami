@@ -1,9 +1,7 @@
 import { createWebSearchInstructionMessage } from "../../../runtime/context/context-message-factory.js";
 import { BaseTaskAgent, type TaskAgentInvoker, type ToolExecutor } from "@kagami/agent-runtime";
-import { INVOKE_TOOL_NAME } from "../../../runtime/root-agent/tools/invoke.tool.js";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage } from "../../../../llm/types.js";
-import { FINALIZE_WEB_SEARCH_TOOL_NAME } from "./tools/finalize-web-search.tool.js";
 
 export type WebSearchTaskInput = {
   question: string;
@@ -26,7 +24,8 @@ export type WebSearchAgentInput = WebSearchTaskInput;
  * 意外触动。
  *
  * 终止条件：LLM 调用 invoke({tool:"finalize_web_search", summary:...})，
- * BaseTaskAgent 把 finalize 的 result content 作为最终摘要返回。
+ * FinalizeWebSearchTool 产 `terminate` Effect；BaseTaskAgent 检测到 terminate
+ * 退出循环，把 finalize 的 content 作为 buildResult 入参。
  */
 export class WebSearchTaskAgent
   extends BaseTaskAgent<WebSearchTaskInput, string, LlmMessage, "webSearchAgent">
@@ -42,16 +41,6 @@ export class WebSearchTaskAgent
     super({
       model: llmClient,
       taskTools,
-      // 终止信号现在埋在 invoke 的子工具名里。BaseTaskAgent 检测到这个 tool
-      // call 后会把它的 execute 结果（finalize_web_search 的 summary）当作
-      // buildResult 的 content。
-      terminalToolPredicate: toolCall => {
-        if (toolCall.name !== INVOKE_TOOL_NAME) {
-          return false;
-        }
-        const innerTool = (toolCall.arguments as { tool?: unknown } | undefined)?.tool;
-        return innerTool === FINALIZE_WEB_SEARCH_TOOL_NAME;
-      },
     });
   }
 

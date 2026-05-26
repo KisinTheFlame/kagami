@@ -4,7 +4,6 @@ import type {
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
 import type { LlmMessage } from "../../../../llm/types.js";
-import { createMessagesFromEvent } from "../../context/context-message-factory.js";
 import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-agent-runtime.js";
 import type { RootAgentExtensionHost } from "./extension-host.js";
 
@@ -47,10 +46,7 @@ export class RootPostToolEffectsExtension implements ReActKernelExtension<
     const postToolEffects = await this.host.flushPendingPostToolEffects();
 
     return {
-      appendedMessages: [
-        ...postToolEffects.messages,
-        ...postToolEffects.events.flatMap(createMessagesFromEvent),
-      ],
+      appendedMessages: postToolEffects.messages,
       extensionData: {
         postToolEffects,
       },

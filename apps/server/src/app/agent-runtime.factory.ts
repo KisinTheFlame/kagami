@@ -61,10 +61,10 @@ import {
   SummaryTool,
   SUMMARY_TOOL_NAME,
 } from "../agent/capabilities/context-summary/tools/summary.tool.js";
-import { OpenIthomeArticleTool } from "../agent/capabilities/news/tools/open-ithome-article.tool.js";
 import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/prisma-terminal-state.dao.js";
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
+import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
@@ -198,6 +198,7 @@ export async function buildAgentRuntime({
   const appManager = new AppManager();
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
+  appManager.register(new IthomeApp({ ithomeNewsService }));
   await appManager.startupAll(config.server.apps);
 
   // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
@@ -207,7 +208,6 @@ export async function buildAgentRuntime({
     new SendMessageTool({
       agentMessageService,
     }),
-    new OpenIthomeArticleTool(),
   ];
 
   const agentSystemPromptFactory = async () => {
@@ -233,7 +233,6 @@ export async function buildAgentRuntime({
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     notificationTimeWindowMs: config.server.agent.notificationBatchWindowMs,
-    ithomeNewsService,
     appManager,
   });
   const helpTool = new HelpTool({
@@ -257,9 +256,8 @@ export async function buildAgentRuntime({
   // 字段字节相等，命中 KV cache。
   const enterTool = new EnterTool({ appManager });
   const backTool = new BackTool();
-  const backToPortalTool = new BackToPortalTool();
+  const backToPortalTool = new BackToPortalTool({ appManager });
   const waitTool = new WaitTool({
-    eventQueue,
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
   const mainInvokeTool = new InvokeTool({ owners: mainSubtoolOwners });

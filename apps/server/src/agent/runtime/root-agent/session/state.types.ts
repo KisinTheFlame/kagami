@@ -1,16 +1,14 @@
-import type { LlmMessage } from "../../../../llm/types.js";
 import type {
   NapcatFriendInfo,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
 } from "../../../../napcat/service/napcat-gateway.service.js";
-import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
+import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 import type { Event } from "../../event/event.js";
 import type { GroupChatState } from "./group-chat-state.js";
 import type { PrivateChatState } from "./private-chat-state.js";
-import type { PersistedRootAgentIthomeFeedState } from "../persistence/root-agent-runtime-snapshot.js";
 
-export const ROOT_AGENT_STATIC_STATE_IDS = ["portal", "ithome"] as const;
+export const ROOT_AGENT_STATIC_STATE_IDS = ["portal"] as const;
 export type RootAgentStaticStateId = (typeof ROOT_AGENT_STATIC_STATE_IDS)[number];
 export type RootAgentStateId =
   | RootAgentStaticStateId
@@ -21,7 +19,6 @@ export const ROOT_AGENT_INVOKE_TOOLS_BY_STATE = {
   portal: [],
   qq_group: ["send_message"],
   qq_private: ["send_message"],
-  ithome: ["open_ithome_article"],
 } as const;
 
 export type RootAgentInvokeToolName =
@@ -30,10 +27,18 @@ export type RootAgentInvokeToolName =
 export type FocusReason = "initialize" | "enter" | "resume_back";
 export type BlurReason = "enter_child" | "back";
 
+/**
+ * state.handleEvent 的返回。
+ *
+ * - `effects`：要应用到上下文的 Effect[]（通常是 append_message）。session 在
+ *   合适的时机走 Interpreter 应用。
+ * - `stateChanged`：可选信号——通知 session "我内部私有状态变了"（比如 unread
+ *   计数 ++），session 据此决定要不要刷 reminder、聚合通知。
+ *
+ * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 4。
+ */
 export type RootAgentStateHandleEventResult = {
-  shouldTriggerRound: boolean;
-  messages?: LlmMessage[];
-  events?: Event[];
+  effects: readonly RootAgentEffect[];
   stateChanged?: boolean;
 };
 
@@ -43,8 +48,10 @@ export interface RootAgentState {
   getDescription(): Promise<string>;
   listChildren(): Promise<RootAgentState[]>;
   getAvailableInvokeTools(): RootAgentInvokeToolName[];
-  onFocus(input: { reason: FocusReason }): Promise<LlmMessage[]>;
-  onBlur(input: { reason: BlurReason }): Promise<LlmMessage[]>;
+  /** 焦点切到本 state 时调用。返 Effect[]，由 session 走 Interpreter 应用。 */
+  onFocus(input: { reason: FocusReason }): Promise<readonly RootAgentEffect[]>;
+  /** 焦点离开本 state 时调用。 */
+  onBlur(input: { reason: BlurReason }): Promise<readonly RootAgentEffect[]>;
   handleEvent(input: {
     event: Event;
     isFocused: boolean;
@@ -61,13 +68,7 @@ export interface RootAgentStateHost {
   readonly groupStateById: ReadonlyMap<string, GroupChatState>;
   readonly privateChatStates: readonly PrivateChatState[];
   readonly privateChatStateByUserId: ReadonlyMap<string, PrivateChatState>;
-  readonly ithomeNewsService: Pick<
-    IthomeNewsService,
-    "getFeedOverview" | "enterFeed" | "openArticle"
-  > | null;
-  ithomeFeedState: PersistedRootAgentIthomeFeedState | null;
   ensureGroupInfosLoaded(): Promise<void>;
-  ensureIthomeFeedStateLoaded(): Promise<void>;
   fetchRecentMessages(groupId: string): Promise<NapcatGroupMessageData[]>;
   fetchRecentPrivateMessages(userId: string): Promise<NapcatPrivateMessageData[]>;
   ensurePrivateChatState(input: {

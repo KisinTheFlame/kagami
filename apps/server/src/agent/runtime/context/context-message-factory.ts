@@ -188,7 +188,7 @@ export function createWebSearchInstructionMessage(question: string): UserMessage
   );
 }
 
-export function createIthomeArticleListMessage(input: {
+type IthomeArticleListInput = {
   displayName: string;
   mode: "latest" | "new";
   hiddenNewCount: number;
@@ -199,21 +199,25 @@ export function createIthomeArticleListMessage(input: {
     publishedAt: Date;
     rssSummary: string;
   }>;
-}): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/ithome-article-list.hbs", {
-      displayName: input.displayName,
-      isNewMode: input.mode === "new",
-      hiddenNewCount: input.hiddenNewCount,
-      articles: input.articles.map(article => ({
-        ...article,
-        publishedAtText: formatDateTime(article.publishedAt),
-      })),
-    }),
-  );
+};
+
+export function renderIthomeArticleListContent(input: IthomeArticleListInput): string {
+  return renderServerStaticTemplate(import.meta.url, "context/ithome-article-list.hbs", {
+    displayName: input.displayName,
+    isNewMode: input.mode === "new",
+    hiddenNewCount: input.hiddenNewCount,
+    articles: input.articles.map(article => ({
+      ...article,
+      publishedAtText: formatDateTime(article.publishedAt),
+    })),
+  });
 }
 
-export function createIthomeArticleDetailMessage(input: {
+export function createIthomeArticleListMessage(input: IthomeArticleListInput): UserMessage {
+  return createUserMessage(renderIthomeArticleListContent(input));
+}
+
+type IthomeArticleDetailInput = {
   title: string;
   url: string;
   publishedAt: Date;
@@ -221,18 +225,22 @@ export function createIthomeArticleDetailMessage(input: {
   contentSource: "article_content" | "rss_summary";
   truncated: boolean;
   maxChars: number;
-}): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/ithome-article-detail.hbs", {
-      title: input.title,
-      url: input.url,
-      publishedAtText: formatDateTime(input.publishedAt),
-      content: input.content.trim(),
-      fallbackToSummary: input.contentSource === "rss_summary",
-      truncated: input.truncated,
-      maxChars: input.maxChars,
-    }),
-  );
+};
+
+export function renderIthomeArticleDetailContent(input: IthomeArticleDetailInput): string {
+  return renderServerStaticTemplate(import.meta.url, "context/ithome-article-detail.hbs", {
+    title: input.title,
+    url: input.url,
+    publishedAtText: formatDateTime(input.publishedAt),
+    content: input.content.trim(),
+    fallbackToSummary: input.contentSource === "rss_summary",
+    truncated: input.truncated,
+    maxChars: input.maxChars,
+  });
+}
+
+export function createIthomeArticleDetailMessage(input: IthomeArticleDetailInput): UserMessage {
+  return createUserMessage(renderIthomeArticleDetailContent(input));
 }
 
 export function createMessagesFromEvent(event: Event): UserMessage[] {
@@ -258,16 +266,29 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
   }
 }
 
-export function createMergedGroupMessagesMessage(
+export function renderMergedGroupMessagesContent(
   messages: NapcatGroupMessageData[],
-): UserMessage | null {
+): string | null {
   if (messages.length === 0) {
     return null;
   }
+  return messages.map(message => renderGroupMessagePlainText(message)).join("\n\n");
+}
 
-  return createUserMessage(
-    messages.map(message => renderGroupMessagePlainText(message)).join("\n\n"),
-  );
+export function createMergedGroupMessagesMessage(
+  messages: NapcatGroupMessageData[],
+): UserMessage | null {
+  const content = renderMergedGroupMessagesContent(messages);
+  return content === null ? null : createUserMessage(content);
+}
+
+export function renderMergedPrivateMessagesContent(
+  messages: NapcatPrivateMessageData[],
+): string | null {
+  if (messages.length === 0) {
+    return null;
+  }
+  return messages.map(message => renderPrivateMessagePlainText(message)).join("\n\n");
 }
 
 export function createMergedPrivateMessagesMessage(

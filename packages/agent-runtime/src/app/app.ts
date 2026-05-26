@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { Effect } from "../effect.js";
 import type { ToolComponent } from "../tool/tool-component.js";
 
 /** App 的唯一标识符。 */
@@ -67,6 +68,23 @@ export interface App<TConfig = void> {
 
   /** 进程关停时反向调用一次。App 应在这里清理 timer / 连接。 */
   onShutdown?(): Promise<void>;
+
+  /**
+   * 进入本 App 时调用（焦点切换为本 App）。
+   *
+   * 返回的 Effect[] 由 root agent 的 EffectInterpreter 解释执行——通常包含
+   * 一个 `append_message` Effect，把 App 进入时要展示的"屏幕"内容追加到上下文
+   * 尾部。
+   *
+   * 由 EnterTool 在 switch_app Effect 之后展开调用：EnterTool 会先产
+   * switch_app Effect 切焦点、再调本钩子拿 Effect[] 拼进自己的 effects 列表。
+   *
+   * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
+   */
+  onFocus?(): Promise<readonly Effect[]>;
+
+  /** 离开本 App 时调用（焦点切到桌面或其他 App）。 */
+  onBlur?(): Promise<readonly Effect[]>;
 }
 
 /** App.onStartup 的入参，目前只含解析后的配置。未来可能扩展（logger / 共享服务等）。 */

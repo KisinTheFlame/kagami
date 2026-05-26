@@ -90,10 +90,6 @@ async function applyPostToolEffects(
   if (effects.messages.length > 0) {
     await context.appendMessages(effects.messages);
   }
-
-  if (effects.events.length > 0) {
-    await context.appendEvents(effects.events);
-  }
 }
 
 function createSession({
@@ -109,7 +105,6 @@ function createSession({
   getRecentGroupMessages = vi.fn().mockResolvedValue([]),
   getRecentPrivateMessages = vi.fn().mockResolvedValue([]),
   getFriendList = vi.fn().mockResolvedValue([]),
-  ithomeNewsService,
   notificationTimeWindowMs,
 }: {
   context: DefaultAgentContext;
@@ -118,37 +113,6 @@ function createSession({
   getRecentPrivateMessages?: ReturnType<typeof vi.fn>;
   getFriendList?: ReturnType<typeof vi.fn>;
   notificationTimeWindowMs?: number;
-  ithomeNewsService?: {
-    getFeedOverview(): Promise<{
-      sourceKey: "ithome";
-      displayName: string;
-      unreadCount: number;
-      hasEntered: boolean;
-    }>;
-    enterFeed(): Promise<{
-      sourceKey: "ithome";
-      displayName: string;
-      mode: "latest" | "new";
-      hiddenNewCount: number;
-      articles: Array<{
-        id: number;
-        title: string;
-        url: string;
-        publishedAt: Date;
-        rssSummary: string;
-      }>;
-    }>;
-    openArticle(input: { articleId: number }): Promise<{
-      articleId: number;
-      title: string;
-      url: string;
-      publishedAt: Date;
-      content: string;
-      contentSource: "article_content" | "rss_summary";
-      truncated: boolean;
-      maxChars: number;
-    } | null>;
-  };
 }) {
   return new RootAgentSession({
     context,
@@ -165,7 +129,6 @@ function createSession({
     listenGroupIds: ["group-1", "group-2"],
     recentMessageLimit: 2,
     notificationTimeWindowMs,
-    ithomeNewsService,
   });
 }
 
@@ -377,7 +340,6 @@ describe("RootAgentSession", () => {
         },
       ],
       privateChats: [],
-      ithomeFeedState: null,
     } as never);
 
     expect(session.getState()).toEqual({
@@ -395,33 +357,7 @@ describe("RootAgentSession", () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
-    const session = createSession({
-      context,
-      ithomeNewsService: {
-        getFeedOverview: vi.fn().mockResolvedValue({
-          sourceKey: "ithome",
-          displayName: "IT之家",
-          unreadCount: 1,
-          hasEntered: false,
-        }),
-        enterFeed: vi.fn().mockResolvedValue({
-          sourceKey: "ithome",
-          displayName: "IT之家",
-          mode: "new",
-          hiddenNewCount: 0,
-          articles: [
-            {
-              id: 1,
-              title: "测试文章",
-              url: "https://www.ithome.com/1.htm",
-              publishedAt: new Date("2026-03-30T04:21:03.000Z"),
-              rssSummary: "文章摘要",
-            },
-          ],
-        }),
-        openArticle: vi.fn().mockResolvedValue(null),
-      },
-    });
+    const session = createSession({ context });
 
     await session.initializeContext();
     const dashboard = await session.getStateView();
@@ -432,9 +368,6 @@ describe("RootAgentSession", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "qq_group:group-1",
-        }),
-        expect.objectContaining({
-          id: "ithome",
         }),
       ]),
     );
