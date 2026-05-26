@@ -317,7 +317,7 @@ class RootAgentHost implements RootAgentExtensionHost {
   public async appendWakeReminderIfNeeded(): Promise<void> {
     const now = this.now();
     await this.mutationExecutor.submit(async () => {
-      if (isSameWakeReminderMinute(this.lastWakeReminderAt, now)) {
+      if (isSameWakeReminderBucket(this.lastWakeReminderAt, now)) {
         return;
       }
 
@@ -726,15 +726,15 @@ function shouldPersistAssistantMessage(message: AssistantMessage): boolean {
   return message.content.trim().length > 0 || message.toolCalls.length > 0;
 }
 
-function isSameWakeReminderMinute(previous: Date | null, current: Date): boolean {
+function isSameWakeReminderBucket(previous: Date | null, current: Date): boolean {
   if (previous === null) {
     return false;
   }
 
-  return createWakeReminderMinuteKey(previous) === createWakeReminderMinuteKey(current);
+  return createWakeReminderBucketKey(previous) === createWakeReminderBucketKey(current);
 }
 
-function createWakeReminderMinuteKey(now: Date): string {
+function createWakeReminderBucketKey(now: Date): string {
   const parts = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
@@ -746,7 +746,10 @@ function createWakeReminderMinuteKey(now: Date): string {
   }).formatToParts(now);
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
 
-  return [values.year, values.month, values.day, values.hour, values.minute].join("-");
+  const minuteNumber = Number.parseInt(values.minute, 10);
+  const bucketedMinute = minuteNumber < 30 ? "00" : "30";
+
+  return [values.year, values.month, values.day, values.hour, bucketedMinute].join("-");
 }
 
 function cloneDate(value: Date | null): Date | null {
