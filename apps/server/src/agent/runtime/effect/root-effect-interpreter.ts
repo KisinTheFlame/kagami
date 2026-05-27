@@ -1,3 +1,4 @@
+import type { EffectInterpreter, EffectInterpreterResult } from "@kagami/agent-runtime";
 import type { AgentContext } from "../context/agent-context.js";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
@@ -19,29 +20,28 @@ type WakeEvent = Extract<Event, { type: "wake" }>;
  * 切换、focused state 切换——都通过这里 apply。
  *
  * apply 的语义分两类：
- * - **即时副作用**：switch_app / switch_state 直接改 session 内部状态（currentApp、
- *   stateStack）。返回空数组。
- * - **延迟追加**：append_message 不直接 context.appendMessages（避免和 ReAct
- *   kernel 的 commit 流程冲突），而是把要追加的 LlmMessage 返出去，由调用方
- *   （通常是 RootEffectsApplyExtension）走 kernel 的 appendedMessages 协议
- *   commit。
+ * - **即时副作用**：switch_app / switch_state / replace_messages / wait_for_event
+ *   直接改 session 内部状态或 context、或阻塞 await 事件队列。
+ * - **延迟追加**：append_message 不直接 `context.appendMessages`，而是把要追加的
+ *   `LlmMessage` 收集到返回值的 `appendedMessages` 里，由 ReAct kernel 的原子
+ *   commit 流程走。
  *
  * 这种"即时改 session / 延迟追加 message"的不对称是 KV 缓存友好的：message 追加
  * 必须经过 kernel 的原子 commit 才能保证一轮内消息顺序一致；session 字段变更
  * 与消息流无关，可以即时。
  *
- * 产出方包括：
- * - 工具 execute()（通过 ToolExecutionResult.effects 透传）
- * - App.onFocus / onBlur 钩子（由 EnterTool / BackToPortalTool 展开后塞进自己的
- *   effects 列表）
- * - state.handleEvent（未来阶段 4）
- * - LoopAgent extension（如未来阶段 5 的 ContextCompactionExtension）
+ * 调用方包括：
+ * - **kernel 内置消费**：每个工具跑完后立即调本类（由 kernel 拿到 `effects` 喂入）。
+ * - **host 直接调用**：`RootAgentHost.compactContextIfNeeded` 在 context 压缩
+ *   完成后产 `replace_messages` Effect 自己调本类。host 调时不期待 control 信号，
+ *   不期待 appendedMessages（replace_messages 不产追加消息）。
  *
- * 不管哪类产出方，最终都调本类的 apply。
+ * RootAgent 不产生 control 信号（`TControl=never`）——它的循环退出由事件队列 +
+ * idle 状态决定，不由工具决定。
  *
  * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
-export class RootEffectInterpreter {
+export class RootEffectInterpreter implements EffectInterpreter<LlmMessage, never> {
   private readonly session: InterpreterSession;
   private readonly context: AgentContext;
   private readonly eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">;
@@ -61,13 +61,29 @@ export class RootEffectInterpreter {
   }
 
   /**
+   * 按数组顺序逐个处理 Effect。中间某个 Effect 抛错时停止，已 apply 的不回滚。
+   *
+   * 返 `{ appendedMessages }`——所有 `append_message` 产出的 LlmMessage 顺序累积。
+   * RootAgent 永远不产 control，返回值的 `control` 字段缺省。
+   */
+  public async apply(
+    effects: readonly RootAgentEffect[],
+  ): Promise<EffectInterpreterResult<LlmMessage, never>> {
+    const appended: LlmMessage[] = [];
+    for (const effect of effects) {
+      appended.push(...(await this.applySingle(effect)));
+    }
+    return { appendedMessages: appended };
+  }
+
+  /**
    * 按 Effect 联合的 type 字段分发到具体处理逻辑。遇到不认识的 type 直接抛错
    * （不静默丢弃，避免业务上"以为生效了实际上没生效"）。
    *
    * 返回值：本次 apply 累积要追加到上下文的 LlmMessage[]（switch_* 这种即时
    * 变更返空数组）。
    */
-  public async apply(effect: RootAgentEffect): Promise<LlmMessage[]> {
+  private async applySingle(effect: RootAgentEffect): Promise<LlmMessage[]> {
     switch (effect.type) {
       case "append_message":
         return [createUserMessage(effect.content)];
@@ -101,18 +117,6 @@ export class RootEffectInterpreter {
         );
       }
     }
-  }
-
-  /**
-   * 按数组顺序逐个 apply，累积返回所有 append_message 产出的消息。中间某个
-   * Effect 抛错时停止，已 apply 的不回滚。
-   */
-  public async applyAll(effects: readonly RootAgentEffect[]): Promise<LlmMessage[]> {
-    const collected: LlmMessage[] = [];
-    for (const effect of effects) {
-      collected.push(...(await this.apply(effect)));
-    }
-    return collected;
   }
 
   /**

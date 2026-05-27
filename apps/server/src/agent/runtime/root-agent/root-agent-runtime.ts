@@ -47,7 +47,6 @@ import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
 import { RootEffectInterpreter } from "../effect/root-effect-interpreter.js";
-import { RootEffectsApplyExtension } from "./extensions/effects-apply.extension.js";
 import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
@@ -145,6 +144,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     context,
     eventQueue,
     session,
+    interpreter,
     snapshotRepository,
     runtimeKey,
     contextSummaryOperation,
@@ -155,11 +155,15 @@ class RootAgentHost implements RootAgentExtensionHost {
     llmRetryBackoffMs,
     now,
     sleep,
-  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools">) {
+  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools"> & {
+    interpreter: RootEffectInterpreter;
+  }) {
     this.context = context;
     this.eventQueue = eventQueue;
     this.session = session;
-    this.interpreter = new RootEffectInterpreter({ session, context, eventQueue });
+    // 由外层 RootAgentRuntime 构造时一次性 new，host 和 kernel 共享同一实例
+    // （PR #75 PoC 妥协 #2 解决）。
+    this.interpreter = interpreter;
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
     this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
@@ -430,7 +434,8 @@ class RootAgentHost implements RootAgentExtensionHost {
 
       // 阶段 5：compact 通过 Effect 模型收口，不再直接 context.replaceMessages。
       // Interpreter 是 Agent 状态变更的唯一入口（参见 docs/effect-model.md）。
-      await this.interpreter.applyAll([
+      // 不消费 appendedMessages——replace_messages Effect 不产追加消息。
+      await this.interpreter.apply([
         {
           type: "replace_messages",
           messages: [createConversationSummaryMessage(summary), ...compactionPlan.messagesToKeep],
@@ -527,15 +532,18 @@ export class RootLoopAgent extends BaseLoopAgent<
     const resolvedSleep = sleep ?? createSleep;
     const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     const resolvedTools = tools ?? agentTools ?? failMissingTools();
+    // 单例 Interpreter：host（compactContextIfNeeded 直接调）和 kernel（每个工具
+    // 跑完后内置消费 effects）共享。Interpreter 无状态，但语义上应该同一个。
+    const interpreter = new RootEffectInterpreter({ session, context, eventQueue });
     const host = new RootAgentHost({
       ...rest,
       context,
       session,
       eventQueue,
+      interpreter,
       llmRetryBackoffMs: resolvedRetryBackoffMs,
       sleep: resolvedSleep,
     });
-    const interpreter = new RootEffectInterpreter({ session, context, eventQueue });
     const kernel = new ReActKernel<
       LlmMessage,
       "agent",
@@ -543,6 +551,7 @@ export class RootLoopAgent extends BaseLoopAgent<
       RootAgentToolExecutionData
     >({
       model: llmClient,
+      interpreter,
       extensions: [
         new LoopLlmRetryExtension({
           backoffPolicy: new FixedRetryBackoffPolicy(resolvedRetryBackoffMs),
@@ -560,7 +569,6 @@ export class RootLoopAgent extends BaseLoopAgent<
         new RootPostToolEffectsExtension({
           host,
         }),
-        new RootEffectsApplyExtension({ interpreter }),
       ],
     });
 

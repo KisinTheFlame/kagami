@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   TERMINATE_EFFECT_TYPE,
   ZodToolComponent,
+  type TerminateEffect,
   type ToolExecutionResult,
   type ToolKind,
 } from "@kagami/agent-runtime";
@@ -37,9 +38,13 @@ export class FinalizeWebSearchTool extends ZodToolComponent<
   protected async executeTyped(
     input: z.infer<typeof FinalizeWebSearchArgumentsSchema>,
   ): Promise<ToolExecutionResult> {
+    const summary = input.summary.trim();
+    // terminate Effect 自描述：把 summary 携带在 Effect 字段里，TaskEffectInterpreter
+    // 直接从 Effect 拿（不依赖 tool.result.content）。
+    const terminate: TerminateEffect = { type: TERMINATE_EFFECT_TYPE, content: summary };
     return {
-      content: input.summary.trim(),
-      effects: [{ type: TERMINATE_EFFECT_TYPE }],
+      content: summary,
+      effects: [terminate],
     };
   }
 }

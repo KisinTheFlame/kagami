@@ -1,5 +1,6 @@
 import {
   BaseLoopAgent,
+  NoopEffectInterpreter,
   type Queue,
   ReActKernel,
   type ReActKernelRunRoundInput,
@@ -121,6 +122,9 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
 
     const kernel = new ReActKernel<LlmMessage, "storyAgent", StoryCompletion>({
       model: llmClient,
+      // Story 工具集不产 Effect——显式 noop interpreter 表达 "这条路径不处理 effects"，
+      // 任何意外产生的 effects 会触发 noop 的 throw，便于发现 bug。
+      interpreter: new NoopEffectInterpreter<LlmMessage>(),
       extensions: [
         new StoryToolCallMetricKernelExtension({ metricService: resolvedMetricService }),
         new LoopLlmRetryExtension({
