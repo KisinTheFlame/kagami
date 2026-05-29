@@ -601,21 +601,10 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     }
 
     // 触发下一轮：state.handleEvent 产了 append_message Effect 就跑。
-    let shouldTriggerRound = effectMessages.length > 0;
+    const shouldTriggerRound = effectMessages.length > 0;
 
     if (result.stateChanged) {
       const isFocused = focusedStateId === targetStateId;
-      const focusedState = this.requireState(focusedStateId);
-      const needsReminderRefresh =
-        isFocused ||
-        (await this.hasDescendantState({
-          state: focusedState,
-          targetStateId,
-        }));
-      if (needsReminderRefresh) {
-        this.pendingIncomingMessages.push(await this.createStateReminderMessage(focusedStateId));
-        shouldTriggerRound = true;
-      }
 
       // Push cross-state notification for non-focused state changes.
       // Skip when focused on portal (portal reminder already shows unread).
@@ -754,28 +743,5 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
       },
     });
     return createQqPrivateStateId(privateChatState.userId);
-  }
-
-  private async hasDescendantState(input: {
-    state: RootAgentState;
-    targetStateId: RootAgentStateId;
-  }): Promise<boolean> {
-    const children = await input.state.listChildren();
-    for (const child of children) {
-      if (child.getId() === input.targetStateId) {
-        return true;
-      }
-
-      if (
-        (await this.hasDescendantState({
-          state: child,
-          targetStateId: input.targetStateId,
-        })) === true
-      ) {
-        return true;
-      }
-    }
-
-    return false;
   }
 }
