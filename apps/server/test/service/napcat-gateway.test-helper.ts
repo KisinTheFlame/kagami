@@ -115,6 +115,7 @@ export function createConfigManager(): ConfigManager {
             },
           },
           recall: {
+            enabled: true,
             topK: 2,
             scoreThreshold: 0.65,
           },

@@ -12,6 +12,7 @@ import { createStateTreeSubtoolOwner } from "../agent/runtime/root-agent/tools/s
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
+import { AppLogger } from "../logger/logger.js";
 import type { LlmClient } from "../llm/client.js";
 import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
@@ -81,6 +82,8 @@ import {
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
+
+const logger = new AppLogger({ source: "agent.runtime-factory" });
 
 type BuildAgentRuntimeInput = {
   config: Config;
@@ -374,18 +377,26 @@ export async function buildAgentRuntime({
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     eventQueue: storyEventQueue,
   });
-  const storyRecallScheduler = new StoryRecallScheduler({
-    llmClient,
-    storyRecallService,
-    agentContext: context,
-    eventQueue,
-    availableTools: rootAgentTools.definitions(),
-    topK: config.server.agent.story.recall.topK,
-    scoreThreshold: config.server.agent.story.recall.scoreThreshold,
-  });
-  const storyRecallExtension = new StoryRecallExtension({
-    scheduler: storyRecallScheduler,
-  });
+  // Story Recall Agent（后台自动召回）可通过配置整体关停。关停时只是不注册这个
+  // loop extension —— search_memory 工具仍然保留在顶层工具集里，主 Agent 暴露给
+  // LLM 的 tools 列表字节不变，稳定前缀与 KV 缓存完全不受影响。
+  const storyRecallExtensions: StoryRecallExtension[] = [];
+  if (config.server.agent.story.recall.enabled) {
+    const storyRecallScheduler = new StoryRecallScheduler({
+      llmClient,
+      storyRecallService,
+      agentContext: context,
+      eventQueue,
+      availableTools: rootAgentTools.definitions(),
+      topK: config.server.agent.story.recall.topK,
+      scoreThreshold: config.server.agent.story.recall.scoreThreshold,
+    });
+    storyRecallExtensions.push(new StoryRecallExtension({ scheduler: storyRecallScheduler }));
+  } else {
+    logger.info("Story recall agent disabled by config", {
+      event: "agent.story_recall.disabled",
+    });
+  }
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,
     context,
@@ -397,7 +408,7 @@ export async function buildAgentRuntime({
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    loopExtensions: [storyRecallExtension],
+    loopExtensions: storyRecallExtensions,
     summaryTools: [
       ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),

@@ -45,6 +45,7 @@ const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
 const DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K = 3;
 const DEFAULT_STORY_RECALL_TOP_K = 2;
 const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
+const DEFAULT_STORY_RECALL_ENABLED = true;
 
 const UrlSchema = z.string().url();
 const NonEmptyStringSchema = z.string().trim().min(1);
@@ -221,6 +222,7 @@ const ConfigSchema = z.object({
             }),
             recall: z
               .object({
+                enabled: z.boolean().default(DEFAULT_STORY_RECALL_ENABLED),
                 topK: PositiveIntSchema.default(DEFAULT_STORY_RECALL_TOP_K),
                 scoreThreshold: z
                   .number()
