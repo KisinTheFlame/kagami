@@ -207,7 +207,7 @@ describe("RootAgentSession", () => {
     ).toBe(true);
   });
 
-  it("should not refresh portal reminder when background child state changes", async () => {
+  it("should refresh portal reminder when background child state changes", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -218,10 +218,10 @@ describe("RootAgentSession", () => {
     const flushResult = await session.flushPendingIncomingEffects();
 
     expect(consumeResult).toEqual({
-      shouldTriggerRound: false,
+      shouldTriggerRound: true,
     });
     expect(flushResult).toEqual({
-      shouldTriggerRound: false,
+      shouldTriggerRound: true,
     });
 
     const snapshot = await context.getSnapshot();
@@ -229,9 +229,7 @@ describe("RootAgentSession", () => {
       message =>
         typeof message.content === "string" && message.content.includes("<system_reminder>"),
     );
-    // 只有 initialize 时那条门户 reminder；后台子状态变化不再追加任何新的 reminder。
-    expect(reminderMessages).toHaveLength(1);
-    expect(reminderMessages[0]?.content).not.toContain("未读 1 条消息");
+    expect(reminderMessages.at(-1)?.content).toContain("未读 1 条消息");
   });
 
   // NOTE: wait-overlay tests removed. Under the new event-driven model the
@@ -488,12 +486,11 @@ describe("RootAgentSession", () => {
     );
     const flushResult = await session.flushPendingIncomingEffects();
 
-    // 焦点在门户时，后台私聊子状态变化不再刷新 reminder，也就不触发轮次。
     expect(consumeResult).toEqual({
-      shouldTriggerRound: false,
+      shouldTriggerRound: true,
     });
     expect(flushResult).toEqual({
-      shouldTriggerRound: false,
+      shouldTriggerRound: true,
     });
 
     const dashboard = await session.getStateView();
