@@ -11,7 +11,7 @@ import { ReadBashOutputTool } from "../../capabilities/terminal/tools/read-bash-
 
 export const TERMINAL_APP_ID = "terminal";
 
-const DEFAULT_TERMINAL_COMMAND_TIMEOUT_MS = 30_000;
+const DEFAULT_TERMINAL_COMMAND_TIMEOUT_MS = 60_000;
 const DEFAULT_TERMINAL_PREVIEW_BYTES = 2048;
 const DEFAULT_TERMINAL_MAX_OUTPUT_BYTES = 1_048_576;
 const DEFAULT_TERMINAL_MAX_COMMAND_LENGTH = 4096;

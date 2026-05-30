@@ -61,7 +61,7 @@ describe("TerminalApp", () => {
       terminalOutputDao: makeFakeOutputDao(),
     });
     const parsed = app.configSchema.parse({});
-    expect(parsed.commandTimeoutMs).toBe(30_000);
+    expect(parsed.commandTimeoutMs).toBe(60_000);
     expect(parsed.previewBytes).toBe(2048);
     expect(parsed.maxOutputBytes).toBe(1_048_576);
     expect(parsed.maxCommandLength).toBe(4096);

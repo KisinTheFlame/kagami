@@ -110,7 +110,7 @@ server:
     terminal:
       # 终端 App。小镜的"家"默认在 ~/kagami/（由 os.homedir() 解析）。
       # initialCwd: ~/kagami         # 可选；不填则使用 os.homedir() + "/kagami"
-      commandTimeoutMs: 30000        # 单条命令超时，超时后进程被强杀，partial 输出仍保留
+      commandTimeoutMs: 60000        # 单条命令超时，超时后进程组被强杀，partial 输出仍保留
       previewBytes: 2048             # 工具返回的 stdout/stderr preview 上限，每条独立
       maxOutputBytes: 1048576        # 单条命令完整捕获上限（1 MB），超过后停止接收
       maxCommandLength: 4096         # command 参数字符长度上限

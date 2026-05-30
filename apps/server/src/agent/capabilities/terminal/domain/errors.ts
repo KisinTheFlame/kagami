@@ -1,7 +1,7 @@
 export const TERMINAL_ERROR = {
   /** spawn 失败（shell 找不到、权限不足等） */
   SPAWN_FAILED: "SPAWN_FAILED",
-  /** 命令执行超过 commandTimeoutMs，进程已被强制终止 */
+  /** 命令执行超过 commandTimeoutMs，进程组已被强制终止 */
   TIMEOUT: "TIMEOUT",
   /** 子进程被信号杀死（非正常退出，且非 timeout 场景） */
   KILLED: "KILLED",

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -342,6 +342,65 @@ describe("TerminalService", () => {
       }
     });
 
+    it("timeout kills descendant processes in the spawned process group", async () => {
+      const marker = path.join(tmpRoot, "timeout-grandchild-marker.txt");
+      const childScript = [
+        "setTimeout(() => {",
+        `  require("node:fs").writeFileSync(${JSON.stringify(marker)}, "survived");`,
+        "}, 500);",
+      ].join("\n");
+      const parentScript = [
+        "require('node:child_process').spawn(",
+        "  process.execPath,",
+        `  ["-e", ${JSON.stringify(childScript)}],`,
+        "  { stdio: 'ignore' },",
+        ");",
+        "setTimeout(() => {}, 5_000);",
+      ].join("\n");
+      const { service } = await makeService({
+        initialCwd: tmpRoot,
+        overrides: { commandTimeoutMs: 100 },
+      });
+
+      const result = await service.runBash({
+        command: `${shellQuote(process.execPath)} -e ${shellQuote(parentScript)}`,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toBe(TERMINAL_ERROR.TIMEOUT);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      await expect(access(marker)).rejects.toThrow();
+    });
+
+    it("timeout returns without waiting for an escaped child that keeps stdout open", async () => {
+      const escapedChildScript = "setTimeout(() => {}, 1_500);";
+      const parentScript = [
+        "const child = require('node:child_process').spawn(",
+        "  process.execPath,",
+        `  ["-e", ${JSON.stringify(escapedChildScript)}],`,
+        "  { detached: true, stdio: ['ignore', 'inherit', 'inherit'] },",
+        ");",
+        "child.unref();",
+        "setTimeout(() => {}, 5_000);",
+      ].join("\n");
+      const { service } = await makeService({
+        initialCwd: tmpRoot,
+        overrides: { commandTimeoutMs: 100 },
+      });
+
+      const start = Date.now();
+      const result = await service.runBash({
+        command: `${shellQuote(process.execPath)} -e ${shellQuote(parentScript)}`,
+      });
+      const elapsedMs = Date.now() - start;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toBe(TERMINAL_ERROR.TIMEOUT);
+      expect(elapsedMs).toBeLessThan(800);
+    });
+
     it("cwd disappeared between commands returns CWD_MISSING and falls back", async () => {
       const sub = path.join(tmpRoot, "transient");
       const { mkdir, rm: rmDir } = await import("node:fs/promises");
@@ -450,3 +509,7 @@ describe("TerminalService", () => {
     });
   });
 });
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}

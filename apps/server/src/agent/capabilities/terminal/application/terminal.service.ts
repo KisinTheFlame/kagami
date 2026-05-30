@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -150,6 +150,7 @@ export class TerminalService {
    * 执行一条 bash 命令。
    * - `cd <dir>` 单条命令被拦截，直接更新 cwd 并返回空输出
    * - 其他命令 spawn 到配置的 shell，捕获 stdout/stderr 直到 maxOutputBytes 或 timeout
+   * - timeout 会终止本次 shell 所在进程组，避免后台子进程残留
    * - 完整输出写入 DB（若任一 stream 非空），返回 output_id 供小镜分页读取
    */
   public async runBash(input: { command: string }): Promise<RunBashResult> {
@@ -331,29 +332,87 @@ export class TerminalService {
       let stdoutCapReached = false;
       let stderrCapReached = false;
       let timedOut = false;
+      let settling = false;
       let settled = false;
 
       const child = spawn(this.config.shell, ["-c", rawCommand], {
         cwd: cwdAtStart,
+        detached: true,
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
       });
+
+      const startSettling = (): boolean => {
+        if (settled || settling) {
+          return false;
+        }
+        settling = true;
+        clearTimeout(timer);
+        return true;
+      };
 
       const settle = (result: RunBashResult): void => {
         if (settled) {
           return;
         }
         settled = true;
+        settling = false;
         clearTimeout(timer);
         resolve(result);
       };
 
+      const buildCapturedOutput = (durationMs: number) => {
+        const stdoutFull = Buffer.concat(stdoutChunks).toString("utf8");
+        const stderrFull = Buffer.concat(stderrChunks).toString("utf8");
+        const sanitizedStdout = sanitizeUtf8String(stdoutFull);
+        const sanitizedStderr = sanitizeUtf8String(stderrFull);
+        const stdoutPreview = sanitizeUtf8Buffer(
+          Buffer.from(sanitizedStdout, "utf8").subarray(0, this.config.previewBytes),
+        );
+        const stderrPreview = sanitizeUtf8Buffer(
+          Buffer.from(sanitizedStderr, "utf8").subarray(0, this.config.previewBytes),
+        );
+        const stdoutTruncated =
+          stdoutCapReached || Buffer.byteLength(sanitizedStdout, "utf8") > this.config.previewBytes;
+        const stderrTruncated =
+          stderrCapReached || Buffer.byteLength(sanitizedStderr, "utf8") > this.config.previewBytes;
+
+        return {
+          sanitizedStdout,
+          sanitizedStderr,
+          stdoutPreview,
+          stderrPreview,
+          stdoutTruncated,
+          stderrTruncated,
+          durationMs,
+        };
+      };
+
       const timer = setTimeout(() => {
+        if (!startSettling()) {
+          return;
+        }
         timedOut = true;
-        child.kill("SIGKILL");
+        killSpawnedProcessGroup(child, "SIGKILL");
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        this.persistAndSettle({
+          ...buildCapturedOutput(Date.now() - start),
+          stdoutTotalBytes,
+          stderrTotalBytes,
+          code: null,
+          signal: "SIGKILL",
+          timedOut,
+          cwdAtStart,
+          rawCommand,
+          settle,
+        });
       }, this.config.commandTimeoutMs);
 
       child.on("error", err => {
+        if (!startSettling()) {
+          return;
+        }
         logger.errorWithCause("Terminal bash spawn error", err, {
           event: "agent.terminal.runBash.spawn_error",
           cwd: cwdAtStart,
@@ -403,20 +462,9 @@ export class TerminalService {
       });
 
       child.on("close", (code, signal) => {
-        const stdoutFull = Buffer.concat(stdoutChunks).toString("utf8");
-        const stderrFull = Buffer.concat(stderrChunks).toString("utf8");
-        const sanitizedStdout = sanitizeUtf8String(stdoutFull);
-        const sanitizedStderr = sanitizeUtf8String(stderrFull);
-        const stdoutPreview = sanitizeUtf8Buffer(
-          Buffer.from(sanitizedStdout, "utf8").subarray(0, this.config.previewBytes),
-        );
-        const stderrPreview = sanitizeUtf8Buffer(
-          Buffer.from(sanitizedStderr, "utf8").subarray(0, this.config.previewBytes),
-        );
-        const stdoutTruncated =
-          stdoutCapReached || Buffer.byteLength(sanitizedStdout, "utf8") > this.config.previewBytes;
-        const stderrTruncated =
-          stderrCapReached || Buffer.byteLength(sanitizedStderr, "utf8") > this.config.previewBytes;
+        if (!startSettling()) {
+          return;
+        }
         const durationMs = Date.now() - start;
 
         if (code === null && signal !== null && !timedOut) {
@@ -439,14 +487,9 @@ export class TerminalService {
           return;
         }
 
-        // 正常结束或超时——两条路径共享 persistOutput
+        // 正常结束：timeout 会在 timer 分支直接 settle，不再等待 close 事件。
         this.persistAndSettle({
-          sanitizedStdout,
-          sanitizedStderr,
-          stdoutPreview,
-          stderrPreview,
-          stdoutTruncated,
-          stderrTruncated,
+          ...buildCapturedOutput(durationMs),
           stdoutTotalBytes,
           stderrTotalBytes,
           code,
@@ -610,6 +653,19 @@ function totalSize(chunks: Buffer[]): number {
     t += c.length;
   }
   return t;
+}
+
+function killSpawnedProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (typeof child.pid !== "number") {
+    child.kill(signal);
+    return;
+  }
+
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
 }
 
 function sanitizeUtf8String(s: string): string {
