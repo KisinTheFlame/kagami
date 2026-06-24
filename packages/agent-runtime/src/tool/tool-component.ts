@@ -1,18 +1,10 @@
 import { z } from "zod";
-import type { LlmMessage } from "@kagami/llm";
+import type { JsonSchema, LlmMessage, Tool } from "@kagami/llm";
 import type { Effect } from "../effect.js";
 
-export type JsonSchema = {
-  type: "object";
-  properties: Record<string, unknown>;
-  additionalProperties?: boolean | Record<string, unknown>;
-};
-
-export type ToolDefinition = {
-  name: string;
-  description?: string;
-  parameters: JsonSchema;
-};
+// JsonSchema / Tool 是 LLM 协议层类型，定义在 @kagami/llm；这里 import 后再 export，
+// 让 agent-runtime 内部沿用 "从 tool-component 引入" 的习惯（避开 export...from 限制）。
+export type { JsonSchema, Tool };
 
 export type ToolKind = "business" | "control";
 
@@ -38,7 +30,7 @@ export interface ToolComponent {
   readonly description?: string;
   readonly parameters: JsonSchema;
   readonly kind: ToolKind;
-  readonly llmTool: ToolDefinition;
+  readonly llmTool: Tool;
   execute(
     argumentsValue: Record<string, unknown>,
     context: ToolContext,
@@ -75,7 +67,7 @@ export abstract class ZodToolComponent<TInput extends z.ZodTypeAny> implements T
   public abstract readonly kind: ToolKind;
   protected abstract readonly inputSchema: TInput;
 
-  public get llmTool(): ToolDefinition {
+  public get llmTool(): Tool {
     return {
       name: this.name,
       description: this.description,

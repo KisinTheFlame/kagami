@@ -1,7 +1,7 @@
 import type {
   ToolComponent,
   ToolContext,
-  ToolDefinition,
+  Tool,
   ToolExecutionResult,
   ToolKind,
 } from "./tool-component.js";
@@ -11,7 +11,7 @@ export type ToolSetExecutionResult = ToolExecutionResult & {
 };
 
 export interface ToolExecutor {
-  definitions(): ToolDefinition[];
+  definitions(): Tool[];
   getKind(name: string): ToolKind | null;
   execute(
     name: string,
@@ -58,7 +58,7 @@ export class ToolSet implements ToolExecutor {
     this.componentsByName = new Map(components.map(component => [component.name, component]));
   }
 
-  public definitions(): ToolDefinition[] {
+  public definitions(): Tool[] {
     return this.orderedComponents.map(component => component.llmTool);
   }
 

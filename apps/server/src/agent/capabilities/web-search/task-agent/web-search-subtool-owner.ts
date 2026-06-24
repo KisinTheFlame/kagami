@@ -4,7 +4,7 @@ import {
   type SubtoolGuardResult,
   type ToolComponent,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutionResult,
   type ToolExecutor,
 } from "@kagami/agent-runtime";
@@ -21,7 +21,7 @@ export function createWebSearchSubtoolOwner(deps: {
   tools: readonly ToolComponent[];
 }): InvokeSubtoolOwner {
   const toolNames = deps.tools.map(tool => tool.name);
-  const definitions: readonly ToolDefinition[] = deps.tools.map(tool => tool.llmTool);
+  const definitions: readonly Tool[] = deps.tools.map(tool => tool.llmTool);
   const executor: ToolExecutor = new ToolCatalog([...deps.tools]).pick(toolNames);
 
   return {

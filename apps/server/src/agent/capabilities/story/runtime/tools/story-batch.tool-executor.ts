@@ -1,7 +1,7 @@
 import {
   ToolCatalog,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
@@ -20,9 +20,7 @@ import {
 } from "../../task-agent/tools/rewrite-story.tool.js";
 import type { StoryBatchSeqRange } from "../story-batch-preparer.js";
 
-export function createStoryBatchToolDefinitions(input: {
-  storyService: StoryService;
-}): ToolDefinition[] {
+export function createStoryBatchToolDefinitions(input: { storyService: StoryService }): Tool[] {
   return new ToolCatalog([
     new CreateStoryTool({
       storyService: input.storyService,
@@ -42,7 +40,7 @@ export function createStoryBatchToolDefinitions(input: {
 
 type StoryBatchToolExecutorDeps = {
   storyService: StoryService;
-  toolDefinitions: ToolDefinition[];
+  toolDefinitions: Tool[];
   getPendingBatchSeqRange: () => StoryBatchSeqRange | null;
 };
 
@@ -52,7 +50,7 @@ type StoryBatchToolExecutorDeps = {
  */
 export class StoryBatchToolExecutor implements ToolExecutor {
   private readonly storyService: StoryService;
-  private readonly toolDefinitions: ToolDefinition[];
+  private readonly toolDefinitions: Tool[];
   private readonly getPendingBatchSeqRange: () => StoryBatchSeqRange | null;
 
   public constructor({
@@ -65,7 +63,7 @@ export class StoryBatchToolExecutor implements ToolExecutor {
     this.getPendingBatchSeqRange = getPendingBatchSeqRange;
   }
 
-  public definitions(): ToolDefinition[] {
+  public definitions(): Tool[] {
     return this.toolDefinitions;
   }
 
