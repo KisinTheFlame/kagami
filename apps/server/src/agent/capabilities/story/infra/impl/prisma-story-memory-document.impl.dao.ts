@@ -62,14 +62,14 @@ export class PrismaStoryMemoryDocumentDao implements StoryMemoryDocumentDao {
       }
     });
 
-    // DB 事务提交后再同步内存索引，保证 SQLite 始终是事实来源。
+    // DB 事务提交后再同步内存索引，保证 SQLite 始终是事实来源。索引不在每次写入时落盘——
+    // 启动时会从 SQLite 全量重建，磁盘快照只在重建后写一次。
     for (const previous of previousDocuments) {
       this.vectorIndex.remove(previous.id);
     }
     for (const point of insertedPoints) {
       this.vectorIndex.add(point.id, point.vector);
     }
-    this.vectorIndex.flush();
   }
 
   public async findIndexMetadataByStoryIds(

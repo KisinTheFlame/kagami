@@ -98,8 +98,11 @@ export class HnswVectorIndex {
     }
   }
 
-  /** 把当前索引快照写到磁盘。批量写完后由调用方触发一次即可。 */
-  public flush(): void {
+  /**
+   * 把当前索引写为磁盘快照。仅在启动重建后落盘一次（boot-time snapshot），不在每次写入时
+   * 写盘——SQLite 是事实来源，索引始终在启动时从 SQLite 重建，该文件不作为加载来源。
+   */
+  private flush(): void {
     mkdirSync(path.dirname(this.indexFilePath), { recursive: true });
     this.index.writeIndexSync(this.indexFilePath);
   }
