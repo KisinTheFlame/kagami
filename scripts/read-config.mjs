@@ -20,7 +20,19 @@ if (typeof value !== "string" || value.length === 0) {
   throw new Error(`config.yaml 缺少合法的 ${key}`);
 }
 
-process.stdout.write(value);
+process.stdout.write(resolveFileUrl(value, path.dirname(configPath)));
+
+/**
+ * SQLite 的 `file:` 相对路径要按 config.yaml 所在目录解析为绝对路径，确保 Prisma CLI
+ * 与运行时（config.loader.ts）落在同一个库文件上。其余值原样返回。
+ */
+function resolveFileUrl(rawValue, baseDir) {
+  if (!rawValue.startsWith("file:")) return rawValue;
+  const filePath = rawValue.slice("file:".length);
+  if (filePath === ":memory:" || filePath.length === 0) return rawValue;
+  const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
+  return `file:${absolute}`;
+}
 
 async function resolveConfigPath(repoRoot) {
   const direct = path.join(repoRoot, "config.yaml");

@@ -32,7 +32,8 @@ export class PrismaEmbeddingCacheDao implements EmbeddingCacheDao {
       outputDimensionality: row.outputDimensionality,
       text: row.text,
       textHash: row.textHash,
-      embedding: row.embedding,
+      // SQLite 不支持标量数组，embedding 以 JSON 字符串存储，读取时反序列化。
+      embedding: deserializeEmbedding(row.embedding),
       createdAt: row.createdAt,
     };
   }
@@ -57,12 +58,25 @@ export class PrismaEmbeddingCacheDao implements EmbeddingCacheDao {
         outputDimensionality: input.outputDimensionality,
         text: input.text,
         textHash: input.textHash,
-        embedding: input.embedding,
+        embedding: serializeEmbedding(input.embedding),
       },
       update: {
         text: input.text,
-        embedding: input.embedding,
+        embedding: serializeEmbedding(input.embedding),
       },
     });
   }
+}
+
+function serializeEmbedding(embedding: number[]): string {
+  return JSON.stringify(embedding);
+}
+
+function deserializeEmbedding(value: string): number[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed.map(item => Number(item));
 }

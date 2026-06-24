@@ -110,6 +110,7 @@ export function createConfigManager(): ConfigManager {
               model: "gemini-embedding-001",
               outputDimensionality: 768,
             },
+            vectorIndexPath: "./data/vector/story-memory.hnsw",
             retrieval: {
               topK: 3,
             },

@@ -6,25 +6,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model LlmChatCall {
-  id              Int       @id @default(autoincrement())
-  requestId       String    @map("request_id")
-  seq             Int       @default(1)
-  provider        String
-  model           String
-  extension       Json?     @db.JsonB
-  status          String
-  requestPayload  Json      @map("request_payload") @db.JsonB
-  responsePayload Json?     @map("response_payload") @db.JsonB
-  nativeRequestPayload  Json?     @map("native_request_payload") @db.JsonB
-  nativeResponsePayload Json?     @map("native_response_payload") @db.JsonB
-  error           Json?     @db.JsonB
-  nativeError     Json?     @map("native_error") @db.JsonB
-  latencyMs       Int?      @map("latency_ms")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                    Int      @id @default(autoincrement())
+  requestId             String   @map("request_id")
+  seq                   Int      @default(1)
+  provider              String
+  model                 String
+  extension             Json?
+  status                String
+  requestPayload        Json     @map("request_payload")
+  responsePayload       Json?    @map("response_payload")
+  nativeRequestPayload  Json?    @map("native_request_payload")
+  nativeResponsePayload Json?    @map("native_response_payload")
+  error                 Json?
+  nativeError           Json?    @map("native_error")
+  latencyMs             Int?     @map("latency_ms")
+  createdAt             DateTime @default(now()) @map("created_at")
 
   @@unique([requestId, seq], map: "llm_chat_call_request_id_seq_uq")
   @@index([provider, model], map: "llm_chat_call_provider_model_idx")
@@ -37,9 +37,9 @@ model AppLog {
   traceId   String   @map("trace_id")
   level     String
   message   String
-  metadata  Json     @db.JsonB
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  metadata  Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
 
   @@index([traceId, createdAt], map: "app_log_trace_id_created_at_idx")
   @@index([level, createdAt], map: "app_log_level_created_at_idx")
@@ -51,9 +51,9 @@ model Metric {
   id         Int      @id @default(autoincrement())
   metricName String   @map("metric_name")
   value      Float
-  tags       Json     @db.JsonB
-  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tags       Json
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([metricName, occurredAt], map: "metric_metric_name_occurred_at_idx")
   @@index([createdAt], map: "metric_created_at_idx")
@@ -65,10 +65,10 @@ model MetricChart {
   chartName  String   @unique(map: "metric_chart_chart_name_uq") @map("chart_name")
   metricName String   @map("metric_name")
   aggregator String
-  tagFilters Json?    @map("tag_filters") @db.JsonB
+  tagFilters Json?    @map("tag_filters")
   groupByTag String?  @map("group_by_tag")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
 
   @@map("metric_chart")
 }
@@ -80,9 +80,9 @@ model NapcatEvent {
   subType     String?   @map("sub_type")
   userId      String?   @map("user_id")
   groupId     String?   @map("group_id")
-  eventTime   DateTime? @map("event_time") @db.Timestamptz(6)
-  payload     Json      @db.JsonB
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  eventTime   DateTime? @map("event_time")
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([createdAt], map: "napcat_event_created_at_idx")
   @@index([postType, createdAt], map: "napcat_event_post_type_created_at_idx")
@@ -99,10 +99,10 @@ model NapcatQqMessage {
   userId      String?   @map("user_id")
   nickname    String?
   messageId   Int?      @map("message_id")
-  message     Json      @db.JsonB
-  eventTime   DateTime? @map("event_time") @db.Timestamptz(6)
-  payload     Json      @db.JsonB
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  message     Json
+  eventTime   DateTime? @map("event_time")
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([createdAt], map: "napcat_qq_message_created_at_idx")
   @@index([messageType, createdAt], map: "napcat_qq_message_message_type_created_at_idx")
@@ -113,19 +113,19 @@ model NapcatQqMessage {
 }
 
 model OauthSession {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   provider      String
-  accountId     String?  @map("account_id")
+  accountId     String?   @map("account_id")
   email         String?
-  accessToken   String?  @map("access_token")
-  refreshToken  String?  @map("refresh_token")
-  idToken       String?  @map("id_token")
-  expiresAt     DateTime? @map("expires_at") @db.Timestamptz(6)
-  lastRefreshAt DateTime? @map("last_refresh_at") @db.Timestamptz(6)
+  accessToken   String?   @map("access_token")
+  refreshToken  String?   @map("refresh_token")
+  idToken       String?   @map("id_token")
+  expiresAt     DateTime? @map("expires_at")
+  lastRefreshAt DateTime? @map("last_refresh_at")
   status        String
-  lastError     String?  @map("last_error")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @map("updated_at")
 
   @@unique([provider], map: "oauth_session_provider_uq")
   @@index([status, updatedAt], map: "oauth_session_status_updated_at_idx")
@@ -133,13 +133,13 @@ model OauthSession {
 }
 
 model OauthState {
-  id          Int       @id @default(autoincrement())
-  state       String    @unique(map: "oauth_state_state_uq")
-  codeVerifier String   @map("code_verifier")
-  redirectUri String    @map("redirect_uri")
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
-  usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           Int       @id @default(autoincrement())
+  state        String    @unique(map: "oauth_state_state_uq")
+  codeVerifier String    @map("code_verifier")
+  redirectUri  String    @map("redirect_uri")
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   @@index([expiresAt], map: "oauth_state_expires_at_idx")
   @@map("oauth_state")
@@ -151,8 +151,8 @@ model AuthUsageSnapshot {
   accountId        String    @map("account_id")
   windowKey        String    @map("window_key")
   remainingPercent Float     @map("remaining_percent")
-  resetAt          DateTime? @map("reset_at") @db.Timestamptz(6)
-  capturedAt       DateTime  @default(now()) @map("captured_at") @db.Timestamptz(6)
+  resetAt          DateTime? @map("reset_at")
+  capturedAt       DateTime  @default(now()) @map("captured_at")
 
   @@index([provider, accountId, capturedAt], map: "auth_usage_snapshot_provider_account_captured_at_idx")
   @@index([provider, accountId, windowKey, capturedAt], map: "auth_usage_snapshot_provider_account_window_captured_at_idx")
@@ -161,15 +161,15 @@ model AuthUsageSnapshot {
 }
 
 model EmbeddingCache {
-  id                  Int      @id @default(autoincrement())
-  provider            String
-  model               String
-  taskType            String   @map("task_type")
-  outputDimensionality Int     @map("output_dimensionality")
-  text                String
-  textHash            String   @map("text_hash")
-  embedding           Float[]
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                   Int      @id @default(autoincrement())
+  provider             String
+  model                String
+  taskType             String   @map("task_type")
+  outputDimensionality Int      @map("output_dimensionality")
+  text                 String
+  textHash             String   @map("text_hash")
+  embedding            String
+  createdAt            DateTime @default(now()) @map("created_at")
 
   @@unique([provider, model, taskType, outputDimensionality, textHash], map: "embedding_cache_provider_model_task_output_text_hash_uq")
   @@index([createdAt], map: "embedding_cache_created_at_idx")
@@ -180,11 +180,11 @@ model RootAgentRuntimeSnapshot {
   id                 Int       @id @default(autoincrement())
   runtimeKey         String    @unique(map: "root_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
   schemaVersion      Int       @map("schema_version")
-  contextSnapshot    Json      @map("context_snapshot") @db.JsonB
-  sessionSnapshot    Json      @map("session_snapshot") @db.JsonB
-  lastWakeReminderAt DateTime? @map("last_wake_reminder_at") @db.Timestamptz(6)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  contextSnapshot    Json      @map("context_snapshot")
+  sessionSnapshot    Json      @map("session_snapshot")
+  lastWakeReminderAt DateTime? @map("last_wake_reminder_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @map("updated_at")
 
   @@map("root_agent_runtime_snapshot")
 }
@@ -192,8 +192,8 @@ model RootAgentRuntimeSnapshot {
 model LinearMessageLedger {
   id         Int      @id @default(autoincrement())
   runtimeKey String   @map("runtime_key")
-  message    Json     @db.JsonB
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  message    Json
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([runtimeKey, id], map: "ledger_runtime_key_id_idx")
   @@index([createdAt], map: "ledger_created_at_idx")
@@ -201,12 +201,12 @@ model LinearMessageLedger {
 }
 
 model Story {
-  id                    String     @id @default(uuid())
+  id                    String                @id @default(uuid())
   markdown              String
-  sourceMessageSeqStart Int        @map("source_message_seq_start")
-  sourceMessageSeqEnd   Int        @map("source_message_seq_end")
-  createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  sourceMessageSeqStart Int                   @map("source_message_seq_start")
+  sourceMessageSeqEnd   Int                   @map("source_message_seq_end")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @default(now()) @map("updated_at")
   memoryDocuments       StoryMemoryDocument[]
 
   @@index([updatedAt], map: "story_updated_at_idx")
@@ -221,9 +221,9 @@ model StoryMemoryDocument {
   content        String
   embeddingModel String?  @map("embedding_model")
   embeddingDim   Int?     @map("embedding_dim")
-  embedding      Unsupported("vector(768)")?
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  embedding      String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
   story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   @@unique([storyId, kind], map: "story_memory_document_story_id_kind_uq")
@@ -232,31 +232,31 @@ model StoryMemoryDocument {
 }
 
 model StoryAgentRuntimeSnapshot {
-  id                    Int      @id @default(autoincrement())
-  runtimeKey            String   @unique(map: "story_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
-  schemaVersion         Int      @map("schema_version")
-  contextSnapshot       Json     @map("context_snapshot") @db.JsonB
-  lastProcessedMessageSeq Int    @default(0) @map("last_processed_message_seq")
-  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  id                      Int      @id @default(autoincrement())
+  runtimeKey              String   @unique(map: "story_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
+  schemaVersion           Int      @map("schema_version")
+  contextSnapshot         Json     @map("context_snapshot")
+  lastProcessedMessageSeq Int      @default(0) @map("last_processed_message_seq")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @map("updated_at")
 
   @@map("story_agent_runtime_snapshot")
 }
 
 model NewsArticle {
-  id                     Int       @id @default(autoincrement())
-  sourceKey              String    @map("source_key")
-  upstreamId             String    @map("upstream_id")
-  title                  String
-  url                    String
-  publishedAt            DateTime  @map("published_at") @db.Timestamptz(6)
-  rssSummary             String    @map("rss_summary")
-  rssPayload             Json      @map("rss_payload") @db.JsonB
-  articleContent         String?   @map("article_content")
-  articleContentStatus   String    @default("pending") @map("article_content_status")
-  articleContentFetchedAt DateTime? @map("article_content_fetched_at") @db.Timestamptz(6)
-  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  id                      Int       @id @default(autoincrement())
+  sourceKey               String    @map("source_key")
+  upstreamId              String    @map("upstream_id")
+  title                   String
+  url                     String
+  publishedAt             DateTime  @map("published_at")
+  rssSummary              String    @map("rss_summary")
+  rssPayload              Json      @map("rss_payload")
+  articleContent          String?   @map("article_content")
+  articleContentStatus    String    @default("pending") @map("article_content_status")
+  articleContentFetchedAt DateTime? @map("article_content_fetched_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @default(now()) @map("updated_at")
 
   @@unique([sourceKey, upstreamId], map: "news_article_source_key_upstream_id_uq")
   @@index([sourceKey, publishedAt], map: "news_article_source_key_published_at_idx")
@@ -266,9 +266,9 @@ model NewsArticle {
 model NewsFeedCursor {
   sourceKey           String   @id @map("source_key")
   lastSeenArticleId   Int      @map("last_seen_article_id")
-  lastSeenPublishedAt DateTime @map("last_seen_published_at") @db.Timestamptz(6)
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  lastSeenPublishedAt DateTime @map("last_seen_published_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
 
   @@map("news_feed_cursor")
 }
@@ -276,8 +276,8 @@ model NewsFeedCursor {
 model TerminalState {
   id        Int      @id @default(autoincrement())
   cwd       String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("terminal_state")
 }
@@ -285,9 +285,9 @@ model TerminalState {
 model TerminalOutput {
   id        Int      @id @default(autoincrement())
   outputId  String   @unique(map: "terminal_output_output_id_uq") @map("output_id")
-  stdout    String   @db.Text
-  stderr    String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  stdout    String
+  stderr    String
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([createdAt], map: "terminal_output_created_at_idx")
   @@map("terminal_output")

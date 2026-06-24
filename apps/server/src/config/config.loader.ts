@@ -45,11 +45,18 @@ const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
 const DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K = 3;
+const DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH = "./data/vector/story-memory.hnsw";
 const DEFAULT_STORY_RECALL_TOP_K = 2;
 const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
 const DEFAULT_STORY_RECALL_ENABLED = true;
 
 const UrlSchema = z.string().url();
+/**
+ * `databaseUrl` 现为 SQLite 文件路径（`file:./data/sqlite/kagami.db`），不再是网络 URL，
+ * 因此只校验非空字符串；绝对路径解析在 {@link loadStaticConfig} 中完成。
+ */
+const DatabaseUrlSchema = z.string().trim().min(1);
+const FilePathSchema = z.string().trim().min(1);
 const NonEmptyStringSchema = z.string().trim().min(1);
 const OptionalNonEmptyStringSchema = z
   .string()
@@ -183,7 +190,7 @@ const NapcatConfigSchema = z.preprocess(
 
 const ConfigSchema = z.object({
   server: z.object({
-    databaseUrl: UrlSchema,
+    databaseUrl: DatabaseUrlSchema,
     port: PositiveIntSchema.default(DEFAULT_PORT),
     agent: z.preprocess(
       value => {
@@ -216,6 +223,7 @@ const ConfigSchema = z.object({
             idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
             memory: z.object({
               embedding: StoryMemoryEmbeddingConfigSchema,
+              vectorIndexPath: FilePathSchema.default(DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH),
               retrieval: z
                 .object({
                   topK: PositiveIntSchema.default(DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K),
@@ -438,16 +446,53 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
     });
   }
 
+  const configDir = path.dirname(configPath);
+  const data = parsedConfig.data;
+  const memory = data.server.agent.story.memory;
+
   return {
-    ...parsedConfig.data,
+    ...data,
     server: {
-      ...parsedConfig.data.server,
+      ...data.server,
+      databaseUrl: resolveSqliteFileUrl(configDir, data.server.databaseUrl),
+      agent: {
+        ...data.server.agent,
+        story: {
+          ...data.server.agent.story,
+          memory: {
+            ...memory,
+            vectorIndexPath: resolveAbsolutePath(configDir, memory.vectorIndexPath),
+          },
+        },
+      },
       llm: {
-        ...parsedConfig.data.server.llm,
-        usages: normalizeLlmUsages(parsedConfig.data.server.llm),
+        ...data.server.llm,
+        usages: normalizeLlmUsages(data.server.llm),
       },
     },
   };
+}
+
+function stripFileScheme(value: string): string {
+  return value.startsWith("file:") ? value.slice("file:".length) : value;
+}
+
+function resolveAbsolutePath(baseDir: string, value: string): string {
+  const raw = stripFileScheme(value);
+  return path.isAbsolute(raw) ? raw : path.resolve(baseDir, raw);
+}
+
+/**
+ * 将 config 中相对仓库根的 SQLite 路径解析为绝对 `file:` URL，运行时与 Prisma CLI
+ * 共用同一锚点（config.yaml 所在目录），避免在不同 cwd 下建出两个库。只处理 `file:`
+ * 路径；`file::memory:`、`:memory:` 及其它 scheme（历史 postgresql:// 等）原样返回。
+ */
+function resolveSqliteFileUrl(baseDir: string, value: string): string {
+  if (!value.startsWith("file:") || value === "file::memory:") {
+    return value;
+  }
+
+  return `file:${resolveAbsolutePath(baseDir, value)}`;
 }
 
 function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
