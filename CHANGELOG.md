@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- server: PG→SQLite 搬迁脚本 `migrate-pg-to-sqlite.ts` 补全为**全量迁移所有表**（之前漏了 app_log / llm_chat_call / metric / napcat_event / napcat_qq_message 群消息历史等 8 张表）；大表按 id 分页流式读取避免 OOM；新增 `migrate-pg-remaining-append.ts` 用于在已上线的 SQLite 上「不清空、追加补迁」个别表
+
 ### Added
 
 - agent-runtime: 为此前零测试的核心包 `@kagami/agent-runtime` 补上 vitest 测试基建，新增 26 条不变量测试，直接测源码、不依赖构建；覆盖 Effect 解释器（`ReplaceLeadingMessages` 唯一前缀重建路径且传副本、无匹配 / Noop 收到 effect 即抛绝不静默吞）、事件队列（FIFO、一次 enqueue 唤醒全部 waiter）、串行执行器（严格串行不交错、单任务抛错隔离）、`ZodToolComponent`（非法参数永不进 `executeTyped`、业务抛错转结构化结果）；根目录 `pnpm test` 现已覆盖该包（[#87](https://github.com/KisinTheFlame/kagami/pull/87)）
