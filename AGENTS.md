@@ -134,7 +134,7 @@ pnpm --filter @kagami/shared <script>
 - 当前仓库没有统一的根目录 `pnpm dev` 脚本。
 - `apps/server` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
 - `apps/web` 当前提供 `build`、`typecheck` 脚本。
-- `packages/agent-runtime` 当前提供 `build`、`typecheck` 脚本。
+- `packages/agent-runtime` 当前提供 `build`、`typecheck`、`test`、`test:watch` 脚本。
 - `packages/shared` 当前提供 `build`、`typecheck` 脚本。
 - 因此前后端联调时，需要按实际情况分别启动或补充本地开发脚本，不要假设仓库已经内置一键 dev 流程。
 
@@ -148,7 +148,7 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 
 补充说明：
 
-- 当前只有 `@kagami/server` 声明了测试脚本。
+- 当前 `@kagami/server` 与 `@kagami/agent-runtime` 声明了测试脚本（后者用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
 
 ## 数据库与配置
 
