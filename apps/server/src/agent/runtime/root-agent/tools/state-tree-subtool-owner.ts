@@ -4,7 +4,7 @@ import {
   type SubtoolGuardResult,
   type ToolComponent,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutionResult,
   type ToolExecutor,
 } from "@kagami/agent-runtime";
@@ -31,10 +31,8 @@ export function createStateTreeSubtoolOwner(deps: {
   tools: readonly ToolComponent[];
 }): InvokeSubtoolOwner {
   const toolNames = deps.tools.map(tool => tool.name);
-  const definitions: readonly ToolDefinition[] = deps.tools.map(tool => tool.llmTool);
-  const definitionByName = new Map<string, ToolDefinition>(
-    deps.tools.map(tool => [tool.name, tool.llmTool]),
-  );
+  const definitions: readonly Tool[] = deps.tools.map(tool => tool.llmTool);
+  const definitionByName = new Map<string, Tool>(deps.tools.map(tool => [tool.name, tool.llmTool]));
   const executor: ToolExecutor = new ToolCatalog([...deps.tools]).pick(toolNames);
 
   return {
@@ -57,7 +55,7 @@ export function createStateTreeSubtoolOwner(deps: {
       const focusedStateId = session.getState().focusedStateId;
       const availableToolDefinitions = availableTools
         .map(name => definitionByName.get(name))
-        .filter((definition): definition is ToolDefinition => definition !== undefined);
+        .filter((definition): definition is Tool => definition !== undefined);
       const availableMessage =
         availableToolDefinitions.length === 0
           ? "当前状态没有可用的 invoke 子工具。"

@@ -2,7 +2,7 @@ import type {
   JsonSchema,
   ToolComponent,
   ToolContext,
-  ToolDefinition,
+  Tool,
   ToolExecutionResult,
   ToolKind,
 } from "./tool-component.js";
@@ -41,7 +41,7 @@ export class OutOfScopeTool implements ToolComponent {
     this.reason = reason;
   }
 
-  public get llmTool(): ToolDefinition {
+  public get llmTool(): Tool {
     return {
       name: this.name,
       description: this.description,

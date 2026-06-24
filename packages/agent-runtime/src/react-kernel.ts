@@ -1,7 +1,7 @@
 import type { LlmMessage } from "@kagami/llm";
 import type { EffectInterpreter } from "./effect.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "./tool/tool-catalog.js";
-import type { ToolContext, ToolDefinition } from "./tool/tool-component.js";
+import type { ToolContext, Tool } from "./tool/tool-component.js";
 
 export type ReActToolCall = {
   id: string;
@@ -31,7 +31,7 @@ export interface ReActModel<
     request: {
       system?: string;
       messages: LlmMessage[];
-      tools: ToolDefinition[];
+      tools: Tool[];
       toolChoice: "required";
     },
     options: {

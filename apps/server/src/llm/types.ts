@@ -3,24 +3,23 @@ import type { LlmProviderId } from "../common/contracts/llm.js";
 // TMessage 泛型）。这里 import 后再 export，保持 server 侧既有 import 路径不变，
 // 同时避开 `export ... from` 的 re-export 限制。
 import type {
+  JsonSchema,
   LlmContentPart,
   LlmImageContentPart,
   LlmMessage,
   LlmTextContentPart,
   LlmToolCall,
+  Tool,
 } from "@kagami/llm";
 
-export type { LlmContentPart, LlmImageContentPart, LlmMessage, LlmTextContentPart, LlmToolCall };
-
-export type JsonSchema = {
-  type: "object";
-  properties: Record<string, unknown>;
-};
-
-export type Tool = {
-  name: string;
-  description?: string;
-  parameters: JsonSchema;
+export type {
+  JsonSchema,
+  LlmContentPart,
+  LlmImageContentPart,
+  LlmMessage,
+  LlmTextContentPart,
+  LlmToolCall,
+  Tool,
 };
 
 export type LlmToolChoice = "required" | "auto" | "none" | { tool_name: string };

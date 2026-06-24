@@ -1,4 +1,4 @@
-import type { ToolContext, ToolDefinition, ToolExecutionResult } from "./tool-component.js";
+import type { ToolContext, Tool, ToolExecutionResult } from "./tool-component.js";
 
 /**
  * Invoke 子工具的所有者协议。
@@ -28,7 +28,7 @@ export interface InvokeSubtoolOwner {
    *
    * 返回数组应当在 owner 生命周期内稳定——InvokeTool 只在构造期读一次建索引。
    */
-  listOwnedTools(): readonly ToolDefinition[];
+  listOwnedTools(): readonly Tool[];
 
   /**
    * 在当前 runtime context 下能否调 toolName。
