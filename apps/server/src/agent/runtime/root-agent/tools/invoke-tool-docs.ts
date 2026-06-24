@@ -1,7 +1,7 @@
-import type { ToolDefinition } from "@kagami/agent-runtime";
+import type { Tool } from "@kagami/agent-runtime";
 import { isRecord } from "../../../../common/prisma-json.js";
 
-export function renderInvokeToolGuide(tools: readonly ToolDefinition[]): string {
+export function renderInvokeToolGuide(tools: readonly Tool[]): string {
   return tools
     .map(tool => {
       const lines = [`- \`${tool.name}\`: ${tool.description ?? "无说明。"}`];
@@ -21,7 +21,7 @@ export function renderInvokeToolGuide(tools: readonly ToolDefinition[]): string 
     .join("\n");
 }
 
-function renderInvokeToolParameterLines(tool: ToolDefinition): string[] {
+function renderInvokeToolParameterLines(tool: Tool): string[] {
   return Object.entries(tool.parameters.properties)
     .filter(([parameterName]) => parameterName !== "tool")
     .map(([parameterName, propertySchema]) => {

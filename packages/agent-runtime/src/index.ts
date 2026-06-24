@@ -66,7 +66,7 @@ import {
   type JsonSchema,
   type ToolComponent,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutionResult,
   type ToolKind,
 } from "./tool/tool-component.js";
@@ -133,7 +133,7 @@ export {
   type TaskAgentToolCall,
   type ToolComponent,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutionResult,
   type ToolExecutor,
   type ToolKind,

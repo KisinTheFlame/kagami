@@ -1,5 +1,5 @@
 import { ToolCatalog, type ToolExecutor } from "../tool/tool-catalog.js";
-import type { ToolContext, ToolDefinition, ToolExecutionResult } from "../tool/tool-component.js";
+import type { ToolContext, Tool, ToolExecutionResult } from "../tool/tool-component.js";
 import type { InvokeSubtoolOwner, SubtoolGuardResult } from "../tool/subtool-owner.js";
 import type { AppId, AppManager } from "./app.js";
 
@@ -22,7 +22,7 @@ export function createAppSubtoolOwner(deps: {
 }): InvokeSubtoolOwner {
   const appTools = deps.appManager.getAllApps().flatMap(app => [...app.tools]);
   const toolNames = appTools.map(tool => tool.name);
-  const definitions: readonly ToolDefinition[] = appTools.map(tool => tool.llmTool);
+  const definitions: readonly Tool[] = appTools.map(tool => tool.llmTool);
   const executor: ToolExecutor = new ToolCatalog(appTools).pick(toolNames);
 
   return {

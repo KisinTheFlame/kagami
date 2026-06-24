@@ -3,7 +3,7 @@ import {
   type InvokeSubtoolOwner,
   type JsonSchema,
   type ToolContext,
-  type ToolDefinition,
+  type Tool,
   type ToolExecutionResult,
   type ToolKind,
   ZodToolComponent,
@@ -52,12 +52,12 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
 
   private readonly owners: readonly InvokeSubtoolOwner[];
   private readonly ownerByToolName: ReadonlyMap<string, InvokeSubtoolOwner>;
-  private readonly definitionByToolName: ReadonlyMap<string, ToolDefinition>;
+  private readonly definitionByToolName: ReadonlyMap<string, Tool>;
 
   public constructor({ owners }: { owners: readonly InvokeSubtoolOwner[] }) {
     super();
     const ownerByToolName = new Map<string, InvokeSubtoolOwner>();
-    const definitionByToolName = new Map<string, ToolDefinition>();
+    const definitionByToolName = new Map<string, Tool>();
     for (const owner of owners) {
       for (const definition of owner.listOwnedTools()) {
         if (ownerByToolName.has(definition.name)) {
@@ -114,8 +114,8 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
    * 这样「不存在」和「不允许调用」合并后，被拒的工具自然不会出现在清单里，
    * 不会出现"说它不存在却又列在可用里"的自相矛盾。
    */
-  private listInvocableDefinitions(context: ToolContext): readonly ToolDefinition[] {
-    const definitions: ToolDefinition[] = [];
+  private listInvocableDefinitions(context: ToolContext): readonly Tool[] {
+    const definitions: Tool[] = [];
     for (const owner of this.owners) {
       for (const definition of owner.listOwnedTools()) {
         if (owner.canInvokeNow(definition.name, context).ok) {
@@ -129,7 +129,7 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
 
 function buildInvokeToolNotFoundMessage(input: {
   tool: string;
-  availableToolDefinitions: readonly ToolDefinition[];
+  availableToolDefinitions: readonly Tool[];
 }): string {
   return [
     `invoke 子工具 ${input.tool} 不存在。`,
@@ -148,7 +148,7 @@ function buildInvokeToolNotFoundMessage(input: {
 function enrichSubtoolFailureContent(input: {
   tool: string;
   content: string;
-  currentToolDefinition?: ToolDefinition;
+  currentToolDefinition?: Tool;
 }): string {
   try {
     const parsed = JSON.parse(input.content) as Record<string, unknown>;
@@ -181,7 +181,7 @@ function buildInvokeSubtoolFailureMessage(input: {
   tool: string;
   error?: string;
   details: string[];
-  currentToolDefinition?: ToolDefinition;
+  currentToolDefinition?: Tool;
 }): string {
   if (input.error === "INVALID_ARGUMENTS") {
     const detailsText = input.details.length > 0 ? ` ${input.details.join("；")}` : "";
@@ -218,9 +218,7 @@ function buildInvokeSubtoolFailureMessage(input: {
   );
 }
 
-function buildAvailableInvokeToolsDescription(
-  availableToolDefinitions: readonly ToolDefinition[],
-): string {
+function buildAvailableInvokeToolsDescription(availableToolDefinitions: readonly Tool[]): string {
   if (availableToolDefinitions.length === 0) {
     return "当前没有可用的 invoke 子工具。";
   }
@@ -230,7 +228,7 @@ function buildAvailableInvokeToolsDescription(
 
 function appendInvokeToolDefinitionMessage(
   baseMessage: string,
-  currentToolDefinition?: ToolDefinition,
+  currentToolDefinition?: Tool,
 ): string {
   if (!currentToolDefinition) {
     return baseMessage;
