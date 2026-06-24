@@ -6,6 +6,7 @@ import {
 } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
+import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 import { createStateTreeSubtoolOwner } from "../../src/agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
 
@@ -14,6 +15,19 @@ function createAgentMessageService() {
     sendGroupMessage: vi.fn(),
     sendPrivateMessage: vi.fn(),
   };
+}
+
+// AI 味门控不是本套件的关注点：以 enabled=false 构造，完全退化为原发送行为，
+// 保证这些断言只校验 InvokeTool 的路由与发送语义。
+function createSendMessageTool(agentMessageService = createAgentMessageService()) {
+  return new SendMessageTool({
+    agentMessageService,
+    aiToneScorer: { proba: () => 0 } as unknown as ConstructorParameters<
+      typeof SendMessageTool
+    >[0]["aiToneScorer"],
+    pendingDraftStore: new PendingDraftStore(),
+    aiTone: { enabled: false, blockThreshold: 0.8 },
+  });
 }
 
 /**
@@ -56,11 +70,7 @@ describe("invoke tool", () => {
     // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
     // 不会让这一份 schema 漂移。
     const tool = createTestInvokeTool({
-      stateTreeTools: [
-        new SendMessageTool({
-          agentMessageService: createAgentMessageService(),
-        }),
-      ],
+      stateTreeTools: [createSendMessageTool()],
     });
 
     expect(tool.parameters).toEqual({
@@ -79,7 +89,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = createTestInvokeTool({
-      stateTreeTools: [new SendMessageTool({ agentMessageService })],
+      stateTreeTools: [createSendMessageTool(agentMessageService)],
     });
 
     const result = await tool.execute(
@@ -120,7 +130,7 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = createTestInvokeTool({
-      stateTreeTools: [new SendMessageTool({ agentMessageService })],
+      stateTreeTools: [createSendMessageTool(agentMessageService)],
     });
 
     const result = await tool.execute(
@@ -159,7 +169,7 @@ describe("invoke tool", () => {
 
   it("should describe available tools when invoke subtool does not exist", async () => {
     const tool = createTestInvokeTool({
-      stateTreeTools: [new SendMessageTool({ agentMessageService: createAgentMessageService() })],
+      stateTreeTools: [createSendMessageTool()],
     });
 
     const result = await tool.execute(

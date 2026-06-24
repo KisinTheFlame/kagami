@@ -120,6 +120,12 @@ export function createConfigManager(): ConfigManager {
             scoreThreshold: 0.65,
           },
         },
+        messaging: {
+          aiTone: {
+            enabled: true,
+            blockThreshold: 0.8,
+          },
+        },
       },
       news: {
         ithome: {

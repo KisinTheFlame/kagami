@@ -48,6 +48,8 @@ import {
   createStoryContextSummaryReminderMessage,
 } from "../agent/runtime/context/context-message-factory.js";
 import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
+import { PendingDraftStore } from "../agent/capabilities/messaging/application/pending-draft.store.js";
+import { AiToneScorer } from "../agent/capabilities/messaging/infra/ai-tone-scorer.js";
 import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
@@ -212,6 +214,12 @@ export async function buildAgentRuntime({
   const stateTreeSubtools = [
     new SendMessageTool({
       agentMessageService,
+      aiToneScorer: new AiToneScorer(),
+      pendingDraftStore: new PendingDraftStore(),
+      aiTone: {
+        enabled: config.server.agent.messaging.aiTone.enabled,
+        blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
+      },
     }),
   ];
 

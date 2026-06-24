@@ -1,107 +1,100 @@
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
+import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
+
+function buildTool(options?: {
+  score?: number;
+  enabled?: boolean;
+  blockThreshold?: number;
+  pendingDraftStore?: PendingDraftStore;
+  sendGroupMessage?: ReturnType<typeof vi.fn>;
+  sendPrivateMessage?: ReturnType<typeof vi.fn>;
+}) {
+  const agentMessageService = {
+    sendGroupMessage: options?.sendGroupMessage ?? vi.fn().mockResolvedValue({ messageId: 9527 }),
+    sendPrivateMessage:
+      options?.sendPrivateMessage ?? vi.fn().mockResolvedValue({ messageId: 9630 }),
+  };
+  const aiToneScorer = { proba: vi.fn().mockReturnValue(options?.score ?? 0.1) };
+  const pendingDraftStore = options?.pendingDraftStore ?? new PendingDraftStore();
+  const tool = new SendMessageTool({
+    agentMessageService,
+    aiToneScorer: aiToneScorer as unknown as ConstructorParameters<
+      typeof SendMessageTool
+    >[0]["aiToneScorer"],
+    pendingDraftStore,
+    aiTone: {
+      enabled: options?.enabled ?? true,
+      blockThreshold: options?.blockThreshold ?? 0.8,
+    },
+  });
+  return { tool, agentMessageService, aiToneScorer, pendingDraftStore };
+}
+
+function groupContext(groupId = "987654") {
+  return {
+    chatTarget: { chatType: "group", groupId },
+  } as Parameters<SendMessageTool["execute"]>[1];
+}
 
 describe("send_message tool", () => {
-  it("should send message by injected gateway function", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 9527 }),
-      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 9528 }),
-    };
-    const tool = new SendMessageTool({ agentMessageService });
+  it("低 AI 味发言正常发送，响应回带 aiToneScore", async () => {
+    const { tool, agentMessageService } = buildTool({ score: 0.1 });
 
-    const result = await tool.execute(
-      {
-        message: "  hello group  ",
-      },
-      {
-        chatTarget: {
-          chatType: "group",
-          groupId: "987654",
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
+    const result = await tool.execute({ message: "  hello group  " }, groupContext());
 
     expect(tool.name).toBe("send_message");
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
       groupId: "987654",
       message: "hello group",
     });
-    expect(result.content).toBe(
-      JSON.stringify({
-        ok: true,
-        chatType: "group",
-        groupId: "987654",
-        messageId: 9527,
-      }),
-    );
+    expect(JSON.parse(result.content)).toEqual({
+      ok: true,
+      chatType: "group",
+      groupId: "987654",
+      messageId: 9527,
+      aiToneScore: 0.1,
+    });
   });
 
-  it("should send private message in qq private state", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 9527 }),
-      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 9630 }),
-    };
-    const tool = new SendMessageTool({ agentMessageService });
+  it("私聊发言正常发送", async () => {
+    const { tool, agentMessageService } = buildTool({ score: 0.2 });
 
-    const result = await tool.execute(
-      {
-        message: "  hello friend  ",
-      },
-      {
-        chatTarget: {
-          chatType: "private",
-          userId: "123456",
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
+    const result = await tool.execute({ message: "  hello friend  " }, {
+      chatTarget: { chatType: "private", userId: "123456" },
+    } as Parameters<SendMessageTool["execute"]>[1]);
 
     expect(agentMessageService.sendPrivateMessage).toHaveBeenCalledWith({
       userId: "123456",
       message: "hello friend",
     });
-    expect(result.content).toBe(
-      JSON.stringify({
-        ok: true,
-        chatType: "private",
-        userId: "123456",
-        messageId: 9630,
-      }),
-    );
-  });
-
-  it("should return invalid arguments result when message is empty", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
-      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 2 }),
-    };
-    const tool = new SendMessageTool({ agentMessageService });
-
-    const result = await tool.execute(
-      {
-        message: "   ",
-      },
-      {},
-    );
-
-    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
     expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "INVALID_ARGUMENTS",
+      ok: true,
+      chatType: "private",
+      userId: "123456",
+      messageId: 9630,
+      aiToneScore: 0.2,
     });
   });
 
-  it("should return group context unavailable when current group is missing", async () => {
-    const agentMessageService = {
-      sendGroupMessage: vi.fn().mockResolvedValue({ messageId: 1 }),
-      sendPrivateMessage: vi.fn().mockResolvedValue({ messageId: 2 }),
-    };
-    const tool = new SendMessageTool({ agentMessageService });
+  it("message 为空返回参数错误", async () => {
+    const { tool, agentMessageService } = buildTool();
 
     const result = await tool.execute(
-      {
-        message: "hello",
-      },
-      {},
+      { message: "   " },
+      {} as Parameters<SendMessageTool["execute"]>[1],
+    );
+
+    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
+    expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
+  });
+
+  it("缺少会话上下文返回 CHAT_CONTEXT_UNAVAILABLE", async () => {
+    const { tool, agentMessageService } = buildTool();
+
+    const result = await tool.execute(
+      { message: "hello" },
+      {} as Parameters<SendMessageTool["execute"]>[1],
     );
 
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
@@ -109,5 +102,103 @@ describe("send_message tool", () => {
       ok: false,
       error: "CHAT_CONTEXT_UNAVAILABLE",
     });
+  });
+
+  it("AI 味超阈值则拦截不发，并存草稿", async () => {
+    const { tool, agentMessageService, pendingDraftStore } = buildTool({ score: 0.9 });
+
+    const result = await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: false,
+      blocked: true,
+      aiToneScore: 0.9,
+      threshold: 0.8,
+    });
+    expect(pendingDraftStore.peek()).toMatchObject({
+      message: "这不是结束，而是开始",
+      score: 0.9,
+    });
+  });
+
+  it("confirm_last 补发上一条被拦草稿并清空草稿", async () => {
+    const { tool, agentMessageService, pendingDraftStore } = buildTool({ score: 0.9 });
+
+    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+    const result = await tool.execute({ confirm_last: true }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
+      groupId: "987654",
+      message: "这不是结束，而是开始",
+    });
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      confirmedResend: true,
+      aiToneScore: 0.9,
+    });
+    expect(pendingDraftStore.peek()).toBeNull();
+  });
+
+  it("confirm_last 同时带 message 会忽略本次 message 并提示", async () => {
+    const { tool, agentMessageService } = buildTool({ score: 0.9 });
+
+    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+    const result = await tool.execute({ confirm_last: true, message: "另一句话" }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).toHaveBeenLastCalledWith({
+      groupId: "987654",
+      message: "这不是结束，而是开始",
+    });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, confirmedResend: true });
+    expect(JSON.parse(result.content).note).toContain("已忽略本次 message");
+  });
+
+  it("没有待确认草稿时 confirm_last 返回 NO_PENDING_DRAFT", async () => {
+    const { tool, agentMessageService } = buildTool();
+
+    const result = await tool.execute({ confirm_last: true }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
+    expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "NO_PENDING_DRAFT" });
+  });
+
+  it("补发失败保留草稿", async () => {
+    const sendGroupMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue({ messageId: 1 });
+    const { tool, pendingDraftStore } = buildTool({ score: 0.9, sendGroupMessage });
+
+    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+    const result = await tool.execute({ confirm_last: true }, groupContext());
+
+    expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "RESEND_FAILED" });
+    expect(pendingDraftStore.peek()).not.toBeNull();
+  });
+
+  it("成功发送会清空之前的待确认草稿", async () => {
+    const store = new PendingDraftStore();
+    store.set({ chatTarget: { chatType: "group", groupId: "1" }, message: "旧草稿", score: 0.9 });
+    const { tool } = buildTool({ score: 0.1, pendingDraftStore: store });
+
+    await tool.execute({ message: "正常发言" }, groupContext());
+
+    expect(store.peek()).toBeNull();
+  });
+
+  it("enabled=false 时完全退化：不打分、不拦、响应不含 aiToneScore", async () => {
+    const { tool, agentMessageService, aiToneScorer } = buildTool({
+      score: 0.99,
+      enabled: false,
+    });
+
+    const result = await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+
+    expect(aiToneScorer.proba).not.toHaveBeenCalled();
+    expect(agentMessageService.sendGroupMessage).toHaveBeenCalled();
+    const parsed = JSON.parse(result.content);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.aiToneScore).toBeUndefined();
   });
 });
