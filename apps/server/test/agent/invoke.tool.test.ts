@@ -179,9 +179,8 @@ describe("invoke tool", () => {
       } as Parameters<typeof tool.execute>[1],
     );
 
-    // NOT_FOUND 列出本 InvokeTool 实例所有 owner 拥有的工具全集（不再按 session
-    // 当前状态过滤）。owner-driven 模型下 InvokeTool 本身不再耦合 session 状态，
-    // 状态化的"当前能用"提示走 owner.canInvokeNow → NOT_AVAILABLE 那一支。
+    // NOT_FOUND 回带的可用清单按 owner.canInvokeNow 过滤成"当前真正可调"的子集。
+    // 这里 send_message 在当前状态可调，所以仍会出现在清单里。
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_FOUND",
@@ -223,7 +222,9 @@ describe("invoke tool", () => {
     });
   });
 
-  it("should reject App-owned tool with APP_GUARD when not in the owning App", async () => {
+  it("should treat App-owned tool as NOT_FOUND when not in the owning App", async () => {
+    // 「子工具存在但当前不允许调用」与「子工具不存在」合并：没进 calc 时调
+    // calculate，统一按 NOT_FOUND 返回，且该工具不会出现在可用清单里。
     const { CalcApp } = await import("../../src/agent/apps/calc/calc.app.js");
     const appManager = new AppManager();
     appManager.register(new CalcApp());
@@ -245,9 +246,13 @@ describe("invoke tool", () => {
       },
     } as Parameters<typeof tool.execute>[1]);
 
-    expect(JSON.parse(result.content)).toMatchObject({
+    const parsed = JSON.parse(result.content);
+    expect(parsed).toMatchObject({
       ok: false,
-      error: "INVOKE_TOOL_APP_GUARD",
+      error: "INVOKE_TOOL_NOT_FOUND",
+      tool: "calculate",
+      availableTools: [],
     });
+    expect(parsed.message).toContain("invoke 子工具 calculate 不存在。");
   });
 });

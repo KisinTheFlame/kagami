@@ -79,7 +79,10 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     context: ToolContext,
   ): Promise<ToolExecutionResult> {
     const owner = this.ownerByToolName.get(input.tool);
-    if (!owner) {
+    // 子工具「不存在」和「当前不允许调用」统一按不存在处理：对 LLM 而言两者都是
+    // "这个工具现在不可用"，回带当前真正可调的工具清单让它改投，不再区分 guard 原因。
+    if (!owner || !owner.canInvokeNow(input.tool, context).ok) {
+      const availableToolDefinitions = this.listInvocableDefinitions(context);
       return {
         content: JSON.stringify({
           ok: false,
@@ -87,22 +90,9 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
           tool: input.tool,
           message: buildInvokeToolNotFoundMessage({
             tool: input.tool,
-            availableToolDefinitions: this.listAllDefinitions(),
+            availableToolDefinitions,
           }),
-          availableTools: this.listAllDefinitions().map(definition => definition.name),
-        }),
-      };
-    }
-
-    const guard = owner.canInvokeNow(input.tool, context);
-    if (!guard.ok) {
-      return {
-        content: JSON.stringify({
-          ok: false,
-          error: guard.error,
-          tool: input.tool,
-          message: guard.message,
-          ...(guard.extras ?? {}),
+          availableTools: availableToolDefinitions.map(definition => definition.name),
         }),
       };
     }
@@ -119,8 +109,21 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
     };
   }
 
-  private listAllDefinitions(): readonly ToolDefinition[] {
-    return this.owners.flatMap(owner => [...owner.listOwnedTools()]);
+  /**
+   * 当前 runtime context 下真正可调的子工具定义。NOT_FOUND 回带的可用清单走这里，
+   * 这样「不存在」和「不允许调用」合并后，被拒的工具自然不会出现在清单里，
+   * 不会出现"说它不存在却又列在可用里"的自相矛盾。
+   */
+  private listInvocableDefinitions(context: ToolContext): readonly ToolDefinition[] {
+    const definitions: ToolDefinition[] = [];
+    for (const owner of this.owners) {
+      for (const definition of owner.listOwnedTools()) {
+        if (owner.canInvokeNow(definition.name, context).ok) {
+          definitions.push(definition);
+        }
+      }
+    }
+    return definitions;
   }
 }
 
