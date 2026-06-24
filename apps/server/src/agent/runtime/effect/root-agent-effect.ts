@@ -1,5 +1,4 @@
 import type { AppId, Effect, ReplaceLeadingMessagesEffect } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../llm/types.js";
 import type { RootAgentStateId } from "../root-agent/session/state.types.js";
 
 /**
@@ -60,5 +59,5 @@ export type RootAgentEffect =
   | AppendMessageEffect
   | SwitchAppEffect
   | SwitchStateEffect
-  | ReplaceLeadingMessagesEffect<LlmMessage>
+  | ReplaceLeadingMessagesEffect
   | WaitForEventEffect;

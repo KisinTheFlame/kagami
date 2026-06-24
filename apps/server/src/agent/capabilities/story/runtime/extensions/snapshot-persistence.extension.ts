@@ -1,6 +1,5 @@
 import type { LoopAgentExtension } from "@kagami/agent-runtime";
 import type { LlmClient } from "../../../../../llm/client.js";
-import type { LlmMessage } from "../../../../../llm/types.js";
 import type { StoryBatchPreparer } from "../story-batch-preparer.js";
 import type { StoryContextLifecycle } from "../story-context-lifecycle.js";
 
@@ -12,7 +11,6 @@ type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
  */
 export class StorySnapshotPersistenceExtension implements LoopAgentExtension<
   void,
-  LlmMessage,
   "storyAgent",
   StoryCompletion
 > {

@@ -9,7 +9,6 @@ import {
 import type { AgentContext } from "../context/agent-context.js";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
-import type { LlmMessage } from "../../../llm/types.js";
 import { createUserMessage } from "../context/context-message-factory.js";
 import type { RootAgentSessionController } from "../root-agent/session/root-agent-session.js";
 import type {
@@ -55,9 +54,9 @@ export function createRootEffectInterpreter({
   session: InterpreterSession;
   context: AgentContext;
   eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">;
-}): EffectInterpreter<LlmMessage, never> {
-  return new HandlerEffectInterpreter<LlmMessage, never>([
-    new ReplaceLeadingMessagesHandler<LlmMessage>(context),
+}): EffectInterpreter<never> {
+  return new HandlerEffectInterpreter<never>([
+    new ReplaceLeadingMessagesHandler(context),
     new AppendMessageHandler(),
     new SwitchAppHandler(session),
     new SwitchStateHandler(session),
@@ -72,19 +71,19 @@ export function createRootEffectInterpreter({
  * RootAgent 专属——它和 kernel 的 commit 协议耦合（公共的"直接写 context"
  * append 语义不适用）。
  */
-class AppendMessageHandler implements EffectHandler<LlmMessage, never> {
+class AppendMessageHandler implements EffectHandler<never> {
   public matches(effect: Effect): boolean {
     return effect.type === "append_message";
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<LlmMessage, never>> {
+  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
     const append = effect as AppendMessageEffect;
     return { appendedMessages: [createUserMessage(append.content)] };
   }
 }
 
 /** 把 root agent 的 currentApp 切到 appId（null 表示回到桌面）。即时副作用。 */
-class SwitchAppHandler implements EffectHandler<LlmMessage, never> {
+class SwitchAppHandler implements EffectHandler<never> {
   private readonly session: InterpreterSession;
 
   public constructor(session: InterpreterSession) {
@@ -95,7 +94,7 @@ class SwitchAppHandler implements EffectHandler<LlmMessage, never> {
     return effect.type === "switch_app";
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<LlmMessage, never>> {
+  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
     const switchApp = effect as SwitchAppEffect;
     if (switchApp.appId === null) {
       this.session.clearCurrentApp();
@@ -107,7 +106,7 @@ class SwitchAppHandler implements EffectHandler<LlmMessage, never> {
 }
 
 /** 把 root agent 的 focused state 切到 stateId。即时副作用。 */
-class SwitchStateHandler implements EffectHandler<LlmMessage, never> {
+class SwitchStateHandler implements EffectHandler<never> {
   private readonly session: InterpreterSession;
 
   public constructor(session: InterpreterSession) {
@@ -118,7 +117,7 @@ class SwitchStateHandler implements EffectHandler<LlmMessage, never> {
     return effect.type === "switch_state";
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<LlmMessage, never>> {
+  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
     const switchState = effect as SwitchStateEffect;
     await this.session.enter({ id: switchState.stateId });
     return {};
@@ -130,7 +129,7 @@ class SwitchStateHandler implements EffectHandler<LlmMessage, never> {
  * 唤醒。事件本身不在这里消费——本 handler 只负责"挂起 Agent 主循环"，事件路由
  * 由后续 LoopAgent 主循环 take + session.consumeIncomingEvent 处理。
  */
-class WaitForEventHandler implements EffectHandler<LlmMessage, never> {
+class WaitForEventHandler implements EffectHandler<never> {
   private readonly eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">;
 
   public constructor(eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">) {
@@ -141,7 +140,7 @@ class WaitForEventHandler implements EffectHandler<LlmMessage, never> {
     return effect.type === "wait_for_event";
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<LlmMessage, never>> {
+  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
     const wait = effect as WaitForEventEffect;
     const wakeEvent: WakeEvent = { type: "wake" };
     const timerHandle = setTimeout(() => {

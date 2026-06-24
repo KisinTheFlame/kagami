@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
 import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 
 export const WAIT_TOOL_NAME = "wait";
@@ -16,7 +15,7 @@ const WaitArgumentsSchema = z.object({});
  *
  * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 6。
  */
-export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema, LlmMessage> {
+export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
   public readonly name = WAIT_TOOL_NAME;
   public readonly description: string;
   public readonly parameters = {

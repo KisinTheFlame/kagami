@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { LlmMessage } from "@kagami/llm";
 import type { Effect } from "../effect.js";
 
 export type JsonSchema = {
@@ -15,10 +16,10 @@ export type ToolDefinition = {
 
 export type ToolKind = "business" | "control";
 
-export type ToolContext<TMessage = unknown> = {
+export type ToolContext = {
   groupId?: string;
   systemPrompt?: string;
-  messages?: TMessage[];
+  messages?: LlmMessage[];
 };
 
 export type ToolExecutionResult = {
@@ -32,7 +33,7 @@ export type ToolExecutionResult = {
   effects?: readonly Effect[];
 };
 
-export interface ToolComponent<TMessage = unknown> {
+export interface ToolComponent {
   readonly name: string;
   readonly description?: string;
   readonly parameters: JsonSchema;
@@ -40,7 +41,7 @@ export interface ToolComponent<TMessage = unknown> {
   readonly llmTool: ToolDefinition;
   execute(
     argumentsValue: Record<string, unknown>,
-    context: ToolContext<TMessage>,
+    context: ToolContext,
   ): Promise<ToolExecutionResult>;
 }
 
@@ -67,10 +68,7 @@ const DEFAULT_EXECUTION_ERROR_FORMATTER: ToolResultFormatter = error =>
     error: error instanceof Error ? error.message : String(error),
   });
 
-export abstract class ZodToolComponent<
-  TInput extends z.ZodTypeAny,
-  TMessage = unknown,
-> implements ToolComponent<TMessage> {
+export abstract class ZodToolComponent<TInput extends z.ZodTypeAny> implements ToolComponent {
   public abstract readonly name: string;
   public abstract readonly description?: string;
   public abstract readonly parameters: JsonSchema;
@@ -87,7 +85,7 @@ export abstract class ZodToolComponent<
 
   public async execute(
     argumentsValue: Record<string, unknown>,
-    context: ToolContext<TMessage>,
+    context: ToolContext,
   ): Promise<ToolExecutionResult> {
     const parsed = this.inputSchema.safeParse(argumentsValue);
     if (!parsed.success) {
@@ -120,6 +118,6 @@ export abstract class ZodToolComponent<
 
   protected abstract executeTyped(
     input: z.infer<TInput>,
-    context: ToolContext<TMessage>,
+    context: ToolContext,
   ): Promise<string | ToolExecutionResult> | string | ToolExecutionResult;
 }

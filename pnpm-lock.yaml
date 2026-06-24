@@ -50,6 +50,9 @@ importers:
       '@kagami/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
+      '@kagami/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -184,10 +187,25 @@ importers:
 
   packages/agent-runtime:
     dependencies:
+      '@kagami/llm':
+        specifier: workspace:*
+        version: link:../llm
       zod:
         specifier: ^3.24.4
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/llm:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

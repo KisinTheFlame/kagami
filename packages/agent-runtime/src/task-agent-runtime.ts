@@ -1,3 +1,4 @@
+import type { LlmMessage } from "@kagami/llm";
 import type { TaskAgent } from "./agent-runtime.js";
 import {
   HandlerEffectInterpreter,
@@ -18,16 +19,17 @@ import type { ToolContext } from "./tool/tool-component.js";
 
 export type TaskAgentToolCall = ReActToolCall;
 export type { AssistantLikeMessage, ToolLikeMessage };
-export type TaskAgentModel<
-  TMessage extends { role: string },
-  TUsage extends string = string,
-> = ReActModel<TMessage, TUsage>;
+export type TaskAgentModel<TUsage extends string = string> = ReActModel<TUsage>;
 export type TaskAgentInvoker<TInput, TOutput> = Pick<TaskAgent<TInput, TOutput>, "invoke">;
 
-export type TaskAgentInvocationState<TMessage extends { role: string }, TUsage extends string> = {
+type TaskAgentCompletion = {
+  message: Extract<LlmMessage, { role: "assistant" }> & AssistantLikeMessage;
+};
+
+export type TaskAgentInvocationState<TUsage extends string> = {
   systemPrompt?: string;
-  messages: TMessage[];
-  toolContext?: ToolContext<TMessage>;
+  messages: LlmMessage[];
+  toolContext?: ToolContext;
   usage: TUsage;
 };
 
@@ -59,12 +61,12 @@ export type TaskAgentControl = {
  * 处理 `terminate` Effect 的 handler：翻译成 `TaskAgentControl.stop`，content
  * 取自 Effect 自带的 `content` 字段（Effect 自描述）。
  */
-export class TerminateHandler<TMessage> implements EffectHandler<TMessage, TaskAgentControl> {
+export class TerminateHandler implements EffectHandler<TaskAgentControl> {
   public matches(effect: Effect): boolean {
     return effect.type === TERMINATE_EFFECT_TYPE;
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<TMessage, TaskAgentControl>> {
+  public async handle(effect: Effect): Promise<EffectHandlerResult<TaskAgentControl>> {
     const terminate = effect as TerminateEffect;
     return { control: { kind: "stop", content: terminate.content } };
   }
@@ -75,31 +77,22 @@ export class TerminateHandler<TMessage> implements EffectHandler<TMessage, TaskA
  * 不像 RootAgent 有切状态 / append message 这些副作用语义，遇到非 terminate 的
  * Effect 由 HandlerEffectInterpreter 抛错。
  */
-export class TaskEffectInterpreter<TMessage>
-  extends HandlerEffectInterpreter<TMessage, TaskAgentControl>
-  implements EffectInterpreter<TMessage, TaskAgentControl>
+export class TaskEffectInterpreter
+  extends HandlerEffectInterpreter<TaskAgentControl>
+  implements EffectInterpreter<TaskAgentControl>
 {
   public constructor() {
-    super([new TerminateHandler<TMessage>()]);
+    super([new TerminateHandler()]);
   }
 }
 
 export abstract class BaseTaskAgent<
   TInput,
   TOutput,
-  TMessage extends { role: string },
   TUsage extends string = string,
 > implements TaskAgent<TInput, TOutput> {
-  private readonly kernel: ReActKernel<
-    TMessage,
-    TUsage,
-    {
-      message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-    },
-    unknown,
-    TaskAgentControl
-  >;
-  private readonly taskTools: ToolExecutor<TMessage>;
+  private readonly kernel: ReActKernel<TUsage, TaskAgentCompletion, unknown, TaskAgentControl>;
+  private readonly taskTools: ToolExecutor;
 
   public constructor({
     kernel,
@@ -107,29 +100,21 @@ export abstract class BaseTaskAgent<
     interpreter,
     taskTools,
   }: {
-    kernel?: ReActKernel<
-      TMessage,
-      TUsage,
-      {
-        message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-      },
-      unknown,
-      TaskAgentControl
-    >;
-    model?: TaskAgentModel<TMessage, TUsage>;
+    kernel?: ReActKernel<TUsage, TaskAgentCompletion, unknown, TaskAgentControl>;
+    model?: TaskAgentModel<TUsage>;
     /**
      * 解释 Effect 的 Interpreter。不传则用默认 `TaskEffectInterpreter`——它认识
      * `terminate` Effect 并产 stop control。子类需要识别更多 Effect（罕见）时
      * 自己实现并传入。
      */
-    interpreter?: EffectInterpreter<TMessage, TaskAgentControl>;
-    taskTools: ToolExecutor<TMessage>;
+    interpreter?: EffectInterpreter<TaskAgentControl>;
+    taskTools: ToolExecutor;
   }) {
     this.kernel =
       kernel ??
       new ReActKernel({
         model: model ?? failMissingTaskAgentModel(),
-        interpreter: interpreter ?? new TaskEffectInterpreter<TMessage>(),
+        interpreter: interpreter ?? new TaskEffectInterpreter(),
       });
     this.taskTools = taskTools;
   }
@@ -170,13 +155,11 @@ export abstract class BaseTaskAgent<
     }
   }
 
-  protected abstract createInvocation(
-    input: TInput,
-  ): Promise<TaskAgentInvocationState<TMessage, TUsage>>;
+  protected abstract createInvocation(input: TInput): Promise<TaskAgentInvocationState<TUsage>>;
 
   protected abstract buildResult(input: {
     input: TInput;
-    messages: TMessage[];
+    messages: LlmMessage[];
     content: string;
   }): Promise<TOutput> | TOutput;
 }
@@ -187,9 +170,8 @@ export abstract class BaseTaskAgent<
 export abstract class TaskAgentRuntime<
   TInput,
   TOutput,
-  TMessage extends { role: string },
   TUsage extends string = string,
-> extends BaseTaskAgent<TInput, TOutput, TMessage, TUsage> {}
+> extends BaseTaskAgent<TInput, TOutput, TUsage> {}
 
 function failMissingTaskAgentModel(): never {
   throw new Error("BaseTaskAgent requires model when kernel is not provided");

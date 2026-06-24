@@ -10,21 +10,21 @@ export type ToolSetExecutionResult = ToolExecutionResult & {
   kind: ToolKind;
 };
 
-export interface ToolExecutor<TMessage = unknown> {
+export interface ToolExecutor {
   definitions(): ToolDefinition[];
   getKind(name: string): ToolKind | null;
   execute(
     name: string,
     argumentsValue: Record<string, unknown>,
-    context: ToolContext<TMessage>,
+    context: ToolContext,
   ): Promise<ToolSetExecutionResult>;
 }
 
-export class ToolCatalog<TMessage = unknown> {
-  private readonly componentsByName: Map<string, ToolComponent<TMessage>>;
+export class ToolCatalog {
+  private readonly componentsByName: Map<string, ToolComponent>;
 
-  public constructor(components: ToolComponent<TMessage>[]) {
-    this.componentsByName = new Map<string, ToolComponent<TMessage>>();
+  public constructor(components: ToolComponent[]) {
+    this.componentsByName = new Map<string, ToolComponent>();
 
     for (const component of components) {
       if (this.componentsByName.has(component.name)) {
@@ -35,7 +35,7 @@ export class ToolCatalog<TMessage = unknown> {
     }
   }
 
-  public pick(names: string[]): ToolSet<TMessage> {
+  public pick(names: string[]): ToolSet {
     const components = names.map(name => {
       const component = this.componentsByName.get(name);
       if (!component) {
@@ -49,11 +49,11 @@ export class ToolCatalog<TMessage = unknown> {
   }
 }
 
-export class ToolSet<TMessage = unknown> implements ToolExecutor<TMessage> {
-  private readonly componentsByName: Map<string, ToolComponent<TMessage>>;
-  private readonly orderedComponents: ToolComponent<TMessage>[];
+export class ToolSet implements ToolExecutor {
+  private readonly componentsByName: Map<string, ToolComponent>;
+  private readonly orderedComponents: ToolComponent[];
 
-  public constructor(components: ToolComponent<TMessage>[]) {
+  public constructor(components: ToolComponent[]) {
     this.orderedComponents = components;
     this.componentsByName = new Map(components.map(component => [component.name, component]));
   }
@@ -69,7 +69,7 @@ export class ToolSet<TMessage = unknown> implements ToolExecutor<TMessage> {
   public async execute(
     name: string,
     argumentsValue: Record<string, unknown>,
-    context: ToolContext<TMessage>,
+    context: ToolContext,
   ): Promise<ToolSetExecutionResult> {
     const component = this.componentsByName.get(name);
     if (!component) {

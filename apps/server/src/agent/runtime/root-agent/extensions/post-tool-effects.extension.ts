@@ -8,7 +8,6 @@ import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-ag
 import type { RootAgentExtensionHost } from "./extension-host.js";
 
 export class RootPostToolEffectsExtension implements ReActKernelExtension<
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData
@@ -27,7 +26,7 @@ export class RootPostToolEffectsExtension implements ReActKernelExtension<
   }
 
   public async onAfterToolExecution(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    request: ReActKernelRunRoundInput<"agent">;
     completion: RootAgentCompletion;
     toolCall: {
       name: string;

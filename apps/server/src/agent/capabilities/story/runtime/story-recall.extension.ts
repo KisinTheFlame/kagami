@@ -1,5 +1,4 @@
 import type { LoopAgentExtension } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
 import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
@@ -15,7 +14,6 @@ import type { StoryRecallScheduler } from "./story-recall.scheduler.js";
  */
 export class StoryRecallExtension implements LoopAgentExtension<
   RootLoopExtensionContext,
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData

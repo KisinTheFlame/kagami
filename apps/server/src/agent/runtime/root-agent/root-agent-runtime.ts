@@ -55,7 +55,6 @@ type ContextSummaryLike = Pick<ContextSummaryOperation, "execute">;
 
 type RootLoopExtension = LoopAgentExtension<
   RootLoopExtensionContext,
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData
@@ -68,8 +67,8 @@ type RootAgentRuntimeDeps = {
   session: RootAgentSessionController;
   snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   runtimeKey?: string;
-  tools?: ToolExecutor<LlmMessage>;
-  agentTools?: ToolExecutor<LlmMessage>;
+  tools?: ToolExecutor;
+  agentTools?: ToolExecutor;
   contextSummaryOperation?: ContextSummaryLike;
   summaryTools?: Tool[];
   contextCompactionTotalTokenThreshold?: number;
@@ -115,7 +114,7 @@ class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
-  private readonly interpreter: EffectInterpreter<LlmMessage, never>;
+  private readonly interpreter: EffectInterpreter<never>;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
   private readonly contextSummaryOperation?: ContextSummaryLike;
@@ -145,7 +144,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     now,
     sleep,
   }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools"> & {
-    interpreter: EffectInterpreter<LlmMessage, never>;
+    interpreter: EffectInterpreter<never>;
   }) {
     this.context = context;
     this.eventQueue = eventQueue;
@@ -247,9 +246,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     });
   }
 
-  public async createRoundInput(
-    tools: ToolExecutor<LlmMessage>,
-  ): Promise<ReActKernelRunRoundInput<LlmMessage, "agent">> {
+  public async createRoundInput(tools: ToolExecutor): Promise<ReActKernelRunRoundInput<"agent">> {
     const snapshot = await this.context.getSnapshot();
 
     return {
@@ -264,7 +261,7 @@ class RootAgentHost implements RootAgentExtensionHost {
         messages: [...snapshot.messages],
         agentContext: this.context,
         rootAgentSession: this.session,
-      } as ReActKernelRunRoundInput<LlmMessage, "agent">["toolContext"],
+      } as ReActKernelRunRoundInput<"agent">["toolContext"],
       usage: "agent",
     };
   }
@@ -274,8 +271,8 @@ class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async commitRoundResult(
-    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
-    tools: ToolExecutor<LlmMessage>,
+    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
+    tools: ToolExecutor,
   ): Promise<void> {
     const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
     const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
@@ -449,9 +446,7 @@ class RootAgentHost implements RootAgentExtensionHost {
       systemPrompt: string;
       messages: LlmMessage[];
     },
-  ): Promise<
-    { retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect<LlmMessage>[] }
-  > {
+  ): Promise<{ retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect[] }> {
     try {
       const result = await operation.execute({
         systemPrompt: input.systemPrompt,
@@ -536,14 +531,13 @@ class RootAgentHost implements RootAgentExtensionHost {
 }
 
 export class RootLoopAgent extends BaseLoopAgent<
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData,
   RootLoopExtensionContext
 > {
   private readonly host: RootAgentHost;
-  private readonly tools: ToolExecutor<LlmMessage>;
+  private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
@@ -576,12 +570,7 @@ export class RootLoopAgent extends BaseLoopAgent<
       llmRetryBackoffMs: resolvedRetryBackoffMs,
       sleep: resolvedSleep,
     });
-    const kernel = new ReActKernel<
-      LlmMessage,
-      "agent",
-      RootAgentCompletion,
-      RootAgentToolExecutionData
-    >({
+    const kernel = new ReActKernel<"agent", RootAgentCompletion, RootAgentToolExecutionData>({
       model: llmClient,
       interpreter,
       extensions: [
@@ -734,15 +723,12 @@ export class RootLoopAgent extends BaseLoopAgent<
     await this.runReactRound();
   }
 
-  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
-    LlmMessage,
-    "agent"
-  > | null> {
+  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<"agent"> | null> {
     return await this.host.createRoundInput(this.tools);
   }
 
   protected override async commitRoundResult(
-    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
+    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
   ): Promise<void> {
     await this.host.commitRoundResult(result, this.tools);
   }
@@ -785,7 +771,7 @@ function failMissingTools(): never {
 
 function omitControlToolCalls(
   message: AssistantMessage,
-  agentTools: ToolExecutor<LlmMessage>,
+  agentTools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,

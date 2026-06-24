@@ -34,7 +34,7 @@ export type ContextSummaryInput = {
  */
 export type ContextSummaryResult = {
   /** 空数组表示 LLM 没产出有效摘要，调用方不做任何变更。 */
-  effects: readonly ReplaceLeadingMessagesEffect<LlmMessage>[];
+  effects: readonly ReplaceLeadingMessagesEffect[];
 };
 
 export class ContextSummaryOperation implements Operation<

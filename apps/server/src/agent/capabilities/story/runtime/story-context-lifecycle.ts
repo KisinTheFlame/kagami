@@ -57,7 +57,7 @@ export class StoryContextLifecycle {
    * 装了公共 ReplaceLeadingMessagesHandler 的 Interpreter 解释——复用粒度是 handler，
    * Story 只需要 replace 这一个。
    */
-  private readonly interpreter: EffectInterpreter<LlmMessage, never>;
+  private readonly interpreter: EffectInterpreter<never>;
   private lastPersistedSnapshotFingerprint: string | null = null;
 
   public constructor({
@@ -84,8 +84,8 @@ export class StoryContextLifecycle {
       new DefaultAgentContext({
         systemPromptFactory: createStoryAgentSystemPrompt,
       });
-    this.interpreter = new HandlerEffectInterpreter<LlmMessage, never>([
-      new ReplaceLeadingMessagesHandler<LlmMessage>(this.context),
+    this.interpreter = new HandlerEffectInterpreter<never>([
+      new ReplaceLeadingMessagesHandler(this.context),
     ]);
   }
 

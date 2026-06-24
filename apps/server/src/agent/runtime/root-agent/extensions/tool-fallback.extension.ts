@@ -3,20 +3,18 @@ import type {
   ReActKernelRunRoundInput,
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
 import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-agent-runtime.js";
 
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });
 
 export class RootToolFallbackExtension implements ReActKernelExtension<
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData
 > {
   public async onToolError(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "agent">;
+    request: ReActKernelRunRoundInput<"agent">;
     toolCall: {
       name: string;
     };

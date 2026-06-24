@@ -1,3 +1,4 @@
+import type { LlmMessage } from "@kagami/llm";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type {
@@ -29,18 +30,16 @@ import type {
  * extension hooks around a single kernel round.
  */
 export abstract class BaseLoopAgent<
-  TMessage extends { role: string },
   TUsage extends string,
   TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
+    message: Extract<LlmMessage, { role: "assistant" }> & AssistantLikeMessage;
   },
   TExtensionData = unknown,
   TLoopExtensionContext = void,
 > implements LoopAgent {
-  private readonly kernel: ReActKernel<TMessage, TUsage, TCompletion, TExtensionData>;
+  private readonly kernel: ReActKernel<TUsage, TCompletion, TExtensionData>;
   protected readonly extensions: LoopAgentExtension<
     TLoopExtensionContext,
-    TMessage,
     TUsage,
     TCompletion,
     TExtensionData
@@ -54,14 +53,8 @@ export abstract class BaseLoopAgent<
     kernel,
     extensions,
   }: {
-    kernel: ReActKernel<TMessage, TUsage, TCompletion, TExtensionData>;
-    extensions?: LoopAgentExtension<
-      TLoopExtensionContext,
-      TMessage,
-      TUsage,
-      TCompletion,
-      TExtensionData
-    >[];
+    kernel: ReActKernel<TUsage, TCompletion, TExtensionData>;
+    extensions?: LoopAgentExtension<TLoopExtensionContext, TUsage, TCompletion, TExtensionData>[];
   }) {
     this.kernel = kernel;
     this.extensions = extensions ?? [];
@@ -116,9 +109,9 @@ export abstract class BaseLoopAgent<
    */
   protected abstract runOnce(): Promise<void>;
 
-  protected abstract buildRoundInput(): Promise<ReActKernelRunRoundInput<TMessage, TUsage> | null>;
+  protected abstract buildRoundInput(): Promise<ReActKernelRunRoundInput<TUsage> | null>;
   protected abstract commitRoundResult(
-    result: ReActRoundResult<TMessage, TCompletion, TExtensionData>,
+    result: ReActRoundResult<TCompletion, TExtensionData>,
   ): Promise<void>;
 
   /**
@@ -128,11 +121,7 @@ export abstract class BaseLoopAgent<
    * Returns the round result (or null if buildRoundInput returned null,
    * meaning the round was skipped).
    */
-  protected async runReactRound(): Promise<ReActRoundResult<
-    TMessage,
-    TCompletion,
-    TExtensionData
-  > | null> {
+  protected async runReactRound(): Promise<ReActRoundResult<TCompletion, TExtensionData> | null> {
     const context = this.createLoopExtensionContext();
     for (const extension of this.extensions) {
       await extension.onBeforeRound?.(context);
@@ -166,8 +155,8 @@ export abstract class BaseLoopAgent<
   }
 
   protected async executeRound(
-    input: ReActKernelRunRoundInput<TMessage, TUsage>,
-  ): Promise<ReActRoundResult<TMessage, TCompletion, TExtensionData>> {
+    input: ReActKernelRunRoundInput<TUsage>,
+  ): Promise<ReActRoundResult<TCompletion, TExtensionData>> {
     return await this.kernel.runRound(input);
   }
 

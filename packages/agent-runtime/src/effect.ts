@@ -1,3 +1,5 @@
+import type { LlmMessage } from "@kagami/llm";
+
 /**
  * Effect 是描述 "Agent 状态变更动作" 的结构化数据。
  *
@@ -33,12 +35,12 @@ export interface Effect {
  *
  * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
-export interface EffectInterpreter<TMessage, TControl = never> {
-  apply(effects: readonly Effect[]): Promise<EffectInterpreterResult<TMessage, TControl>>;
+export interface EffectInterpreter<TControl = never> {
+  apply(effects: readonly Effect[]): Promise<EffectInterpreterResult<TControl>>;
 }
 
-export type EffectInterpreterResult<TMessage, TControl = never> = {
-  readonly appendedMessages: readonly TMessage[];
+export type EffectInterpreterResult<TControl = never> = {
+  readonly appendedMessages: readonly LlmMessage[];
   readonly control?: TControl;
 };
 
@@ -49,10 +51,8 @@ export type EffectInterpreterResult<TMessage, TControl = never> = {
  *
  * 实际收到 effects 时会抛错（声明的契约是"无 effect"，传入即违约）。
  */
-export class NoopEffectInterpreter<TMessage> implements EffectInterpreter<TMessage, never> {
-  public async apply(
-    effects: readonly Effect[],
-  ): Promise<EffectInterpreterResult<TMessage, never>> {
+export class NoopEffectInterpreter implements EffectInterpreter<never> {
+  public async apply(effects: readonly Effect[]): Promise<EffectInterpreterResult<never>> {
     if (effects.length > 0) {
       const types = effects.map(effect => effect.type).join(", ");
       throw new Error(
@@ -78,8 +78,8 @@ export class NoopEffectInterpreter<TMessage> implements EffectInterpreter<TMessa
 // 设计依据：[docs/effect-model.md](docs/effect-model.md)。
 // ============================================================================
 
-export type EffectHandlerResult<TMessage, TControl = never> = {
-  readonly appendedMessages?: readonly TMessage[];
+export type EffectHandlerResult<TControl = never> = {
+  readonly appendedMessages?: readonly LlmMessage[];
   readonly control?: TControl;
 };
 
@@ -92,9 +92,9 @@ export type EffectHandlerResult<TMessage, TControl = never> = {
  * 数组而不触发 TEffect 逆变冲突。matches 与 handle 的类型一致性由各 handler 自身
  * 这一处保证。
  */
-export interface EffectHandler<TMessage, TControl = never> {
+export interface EffectHandler<TControl = never> {
   matches(effect: Effect): boolean;
-  handle(effect: Effect): Promise<EffectHandlerResult<TMessage, TControl>>;
+  handle(effect: Effect): Promise<EffectHandlerResult<TControl>>;
 }
 
 /**
@@ -105,20 +105,15 @@ export interface EffectHandler<TMessage, TControl = never> {
  * 累积所有 handler 产出的 appendedMessages；control 取最后一个产出 control 的
  * handler 结果（与 ReActKernel 内 `capturedControl` 覆盖语义一致）。
  */
-export class HandlerEffectInterpreter<TMessage, TControl = never> implements EffectInterpreter<
-  TMessage,
-  TControl
-> {
-  private readonly handlers: readonly EffectHandler<TMessage, TControl>[];
+export class HandlerEffectInterpreter<TControl = never> implements EffectInterpreter<TControl> {
+  private readonly handlers: readonly EffectHandler<TControl>[];
 
-  public constructor(handlers: readonly EffectHandler<TMessage, TControl>[]) {
+  public constructor(handlers: readonly EffectHandler<TControl>[]) {
     this.handlers = handlers;
   }
 
-  public async apply(
-    effects: readonly Effect[],
-  ): Promise<EffectInterpreterResult<TMessage, TControl>> {
-    const appendedMessages: TMessage[] = [];
+  public async apply(effects: readonly Effect[]): Promise<EffectInterpreterResult<TControl>> {
+    const appendedMessages: LlmMessage[] = [];
     let control: TControl | undefined;
     for (const effect of effects) {
       const handler = this.handlers.find(candidate => candidate.matches(effect));
@@ -157,21 +152,18 @@ export const REPLACE_LEADING_MESSAGES_EFFECT_TYPE = "replace_leading_messages";
  * `[summaryMessage]`。保留段不用显式携带（它就是 count 之后的部分），所以产 Effect
  * 的一方（如 ContextSummaryOperation）不需要知道"保留哪些"，职责更纯。全量压缩 =
  * count 取全部 message 数。
- *
- * 公共 Effect：任何 Agent 都有 `messages` 列表，"替换前缀 N 条"不依赖任何
- * Agent-specific 概念。`TMessage` 由 specialize 它的 Agent 定。
  */
-export interface ReplaceLeadingMessagesEffect<TMessage> extends Effect {
+export interface ReplaceLeadingMessagesEffect extends Effect {
   readonly type: typeof REPLACE_LEADING_MESSAGES_EFFECT_TYPE;
   /** 要替换的前缀 message 条数（按展平后的 message 计）。 */
   readonly count: number;
   /** 替换成的新 message（compact 场景通常是单条 summary）。 */
-  readonly replacement: readonly TMessage[];
+  readonly replacement: readonly LlmMessage[];
 }
 
 /** ReplaceLeadingMessagesHandler 依赖的最小 context 端口。 */
-export interface ReplaceLeadingMessagesTarget<TMessage> {
-  replaceLeadingMessages(count: number, replacement: TMessage[]): Promise<void>;
+export interface ReplaceLeadingMessagesTarget {
+  replaceLeadingMessages(count: number, replacement: LlmMessage[]): Promise<void>;
 }
 
 /**
@@ -181,10 +173,10 @@ export interface ReplaceLeadingMessagesTarget<TMessage> {
  * replace 不走 kernel 的原子追加协议（它是"计划性重建"，不是追加），所以直接改
  * context、不返 appendedMessages。RootAgent 和 StoryAgent compact 都复用它。
  */
-export class ReplaceLeadingMessagesHandler<TMessage> implements EffectHandler<TMessage, never> {
-  private readonly target: ReplaceLeadingMessagesTarget<TMessage>;
+export class ReplaceLeadingMessagesHandler implements EffectHandler<never> {
+  private readonly target: ReplaceLeadingMessagesTarget;
 
-  public constructor(target: ReplaceLeadingMessagesTarget<TMessage>) {
+  public constructor(target: ReplaceLeadingMessagesTarget) {
     this.target = target;
   }
 
@@ -192,8 +184,8 @@ export class ReplaceLeadingMessagesHandler<TMessage> implements EffectHandler<TM
     return effect.type === REPLACE_LEADING_MESSAGES_EFFECT_TYPE;
   }
 
-  public async handle(effect: Effect): Promise<EffectHandlerResult<TMessage, never>> {
-    const replace = effect as ReplaceLeadingMessagesEffect<TMessage>;
+  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
+    const replace = effect as ReplaceLeadingMessagesEffect;
     await this.target.replaceLeadingMessages(replace.count, [...replace.replacement]);
     return {};
   }

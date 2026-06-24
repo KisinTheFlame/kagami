@@ -1,6 +1,5 @@
 import type { LoopAgentExtension, ReActRoundResult } from "@kagami/agent-runtime";
 import type { LlmClient } from "../../../../../llm/client.js";
-import type { LlmMessage } from "../../../../../llm/types.js";
 import type { StoryContextLifecycle } from "../story-context-lifecycle.js";
 
 type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
@@ -10,7 +9,6 @@ type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
  */
 export class StoryContextCompactionExtension implements LoopAgentExtension<
   void,
-  LlmMessage,
   "storyAgent",
   StoryCompletion
 > {
@@ -20,9 +18,7 @@ export class StoryContextCompactionExtension implements LoopAgentExtension<
     this.contextLifecycle = contextLifecycle;
   }
 
-  public async onAfterCommit(input: {
-    result: ReActRoundResult<LlmMessage, StoryCompletion>;
-  }): Promise<void> {
+  public async onAfterCommit(input: { result: ReActRoundResult<StoryCompletion> }): Promise<void> {
     await this.contextLifecycle.compactContextIfNeeded(input.result.completion.usage?.totalTokens);
   }
 }

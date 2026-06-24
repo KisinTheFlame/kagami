@@ -18,6 +18,7 @@
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@kagami/agent-runtime": "workspace:*",
+    "@kagami/llm": "workspace:*",
     "@kagami/shared": "workspace:*",
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",

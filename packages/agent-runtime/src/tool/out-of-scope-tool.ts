@@ -19,7 +19,7 @@ import type {
  * 关键不变量，否则 LLM API 的 tools 字段不再字节相等，cache 不命中。execute
  * 永远返回 OUT_OF_SCOPE，附带 reason 让 LLM 自然回到允许的调用路径。
  */
-export class OutOfScopeTool<TMessage = unknown> implements ToolComponent<TMessage> {
+export class OutOfScopeTool implements ToolComponent {
   public readonly name: string;
   public readonly description: string | undefined;
   public readonly parameters: JsonSchema;
@@ -30,7 +30,7 @@ export class OutOfScopeTool<TMessage = unknown> implements ToolComponent<TMessag
     inner,
     reason,
   }: {
-    inner: ToolComponent<TMessage>;
+    inner: ToolComponent;
     /** 软拒绝时回带给 LLM 的具体原因。形如 "在网页搜索子任务里不能调用 enter"。 */
     reason: string;
   }) {
@@ -51,7 +51,7 @@ export class OutOfScopeTool<TMessage = unknown> implements ToolComponent<TMessag
 
   public async execute(
     _argumentsValue: Record<string, unknown>,
-    _context: ToolContext<TMessage>,
+    _context: ToolContext,
   ): Promise<ToolExecutionResult> {
     return {
       content: JSON.stringify({

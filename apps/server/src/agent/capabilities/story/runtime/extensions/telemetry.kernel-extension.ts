@@ -4,7 +4,6 @@ import type {
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
 import type { LlmClient } from "../../../../../llm/client.js";
-import type { LlmMessage } from "../../../../../llm/types.js";
 import type { MetricService } from "../../../../../metric/application/metric.service.js";
 import { recordToolCallMetric } from "../../../../runtime/tool-call-metric.js";
 
@@ -14,7 +13,6 @@ type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
  * 把每轮工具执行后的 metric 上报挂到 kernel 上。除 metric 之外没有任何持久化或状态变更。
  */
 export class StoryToolCallMetricKernelExtension implements ReActKernelExtension<
-  LlmMessage,
   "storyAgent",
   StoryCompletion
 > {
@@ -25,7 +23,7 @@ export class StoryToolCallMetricKernelExtension implements ReActKernelExtension<
   }
 
   public async onAfterToolExecution(input: {
-    request: ReActKernelRunRoundInput<LlmMessage, "storyAgent">;
+    request: ReActKernelRunRoundInput<"storyAgent">;
     completion: StoryCompletion;
     toolCall: {
       name: string;
