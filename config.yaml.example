@@ -121,3 +121,20 @@ server:
       maxCommandLength: 4096         # command 参数字符长度上限
       readOutputMaxSize: 4096        # read_bash_output 单次返回字节上限
       shell: /bin/sh                 # 执行 bash command 时使用的 shell
+    hn:
+      # Hacker News App（只读：逛 / 读讨论 / 搜 / 看用户）。两个 API 都零鉴权公开。
+      # 整段可省略，全部字段都有默认值。
+      userAgent: "Mozilla/5.0 ... Kagami/1.0"  # 请求 HN 用的 User-Agent
+      fetchTimeoutMs: 10000          # 单次 HTTP 超时
+      fetchMaxAttempts: 3            # 含首次的最大尝试次数（只对 429/408/5xx/网络错误重试）
+      fetchBackoffBaseMs: 500        # 指数退避基数
+      fetchBackoffMaxMs: 8000        # 退避上限
+      glanceDefaultLimit: 15         # glance_hn 默认看几条
+      glanceLimitCap: 30             # glance_hn 上限（超过被截断）
+      glanceConcurrency: 6           # glance_hn 拉 item 的并发上限
+      commentTopLimit: 20            # open_hn_thread 展开的主楼评论数
+      commentReplyLimit: 3           # 每条主楼展开的第一层回复数
+      perCommentMaxChars: 600        # 单条评论 / 片段最大字符
+      responseMaxChars: 8000         # open_hn_thread 评论总字符预算，超出截断
+      searchHitsLimit: 15            # search_hn 返回命中数
+      userActivityLimit: 10          # open_hn_user 近期发言条数

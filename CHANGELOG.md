@@ -9,6 +9,7 @@
 
 ### Added
 
+- agent: 新增 `hn` App，给小镜一个只读的 Hacker News 地点（agency 优先：进门不自动拉榜、无未读提醒，想看才看，区别于 ithome 的"推未读"节奏）。4 个 InvokeTool 子工具 `glance_hn` / `open_hn_thread` / `search_hn` / `open_hn_user`，顶层工具集不变（KV 稳定前缀）；feed 列表用官方 Firebase API、评论树与搜索用 Algolia API（搜索 / 嵌套评论树 / 用户主页都是 RSS 做不到、HN 原生的能力）；整个 App 自包含在 `agent/apps/hn`（无轮询 / 无 DB / 无 cursor，刻意不照搬 ithome 的 RSS 驱动结构）；`open_hn_thread` 按最热闹子树优先 + 限深限量 + 字符预算截断；所有 HN 文本过 `htmlToPlainText` 清洗（去标签 / 解码实体 / 软化尖括号）防上下文结构注入；onFocus 只返静态提示屏、无网络 I/O（[#86](https://github.com/KisinTheFlame/kagami/pull/86)）
 - agent-runtime: 为此前零测试的核心包 `@kagami/agent-runtime` 补上 vitest 测试基建，新增 26 条不变量测试，直接测源码、不依赖构建；覆盖 Effect 解释器（`ReplaceLeadingMessages` 唯一前缀重建路径且传副本、无匹配 / Noop 收到 effect 即抛绝不静默吞）、事件队列（FIFO、一次 enqueue 唤醒全部 waiter）、串行执行器（严格串行不交错、单任务抛错隔离）、`ZodToolComponent`（非法参数永不进 `executeTyped`、业务抛错转结构化结果）；根目录 `pnpm test` 现已覆盖该包（[#87](https://github.com/KisinTheFlame/kagami/pull/87)）
 - agent: 新增 `clock` App，提供 `view_time` 工具让 Agent 主动查询当前北京时间（精确到秒）；与 Wake Reminder 降频（[#77](https://github.com/KisinTheFlame/kagami/pull/77)）形成被动 + 主动的时间感知闭环（[#79](https://github.com/KisinTheFlame/kagami/pull/79)）
 

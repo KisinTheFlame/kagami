@@ -85,6 +85,7 @@ import {
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
+import { HnApp } from "../agent/apps/hn/hn.app.js";
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
 
@@ -211,6 +212,7 @@ export async function buildAgentRuntime({
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
   appManager.register(new ClockApp());
+  appManager.register(new HnApp());
   await appManager.startupAll(config.server.apps);
 
   // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
