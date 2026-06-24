@@ -1,6 +1,19 @@
 import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
-import type { Effect, EffectInterpreter, EffectInterpreterResult } from "./effect.js";
-import { NoopEffectInterpreter } from "./effect.js";
+import type {
+  Effect,
+  EffectHandler,
+  EffectHandlerResult,
+  EffectInterpreter,
+  EffectInterpreterResult,
+  ReplaceMessagesEffect,
+  ReplaceMessagesTarget,
+} from "./effect.js";
+import {
+  HandlerEffectInterpreter,
+  NoopEffectInterpreter,
+  REPLACE_MESSAGES_EFFECT_TYPE,
+  ReplaceMessagesHandler,
+} from "./effect.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type { Operation } from "./operation.js";
@@ -31,6 +44,7 @@ import {
   BaseTaskAgent,
   TaskAgentRuntime,
   TaskEffectInterpreter,
+  TerminateHandler,
   TERMINATE_EFFECT_TYPE,
   type AssistantLikeMessage,
   type TaskAgentControl,
@@ -64,15 +78,19 @@ export {
   BaseLoopAgent,
   BaseTaskAgent,
   createAppSubtoolOwner,
+  HandlerEffectInterpreter,
   HELP_TOOL_NAME,
   HelpTool,
   InMemoryQueue,
   NoopEffectInterpreter,
   OutOfScopeTool,
   ReActKernel,
+  REPLACE_MESSAGES_EFFECT_TYPE,
+  ReplaceMessagesHandler,
   SerialExecutor,
   TaskAgentRuntime,
   TaskEffectInterpreter,
+  TerminateHandler,
   TERMINATE_EFFECT_TYPE,
   ToolCatalog,
   ToolSet,
@@ -83,9 +101,13 @@ export {
   type AppStartupContext,
   type CanInvokeResult,
   type Effect,
+  type EffectHandler,
+  type EffectHandlerResult,
   type EffectInterpreter,
   type EffectInterpreterResult,
   type HelpToolDeps,
+  type ReplaceMessagesEffect,
+  type ReplaceMessagesTarget,
   type InvokeSubtoolOwner,
   type SubtoolGuardResult,
   type Queue,

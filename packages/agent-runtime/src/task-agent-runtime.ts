@@ -1,5 +1,11 @@
 import type { TaskAgent } from "./agent-runtime.js";
-import type { Effect, EffectInterpreter, EffectInterpreterResult } from "./effect.js";
+import {
+  HandlerEffectInterpreter,
+  type Effect,
+  type EffectHandler,
+  type EffectHandlerResult,
+  type EffectInterpreter,
+} from "./effect.js";
 import {
   ReActKernel,
   type AssistantLikeMessage,
@@ -50,31 +56,31 @@ export type TaskAgentControl = {
 };
 
 /**
- * TaskAgent 用的标准 EffectInterpreter。识别 `terminate` Effect，把它翻译成
- * `TaskAgentControl`。其他 Effect 类型一律 throw——TaskAgent 不像 RootAgent
- * 有切状态 / append message 这些副作用语义。
+ * 处理 `terminate` Effect 的 handler：翻译成 `TaskAgentControl.stop`，content
+ * 取自 Effect 自带的 `content` 字段（Effect 自描述）。
  */
-export class TaskEffectInterpreter<TMessage> implements EffectInterpreter<
-  TMessage,
-  TaskAgentControl
-> {
-  public async apply(
-    effects: readonly Effect[],
-  ): Promise<EffectInterpreterResult<TMessage, TaskAgentControl>> {
-    for (const effect of effects) {
-      if (effect.type === TERMINATE_EFFECT_TYPE) {
-        const terminate = effect as TerminateEffect;
-        return {
-          appendedMessages: [],
-          control: { kind: "stop", content: terminate.content },
-        };
-      }
-      throw new Error(
-        `TaskEffectInterpreter does not handle Effect "${effect.type}". ` +
-          `TaskAgent only supports "${TERMINATE_EFFECT_TYPE}".`,
-      );
-    }
-    return { appendedMessages: [] };
+export class TerminateHandler<TMessage> implements EffectHandler<TMessage, TaskAgentControl> {
+  public matches(effect: Effect): boolean {
+    return effect.type === TERMINATE_EFFECT_TYPE;
+  }
+
+  public async handle(effect: Effect): Promise<EffectHandlerResult<TMessage, TaskAgentControl>> {
+    const terminate = effect as TerminateEffect;
+    return { control: { kind: "stop", content: terminate.content } };
+  }
+}
+
+/**
+ * TaskAgent 用的标准 EffectInterpreter。只装一个 `TerminateHandler`——TaskAgent
+ * 不像 RootAgent 有切状态 / append message 这些副作用语义，遇到非 terminate 的
+ * Effect 由 HandlerEffectInterpreter 抛错。
+ */
+export class TaskEffectInterpreter<TMessage>
+  extends HandlerEffectInterpreter<TMessage, TaskAgentControl>
+  implements EffectInterpreter<TMessage, TaskAgentControl>
+{
+  public constructor() {
+    super([new TerminateHandler<TMessage>()]);
   }
 }
 

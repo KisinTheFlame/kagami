@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmClient } from "../../src/llm/client.js";
-import { ContextSummaryOperation as ContextSummaryPlannerService } from "../../src/agent/capabilities/context-summary/operations/context-summary.operation.js";
+import { ContextSummaryOperation } from "../../src/agent/capabilities/context-summary/operations/context-summary.operation.js";
 import {
   SUMMARY_TOOL_NAME,
   SummaryTool,
 } from "../../src/agent/capabilities/context-summary/tools/summary.tool.js";
-import { ToolCatalog } from "@kagami/agent-runtime";
+import { REPLACE_MESSAGES_EFFECT_TYPE, ToolCatalog } from "@kagami/agent-runtime";
 
-describe("ContextSummaryPlannerService", () => {
-  it("should force the summary tool and return its content", async () => {
+describe("ContextSummaryOperation", () => {
+  it("forces the summary tool and emits a replace_messages effect with summary + kept messages", async () => {
     const chat = vi.fn().mockResolvedValue({
       provider: "openai",
       model: "gpt-4o-mini",
@@ -31,7 +31,7 @@ describe("ContextSummaryPlannerService", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
-    const planner = new ContextSummaryPlannerService({
+    const operation = new ContextSummaryOperation({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
       reminderMessageFactory: () => ({
@@ -40,24 +40,31 @@ describe("ContextSummaryPlannerService", () => {
       }),
     });
 
-    await expect(
-      planner.summarize({
-        systemPrompt: "runtime-system-prompt",
-        messages: [{ role: "user", content: "旧消息" }],
-        tools: [
-          {
-            name: "search_web",
-            description: "search",
-            parameters: { type: "object", properties: {} },
-          },
-          {
-            name: SUMMARY_TOOL_NAME,
-            description: "summary",
-            parameters: { type: "object", properties: {} },
-          },
-        ],
-      }),
-    ).resolves.toBe("累计摘要");
+    const keptMessage = { role: "user", content: "最近一条" } as const;
+    const result = await operation.execute({
+      systemPrompt: "runtime-system-prompt",
+      messagesToSummarize: [{ role: "user", content: "旧消息" }],
+      messagesToKeep: [keptMessage],
+      tools: [
+        {
+          name: "search_web",
+          description: "search",
+          parameters: { type: "object", properties: {} },
+        },
+        {
+          name: SUMMARY_TOOL_NAME,
+          description: "summary",
+          parameters: { type: "object", properties: {} },
+        },
+      ],
+    });
+
+    expect(result.effects).toHaveLength(1);
+    const effect = result.effects[0];
+    expect(effect.type).toBe(REPLACE_MESSAGES_EFFECT_TYPE);
+    // 重建后的消息 = [summary message, ...messagesToKeep]
+    expect(effect.messages).toHaveLength(2);
+    expect(effect.messages[1]).toEqual(keptMessage);
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -78,7 +85,7 @@ describe("ContextSummaryPlannerService", () => {
     );
   });
 
-  it("should return null when the first tool call is not summary", async () => {
+  it("emits no effects when the first tool call is not summary", async () => {
     const llmClient: LlmClient = {
       chat: vi.fn().mockResolvedValue({
         provider: "openai",
@@ -92,7 +99,7 @@ describe("ContextSummaryPlannerService", () => {
       chatDirect: vi.fn(),
       listAvailableProviders: vi.fn().mockResolvedValue([]),
     };
-    const planner = new ContextSummaryPlannerService({
+    const operation = new ContextSummaryOperation({
       llmClient,
       summaryToolExecutor: new ToolCatalog([new SummaryTool()]).pick([SUMMARY_TOOL_NAME]),
       reminderMessageFactory: () => ({
@@ -101,12 +108,13 @@ describe("ContextSummaryPlannerService", () => {
       }),
     });
 
-    await expect(
-      planner.summarize({
-        systemPrompt: "story-system-prompt",
-        messages: [],
-        tools: [{ name: SUMMARY_TOOL_NAME, parameters: { type: "object", properties: {} } }],
-      }),
-    ).resolves.toBeNull();
+    const result = await operation.execute({
+      systemPrompt: "story-system-prompt",
+      messagesToSummarize: [],
+      messagesToKeep: [],
+      tools: [{ name: SUMMARY_TOOL_NAME, parameters: { type: "object", properties: {} } }],
+    });
+
+    expect(result.effects).toEqual([]);
   });
 });
