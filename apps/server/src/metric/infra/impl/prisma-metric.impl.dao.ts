@@ -36,35 +36,77 @@ export class PrismaMetricDao implements MetricDao {
     const seriesKeyExpression = input.groupByTag
       ? Prisma.sql`NULLIF("tags" ->> ${input.groupByTag}, '')`
       : Prisma.sql`NULL`;
-    const aggregateExpression = buildAggregateExpression(input.aggregator);
+    // SQLite 下 DateTime 以 ISO-8601 文本存储，unixepoch 解析为 epoch 秒。绑定参数会以 REAL
+    // 传入导致 `/` 走浮点除法（不截断），故用 CAST(... AS INTEGER) 强制整除再乘回，实现分桶。
+    const bucketExpression = Prisma.sql`CAST(unixepoch("occurred_at") / ${bucketSeconds} AS INTEGER) * ${bucketSeconds}`;
     const whereClause = buildChartSeriesWhereClause(input);
 
-    const rows = await this.database.$queryRaw<RawMetricChartSeriesRow[]>(Prisma.sql`
+    const rows =
+      input.aggregator === "last"
+        ? await this.queryLastValueSeries({ bucketExpression, seriesKeyExpression, whereClause })
+        : await this.queryAggregatedSeries({
+            bucketExpression,
+            seriesKeyExpression,
+            whereClause,
+            aggregateExpression: buildAggregateExpression(input.aggregator),
+          });
+
+    return rows.map(row => ({
+      bucketStart: new Date(Number(row.bucketStart) * 1000),
+      seriesKey: row.seriesKey,
+      value: row.value === null ? null : Number(row.value),
+    }));
+  }
+
+  private async queryAggregatedSeries(input: {
+    bucketExpression: Prisma.Sql;
+    seriesKeyExpression: Prisma.Sql;
+    whereClause: Prisma.Sql;
+    aggregateExpression: Prisma.Sql;
+  }): Promise<RawMetricChartSeriesRow[]> {
+    // SQLite ORDER BY ASC 默认把 NULL 排在最前，无需 PG 的 NULLS FIRST。
+    return this.database.$queryRaw<RawMetricChartSeriesRow[]>(Prisma.sql`
       WITH filtered_metrics AS (
         SELECT
-          to_timestamp(
-            FLOOR(EXTRACT(EPOCH FROM "occurred_at") / ${bucketSeconds}) * ${bucketSeconds}
-          ) AS "bucketStart",
-          ${seriesKeyExpression} AS "seriesKey",
-          "value" AS "value",
-          "occurred_at" AS "occurredAt"
+          ${input.bucketExpression} AS "bucketStart",
+          ${input.seriesKeyExpression} AS "seriesKey",
+          "value" AS "value"
         FROM "metric"
-        ${whereClause}
+        ${input.whereClause}
       )
       SELECT
         "bucketStart" AS "bucketStart",
         "seriesKey" AS "seriesKey",
-        ${aggregateExpression} AS "value"
+        ${input.aggregateExpression} AS "value"
       FROM filtered_metrics
       GROUP BY "bucketStart", "seriesKey"
-      ORDER BY "bucketStart" ASC, "seriesKey" ASC NULLS FIRST
+      ORDER BY "bucketStart" ASC, "seriesKey" ASC
     `);
+  }
 
-    return rows.map(row => ({
-      bucketStart: row.bucketStart,
-      seriesKey: row.seriesKey,
-      value: row.value,
-    }));
+  private async queryLastValueSeries(input: {
+    bucketExpression: Prisma.Sql;
+    seriesKeyExpression: Prisma.Sql;
+    whereClause: Prisma.Sql;
+  }): Promise<RawMetricChartSeriesRow[]> {
+    // PG 的 ARRAY_AGG(... ORDER BY ...)[1] 在 SQLite 无对应，用窗口函数取每个桶内最新一条。
+    return this.database.$queryRaw<RawMetricChartSeriesRow[]>(Prisma.sql`
+      SELECT "bucketStart" AS "bucketStart", "seriesKey" AS "seriesKey", "value" AS "value"
+      FROM (
+        SELECT
+          ${input.bucketExpression} AS "bucketStart",
+          ${input.seriesKeyExpression} AS "seriesKey",
+          "value" AS "value",
+          ROW_NUMBER() OVER (
+            PARTITION BY ${input.bucketExpression}, ${input.seriesKeyExpression}
+            ORDER BY "occurred_at" DESC, "id" DESC
+          ) AS "rowNumber"
+        FROM "metric"
+        ${input.whereClause}
+      )
+      WHERE "rowNumber" = 1
+      ORDER BY "bucketStart" ASC, "seriesKey" ASC
+    `);
   }
 }
 
@@ -73,9 +115,10 @@ function toInputJsonObject(tags: Record<string, string>): Prisma.InputJsonObject
 }
 
 type RawMetricChartSeriesRow = {
-  bucketStart: Date;
+  // SQLite 返回的 bucketStart 是 epoch 秒（整数），value 是聚合数值；统一在映射处转换。
+  bucketStart: number | bigint | string;
   seriesKey: string | null;
-  value: number | null;
+  value: number | bigint | string | null;
 };
 
 function buildChartSeriesWhereClause(input: QueryMetricChartSeriesInput): Prisma.Sql {
@@ -93,21 +136,19 @@ function buildChartSeriesWhereClause(input: QueryMetricChartSeriesInput): Prisma
 }
 
 function buildAggregateExpression(
-  aggregator: QueryMetricChartSeriesInput["aggregator"],
+  aggregator: Exclude<QueryMetricChartSeriesInput["aggregator"], "last">,
 ): Prisma.Sql {
   switch (aggregator) {
     case "count":
-      return Prisma.sql`COUNT(*)::double precision`;
+      return Prisma.sql`COUNT(*)`;
     case "sum":
-      return Prisma.sql`SUM("value")::double precision`;
+      return Prisma.sql`SUM("value")`;
     case "avg":
-      return Prisma.sql`AVG("value")::double precision`;
+      return Prisma.sql`AVG("value")`;
     case "max":
-      return Prisma.sql`MAX("value")::double precision`;
+      return Prisma.sql`MAX("value")`;
     case "min":
-      return Prisma.sql`MIN("value")::double precision`;
-    case "last":
-      return Prisma.sql`(ARRAY_AGG("value" ORDER BY "occurredAt" DESC))[1]::double precision`;
+      return Prisma.sql`MIN("value")`;
   }
 }
 

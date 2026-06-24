@@ -152,7 +152,11 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 
 ## 数据库与配置
 
-- 数据库操作可以使用 `psql`；连接信息统一以仓库根目录 `config.yaml` 中的 `server.databaseUrl` 为准。
+- 数据库为**进程内 SQLite 文件**（默认 `data/sqlite/kagami.db`），不再依赖外部 PostgreSQL 服务；ORM 仍是 Prisma，driver adapter 为 `@prisma/adapter-better-sqlite3`。
+- 直接查库可使用 `sqlite3` CLI；库文件路径以仓库根目录 `config.yaml` 中的 `server.databaseUrl`（`file:` 路径，运行时解析为绝对路径）为准。
+- Story 向量记忆不再用 pgvector，改为**进程内 HNSW 索引（hnswlib-node）**：向量以 JSON 字符串存于 `story_memory_document.embedding`（SQLite 为唯一事实来源），HNSW 索引在启动时从 SQLite 重建、并持久化派生快照到 `data/vector/story-memory.hnsw`。
+- 所有持久化数据统一放在仓库根 `data/` 目录下并按类别分子目录（`data/sqlite/`、`data/vector/`）；整个 `data/` 已在 `.gitignore` 中。
+- 从旧 PostgreSQL 搬迁数据：停服务后执行 `SOURCE_DATABASE_URL=<旧PG连接串> pnpm --filter @kagami/server exec tsx scripts/migrate-pg-to-sqlite.ts`（只搬迁关键有状态表，日志/指标/事件类不迁移）。
 
 ### 数据库迁移
 
@@ -181,9 +185,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - 后端启动时通过 `apps/server/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
 - `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
 - 关键配置分区包括：
-  - `server.databaseUrl`、`server.port`
+  - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
   - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationBatchWindowMs`
-  - `server.agent.story.batchSize`、`idleFlushMs`、`memory.embedding`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
+  - `server.agent.story.batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
   - `server.news.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
   - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
   - `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
@@ -339,7 +343,8 @@ Agent 相关补充约定：
 - 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。
 - 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
-- PostgreSQL 与 Napcat 作为宿主机外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
+- 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
+- 部署机需要能编译/安装原生模块（`better-sqlite3`、`hnswlib-node`）；这些依赖的构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行。
 
 # gstack
 

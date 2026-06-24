@@ -1,5 +1,5 @@
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami?schema=public
+  databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
   port: 20003
   agent:
     contextCompactionTotalTokenThreshold: 150000
@@ -15,6 +15,7 @@ server:
           baseUrl: http://127.0.0.1:20008
           model: google/embeddinggemma-300m
           outputDimensionality: 768
+        vectorIndexPath: ./data/vector/story-memory.hnsw # HNSW 向量索引文件（派生缓存，缺失时从 SQLite 重建）
         retrieval:
           topK: 3
       recall:

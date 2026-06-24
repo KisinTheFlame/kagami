@@ -1,16 +1,27 @@
-import * as Prisma from "../../../../../generated/prisma/internal/prismaNamespace.js";
 import type { Database } from "../../../../../db/client.js";
 import type {
   StoryMemoryDocumentDao,
   StoryMemoryDocumentIndexMetadata,
 } from "../story-memory-document.dao.js";
 import type { StoryMemoryDocumentHit, StoryMemoryDocumentKind } from "../../domain/story.js";
+import type { HnswVectorIndex } from "../hnsw-vector-index.js";
+
+/** searchSimilar 时在 topK 之外多取一些候选，给 embeddingModel/embeddingDim 过滤留余量。 */
+const SEARCH_OVERFETCH = 16;
 
 export class PrismaStoryMemoryDocumentDao implements StoryMemoryDocumentDao {
   private readonly database: Database;
+  private readonly vectorIndex: HnswVectorIndex;
 
-  public constructor({ database }: { database: Database }) {
+  public constructor({
+    database,
+    vectorIndex,
+  }: {
+    database: Database;
+    vectorIndex: HnswVectorIndex;
+  }) {
     this.database = database;
+    this.vectorIndex = vectorIndex;
   }
 
   public async replaceForStory(input: {
@@ -23,38 +34,42 @@ export class PrismaStoryMemoryDocumentDao implements StoryMemoryDocumentDao {
       normalizedEmbedding: number[];
     }>;
   }): Promise<void> {
+    const previousDocuments = await this.database.storyMemoryDocument.findMany({
+      where: { storyId: input.storyId },
+      select: { id: true },
+    });
+
+    const insertedPoints: Array<{ id: number; vector: number[] }> = [];
     await this.database.$transaction(async tx => {
       await tx.storyMemoryDocument.deleteMany({
-        where: {
-          storyId: input.storyId,
-        },
+        where: { storyId: input.storyId },
       });
 
       for (const document of input.documents) {
-        await tx.$executeRaw(Prisma.sql`
-          INSERT INTO "story_memory_document" (
-            "story_id",
-            "kind",
-            "content",
-            "embedding_model",
-            "embedding_dim",
-            "embedding",
-            "created_at",
-            "updated_at"
-          )
-          VALUES (
-            ${input.storyId},
-            ${document.kind},
-            ${document.content},
-            ${document.embeddingModel},
-            ${document.embeddingDim},
-            ${toVectorLiteral(document.normalizedEmbedding)}::vector,
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-          )
-        `);
+        const created = await tx.storyMemoryDocument.create({
+          data: {
+            storyId: input.storyId,
+            kind: document.kind,
+            content: document.content,
+            embeddingModel: document.embeddingModel,
+            embeddingDim: document.embeddingDim,
+            // SQLite 不支持向量类型，归一化向量以 JSON 字符串存储；HNSW 索引从这里重建。
+            embedding: JSON.stringify(document.normalizedEmbedding),
+          },
+          select: { id: true },
+        });
+        insertedPoints.push({ id: created.id, vector: document.normalizedEmbedding });
       }
     });
+
+    // DB 事务提交后再同步内存索引，保证 SQLite 始终是事实来源。
+    for (const previous of previousDocuments) {
+      this.vectorIndex.remove(previous.id);
+    }
+    for (const point of insertedPoints) {
+      this.vectorIndex.add(point.id, point.vector);
+    }
+    this.vectorIndex.flush();
   }
 
   public async findIndexMetadataByStoryIds(
@@ -92,39 +107,36 @@ export class PrismaStoryMemoryDocumentDao implements StoryMemoryDocumentDao {
     embeddingModel: string;
     embeddingDim: number;
   }): Promise<StoryMemoryDocumentHit[]> {
-    const rows = await this.database.$queryRaw<Array<RawStoryMemoryDocumentHit>>(Prisma.sql`
-      SELECT
-        "id" AS "documentId",
-        "story_id" AS "storyId",
-        "kind" AS "kind",
-        "content" AS "content",
-        1 - ("embedding" <=> ${toVectorLiteral(input.queryEmbedding)}::vector) AS "score"
-      FROM "story_memory_document"
-      WHERE "embedding" IS NOT NULL
-        AND "embedding_model" = ${input.embeddingModel}
-        AND "embedding_dim" = ${input.embeddingDim}
-      ORDER BY "embedding" <=> ${toVectorLiteral(input.queryEmbedding)}::vector ASC
-      LIMIT ${Math.max(1, input.topK)}
-    `);
+    const topK = Math.max(1, input.topK);
+    const hits = this.vectorIndex.search(input.queryEmbedding, topK + SEARCH_OVERFETCH);
+    if (hits.length === 0) {
+      return [];
+    }
 
-    return rows.map(row => ({
-      documentId: row.documentId,
-      storyId: row.storyId,
-      kind: row.kind,
-      content: row.content,
-      score: Number(row.score),
-    }));
+    const scoreByDocumentId = new Map(hits.map(hit => [hit.label, hit.score]));
+    const rows = await this.database.storyMemoryDocument.findMany({
+      where: {
+        id: { in: hits.map(hit => hit.label) },
+        embeddingModel: input.embeddingModel,
+        embeddingDim: input.embeddingDim,
+      },
+      select: {
+        id: true,
+        storyId: true,
+        kind: true,
+        content: true,
+      },
+    });
+
+    return rows
+      .map(row => ({
+        documentId: row.id,
+        storyId: row.storyId,
+        kind: row.kind as StoryMemoryDocumentKind,
+        content: row.content,
+        score: scoreByDocumentId.get(row.id) ?? 0,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK);
   }
-}
-
-type RawStoryMemoryDocumentHit = {
-  documentId: number;
-  storyId: string;
-  kind: StoryMemoryDocumentKind;
-  content: string;
-  score: number | string;
-};
-
-function toVectorLiteral(values: number[]): string {
-  return `[${values.join(",")}]`;
 }

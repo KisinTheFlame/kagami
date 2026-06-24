@@ -5,6 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="$ROOT_DIR/apps/server"
 DATABASE_URL="$(node "$ROOT_DIR/scripts/read-config.mjs" server.databaseUrl)"
 
+# SQLite：确保库文件父目录存在，否则 prisma migrate/db push 会因目录缺失失败。
+if [[ "$DATABASE_URL" == file:* ]]; then
+  db_file="${DATABASE_URL#file:}"
+  if [ "$db_file" != ":memory:" ]; then
+    mkdir -p "$(dirname "$db_file")"
+  fi
+fi
+
 if [ "$#" -eq 0 ]; then
   echo "Usage: scripts/prisma.sh <prisma args...>"
   echo "Example: scripts/prisma.sh migrate status"

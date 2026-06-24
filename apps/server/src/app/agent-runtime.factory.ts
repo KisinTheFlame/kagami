@@ -71,6 +71,7 @@ import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
+import { HnswVectorIndex } from "../agent/capabilities/story/infra/hnsw-vector-index.js";
 import { PrismaStoryAgentRuntimeSnapshotRepository } from "../agent/capabilities/story/runtime/persistence/prisma-story-agent-runtime-snapshot.repository.js";
 import { StoryMemoryIndexService } from "../agent/capabilities/story/application/story-memory-index.service.js";
 import { StoryRecallService } from "../agent/capabilities/story/application/story-recall.service.js";
@@ -130,7 +131,11 @@ export async function buildAgentRuntime({
   });
   const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
   const storyDao = new PrismaStoryDao({ database });
-  const storyMemoryDocumentDao = new PrismaStoryMemoryDocumentDao({ database });
+  const storyVectorIndex = await buildStoryVectorIndex({ config, database });
+  const storyMemoryDocumentDao = new PrismaStoryMemoryDocumentDao({
+    database,
+    vectorIndex: storyVectorIndex,
+  });
   const storyMemoryIndexService = new StoryMemoryIndexService({
     storyMemoryDocumentDao,
     embeddingClient,
@@ -473,4 +478,46 @@ export async function buildAgentRuntime({
     },
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
   };
+}
+
+/**
+ * 创建 Story 向量索引并完成启动补水：从 SQLite 读出全部归一化向量，重建进程内 HNSW。
+ * SQLite 是事实来源，索引文件只是派生快照，因此每次启动都重建，不依赖磁盘上的旧索引。
+ */
+async function buildStoryVectorIndex({
+  config,
+  database,
+}: {
+  config: Config;
+  database: Database;
+}): Promise<HnswVectorIndex> {
+  const vectorIndex = new HnswVectorIndex({
+    dimensions: config.server.agent.story.memory.embedding.outputDimensionality,
+    indexFilePath: config.server.agent.story.memory.vectorIndexPath,
+  });
+
+  const rows = await database.storyMemoryDocument.findMany({
+    where: { embedding: { not: null } },
+    select: { id: true, embedding: true },
+  });
+
+  const points = rows
+    .map(row => ({ label: row.id, vector: parseEmbedding(row.embedding) }))
+    .filter(point => point.vector.length > 0);
+  vectorIndex.rebuildFrom(points);
+
+  return vectorIndex;
+}
+
+function parseEmbedding(value: string | null): number[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(item => Number(item)) : [];
+  } catch {
+    return [];
+  }
 }

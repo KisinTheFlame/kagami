@@ -65,9 +65,11 @@ describe("PrismaMetricDao", () => {
   });
 
   it("should map aggregated chart series rows", async () => {
+    // SQLite 下 unixepoch 分桶返回 epoch 秒（整数），DAO 负责转回 Date。
+    const bucketStartEpochSeconds = new Date("2026-04-02T00:00:00.000Z").getTime() / 1000;
     const queryRaw = vi.fn().mockResolvedValue([
       {
-        bucketStart: new Date("2026-04-02T00:00:00.000Z"),
+        bucketStart: bucketStartEpochSeconds,
         seriesKey: "gpt-4o",
         value: 120,
       },

@@ -1,3 +1,13 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# 允许这些依赖在安装时运行构建脚本（原生模块需要编译/拉取预编译二进制）。
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - better-sqlite3
+  - esbuild
+  - hnswlib-node
+  - prisma
+  - protobufjs

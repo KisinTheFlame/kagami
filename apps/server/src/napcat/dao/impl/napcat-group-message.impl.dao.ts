@@ -91,7 +91,7 @@ export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
     const rows = await this.database.$queryRaw<
       Array<{ total: bigint | number | string }>
     >(Prisma.sql`
-      SELECT COUNT(*)::bigint AS "total"
+      SELECT COUNT(*) AS "total"
       FROM "napcat_qq_message"
       ${whereClause}
     `);
@@ -143,7 +143,7 @@ export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
           gm."nickname" AS "nickname",
           COALESCE(
             gm."payload"->>'raw_message',
-            gm."message"::text
+            CAST(gm."message" AS TEXT)
           ) AS "messageText",
           gm."event_time" AS "eventTime",
           gm."created_at" AS "createdAt",
@@ -194,9 +194,9 @@ function buildWhereInput(
     where.userId = input.userId;
   }
   if (input.nickname) {
+    // SQLite 不支持 Prisma 的 mode: "insensitive"；contains 默认走 LIKE，对 ASCII 已大小写不敏感。
     where.nickname = {
       contains: input.nickname,
-      mode: "insensitive",
     };
   }
 
@@ -227,10 +227,10 @@ function buildKeywordSqlWhereClause(input: QueryNapcatQqMessageListFilterInput):
     conditions.push(Prisma.sql`"user_id" = ${input.userId}`);
   }
   if (input.nickname) {
-    conditions.push(Prisma.sql`"nickname" ILIKE ${toContainsPattern(input.nickname)}`);
+    conditions.push(Prisma.sql`"nickname" LIKE ${toContainsPattern(input.nickname)}`);
   }
   if (input.keyword) {
-    conditions.push(Prisma.sql`"message"::text ILIKE ${toContainsPattern(input.keyword)}`);
+    conditions.push(Prisma.sql`CAST("message" AS TEXT) LIKE ${toContainsPattern(input.keyword)}`);
   }
   if (input.startAt) {
     conditions.push(Prisma.sql`"created_at" >= ${new Date(input.startAt)}`);
