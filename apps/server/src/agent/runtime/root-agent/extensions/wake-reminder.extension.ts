@@ -1,5 +1,4 @@
 import type { LoopAgentExtension } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
 import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
@@ -8,7 +7,6 @@ import type {
 
 export class WakeReminderExtension implements LoopAgentExtension<
   RootLoopExtensionContext,
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData

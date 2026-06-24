@@ -12,7 +12,6 @@ import { NOOP_METRIC_SERVICE } from "../../../runtime/tool-call-metric.js";
 import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
 import { createUserMessage } from "../../../runtime/context/context-message-factory.js";
 import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
 import type { MetricService } from "../../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
@@ -66,10 +65,10 @@ type StoryLoopAgentDeps = {
  * - {@link StoryBatchPreparer}：从 ledger 切批、维护批次游标、判定 batch 完成。
  * - {@link StoryContextLifecycle}：AgentContext snapshot 装载/回写、上下文压缩。
  */
-export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", StoryCompletion> {
+export class StoryLoopAgent extends BaseLoopAgent<"storyAgent", StoryCompletion> {
   private readonly batchPreparer: StoryBatchPreparer;
   private readonly contextLifecycle: StoryContextLifecycle;
-  private readonly tools: ToolExecutor<LlmMessage>;
+  private readonly tools: ToolExecutor;
   private readonly eventQueue: Queue<StoryAgentEvent>;
 
   public constructor({
@@ -120,11 +119,11 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
       getPendingBatchSeqRange: () => batchPreparer.getPendingBatchSeqRange(),
     });
 
-    const kernel = new ReActKernel<LlmMessage, "storyAgent", StoryCompletion>({
+    const kernel = new ReActKernel<"storyAgent", StoryCompletion>({
       model: llmClient,
       // Story 工具集不产 Effect——显式 noop interpreter 表达 "这条路径不处理 effects"，
       // 任何意外产生的 effects 会触发 noop 的 throw，便于发现 bug。
-      interpreter: new NoopEffectInterpreter<LlmMessage>(),
+      interpreter: new NoopEffectInterpreter(),
       extensions: [
         new StoryToolCallMetricKernelExtension({ metricService: resolvedMetricService }),
         new LoopLlmRetryExtension({
@@ -219,10 +218,7 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
     await this.eventQueue.waitNonEmpty();
   }
 
-  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
-    LlmMessage,
-    "storyAgent"
-  > | null> {
+  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<"storyAgent"> | null> {
     const pendingBatchMessages = this.batchPreparer.getPendingBatchRoundMessages();
     if (!pendingBatchMessages) {
       return null;
@@ -240,7 +236,7 @@ export class StoryLoopAgent extends BaseLoopAgent<LlmMessage, "storyAgent", Stor
   }
 
   protected override async commitRoundResult(
-    result: ReActRoundResult<LlmMessage, StoryCompletion>,
+    result: ReActRoundResult<StoryCompletion>,
   ): Promise<void> {
     const outcome = this.batchPreparer.commitRound(result);
     if (outcome.kind === "completed") {

@@ -1,3 +1,4 @@
+import type { LlmMessage } from "@kagami/llm";
 import type { EffectInterpreter } from "./effect.js";
 import type { ToolExecutor, ToolSetExecutionResult } from "./tool/tool-catalog.js";
 import type { ToolContext, ToolDefinition } from "./tool/tool-component.js";
@@ -20,19 +21,16 @@ export type ToolLikeMessage = {
   content: string;
 };
 
+type AssistantMessage = Extract<LlmMessage, { role: "assistant" }> & AssistantLikeMessage;
+
 export interface ReActModel<
-  TMessage extends { role: string },
   TUsage extends string = string,
-  TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  } = {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  },
+  TCompletion extends { message: AssistantMessage } = { message: AssistantMessage },
 > {
   chat(
     request: {
       system?: string;
-      messages: TMessage[];
+      messages: LlmMessage[];
       tools: ToolDefinition[];
       toolChoice: "required";
     },
@@ -42,37 +40,34 @@ export interface ReActModel<
   ): Promise<TCompletion>;
 }
 
-export type ReActRoundState<TMessage> = {
+export type ReActRoundState = {
   systemPrompt?: string;
-  messages: TMessage[];
+  messages: LlmMessage[];
 };
 
-export type ReActKernelRunRoundInput<TMessage extends { role: string }, TUsage extends string> = {
-  state: ReActRoundState<TMessage>;
-  tools: ToolExecutor<TMessage>;
-  toolContext?: ToolContext<TMessage>;
+export type ReActKernelRunRoundInput<TUsage extends string> = {
+  state: ReActRoundState;
+  tools: ToolExecutor;
+  toolContext?: ToolContext;
   usage: TUsage;
 };
 
-export type ReActToolExecution<TMessage extends { role: string }, TExtensionData = unknown> = {
+export type ReActToolExecution<TExtensionData = unknown> = {
   toolCall: ReActToolCall;
   result: ToolSetExecutionResult;
-  appendedMessages: Array<Extract<TMessage, { role: "tool" }>>;
+  appendedMessages: Array<Extract<LlmMessage, { role: "tool" }>>;
   extensionData?: TExtensionData;
 };
 
 export type ReActRoundResult<
-  TMessage extends { role: string },
-  TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  },
+  TCompletion extends { message: AssistantMessage },
   TExtensionData = unknown,
   TControl = never,
 > = {
   completion: TCompletion;
-  assistantMessage: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  toolExecutions: ReActToolExecution<TMessage, TExtensionData>[];
-  appendedMessages: TMessage[];
+  assistantMessage: AssistantMessage;
+  toolExecutions: ReActToolExecution<TExtensionData>[];
+  appendedMessages: LlmMessage[];
   shouldCommit: boolean;
   control?: TControl;
 };
@@ -88,45 +83,42 @@ export type ReActKernelToolErrorDecision = {
 };
 
 export interface ReActKernelExtension<
-  TMessage extends { role: string },
   TUsage extends string,
-  TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  },
+  TCompletion extends { message: AssistantMessage },
   TExtensionData = unknown,
 > {
-  onBeforeModel?(input: ReActKernelRunRoundInput<TMessage, TUsage>): Promise<void> | void;
+  onBeforeModel?(input: ReActKernelRunRoundInput<TUsage>): Promise<void> | void;
   onAfterModel?(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
   }): Promise<void> | void;
   onModelError?(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     error: unknown;
   }): Promise<ReActKernelModelErrorDecision | void> | ReActKernelModelErrorDecision | void;
   onBeforeToolExecution?(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
     toolCall: ReActToolCall;
   }): Promise<void> | void;
   onToolError?(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
     toolCall: ReActToolCall;
     error: unknown;
   }): Promise<ReActKernelToolErrorDecision | void> | ReActKernelToolErrorDecision | void;
   onAfterToolExecution?(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
     toolCall: ReActToolCall;
     result: ToolSetExecutionResult;
   }):
     | Promise<{
-        appendedMessages?: TMessage[];
+        appendedMessages?: LlmMessage[];
         extensionData?: TExtensionData;
       } | void>
     | {
-        appendedMessages?: TMessage[];
+        appendedMessages?: LlmMessage[];
         extensionData?: TExtensionData;
       }
     | void;
@@ -141,31 +133,21 @@ const SKIPPED_TOOL_RESULT_CONTENT =
   "<skipped>Tool execution skipped because an earlier tool in this round produced a control signal.</skipped>";
 
 export class ReActKernel<
-  TMessage extends { role: string },
   TUsage extends string = string,
-  TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  } = {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
-  },
+  TCompletion extends { message: AssistantMessage } = { message: AssistantMessage },
   TExtensionData = unknown,
   TControl = never,
 > {
-  private readonly model: ReActModel<TMessage, TUsage, TCompletion>;
-  private readonly interpreter: EffectInterpreter<TMessage, TControl>;
-  private readonly extensions: ReActKernelExtension<
-    TMessage,
-    TUsage,
-    TCompletion,
-    TExtensionData
-  >[];
+  private readonly model: ReActModel<TUsage, TCompletion>;
+  private readonly interpreter: EffectInterpreter<TControl>;
+  private readonly extensions: ReActKernelExtension<TUsage, TCompletion, TExtensionData>[];
 
   public constructor({
     model,
     interpreter,
     extensions,
   }: {
-    model: ReActModel<TMessage, TUsage, TCompletion>;
+    model: ReActModel<TUsage, TCompletion>;
     /**
      * Effect → 系统变更 的翻译器。kernel 每个 tool 跑完后立即把它的 `effects`
      * 喂给本 interpreter，拿到 `appendedMessages`（走原子提交）和可选的
@@ -175,8 +157,8 @@ export class ReActKernel<
      * Effect 是 `ToolExecutionResult` 的一等字段，跟 `content` 平级，kernel
      * 内置消费它——不再走 extension hook。
      */
-    interpreter: EffectInterpreter<TMessage, TControl>;
-    extensions?: ReActKernelExtension<TMessage, TUsage, TCompletion, TExtensionData>[];
+    interpreter: EffectInterpreter<TControl>;
+    extensions?: ReActKernelExtension<TUsage, TCompletion, TExtensionData>[];
   }) {
     this.model = model;
     this.interpreter = interpreter;
@@ -184,8 +166,8 @@ export class ReActKernel<
   }
 
   public async runRound(
-    request: ReActKernelRunRoundInput<TMessage, TUsage>,
-  ): Promise<ReActRoundResult<TMessage, TCompletion, TExtensionData, TControl>> {
+    request: ReActKernelRunRoundInput<TUsage>,
+  ): Promise<ReActRoundResult<TCompletion, TExtensionData, TControl>> {
     for (const extension of this.extensions) {
       await extension.onBeforeModel?.(request);
     }
@@ -222,7 +204,7 @@ export class ReActKernel<
               role: "assistant",
               content: "",
               toolCalls: [],
-            } as unknown as Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage,
+            } as unknown as AssistantMessage,
             toolExecutions: [],
             appendedMessages: [],
             shouldCommit: false,
@@ -240,8 +222,8 @@ export class ReActKernel<
       });
     }
 
-    const appendedMessages: TMessage[] = [];
-    const toolExecutions: ReActToolExecution<TMessage, TExtensionData>[] = [];
+    const appendedMessages: LlmMessage[] = [];
+    const toolExecutions: ReActToolExecution<TExtensionData>[] = [];
     const toolContext = request.toolContext ?? {};
     const assistantMessage = completion.message;
     const toolContextMessages = [...request.state.messages];
@@ -255,12 +237,12 @@ export class ReActKernel<
           content: SKIPPED_TOOL_RESULT_CONTENT,
           kind: "control",
         };
-        const skippedToolMessages = [
+        const skippedToolMessages: Array<Extract<LlmMessage, { role: "tool" }>> = [
           {
             role: "tool",
             toolCallId: toolCall.id,
             content: SKIPPED_TOOL_RESULT_CONTENT,
-          } as unknown as Extract<TMessage, { role: "tool" }>,
+          },
         ];
         appendedMessages.push(...skippedToolMessages);
         toolExecutions.push({
@@ -304,14 +286,14 @@ export class ReActKernel<
         result = fallback;
       }
 
-      const toolMessages: Array<Extract<TMessage, { role: "tool" }>> =
+      const toolMessages: Array<Extract<LlmMessage, { role: "tool" }>> =
         result.content.length > 0
           ? [
               {
                 role: "tool",
                 toolCallId: toolCall.id,
                 content: result.content,
-              } as unknown as Extract<TMessage, { role: "tool" }>,
+              },
             ]
           : [];
 
@@ -325,7 +307,7 @@ export class ReActKernel<
       }
 
       let extensionData: TExtensionData | undefined;
-      const extraMessages: TMessage[] = [];
+      const extraMessages: LlmMessage[] = [];
       for (const extension of this.extensions) {
         const augmentation = await extension.onAfterToolExecution?.({
           request,
@@ -368,7 +350,7 @@ export class ReActKernel<
   }
 
   private async resolveToolError(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
     toolCall: ReActToolCall;
     error: unknown;

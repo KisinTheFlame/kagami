@@ -3,6 +3,7 @@ import type {
   ReActKernelExtension,
   ReActKernelRunRoundInput,
 } from "@kagami/agent-runtime";
+import type { LlmMessage } from "../../llm/types.js";
 import { BizError } from "../../common/errors/biz-error.js";
 
 export const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
@@ -34,19 +35,18 @@ export function isRetryableLlmFailure(error: unknown): error is BizError {
 }
 
 export class LoopLlmRetryExtension<
-  TMessage extends { role: string },
   TUsage extends string,
   TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
+    message: Extract<LlmMessage, { role: "assistant" }> & AssistantLikeMessage;
   },
   TExtensionData = unknown,
-> implements ReActKernelExtension<TMessage, TUsage, TCompletion, TExtensionData> {
+> implements ReActKernelExtension<TUsage, TCompletion, TExtensionData> {
   private readonly backoffPolicy: RetryBackoffPolicy;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly onRecoverableError?: ((error: unknown) => Promise<void> | void) | undefined;
   private readonly onBeforeRetry?:
     | ((input: {
-        request: ReActKernelRunRoundInput<TMessage, TUsage>;
+        request: ReActKernelRunRoundInput<TUsage>;
         error: unknown;
         delayMs: number;
         attempt: number;
@@ -54,7 +54,7 @@ export class LoopLlmRetryExtension<
     | undefined;
   private readonly onSuccessfulModelCall?:
     | ((input: {
-        request: ReActKernelRunRoundInput<TMessage, TUsage>;
+        request: ReActKernelRunRoundInput<TUsage>;
         completion: TCompletion;
       }) => Promise<void> | void)
     | undefined;
@@ -65,13 +65,13 @@ export class LoopLlmRetryExtension<
     sleep: (ms: number) => Promise<void>;
     onRecoverableError?: (error: unknown) => Promise<void> | void;
     onBeforeRetry?: (input: {
-      request: ReActKernelRunRoundInput<TMessage, TUsage>;
+      request: ReActKernelRunRoundInput<TUsage>;
       error: unknown;
       delayMs: number;
       attempt: number;
     }) => Promise<void> | void;
     onSuccessfulModelCall?: (input: {
-      request: ReActKernelRunRoundInput<TMessage, TUsage>;
+      request: ReActKernelRunRoundInput<TUsage>;
       completion: TCompletion;
     }) => Promise<void> | void;
   }) {
@@ -83,7 +83,7 @@ export class LoopLlmRetryExtension<
   }
 
   public async onAfterModel(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     completion: TCompletion;
   }): Promise<void> {
     this.retryAttempt = 0;
@@ -92,7 +92,7 @@ export class LoopLlmRetryExtension<
   }
 
   public async onModelError(input: {
-    request: ReActKernelRunRoundInput<TMessage, TUsage>;
+    request: ReActKernelRunRoundInput<TUsage>;
     error: unknown;
   }): Promise<{ handled: boolean; retry: boolean } | void> {
     if (!isRetryableLlmFailure(input.error)) {

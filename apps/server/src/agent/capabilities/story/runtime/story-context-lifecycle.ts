@@ -1,3 +1,8 @@
+import {
+  HandlerEffectInterpreter,
+  ReplaceLeadingMessagesHandler,
+  type EffectInterpreter,
+} from "@kagami/agent-runtime";
 import type {
   AgentContext,
   AgentContextDashboardSummary,
@@ -5,7 +10,6 @@ import type {
 } from "../../../runtime/context/agent-context.js";
 import { DefaultAgentContext } from "../../../runtime/context/default-agent-context.js";
 import { createContextCompactionPlan } from "../../../runtime/context/context-compaction.js";
-import { createConversationSummaryMessage } from "../../../runtime/context/context-message-factory.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import { AppLogger } from "../../../../logger/logger.js";
 import { DEFAULT_LLM_RETRY_BACKOFF_MS, isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
@@ -48,6 +52,12 @@ export class StoryContextLifecycle {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => Date;
   private readonly runtimeKey: string;
+  /**
+   * compact 走 Effect 模型：Operation 产 replace_leading_messages Effect，这里用只
+   * 装了公共 ReplaceLeadingMessagesHandler 的 Interpreter 解释——复用粒度是 handler，
+   * Story 只需要 replace 这一个。
+   */
+  private readonly interpreter: EffectInterpreter<never>;
   private lastPersistedSnapshotFingerprint: string | null = null;
 
   public constructor({
@@ -74,6 +84,9 @@ export class StoryContextLifecycle {
       new DefaultAgentContext({
         systemPromptFactory: createStoryAgentSystemPrompt,
       });
+    this.interpreter = new HandlerEffectInterpreter<never>([
+      new ReplaceLeadingMessagesHandler(this.context),
+    ]);
   }
 
   public getContextCompactionTotalTokenThreshold(): number {
@@ -133,9 +146,9 @@ export class StoryContextLifecycle {
         return false;
       }
 
-      let summary: string | null;
+      let result: Awaited<ReturnType<ContextSummaryLike["execute"]>>;
       try {
-        summary = await this.contextSummaryOperation.execute({
+        result = await this.contextSummaryOperation.execute({
           systemPrompt: snapshot.systemPrompt,
           messages: compactionPlan.messagesToSummarize,
           tools: this.summaryTools,
@@ -155,14 +168,13 @@ export class StoryContextLifecycle {
         continue;
       }
 
-      if (!summary) {
+      if (result.effects.length === 0) {
         return false;
       }
 
-      await this.context.replaceMessages([
-        createConversationSummaryMessage(summary),
-        ...compactionPlan.messagesToKeep,
-      ]);
+      // compact 通过 Effect 模型收口：Operation 产 replace_leading_messages Effect，
+      // 这里的 Interpreter（只含公共 ReplaceLeadingMessagesHandler）解释执行。
+      await this.interpreter.apply(result.effects);
       return true;
     }
   }

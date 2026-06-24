@@ -28,16 +28,10 @@ export type WebSearchAgentInput = WebSearchTaskInput;
  * 退出循环，把 finalize 的 content 作为 buildResult 入参。
  */
 export class WebSearchTaskAgent
-  extends BaseTaskAgent<WebSearchTaskInput, string, LlmMessage, "webSearchAgent">
+  extends BaseTaskAgent<WebSearchTaskInput, string, "webSearchAgent">
   implements TaskAgentInvoker<WebSearchTaskInput, string>
 {
-  public constructor({
-    llmClient,
-    taskTools,
-  }: {
-    llmClient: LlmClient;
-    taskTools: ToolExecutor<LlmMessage>;
-  }) {
+  public constructor({ llmClient, taskTools }: { llmClient: LlmClient; taskTools: ToolExecutor }) {
     super({
       model: llmClient,
       taskTools,

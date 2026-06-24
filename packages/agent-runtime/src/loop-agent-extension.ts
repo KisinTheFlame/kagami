@@ -1,3 +1,4 @@
+import type { LlmMessage } from "@kagami/llm";
 import type {
   AssistantLikeMessage,
   ReActKernelRunRoundInput,
@@ -6,10 +7,9 @@ import type {
 
 export interface LoopAgentExtension<
   TContext,
-  TMessage extends { role: string },
   TUsage extends string,
   TCompletion extends {
-    message: Extract<TMessage, { role: "assistant" }> & AssistantLikeMessage;
+    message: Extract<LlmMessage, { role: "assistant" }> & AssistantLikeMessage;
   },
   TExtensionData = unknown,
 > {
@@ -21,12 +21,12 @@ export interface LoopAgentExtension<
   onBeforeRound?(context: TContext): Promise<void> | void;
   onAfterRound?(input: {
     context: TContext;
-    roundInput: ReActKernelRunRoundInput<TMessage, TUsage>;
-    result: ReActRoundResult<TMessage, TCompletion, TExtensionData>;
+    roundInput: ReActKernelRunRoundInput<TUsage>;
+    result: ReActRoundResult<TCompletion, TExtensionData>;
   }): Promise<void> | void;
   onAfterCommit?(input: {
     context: TContext;
-    result: ReActRoundResult<TMessage, TCompletion, TExtensionData>;
+    result: ReActRoundResult<TCompletion, TExtensionData>;
   }): Promise<void> | void;
   onAfterReset?(context: TContext): Promise<void> | void;
   onContextCompacted?(context: TContext): Promise<void> | void;

@@ -164,9 +164,7 @@ export class StoryBatchPreparer {
    * 调用方需要在 append 到 context 成功后调用 {@link markCommitted} 才会真正前进游标。
    * 这保留了原始单体 host 的不变量：context 写成功 → 才认这批已消费。
    */
-  public commitRound(
-    result: ReActRoundResult<LlmMessage, StoryCompletion, unknown>,
-  ): StoryBatchCommitOutcome {
+  public commitRound(result: ReActRoundResult<StoryCompletion, unknown>): StoryBatchCommitOutcome {
     if (!this.pendingBatch) {
       return { kind: "pending" };
     }

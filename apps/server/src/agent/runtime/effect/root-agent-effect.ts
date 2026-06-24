@@ -1,5 +1,4 @@
-import type { AppId, Effect } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../llm/types.js";
+import type { AppId, Effect, ReplaceLeadingMessagesEffect } from "@kagami/agent-runtime";
 import type { RootAgentStateId } from "../root-agent/session/state.types.js";
 
 /**
@@ -30,19 +29,6 @@ export type SwitchStateEffect = Effect & {
 };
 
 /**
- * 重建上下文消息列表（上下文压缩用）。这是**昂贵动作**，破坏 KV 缓存前缀。
- *
- * 守门：只允许 ContextCompactionExtension 这一类"系统级"组件产出，工具/钩子
- * 不应该产 `replace_messages`。约束靠约定 + code review，不靠类型系统。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 5 / 守门小节。
- */
-export type ReplaceMessagesEffect = Effect & {
-  readonly type: "replace_messages";
-  readonly messages: readonly LlmMessage[];
-};
-
-/**
  * 把当前 Agent 主循环挂起，等待事件队列非空（或 maxWaitMs 超时由内部 wake
  * timer 唤醒）。Interpreter 在处理这个 Effect 时阻塞 await，事件到达后返回，
  * 由后续 LoopAgent 主循环正常 take 事件消费——本 Effect 不负责事件路由。
@@ -59,10 +45,12 @@ export type WaitForEventEffect = Effect & {
 /**
  * 主 Agent（RootLoopAgent）支持的 Effect 联合。
  *
- * Effect 是开放接口；这个联合枚举了 Interpreter 当前认识的全部 type。新增
- * Effect 类型需要：
+ * 由公共 Effect（`ReplaceMessagesEffect`，来自 agent-runtime）和 RootAgent 专属
+ * Effect 组成。Interpreter 由 `createRootEffectInterpreter` 组装的一组 handler
+ * 解释——新增 Effect 类型需要：
  * 1. 在这里加一个分支。
- * 2. 在 RootEffectInterpreter.apply 的 switch 加对应 case。
+ * 2. 在 createRootEffectInterpreter 里加对应 handler（公共能力优先复用 agent-runtime
+ *    的公共 handler，专属能力写 RootAgent 自己的 handler）。
  * 3. 产出方（工具 / 钩子 / extension）在拼 Effect 时用新的字面量。
  *
  * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
@@ -71,5 +59,5 @@ export type RootAgentEffect =
   | AppendMessageEffect
   | SwitchAppEffect
   | SwitchStateEffect
-  | ReplaceMessagesEffect
+  | ReplaceLeadingMessagesEffect
   | WaitForEventEffect;

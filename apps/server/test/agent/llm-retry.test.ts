@@ -15,7 +15,7 @@ describe("LoopLlmRetryExtension", () => {
       nextDelayMs: ({ attempt }) => attempt * 1_000,
       reset,
     };
-    const kernel = new ReActKernel<LlmMessage, "agent", LlmChatResponsePayload>({
+    const kernel = new ReActKernel<"agent", LlmChatResponsePayload>({
       model: {
         chat: vi
           .fn()
@@ -44,7 +44,7 @@ describe("LoopLlmRetryExtension", () => {
             }),
           ),
       },
-      interpreter: new NoopEffectInterpreter<LlmMessage>(),
+      interpreter: new NoopEffectInterpreter(),
       extensions: [
         new LoopLlmRetryExtension({
           backoffPolicy,
@@ -63,7 +63,7 @@ describe("LoopLlmRetryExtension", () => {
           } satisfies Extract<LlmMessage, { role: "user" }>,
         ],
       },
-      tools: new ToolCatalog<LlmMessage>([]).pick([]),
+      tools: new ToolCatalog([]).pick([]),
       usage: "agent" as const,
     };
 

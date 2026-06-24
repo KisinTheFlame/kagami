@@ -1,9 +1,11 @@
 import {
   BaseLoopAgent,
+  type EffectInterpreter,
   type LoopAgentExtension,
   ReActKernel,
   type ReActKernelRunRoundInput,
   type ReActRoundResult,
+  type ReplaceLeadingMessagesEffect,
   SerialExecutor,
   type ToolExecutor,
   type ToolSetExecutionResult,
@@ -14,10 +16,7 @@ import type {
   AgentContextSnapshot,
   AssistantMessage,
 } from "../context/agent-context.js";
-import {
-  createConversationSummaryMessage,
-  createWakeReminderMessage,
-} from "../context/context-message-factory.js";
+import { createWakeReminderMessage } from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
@@ -46,25 +45,16 @@ import type {
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
-import { RootEffectInterpreter } from "../effect/root-effect-interpreter.js";
+import { createRootEffectInterpreter } from "../effect/root-effect-interpreter.js";
 import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
 
-type ContextSummaryLike =
-  | Pick<ContextSummaryOperation, "execute">
-  | {
-      summarize(input: {
-        systemPrompt: string;
-        messages: import("../../../llm/types.js").LlmMessage[];
-        tools: Tool[];
-      }): Promise<string | null>;
-    };
+type ContextSummaryLike = Pick<ContextSummaryOperation, "execute">;
 
 type RootLoopExtension = LoopAgentExtension<
   RootLoopExtensionContext,
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData
@@ -77,10 +67,9 @@ type RootAgentRuntimeDeps = {
   session: RootAgentSessionController;
   snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   runtimeKey?: string;
-  tools?: ToolExecutor<LlmMessage>;
-  agentTools?: ToolExecutor<LlmMessage>;
+  tools?: ToolExecutor;
+  agentTools?: ToolExecutor;
   contextSummaryOperation?: ContextSummaryLike;
-  summaryPlanner?: ContextSummaryLike;
   summaryTools?: Tool[];
   contextCompactionTotalTokenThreshold?: number;
   metricService?: MetricService;
@@ -125,7 +114,7 @@ class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
-  private readonly interpreter: RootEffectInterpreter;
+  private readonly interpreter: EffectInterpreter<never>;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
   private readonly contextSummaryOperation?: ContextSummaryLike;
@@ -148,7 +137,6 @@ class RootAgentHost implements RootAgentExtensionHost {
     snapshotRepository,
     runtimeKey,
     contextSummaryOperation,
-    summaryPlanner,
     summaryTools,
     contextCompactionTotalTokenThreshold,
     metricService,
@@ -156,7 +144,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     now,
     sleep,
   }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools"> & {
-    interpreter: RootEffectInterpreter;
+    interpreter: EffectInterpreter<never>;
   }) {
     this.context = context;
     this.eventQueue = eventQueue;
@@ -166,7 +154,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     this.interpreter = interpreter;
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
-    this.contextSummaryOperation = contextSummaryOperation ?? summaryPlanner;
+    this.contextSummaryOperation = contextSummaryOperation;
     this.summaryTools = summaryTools ?? [];
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
@@ -258,9 +246,7 @@ class RootAgentHost implements RootAgentExtensionHost {
     });
   }
 
-  public async createRoundInput(
-    tools: ToolExecutor<LlmMessage>,
-  ): Promise<ReActKernelRunRoundInput<LlmMessage, "agent">> {
+  public async createRoundInput(tools: ToolExecutor): Promise<ReActKernelRunRoundInput<"agent">> {
     const snapshot = await this.context.getSnapshot();
 
     return {
@@ -275,7 +261,7 @@ class RootAgentHost implements RootAgentExtensionHost {
         messages: [...snapshot.messages],
         agentContext: this.context,
         rootAgentSession: this.session,
-      } as ReActKernelRunRoundInput<LlmMessage, "agent">["toolContext"],
+      } as ReActKernelRunRoundInput<"agent">["toolContext"],
       usage: "agent",
     };
   }
@@ -285,8 +271,8 @@ class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async commitRoundResult(
-    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
-    tools: ToolExecutor<LlmMessage>,
+    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
+    tools: ToolExecutor,
   ): Promise<void> {
     const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
     const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
@@ -407,22 +393,14 @@ class RootAgentHost implements RootAgentExtensionHost {
       if (attempt.retry) {
         continue;
       }
-      if (!attempt.summary) {
+      if (attempt.effects.length === 0) {
         return false;
       }
 
-      // 阶段 5：compact 通过 Effect 模型收口，不再直接 context.replaceMessages。
+      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。Operation 自己产
+      // replace_leading_messages Effect，host 只把它交给 Interpreter。
       // Interpreter 是 Agent 状态变更的唯一入口（参见 docs/effect-model.md）。
-      // 不消费 appendedMessages——replace_messages Effect 不产追加消息。
-      await this.interpreter.apply([
-        {
-          type: "replace_messages",
-          messages: [
-            createConversationSummaryMessage(attempt.summary),
-            ...compactionPlan.messagesToKeep,
-          ],
-        },
-      ]);
+      await this.interpreter.apply(attempt.effects);
       return true;
     }
   }
@@ -430,7 +408,8 @@ class RootAgentHost implements RootAgentExtensionHost {
   /**
    * 全量压缩：把整条消息列表（不保留最近 10%）一次性摘要成单条 summary。
    * 与阈值无关，由人工面板手动触发。和 compactContextIfNeeded 一样走 Effect 模型
-   * 的 replace_messages，是 KV 缓存允许被破坏的"计划性重建"路径之一。
+   * 的 replace_leading_messages（count = 全部 message 数），是 KV 缓存允许被破坏的
+   * "计划性重建"路径之一。
    */
   public async compactEntireContext(): Promise<boolean> {
     const operation = this.contextSummaryOperation;
@@ -444,6 +423,7 @@ class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
+      // 全量压缩：摘要整条消息列表，Operation 产的 count = 全部 message 数。
       const attempt = await this.attemptSummarize(operation, {
         systemPrompt: snapshot.systemPrompt,
         messages: snapshot.messages,
@@ -451,38 +431,29 @@ class RootAgentHost implements RootAgentExtensionHost {
       if (attempt.retry) {
         continue;
       }
-      if (!attempt.summary) {
+      if (attempt.effects.length === 0) {
         return false;
       }
 
-      await this.interpreter.apply([
-        {
-          type: "replace_messages",
-          messages: [createConversationSummaryMessage(attempt.summary)],
-        },
-      ]);
+      await this.interpreter.apply(attempt.effects);
       return true;
     }
   }
 
   private async attemptSummarize(
     operation: ContextSummaryLike,
-    input: { systemPrompt: string; messages: LlmMessage[] },
-  ): Promise<{ retry: true } | { retry: false; summary: string | null }> {
+    input: {
+      systemPrompt: string;
+      messages: LlmMessage[];
+    },
+  ): Promise<{ retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect[] }> {
     try {
-      const summary =
-        "execute" in operation
-          ? await operation.execute({
-              systemPrompt: input.systemPrompt,
-              messages: input.messages,
-              tools: this.summaryTools,
-            })
-          : await operation.summarize({
-              systemPrompt: input.systemPrompt,
-              messages: input.messages,
-              tools: this.summaryTools,
-            });
-      return { retry: false, summary };
+      const result = await operation.execute({
+        systemPrompt: input.systemPrompt,
+        messages: input.messages,
+        tools: this.summaryTools,
+      });
+      return { retry: false, effects: result.effects };
     } catch (error) {
       if (!isRetryableLlmFailure(error)) {
         throw error;
@@ -560,14 +531,13 @@ class RootAgentHost implements RootAgentExtensionHost {
 }
 
 export class RootLoopAgent extends BaseLoopAgent<
-  LlmMessage,
   "agent",
   RootAgentCompletion,
   RootAgentToolExecutionData,
   RootLoopExtensionContext
 > {
   private readonly host: RootAgentHost;
-  private readonly tools: ToolExecutor<LlmMessage>;
+  private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
@@ -590,7 +560,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     const resolvedTools = tools ?? agentTools ?? failMissingTools();
     // 单例 Interpreter：host（compactContextIfNeeded 直接调）和 kernel（每个工具
     // 跑完后内置消费 effects）共享。Interpreter 无状态，但语义上应该同一个。
-    const interpreter = new RootEffectInterpreter({ session, context, eventQueue });
+    const interpreter = createRootEffectInterpreter({ session, context, eventQueue });
     const host = new RootAgentHost({
       ...rest,
       context,
@@ -600,12 +570,7 @@ export class RootLoopAgent extends BaseLoopAgent<
       llmRetryBackoffMs: resolvedRetryBackoffMs,
       sleep: resolvedSleep,
     });
-    const kernel = new ReActKernel<
-      LlmMessage,
-      "agent",
-      RootAgentCompletion,
-      RootAgentToolExecutionData
-    >({
+    const kernel = new ReActKernel<"agent", RootAgentCompletion, RootAgentToolExecutionData>({
       model: llmClient,
       interpreter,
       extensions: [
@@ -758,15 +723,12 @@ export class RootLoopAgent extends BaseLoopAgent<
     await this.runReactRound();
   }
 
-  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<
-    LlmMessage,
-    "agent"
-  > | null> {
+  protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<"agent"> | null> {
     return await this.host.createRoundInput(this.tools);
   }
 
   protected override async commitRoundResult(
-    result: ReActRoundResult<LlmMessage, RootAgentCompletion, RootAgentToolExecutionData>,
+    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
   ): Promise<void> {
     await this.host.commitRoundResult(result, this.tools);
   }
@@ -809,7 +771,7 @@ function failMissingTools(): never {
 
 function omitControlToolCalls(
   message: AssistantMessage,
-  agentTools: ToolExecutor<LlmMessage>,
+  agentTools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,

@@ -105,7 +105,11 @@ describe("LinearMessageLedgerAgentContext", () => {
       runtimeKey: "root-agent",
     });
 
-    await context.replaceMessages([
+    await context.appendMessages([{ role: "user", content: "old" }]);
+    insertMany.mockClear();
+
+    // compact 替换前缀不应写 linear ledger（ledger 只记真实增量消息）。
+    await context.replaceLeadingMessages(1, [
       {
         role: "user",
         content: "summary",

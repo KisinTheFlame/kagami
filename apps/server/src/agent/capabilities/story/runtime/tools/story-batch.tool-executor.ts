@@ -5,7 +5,6 @@ import {
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../../llm/types.js";
 import { StoryService } from "../../application/story.service.js";
 import {
   CreateStoryTool,
@@ -51,7 +50,7 @@ type StoryBatchToolExecutorDeps = {
  * 把 LLM 选中的工具调用映射到带有"当前批次 seq 范围"上下文的 CreateStory / RewriteStory / FinishStoryBatch 工具集。
  * 每次 execute 都重建 ToolCatalog，确保 sourceMessageSeqStart/End 取的是当下 pendingBatch 的 seq。
  */
-export class StoryBatchToolExecutor implements ToolExecutor<LlmMessage> {
+export class StoryBatchToolExecutor implements ToolExecutor {
   private readonly storyService: StoryService;
   private readonly toolDefinitions: ToolDefinition[];
   private readonly getPendingBatchSeqRange: () => StoryBatchSeqRange | null;
@@ -85,7 +84,7 @@ export class StoryBatchToolExecutor implements ToolExecutor<LlmMessage> {
   public async execute(
     name: string,
     argumentsValue: Record<string, unknown>,
-    context: ToolContext<LlmMessage>,
+    context: ToolContext,
   ): Promise<ToolSetExecutionResult> {
     const pendingBatch = this.getPendingBatchSeqRange();
     const sourceMessageSeqStart = pendingBatch?.firstSeq ?? 0;

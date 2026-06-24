@@ -295,7 +295,7 @@ describe("DefaultAgentContext", () => {
     });
   });
 
-  it("should replace messages when external compaction finishes", async () => {
+  it("should replace the entire context when leading count covers all messages", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
@@ -307,7 +307,8 @@ describe("DefaultAgentContext", () => {
         content: "<qq_message>\n测试昵称 (654321):\nhello\n</qq_message>",
       },
     ]);
-    await context.replaceMessages([
+    // count=2 覆盖全部 message，等价于整条重建。
+    await context.replaceLeadingMessages(2, [
       createConversationSummaryMessage("旧上下文摘要"),
       {
         role: "assistant",
@@ -327,6 +328,58 @@ describe("DefaultAgentContext", () => {
         },
       ],
     });
+  });
+
+  it("should replace only the leading prefix and keep the tail", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendMessages([
+      { role: "user", content: "old-1" },
+      { role: "user", content: "old-2" },
+      { role: "user", content: "keep-me" },
+    ]);
+    // 只替换前 2 条，保留尾部 keep-me。
+    await context.replaceLeadingMessages(2, [createConversationSummaryMessage("摘要")]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [createConversationSummaryMessage("摘要"), { role: "user", content: "keep-me" }],
+    });
+  });
+
+  it("should align the leading count across zero-message event items", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    // friend_list_updated 事件渲染成 0 条 message——它夹在两条真实 message 之间，
+    // count 的 item 边界要跨过它。
+    await context.appendMessages([{ role: "user", content: "old" }]);
+    await context.appendEvents([{ type: "napcat_friend_list_updated", data: { friends: [] } }]);
+    await context.appendMessages([{ role: "user", content: "keep-me" }]);
+
+    // 展平后 message = [old, keep-me]，count=1 替换 old；中间的 0-message 事件并入
+    // 已替换前缀，keep-me 保留。
+    await context.replaceLeadingMessages(1, [createConversationSummaryMessage("摘要")]);
+
+    await expect(context.getSnapshot()).resolves.toEqual({
+      systemPrompt: "system-prompt",
+      messages: [createConversationSummaryMessage("摘要"), { role: "user", content: "keep-me" }],
+    });
+  });
+
+  it("should throw when leading count exceeds total messages", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+
+    await context.appendMessages([{ role: "user", content: "only-one" }]);
+
+    await expect(context.replaceLeadingMessages(2, [])).rejects.toThrow(
+      /超过 context 总 message 数/,
+    );
   });
 
   it("should keep messages immutable from snapshot callers", async () => {

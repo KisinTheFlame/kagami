@@ -5,7 +5,6 @@ import {
   type ToolContext,
   type ToolKind,
 } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
 import type { AgentContext } from "../../../runtime/context/agent-context.js";
 import type { RootAgentSessionController } from "../../../runtime/root-agent/session/root-agent-session.js";
 import type { WebSearchTaskInput } from "../task-agent/web-search-task-agent.js";
@@ -22,12 +21,12 @@ const SearchWebArgumentsSchema = z.object({
   question: z.string().trim().min(1),
 });
 
-type SearchWebToolContext = ToolContext<LlmMessage> & {
+type SearchWebToolContext = ToolContext & {
   agentContext?: AgentContext;
   rootAgentSession?: RootAgentSessionController;
 };
 
-export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema, LlmMessage> {
+export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema> {
   public readonly name = SEARCH_WEB_TOOL_NAME;
   public readonly description =
     "把一个自然语言问题交给网页搜索子 Agent，让它自行拆词、多次检索并返回摘要。";
@@ -58,7 +57,7 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
 
   protected async executeTyped(
     input: z.infer<typeof SearchWebArgumentsSchema>,
-    context: ToolContext<LlmMessage>,
+    context: ToolContext,
   ): Promise<string> {
     const typedContext = context as SearchWebToolContext;
     const agentContext = typedContext.agentContext;
