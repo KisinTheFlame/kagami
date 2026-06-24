@@ -22,6 +22,7 @@ describe("MainAgentContextHandler", () => {
     });
     const mainAgentContextQueryService: MainAgentContextQueryService = {
       getRecentSnapshot,
+      compactEntireContext: vi.fn(),
     };
     const handler = new MainAgentContextHandler({
       mainAgentContextQueryService,
@@ -40,5 +41,33 @@ describe("MainAgentContextHandler", () => {
       recentItemsTruncated: false,
     });
     expect(getRecentSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("should compact the entire main agent context", async () => {
+    const compactEntireContext = vi.fn().mockResolvedValue({
+      compacted: true,
+      compactedAt: "2026-03-30T08:00:00.000Z",
+    });
+    const mainAgentContextQueryService: MainAgentContextQueryService = {
+      getRecentSnapshot: vi.fn(),
+      compactEntireContext,
+    };
+    const handler = new MainAgentContextHandler({
+      mainAgentContextQueryService,
+    });
+    handler.register(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/main-agent-context/compact",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      compacted: true,
+      compactedAt: "2026-03-30T08:00:00.000Z",
+    });
+    expect(compactEntireContext).toHaveBeenCalledTimes(1);
   });
 });

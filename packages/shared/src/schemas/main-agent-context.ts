@@ -24,3 +24,15 @@ export const MainAgentContextSnapshotSchema = z
   .strict();
 
 export type MainAgentContextSnapshot = z.infer<typeof MainAgentContextSnapshotSchema>;
+
+export const MainAgentContextCompactionResultSchema = z
+  .object({
+    // 是否实际执行了压缩；上下文为空或摘要为空时为 false。
+    compacted: z.boolean(),
+    compactedAt: z.string().datetime(),
+  })
+  .strict();
+
+export type MainAgentContextCompactionResult = z.infer<
+  typeof MainAgentContextCompactionResultSchema
+>;

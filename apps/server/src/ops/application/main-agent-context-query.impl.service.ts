@@ -1,4 +1,7 @@
-import type { MainAgentContextSnapshot } from "@kagami/shared/schemas/main-agent-context";
+import type {
+  MainAgentContextCompactionResult,
+  MainAgentContextSnapshot,
+} from "@kagami/shared/schemas/main-agent-context";
 import type { RootLoopAgent } from "../../agent/runtime/root-agent/root-agent-runtime.js";
 import type { MainAgentContextQueryService } from "./main-agent-context-query.service.js";
 
@@ -19,6 +22,14 @@ export class DefaultMainAgentContextQueryService implements MainAgentContextQuer
       generatedAt: new Date().toISOString(),
       recentItems: summary.recentItems,
       recentItemsTruncated: summary.recentItemsTruncated,
+    };
+  }
+
+  public async compactEntireContext(): Promise<MainAgentContextCompactionResult> {
+    const result = await this.rootAgentRuntime.compactEntireContext();
+    return {
+      compacted: result.compacted,
+      compactedAt: result.compactedAt.toISOString(),
     };
   }
 }

@@ -373,7 +373,8 @@ class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<boolean> {
-    if (!this.contextSummaryOperation) {
+    const operation = this.contextSummaryOperation;
+    if (!operation) {
       return false;
     }
 
@@ -399,36 +400,14 @@ class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      let summary;
-      try {
-        summary =
-          "execute" in this.contextSummaryOperation
-            ? await this.contextSummaryOperation.execute({
-                systemPrompt: snapshot.systemPrompt,
-                messages: compactionPlan.messagesToSummarize,
-                tools: this.summaryTools,
-              })
-            : await this.contextSummaryOperation.summarize({
-                systemPrompt: snapshot.systemPrompt,
-                messages: compactionPlan.messagesToSummarize,
-                tools: this.summaryTools,
-              });
-      } catch (error) {
-        if (!isRetryableLlmFailure(error)) {
-          throw error;
-        }
-
-        logger.warn("Context summary failed; scheduling retry", {
-          event: "agent.root_agent_runtime.context_summary_retry_scheduled",
-          retryBackoffMs: this.llmRetryBackoffMs,
-          errorName: error instanceof Error ? error.name : "Error",
-          errorMessage: error instanceof Error ? error.message : String(error),
-        });
-        await this.sleep(this.llmRetryBackoffMs);
+      const attempt = await this.attemptSummarize(operation, {
+        systemPrompt: snapshot.systemPrompt,
+        messages: compactionPlan.messagesToSummarize,
+      });
+      if (attempt.retry) {
         continue;
       }
-
-      if (!summary) {
+      if (!attempt.summary) {
         return false;
       }
 
@@ -438,10 +417,85 @@ class RootAgentHost implements RootAgentExtensionHost {
       await this.interpreter.apply([
         {
           type: "replace_messages",
-          messages: [createConversationSummaryMessage(summary), ...compactionPlan.messagesToKeep],
+          messages: [
+            createConversationSummaryMessage(attempt.summary),
+            ...compactionPlan.messagesToKeep,
+          ],
         },
       ]);
       return true;
+    }
+  }
+
+  /**
+   * 全量压缩：把整条消息列表（不保留最近 10%）一次性摘要成单条 summary。
+   * 与阈值无关，由人工面板手动触发。和 compactContextIfNeeded 一样走 Effect 模型
+   * 的 replace_messages，是 KV 缓存允许被破坏的"计划性重建"路径之一。
+   */
+  public async compactEntireContext(): Promise<boolean> {
+    const operation = this.contextSummaryOperation;
+    if (!operation) {
+      return false;
+    }
+
+    while (true) {
+      const snapshot = await this.context.getSnapshot();
+      if (snapshot.messages.length === 0) {
+        return false;
+      }
+
+      const attempt = await this.attemptSummarize(operation, {
+        systemPrompt: snapshot.systemPrompt,
+        messages: snapshot.messages,
+      });
+      if (attempt.retry) {
+        continue;
+      }
+      if (!attempt.summary) {
+        return false;
+      }
+
+      await this.interpreter.apply([
+        {
+          type: "replace_messages",
+          messages: [createConversationSummaryMessage(attempt.summary)],
+        },
+      ]);
+      return true;
+    }
+  }
+
+  private async attemptSummarize(
+    operation: ContextSummaryLike,
+    input: { systemPrompt: string; messages: LlmMessage[] },
+  ): Promise<{ retry: true } | { retry: false; summary: string | null }> {
+    try {
+      const summary =
+        "execute" in operation
+          ? await operation.execute({
+              systemPrompt: input.systemPrompt,
+              messages: input.messages,
+              tools: this.summaryTools,
+            })
+          : await operation.summarize({
+              systemPrompt: input.systemPrompt,
+              messages: input.messages,
+              tools: this.summaryTools,
+            });
+      return { retry: false, summary };
+    } catch (error) {
+      if (!isRetryableLlmFailure(error)) {
+        throw error;
+      }
+
+      logger.warn("Context summary failed; scheduling retry", {
+        event: "agent.root_agent_runtime.context_summary_retry_scheduled",
+        retryBackoffMs: this.llmRetryBackoffMs,
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      await this.sleep(this.llmRetryBackoffMs);
+      return { retry: true };
     }
   }
 
@@ -516,6 +570,8 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly tools: ToolExecutor<LlmMessage>;
   private readonly eventQueue: AgentEventQueue;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
+  private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
+    null;
 
   public constructor({
     llmClient,
@@ -628,6 +684,40 @@ export class RootLoopAgent extends BaseLoopAgent<
     }
   }
 
+  /**
+   * 手动触发全量上下文压缩。语义对齐 resetContext：
+   * 如果当前正卡在 wait 工具里，先推一个 wake 事件解除阻塞；如果当轮 LLM/工具
+   * 调用正在进行，则等它收尾（waitForActiveRunOnce）后再压缩，因此对调用方表现为
+   * "立即，或在当次调用完成后"。pendingCompactionPromise 让下一轮 runOnce 在
+   * 压缩完成前不会用旧上下文起新一轮。
+   */
+  public async compactEntireContext(): Promise<{ compacted: boolean; compactedAt: Date }> {
+    if (this.pendingCompactionPromise) {
+      return await this.pendingCompactionPromise;
+    }
+
+    const compactionPromise = (async () => {
+      this.eventQueue.enqueue({ type: "wake" });
+      await this.waitForActiveRunOnce();
+
+      const compacted = await this.host.compactEntireContext();
+      if (compacted) {
+        await this.notifyContextCompacted();
+      }
+      return { compacted, compactedAt: new Date() };
+    })();
+
+    this.pendingCompactionPromise = compactionPromise;
+
+    try {
+      return await compactionPromise;
+    } finally {
+      if (this.pendingCompactionPromise === compactionPromise) {
+        this.pendingCompactionPromise = null;
+      }
+    }
+  }
+
   public async hydrateStartupEvents(events: Event[]): Promise<void> {
     await this.host.hydrateStartupEvents(events);
   }
@@ -654,13 +744,13 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   protected override async runOnce(): Promise<void> {
-    await this.awaitPendingReset();
+    await this.awaitPendingMutations();
 
     // Step 1: drain any events in the queue into the context. This is the
     // moment where wake events get silently consumed (session routes them
     // to a no-op), napcat messages get routed to their state, etc.
     await this.host.consumePendingEvents();
-    await this.awaitPendingReset();
+    await this.awaitPendingMutations();
 
     // Step 2: run one ReAct round. The LLM may call blocking tools like
     // wait / finish_story_batch; those block inside eventQueue.waitNonEmpty
@@ -694,6 +784,18 @@ export class RootLoopAgent extends BaseLoopAgent<
     }
 
     await pendingResetPromise.catch(() => undefined);
+  }
+
+  /**
+   * 在起新一轮 / drain 事件前，等待任何挂起的 reset 或全量压缩收尾，避免新一轮
+   * 用旧上下文起跑，与这些"计划性重建"操作竞争。
+   */
+  private async awaitPendingMutations(): Promise<void> {
+    await this.awaitPendingReset();
+    const pendingCompactionPromise = this.pendingCompactionPromise;
+    if (pendingCompactionPromise) {
+      await pendingCompactionPromise.catch(() => undefined);
+    }
   }
 }
 
