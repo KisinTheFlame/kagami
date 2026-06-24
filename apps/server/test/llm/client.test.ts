@@ -992,7 +992,11 @@ describe("createLlmClient", () => {
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(3);
   });
 
-  it("should reject unauthorized tool calls returned by provider", async () => {
+  it("should not reject tool calls that fall outside the tools list under auto tool choice", async () => {
+    // Agent 调了一个不在 tools 列表里的工具（典型：把子工具当顶层工具直接调而没走
+    // invoke）属于正常失误，不应在 client 层 throw 拒绝整条响应。响应正常通过后，
+    // 由工具执行层把 "Unknown tool" 反馈以 ToolResponse 追加到尾部，让 Agent 下一轮
+    // 自我纠正。
     const llmChatCallDao = createLlmChatCallDaoMock();
     const provider: LlmProvider = {
       id: "openai",
@@ -1037,53 +1041,28 @@ describe("createLlmClient", () => {
               },
             },
           ],
-          toolChoice: { tool_name: "search_web" },
+          toolChoice: "auto",
         },
         {
           usage: "agent",
         },
       ),
-    ).rejects.toMatchObject({
-      name: "BizError",
-      message: "LLM 返回了未授权的工具调用",
-      meta: {
-        invalidToolNames: ["send_message"],
-        allowedToolNames: ["search_web"],
-      },
-    } satisfies Partial<BizError>);
-
-    expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
-    expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
-    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].response).toEqual({
+    ).resolves.toMatchObject({
       provider: "openai",
       model: "gpt-4o-mini",
       message: {
         role: "assistant",
-        content: "",
         toolCalls: [
           {
             id: "call-1",
             name: "send_message",
-            arguments: {
-              message: "hi",
-            },
           },
         ],
       },
     });
-    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].nativeRequestPayload).toEqual({
-      model: "gpt-4o-mini",
-      messages: [],
-    });
-    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].nativeResponsePayload).toEqual({
-      id: "native-gpt-4o-mini",
-      model: "gpt-4o-mini",
-    });
-    expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].extension).toEqual({
-      metadata: {
-        actualModel: "gpt-4o-mini",
-      },
-    });
+
+    expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
   });
 
   it("should reject tool calls that do not match the explicitly required tool", async () => {

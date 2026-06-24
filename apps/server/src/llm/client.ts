@@ -644,23 +644,15 @@ function validateToolCalls(request: LlmChatRequest, response: LlmChatResponsePay
     return;
   }
 
-  const allowedToolNames = new Set(request.tools.map(tool => tool.name));
-  const invalidToolNames = response.message.toolCalls
-    .map(toolCall => toolCall.name)
-    .filter(toolName => !allowedToolNames.has(toolName));
-
-  if (invalidToolNames.length > 0) {
-    throw new BizError({
-      message: "LLM 返回了未授权的工具调用",
-      meta: {
-        provider: response.provider,
-        model: response.model,
-        invalidToolNames,
-        allowedToolNames: [...allowedToolNames],
-      },
-    });
-  }
-
+  // 注意：不在这里因为"工具不在 tools 列表里"而 throw 拒绝整条响应。
+  // 调了未授权/未知的工具（典型：把子工具当顶层工具直接调而没走 invoke）属于
+  // Agent 的正常失误，应当让响应正常通过，由工具执行层（ToolSet.execute 对未知
+  // 工具返回 "Unknown tool" 的 tool_result）把反馈以 ToolResponse 追加到尾部，
+  // 让 Agent 下一轮自我纠正。在此 throw 会让整轮 runOnce 崩溃、丢弃响应，Agent
+  // 永远收不到反馈，也违背 KV 缓存友好的"只追加尾部"原则。
+  //
+  // 仅保留 toolChoice 强制单工具（required tool_name）的校验：那是 vision /
+  // summarizer 这类一次性强制工具调用的场景，语义上不存在"让 Agent 改投"的回路。
   const requiredToolName = getRequiredToolName(request.toolChoice);
   if (!requiredToolName) {
     return;
