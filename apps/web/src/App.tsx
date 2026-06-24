@@ -10,6 +10,11 @@ const MainAgentContextPage = lazy(() =>
     default: module.MainAgentContextPage,
   })),
 );
+const ControlPanelPage = lazy(() =>
+  import("@/pages/control-panel/ControlPanelPage").then(module => ({
+    default: module.ControlPanelPage,
+  })),
+);
 const SchedulerTasksPage = lazy(() =>
   import("@/pages/scheduler-tasks/SchedulerTasksPage").then(module => ({
     default: module.SchedulerTasksPage,
@@ -58,6 +63,7 @@ function App() {
           <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
           <Route path="/auth/:provider" element={<AuthPage />} />
           <Route path="/main-agent-context" element={<MainAgentContextPage />} />
+          <Route path="/control-panel" element={<ControlPanelPage />} />
           <Route path="/scheduler-tasks" element={<SchedulerTasksPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
