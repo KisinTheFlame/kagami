@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- server: PG→SQLite 搬迁脚本 `migrate-pg-to-sqlite.ts` 补全为**全量迁移所有表**（之前漏了 app_log / llm_chat_call / metric / napcat_event / napcat_qq_message 群消息历史等 8 张表）；大表按 id 分页流式读取避免 OOM；新增 `migrate-pg-remaining-append.ts` 用于在已上线的 SQLite 上「不清空、追加补迁」个别表
+
 ### Added
 
 - agent: 新增 `clock` App，提供 `view_time` 工具让 Agent 主动查询当前北京时间（精确到秒）；与 Wake Reminder 降频（[#77](https://github.com/KisinTheFlame/kagami/pull/77)）形成被动 + 主动的时间感知闭环（[#79](https://github.com/KisinTheFlame/kagami/pull/79)）
