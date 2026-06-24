@@ -15,6 +15,8 @@ const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
 const DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS = 30_000;
 const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
 const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
+const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
+const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
 const DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -232,6 +234,20 @@ const ConfigSchema = z.object({
               })
               .default({}),
           }),
+          messaging: z
+            .object({
+              aiTone: z
+                .object({
+                  enabled: z.boolean().default(DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED),
+                  blockThreshold: z
+                    .number()
+                    .min(0)
+                    .max(1)
+                    .default(DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD),
+                })
+                .default({}),
+            })
+            .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),
         })
         .superRefine((value, ctx) => {
@@ -250,6 +266,7 @@ const ConfigSchema = z.object({
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
           notificationBatchWindowMs: value.notificationBatchWindowMs,
           story: value.story,
+          messaging: value.messaging,
         })),
     ),
     news: z

@@ -21,6 +21,10 @@ server:
         enabled: true # 是否开启 Story Recall Agent（后台自动召回历史故事并注入上下文）
         topK: 2
         scoreThreshold: 0.65
+    messaging:
+      aiTone:
+        enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
+        blockThreshold: 0.8 # P(AI) >= 该值则拦下不发，等 confirm_last 二次确认
   news:
     ithome:
       pollIntervalMs: 300000

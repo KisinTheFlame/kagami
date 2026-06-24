@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/prisma/generated/**",
       "**/src/generated/prisma/**",
+      ".claude/**",
     ],
   },
   js.configs.recommended,

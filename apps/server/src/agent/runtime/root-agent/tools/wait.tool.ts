@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  ZodToolComponent,
-  type ToolExecutionResult,
-  type ToolKind,
-} from "@kagami/agent-runtime";
+import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import type { LlmMessage } from "../../../../llm/types.js";
 import type { RootAgentEffect } from "../../effect/root-agent-effect.js";
 

@@ -5,4 +5,5 @@ build
 coverage
 apps/server/src/generated/prisma
 apps/server/static/**/*.hbs
+apps/server/src/agent/capabilities/messaging/infra/ai-tone-model.data.ts
 .gstack
