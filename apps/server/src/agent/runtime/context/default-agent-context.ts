@@ -115,8 +115,50 @@ export class DefaultAgentContext implements AgentContext {
     );
   }
 
-  public async replaceMessages(messages: LlmMessage[]): Promise<void> {
-    this.items.splice(0, this.items.length, ...messages.map(createContextItemFromMessage));
+  public async replaceLeadingMessages(count: number, replacement: LlmMessage[]): Promise<void> {
+    const itemCut = this.resolveLeadingItemCut(count);
+    this.items.splice(0, itemCut, ...replacement.map(createContextItemFromMessage));
+  }
+
+  /**
+   * 把"前 count 条 message"映射到"前几个 ContextItem"。
+   *
+   * 一个 event item 可能渲染成 0 条 message（如 friend_list / news 事件），所以
+   * message 数和 item 数不一定相等。从头累加每个 item 渲染出的 message 数，正好
+   * 累加到 count 时即为切点；达到 count 后继续吞掉紧跟的 0-message item（它们属于
+   * 已摘要前缀、不产新 message，吞掉才能让全量压缩彻底清空头部）。
+   *
+   * 若某个 item 渲染成多条 message、导致累加从 <count 直接跳过 count，说明 count
+   * 落在 item 内部、无法在边界对齐——抛错（fail-fast，避免悄悄替换错范围）。
+   */
+  private resolveLeadingItemCut(count: number): number {
+    let seen = 0;
+    let itemCut = 0;
+    for (let i = 0; i < this.items.length; i += 1) {
+      const rendered = renderContextItemToMessages(this.items[i]).length;
+      if (seen === count) {
+        if (rendered !== 0) {
+          break;
+        }
+        // 紧跟在 count 边界后的 0-message item，并入已替换前缀。
+        itemCut = i + 1;
+        continue;
+      }
+      seen += rendered;
+      itemCut = i + 1;
+      if (seen > count) {
+        throw new Error(
+          `replaceLeadingMessages: count ${count} 落在 ContextItem 内部，无法在 item ` +
+            `边界对齐（某 item 渲染成多条 message）。`,
+        );
+      }
+    }
+    if (seen !== count) {
+      throw new Error(
+        `replaceLeadingMessages: count ${count} 超过 context 总 message 数 ${seen}。`,
+      );
+    }
+    return itemCut;
   }
 
   public async getDashboardSummary(input?: {

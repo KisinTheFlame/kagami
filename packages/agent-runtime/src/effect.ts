@@ -69,9 +69,9 @@ export class NoopEffectInterpreter<TMessage> implements EffectInterpreter<TMessa
 // Interpreter 的标准实现方式：把"如何处理某一类 Effect"拆成一个个 EffectHandler，
 // 用 HandlerEffectInterpreter 把它们组合起来。复用粒度是 handler——不同 Agent
 // 装不同的 handler 子集：
-//   - RootAgent：ReplaceMessagesHandler（公共）+ 自己的 switch_app / switch_state
-//     / wait_for_event / append_message handler
-//   - StoryAgent compact：只装 ReplaceMessagesHandler（公共）
+//   - RootAgent：ReplaceLeadingMessagesHandler（公共）+ 自己的 switch_app /
+//     switch_state / wait_for_event / append_message handler
+//   - StoryAgent compact：只装 ReplaceLeadingMessagesHandler（公共）
 // 公共 Effect + 公共 handler 收在 agent-runtime；Agent 专属 Effect + 专属 handler
 // 留在各 Agent 自己的包里。
 //
@@ -144,46 +144,57 @@ export class HandlerEffectInterpreter<TMessage, TControl = never> implements Eff
 // 公共 Effect 与公共 handler
 // ============================================================================
 
-export const REPLACE_MESSAGES_EFFECT_TYPE = "replace_messages";
+export const REPLACE_LEADING_MESSAGES_EFFECT_TYPE = "replace_leading_messages";
 
 /**
- * 整列重建消息列表。这是**昂贵动作**——破坏 KV 缓存前缀。守门靠约定：只有上下文
- * 压缩这类"计划性重建"组件应产生此 Effect，工具/钩子产 replace_messages 是 bug。
+ * 把 context 最前面的 `count` 条 message 替换成 `replacement`。
  *
- * 公共 Effect：任何 Agent 都有 `messages` 列表，"整列替换"是 `replaceMessages`
- * 抽象的声明式包装，不依赖任何 Agent-specific 概念。`TMessage` 由 specialize
- * 它的 Agent 定（RootAgent / StoryAgent 都用各自的 LlmMessage）。
+ * 这是**昂贵动作**——破坏 KV 缓存前缀。守门靠约定：只有上下文压缩这类"计划性
+ * 重建"组件应产生此 Effect，工具/钩子产它是 bug。
+ *
+ * 为什么是"前缀替换"而非"整列重建"：compact 的本质就是"把最旧的一段压成摘要、
+ * 保留最近一段"——旧的永远在前缀。`count` = 被摘要的前缀长度，`replacement` =
+ * `[summaryMessage]`。保留段不用显式携带（它就是 count 之后的部分），所以产 Effect
+ * 的一方（如 ContextSummaryOperation）不需要知道"保留哪些"，职责更纯。全量压缩 =
+ * count 取全部 message 数。
+ *
+ * 公共 Effect：任何 Agent 都有 `messages` 列表，"替换前缀 N 条"不依赖任何
+ * Agent-specific 概念。`TMessage` 由 specialize 它的 Agent 定。
  */
-export interface ReplaceMessagesEffect<TMessage> extends Effect {
-  readonly type: typeof REPLACE_MESSAGES_EFFECT_TYPE;
-  readonly messages: readonly TMessage[];
+export interface ReplaceLeadingMessagesEffect<TMessage> extends Effect {
+  readonly type: typeof REPLACE_LEADING_MESSAGES_EFFECT_TYPE;
+  /** 要替换的前缀 message 条数（按展平后的 message 计）。 */
+  readonly count: number;
+  /** 替换成的新 message（compact 场景通常是单条 summary）。 */
+  readonly replacement: readonly TMessage[];
 }
 
-/** ReplaceMessagesHandler 依赖的最小 context 端口——只要能"整列替换消息"即可。 */
-export interface ReplaceMessagesTarget<TMessage> {
-  replaceMessages(messages: TMessage[]): Promise<void>;
+/** ReplaceLeadingMessagesHandler 依赖的最小 context 端口。 */
+export interface ReplaceLeadingMessagesTarget<TMessage> {
+  replaceLeadingMessages(count: number, replacement: TMessage[]): Promise<void>;
 }
 
 /**
- * 公共 handler：处理 `replace_messages` Effect，直接调 target.replaceMessages。
+ * 公共 handler：处理 `replace_leading_messages` Effect，直接调
+ * target.replaceLeadingMessages。
  *
  * replace 不走 kernel 的原子追加协议（它是"计划性重建"，不是追加），所以直接改
  * context、不返 appendedMessages。RootAgent 和 StoryAgent compact 都复用它。
  */
-export class ReplaceMessagesHandler<TMessage> implements EffectHandler<TMessage, never> {
-  private readonly target: ReplaceMessagesTarget<TMessage>;
+export class ReplaceLeadingMessagesHandler<TMessage> implements EffectHandler<TMessage, never> {
+  private readonly target: ReplaceLeadingMessagesTarget<TMessage>;
 
-  public constructor(target: ReplaceMessagesTarget<TMessage>) {
+  public constructor(target: ReplaceLeadingMessagesTarget<TMessage>) {
     this.target = target;
   }
 
   public matches(effect: Effect): boolean {
-    return effect.type === REPLACE_MESSAGES_EFFECT_TYPE;
+    return effect.type === REPLACE_LEADING_MESSAGES_EFFECT_TYPE;
   }
 
   public async handle(effect: Effect): Promise<EffectHandlerResult<TMessage, never>> {
-    const replace = effect as ReplaceMessagesEffect<TMessage>;
-    await this.target.replaceMessages([...replace.messages]);
+    const replace = effect as ReplaceLeadingMessagesEffect<TMessage>;
+    await this.target.replaceLeadingMessages(replace.count, [...replace.replacement]);
     return {};
   }
 }

@@ -87,8 +87,8 @@ export class LinearMessageLedgerAgentContext implements AgentContext {
     await this.writeLedgerEntries([message]);
   }
 
-  public async replaceMessages(messages: LlmMessage[]): Promise<void> {
-    await this.inner.replaceMessages(messages);
+  public async replaceLeadingMessages(count: number, replacement: LlmMessage[]): Promise<void> {
+    await this.inner.replaceLeadingMessages(count, replacement);
   }
 
   public async getDashboardSummary(input?: {

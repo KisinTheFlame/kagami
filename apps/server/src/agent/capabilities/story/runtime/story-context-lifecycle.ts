@@ -1,6 +1,6 @@
 import {
   HandlerEffectInterpreter,
-  ReplaceMessagesHandler,
+  ReplaceLeadingMessagesHandler,
   type EffectInterpreter,
 } from "@kagami/agent-runtime";
 import type {
@@ -53,9 +53,9 @@ export class StoryContextLifecycle {
   private readonly now: () => Date;
   private readonly runtimeKey: string;
   /**
-   * compact 走 Effect 模型：Operation 产 replace_messages Effect，这里用只装了
-   * 公共 ReplaceMessagesHandler 的 Interpreter 解释——复用粒度是 handler，Story
-   * 只需要 replace 这一个。
+   * compact 走 Effect 模型：Operation 产 replace_leading_messages Effect，这里用只
+   * 装了公共 ReplaceLeadingMessagesHandler 的 Interpreter 解释——复用粒度是 handler，
+   * Story 只需要 replace 这一个。
    */
   private readonly interpreter: EffectInterpreter<LlmMessage, never>;
   private lastPersistedSnapshotFingerprint: string | null = null;
@@ -85,7 +85,7 @@ export class StoryContextLifecycle {
         systemPromptFactory: createStoryAgentSystemPrompt,
       });
     this.interpreter = new HandlerEffectInterpreter<LlmMessage, never>([
-      new ReplaceMessagesHandler<LlmMessage>(this.context),
+      new ReplaceLeadingMessagesHandler<LlmMessage>(this.context),
     ]);
   }
 
@@ -150,8 +150,7 @@ export class StoryContextLifecycle {
       try {
         result = await this.contextSummaryOperation.execute({
           systemPrompt: snapshot.systemPrompt,
-          messagesToSummarize: compactionPlan.messagesToSummarize,
-          messagesToKeep: compactionPlan.messagesToKeep,
+          messages: compactionPlan.messagesToSummarize,
           tools: this.summaryTools,
         });
       } catch (error) {
@@ -173,8 +172,8 @@ export class StoryContextLifecycle {
         return false;
       }
 
-      // compact 通过 Effect 模型收口：Operation 产 replace_messages Effect，
-      // 这里的 Interpreter（只含公共 ReplaceMessagesHandler）解释执行。
+      // compact 通过 Effect 模型收口：Operation 产 replace_leading_messages Effect，
+      // 这里的 Interpreter（只含公共 ReplaceLeadingMessagesHandler）解释执行。
       await this.interpreter.apply(result.effects);
       return true;
     }

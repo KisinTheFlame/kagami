@@ -1,6 +1,6 @@
 import {
   HandlerEffectInterpreter,
-  ReplaceMessagesHandler,
+  ReplaceLeadingMessagesHandler,
   type Effect,
   type EffectHandler,
   type EffectHandlerResult,
@@ -32,8 +32,9 @@ type WakeEvent = Extract<Event, { type: "wake" }>;
  * currentApp 切换、focused state 切换、阻塞等待、上下文重建）都通过它 apply。
  *
  * 由一组 handler 组成。复用粒度是 handler：
- * - `ReplaceMessagesHandler`（公共，来自 agent-runtime）：处理 replace_messages，
- *   直接调 context.replaceMessages。RootAgent 和 StoryAgent compact 都复用它。
+ * - `ReplaceLeadingMessagesHandler`（公共，来自 agent-runtime）：处理
+ *   replace_leading_messages，直接调 context.replaceLeadingMessages。RootAgent 和
+ *   StoryAgent compact 都复用它。
  * - RootAgent 专属 handler：append_message / switch_app / switch_state /
  *   wait_for_event——这些副作用语义只属于主 Agent。
  *
@@ -56,7 +57,7 @@ export function createRootEffectInterpreter({
   eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">;
 }): EffectInterpreter<LlmMessage, never> {
   return new HandlerEffectInterpreter<LlmMessage, never>([
-    new ReplaceMessagesHandler<LlmMessage>(context),
+    new ReplaceLeadingMessagesHandler<LlmMessage>(context),
     new AppendMessageHandler(),
     new SwitchAppHandler(session),
     new SwitchStateHandler(session),

@@ -5,7 +5,7 @@ import {
   SUMMARY_TOOL_NAME,
   SummaryTool,
 } from "../../src/agent/capabilities/context-summary/tools/summary.tool.js";
-import { REPLACE_MESSAGES_EFFECT_TYPE, ToolCatalog } from "@kagami/agent-runtime";
+import { REPLACE_LEADING_MESSAGES_EFFECT_TYPE, ToolCatalog } from "@kagami/agent-runtime";
 
 describe("ContextSummaryOperation", () => {
   it("forces the summary tool and emits a replace_messages effect with summary + kept messages", async () => {
@@ -40,11 +40,12 @@ describe("ContextSummaryOperation", () => {
       }),
     });
 
-    const keptMessage = { role: "user", content: "最近一条" } as const;
     const result = await operation.execute({
       systemPrompt: "runtime-system-prompt",
-      messagesToSummarize: [{ role: "user", content: "旧消息" }],
-      messagesToKeep: [keptMessage],
+      messages: [
+        { role: "user", content: "旧消息-1" },
+        { role: "user", content: "旧消息-2" },
+      ],
       tools: [
         {
           name: "search_web",
@@ -61,16 +62,18 @@ describe("ContextSummaryOperation", () => {
 
     expect(result.effects).toHaveLength(1);
     const effect = result.effects[0];
-    expect(effect.type).toBe(REPLACE_MESSAGES_EFFECT_TYPE);
-    // 重建后的消息 = [summary message, ...messagesToKeep]
-    expect(effect.messages).toHaveLength(2);
-    expect(effect.messages[1]).toEqual(keptMessage);
+    expect(effect.type).toBe(REPLACE_LEADING_MESSAGES_EFFECT_TYPE);
+    // count = 被摘要的前缀长度（input.messages.length）
+    expect(effect.count).toBe(2);
+    // replacement 是单条 summary message
+    expect(effect.replacement).toHaveLength(1);
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
         system: "runtime-system-prompt",
         messages: [
-          { role: "user", content: "旧消息" },
+          { role: "user", content: "旧消息-1" },
+          { role: "user", content: "旧消息-2" },
           { role: "user", content: "<system_reminder>请整理 root 摘要</system_reminder>" },
         ],
         toolChoice: { tool_name: SUMMARY_TOOL_NAME },
@@ -110,8 +113,7 @@ describe("ContextSummaryOperation", () => {
 
     const result = await operation.execute({
       systemPrompt: "story-system-prompt",
-      messagesToSummarize: [],
-      messagesToKeep: [],
+      messages: [],
       tools: [{ name: SUMMARY_TOOL_NAME, parameters: { type: "object", properties: {} } }],
     });
 

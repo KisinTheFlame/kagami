@@ -5,14 +5,14 @@ import type {
   EffectHandlerResult,
   EffectInterpreter,
   EffectInterpreterResult,
-  ReplaceMessagesEffect,
-  ReplaceMessagesTarget,
+  ReplaceLeadingMessagesEffect,
+  ReplaceLeadingMessagesTarget,
 } from "./effect.js";
 import {
   HandlerEffectInterpreter,
   NoopEffectInterpreter,
-  REPLACE_MESSAGES_EFFECT_TYPE,
-  ReplaceMessagesHandler,
+  REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
+  ReplaceLeadingMessagesHandler,
 } from "./effect.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
@@ -85,8 +85,8 @@ export {
   NoopEffectInterpreter,
   OutOfScopeTool,
   ReActKernel,
-  REPLACE_MESSAGES_EFFECT_TYPE,
-  ReplaceMessagesHandler,
+  REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
+  ReplaceLeadingMessagesHandler,
   SerialExecutor,
   TaskAgentRuntime,
   TaskEffectInterpreter,
@@ -106,8 +106,8 @@ export {
   type EffectInterpreter,
   type EffectInterpreterResult,
   type HelpToolDeps,
-  type ReplaceMessagesEffect,
-  type ReplaceMessagesTarget,
+  type ReplaceLeadingMessagesEffect,
+  type ReplaceLeadingMessagesTarget,
   type InvokeSubtoolOwner,
   type SubtoolGuardResult,
   type Queue,

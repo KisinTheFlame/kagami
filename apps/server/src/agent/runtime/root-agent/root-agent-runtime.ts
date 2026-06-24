@@ -5,7 +5,7 @@ import {
   ReActKernel,
   type ReActKernelRunRoundInput,
   type ReActRoundResult,
-  type ReplaceMessagesEffect,
+  type ReplaceLeadingMessagesEffect,
   SerialExecutor,
   type ToolExecutor,
   type ToolSetExecutionResult,
@@ -391,8 +391,7 @@ class RootAgentHost implements RootAgentExtensionHost {
 
       const attempt = await this.attemptSummarize(operation, {
         systemPrompt: snapshot.systemPrompt,
-        messagesToSummarize: compactionPlan.messagesToSummarize,
-        messagesToKeep: compactionPlan.messagesToKeep,
+        messages: compactionPlan.messagesToSummarize,
       });
       if (attempt.retry) {
         continue;
@@ -401,8 +400,8 @@ class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      // 阶段 5：compact 通过 Effect 模型收口，不再直接 context.replaceMessages。
-      // Operation 自己产 replace_messages Effect，host 只把它交给 Interpreter。
+      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。Operation 自己产
+      // replace_leading_messages Effect，host 只把它交给 Interpreter。
       // Interpreter 是 Agent 状态变更的唯一入口（参见 docs/effect-model.md）。
       await this.interpreter.apply(attempt.effects);
       return true;
@@ -412,7 +411,8 @@ class RootAgentHost implements RootAgentExtensionHost {
   /**
    * 全量压缩：把整条消息列表（不保留最近 10%）一次性摘要成单条 summary。
    * 与阈值无关，由人工面板手动触发。和 compactContextIfNeeded 一样走 Effect 模型
-   * 的 replace_messages，是 KV 缓存允许被破坏的"计划性重建"路径之一。
+   * 的 replace_leading_messages（count = 全部 message 数），是 KV 缓存允许被破坏的
+   * "计划性重建"路径之一。
    */
   public async compactEntireContext(): Promise<boolean> {
     const operation = this.contextSummaryOperation;
@@ -426,12 +426,10 @@ class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      // 全量压缩：messagesToKeep 传空，Operation 产的 replace_messages 只含
-      // 单条 summary。
+      // 全量压缩：摘要整条消息列表，Operation 产的 count = 全部 message 数。
       const attempt = await this.attemptSummarize(operation, {
         systemPrompt: snapshot.systemPrompt,
-        messagesToSummarize: snapshot.messages,
-        messagesToKeep: [],
+        messages: snapshot.messages,
       });
       if (attempt.retry) {
         continue;
@@ -449,17 +447,15 @@ class RootAgentHost implements RootAgentExtensionHost {
     operation: ContextSummaryLike,
     input: {
       systemPrompt: string;
-      messagesToSummarize: LlmMessage[];
-      messagesToKeep: readonly LlmMessage[];
+      messages: LlmMessage[];
     },
   ): Promise<
-    { retry: true } | { retry: false; effects: readonly ReplaceMessagesEffect<LlmMessage>[] }
+    { retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect<LlmMessage>[] }
   > {
     try {
       const result = await operation.execute({
         systemPrompt: input.systemPrompt,
-        messagesToSummarize: input.messagesToSummarize,
-        messagesToKeep: input.messagesToKeep,
+        messages: input.messages,
         tools: this.summaryTools,
       });
       return { retry: false, effects: result.effects };
