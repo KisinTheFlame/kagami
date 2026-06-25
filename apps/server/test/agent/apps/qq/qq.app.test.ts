@@ -14,14 +14,11 @@ initTestLoggerRuntime();
 
 class FakeScheduler implements NotificationScheduler {
   private fn: (() => void) | null = null;
-  public scheduleInterval(_intervalMs: number, fn: () => void): () => void {
+  public schedule(_delayMs: number, fn: () => void): () => void {
     this.fn = fn;
     return () => {
       this.fn = null;
     };
-  }
-  public tick(): void {
-    this.fn?.();
   }
 }
 
@@ -94,7 +91,6 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("在吗") });
-    scheduler.tick();
 
     expect(onFlush).toHaveBeenCalledTimes(1);
     expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 在吗"]);
@@ -107,7 +103,6 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("看下", "10001") });
-    scheduler.tick();
 
     expect(onFlush.mock.calls[0][0][1]).toContain("[有人 @ 你]");
   });
@@ -172,7 +167,6 @@ describe("QqApp", () => {
         time: 1,
       },
     });
-    scheduler.tick();
 
     expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
     // 会话被建出来，能打开
