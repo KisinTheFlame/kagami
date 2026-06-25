@@ -1,4 +1,4 @@
-import model, { type AiToneModelData } from "./ai-tone-model.data.js";
+import model, { type AiToneModelData } from "./ai-tone-model.js";
 
 /**
  * 中文「AI 味」打分器。
