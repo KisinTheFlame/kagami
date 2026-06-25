@@ -15,6 +15,7 @@
 
 ### Changed
 
+- build/config: `prisma generate`（及 `pnpm build` / `typecheck`）不再依赖 `config.yaml`——`scripts/prisma.sh` 对 `generate` 子命令改用占位 `DATABASE_URL`，让纯代码生成 / 类型检查与运行时配置解耦；连库命令（`migrate` / `db push` 等）仍读真实 `server.databaseUrl`，缺失即报错不静默兜底。便于 CI / 全新 clone 在没有 `config.yaml` 时直接跑 build / typecheck（[#91](https://github.com/KisinTheFlame/kagami/pull/91)）
 - agent: 顶层 `news` 模块塌缩为 `ithome` capability，消除"多源资讯"泛化。抓取 / 存储 / 轮询本体迁入 `agent/capabilities/ithome`（对标 `terminal` 范式的能力本体 + App 壳分层），App 壳保留在 `agent/apps/ithome`；删除 `source_key` 多源抽象：`IthomeNewsService`→`IthomeService`、表 `news_article` / `news_feed_cursor`→`ithome_article` / `ithome_feed_cursor`（游标退化为单行表）、事件 `news_article_ingested`→`ithome_article_ingested`、配置 `server.news.ithome`→`server.ithome`；迁移 `collapse_news_into_ithome` 以 rename + `INSERT SELECT` 保留已抓取文章与已读游标
 - server: 数据库由外部 PostgreSQL + pgvector 迁移到**进程内 SQLite + hnswlib-node**，宿主机不再需要运行独立数据库。ORM 仍是 Prisma（adapter 换 `@prisma/adapter-better-sqlite3`）；schema 去掉 PG 专有类型，`EmbeddingCache.embedding` 与向量列改 `String`(JSON)；向量检索改进程内 HNSW（SQLite 为唯一事实来源、启动时重建）；metric / napcat / app-log 的原生 SQL 改写为 SQLite 方言；持久化数据统一进 `data/`（`sqlite/`、`vector/`）；重建 Prisma 迁移基线；旧 PostgreSQL 数据经一次性脚本搬迁（脚本不随仓库留存）（[#85](https://github.com/KisinTheFlame/kagami/pull/85)）
 - agent: Wake Reminder 由每分钟降频为每半小时一次，同一半小时窗口（00 / 30 分桶）内的多轮 round 共享去重 key、不再重复追加；展示的时间值仍是真实触发时刻；长会话尾部 `system_reminder` 噪声减少约 30 倍，对 KV 缓存更友好（[#77](https://github.com/KisinTheFlame/kagami/pull/77)）
