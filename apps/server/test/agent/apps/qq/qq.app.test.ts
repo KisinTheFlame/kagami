@@ -152,4 +152,61 @@ describe("QqApp", () => {
     app.backToConversationList();
     expect(app.getCurrentChatTarget()).toBeUndefined();
   });
+
+  it("ingests a private message: creates the conversation and pushes a notification", async () => {
+    const scheduler = new FakeScheduler();
+    const onFlush = vi.fn();
+    const app = createApp(scheduler, onFlush);
+    await app.onStartup();
+
+    app.handleNapcatEvent({
+      type: "napcat_private_message",
+      data: {
+        userId: "888",
+        nickname: "老王",
+        remark: null,
+        rawMessage: "在不在",
+        messageSegments: [{ type: "text", data: { text: "在不在" } } as never],
+        messageId: 1,
+        time: 1,
+      },
+    });
+    scheduler.fire();
+
+    expect(onFlush.mock.calls[0][0][0]).toBe("老王：老王: 在不在");
+    // 会话被建出来，能打开
+    expect((await app.openConversation("qq_private:888")).ok).toBe(true);
+    expect(app.getCurrentChatTarget()).toEqual({ chatType: "private", userId: "888" });
+  });
+
+  it("open_conversation renders recent messages fetched from the gateway", async () => {
+    const app = new QqApp({
+      napcatGateway: fakeGateway({
+        getRecentGroupMessages: vi.fn().mockResolvedValue([groupMessage("历史一条")]),
+      }),
+      notificationCenter: new NotificationCenter({
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+    await app.onStartup();
+
+    const result = await app.openConversation("qq_group:1");
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain("历史一条");
+    expect(result.content).toContain("<qq_conversation");
+  });
+
+  it("rejects opening an unknown conversation", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    const result = await app.openConversation("qq_group:does-not-exist");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("CONVERSATION_NOT_FOUND");
+  });
 });
