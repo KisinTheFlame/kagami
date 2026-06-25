@@ -12,8 +12,13 @@
  * 设计依据：手机 OS 模型设计文档（NotificationCenter / 折叠契约）。
  */
 export interface NotificationDraft {
-  /** 不透明源标识（appId / stateId）。NotificationCenter 按它归组、折叠、清空。 */
+  /** 不透明源标识（每个会话 / app 一个）。NotificationCenter 按它折叠、清空。 */
   readonly sourceId: string;
+  /**
+   * 通知里的分组段名（如 "QQ"、"IT之家"）。NotificationCenter flush 时按 group
+   * 把各源的 render() 行归到同一段标题下，输出 `{group}:` + 每行。
+   */
+  readonly group: string;
   /** 给人看的源短名，渲染时可用。 */
   readonly displayName: string;
   /** 把同源的历史 draft 折叠进来。this = 最新、prev = 历史。 */

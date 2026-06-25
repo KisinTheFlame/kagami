@@ -6,28 +6,48 @@ import {
 import type { NapcatReceiveMessageSegment } from "../../src/napcat/service/napcat-gateway/shared.js";
 
 describe("ChatNotificationDraft", () => {
-  it("renders {name}：{latest} without a mention", () => {
-    const draft = new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false);
-    expect(draft.sourceId).toBe("qq_group:1");
-    expect(draft.render()).toBe("产品群：在吗");
+  it("belongs to the QQ group", () => {
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false).group).toBe("QQ");
   });
 
-  it("renders the mention tag when mentioned", () => {
-    const draft = new ChatNotificationDraft("qq_group:1", "产品群", "看下这个", true);
-    expect(draft.render()).toBe("产品群：[有人@你] 看下这个");
+  it("renders {name}: {latest} for a single non-@ message", () => {
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false).render()).toBe(
+      "产品群: 在吗",
+    );
+  });
+
+  it("shows the mention tag", () => {
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "看下", true).render()).toBe(
+      "产品群: [有人 @ 你]看下",
+    );
+  });
+
+  it("shows the count tag when >1, capping at 99+", () => {
+    expect(new ChatNotificationDraft("qq_group:1", "群", "x", false, 2).render()).toBe(
+      "群: [2 条消息]x",
+    );
+    expect(new ChatNotificationDraft("qq_group:1", "群", "x", false, 150).render()).toBe(
+      "群: [99+ 条消息]x",
+    );
+  });
+
+  it("orders count tag before mention tag before content", () => {
+    expect(new ChatNotificationDraft("qq_group:1", "程序喵", "哈哈", true, 150).render()).toBe(
+      "程序喵: [99+ 条消息][有人 @ 你]哈哈",
+    );
+  });
+
+  it("folds via merge(prev): latest text, sticky mention, accumulated count", () => {
+    const older = new ChatNotificationDraft("qq_group:1", "群", "第一条", true, 1); // 历史里 @ 过
+    const newer = new ChatNotificationDraft("qq_group:1", "群", "第二条", false, 1);
+    expect(newer.merge(older).render()).toBe("群: [2 条消息][有人 @ 你]第二条");
   });
 
   it("truncates an over-long latest message", () => {
     const long = "一".repeat(50);
-    const draft = new ChatNotificationDraft("qq_group:1", "群", long, false);
-    expect(draft.render()).toBe(`群：${"一".repeat(40)}…`);
-  });
-
-  it("folds via merge(prev): latest text wins, mention is sticky within the window", () => {
-    const older = new ChatNotificationDraft("qq_group:1", "群", "第一条", true); // 历史里 @ 过
-    const newer = new ChatNotificationDraft("qq_group:1", "群", "第二条", false);
-    const merged = newer.merge(older);
-    expect(merged.render()).toBe("群：[有人@你] 第二条");
+    expect(new ChatNotificationDraft("qq_group:1", "群", long, false).render()).toBe(
+      `群: ${"一".repeat(40)}…`,
+    );
   });
 });
 

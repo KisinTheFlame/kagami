@@ -1,22 +1,30 @@
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { NapcatReceiveMessageSegment } from "../../../napcat/service/napcat-gateway/shared.js";
 
-const MENTION_TAG = "[有人@你]";
+const MENTION_TAG = "[有人 @ 你]";
 const MAX_PREVIEW_CHARS = 40;
+const MAX_DISPLAY_COUNT = 99;
 
 /**
  * 一个 QQ 会话的后台通知 draft（手机 OS 模型）。
  *
- * 一个窗口内同会话的多条消息折叠成一行：`{会话名}：{[有人@你] }{最新一条(截断)}`。
- * 折叠约定 this = 最新、prev = 历史：文本取最新、`mentioned` 在窗口内**粘住**
- * （出现过一次 @ 就为真）。sourceId = 会话 id（每会话一个源）。
+ * 在通知里归到 "QQ" 段下，每会话一行：
+ *   `{会话名}: {条数标签}{@标签}{最近一条内容}`
+ * - 条数标签：本窗口内该会话消息数 > 1 时显示 `[N 条消息]`（N 超 99 显 `99+`）。
+ * - @标签：窗口内有人 @ 过小镜时显示 `[有人 @ 你]`（出现过一次就粘住）。
+ *
+ * 折叠约定 this = 最新、prev = 历史：文本取最新、`mentioned` 粘住（OR）、`messageCount`
+ * 累加。sourceId = 会话 id（每会话一个源）。
  */
 export class ChatNotificationDraft implements NotificationDraft {
+  public readonly group = "QQ";
+
   public constructor(
     public readonly sourceId: string,
     public readonly displayName: string,
     private readonly latestText: string,
     private readonly mentioned: boolean,
+    private readonly messageCount = 1,
   ) {}
 
   public merge(prev: NotificationDraft): NotificationDraft {
@@ -26,12 +34,14 @@ export class ChatNotificationDraft implements NotificationDraft {
       this.displayName,
       this.latestText, // 最新归我
       this.mentioned || previous.mentioned, // @ 粘住
+      this.messageCount + previous.messageCount, // 条数累加
     );
   }
 
   public render(): string {
-    const mark = this.mentioned ? `${MENTION_TAG} ` : "";
-    return `${this.displayName}：${mark}${truncate(this.latestText, MAX_PREVIEW_CHARS)}`;
+    const countTag = this.messageCount > 1 ? `[${formatCount(this.messageCount)} 条消息]` : "";
+    const mentionTag = this.mentioned ? MENTION_TAG : "";
+    return `${this.displayName}: ${countTag}${mentionTag}${truncate(this.latestText, MAX_PREVIEW_CHARS)}`;
   }
 }
 
@@ -41,6 +51,10 @@ export function detectBotMentioned(
   botQQ: string,
 ): boolean {
   return segments.some(segment => segment.type === "at" && segment.data.qq === botQQ);
+}
+
+function formatCount(count: number): string {
+  return count <= MAX_DISPLAY_COUNT ? String(count) : `${MAX_DISPLAY_COUNT}+`;
 }
 
 function truncate(text: string, max: number): string {
