@@ -40,45 +40,47 @@ export class SharedOAuthCallbackServer<
       });
     }
 
-    // handler 自带 try/catch/finally，错误已在内部处理并写回响应，是有意的 fire-and-forget。
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    const server = createServer(async (request, response) => {
-      const url = new URL(request.url ?? "/", `http://localhost:${this.config.port}`);
-      if (request.method !== "GET" || url.pathname !== this.config.path) {
-        response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        response.end("Not found");
-        return;
-      }
+    const server = createServer((request, response) => {
+      // 回调 handler 自含 try/catch/finally、所有分支都会写回响应，是有意的 fire-and-forget。
+      // 用 void 在代码层显式声明"不等待这个 Promise"，让 no-misused-promises 自然满足，而非 disable。
+      void (async () => {
+        const url = new URL(request.url ?? "/", `http://localhost:${this.config.port}`);
+        if (request.method !== "GET" || url.pathname !== this.config.path) {
+          response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          response.end("Not found");
+          return;
+        }
 
-      const code = url.searchParams.get("code");
-      const state = url.searchParams.get("state");
-      if (!code || !state) {
-        response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
-        response.end("Missing code or state");
-        queueMicrotask(() => {
-          void this.stop();
-        });
-        return;
-      }
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
+        if (!code || !state) {
+          response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          response.end("Missing code or state");
+          queueMicrotask(() => {
+            void this.stop();
+          });
+          return;
+        }
 
-      try {
-        const result = await authService.handleCallback({
-          code,
-          state,
-        } satisfies OAuthCallbackInput);
-        response.writeHead(302, {
-          Location: result.redirectUrl,
-        });
-        response.end();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Callback failed";
-        response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-        response.end(message);
-      } finally {
-        queueMicrotask(() => {
-          void this.stop();
-        });
-      }
+        try {
+          const result = await authService.handleCallback({
+            code,
+            state,
+          } satisfies OAuthCallbackInput);
+          response.writeHead(302, {
+            Location: result.redirectUrl,
+          });
+          response.end();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Callback failed";
+          response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+          response.end(message);
+        } finally {
+          queueMicrotask(() => {
+            void this.stop();
+          });
+        }
+      })();
     });
 
     await new Promise<void>((resolve, reject) => {

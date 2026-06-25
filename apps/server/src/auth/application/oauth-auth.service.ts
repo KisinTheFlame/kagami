@@ -56,7 +56,7 @@ type DefaultOAuthAuthServiceDeps<
   callbackServer: OAuthCallbackServerLike;
   secretStore: OAuthSecretStore;
   protocolAdapter: OAuthProtocolAdapter<TConfig, TTokenResponse>;
-  createEmptyUsageLimits(): TUsageLimits;
+  createEmptyUsageLimits: () => TUsageLimits;
 };
 
 export interface OAuthAuthService<
