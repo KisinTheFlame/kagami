@@ -13,14 +13,15 @@ import { initTestLoggerRuntime } from "../../../helpers/logger.js";
 initTestLoggerRuntime();
 
 class FakeScheduler implements NotificationScheduler {
-  private fns: Array<() => void> = [];
-  public schedule(_delayMs: number, fn: () => void): void {
-    this.fns.push(fn);
+  private fn: (() => void) | null = null;
+  public scheduleInterval(_intervalMs: number, fn: () => void): () => void {
+    this.fn = fn;
+    return () => {
+      this.fn = null;
+    };
   }
-  public fire(): void {
-    const fns = this.fns;
-    this.fns = [];
-    for (const fn of fns) fn();
+  public tick(): void {
+    this.fn?.();
   }
 }
 
@@ -93,10 +94,10 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("在吗") });
-    scheduler.fire();
+    scheduler.tick();
 
     expect(onFlush).toHaveBeenCalledTimes(1);
-    expect(onFlush.mock.calls[0][0][0]).toBe("产品群：群友: 在吗");
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 在吗"]);
   });
 
   it("marks [有人@你] when the bot is mentioned", async () => {
@@ -106,9 +107,9 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("看下", "10001") });
-    scheduler.fire();
+    scheduler.tick();
 
-    expect(onFlush.mock.calls[0][0][0]).toContain("[有人@你]");
+    expect(onFlush.mock.calls[0][0][1]).toContain("[有人 @ 你]");
   });
 
   it("open_conversation sets the current chat target and clears that source", async () => {
@@ -171,9 +172,9 @@ describe("QqApp", () => {
         time: 1,
       },
     });
-    scheduler.fire();
+    scheduler.tick();
 
-    expect(onFlush.mock.calls[0][0][0]).toBe("老王：老王: 在不在");
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
     // 会话被建出来，能打开
     expect((await app.openConversation("qq_private:888")).ok).toBe(true);
     expect(app.getCurrentChatTarget()).toEqual({ chatType: "private", userId: "888" });

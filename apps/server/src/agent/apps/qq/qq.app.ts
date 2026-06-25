@@ -308,10 +308,9 @@ function renderMessagePlainText(message: ConversationMessage): string {
     : renderPrivateMessagePlainText(message);
 }
 
+/** 通知行里的"最近一条内容"：只取消息文本（会话名由通知行前缀给出，不重复发送者）。 */
 function renderMessagePreview(message: ConversationMessage): string {
-  const nickname = message.nickname?.trim() || "某人";
-  const text = message.rawMessage?.trim() || "（非文本消息）";
-  return `${nickname}: ${text}`;
+  return message.rawMessage?.trim() || "（非文本消息）";
 }
 
 function parseConversationGroupId(id: ConversationId): string | null {
