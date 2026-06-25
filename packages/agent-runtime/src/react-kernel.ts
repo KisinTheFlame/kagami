@@ -56,6 +56,14 @@ export type ReActToolExecution<TExtensionData = unknown> = {
   toolCall: ReActToolCall;
   result: ToolSetExecutionResult;
   appendedMessages: Array<Extract<LlmMessage, { role: "tool" }>>;
+  /**
+   * 本次工具执行的 `effects` 经 interpreter 翻译出的待追加消息（通常是
+   * `append_message` 产的"屏幕"，如 App 列表 / 文章正文）。与 `appendedMessages`
+   * （tool_result 消息）分开放，让 commit 方能按"tool 结果 → effect 屏幕"的顺序
+   * 各自持久化。本字段是 #78 把 effect 下沉进 kernel 后，commit 方持久化这些
+   * 消息的唯一来源——丢了它，App 的"屏幕"内容就进不了 ledger。
+   */
+  effectMessages: LlmMessage[];
   extensionData?: TExtensionData;
 };
 
@@ -249,6 +257,7 @@ export class ReActKernel<
           toolCall,
           result: skippedResult,
           appendedMessages: skippedToolMessages,
+          effectMessages: [],
         });
         continue;
       }
@@ -335,6 +344,7 @@ export class ReActKernel<
         toolCall,
         result,
         appendedMessages: toolMessages,
+        effectMessages: interpretedMessages,
         ...(extensionData !== undefined ? { extensionData } : {}),
       });
     }

@@ -24,6 +24,10 @@
 - agent: 移除 `wait` 工具连续第 3 次调用时的 `<wait_blocked>` 短路限制；`wait` 现在总是产出 `wait_for_event`，由事件队列或最大等待时间正常恢复主循环
 - llm-history: 拆分 LLM 调用历史列表 / 详情接口，`/llm-chat-call/query` 列表只返回 summary 字段，新增 `GET /llm-chat-call/:id` 详情接口；前端列表改为按选中 id 单独 fetch detail，降低列表响应体大小（[#72](https://github.com/KisinTheFlame/kagami/pull/72)）
 
+### Fixed
+
+- agent: 修复 root agent 丢失 tool 的 `append_message` effect 产出消息的回归。#78 把 effect 应用下沉进 ReAct kernel 后，effect 翻译出的"屏幕"消息（App 列表 / 文章正文等）只进 `ReActRoundResult.appendedMessages`，而 `RootAgentHost.commitRoundResult` 仍只持久化 tool 结果 content + postToolEffects、从不落 `appendedMessages`——导致 `glance_hn` / `search_hn` / `open_hn_user` / `open_hn_thread` 以及 ithome 的列表 / 文章正文只在回合内可见、不进 ledger，下一轮主 Agent 只剩 tool_result 那句简短状态（如 `{"count":10}`），看不到真正内容。kernel 现在把 effect 产出挂到 `ReActToolExecution.effectMessages`，commit 按"tool 结果 → effect 屏幕 → postToolEffects"顺序持久化；新增 kernel 与 commit 两层回归测试（[#94](https://github.com/KisinTheFlame/kagami/pull/94)）
+
 ## 2026-05
 
 ### Added
