@@ -14,14 +14,10 @@ import type { RootAgentSessionController } from "../root-agent/session/root-agen
 import type {
   AppendMessageEffect,
   SwitchAppEffect,
-  SwitchStateEffect,
   WaitForEventEffect,
 } from "./root-agent-effect.js";
 
-type InterpreterSession = Pick<
-  RootAgentSessionController,
-  "setCurrentApp" | "clearCurrentApp" | "enter"
->;
+type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp" | "clearCurrentApp">;
 
 /** wait_for_event 超时时由 Interpreter 自己 push 进队列的 wake 事件类型。 */
 type WakeEvent = Extract<Event, { type: "wake" }>;
@@ -59,7 +55,6 @@ export function createRootEffectInterpreter({
     new ReplaceLeadingMessagesHandler(context),
     new AppendMessageHandler(),
     new SwitchAppHandler(session),
-    new SwitchStateHandler(session),
     new WaitForEventHandler(eventQueue),
   ]);
 }
@@ -101,25 +96,6 @@ class SwitchAppHandler implements EffectHandler<never> {
     } else {
       this.session.setCurrentApp(switchApp.appId);
     }
-    return {};
-  }
-}
-
-/** 把 root agent 的 focused state 切到 stateId。即时副作用。 */
-class SwitchStateHandler implements EffectHandler<never> {
-  private readonly session: InterpreterSession;
-
-  public constructor(session: InterpreterSession) {
-    this.session = session;
-  }
-
-  public matches(effect: Effect): boolean {
-    return effect.type === "switch_state";
-  }
-
-  public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
-    const switchState = effect as SwitchStateEffect;
-    await this.session.enter({ id: switchState.stateId });
     return {};
   }
 }

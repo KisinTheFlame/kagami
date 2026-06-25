@@ -1,247 +1,45 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { AppManager, type App } from "@kagami/agent-runtime";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
+import type { NapcatChatTarget } from "../../src/napcat/service/napcat-gateway.service.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 initTestLoggerRuntime();
 
-function createGroupEvent(message: string, groupId: string) {
-  return {
-    type: "napcat_group_message" as const,
-    data: {
-      groupId,
-      userId: "654321",
-      nickname: "测试昵称",
-      rawMessage: message,
-      messageSegments: [
-        {
-          type: "text" as const,
-          data: {
-            text: message,
-          },
-        },
-      ],
-      messageId: 1001,
-      time: 1710000000,
-    },
-  };
+function createTestApp(id: string, displayName: string): App {
+  return { id, displayName, tools: [], canInvoke: () => true, help: async () => "" };
 }
 
-function createHistoryMessage(message: string, groupId: string) {
-  return {
-    groupId,
-    userId: "123456",
-    nickname: "历史群友",
-    rawMessage: message,
-    messageSegments: [
-      {
-        type: "text" as const,
-        data: {
-          text: message,
-        },
-      },
-    ],
-    messageId: 2001,
-    time: 1710000100,
-  };
+function createContext() {
+  return new DefaultAgentContext({ systemPromptFactory: () => "system-prompt" });
 }
 
-function createPrivateEvent(message: string, userId: string) {
-  return {
-    type: "napcat_private_message" as const,
-    data: {
-      userId,
-      nickname: "测试好友",
-      remark: "好友备注",
-      rawMessage: message,
-      messageSegments: [
-        {
-          type: "text" as const,
-          data: {
-            text: message,
-          },
-        },
-      ],
-      messageId: 3001,
-      time: 1710000200,
-    },
-  };
-}
-
-function createFriendListUpdatedEvent(
-  friends: Array<{
-    userId: string;
-    nickname: string;
-    remark: string | null;
-  }>,
-) {
-  return {
-    type: "napcat_friend_list_updated" as const,
-    data: {
-      friends,
-    },
-  };
-}
-
-async function applyPostToolEffects(
-  context: DefaultAgentContext,
-  effects: Awaited<ReturnType<RootAgentSession["flushPendingPostToolEffects"]>>,
-): Promise<void> {
-  if (effects.messages.length > 0) {
-    await context.appendMessages(effects.messages);
-  }
-}
-
-function createSession({
-  context,
-  getGroupInfo = vi.fn().mockImplementation(async ({ groupId }) => ({
-    groupId,
-    groupName: groupId === "group-1" ? "产品群" : "测试群",
-    memberCount: 123,
-    maxMemberCount: 500,
-    groupRemark: "",
-    groupAllShut: false,
-  })),
-  getRecentGroupMessages = vi.fn().mockResolvedValue([]),
-  getRecentPrivateMessages = vi.fn().mockResolvedValue([]),
-  getFriendList = vi.fn().mockResolvedValue([]),
-  notificationTimeWindowMs,
-}: {
-  context: DefaultAgentContext;
-  getGroupInfo?: ReturnType<typeof vi.fn>;
-  getRecentGroupMessages?: ReturnType<typeof vi.fn>;
-  getRecentPrivateMessages?: ReturnType<typeof vi.fn>;
-  getFriendList?: ReturnType<typeof vi.fn>;
-  notificationTimeWindowMs?: number;
-}) {
-  return new RootAgentSession({
-    context,
-    napcatGatewayService: {
-      start: vi.fn(),
-      stop: vi.fn(),
-      sendGroupMessage: vi.fn(),
-      sendPrivateMessage: vi.fn(),
-      getFriendList,
-      getGroupInfo,
-      getRecentGroupMessages,
-      getRecentPrivateMessages,
-    },
-    listenGroupIds: ["group-1", "group-2"],
-    recentMessageLimit: 2,
-    notificationTimeWindowMs,
-  });
-}
-
-describe("RootAgentSession", () => {
-  it("should initialize with a system_reminder for portal children", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
+describe("RootAgentSession (App 启动器)", () => {
+  it("initializes with a portal reminder listing registered apps", async () => {
+    const context = createContext();
+    const appManager = new AppManager();
+    appManager.register(createTestApp("qq", "QQ"));
+    const session = new RootAgentSession({ context, appManager });
 
     await session.initializeContext();
 
     const snapshot = await context.getSnapshot();
-    const lastMessage = snapshot.messages.at(-1);
-
-    expect(session.getState()).toEqual({
-      focusedStateId: "portal",
-      stateStack: ["portal"],
-    });
-    expect(lastMessage?.content).toContain("<system_reminder>");
-    expect(lastMessage?.content).toContain("你进入了 门户 节点");
-    expect(lastMessage?.content).toContain("QQ 群 产品群 (group-1) (qq_group:group-1)");
+    const reminder = snapshot.messages.at(-1);
+    expect(reminder?.content).toContain("<system_reminder>");
+    expect(reminder?.content).toContain("门户");
+    expect(typeof reminder?.content === "string" ? reminder.content : "").toContain("QQ");
+    expect(session.getState()).toEqual({ focusedStateId: "portal", stateStack: ["portal"] });
   });
 
-  it("should enter child state by state id and back one level", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({
-      context,
-      getRecentGroupMessages: vi
-        .fn()
-        .mockResolvedValue([createHistoryMessage("history-1", "group-1")]),
-    });
-
+  it("appends a <notification> message and triggers a round on notification events", async () => {
+    const context = createContext();
+    const session = new RootAgentSession({ context, appManager: new AppManager() });
     await session.initializeContext();
-    await expect(session.enter({ id: "qq_group:group-1" })).resolves.toMatchObject({
-      ok: true,
-      id: "qq_group:group-1",
-      displayName: "QQ 群 产品群 (group-1)",
-      message: "已进入QQ 群 产品群 (group-1)",
-    });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
-    expect(session.getState()).toEqual({
-      focusedStateId: "qq_group:group-1",
-      stateStack: ["portal", "qq_group:group-1"],
-    });
-    expect(session.getCurrentGroupId()).toBe("group-1");
-    expect(session.getAvailableInvokeTools()).toEqual(["send_message"]);
-    const snapshotAfterEnter = await context.getSnapshot();
-    const stateReminder = snapshotAfterEnter.messages.find(
-      message =>
-        typeof message.content === "string" &&
-        message.content.includes("你进入了 QQ 群 产品群 (group-1) 节点"),
-    );
-    expect(stateReminder?.content).not.toContain("要发送到群里的文本内容。");
-
-    await expect(session.back()).resolves.toMatchObject({
-      ok: true,
-      id: "qq_group:group-1",
-      displayName: "QQ 群 产品群 (group-1)",
-      message: "已退出QQ 群 产品群 (group-1)",
-    });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
-
-    expect(session.getState()).toEqual({
-      focusedStateId: "portal",
-      stateStack: ["portal"],
-    });
-    const snapshot = await context.getSnapshot();
-    expect(
-      snapshot.messages.some(
-        message => typeof message.content === "string" && message.content.includes("history-1"),
-      ),
-    ).toBe(true);
-  });
-
-  it("should refresh portal reminder when background child state changes", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
-
-    await session.initializeContext();
-    const consumeResult = await session.consumeIncomingEvent(createGroupEvent("hello", "group-1"));
-    const flushResult = await session.flushPendingIncomingEffects();
-
-    expect(consumeResult).toEqual({
-      shouldTriggerRound: true,
-    });
-    expect(flushResult).toEqual({
-      shouldTriggerRound: true,
-    });
-
-    const snapshot = await context.getSnapshot();
-    const reminderMessages = snapshot.messages.filter(
-      message =>
-        typeof message.content === "string" && message.content.includes("<system_reminder>"),
-    );
-    expect(reminderMessages.at(-1)?.content).toContain("未读 1 条消息");
-  });
-
-  it("should append a <notification> message and trigger a round on notification events", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
-
-    await session.initializeContext();
     const consumeResult = await session.consumeIncomingEvent({
       type: "notification",
-      data: { lines: ["IT之家：2篇新文，最新《某标题》"] },
+      data: { lines: ["IT之家：2篇新文，最新《某标题》", "产品群：[有人@你] 在吗"] },
     });
     const flushResult = await session.flushPendingIncomingEffects();
 
@@ -249,340 +47,50 @@ describe("RootAgentSession", () => {
     expect(flushResult).toEqual({ shouldTriggerRound: true });
 
     const snapshot = await context.getSnapshot();
-    const notificationMessage = snapshot.messages.find(
+    const notification = snapshot.messages.find(
       message => typeof message.content === "string" && message.content.includes("<notification>"),
     );
-    expect(notificationMessage?.content).toContain("IT之家：2篇新文，最新《某标题》");
-    expect(notificationMessage?.content).toContain("</notification>");
+    expect(notification?.content).toContain("产品群：[有人@你] 在吗");
   });
 
-  // NOTE: wait-overlay tests removed. Under the new event-driven model the
-  // session has no concept of a waiting state — the wait tool blocks directly
-  // on the event queue, and session state is unchanged while the tool is
-  // blocked. Wait-resume rendering is no longer a session concern.
-
-  it("should show unread count instead of preview in cross-state group notifications", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({
-      context,
-      notificationTimeWindowMs: 0,
-    });
-
+  it("triggers a round on story_recall but not on wake", async () => {
+    const context = createContext();
+    const session = new RootAgentSession({ context, appManager: new AppManager() });
     await session.initializeContext();
-    await session.enter({ id: "qq_group:group-1" });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
 
-    const consumeResult = await session.consumeIncomingEvent(createGroupEvent("hello", "group-2"));
-    const flushResult = await session.flushPendingIncomingEffects();
-
-    expect(consumeResult).toEqual({
-      shouldTriggerRound: false,
+    const story = await session.consumeIncomingEvent({
+      type: "story_recall_completed",
+      data: { stories: [{ id: "s1", markdown: "回忆", createdAt: new Date(0) }] },
     });
-    expect(flushResult).toEqual({
-      shouldTriggerRound: true,
-    });
+    expect(story).toEqual({ shouldTriggerRound: true });
 
-    const snapshot = await context.getSnapshot();
-    const notificationMessage = [...snapshot.messages]
-      .reverse()
-      .find(
-        message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
-      );
-
-    expect(notificationMessage?.content).toContain("QQ 群 测试群 (group-2)：未读 1 条消息。");
-    expect(notificationMessage?.content).not.toContain("测试昵称");
-    expect(notificationMessage?.content).not.toContain("hello");
+    const wake = await session.consumeIncomingEvent({ type: "wake" });
+    expect(wake).toEqual({ shouldTriggerRound: false });
   });
 
-  it("should show latest total unread count for repeated group notifications in the same batch", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({
-      context,
-      notificationTimeWindowMs: 0,
-    });
-
-    await session.initializeContext();
-    await session.enter({ id: "qq_group:group-1" });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
-
-    await session.consumeIncomingEvent(createGroupEvent("hello-1", "group-2"));
-    await session.consumeIncomingEvent(createGroupEvent("hello-2", "group-2"));
-    const flushResult = await session.flushPendingIncomingEffects();
-
-    expect(flushResult).toEqual({
-      shouldTriggerRound: true,
+  it("delegates getCurrentChatTarget to the chat target provider (QQ App current conversation)", async () => {
+    const holder: { target: NapcatChatTarget | undefined } = { target: undefined };
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
+      chatTargetProvider: () => holder.target,
     });
 
-    const snapshot = await context.getSnapshot();
-    const notificationMessages = snapshot.messages.filter(
-      message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
-    );
-
-    expect(notificationMessages).toHaveLength(1);
-    expect(notificationMessages[0]?.content).toContain("QQ 群 测试群 (group-2)：未读 2 条消息。");
-    expect(notificationMessages[0]?.content).not.toContain("hello-1");
-    expect(notificationMessages[0]?.content).not.toContain("hello-2");
+    expect(session.getCurrentChatTarget()).toBeUndefined();
+    holder.target = { chatType: "group", groupId: "group-1" };
+    expect(session.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "group-1" });
+    expect(session.getCurrentGroupId()).toBe("group-1");
   });
 
-  it("should restore persisted stateStack and tolerate legacy waitOverlay field", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
+  it("tracks the current app", () => {
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
     });
-    const session = createSession({ context });
-
-    // Legacy snapshot shape from the old polling design still contained a
-    // waitOverlay field. The new schema tolerates it (ignored on restore).
-    session.restorePersistedSnapshot({
-      stateStack: ["portal", "qq_group:group-1"],
-      waitOverlay: {
-        deadlineAt: new Date("2026-03-30T12:05:00.000Z"),
-        resumeStateStack: ["portal", "qq_group:group-1"],
-      },
-      groups: [
-        {
-          groupId: "group-1",
-          groupInfo: {
-            groupId: "group-1",
-            groupName: "产品群",
-            memberCount: 123,
-            maxMemberCount: 500,
-            groupRemark: "",
-            groupAllShut: false,
-          },
-          unreadMessages: [],
-          hasEntered: true,
-        },
-        {
-          groupId: "group-2",
-          groupInfo: null,
-          unreadMessages: [],
-          hasEntered: false,
-        },
-      ],
-      privateChats: [],
-    } as never);
-
-    expect(session.getState()).toEqual({
-      focusedStateId: "qq_group:group-1",
-      stateStack: ["portal", "qq_group:group-1"],
-    });
-
-    const exportedSnapshot = session.exportPersistedSnapshot();
-    expect(exportedSnapshot).toMatchObject({
-      stateStack: ["portal", "qq_group:group-1"],
-    });
-  });
-
-  it("should expose focused state dashboard information", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
-
-    await session.initializeContext();
-    const dashboard = await session.getStateView();
-
-    expect(dashboard.focusedStateId).toBe("portal");
-    expect(dashboard.stateStack).toEqual([{ id: "portal", displayName: "门户" }]);
-    expect(dashboard.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "qq_group:group-1",
-        }),
-      ]),
-    );
-  });
-
-  it("should list qq private child states after consuming friend list update event", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
-
-    await session.initializeContext();
-    const snapshotBeforeEvent = await context.getSnapshot();
-    const consumeResult = await session.consumeIncomingEvent(
-      createFriendListUpdatedEvent([
-        {
-          userId: "user-2",
-          nickname: "新好友",
-          remark: "新备注",
-        },
-      ]),
-    );
-    const flushResult = await session.flushPendingIncomingEffects();
-    const dashboard = await session.getStateView();
-    const snapshotAfterEvent = await context.getSnapshot();
-
-    expect(consumeResult).toEqual({
-      shouldTriggerRound: false,
-    });
-    expect(flushResult).toEqual({
-      shouldTriggerRound: false,
-    });
-    expect(snapshotAfterEvent.messages).toEqual(snapshotBeforeEvent.messages);
-    expect(dashboard.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "qq_private:user-2",
-          displayName: "QQ 私聊 新备注 (user-2)",
-        }),
-      ]),
-    );
-  });
-
-  it("should update private chat display name after consuming friend list update event", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({ context });
-
-    await session.initializeContext();
-    await session.consumeIncomingEvent(
-      createFriendListUpdatedEvent([
-        {
-          userId: "user-2",
-          nickname: "老昵称",
-          remark: null,
-        },
-      ]),
-    );
-    await session.flushPendingIncomingEffects();
-
-    await session.consumeIncomingEvent(
-      createFriendListUpdatedEvent([
-        {
-          userId: "user-2",
-          nickname: "新昵称",
-          remark: "新备注",
-        },
-      ]),
-    );
-    await session.flushPendingIncomingEffects();
-
-    const dashboard = await session.getStateView();
-    expect(dashboard.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "qq_private:user-2",
-          displayName: "QQ 私聊 新备注 (user-2)",
-        }),
-      ]),
-    );
-  });
-
-  it("should create qq private child state from incoming private message and enter it", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({
-      context,
-      getRecentPrivateMessages: vi.fn().mockResolvedValue([
-        {
-          messageType: "private",
-          subType: "friend",
-          groupId: null,
-          userId: "user-1",
-          nickname: "测试好友",
-          rawMessage: "history-private",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "history-private",
-              },
-            },
-          ],
-          messageId: 4001,
-          time: 1710000300,
-          payload: {},
-        },
-      ]),
-    });
-
-    await session.initializeContext();
-    const consumeResult = await session.consumeIncomingEvent(
-      createPrivateEvent("hello-private", "user-1"),
-    );
-    const flushResult = await session.flushPendingIncomingEffects();
-
-    expect(consumeResult).toEqual({
-      shouldTriggerRound: true,
-    });
-    expect(flushResult).toEqual({
-      shouldTriggerRound: true,
-    });
-
-    const dashboard = await session.getStateView();
-    expect(dashboard.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "qq_private:user-1",
-          displayName: "QQ 私聊 好友备注 (user-1)",
-        }),
-      ]),
-    );
-
-    await expect(session.enter({ id: "qq_private:user-1" })).resolves.toMatchObject({
-      ok: true,
-      id: "qq_private:user-1",
-    });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
-
-    expect(session.getCurrentChatTarget()).toEqual({
-      chatType: "private",
-      userId: "user-1",
-    });
-    expect(session.getCurrentGroupId()).toBeUndefined();
-    expect(session.getAvailableInvokeTools()).toEqual(["send_message"]);
-
-    const snapshot = await context.getSnapshot();
-    expect(
-      snapshot.messages.some(
-        message =>
-          typeof message.content === "string" && message.content.includes("history-private"),
-      ),
-    ).toBe(true);
-  });
-
-  it("should show unread count instead of preview in cross-state private notifications", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-    const session = createSession({
-      context,
-      notificationTimeWindowMs: 0,
-    });
-
-    await session.initializeContext();
-    await session.enter({ id: "qq_group:group-1" });
-    await applyPostToolEffects(context, await session.flushPendingPostToolEffects());
-
-    const consumeResult = await session.consumeIncomingEvent(
-      createPrivateEvent("hello-private", "user-1"),
-    );
-    const flushResult = await session.flushPendingIncomingEffects();
-
-    expect(consumeResult).toEqual({
-      shouldTriggerRound: false,
-    });
-    expect(flushResult).toEqual({
-      shouldTriggerRound: true,
-    });
-
-    const snapshot = await context.getSnapshot();
-    const notificationMessage = [...snapshot.messages]
-      .reverse()
-      .find(
-        message => typeof message.content === "string" && message.content.includes("[跨状态通知]"),
-      );
-
-    expect(notificationMessage?.content).toContain("QQ 私聊 好友备注 (user-1)：未读 1 条消息。");
-    expect(notificationMessage?.content).not.toContain("测试好友");
-    expect(notificationMessage?.content).not.toContain("hello-private");
+    expect(session.getCurrentApp()).toBeUndefined();
+    session.setCurrentApp("qq");
+    expect(session.getCurrentApp()).toBe("qq");
+    session.clearCurrentApp();
+    expect(session.getCurrentApp()).toBeUndefined();
   });
 });

@@ -122,15 +122,14 @@ export type PersistedRootAgentSessionPrivateChatState = z.infer<
 >;
 
 export const PersistedRootAgentSessionSnapshotSchema = z.object({
-  stateStack: z.array(z.string().min(1)).min(1),
-  // Legacy field: the old polling-based design persisted a wait overlay
-  // here. The new event-driven design has no concept of a waiting session
-  // state. Accept any value during deserialization and ignore it.
+  // 手机 OS 模型下 session 退化为 App 启动器，不再持聊天状态。stateStack 恒为
+  // ["portal"]；保留字段只为兼容老快照的反序列化。
+  stateStack: z.array(z.string().min(1)).min(1).default(["portal"]),
+  // Legacy 字段：状态树时代持久化的 wait overlay / 聊天会话（groups/privateChats）/
+  // ithome 焦点。会话状态已归 QqApp（本次重置），这些字段接受但反序列化后忽略。
   waitOverlay: z.unknown().optional(),
-  groups: z.array(PersistedRootAgentSessionGroupStateSchema),
-  privateChats: z.array(PersistedRootAgentSessionPrivateChatStateSchema).default([]),
-  // Legacy field: state tree 时代持久化的 ithome 焦点状态。现在归 IthomeApp
-  // 管，unread 不再持久化。接受旧 snapshot 里的字段但反序列化后忽略。
+  groups: z.array(PersistedRootAgentSessionGroupStateSchema).optional(),
+  privateChats: z.array(PersistedRootAgentSessionPrivateChatStateSchema).optional(),
   ithomeFeedState: z.unknown().optional(),
 });
 
