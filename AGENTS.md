@@ -134,7 +134,7 @@ pnpm --filter @kagami/shared <script>
 - 当前仓库没有统一的根目录 `pnpm dev` 脚本。
 - `apps/server` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
 - `apps/web` 当前提供 `build`、`typecheck` 脚本。
-- `packages/agent-runtime` 当前提供 `build`、`typecheck` 脚本。
+- `packages/agent-runtime` 当前提供 `build`、`typecheck`、`test`、`test:watch` 脚本。
 - `packages/shared` 当前提供 `build`、`typecheck` 脚本。
 - 因此前后端联调时，需要按实际情况分别启动或补充本地开发脚本，不要假设仓库已经内置一键 dev 流程。
 
@@ -148,7 +148,7 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 
 补充说明：
 
-- 当前只有 `@kagami/server` 声明了测试脚本。
+- 当前 `@kagami/server` 与 `@kagami/agent-runtime` 声明了测试脚本（后者用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
 
 ## 数据库与配置
 
@@ -156,7 +156,6 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 - 直接查库可使用 `sqlite3` CLI；库文件路径以仓库根目录 `config.yaml` 中的 `server.databaseUrl`（`file:` 路径，运行时解析为绝对路径）为准。
 - Story 向量记忆不再用 pgvector，改为**进程内 HNSW 索引（hnswlib-node）**：向量以 JSON 字符串存于 `story_memory_document.embedding`（SQLite 为唯一事实来源），HNSW 索引在启动时从 SQLite 重建、并持久化派生快照到 `data/vector/story-memory.hnsw`。
 - 所有持久化数据统一放在仓库根 `data/` 目录下并按类别分子目录（`data/sqlite/`、`data/vector/`）；整个 `data/` 已在 `.gitignore` 中。
-- 从旧 PostgreSQL 搬迁数据：停服务后执行 `SOURCE_DATABASE_URL=<旧PG连接串> pnpm --filter @kagami/server exec tsx scripts/migrate-pg-to-sqlite.ts`（只搬迁关键有状态表，日志/指标/事件类不迁移）。
 
 ### 数据库迁移
 
