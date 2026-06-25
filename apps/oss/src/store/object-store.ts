@@ -20,6 +20,10 @@ import type Database from "better-sqlite3";
  *   put:    先落盘(rename, 幂等) ─▶ 再提交事务         崩在中间 = 孤儿文件(没人引用)
  *   delete: 先提交事务(删行)     ─▶ 再 best-effort unlink  崩在中间 = 孤儿文件(没人引用)
  * 孤儿文件由 sweepOrphans() 在启动时回收。
+ *
+ * 并发一致性: put/delete 的文件 I/O 在事务外、且 await 处让出事件循环。若不串行化,delete 的
+ * "提交后 unlink" 会删掉一个并发 put 刚重建的 blob 文件,留下"库说有、文件没有"的不可读对象。
+ * 故所有写操作(put/delete)走一把进程内写锁串行化;读(get/head)不加锁、可并发。
  */
 
 const SHARD_PREFIX_LENGTH = 2;
@@ -63,6 +67,8 @@ interface DeleteOutcome {
 export class ObjectStore {
   private readonly db: Database.Database;
   private readonly blobDir: string;
+  /** 串行化所有写操作(put/delete),消除文件 I/O 与事务分离带来的并发竞态。读不走它。 */
+  private readonly writeLock = new Mutex();
 
   public constructor({ db, blobDir }: { db: Database.Database; blobDir: string }) {
     this.db = db;
@@ -92,29 +98,31 @@ export class ObjectStore {
   }
 
   public async put(bytes: Buffer, mime: string): Promise<PutResult> {
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    return this.writeLock.run(async () => {
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
 
-    // 1) 先把字节落盘（事务外）。幂等：已存在则跳过，缺失则补回（自愈历史半成品）。
-    //    只保证"字节在盘上"，不据此做 refcount 决策（避免 fs 检查与事务自增分离的 TOCTOU）。
-    await this.ensureBlobFile(sha256, bytes);
+      // 1) 先把字节落盘（事务外）。幂等：已存在则跳过，缺失则补回（自愈历史半成品）。
+      await this.ensureBlobFile(sha256, bytes);
 
-    // 2) refcount 决策完全基于库行：upsert blob，再插 object，取自增 id 拼 key。
-    const now = Date.now();
-    const insert = this.db.transaction((): number => {
-      this.db
-        .prepare(
-          `INSERT INTO blob (sha256, size, refcount, created_at)
-           VALUES (?, ?, 1, ?)
-           ON CONFLICT(sha256) DO UPDATE SET refcount = refcount + 1`,
-        )
-        .run(sha256, bytes.length, now);
-      const info = this.db
-        .prepare(`INSERT INTO object (sha256, mime, created_at) VALUES (?, ?, ?)`)
-        .run(sha256, mime, now);
-      return Number(info.lastInsertRowid);
+      // 2) refcount 决策完全基于库行：upsert blob，再插 object，取自增 id 拼 key。
+      //    写锁保证此处不会与并发 delete 的 unlink 交错（见类头"并发一致性"）。
+      const now = Date.now();
+      const insert = this.db.transaction((): number => {
+        this.db
+          .prepare(
+            `INSERT INTO blob (sha256, size, refcount, created_at)
+             VALUES (?, ?, 1, ?)
+             ON CONFLICT(sha256) DO UPDATE SET refcount = refcount + 1`,
+          )
+          .run(sha256, bytes.length, now);
+        const info = this.db
+          .prepare(`INSERT INTO object (sha256, mime, created_at) VALUES (?, ?, ?)`)
+          .run(sha256, mime, now);
+        return Number(info.lastInsertRowid);
+      });
+
+      return { key: `${KEY_PREFIX}${insert()}` };
     });
-
-    return { key: `${KEY_PREFIX}${insert()}` };
   }
 
   public async get(key: string): Promise<GetResult | null> {
@@ -157,36 +165,41 @@ export class ObjectStore {
       return false;
     }
 
-    const remove = this.db.transaction((): DeleteOutcome => {
-      const row = this.db.prepare(`SELECT sha256 FROM object WHERE id = ?`).get(id) as
-        | Pick<ObjectRow, "sha256">
-        | undefined;
-      if (!row) {
-        return { found: false, orphanSha256: null };
-      }
-      this.db.prepare(`DELETE FROM object WHERE id = ?`).run(id);
-      const blob = this.db.prepare(`SELECT refcount FROM blob WHERE sha256 = ?`).get(row.sha256) as
-        | BlobRefcountRow
-        | undefined;
-      if (blob && blob.refcount <= 1) {
-        this.db.prepare(`DELETE FROM blob WHERE sha256 = ?`).run(row.sha256);
-        return { found: true, orphanSha256: row.sha256 };
-      }
-      if (blob) {
-        this.db.prepare(`UPDATE blob SET refcount = refcount - 1 WHERE sha256 = ?`).run(row.sha256);
-      }
-      return { found: true, orphanSha256: null };
-    });
+    // 写锁串行化：提交后 unlink 与并发 put 的落盘不会交错（见类头"并发一致性"）。
+    return this.writeLock.run(async () => {
+      const remove = this.db.transaction((): DeleteOutcome => {
+        const row = this.db.prepare(`SELECT sha256 FROM object WHERE id = ?`).get(id) as
+          | Pick<ObjectRow, "sha256">
+          | undefined;
+        if (!row) {
+          return { found: false, orphanSha256: null };
+        }
+        this.db.prepare(`DELETE FROM object WHERE id = ?`).run(id);
+        const blob = this.db
+          .prepare(`SELECT refcount FROM blob WHERE sha256 = ?`)
+          .get(row.sha256) as BlobRefcountRow | undefined;
+        if (blob && blob.refcount <= 1) {
+          this.db.prepare(`DELETE FROM blob WHERE sha256 = ?`).run(row.sha256);
+          return { found: true, orphanSha256: row.sha256 };
+        }
+        if (blob) {
+          this.db
+            .prepare(`UPDATE blob SET refcount = refcount - 1 WHERE sha256 = ?`)
+            .run(row.sha256);
+        }
+        return { found: true, orphanSha256: null };
+      });
 
-    const outcome = remove();
-    if (!outcome.found) {
-      return false;
-    }
-    if (outcome.orphanSha256) {
-      // 提交后 best-effort 删物理文件；失败仅记日志（留下的也是无害孤儿，等 sweep 回收）。
-      await this.unlinkBlobBestEffort(outcome.orphanSha256);
-    }
-    return true;
+      const outcome = remove();
+      if (!outcome.found) {
+        return false;
+      }
+      if (outcome.orphanSha256) {
+        // 提交后 best-effort 删物理文件；失败仅记日志（留下的也是无害孤儿，等 sweep 回收）。
+        await this.unlinkBlobBestEffort(outcome.orphanSha256);
+      }
+      return true;
+    });
   }
 
   /**
@@ -273,4 +286,26 @@ function parseKey(key: string): number | null {
     return null;
   }
   return id;
+}
+
+/**
+ * 极简进程内互斥锁:把异步操作串成一条链,后来的等前一个完成再跑。用于串行化写操作,
+ * 消除"文件 I/O 在事务外 + await 让出事件循环"导致的并发竞态。
+ */
+class Mutex {
+  private tail: Promise<void> = Promise.resolve();
+
+  public async run<T>(task: () => Promise<T>): Promise<T> {
+    const previous = this.tail;
+    let release!: () => void;
+    this.tail = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
 }

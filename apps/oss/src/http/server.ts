@@ -99,6 +99,10 @@ async function handleGet(res: ServerResponse, store: ObjectStore, key: string): 
   res.writeHead(200, {
     "content-type": result.mime,
     "content-length": String(result.size),
+    // 内容由上传方决定、业务无关：强制 nosniff + attachment，杜绝把存进来的
+    // text/html、image/svg+xml 等当作可执行内容内联渲染（若 /objects/* 被同源反代则是存储型 XSS）。
+    "x-content-type-options": "nosniff",
+    "content-disposition": "attachment",
   });
   res.end(result.bytes);
 }
@@ -113,6 +117,8 @@ async function handleHead(res: ServerResponse, store: ObjectStore, key: string):
     "content-type": meta.mime,
     "content-length": String(meta.size),
     "x-oss-sha256": meta.sha256,
+    "x-content-type-options": "nosniff",
+    "content-disposition": "attachment",
   });
   res.end();
 }

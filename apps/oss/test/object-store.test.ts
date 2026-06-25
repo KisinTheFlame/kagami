@@ -174,6 +174,20 @@ describe("ObjectStore", () => {
     expect(refcountOf(sha256(bytes))).toBeUndefined();
   });
 
+  it("并发 delete-last + 重新 put 同内容 → 新对象可读(写锁消除竞态)", async () => {
+    // 回归测试:无写锁时,delete 的"提交后 unlink"会删掉 put 刚(以为还在而)复用的文件,
+    // 留下不可读对象。写锁串行化两者后,无论谁先跑,最终对象的文件都在。
+    const bytes = Buffer.from("race content");
+    const first = await store.put(bytes, "text/plain");
+
+    const [, second] = await Promise.all([store.delete(first.key), store.put(bytes, "text/plain")]);
+
+    const got = await store.get(second.key);
+    expect(got).not.toBeNull();
+    expect(got?.bytes.equals(bytes)).toBe(true);
+    expect(await countBlobFiles()).toBe(1);
+  });
+
   it("sweepOrphans: 删掉无 blob 行的孤儿文件, 保留被引用的文件", async () => {
     const real = Buffer.from("referenced");
     await store.put(real, "text/plain");
