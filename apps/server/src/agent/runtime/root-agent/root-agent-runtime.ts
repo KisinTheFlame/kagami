@@ -89,6 +89,12 @@ type PendingToolPersistence = {
     toolCallId: string;
     content: string;
   };
+  /**
+   * 本次工具执行的 `effects` 经 interpreter 翻译出的待追加消息（App 列表 / 文章正文等
+   * "屏幕"）。必须落库——否则 glance_hn / ithome 列表这类只走 `append_message` effect 的
+   * 内容只会在回合内可见、不进 ledger，下一轮 Agent 就看不到了。
+   */
+  effectMessages: LlmMessage[];
   postToolEffects: RootAgentPostToolEffects;
 };
 
@@ -110,7 +116,7 @@ export type RootLoopExtensionContext = {
   notifyContextCompacted: () => Promise<void>;
 };
 
-class RootAgentHost implements RootAgentExtensionHost {
+export class RootAgentHost implements RootAgentExtensionHost {
   private readonly context: AgentContext;
   private readonly eventQueue: AgentEventQueue;
   private readonly session: RootAgentSessionController;
@@ -290,6 +296,7 @@ class RootAgentHost implements RootAgentExtensionHost {
             },
           }
         : {}),
+      effectMessages: execution.effectMessages,
       postToolEffects: execution.extensionData?.postToolEffects ?? {
         messages: [],
         events: [],
@@ -350,6 +357,12 @@ class RootAgentHost implements RootAgentExtensionHost {
     for (const toolPersistence of input.toolPersistences) {
       if (toolPersistence.toolResult) {
         await this.context.appendToolResult(toolPersistence.toolResult);
+      }
+
+      // tool 结果之后、postToolEffects 之前追加 effect 产出的"屏幕"消息，
+      // 与 kernel 回合内顺序（toolMessages → interpretedMessages → extraMessages）一致。
+      if (toolPersistence.effectMessages.length > 0) {
+        await this.context.appendMessages(toolPersistence.effectMessages);
       }
 
       if (toolPersistence.postToolEffects.messages.length > 0) {
