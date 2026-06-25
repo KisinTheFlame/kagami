@@ -21,11 +21,17 @@ export type NapcatFriendListUpdatedEvent = {
   };
 };
 
-export type IthomeArticleIngestedEvent = {
-  type: "ithome_article_ingested";
+/**
+ * 聚合后的通知事件，由 NotificationCenter 在窗口 flush 时塞进事件队列（手机 OS
+ * 模型里 center 是 App→Agent 的唯一桥）。每个 source 一行 `lines`。Session 路由时
+ * 装配成一条 `<notification>` user message 追加到上下文尾部，并触发一轮 round。
+ * 这条事件进队列本身就是「唤醒」——见 Queue 的 wake-up generality。
+ */
+export type NotificationEvent = {
+  type: "notification";
   data: {
-    articleId: number;
-    title: string;
+    /** 每个源一行，已渲染好的展示文本。 */
+    lines: string[];
   };
 };
 
@@ -62,6 +68,6 @@ export type Event =
   | NapcatGroupMessageEvent
   | NapcatPrivateMessageEvent
   | NapcatFriendListUpdatedEvent
-  | IthomeArticleIngestedEvent
+  | NotificationEvent
   | StoryRecallCompletedEvent
   | WakeEvent;

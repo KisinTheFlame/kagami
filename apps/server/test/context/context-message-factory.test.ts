@@ -4,6 +4,7 @@ import {
   createIthomeArticleDetailMessage,
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
+  createNotificationMessage,
   createPortalSnapshotMessage,
   createRootContextSummaryReminderMessage,
   createStateSystemReminderMessage,
@@ -18,6 +19,16 @@ describe("context-message-factory", () => {
     expect(createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z"))).toEqual({
       role: "user",
       content: "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
+    });
+  });
+
+  it("should wrap notification lines in the notification tag, one line per source", () => {
+    expect(
+      createNotificationMessage(["IT之家：2篇新文，最新《某标题》", "产品群：[有人@你] 在吗"]),
+    ).toEqual({
+      role: "user",
+      content:
+        "<notification>\nIT之家：2篇新文，最新《某标题》\n产品群：[有人@你] 在吗\n</notification>",
     });
   });
 

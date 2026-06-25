@@ -3,6 +3,7 @@ import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
   createCrossStateNotificationMessage,
+  createNotificationMessage,
   createStateSystemReminderMessage,
   createStoryRecallMessage,
   createUserMessage,
@@ -355,6 +356,15 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
 
     if (event.type === "story_recall_completed") {
       this.pendingIncomingMessages.push(createStoryRecallMessage(event.data.stories));
+      return {
+        shouldTriggerRound: true,
+      };
+    }
+
+    if (event.type === "notification") {
+      // NotificationCenter 聚合后塞进队列的统一通知（手机 OS 模型）。装配成一条
+      // <notification> 消息追加到尾部，触发一轮 round。
+      this.pendingIncomingMessages.push(createNotificationMessage(event.data.lines));
       return {
         shouldTriggerRound: true,
       };
@@ -725,12 +735,6 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
   }
 
   private resolveEventStateId(event: Event): RootAgentStateId | null {
-    if (event.type === "ithome_article_ingested") {
-      // ithome 文章事件不再走状态树——IthomeApp 自己管 unread 计数（PoC 阶段未实现，
-      // 等通知系统设计成熟后再处理）。这里直接忽略。
-      return null;
-    }
-
     if (event.type === "napcat_group_message") {
       return this.groupStateById.has(event.data.groupId)
         ? createQqGroupStateId(event.data.groupId)
@@ -740,8 +744,11 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
     if (
       event.type === "napcat_friend_list_updated" ||
       event.type === "wake" ||
-      event.type === "story_recall_completed"
+      event.type === "story_recall_completed" ||
+      event.type === "notification"
     ) {
+      // notification 已在 consumeIncomingEvent 顶层处理、不会走到这里；列出仅为
+      // 让 TS 在落到下方私聊兜底分支前把它收窄掉。
       return null;
     }
 

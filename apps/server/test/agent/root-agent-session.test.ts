@@ -232,6 +232,30 @@ describe("RootAgentSession", () => {
     expect(reminderMessages.at(-1)?.content).toContain("未读 1 条消息");
   });
 
+  it("should append a <notification> message and trigger a round on notification events", async () => {
+    const context = new DefaultAgentContext({
+      systemPromptFactory: () => "system-prompt",
+    });
+    const session = createSession({ context });
+
+    await session.initializeContext();
+    const consumeResult = await session.consumeIncomingEvent({
+      type: "notification",
+      data: { lines: ["IT之家：2篇新文，最新《某标题》"] },
+    });
+    const flushResult = await session.flushPendingIncomingEffects();
+
+    expect(consumeResult).toEqual({ shouldTriggerRound: true });
+    expect(flushResult).toEqual({ shouldTriggerRound: true });
+
+    const snapshot = await context.getSnapshot();
+    const notificationMessage = snapshot.messages.find(
+      message => typeof message.content === "string" && message.content.includes("<notification>"),
+    );
+    expect(notificationMessage?.content).toContain("IT之家：2篇新文，最新《某标题》");
+    expect(notificationMessage?.content).toContain("</notification>");
+  });
+
   // NOTE: wait-overlay tests removed. Under the new event-driven model the
   // session has no concept of a waiting state — the wait tool blocks directly
   // on the event queue, and session state is unchanged while the tool is
