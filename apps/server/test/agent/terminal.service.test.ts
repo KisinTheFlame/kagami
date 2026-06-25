@@ -270,13 +270,18 @@ describe("TerminalService", () => {
 
     it("cd ~/subdir resolves tilde BEFORE path.resolve (P1 fix)", async () => {
       const homedir = (await import("node:os")).default.homedir();
-      const sub = path.join(homedir, "kagami");
-      // ~/kagami should exist because TerminalService.initialize creates it
-      const { service } = await makeService({ initialCwd: tmpRoot });
-      const result = await service.runBash({ command: "cd ~/kagami" });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(service.getCwd()).toBe(sub);
+      // 自建 $HOME 下的唯一临时目录再 cd 进去，而不是假设预先存在的 ~/kagami——
+      // 后者只在开发机上恰好存在，干净 CI runner 上没有会导致 cd 失败。
+      const sub = await mkdtemp(path.join(homedir, "kagami-tilde-test-"));
+      try {
+        const { service } = await makeService({ initialCwd: tmpRoot });
+        const result = await service.runBash({ command: `cd ~/${path.basename(sub)}` });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(service.getCwd()).toBe(sub);
+      } finally {
+        await rm(sub, { recursive: true, force: true });
+      }
     });
 
     it("multi-command (cd a && ls) is NOT intercepted and does not update state.cwd", async () => {
