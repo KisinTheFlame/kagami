@@ -34,10 +34,6 @@ export default tseslint.config(
     rules: {
       // require-await 噪声大（多为满足接口契约而声明的 async），关闭。
       "@typescript-eslint/require-await": "off",
-      // 本项目大量用函数型依赖注入（mapper / factory 作为对象属性传递并解构），
-      // unbound-method 对这种"方法语法函数属性被解构"模式全是误报——它们是普通函数依赖，
-      // 不是会丢 this 的类方法。关闭。
-      "@typescript-eslint/unbound-method": "off",
       // no-unsafe-* 多来自 LLM / 外部无类型边界，先以 warn 做棘轮：可见但不阻塞，
       // 后续逐步收紧为 error。
       "@typescript-eslint/no-unsafe-assignment": "warn",

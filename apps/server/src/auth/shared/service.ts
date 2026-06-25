@@ -50,14 +50,14 @@ type SharedOAuthServiceCoreDeps<
   managementPath: string;
   autoRefreshOnGetAuth?: boolean;
   protocolAdapter: OAuthProtocolAdapter<TTokenResponse>;
-  toStatusResponse(session: TSession | null): TStatusResponse;
-  toRefreshResponse(session: TSession): TRefreshResponse;
-  toProviderAuth(input: {
+  toStatusResponse: (session: TSession | null) => TStatusResponse;
+  toRefreshResponse: (session: TSession) => TRefreshResponse;
+  toProviderAuth: (input: {
     session: TSession;
     accessToken: string;
     refreshToken: string;
     idToken: string | null;
-  }): TProviderAuth;
+  }) => TProviderAuth;
 };
 
 export class SharedOAuthServiceCore<

@@ -24,12 +24,13 @@ export function createPrismaOAuthDao<
   TProvider extends string,
   TSession extends OAuthSessionRecord<TProvider>,
   TState extends OAuthStateRecord,
->({
-  sessionTable,
-  stateTable,
-  mapSessionRow,
-  mapStateRow,
-}: PrismaOAuthDaoFactoryInput<TProvider, TSession, TState>): OAuthDao<TProvider, TSession, TState> {
+>(
+  deps: PrismaOAuthDaoFactoryInput<TProvider, TSession, TState>,
+): OAuthDao<TProvider, TSession, TState> {
+  // 不解构 mapSessionRow / mapStateRow——它们以方法语法声明，解构会触发 unbound-method；
+  // 直接通过 deps 调用即可（普通函数依赖，无 this 语义），既满足规则也不改类型。
+  // 用 deps 而非 input 命名，避免与下方方法各自的 input 参数同名冲突。
+  const { sessionTable, stateTable } = deps;
   return {
     async findSession(sessionProvider: TProvider): Promise<TSession | null> {
       const row = await sessionTable.findUnique({
@@ -38,7 +39,7 @@ export function createPrismaOAuthDao<
         },
       });
 
-      return row ? mapSessionRow(row) : null;
+      return row ? deps.mapSessionRow(row) : null;
     },
 
     async upsertSession(input: UpsertOAuthSessionInput<TProvider>): Promise<TSession> {
@@ -72,7 +73,7 @@ export function createPrismaOAuthDao<
         },
       });
 
-      return mapSessionRow(row);
+      return deps.mapSessionRow(row);
     },
 
     async createOAuthState(input: CreateOAuthStateInput): Promise<TState> {
@@ -80,7 +81,7 @@ export function createPrismaOAuthDao<
         data: input,
       });
 
-      return mapStateRow(row);
+      return deps.mapStateRow(row);
     },
 
     async findOAuthState(state: string): Promise<TState | null> {
@@ -90,7 +91,7 @@ export function createPrismaOAuthDao<
         },
       });
 
-      return row ? mapStateRow(row) : null;
+      return row ? deps.mapStateRow(row) : null;
     },
 
     async markOAuthStateUsed(state: string, usedAt: Date): Promise<void> {
