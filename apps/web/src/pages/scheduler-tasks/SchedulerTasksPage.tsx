@@ -184,7 +184,7 @@ function formatMetadata(metadata: Record<string, unknown>): string {
   try {
     return JSON.stringify(metadata);
   } catch {
-    return String(metadata);
+    return "[unserializable metadata]";
   }
 }
 

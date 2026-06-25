@@ -40,6 +40,8 @@ export class SharedOAuthCallbackServer<
       });
     }
 
+    // handler 自带 try/catch/finally，错误已在内部处理并写回响应，是有意的 fire-and-forget。
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     const server = createServer(async (request, response) => {
       const url = new URL(request.url ?? "/", `http://localhost:${this.config.port}`);
       if (request.method !== "GET" || url.pathname !== this.config.path) {

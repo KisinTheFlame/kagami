@@ -7,12 +7,12 @@ type PrismaOAuthDaoFactoryInput<
   TState extends OAuthStateRecord,
 > = {
   sessionTable: {
-    findUnique(args: unknown): Promise<unknown | null>;
+    findUnique(args: unknown): Promise<unknown>;
     upsert(args: unknown): Promise<unknown>;
   };
   stateTable: {
     create(args: unknown): Promise<unknown>;
-    findUnique(args: unknown): Promise<unknown | null>;
+    findUnique(args: unknown): Promise<unknown>;
     update(args: unknown): Promise<unknown>;
     deleteMany(args: unknown): Promise<unknown>;
   };

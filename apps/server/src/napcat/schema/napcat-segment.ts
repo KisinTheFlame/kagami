@@ -12,7 +12,7 @@ export type NapcatSendTextSegment = {
 export type NapcatSendAtSegment = {
   type: "at";
   data: {
-    qq: string | "all";
+    qq: string; // "all" 表示 @全体成员
   };
 };
 
@@ -384,7 +384,7 @@ export type NapcatReceiveTextSegment = {
 export type NapcatReceiveAtSegment = {
   type: "at";
   data: {
-    qq: string | "all";
+    qq: string; // "all" 表示 @全体成员
     name?: string;
   };
 };

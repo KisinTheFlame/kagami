@@ -512,7 +512,7 @@ export class NapcatGroupMessageProcessor {
     qq,
   }: {
     groupId: string | null;
-    qq: string | "all";
+    qq: string;
   }): Promise<string | null> {
     if (qq === "all") {
       return "全体成员";
