@@ -37,7 +37,7 @@ export interface ToolComponent {
   ): Promise<ToolExecutionResult>;
 }
 
-type ToolResultFormatter = (error: z.ZodError | unknown) => string;
+type ToolResultFormatter = (error: unknown) => string;
 
 const DEFAULT_INVALID_ARGUMENTS_FORMATTER: ToolResultFormatter = error => {
   if (error instanceof z.ZodError) {

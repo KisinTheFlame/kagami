@@ -107,7 +107,7 @@ export function toLlmChatResponsePayload(
   completion: ChatCompletion,
   provider: LlmProviderId,
 ): LlmChatResponsePayload {
-  const openAiMessage = completion.choices[0]!.message;
+  const openAiMessage = completion.choices[0].message;
 
   const toolCalls: LlmToolCall[] = (openAiMessage.tool_calls ?? [])
     .filter((tc): tc is ChatCompletionMessageFunctionToolCall => tc.type === "function")
