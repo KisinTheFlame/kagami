@@ -1,5 +1,4 @@
 import type { AppId, Effect, ReplaceLeadingMessagesEffect } from "@kagami/agent-runtime";
-import type { RootAgentStateId } from "../root-agent/session/state.types.js";
 
 /**
  * 把 content（一段字符串）以 role=user 追加到主 Agent 上下文尾部。
@@ -17,15 +16,6 @@ export type AppendMessageEffect = Effect & {
 export type SwitchAppEffect = Effect & {
   readonly type: "switch_app";
   readonly appId: AppId | null;
-};
-
-/**
- * 把 root agent 的 focused state 切到 stateId。
- * 由 EnterTool / BackTool 产出（状态树场景）。
- */
-export type SwitchStateEffect = Effect & {
-  readonly type: "switch_state";
-  readonly stateId: RootAgentStateId;
 };
 
 /**
@@ -58,6 +48,5 @@ export type WaitForEventEffect = Effect & {
 export type RootAgentEffect =
   | AppendMessageEffect
   | SwitchAppEffect
-  | SwitchStateEffect
   | ReplaceLeadingMessagesEffect
   | WaitForEventEffect;

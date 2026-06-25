@@ -8,7 +8,6 @@ import {
   type Queue,
   type ToolComponent,
 } from "@kagami/agent-runtime";
-import { createStateTreeSubtoolOwner } from "../agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import type { Config } from "../config/config.loader.js";
 import type { Database } from "../db/client.js";
@@ -86,6 +85,8 @@ import {
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
+import { QqApp } from "../agent/apps/qq/qq.app.js";
+import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
 
@@ -97,6 +98,7 @@ type BuildAgentRuntimeInput = {
   metricService: MetricService;
   napcatGatewayService: NapcatGatewayService;
   ithomeService: IthomeService;
+  notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
   storyEventQueue: Queue<StoryAgentEvent>;
 };
@@ -111,6 +113,8 @@ export type AgentRuntimeBundle = {
   restoredRootAgentSnapshot: boolean;
   hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
+  /** QQ App：手机 OS 模型下聊天的承载者。server-runtime 把 napcat 事件接到它。 */
+  qqApp: QqApp;
 };
 
 export async function buildAgentRuntime({
@@ -121,6 +125,7 @@ export async function buildAgentRuntime({
   metricService,
   napcatGatewayService,
   ithomeService,
+  notificationCenter,
   eventQueue,
   storyEventQueue,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
@@ -202,33 +207,38 @@ export async function buildAgentRuntime({
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
 
-  // App 框架：先建 AppManager 并注册 Apps，再按各 App 自带的 configSchema
-  // 校验 config.server.apps 的对应切片并调用 onStartup；最后由
-  // createAppSubtoolOwner 在内部摊平 App 的工具，挂到主 Agent 的 InvokeTool 上。
-  // 这个顺序保证 App 在贡献工具前已经完成自己的初始化（例如 TerminalApp 的
-  // TerminalService 实例化 + mkdir initialCwd 都在 startupAll 里跑完）。
+  // send_message（带 AI 味门控）迁进 QQ App 的工具集；不再是状态树子工具。
+  const sendMessageTool = new SendMessageTool({
+    agentMessageService,
+    aiToneScorer: new AiToneScorer(),
+    pendingDraftStore: new PendingDraftStore(),
+    aiTone: {
+      enabled: config.server.agent.messaging.aiTone.enabled,
+      blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
+    },
+  });
+  // QQ App：手机 OS 模型下聊天的承载者，持会话表 + 当前会话 + 订阅 napcat。napcat
+  // 事件由 server-runtime 接到 qqApp.handleNapcatEvent（不再走共享事件队列）。
+  const qqApp = new QqApp({
+    napcatGateway: napcatGatewayService,
+    notificationCenter,
+    botQQ: config.server.bot.qq,
+    listenGroupIds: config.server.napcat.listenGroupIds,
+    recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
+    sendMessageTool,
+  });
+
+  // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
+  // config.server.apps 切片并 onStartup；createAppSubtoolOwner 在内部摊平 App 工具
+  // 挂到主 Agent 的 InvokeTool 上。
   const appManager = new AppManager();
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
+  appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
-
-  // 状态树时代的子工具：明确列出，作为 createStateTreeSubtoolOwner 的输入。
-  // owner-driven 模型下不再有"全局 invokeSubtools 列表"——每个 owner 自己负责
-  // 列出自己拥有的工具。
-  const stateTreeSubtools = [
-    new SendMessageTool({
-      agentMessageService,
-      aiToneScorer: new AiToneScorer(),
-      pendingDraftStore: new PendingDraftStore(),
-      aiTone: {
-        enabled: config.server.agent.messaging.aiTone.enabled,
-        blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
-      },
-    }),
-  ];
 
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
@@ -249,25 +259,20 @@ export async function buildAgentRuntime({
   });
   const rootAgentSession = new RootAgentSession({
     context,
-    napcatGatewayService,
-    listenGroupIds: config.server.napcat.listenGroupIds,
-    recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
-    notificationTimeWindowMs: config.server.agent.notificationBatchWindowMs,
     appManager,
+    // send_message 的目标 = QQ App 当前打开的会话。
+    chatTargetProvider: () => qqApp.getCurrentChatTarget(),
   });
   const helpTool = new HelpTool({
     appManager,
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
   });
-  // 主 Agent 的 invoke 子工具所有者：App 工具的所有权和 gate 由 AppManager
-  // 把握；状态树工具显式列出。InvokeTool 构造期校验 owners 之间无同名工具。
+  // 主 Agent 的 invoke 子工具所有者：全部 App 工具（含 QQ 的 send_message）由
+  // AppManager 把握所有权与 gate。状态树时代的 owner 已退役。
   const mainSubtoolOwners = [
     createAppSubtoolOwner({
       appManager,
       getCurrentApp: () => rootAgentSession.getCurrentApp(),
-    }),
-    createStateTreeSubtoolOwner({
-      tools: stateTreeSubtools,
     }),
   ];
 
@@ -467,18 +472,11 @@ export async function buildAgentRuntime({
     mainAgentContextQueryService,
     llmPlaygroundService,
     restoredRootAgentSnapshot,
-    hydrateColdStartAgentContext: async () => {
-      const { hydrateStartupContextFromRecentMessages } =
-        await import("./startup-context-hydrator.js");
-
-      await hydrateStartupContextFromRecentMessages({
-        listenGroupIds: config.server.napcat.listenGroupIds,
-        startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
-        napcatGatewayService,
-        rootAgentRuntime,
-      });
-    },
+    // 手机 OS 模型下冷启动不再把"最近群消息"灌进上下文——聊天归 QQ App，小镜进
+    // QQ App、open_conversation 时才按需拉取最近消息。
+    hydrateColdStartAgentContext: async () => {},
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
+    qqApp,
   };
 }
 

@@ -48,7 +48,10 @@ import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
 import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
-import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
+import type {
+  NapcatAgentEvent,
+  NapcatGatewayService,
+} from "../napcat/service/napcat-gateway.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
@@ -241,9 +244,15 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       notificationCenter.push(new IthomeNotificationDraft({ title: article.title }));
     },
   });
+  // 手机 OS 模型：napcat 事件不再进共享事件队列，直达 QQ App。QqApp 在
+  // buildAgentRuntime 里才构造，这里用 late-bind holder 接线。
+  let onNapcatEvent: ((event: NapcatAgentEvent) => void) | null = null;
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
     configManager,
-    enqueueGroupMessageEvent: event => eventQueue.enqueue(event),
+    enqueueGroupMessageEvent: event => {
+      onNapcatEvent?.(event);
+      return 0;
+    },
     persistenceWriter: napcatPersistenceWriter,
     imageMessageAnalyzer,
     qqMessageDao: napcatQqMessageDao,
@@ -257,9 +266,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     metricService,
     napcatGatewayService,
     ithomeService,
+    notificationCenter,
     eventQueue,
     storyEventQueue,
   });
+  onNapcatEvent = event => agentRuntime.qqApp.handleNapcatEvent(event);
 
   const taskScheduler = new TaskScheduler();
   const [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler] =

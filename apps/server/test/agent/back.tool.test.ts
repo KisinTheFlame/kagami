@@ -2,47 +2,15 @@ import { describe, expect, it } from "vitest";
 import { BackTool } from "../../src/agent/runtime/root-agent/tools/back.tool.js";
 
 describe("back tool", () => {
-  it("should return exit message when back succeeds", async () => {
+  // 手机 OS 模型下聊天状态树退役，桌面下没有可逐级 back 的子状态；back 恒返提示，
+  // 退出 App 用 back_to_portal。
+  it("always returns NO_PARENT_STATE pointing to back_to_portal", async () => {
     const tool = new BackTool();
-    const toolContext = {
-      rootAgentSession: {
-        back: async () => ({
-          ok: true,
-          id: "qq_group:group-1",
-          displayName: "QQ 群 产品群 (group-1)",
-          message: "已退出QQ 群 产品群 (group-1)",
-        }),
-      },
-    } as Parameters<typeof tool.execute>[1];
-
-    const result = await tool.execute({}, toolContext);
+    const result = await tool.execute({}, {} as Parameters<typeof tool.execute>[1]);
 
     expect(tool.name).toBe("back");
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      id: "qq_group:group-1",
-      displayName: "QQ 群 产品群 (group-1)",
-      message: "已退出QQ 群 产品群 (group-1)",
-    });
-  });
-
-  it("should return state transition error when current state is root", async () => {
-    const tool = new BackTool();
-    const toolContext = {
-      rootAgentSession: {
-        back: async () => ({
-          ok: false,
-          error: "STATE_TRANSITION_NOT_ALLOWED",
-        }),
-      },
-    } as Parameters<typeof tool.execute>[1];
-
-    const result = await tool.execute({}, toolContext);
-
-    expect(tool.name).toBe("back");
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "STATE_TRANSITION_NOT_ALLOWED",
-    });
+    const parsed = JSON.parse(result.content);
+    expect(parsed).toMatchObject({ ok: false, error: "NO_PARENT_STATE" });
+    expect(parsed.message).toContain("back_to_portal");
   });
 });

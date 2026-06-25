@@ -13,33 +13,18 @@ function createFakeApp(id: string): App {
 }
 
 describe("enter tool", () => {
-  it("should enter child state by id when not an App", async () => {
+  it("should reject a non-App id (chat state tree retired)", async () => {
     const tool = new EnterTool({ appManager: new AppManager() });
-    const result = await tool.execute(
-      {
-        id: "qq_group:group-1",
+    const result = await tool.execute({ id: "qq_group:group-1" }, {
+      rootAgentSession: {
+        getCurrentApp: () => undefined,
       },
-      {
-        rootAgentSession: {
-          enter: async (input: { id: string }) => ({
-            ok: true,
-            ...input,
-            displayName: "QQ 群 产品群 (group-1)",
-            message: "已进入QQ 群 产品群 (group-1)",
-          }),
-          getFocusedStateId: () => "portal",
-          getCurrentApp: () => undefined,
-          setCurrentApp: () => {},
-        },
-      } as Parameters<typeof tool.execute>[1],
-    );
+    } as Parameters<typeof tool.execute>[1]);
 
     expect(tool.name).toBe("enter");
     expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      id: "qq_group:group-1",
-      displayName: "QQ 群 产品群 (group-1)",
-      message: "已进入QQ 群 产品群 (group-1)",
+      ok: false,
+      error: "ENTER_TARGET_NOT_AVAILABLE",
     });
   });
 
@@ -79,28 +64,6 @@ describe("enter tool", () => {
       ok: true,
       type: "app",
       enteredApp: "calc",
-    });
-  });
-
-  it("should reject entering App when not at portal", async () => {
-    const appManager = new AppManager();
-    appManager.register(createFakeApp("calc"));
-    const tool = new EnterTool({ appManager });
-
-    const result = await tool.execute({ id: "calc" }, {
-      rootAgentSession: {
-        enter: async () => {
-          throw new Error("should not delegate to state tree");
-        },
-        getFocusedStateId: () => "qq_group:123",
-        getCurrentApp: () => undefined,
-        setCurrentApp: () => {},
-      },
-    } as Parameters<typeof tool.execute>[1]);
-
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: false,
-      error: "MUST_BE_AT_PORTAL",
     });
   });
 

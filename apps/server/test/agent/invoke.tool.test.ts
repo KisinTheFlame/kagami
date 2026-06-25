@@ -1,6 +1,7 @@
 import {
   AppManager,
   createAppSubtoolOwner,
+  type App,
   type ToolComponent,
   type ToolContext,
 } from "@kagami/agent-runtime";
@@ -8,7 +9,8 @@ import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
-import { createStateTreeSubtoolOwner } from "../../src/agent/runtime/root-agent/tools/state-tree-subtool-owner.js";
+
+const TEST_QQ_APP_ID = "qq";
 
 function createAgentMessageService() {
   return {
@@ -30,20 +32,29 @@ function createSendMessageTool(agentMessageService = createAgentMessageService()
   });
 }
 
+/** 最小测试 App：手机 OS 模型下 send_message 是 QQ App 的工具。 */
+function createTestQqApp(tools: ToolComponent[]): App {
+  return {
+    id: TEST_QQ_APP_ID,
+    displayName: "QQ",
+    tools,
+    canInvoke: () => true,
+    help: async () => "",
+  };
+}
+
 /**
- * 测试用 InvokeTool 工厂。模拟 factory 的 owners 装配：
- *   - appOwner：从传入的 AppManager 摊平所有 App tools
- *   - stateTreeOwner：显式接收状态树工具列表，依赖 ctx 里挂的 mock session 的
- *     getAvailableInvokeTools 做 gate
- *
- * App 工具放到 appManager 里；状态树工具走 stateTreeTools。
+ * 测试用 InvokeTool 工厂。手机 OS 模型下所有子工具都由 App 拥有，gate 走
+ * createAppSubtoolOwner（按 ctx 里 mock session 的 getCurrentApp）。
  */
 function createTestInvokeTool(opts: {
-  stateTreeTools?: ToolComponent[];
+  appTools?: ToolComponent[];
   appManager?: AppManager;
 }): InvokeTool {
   const appManager = opts.appManager ?? new AppManager();
-  const stateTreeTools = opts.stateTreeTools ?? [];
+  if (opts.appTools && opts.appTools.length > 0) {
+    appManager.register(createTestQqApp(opts.appTools));
+  }
   return new InvokeTool({
     owners: [
       createAppSubtoolOwner({
@@ -57,9 +68,6 @@ function createTestInvokeTool(opts: {
           return session?.getCurrentApp();
         },
       }),
-      createStateTreeSubtoolOwner({
-        tools: stateTreeTools,
-      }),
     ],
   });
 }
@@ -70,7 +78,7 @@ describe("invoke tool", () => {
     // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
     // 不会让这一份 schema 漂移。
     const tool = createTestInvokeTool({
-      stateTreeTools: [createSendMessageTool()],
+      appTools: [createSendMessageTool()],
     });
 
     expect(tool.parameters).toEqual({
@@ -85,11 +93,11 @@ describe("invoke tool", () => {
     });
   });
 
-  it("should invoke send_message in qq group state", async () => {
+  it("should invoke send_message to the current group conversation", async () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = createTestInvokeTool({
-      stateTreeTools: [createSendMessageTool(agentMessageService)],
+      appTools: [createSendMessageTool(agentMessageService)],
     });
 
     const result = await tool.execute(
@@ -103,13 +111,7 @@ describe("invoke tool", () => {
           groupId: "group-1",
         },
         rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "qq_group:group-1" as const,
-            stateStack: ["portal", "qq_group:group-1"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["send_message"],
-          getCurrentApp: () => undefined,
+          getCurrentApp: () => TEST_QQ_APP_ID,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -126,11 +128,11 @@ describe("invoke tool", () => {
     });
   });
 
-  it("should invoke send_message in qq private state", async () => {
+  it("should invoke send_message to the current private conversation", async () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = createTestInvokeTool({
-      stateTreeTools: [createSendMessageTool(agentMessageService)],
+      appTools: [createSendMessageTool(agentMessageService)],
     });
 
     const result = await tool.execute(
@@ -144,13 +146,7 @@ describe("invoke tool", () => {
           userId: "user-1",
         },
         rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "qq_private:user-1" as const,
-            stateStack: ["portal", "qq_private:user-1"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["send_message"],
-          getCurrentApp: () => undefined,
+          getCurrentApp: () => TEST_QQ_APP_ID,
         },
       } as Parameters<typeof tool.execute>[1],
     );
@@ -169,7 +165,7 @@ describe("invoke tool", () => {
 
   it("should describe available tools when invoke subtool does not exist", async () => {
     const tool = createTestInvokeTool({
-      stateTreeTools: [createSendMessageTool()],
+      appTools: [createSendMessageTool()],
     });
 
     const result = await tool.execute(
@@ -178,19 +174,13 @@ describe("invoke tool", () => {
       },
       {
         rootAgentSession: {
-          getState: () => ({
-            focusedStateId: "qq_group:group-1" as const,
-            stateStack: ["portal", "qq_group:group-1"] as const,
-            waiting: null,
-          }),
-          getAvailableInvokeTools: () => ["send_message"],
-          getCurrentApp: () => undefined,
+          getCurrentApp: () => TEST_QQ_APP_ID,
         },
       } as Parameters<typeof tool.execute>[1],
     );
 
     // NOT_FOUND 回带的可用清单按 owner.canInvokeNow 过滤成"当前真正可调"的子集。
-    // 这里 send_message 在当前状态可调，所以仍会出现在清单里。
+    // 当前在 QQ App 里，send_message 可调，所以仍会出现在清单里。
     expect(JSON.parse(result.content)).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_FOUND",
@@ -214,14 +204,7 @@ describe("invoke tool", () => {
 
     const result = await tool.execute({ tool: "calculate", a: 6, op: "*", b: 7 }, {
       rootAgentSession: {
-        getState: () => ({
-          focusedStateId: "portal" as const,
-          stateStack: ["portal"] as const,
-          waiting: null,
-        }),
-        // Portal 状态树视野下 availableTools 是空的
-        getAvailableInvokeTools: () => [],
-        // 但 Kagami 已经 enter 进了 calc App
+        // Kagami 已经 enter 进了 calc App
         getCurrentApp: () => "calc",
       },
     } as Parameters<typeof tool.execute>[1]);
@@ -245,12 +228,6 @@ describe("invoke tool", () => {
 
     const result = await tool.execute({ tool: "calculate", a: 1, op: "+", b: 1 }, {
       rootAgentSession: {
-        getState: () => ({
-          focusedStateId: "portal" as const,
-          stateStack: ["portal"] as const,
-          waiting: null,
-        }),
-        getAvailableInvokeTools: () => [],
         // 没在 calc 里
         getCurrentApp: () => undefined,
       },
