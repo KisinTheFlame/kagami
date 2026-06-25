@@ -138,3 +138,7 @@ server:
       responseMaxChars: 8000         # open_hn_thread 评论总字符预算，超出截断
       searchHitsLimit: 15            # search_hn 返回命中数
       userActivityLimit: 10          # open_hn_user 近期发言条数
+
+# 自建对象存储服务（@kagami/oss，独立进程）。其余实现细节（db/blob 路径、body 上限）是代码常量。
+oss:
+  port: 20005 # 仅此一项可调：localhost HTTP 监听端口，避开 server 20003 / web 20004
