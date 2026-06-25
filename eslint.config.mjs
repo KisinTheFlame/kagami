@@ -105,5 +105,13 @@ export default tseslint.config(
       ],
     },
   },
+  // .cjs 是 CommonJS（如 PM2 ecosystem 配置），require 是其原生模块系统，
+  // no-require-imports 不适用——在配置层关闭，取代文件内 disable。
+  {
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   prettierConfig,
 );
