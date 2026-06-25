@@ -14,9 +14,6 @@ export default tseslint.config(
       "**/prisma/generated/**",
       "**/src/generated/prisma/**",
       ".claude/**",
-      // 784K 模型权重数据文件（AIRadar 移植），非手写源码，整体不过 lint。与
-      // .prettierignore 一致：把"不处理生成数据"收进 ignore 配置，取代文件内 /* eslint-disable */。
-      "**/ai-tone-model.data.ts",
     ],
   },
   js.configs.recommended,
