@@ -169,6 +169,14 @@ export function createCrossStateNotificationMessage(
   return createUserMessage(lines.join("\n"));
 }
 
+/**
+ * 手机 OS 模型的统一通知消息：NotificationCenter 聚合后每源一行，包在
+ * `<notification>` 标签里追加到上下文尾部。`lines` 已由各源 Draft 渲染好。
+ */
+export function createNotificationMessage(lines: string[]): UserMessage {
+  return createUserMessage(["<notification>", ...lines, "</notification>"].join("\n"));
+}
+
 export function createStoryRecallMessage(
   stories: Array<{ id: string; markdown: string; createdAt: Date }>,
 ): UserMessage {
@@ -400,9 +408,9 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
       return [createUserMessage(renderPrivateMessagePlainText(event.data))];
     case "napcat_friend_list_updated":
       return [];
-    case "ithome_article_ingested":
-      return [];
     default:
+      // `notification` 事件不走这里——它由 session 直接装配成 <notification> 消息
+      // 追加（createNotificationMessage），不是 event 类 ContextItem。
       return [];
   }
 }

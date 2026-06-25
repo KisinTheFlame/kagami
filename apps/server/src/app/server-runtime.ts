@@ -57,6 +57,8 @@ import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/pr
 import { DefaultIthomeClient } from "../agent/capabilities/ithome/application/ithome-client.js";
 import { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import { IthomePoller } from "../agent/capabilities/ithome/application/ithome-poller.js";
+import { IthomeNotificationDraft } from "../agent/apps/ithome/ithome-notification-draft.js";
+import { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
@@ -217,6 +219,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const eventQueue = new InMemoryQueue<Event>();
   const storyEventQueue = new InMemoryQueue<StoryAgentEvent>();
+  // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
+  // 聚合后把一条 notification 事件塞进事件队列——既投递内容也唤醒 Agent。
+  const notificationCenter = new NotificationCenter({
+    windowMs: config.server.agent.notificationBatchWindowMs,
+    onFlush: lines => {
+      eventQueue.enqueue({ type: "notification", data: { lines } });
+    },
+  });
   const ithomeService = new IthomeService({
     articleDao: ithomeArticleDao,
     cursorDao: ithomeFeedCursorDao,
@@ -228,13 +238,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     ithomeService,
     pollIntervalMs: config.server.ithome.pollIntervalMs,
     onArticleIngested: article => {
-      eventQueue.enqueue({
-        type: "ithome_article_ingested",
-        data: {
-          articleId: article.articleId,
-          title: article.title,
-        },
-      });
+      notificationCenter.push(new IthomeNotificationDraft({ title: article.title }));
     },
   });
   const napcatGatewayService = await DefaultNapcatGatewayService.create({
