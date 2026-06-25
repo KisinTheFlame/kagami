@@ -1,20 +1,25 @@
-import type { Database } from "../../db/client.js";
+import type { Database } from "../../../../db/client.js";
 import type {
-  NewsFeedCursorDao,
-  NewsFeedCursorRecord,
-} from "../application/news-feed-cursor.dao.js";
+  IthomeFeedCursorDao,
+  IthomeFeedCursorRecord,
+} from "../application/ithome-feed-cursor.dao.js";
 
-export class PrismaNewsFeedCursorDao implements NewsFeedCursorDao {
+/**
+ * IT 之家只有单一资讯源，游标退化为单行表。固定主键 1，find / upsert 都锚在这一行。
+ */
+const CURSOR_ID = 1;
+
+export class PrismaIthomeFeedCursorDao implements IthomeFeedCursorDao {
   private readonly database: Database;
 
   public constructor({ database }: { database: Database }) {
     this.database = database;
   }
 
-  public async findBySourceKey(input: { sourceKey: string }): Promise<NewsFeedCursorRecord | null> {
-    const row = await this.database.newsFeedCursor.findUnique({
+  public async find(): Promise<IthomeFeedCursorRecord | null> {
+    const row = await this.database.ithomeFeedCursor.findUnique({
       where: {
-        sourceKey: input.sourceKey,
+        id: CURSOR_ID,
       },
     });
 
@@ -23,7 +28,6 @@ export class PrismaNewsFeedCursorDao implements NewsFeedCursorDao {
     }
 
     return {
-      sourceKey: row.sourceKey,
       lastSeenArticleId: row.lastSeenArticleId,
       lastSeenPublishedAt: row.lastSeenPublishedAt,
       createdAt: row.createdAt,
@@ -32,16 +36,15 @@ export class PrismaNewsFeedCursorDao implements NewsFeedCursorDao {
   }
 
   public async upsert(input: {
-    sourceKey: string;
     lastSeenArticleId: number;
     lastSeenPublishedAt: Date;
   }): Promise<void> {
-    await this.database.newsFeedCursor.upsert({
+    await this.database.ithomeFeedCursor.upsert({
       where: {
-        sourceKey: input.sourceKey,
+        id: CURSOR_ID,
       },
       create: {
-        sourceKey: input.sourceKey,
+        id: CURSOR_ID,
         lastSeenArticleId: input.lastSeenArticleId,
         lastSeenPublishedAt: input.lastSeenPublishedAt,
       },

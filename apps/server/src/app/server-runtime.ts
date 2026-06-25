@@ -40,7 +40,7 @@ import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runti
 import type { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { buildAuthScheduledTasks } from "../auth/application/auth-scheduled-tasks.js";
-import { buildNewsScheduledTasks } from "../news/application/news-scheduled-tasks.js";
+import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
 import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
 import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
@@ -52,11 +52,11 @@ import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.serv
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
-import { PrismaNewsArticleDao } from "../news/infra/prisma-news-article.dao.js";
-import { PrismaNewsFeedCursorDao } from "../news/infra/prisma-news-feed-cursor.dao.js";
-import { DefaultIthomeClient } from "../news/application/ithome-client.js";
-import { IthomeNewsService } from "../news/application/ithome-news.service.js";
-import { IthomePoller } from "../news/application/ithome-poller.js";
+import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
+import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
+import { DefaultIthomeClient } from "../agent/capabilities/ithome/application/ithome-client.js";
+import { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
+import { IthomePoller } from "../agent/capabilities/ithome/application/ithome-poller.js";
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
@@ -128,8 +128,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
-  const newsArticleDao = new PrismaNewsArticleDao({ database });
-  const newsFeedCursorDao = new PrismaNewsFeedCursorDao({ database });
+  const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
+  const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
@@ -217,21 +217,20 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   });
   const eventQueue = new InMemoryQueue<Event>();
   const storyEventQueue = new InMemoryQueue<StoryAgentEvent>();
-  const ithomeNewsService = new IthomeNewsService({
-    articleDao: newsArticleDao,
-    cursorDao: newsFeedCursorDao,
+  const ithomeService = new IthomeService({
+    articleDao: ithomeArticleDao,
+    cursorDao: ithomeFeedCursorDao,
     ithomeClient: new DefaultIthomeClient(),
-    recentArticleLimit: config.server.news.ithome.recentArticleLimit,
-    articleMaxChars: config.server.news.ithome.articleMaxChars,
+    recentArticleLimit: config.server.ithome.recentArticleLimit,
+    articleMaxChars: config.server.ithome.articleMaxChars,
   });
   const ithomePoller = new IthomePoller({
-    ithomeNewsService,
-    pollIntervalMs: config.server.news.ithome.pollIntervalMs,
+    ithomeService,
+    pollIntervalMs: config.server.ithome.pollIntervalMs,
     onArticleIngested: article => {
       eventQueue.enqueue({
-        type: "news_article_ingested",
+        type: "ithome_article_ingested",
         data: {
-          sourceKey: "ithome",
           articleId: article.articleId,
           title: article.title,
         },
@@ -253,7 +252,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     embeddingClient,
     metricService,
     napcatGatewayService,
-    ithomeNewsService,
+    ithomeService,
     eventQueue,
     storyEventQueue,
   });
@@ -271,7 +270,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   })) {
     taskScheduler.register(task);
   }
-  for (const task of buildNewsScheduledTasks({ ithomePoller })) {
+  for (const task of buildIthomeScheduledTasks({ ithomePoller })) {
     taskScheduler.register(task);
   }
   for (const task of buildDataRetentionTasks({ db: database, metricService })) {

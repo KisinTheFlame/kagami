@@ -243,10 +243,9 @@ model StoryAgentRuntimeSnapshot {
   @@map("story_agent_runtime_snapshot")
 }
 
-model NewsArticle {
+model IthomeArticle {
   id                      Int       @id @default(autoincrement())
-  sourceKey               String    @map("source_key")
-  upstreamId              String    @map("upstream_id")
+  upstreamId              String    @unique(map: "ithome_article_upstream_id_uq") @map("upstream_id")
   title                   String
   url                     String
   publishedAt             DateTime  @map("published_at")
@@ -258,19 +257,18 @@ model NewsArticle {
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @default(now()) @map("updated_at")
 
-  @@unique([sourceKey, upstreamId], map: "news_article_source_key_upstream_id_uq")
-  @@index([sourceKey, publishedAt], map: "news_article_source_key_published_at_idx")
-  @@map("news_article")
+  @@index([publishedAt], map: "ithome_article_published_at_idx")
+  @@map("ithome_article")
 }
 
-model NewsFeedCursor {
-  sourceKey           String   @id @map("source_key")
+model IthomeFeedCursor {
+  id                  Int      @id @default(1)
   lastSeenArticleId   Int      @map("last_seen_article_id")
   lastSeenPublishedAt DateTime @map("last_seen_published_at")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")
 
-  @@map("news_feed_cursor")
+  @@map("ithome_feed_cursor")
 }
 
 model TerminalState {

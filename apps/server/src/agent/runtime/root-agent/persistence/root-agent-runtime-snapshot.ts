@@ -129,7 +129,7 @@ export const PersistedRootAgentSessionSnapshotSchema = z.object({
   waitOverlay: z.unknown().optional(),
   groups: z.array(PersistedRootAgentSessionGroupStateSchema),
   privateChats: z.array(PersistedRootAgentSessionPrivateChatStateSchema).default([]),
-  // Legacy field: state tree 时代持久化的 ithome 焦点状态。news 现在归 IthomeApp
+  // Legacy field: state tree 时代持久化的 ithome 焦点状态。现在归 IthomeApp
   // 管，unread 不再持久化。接受旧 snapshot 里的字段但反序列化后忽略。
   ithomeFeedState: z.unknown().optional(),
 });

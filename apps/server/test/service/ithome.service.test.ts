@@ -1,21 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
-  NewsArticleDao,
-  NewsArticleListItem,
-  NewsArticleRecord,
-} from "../../src/news/application/news-article.dao.js";
+  IthomeArticleDao,
+  IthomeArticleListItem,
+  IthomeArticleRecord,
+} from "../../src/agent/capabilities/ithome/application/ithome-article.dao.js";
 import type {
-  NewsFeedCursorDao,
-  NewsFeedCursorRecord,
-} from "../../src/news/application/news-feed-cursor.dao.js";
-import type { IthomeClient } from "../../src/news/application/ithome-client.js";
-import { IthomeNewsService } from "../../src/news/application/ithome-news.service.js";
+  IthomeFeedCursorDao,
+  IthomeFeedCursorRecord,
+} from "../../src/agent/capabilities/ithome/application/ithome-feed-cursor.dao.js";
+import type { IthomeClient } from "../../src/agent/capabilities/ithome/application/ithome-client.js";
+import { IthomeService } from "../../src/agent/capabilities/ithome/application/ithome.service.js";
 
-describe("IthomeNewsService", () => {
+describe("IthomeService", () => {
   it("should cap new article list to recentArticleLimit and advance cursor to newest shown item", async () => {
     const cursorDao = createCursorDao({
       record: {
-        sourceKey: "ithome",
         lastSeenArticleId: 10,
         lastSeenPublishedAt: new Date("2026-03-29T00:00:00.000Z"),
         createdAt: new Date("2026-03-29T00:00:00.000Z"),
@@ -28,7 +27,7 @@ describe("IthomeNewsService", () => {
         .fn()
         .mockResolvedValue([createListItem(15, "第 15 篇"), createListItem(14, "第 14 篇")]),
     });
-    const service = new IthomeNewsService({
+    const service = new IthomeService({
       articleDao,
       cursorDao,
       ithomeClient: createClient(),
@@ -42,7 +41,6 @@ describe("IthomeNewsService", () => {
     expect(result.hiddenNewCount).toBe(3);
     expect(result.articles.map(article => article.id)).toEqual([15, 14]);
     expect(cursorDao.upsert).toHaveBeenCalledWith({
-      sourceKey: "ithome",
       lastSeenArticleId: 15,
       lastSeenPublishedAt: new Date("2026-03-30T00:15:00.000Z"),
     });
@@ -53,7 +51,7 @@ describe("IthomeNewsService", () => {
     const articleDao = createArticleDao({
       listLatest: vi.fn().mockResolvedValue([createListItem(21, "最近文章")]),
     });
-    const service = new IthomeNewsService({
+    const service = new IthomeService({
       articleDao,
       cursorDao,
       ithomeClient: createClient(),
@@ -66,7 +64,6 @@ describe("IthomeNewsService", () => {
     expect(result.mode).toBe("latest");
     expect(result.articles).toHaveLength(1);
     expect(cursorDao.upsert).toHaveBeenCalledWith({
-      sourceKey: "ithome",
       lastSeenArticleId: 21,
       lastSeenPublishedAt: new Date("2026-03-30T00:21:00.000Z"),
     });
@@ -80,15 +77,15 @@ describe("IthomeNewsService", () => {
           ...createRecord(1, "长文"),
           articleContent: "a".repeat(9000),
           articleContentStatus: "succeeded",
-        } satisfies NewsArticleRecord)
+        } satisfies IthomeArticleRecord)
         .mockResolvedValueOnce({
           ...createRecord(2, "无全文"),
           articleContent: null,
           articleContentStatus: "failed",
           rssSummary: "摘要兜底",
-        } satisfies NewsArticleRecord),
+        } satisfies IthomeArticleRecord),
     });
-    const service = new IthomeNewsService({
+    const service = new IthomeService({
       articleDao,
       cursorDao: createCursorDao(),
       ithomeClient: createClient(),
@@ -114,9 +111,9 @@ describe("IthomeNewsService", () => {
   });
 });
 
-function createArticleDao(overrides: Partial<NewsArticleDao> = {}): NewsArticleDao {
+function createArticleDao(overrides: Partial<IthomeArticleDao> = {}): IthomeArticleDao {
   const dao = {
-    findBySourceAndUpstreamId: vi.fn().mockResolvedValue(null),
+    findByUpstreamId: vi.fn().mockResolvedValue(null),
     findById: vi.fn().mockResolvedValue(null),
     create: vi.fn(),
     updateFeedMetadata: vi.fn(),
@@ -129,16 +126,16 @@ function createArticleDao(overrides: Partial<NewsArticleDao> = {}): NewsArticleD
   return {
     ...dao,
     ...overrides,
-  } as NewsArticleDao;
+  } as IthomeArticleDao;
 }
 
-function createCursorDao(input?: { record?: NewsFeedCursorRecord }): NewsFeedCursorDao {
+function createCursorDao(input?: { record?: IthomeFeedCursorRecord }): IthomeFeedCursorDao {
   const dao = {
-    findBySourceKey: vi.fn().mockResolvedValue(input?.record ?? null),
+    find: vi.fn().mockResolvedValue(input?.record ?? null),
     upsert: vi.fn().mockResolvedValue(undefined),
   };
 
-  return dao as NewsFeedCursorDao;
+  return dao as IthomeFeedCursorDao;
 }
 
 function createClient(): IthomeClient {
@@ -148,7 +145,7 @@ function createClient(): IthomeClient {
   };
 }
 
-function createListItem(id: number, title: string): NewsArticleListItem {
+function createListItem(id: number, title: string): IthomeArticleListItem {
   return {
     id,
     title,
@@ -158,10 +155,9 @@ function createListItem(id: number, title: string): NewsArticleListItem {
   };
 }
 
-function createRecord(id: number, title: string): NewsArticleRecord {
+function createRecord(id: number, title: string): IthomeArticleRecord {
   return {
     id,
-    sourceKey: "ithome",
     upstreamId: `guid-${id}`,
     title,
     url: `https://www.ithome.com/${id}.htm`,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DefaultIthomeClient } from "../../src/news/application/ithome-client.js";
+import { DefaultIthomeClient } from "../../src/agent/capabilities/ithome/application/ithome-client.js";
 
 describe("DefaultIthomeClient", () => {
   afterEach(() => {
