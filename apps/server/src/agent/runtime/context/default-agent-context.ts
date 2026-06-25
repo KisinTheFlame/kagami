@@ -123,7 +123,7 @@ export class DefaultAgentContext implements AgentContext {
   /**
    * 把"前 count 条 message"映射到"前几个 ContextItem"。
    *
-   * 一个 event item 可能渲染成 0 条 message（如 friend_list / news 事件），所以
+   * 一个 event item 可能渲染成 0 条 message（如 friend_list / ithome 事件），所以
    * message 数和 item 数不一定相等。从头累加每个 item 渲染出的 message 数，正好
    * 累加到 count 时即为切点；达到 count 后继续吞掉紧跟的 0-message item（它们属于
    * 已摘要前缀、不产新 message，吞掉才能让全量压缩彻底清空头部）。
@@ -248,7 +248,7 @@ function summarizeEvent(event: Event, previewLength: number): AgentContextDashbo
         preview: "",
         truncated: false,
       };
-    case "news_article_ingested":
+    case "ithome_article_ingested":
       return {
         kind: "event",
         label: "资讯文章事件",

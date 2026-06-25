@@ -26,11 +26,10 @@ server:
       aiTone:
         enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
         blockThreshold: 0.8 # P(AI) >= 该值则拦下不发，等 confirm_last 二次确认
-  news:
-    ithome:
-      pollIntervalMs: 300000
-      recentArticleLimit: 8
-      articleMaxChars: 8000
+  ithome:
+    pollIntervalMs: 300000
+    recentArticleLimit: 8
+    articleMaxChars: 8000
   napcat:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000

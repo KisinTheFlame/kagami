@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { renderIthomeArticleDetailContent } from "../../../runtime/context/context-message-factory.js";
-import type { IthomeNewsService } from "../../../../news/application/ithome-news.service.js";
+import type { IthomeService } from "../../../capabilities/ithome/application/ithome.service.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
 export const OPEN_ITHOME_ARTICLE_TOOL_NAME = "open_ithome_article";
@@ -12,11 +12,11 @@ const OpenIthomeArticleArgumentsSchema = z.object({
 
 type OpenIthomeArticleToolDeps = {
   /**
-   * IthomeNewsService 由 factory 装配后通过 IthomeApp 注入，闭包延迟取。
+   * IthomeService 由 factory 装配后通过 IthomeApp 注入，闭包延迟取。
    * 这跟 BashTool 的 getTerminalService 一致——工具不直接持 service 实例，
    * 由所属 App 提供访问。
    */
-  getIthomeNewsService: () => IthomeNewsService;
+  getIthomeService: () => IthomeService;
 };
 
 /**
@@ -44,17 +44,17 @@ export class OpenIthomeArticleTool extends ZodToolComponent<
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = OpenIthomeArticleArgumentsSchema;
 
-  private readonly getIthomeNewsService: () => IthomeNewsService;
+  private readonly getIthomeService: () => IthomeService;
 
-  public constructor({ getIthomeNewsService }: OpenIthomeArticleToolDeps) {
+  public constructor({ getIthomeService }: OpenIthomeArticleToolDeps) {
     super();
-    this.getIthomeNewsService = getIthomeNewsService;
+    this.getIthomeService = getIthomeService;
   }
 
   protected async executeTyped(
     input: z.infer<typeof OpenIthomeArticleArgumentsSchema>,
   ): Promise<ToolExecutionResult> {
-    const article = await this.getIthomeNewsService().openArticle({
+    const article = await this.getIthomeService().openArticle({
       articleId: input.articleId,
     });
     if (!article) {

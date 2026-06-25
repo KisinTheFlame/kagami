@@ -21,10 +21,9 @@ export type NapcatFriendListUpdatedEvent = {
   };
 };
 
-export type NewsArticleIngestedEvent = {
-  type: "news_article_ingested";
+export type IthomeArticleIngestedEvent = {
+  type: "ithome_article_ingested";
   data: {
-    sourceKey: "ithome";
     articleId: number;
     title: string;
   };
@@ -63,6 +62,6 @@ export type Event =
   | NapcatGroupMessageEvent
   | NapcatPrivateMessageEvent
   | NapcatFriendListUpdatedEvent
-  | NewsArticleIngestedEvent
+  | IthomeArticleIngestedEvent
   | StoryRecallCompletedEvent
   | WakeEvent;

@@ -1,23 +1,20 @@
-import type { NewsArticleDao, NewsArticleListItem } from "./news-article.dao.js";
-import type { NewsFeedCursorDao } from "./news-feed-cursor.dao.js";
+import type { IthomeArticleDao, IthomeArticleListItem } from "./ithome-article.dao.js";
+import type { IthomeFeedCursorDao } from "./ithome-feed-cursor.dao.js";
 import type { IthomeClient } from "./ithome-client.js";
 
-const ITHOME_SOURCE_KEY = "ithome";
 const ITHOME_DISPLAY_NAME = "IT之家";
 
 export type IthomeFeedOverview = {
-  sourceKey: "ithome";
   displayName: string;
   unreadCount: number;
   hasEntered: boolean;
 };
 
 export type IthomeEnterResult = {
-  sourceKey: "ithome";
   displayName: string;
   mode: "latest" | "new";
   hiddenNewCount: number;
-  articles: NewsArticleListItem[];
+  articles: IthomeArticleListItem[];
 };
 
 export type IthomeArticleDetailResult = {
@@ -38,9 +35,9 @@ export type IthomeSyncResult = {
   }>;
 };
 
-export class IthomeNewsService {
-  private readonly articleDao: NewsArticleDao;
-  private readonly cursorDao: NewsFeedCursorDao;
+export class IthomeService {
+  private readonly articleDao: IthomeArticleDao;
+  private readonly cursorDao: IthomeFeedCursorDao;
   private readonly ithomeClient: IthomeClient;
   private readonly recentArticleLimit: number;
   private readonly articleMaxChars: number;
@@ -52,8 +49,8 @@ export class IthomeNewsService {
     recentArticleLimit,
     articleMaxChars,
   }: {
-    articleDao: NewsArticleDao;
-    cursorDao: NewsFeedCursorDao;
+    articleDao: IthomeArticleDao;
+    cursorDao: IthomeFeedCursorDao;
     ithomeClient: IthomeClient;
     recentArticleLimit: number;
     articleMaxChars: number;
@@ -66,23 +63,18 @@ export class IthomeNewsService {
   }
 
   public async getFeedOverview(): Promise<IthomeFeedOverview> {
-    const cursor = await this.cursorDao.findBySourceKey({
-      sourceKey: ITHOME_SOURCE_KEY,
-    });
+    const cursor = await this.cursorDao.find();
     const unreadCount = cursor
       ? await this.articleDao.countNewerThanCursor({
-          sourceKey: ITHOME_SOURCE_KEY,
           lastSeenArticleId: cursor.lastSeenArticleId,
           lastSeenPublishedAt: cursor.lastSeenPublishedAt,
         })
       : await this.articleDao.countNewerThanCursor({
-          sourceKey: ITHOME_SOURCE_KEY,
           lastSeenArticleId: 0,
           lastSeenPublishedAt: new Date(0),
         });
 
     return {
-      sourceKey: ITHOME_SOURCE_KEY,
       displayName: ITHOME_DISPLAY_NAME,
       unreadCount,
       hasEntered: cursor !== null,
@@ -94,8 +86,7 @@ export class IthomeNewsService {
     const newArticles: IthomeSyncResult["newArticles"] = [];
 
     for (const item of feedItems) {
-      const existing = await this.articleDao.findBySourceAndUpstreamId({
-        sourceKey: ITHOME_SOURCE_KEY,
+      const existing = await this.articleDao.findByUpstreamId({
         upstreamId: item.upstreamId,
       });
 
@@ -109,7 +100,6 @@ export class IthomeNewsService {
             rssPayload: item.payload,
           })
         : await this.articleDao.create({
-            sourceKey: ITHOME_SOURCE_KEY,
             upstreamId: item.upstreamId,
             title: item.title,
             url: item.url,
@@ -139,19 +129,15 @@ export class IthomeNewsService {
   }
 
   public async enterFeed(): Promise<IthomeEnterResult> {
-    const cursor = await this.cursorDao.findBySourceKey({
-      sourceKey: ITHOME_SOURCE_KEY,
-    });
+    const cursor = await this.cursorDao.find();
 
     if (!cursor) {
       const articles = await this.articleDao.listLatest({
-        sourceKey: ITHOME_SOURCE_KEY,
         limit: this.recentArticleLimit,
       });
       await this.advanceCursorToNewest(articles);
 
       return {
-        sourceKey: ITHOME_SOURCE_KEY,
         displayName: ITHOME_DISPLAY_NAME,
         mode: "latest",
         hiddenNewCount: 0,
@@ -160,14 +146,12 @@ export class IthomeNewsService {
     }
 
     const totalNewCount = await this.articleDao.countNewerThanCursor({
-      sourceKey: ITHOME_SOURCE_KEY,
       lastSeenArticleId: cursor.lastSeenArticleId,
       lastSeenPublishedAt: cursor.lastSeenPublishedAt,
     });
 
     if (totalNewCount > 0) {
       const articles = await this.articleDao.listNewerThanCursor({
-        sourceKey: ITHOME_SOURCE_KEY,
         lastSeenArticleId: cursor.lastSeenArticleId,
         lastSeenPublishedAt: cursor.lastSeenPublishedAt,
         limit: this.recentArticleLimit,
@@ -175,7 +159,6 @@ export class IthomeNewsService {
       await this.advanceCursorToNewest(articles);
 
       return {
-        sourceKey: ITHOME_SOURCE_KEY,
         displayName: ITHOME_DISPLAY_NAME,
         mode: "new",
         hiddenNewCount: Math.max(0, totalNewCount - articles.length),
@@ -184,13 +167,11 @@ export class IthomeNewsService {
     }
 
     const articles = await this.articleDao.listLatest({
-      sourceKey: ITHOME_SOURCE_KEY,
       limit: this.recentArticleLimit,
     });
     await this.advanceCursorToNewest(articles);
 
     return {
-      sourceKey: ITHOME_SOURCE_KEY,
       displayName: ITHOME_DISPLAY_NAME,
       mode: "latest",
       hiddenNewCount: 0,
@@ -204,7 +185,7 @@ export class IthomeNewsService {
     const article = await this.articleDao.findById({
       id: input.articleId,
     });
-    if (!article || article.sourceKey !== ITHOME_SOURCE_KEY) {
+    if (!article) {
       return null;
     }
 
@@ -255,14 +236,13 @@ export class IthomeNewsService {
     }
   }
 
-  private async advanceCursorToNewest(articles: NewsArticleListItem[]): Promise<void> {
+  private async advanceCursorToNewest(articles: IthomeArticleListItem[]): Promise<void> {
     const newestArticle = articles[0];
     if (!newestArticle) {
       return;
     }
 
     await this.cursorDao.upsert({
-      sourceKey: ITHOME_SOURCE_KEY,
       lastSeenArticleId: newestArticle.id,
       lastSeenPublishedAt: newestArticle.publishedAt,
     });

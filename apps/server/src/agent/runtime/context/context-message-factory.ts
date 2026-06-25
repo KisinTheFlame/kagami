@@ -259,7 +259,7 @@ export function createMessagesFromEvent(event: Event): UserMessage[] {
       return [createUserMessage(renderPrivateMessagePlainText(event.data))];
     case "napcat_friend_list_updated":
       return [];
-    case "news_article_ingested":
+    case "ithome_article_ingested":
       return [];
     default:
       return [];

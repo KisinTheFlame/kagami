@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { parse } from "node-html-parser";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "../../../../common/errors/biz-error.js";
 
 const ITHOME_RSS_URL = "https://www.ithome.com/rss/";
 const DEFAULT_USER_AGENT =

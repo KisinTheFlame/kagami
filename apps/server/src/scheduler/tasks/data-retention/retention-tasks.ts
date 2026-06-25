@@ -38,7 +38,7 @@ export type RetentionSpec = {
  * - `story` / `story_memory_document` — Agent long-term memory
  * - `root_agent_runtime_snapshot` / `story_agent_runtime_snapshot` — runtime snapshots
  * - `oauth_session` — persistent auth state
- * - `news_article` / `news_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
+ * - `ithome_article` / `ithome_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
  * - `metric_chart` — chart definitions (meta, not data)
  *
  * Field choices worth noting:

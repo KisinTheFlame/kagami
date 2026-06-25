@@ -1,8 +1,7 @@
-export type NewsArticleContentStatus = "pending" | "succeeded" | "failed";
+export type IthomeArticleContentStatus = "pending" | "succeeded" | "failed";
 
-export type NewsArticleRecord = {
+export type IthomeArticleRecord = {
   id: number;
-  sourceKey: string;
   upstreamId: string;
   title: string;
   url: string;
@@ -10,32 +9,28 @@ export type NewsArticleRecord = {
   rssSummary: string;
   rssPayload: Record<string, unknown>;
   articleContent: string | null;
-  articleContentStatus: NewsArticleContentStatus;
+  articleContentStatus: IthomeArticleContentStatus;
   articleContentFetchedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type NewsArticleListItem = Pick<
-  NewsArticleRecord,
+export type IthomeArticleListItem = Pick<
+  IthomeArticleRecord,
   "id" | "title" | "url" | "publishedAt" | "rssSummary"
 >;
 
-export interface NewsArticleDao {
-  findBySourceAndUpstreamId(input: {
-    sourceKey: string;
-    upstreamId: string;
-  }): Promise<NewsArticleRecord | null>;
-  findById(input: { id: number }): Promise<NewsArticleRecord | null>;
+export interface IthomeArticleDao {
+  findByUpstreamId(input: { upstreamId: string }): Promise<IthomeArticleRecord | null>;
+  findById(input: { id: number }): Promise<IthomeArticleRecord | null>;
   create(input: {
-    sourceKey: string;
     upstreamId: string;
     title: string;
     url: string;
     publishedAt: Date;
     rssSummary: string;
     rssPayload: Record<string, unknown>;
-  }): Promise<NewsArticleRecord>;
+  }): Promise<IthomeArticleRecord>;
   updateFeedMetadata(input: {
     id: number;
     title: string;
@@ -43,22 +38,20 @@ export interface NewsArticleDao {
     publishedAt: Date;
     rssSummary: string;
     rssPayload: Record<string, unknown>;
-  }): Promise<NewsArticleRecord>;
+  }): Promise<IthomeArticleRecord>;
   updateArticleContent(input: {
     id: number;
     articleContent: string | null;
-    articleContentStatus: NewsArticleContentStatus;
+    articleContentStatus: IthomeArticleContentStatus;
     articleContentFetchedAt: Date | null;
   }): Promise<void>;
-  listLatest(input: { sourceKey: string; limit: number }): Promise<NewsArticleListItem[]>;
+  listLatest(input: { limit: number }): Promise<IthomeArticleListItem[]>;
   listNewerThanCursor(input: {
-    sourceKey: string;
     lastSeenArticleId: number;
     lastSeenPublishedAt: Date;
     limit: number;
-  }): Promise<NewsArticleListItem[]>;
+  }): Promise<IthomeArticleListItem[]>;
   countNewerThanCursor(input: {
-    sourceKey: string;
     lastSeenArticleId: number;
     lastSeenPublishedAt: Date;
   }): Promise<number>;

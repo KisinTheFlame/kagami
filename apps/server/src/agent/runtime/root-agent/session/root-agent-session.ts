@@ -725,8 +725,8 @@ export class RootAgentSession implements RootAgentSessionController, RootAgentSt
   }
 
   private resolveEventStateId(event: Event): RootAgentStateId | null {
-    if (event.type === "news_article_ingested") {
-      // news 事件不再走状态树——IthomeApp 自己管 unread 计数（PoC 阶段未实现，
+    if (event.type === "ithome_article_ingested") {
+      // ithome 文章事件不再走状态树——IthomeApp 自己管 unread 计数（PoC 阶段未实现，
       // 等通知系统设计成熟后再处理）。这里直接忽略。
       return null;
     }

@@ -19,7 +19,7 @@ import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.i
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
-import type { IthomeNewsService } from "../news/application/ithome-news.service.js";
+import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { StoryQueryService } from "../ops/application/story-query.service.js";
 import type { StoryReindexService } from "../ops/application/story-reindex.service.js";
 import type { MainAgentContextQueryService } from "../ops/application/main-agent-context-query.service.js";
@@ -95,7 +95,7 @@ type BuildAgentRuntimeInput = {
   embeddingClient: EmbeddingClient;
   metricService: MetricService;
   napcatGatewayService: NapcatGatewayService;
-  ithomeNewsService: IthomeNewsService;
+  ithomeService: IthomeService;
   eventQueue: Queue<Event>;
   storyEventQueue: Queue<StoryAgentEvent>;
 };
@@ -119,7 +119,7 @@ export async function buildAgentRuntime({
   embeddingClient,
   metricService,
   napcatGatewayService,
-  ithomeNewsService,
+  ithomeService,
   eventQueue,
   storyEventQueue,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
@@ -209,7 +209,7 @@ export async function buildAgentRuntime({
   const appManager = new AppManager();
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
-  appManager.register(new IthomeApp({ ithomeNewsService }));
+  appManager.register(new IthomeApp({ ithomeService }));
   appManager.register(new ClockApp());
   await appManager.startupAll(config.server.apps);
 

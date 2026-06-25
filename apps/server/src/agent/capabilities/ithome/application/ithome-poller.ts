@@ -1,36 +1,36 @@
-import { AppLogger } from "../../logger/logger.js";
-import type { IthomeNewsService } from "./ithome-news.service.js";
+import { AppLogger } from "../../../../logger/logger.js";
+import type { IthomeService } from "./ithome.service.js";
 
-const logger = new AppLogger({ source: "news.ithome-poller" });
+const logger = new AppLogger({ source: "ithome.poller" });
 
 export class IthomePoller {
-  private readonly ithomeNewsService: IthomeNewsService;
+  private readonly ithomeService: IthomeService;
   public readonly pollIntervalMs: number;
   private readonly onArticleIngested: (input: { articleId: number; title: string }) => void;
 
   public constructor({
-    ithomeNewsService,
+    ithomeService,
     pollIntervalMs,
     onArticleIngested,
   }: {
-    ithomeNewsService: IthomeNewsService;
+    ithomeService: IthomeService;
     pollIntervalMs: number;
     onArticleIngested: (input: { articleId: number; title: string }) => void;
   }) {
-    this.ithomeNewsService = ithomeNewsService;
+    this.ithomeService = ithomeService;
     this.pollIntervalMs = pollIntervalMs;
     this.onArticleIngested = onArticleIngested;
   }
 
   public async runOnce(): Promise<void> {
     try {
-      const result = await this.ithomeNewsService.syncFeed();
+      const result = await this.ithomeService.syncFeed();
       for (const article of result.newArticles) {
         this.onArticleIngested(article);
       }
     } catch (error) {
       logger.warn("Failed to poll ithome rss feed", {
-        event: "news.ithome_poll_failed",
+        event: "ithome.poll_failed",
         errorName: error instanceof Error ? error.name : "Error",
         errorMessage: error instanceof Error ? error.message : String(error),
       });

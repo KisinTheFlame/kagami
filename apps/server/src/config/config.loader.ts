@@ -17,9 +17,9 @@ const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
 const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
-const DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
-const DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT = 8;
-const DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS = 8000;
+const DEFAULT_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT = 8;
+const DEFAULT_ITHOME_ARTICLE_MAX_CHARS = 8000;
 const DEFAULT_LLM_TIMEOUT_MS = 45_000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -277,15 +277,11 @@ const ConfigSchema = z.object({
           messaging: value.messaging,
         })),
     ),
-    news: z
+    ithome: z
       .object({
-        ithome: z
-          .object({
-            pollIntervalMs: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_POLL_INTERVAL_MS),
-            recentArticleLimit: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_RECENT_ARTICLE_LIMIT),
-            articleMaxChars: PositiveIntSchema.default(DEFAULT_NEWS_ITHOME_ARTICLE_MAX_CHARS),
-          })
-          .default({}),
+        pollIntervalMs: PositiveIntSchema.default(DEFAULT_ITHOME_POLL_INTERVAL_MS),
+        recentArticleLimit: PositiveIntSchema.default(DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT),
+        articleMaxChars: PositiveIntSchema.default(DEFAULT_ITHOME_ARTICLE_MAX_CHARS),
       })
       .default({}),
     napcat: NapcatConfigSchema,

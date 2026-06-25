@@ -128,12 +128,10 @@ export function createConfigManager(): ConfigManager {
           },
         },
       },
-      news: {
-        ithome: {
-          pollIntervalMs: 300_000,
-          recentArticleLimit: 8,
-          articleMaxChars: 8000,
-        },
+      ithome: {
+        pollIntervalMs: 300_000,
+        recentArticleLimit: 8,
+        articleMaxChars: 8000,
       },
       napcat: {
         wsUrl: "ws://napcat:3001/",
