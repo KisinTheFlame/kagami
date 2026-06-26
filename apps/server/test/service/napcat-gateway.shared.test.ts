@@ -173,7 +173,7 @@ describe("renderSupportedMessageSegments", () => {
           },
         },
       ]),
-    ).toBe("[forward_id: 7655556533027578193]");
+    ).toBe("[forward_id: fwd-7655556533027578193]");
   });
 
   it("should fall back to [合并转发] when a forward segment has no id", () => {
