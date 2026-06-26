@@ -17,7 +17,11 @@ import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
-import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
+import type { ConfigManager } from "../config/config.manager.js";
+import type { NapcatQqMessageDao } from "../napcat/dao/napcat-group-message.dao.js";
+import type { NapcatGatewayPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
+import type { NapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
+import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { StoryQueryService } from "../ops/application/story-query.service.js";
 import type { StoryReindexService } from "../ops/application/story-reindex.service.js";
@@ -46,10 +50,6 @@ import {
   createRootContextSummaryReminderMessage,
   createStoryContextSummaryReminderMessage,
 } from "../agent/runtime/context/context-message-factory.js";
-import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
-import { PendingDraftStore } from "../agent/capabilities/messaging/application/pending-draft.store.js";
-import { AiToneScorer } from "../agent/capabilities/messaging/infra/ai-tone-scorer.js";
-import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -85,10 +85,22 @@ import {
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
-import { QqApp } from "../agent/apps/qq/qq.app.js";
+import type { QqApp } from "../agent/apps/qq/qq.app.js";
+import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
+
+/**
+ * napcat 网关的协作者（组合根构造后注入）。网关本身在 buildQqApp 内构造、归 QQ App 持有；
+ * 这些是跨切面基础设施：持久化写入器 + 图片分析 + 消息 DAO（DAO 同时被 ops 查询侧读）。
+ */
+type NapcatGatewayDeps = {
+  configManager: ConfigManager;
+  persistenceWriter: NapcatGatewayPersistenceWriter;
+  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  qqMessageDao: NapcatQqMessageDao;
+};
 
 type BuildAgentRuntimeInput = {
   config: Config;
@@ -96,7 +108,7 @@ type BuildAgentRuntimeInput = {
   llmClient: LlmClient;
   embeddingClient: EmbeddingClient;
   metricService: MetricService;
-  napcatGatewayService: NapcatGatewayService;
+  napcat: NapcatGatewayDeps;
   ithomeService: IthomeService;
   notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
@@ -113,8 +125,12 @@ export type AgentRuntimeBundle = {
   restoredRootAgentSnapshot: boolean;
   hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
-  /** QQ App：手机 OS 模型下聊天的承载者。server-runtime 把 napcat 事件接到它。 */
+  /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
+  /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
+  qqOutboundService: AgentMessageService;
+  /** 反序关停所有 App 的 onShutdown（含 QQ App 停网关）。由服务关停链调用。 */
+  shutdownApps: () => Promise<void>;
 };
 
 export async function buildAgentRuntime({
@@ -123,7 +139,7 @@ export async function buildAgentRuntime({
   llmClient,
   embeddingClient,
   metricService,
-  napcatGatewayService,
+  napcat,
   ithomeService,
   notificationCenter,
   eventQueue,
@@ -201,31 +217,25 @@ export async function buildAgentRuntime({
       return await taskAgent.invoke(input);
     },
   };
-  const agentMessageService = new DefaultAgentMessageService({
-    napcatGatewayService,
-  });
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
 
-  // send_message（带 AI 味门控）迁进 QQ App 的工具集；不再是状态树子工具。
-  const sendMessageTool = new SendMessageTool({
-    agentMessageService,
-    aiToneScorer: new AiToneScorer(),
-    pendingDraftStore: new PendingDraftStore(),
-    aiTone: {
-      enabled: config.server.agent.messaging.aiTone.enabled,
-      blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
-    },
-  });
-  // QQ App：手机 OS 模型下聊天的承载者，持会话表 + 当前会话 + 订阅 napcat。napcat
-  // 事件由 server-runtime 接到 qqApp.handleNapcatEvent（不再走共享事件队列）。
-  const qqApp = new QqApp({
-    napcatGateway: napcatGatewayService,
+  // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
+  // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
+  // 统一走 outboundService（收口）。这里不再见到裸网关。
+  const { qqApp, outboundService: qqOutboundService } = await buildQqApp({
+    configManager: napcat.configManager,
+    persistenceWriter: napcat.persistenceWriter,
+    imageMessageAnalyzer: napcat.imageMessageAnalyzer,
+    qqMessageDao: napcat.qqMessageDao,
     notificationCenter,
     botQQ: config.server.bot.qq,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
-    sendMessageTool,
+    aiTone: {
+      enabled: config.server.agent.messaging.aiTone.enabled,
+      blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
+    },
   });
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
@@ -477,6 +487,8 @@ export async function buildAgentRuntime({
     hydrateColdStartAgentContext: async () => {},
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     qqApp,
+    qqOutboundService,
+    shutdownApps: () => appManager.shutdownAll(),
   };
 }
 

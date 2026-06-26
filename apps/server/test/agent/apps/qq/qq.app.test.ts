@@ -90,6 +90,29 @@ describe("QqApp", () => {
     expect("content" in content ? content.content : "").toContain("产品群");
   });
 
+  it("owns the napcat gateway lifecycle: start on startup, stop on shutdown", async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const app = new QqApp({
+      napcatGateway: fakeGateway({ start, stop }),
+      notificationCenter: new NotificationCenter({
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+
+    await app.onStartup();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    await app.onShutdown();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
   it("pushes a chat notification on an incoming group message", async () => {
     const scheduler = new FakeScheduler();
     const onFlush = vi.fn();

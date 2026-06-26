@@ -3,7 +3,6 @@ import type { Database } from "../db/client.js";
 import { closeDb as defaultCloseDb } from "../db/client.js";
 import { AppLogger } from "../logger/logger.js";
 import { getLoggerRuntime } from "../logger/runtime.js";
-import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
 import type { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 
 export type AgentRuntimeController = {
@@ -21,7 +20,8 @@ type ShutdownServerResourcesOptions = {
   isServerStarted: boolean;
   app: FastifyInstance | null;
   database: Database | null;
-  napcatGatewayService: NapcatGatewayService | null;
+  /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的 napcatGatewayService.stop。 */
+  shutdownApps: (() => Promise<void>) | null;
   taskScheduler: TaskScheduler | null;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: AgentRuntimeController | null;
@@ -43,7 +43,7 @@ export async function shutdownServerResources({
   isServerStarted,
   app,
   database,
-  napcatGatewayService,
+  shutdownApps,
   taskScheduler,
   callbackServers,
   rootAgentRuntime,
@@ -81,10 +81,10 @@ export async function shutdownServerResources({
       });
     }
 
-    if (napcatGatewayService) {
-      await napcatGatewayService.stop();
-      shutdownLogger.info("Napcat gateway closed", {
-        event: "server.shutdown.napcat_closed",
+    if (shutdownApps) {
+      await shutdownApps();
+      shutdownLogger.info("Apps shut down (incl. Napcat gateway)", {
+        event: "server.shutdown.apps_closed",
       });
     }
 
