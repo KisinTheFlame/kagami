@@ -105,6 +105,8 @@ export class QqApp implements App {
   }
 
   public async onStartup(): Promise<void> {
+    // napcat 网关收纳进 QQ App：由这里起 WS 连接（先连上，下面拉群信息才有效）。
+    await this.napcatGateway.start();
     // 拉群信息（显示名）。私聊会话由 friend_list 事件 upsert。
     await Promise.all(
       [...this.conversations.values()]
@@ -131,6 +133,11 @@ export class QqApp implements App {
   public async onBlur(): Promise<readonly RootAgentEffect[]> {
     this.currentConversationId = null;
     return [];
+  }
+
+  /** 关停：停掉网关 WS（收纳后由 QQ App 负责，经 AppManager.shutdownAll 反序触发）。 */
+  public async onShutdown(): Promise<void> {
+    await this.napcatGateway.stop();
   }
 
   /** session.getCurrentChatTarget 委派到这里：当前会话的发送目标。 */
