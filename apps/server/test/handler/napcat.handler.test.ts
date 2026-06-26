@@ -43,6 +43,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -75,6 +76,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -107,6 +109,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -137,6 +140,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -164,6 +168,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -195,6 +200,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });
@@ -226,6 +232,7 @@ describe("NapcatHandler", () => {
       getGroupInfo: vi.fn(),
       getRecentGroupMessages: vi.fn().mockResolvedValue([]),
       getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+      getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     };
 
     const handler = new NapcatHandler({ napcatGatewayService });

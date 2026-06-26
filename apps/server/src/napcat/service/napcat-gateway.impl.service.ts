@@ -12,6 +12,8 @@ import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gatew
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
   NapcatAgentEvent,
+  NapcatForwardMessageNode,
+  NapcatForwardMessagePage,
   NapcatFriendInfo,
   NapcatGetGroupInfoInput,
   NapcatGetGroupInfoResult,
@@ -72,8 +74,14 @@ const GroupInfoResponseSchema = z.object({
   member_count: NonNegativeIntSchema,
   max_member_count: NonNegativeIntSchema,
 });
+// get_forward_msg 返回结构在不同 NapCat 版本上略有差异：内层节点可能挂在 messages 或 message 下。
+const ForwardMessageResponseSchema = z.object({
+  messages: z.array(z.record(z.string(), z.unknown())).optional(),
+  message: z.array(z.record(z.string(), z.unknown())).optional(),
+});
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
+const FORWARD_MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 type OrderedPostTypeEventResult =
   | {
@@ -98,6 +106,16 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private friendInfoByUserId: Map<string, NapcatFriendInfo> | null = null;
   private friendListRefreshTimer: NodeJS.Timeout | null = null;
   private friendListRefreshPromise: Promise<void> | null = null;
+  // 转发原始节点缓存（按 res_id）：翻页时不重复调 get_forward_msg。
+  private readonly forwardRawNodeCache = new Map<
+    string,
+    { nodes: Record<string, unknown>[]; expiresAt: number }
+  >();
+  // 转发当页已渲染结果缓存（按 res_id+offset+limit）：避免同一页来回翻时重复跑 vision。
+  private readonly forwardPageCache = new Map<
+    string,
+    { nodes: NapcatForwardMessageNode[]; total: number; expiresAt: number }
+  >();
 
   public static async create({
     configManager,
@@ -410,6 +428,105 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return await this.groupMessageProcessor.normalizeHistoricalPrivateMessages(
       historyResult.data.messages,
     );
+  }
+
+  public async getForwardMessages({
+    id,
+    offset,
+    limit,
+  }: {
+    id: string;
+    offset: number;
+    limit: number;
+  }): Promise<NapcatForwardMessagePage> {
+    const idResult = NonEmptyStringSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BizError({
+        message: "合并转发 id 必须是非空字符串",
+        meta: {
+          reason: "INVALID_FORWARD_ID",
+        },
+      });
+    }
+
+    const offsetResult = NonNegativeIntSchema.safeParse(offset);
+    if (!offsetResult.success) {
+      throw new BizError({
+        message: "offset 必须是非负整数",
+        meta: {
+          reason: "INVALID_FORWARD_OFFSET",
+        },
+      });
+    }
+
+    const limitResult = PositiveIntSchema.safeParse(limit);
+    if (!limitResult.success) {
+      throw new BizError({
+        message: "limit 必须是正整数",
+        meta: {
+          reason: "INVALID_FORWARD_LIMIT",
+        },
+      });
+    }
+
+    const forwardId = idResult.data;
+    const pageOffset = offsetResult.data;
+    const pageLimit = limitResult.data;
+
+    const pageCacheKey = `${forwardId}:${pageOffset}:${pageLimit}`;
+    const cachedPage = this.forwardPageCache.get(pageCacheKey);
+    if (cachedPage && cachedPage.expiresAt > Date.now()) {
+      return { nodes: cachedPage.nodes, total: cachedPage.total, offset: pageOffset };
+    }
+    if (cachedPage) {
+      this.forwardPageCache.delete(pageCacheKey);
+    }
+
+    const rawNodes = await this.loadForwardRawNodes(forwardId);
+    const total = rawNodes.length;
+    const pageRawNodes = rawNodes.slice(pageOffset, pageOffset + pageLimit);
+    const nodes = await this.groupMessageProcessor.normalizeForwardMessages(pageRawNodes);
+
+    this.forwardPageCache.set(pageCacheKey, {
+      nodes,
+      total,
+      expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
+    });
+
+    return { nodes, total, offset: pageOffset };
+  }
+
+  private async loadForwardRawNodes(forwardId: string): Promise<Record<string, unknown>[]> {
+    const cached = this.forwardRawNodeCache.get(forwardId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.nodes;
+    }
+    if (cached) {
+      this.forwardRawNodeCache.delete(forwardId);
+    }
+
+    // 同时给 id 与 message_id：不同 NapCat 版本认的入参名不同，多给一个未知字段通常被忽略。
+    const data = await this.transport.request("get_forward_msg", {
+      id: forwardId,
+      message_id: forwardId,
+    });
+
+    const responseResult = ForwardMessageResponseSchema.safeParse(data ?? {});
+    if (!responseResult.success) {
+      throw new BizError({
+        message: "NapCat 返回的合并转发结构无效",
+        meta: {
+          reason: "INVALID_FORWARD_MESSAGE_RESPONSE",
+        },
+      });
+    }
+
+    const nodes = responseResult.data.messages ?? responseResult.data.message ?? [];
+    this.forwardRawNodeCache.set(forwardId, {
+      nodes,
+      expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
+    });
+    return nodes;
   }
 
   private async toPrivateMessageEvent(input: {

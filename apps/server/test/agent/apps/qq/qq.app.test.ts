@@ -42,6 +42,7 @@ function fakeGateway(overrides: Partial<NapcatGatewayService> = {}): NapcatGatew
     }),
     getRecentGroupMessages: vi.fn().mockResolvedValue([]),
     getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
+    getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     ...overrides,
   } as NapcatGatewayService;
 }
@@ -209,5 +210,59 @@ describe("QqApp", () => {
     const result = await app.openConversation("qq_group:does-not-exist");
     expect(result.ok).toBe(false);
     expect(result.error).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  it("view_forward renders a forward page wrapped in <qq_forward> with a pagination hint", async () => {
+    const getForwardMessages = vi.fn().mockResolvedValue({
+      nodes: [
+        { senderName: "小明", senderUserId: "10001", rawMessage: "上午开会", time: 1 },
+        { senderName: "小红", senderUserId: "10002", rawMessage: "[图片: 一张架构图]", time: 2 },
+      ],
+      total: 60,
+      offset: 0,
+    });
+    const app = new QqApp({
+      napcatGateway: fakeGateway({ getForwardMessages }),
+      notificationCenter: new NotificationCenter({
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+
+    const result = await app.viewForward("res-123", 0);
+    expect(result.ok).toBe(true);
+    expect(getForwardMessages).toHaveBeenCalledWith({ id: "res-123", offset: 0, limit: 50 });
+    expect(result.content).toContain('<qq_forward id="res-123">');
+    expect(result.content).toContain("小明 (10001): 上午开会");
+    expect(result.content).toContain("小红 (10002): [图片: 一张架构图]");
+    // 共 60 条只显示了前 2 条，应给出继续翻页的提示（从第 2 条之后起）。
+    expect(result.content).toContain("还有 58 条");
+    expect(result.content).toContain("offset=2");
+  });
+
+  it("view_forward reports an error when the gateway fails", async () => {
+    const app = new QqApp({
+      napcatGateway: fakeGateway({
+        getForwardMessages: vi.fn().mockRejectedValue(new Error("boom")),
+      }),
+      notificationCenter: new NotificationCenter({
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+
+    const result = await app.viewForward("res-404", 0);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("boom");
   });
 });
