@@ -3,7 +3,7 @@ import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
   createNotificationMessage,
-  createStateSystemReminderMessage,
+  createPortalReminderMessage,
   createStoryRecallMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
@@ -155,7 +155,11 @@ export class RootAgentSession implements RootAgentSessionController {
     if (this.initialized) {
       return;
     }
-    await this.context.appendMessages([this.createPortalReminderMessage()]);
+    const apps = (this.appManager?.getAllApps() ?? []).map(app => ({
+      id: app.id,
+      displayName: app.displayName,
+    }));
+    await this.context.appendMessages([createPortalReminderMessage({ apps })]);
     this.initialized = true;
   }
 
@@ -195,13 +199,5 @@ export class RootAgentSession implements RootAgentSessionController {
     return {
       messages: this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length),
     };
-  }
-
-  private createPortalReminderMessage(): LlmMessage {
-    const apps = (this.appManager?.getAllApps() ?? []).map(app => ({
-      id: app.id,
-      displayName: app.displayName,
-    }));
-    return createStateSystemReminderMessage({ displayName: "门户", children: [], apps });
   }
 }

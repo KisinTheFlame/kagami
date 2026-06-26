@@ -34,12 +34,12 @@ import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
-import { BackTool, BACK_TOOL_NAME } from "../agent/runtime/root-agent/tools/back.tool.js";
 import {
   BackToPortalTool,
   BACK_TO_PORTAL_TOOL_NAME,
 } from "../agent/runtime/root-agent/tools/back-to-portal.tool.js";
 import { EnterTool, ENTER_TOOL_NAME } from "../agent/runtime/root-agent/tools/enter.tool.js";
+import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import {
@@ -280,8 +280,8 @@ export async function buildAgentRuntime({
   // 定义（通过 OutOfScopeTool 包一层），保证两个 agent 暴露给 LLM 的 tools
   // 字段字节相等，命中 KV cache。
   const enterTool = new EnterTool({ appManager });
-  const backTool = new BackTool();
   const backToPortalTool = new BackToPortalTool({ appManager });
+  const switchTool = new SwitchTool({ appManager });
   const waitTool = new WaitTool({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
@@ -296,8 +296,8 @@ export async function buildAgentRuntime({
   const summaryTool = new SummaryTool();
   const toolCatalog = new ToolCatalog([
     enterTool,
-    backTool,
     backToPortalTool,
+    switchTool,
     waitTool,
     mainInvokeTool,
     searchWebTool,
@@ -307,8 +307,8 @@ export async function buildAgentRuntime({
   ]);
   const rootAgentTools = toolCatalog.pick([
     ENTER_TOOL_NAME,
-    BACK_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
+    SWITCH_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
@@ -330,12 +330,12 @@ export async function buildAgentRuntime({
         '在网页搜索子任务中不可调用 enter。请用 invoke(tool="search_web_raw", ...) 检索，必要时反复，信息足够后用 invoke(tool="finalize_web_search", summary=...) 输出最终摘要。',
     }),
     new OutOfScopeTool({
-      inner: backTool,
-      reason: "在网页搜索子任务中不可调用 back。",
-    }),
-    new OutOfScopeTool({
       inner: backToPortalTool,
       reason: "在网页搜索子任务中不可调用 back_to_portal。",
+    }),
+    new OutOfScopeTool({
+      inner: switchTool,
+      reason: "在网页搜索子任务中不可调用 switch。",
     }),
     new OutOfScopeTool({
       inner: waitTool,
@@ -357,8 +357,8 @@ export async function buildAgentRuntime({
   ]);
   const webSearchAgentTools = webSearchAgentToolCatalog.pick([
     ENTER_TOOL_NAME,
-    BACK_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
+    SWITCH_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
@@ -453,8 +453,8 @@ export async function buildAgentRuntime({
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEARCH_MEMORY_TOOL_NAME,
-        BACK_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
+        SWITCH_TOOL_NAME,
         HELP_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])

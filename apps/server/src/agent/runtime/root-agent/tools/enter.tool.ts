@@ -63,13 +63,13 @@ export class EnterTool extends ZodToolComponent<typeof EnterArgumentsSchema> {
       });
     }
 
-    // 已经在某个 App 里时不允许再 enter 另一个 App。
+    // 已经在某个 App 里时不允许再 enter 另一个 App。换 App 直接用 switch。
     const currentApp = rootAgentSession.getCurrentApp();
     if (currentApp) {
       return JSON.stringify({
         ok: false,
         error: "ALREADY_IN_APP",
-        message: `你已经在 App "${currentApp}" 里。先 back_to_portal 退出，再进入 "${targetApp.id}"。`,
+        message: `你已经在 App "${currentApp}" 里。要去 "${targetApp.id}" 直接用 switch(id="${targetApp.id}")；或先 back_to_portal 回桌面。`,
       });
     }
 

@@ -27,7 +27,7 @@ describe("RootAgentSession (App 启动器)", () => {
     const snapshot = await context.getSnapshot();
     const reminder = snapshot.messages.at(-1);
     expect(reminder?.content).toContain("<system_reminder>");
-    expect(reminder?.content).toContain("门户");
+    expect(reminder?.content).toContain("桌面（Portal）");
     expect(typeof reminder?.content === "string" ? reminder.content : "").toContain("QQ");
     expect(session.getState()).toEqual({ focusedStateId: "portal", stateStack: ["portal"] });
   });
