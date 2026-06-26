@@ -91,11 +91,9 @@ export type ServerRuntime = {
   metricService: MetricService;
   metricChartService: MetricChartService;
   metricChartDao: MetricChartDao;
-  restoredRootAgentSnapshot: boolean;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
-  hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
   closeLlmProviders: () => Promise<void>;
   listAvailableAgentProviders: () => Promise<
@@ -326,11 +324,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     metricService,
     metricChartService,
     metricChartDao,
-    restoredRootAgentSnapshot: agentRuntime.restoredRootAgentSnapshot,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
-    hydrateColdStartAgentContext: agentRuntime.hydrateColdStartAgentContext,
     hasTavilyApiKey: agentRuntime.hasTavilyApiKey,
     closeLlmProviders: async () => {
       await closeLlmProviders(llmProviders);

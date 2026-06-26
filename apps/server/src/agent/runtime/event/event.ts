@@ -1,26 +1,3 @@
-import type {
-  NapcatFriendInfo,
-  NapcatGroupMessageData,
-  NapcatPrivateMessageData,
-} from "../../../napcat/service/napcat-gateway.service.js";
-
-export type NapcatGroupMessageEvent = {
-  type: "napcat_group_message";
-  data: NapcatGroupMessageData;
-};
-
-export type NapcatPrivateMessageEvent = {
-  type: "napcat_private_message";
-  data: NapcatPrivateMessageData;
-};
-
-export type NapcatFriendListUpdatedEvent = {
-  type: "napcat_friend_list_updated";
-  data: {
-    friends: NapcatFriendInfo[];
-  };
-};
-
 /**
  * 聚合后的通知事件，由 NotificationCenter 在窗口 flush 时塞进事件队列（手机 OS
  * 模型里 center 是 App→Agent 的唯一桥）。每个 source 一行 `lines`。Session 路由时
@@ -64,10 +41,4 @@ export type StoryRecallCompletedEvent = {
   };
 };
 
-export type Event =
-  | NapcatGroupMessageEvent
-  | NapcatPrivateMessageEvent
-  | NapcatFriendListUpdatedEvent
-  | NotificationEvent
-  | StoryRecallCompletedEvent
-  | WakeEvent;
+export type Event = NotificationEvent | StoryRecallCompletedEvent | WakeEvent;

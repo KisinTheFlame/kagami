@@ -18,7 +18,6 @@ import type {
 } from "../context/agent-context.js";
 import { createWakeReminderMessage } from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
-import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
@@ -212,15 +211,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
     return {
       resetAt: new Date(resetAt),
     };
-  }
-
-  public async hydrateStartupEvents(events: Event[]): Promise<void> {
-    await this.mutationExecutor.submit(async () => {
-      for (const event of events) {
-        await this.session.consumeIncomingEvent(event);
-      }
-      await this.session.flushPendingIncomingEffects();
-    });
   }
 
   public async getRecentContextSummary(): Promise<AgentContextDashboardSummary> {
@@ -694,10 +684,6 @@ export class RootLoopAgent extends BaseLoopAgent<
         this.pendingCompactionPromise = null;
       }
     }
-  }
-
-  public async hydrateStartupEvents(events: Event[]): Promise<void> {
-    await this.host.hydrateStartupEvents(events);
   }
 
   public async getRecentContextSummary(): Promise<AgentContextDashboardSummary> {
