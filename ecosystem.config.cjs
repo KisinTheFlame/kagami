@@ -26,5 +26,16 @@ module.exports = {
         API_TARGET: "http://localhost:20003",
       },
     },
+    {
+      name: "kagami-oss",
+      cwd: path.join(__dirname, "apps/oss"),
+      script: "dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
