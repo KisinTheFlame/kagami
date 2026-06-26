@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- agent: 清除**冷启动补水死链**与 **napcat 事件死分支**。`C2` 定调（不恢复冷启动补水、改 App 状态持久化 [#108](https://github.com/KisinTheFlame/kagami/pull/108)）后，这条链已是纯死代码：删 orphaned 的 `startup-context-hydrator.ts`（无人 import，却是唯一往主事件队列 enqueue napcat Event 的地方 → 永不执行）+ 其测试；删 `hydrateColdStartAgentContext` 的 no-op 调用链（index → server-runtime → factory 三处）与失去用途的 `restoredRootAgentSnapshot` 门控标志（`restorePersistedSnapshot` 本体保留、snapshot 恢复照常）；删 `hydrateStartupEvents`（host + RootLoopAgent 两处，唯一调用方即上面的 hydrator）；`Event` 联合收紧——移除 `napcat_group_message` / `napcat_private_message` / `napcat_friend_list_updated` 三个变体（只有死掉的 hydrator 在 enqueue），`createMessagesFromEvent` / `summarizeEvent` 的对应分支随之删除。行为零变化：napcat 事件本就直达 `QqApp.handleNapcatEvent`（#106 收纳后），这些路径运行时从不被触达；`event→ContextItem` 渲染入口保留（`createMessagesFromEvent` 恒返 `[]`）为未来新事件类型留口子。净删 ~569 行（[#111](https://github.com/KisinTheFlame/kagami/pull/111)）
+
 ### Added
 
 - agent: 新增 **Story Agent 启用开关** `server.agent.story.enabled`（默认 `true`），可整体关停后台 Story 写作 loop。关停时 index 不再 `initialize`/`run` `StoryLoopAgent`（shutdown 也不接管其 `stop`），且 `onLedgerAppended` 回调不再向 `storyEventQueue` 入队——否则 `ledger_appended` 事件会在无人消费下无界堆积。沿用既有 `recall.enabled` 同范式：与主 Agent 前缀完全无关，`search_memory` 顶层工具照旧注册、tools 列表字节不变，稳定前缀与 KV 缓存零影响（[#110](https://github.com/KisinTheFlame/kagami/pull/110)）

@@ -64,122 +64,18 @@ describe("DefaultAgentContext", () => {
     });
   });
 
-  it("should render structured group message events into snapshot messages", async () => {
+  it("renders no snapshot messages for events (events don't flow into context)", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
 
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "hello",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "hello structured",
-              },
-            },
-          ],
-          messageId: 1001,
-          time: 1710000000,
-        },
-      },
-    ]);
-
-    await expect(context.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
-      messages: [
-        {
-          role: "user",
-          content: "<qq_message>\n测试昵称 (654321):\nhello structured\n</qq_message>",
-        },
-      ],
-    });
-  });
-
-  it("should ignore group message events when structured segments are empty", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "raw fallback",
-          messageSegments: [],
-          messageId: 1001,
-          time: 1710000000,
-        },
-      },
-    ]);
+    // 手机 OS 模型下没有任何事件类型渲染成上下文消息：notification / story_recall 由
+    // session 直接装配追加，QQ 消息归 QQ App。appendEvents 因此对 snapshot 是 no-op。
+    await context.appendEvents([{ type: "notification", data: { lines: ["QQ: 产品群: 你好"] } }]);
 
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "system-prompt",
       messages: [],
-    });
-  });
-
-  it("should ignore face segments in rendered snapshot messages", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "前[CQ:face,id=66]后",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "前",
-              },
-            },
-            {
-              type: "face",
-              data: {
-                id: "66",
-                raw: {
-                  faceIndex: 66,
-                },
-                resultId: null,
-                chainCount: null,
-              },
-            },
-            {
-              type: "text",
-              data: {
-                text: "后",
-              },
-            },
-          ],
-          messageId: 1002,
-          time: 1710000001,
-        },
-      },
-    ]);
-
-    await expect(context.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
-      messages: [
-        {
-          role: "user",
-          content: "<qq_message>\n测试昵称 (654321):\n前后\n</qq_message>",
-        },
-      ],
     });
   });
 
@@ -205,93 +101,6 @@ describe("DefaultAgentContext", () => {
     await expect(context.getSnapshot()).resolves.toEqual({
       systemPrompt: "latest-system-prompt",
       messages: [],
-    });
-  });
-
-  it("should keep group message events when only unsupported segments are present", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "",
-          messageSegments: [
-            {
-              type: "face",
-              data: {
-                id: "66",
-                raw: {
-                  faceIndex: 66,
-                },
-                resultId: null,
-                chainCount: null,
-              },
-            },
-          ],
-          messageId: 1003,
-          time: 1710000002,
-        },
-      },
-    ]);
-
-    await expect(context.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
-      messages: [
-        {
-          role: "user",
-          content: "<qq_message>\n测试昵称 (654321):\n\n</qq_message>",
-        },
-      ],
-    });
-  });
-
-  it("should render at segments without name by using qq instead of unknown", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123456",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "[CQ:at,qq=714457117] hi",
-          messageSegments: [
-            {
-              type: "at",
-              data: {
-                qq: "714457117",
-              },
-            },
-            {
-              type: "text",
-              data: {
-                text: " hi",
-              },
-            },
-          ],
-          messageId: 1004,
-          time: 1710000003,
-        },
-      },
-    ]);
-
-    await expect(context.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
-      messages: [
-        {
-          role: "user",
-          content: "<qq_message>\n测试昵称 (654321):\n@714457117 hi\n</qq_message>",
-        },
-      ],
     });
   });
 
@@ -354,10 +163,9 @@ describe("DefaultAgentContext", () => {
       systemPromptFactory: () => "system-prompt",
     });
 
-    // friend_list_updated 事件渲染成 0 条 message——它夹在两条真实 message 之间，
-    // count 的 item 边界要跨过它。
+    // 事件渲染成 0 条 message——它夹在两条真实 message 之间，count 的 item 边界要跨过它。
     await context.appendMessages([{ role: "user", content: "old" }]);
-    await context.appendEvents([{ type: "napcat_friend_list_updated", data: { friends: [] } }]);
+    await context.appendEvents([{ type: "notification", data: { lines: ["x"] } }]);
     await context.appendMessages([{ role: "user", content: "keep-me" }]);
 
     // 展平后 message = [old, keep-me]，count=1 替换 old；中间的 0-message 事件并入

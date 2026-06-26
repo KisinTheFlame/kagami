@@ -311,27 +311,12 @@ export function renderHnUserContent(result: HnUserResult): string {
   return lines.join("\n");
 }
 
-export function createMessagesFromEvent(event: Event): UserMessage[] {
-  switch (event.type) {
-    case "napcat_group_message":
-      if ((event.data.messageSegments?.length ?? 0) === 0) {
-        return [];
-      }
-
-      return [createUserMessage(renderGroupMessagePlainText(event.data))];
-    case "napcat_private_message":
-      if ((event.data.messageSegments?.length ?? 0) === 0) {
-        return [];
-      }
-
-      return [createUserMessage(renderPrivateMessagePlainText(event.data))];
-    case "napcat_friend_list_updated":
-      return [];
-    default:
-      // `notification` 事件不走这里——它由 session 直接装配成 <notification> 消息
-      // 追加（createNotificationMessage），不是 event 类 ContextItem。
-      return [];
-  }
+export function createMessagesFromEvent(_event: Event): UserMessage[] {
+  // 目前没有任何事件类型需要渲染成上下文消息：notification / story_recall 由 session
+  // 直接装配成 <notification> / <story_recall> 消息追加（不是 event 类 ContextItem），
+  // wake 是纯唤醒。保留此入口是为 event→ContextItem 渲染路径留口子——未来若有需要直接
+  // 进上下文的新事件类型，在这里加分支即可。
+  return [];
 }
 
 export function renderMergedGroupMessagesContent(

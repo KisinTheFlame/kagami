@@ -28,8 +28,6 @@ let isShuttingDown = false;
 let port: number | null = null;
 
 async function startAgentLoop(runtime: {
-  restoredRootAgentSnapshot: boolean;
-  hydrateColdStartAgentContext(): Promise<void>;
   storyAgentEnabled: boolean;
   storyAgentRuntime: {
     initialize(): Promise<void>;
@@ -43,10 +41,6 @@ async function startAgentLoop(runtime: {
   };
 }): Promise<void> {
   try {
-    if (!runtime.restoredRootAgentSnapshot) {
-      await runtime.hydrateColdStartAgentContext();
-    }
-
     await runtime.rootAgentRuntime.initialize();
     if (runtime.storyAgentEnabled) {
       await runtime.storyAgentRuntime.initialize();

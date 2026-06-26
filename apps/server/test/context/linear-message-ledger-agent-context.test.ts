@@ -3,7 +3,7 @@ import { DefaultAgentContext } from "../../src/agent/runtime/context/default-age
 import { LinearMessageLedgerAgentContext } from "../../src/agent/runtime/context/linear-message-ledger-agent-context.js";
 
 describe("LinearMessageLedgerAgentContext", () => {
-  it("records appended messages and events into the linear ledger", async () => {
+  it("records appended messages into the linear ledger; events render to nothing", async () => {
     const insertMany = vi.fn().mockResolvedValue([]);
     const context = new LinearMessageLedgerAgentContext({
       inner: new DefaultAgentContext({
@@ -35,29 +35,11 @@ describe("LinearMessageLedgerAgentContext", () => {
         ],
       },
     ]);
-    await context.appendEvents([
-      {
-        type: "napcat_group_message",
-        data: {
-          groupId: "123",
-          userId: "456",
-          nickname: "Alice",
-          rawMessage: "你好",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "你好",
-              },
-            },
-          ],
-          messageId: 1,
-          time: 1,
-        },
-      },
-    ]);
+    // 事件不再渲染成上下文消息（notification 由 session 直接装配、不走 event 渲染路径），
+    // 所以 appendEvents 不往 ledger 写任何东西——只有真实消息进 ledger。
+    await context.appendEvents([{ type: "notification", data: { lines: ["QQ: 产品群: 你好"] } }]);
 
-    expect(insertMany).toHaveBeenCalledTimes(2);
+    expect(insertMany).toHaveBeenCalledTimes(1);
     expect(insertMany.mock.calls[0]?.[0]).toEqual([
       {
         runtimeKey: "root-agent",
@@ -81,13 +63,6 @@ describe("LinearMessageLedgerAgentContext", () => {
         },
       },
     ]);
-    expect(insertMany.mock.calls[1]?.[0]?.[0]).toEqual({
-      runtimeKey: "root-agent",
-      message: {
-        role: "user",
-        content: "<qq_message>\nAlice (456):\n你好\n</qq_message>",
-      },
-    });
   });
 
   it("does not write compaction replacements into the linear ledger", async () => {

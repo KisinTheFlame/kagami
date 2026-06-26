@@ -125,8 +125,6 @@ export type AgentRuntimeBundle = {
   storyReindexService: StoryReindexService;
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
-  restoredRootAgentSnapshot: boolean;
-  hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
@@ -467,10 +465,8 @@ export async function buildAgentRuntime({
   const restoredSnapshot = await rootAgentRuntimeSnapshotRepository.load(
     ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   );
-  let restoredRootAgentSnapshot = false;
   if (restoredSnapshot) {
     await rootAgentRuntime.restorePersistedSnapshot(restoredSnapshot);
-    restoredRootAgentSnapshot = true;
   }
 
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
@@ -501,10 +497,6 @@ export async function buildAgentRuntime({
     storyReindexService,
     mainAgentContextQueryService,
     llmPlaygroundService,
-    restoredRootAgentSnapshot,
-    // 手机 OS 模型下冷启动不再把"最近群消息"灌进上下文——聊天归 QQ App，小镜进
-    // QQ App、open_conversation 时才按需拉取最近消息。
-    hydrateColdStartAgentContext: async () => {},
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     qqApp,
     qqOutboundService,
