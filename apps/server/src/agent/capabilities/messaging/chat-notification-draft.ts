@@ -10,11 +10,15 @@ const MAX_DISPLAY_COUNT = 99;
  *
  * 在通知里归到 "QQ" 段下，每会话一行：
  *   `{会话名}: {条数标签}{@标签}{最近一条内容}`
- * - 条数标签：本窗口内该会话消息数 > 1 时显示 `[N 条消息]`（N 超 99 显 `99+`）。
- * - @标签：窗口内有人 @ 过小镜时显示 `[有人 @ 你]`（出现过一次就粘住）。
+ * - 条数标签：未读条数 > 1 时显示 `[N 条消息]`（N 超 99 显 `99+`）。
+ * - @标签：未读里有人 @ 过小镜时显示 `[有人 @ 你]`。
  *
- * 折叠约定 this = 最新、prev = 历史：文本取最新、`mentioned` 粘住（OR）、`messageCount`
- * 累加。sourceId = 会话 id（每会话一个源）。
+ * **计数与 @ 都不在这里累积**：每条新消息进来时，QQ App 都用会话当前的权威未读状态
+ * （`Conversation.getUnreadCount()` / `hasUnreadMention()`）现造一个新 draft。这两者只在
+ * open_conversation 时清零，所以未读会跨通知窗口持续累积，而不是每个 30s 窗口重新计数。
+ *
+ * 因此折叠约定是**最新快照覆盖**：`merge(prev)` 直接取 `this`（最新快照已带全量未读计数，
+ * prev 是过期快照）。sourceId = 会话 id（每会话一个源）。
  */
 export class ChatNotificationDraft implements NotificationDraft {
   public readonly group = "QQ";
@@ -24,22 +28,16 @@ export class ChatNotificationDraft implements NotificationDraft {
     public readonly displayName: string,
     private readonly latestText: string,
     private readonly mentioned: boolean,
-    private readonly messageCount = 1,
+    private readonly unreadCount: number,
   ) {}
 
-  public merge(prev: NotificationDraft): NotificationDraft {
-    const previous = prev as ChatNotificationDraft;
-    return new ChatNotificationDraft(
-      this.sourceId,
-      this.displayName,
-      this.latestText, // 最新归我
-      this.mentioned || previous.mentioned, // @ 粘住
-      this.messageCount + previous.messageCount, // 条数累加
-    );
+  public merge(_prev: NotificationDraft): NotificationDraft {
+    // 最新快照已携带权威未读计数 + @ 标记，过期的 prev 直接丢弃。
+    return this;
   }
 
   public render(): string {
-    const countTag = this.messageCount > 1 ? `[${formatCount(this.messageCount)} 条消息]` : "";
+    const countTag = this.unreadCount > 1 ? `[${formatCount(this.unreadCount)} 条消息]` : "";
     const mentionTag = this.mentioned ? MENTION_TAG : "";
     return `${this.displayName}: ${countTag}${mentionTag}${truncate(this.latestText, MAX_PREVIEW_CHARS)}`;
   }

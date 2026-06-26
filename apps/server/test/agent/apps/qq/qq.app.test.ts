@@ -14,14 +14,17 @@ initTestLoggerRuntime();
 
 class FakeScheduler implements NotificationScheduler {
   private fn: (() => void) | null = null;
-  public scheduleInterval(_intervalMs: number, fn: () => void): () => void {
+  public schedule(_delayMs: number, fn: () => void): () => void {
     this.fn = fn;
     return () => {
       this.fn = null;
     };
   }
-  public tick(): void {
-    this.fn?.();
+  /** 模拟当前节流窗口到点。 */
+  public fireWindowEnd(): void {
+    const fn = this.fn;
+    this.fn = null;
+    fn?.();
   }
 }
 
@@ -88,6 +91,29 @@ describe("QqApp", () => {
     expect("content" in content ? content.content : "").toContain("产品群");
   });
 
+  it("owns the napcat gateway lifecycle: start on startup, stop on shutdown", async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const app = new QqApp({
+      napcatGateway: fakeGateway({ start, stop }),
+      notificationCenter: new NotificationCenter({
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+
+    await app.onStartup();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    await app.onShutdown();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
   it("pushes a chat notification on an incoming group message", async () => {
     const scheduler = new FakeScheduler();
     const onFlush = vi.fn();
@@ -95,10 +121,39 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("在吗") });
-    scheduler.tick();
 
     expect(onFlush).toHaveBeenCalledTimes(1);
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 在吗"]);
+    // 群通知行带发送者：`{群名}: {发送者}：{内容}`。
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友：在吗"]);
+  });
+
+  it("keeps the unread count climbing across windows, resetting only on open", async () => {
+    const scheduler = new FakeScheduler();
+    const onFlush = vi.fn();
+    const app = createApp(scheduler, onFlush);
+    await app.onStartup();
+
+    // 空闲第一条→立即直达，count 1（无条数标签）。
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("1") });
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友：1"]);
+
+    // 再来一条→窗内攒着，窗结束 flush，count 2。
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("2") });
+    scheduler.fireWindowEnd();
+    expect(onFlush.mock.calls[1][0]).toEqual(["QQ:", "产品群: [2 条消息]群友：2"]);
+
+    // 又一条→没有 open，计数继续涨到 3，而不是按窗口重新计数。
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("3") });
+    scheduler.fireWindowEnd();
+    expect(onFlush.mock.calls[2][0]).toEqual(["QQ:", "产品群: [3 条消息]群友：3"]);
+
+    // 小镜终于来看→未读清零；窗口排空回到空闲。
+    await app.openConversation("qq_group:1");
+    scheduler.fireWindowEnd();
+
+    // 之后的新消息从 count 1 重新开始。
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("4") });
+    expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 群友：4"]);
   });
 
   it("marks [有人@你] when the bot is mentioned", async () => {
@@ -108,7 +163,6 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("看下", "10001") });
-    scheduler.tick();
 
     expect(onFlush.mock.calls[0][0][1]).toContain("[有人 @ 你]");
   });
@@ -173,7 +227,6 @@ describe("QqApp", () => {
         time: 1,
       },
     });
-    scheduler.tick();
 
     expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
     // 会话被建出来，能打开

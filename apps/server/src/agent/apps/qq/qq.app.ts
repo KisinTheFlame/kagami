@@ -114,6 +114,8 @@ export class QqApp implements App {
   }
 
   public async onStartup(): Promise<void> {
+    // napcat 网关收纳进 QQ App：由这里起 WS 连接（先连上，下面拉群信息才有效）。
+    await this.napcatGateway.start();
     // 拉群信息（显示名）。私聊会话由 friend_list 事件 upsert。
     await Promise.all(
       [...this.conversations.values()]
@@ -140,6 +142,11 @@ export class QqApp implements App {
   public async onBlur(): Promise<readonly RootAgentEffect[]> {
     this.currentConversationId = null;
     return [];
+  }
+
+  /** 关停：停掉网关 WS（收纳后由 QQ App 负责，经 AppManager.shutdownAll 反序触发）。 */
+  public async onShutdown(): Promise<void> {
+    await this.napcatGateway.stop();
   }
 
   /** session.getCurrentChatTarget 委派到这里：当前会话的发送目标。 */
@@ -238,13 +245,15 @@ export class QqApp implements App {
     message: ConversationMessage,
     mentioned: boolean,
   ): void {
-    conversation.pushUnread(message);
+    conversation.pushUnread(message, mentioned);
+    // 通知用会话当前的权威未读状态现造 draft：计数 / @ 标记跨窗口累积，open 才清零。
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
         conversation.getShortName(),
         renderMessagePreview(message),
-        mentioned,
+        conversation.hasUnreadMention(),
+        conversation.getUnreadCount(),
       ),
     );
   }
@@ -337,9 +346,13 @@ function renderMessagePlainText(message: ConversationMessage): string {
     : renderPrivateMessagePlainText(message);
 }
 
-/** 通知行里的"最近一条内容"：只取消息文本（会话名由通知行前缀给出，不重复发送者）。 */
+/**
+ * 通知行里的"最近一条内容"。群消息带上发送者（群里不知谁说的没意义）；私聊不带——
+ * 会话名本身就是对方。会话名由通知行前缀给出，这里只补发送者。
+ */
 function renderMessagePreview(message: ConversationMessage): string {
-  return message.rawMessage?.trim() || "（非文本消息）";
+  const text = message.rawMessage?.trim() || "（非文本消息）";
+  return isGroupMessage(message) ? `${message.nickname}：${text}` : text;
 }
 
 /** 把一页合并转发渲染成 <qq_forward> 文本，含分页提示。 */

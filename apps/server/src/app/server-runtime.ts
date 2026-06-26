@@ -47,11 +47,6 @@ import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
-import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
-import type {
-  NapcatAgentEvent,
-  NapcatGatewayService,
-} from "../napcat/service/napcat-gateway.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
@@ -83,7 +78,8 @@ type AppRouteHandler = {
 export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
-  napcatGatewayService: NapcatGatewayService;
+  /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的裸 napcatGatewayService.stop。 */
+  shutdownApps: () => Promise<void>;
   taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
@@ -244,33 +240,26 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       notificationCenter.push(new IthomeNotificationDraft({ title: article.title }));
     },
   });
-  // 手机 OS 模型：napcat 事件不再进共享事件队列，直达 QQ App。QqApp 在
-  // buildAgentRuntime 里才构造，这里用 late-bind holder 接线。
-  let onNapcatEvent: ((event: NapcatAgentEvent) => void) | null = null;
-  const napcatGatewayService = await DefaultNapcatGatewayService.create({
-    configManager,
-    enqueueGroupMessageEvent: event => {
-      onNapcatEvent?.(event);
-      return 0;
-    },
-    persistenceWriter: napcatPersistenceWriter,
-    imageMessageAnalyzer,
-    qqMessageDao: napcatQqMessageDao,
-  });
-
+  // 手机 OS 模型：napcat 网关收纳进 QQ App。这里只把网关的协作者（持久化 / 图片分析 /
+  // DAO + configManager）传进去，网关实例由 buildQqApp 构造并独占持有，入站事件直达
+  // QqApp、不再走共享事件队列（也就不再需要跨边界的 late-bind holder）。
   const agentRuntime = await buildAgentRuntime({
     config,
     database,
     llmClient,
     embeddingClient,
     metricService,
-    napcatGatewayService,
+    napcat: {
+      configManager,
+      persistenceWriter: napcatPersistenceWriter,
+      imageMessageAnalyzer,
+      qqMessageDao: napcatQqMessageDao,
+    },
     ithomeService,
     notificationCenter,
     eventQueue,
     storyEventQueue,
   });
-  onNapcatEvent = event => agentRuntime.qqApp.handleNapcatEvent(event);
 
   const taskScheduler = new TaskScheduler();
   const [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler] =
@@ -309,7 +298,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         storyQueryService: agentRuntime.storyQueryService,
         storyReindexService: agentRuntime.storyReindexService,
       }),
-      new NapcatHandler({ napcatGatewayService }),
+      new NapcatHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
       new SchedulerHandler({ taskScheduler }),
     ],
   });
@@ -317,7 +306,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   return {
     app,
     database,
-    napcatGatewayService,
+    shutdownApps: agentRuntime.shutdownApps,
     taskScheduler,
     callbackServers: authModule.callbackServers,
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
