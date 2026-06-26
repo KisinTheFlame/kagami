@@ -84,6 +84,8 @@ export type ServerRuntime = {
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
+  /** Story Agent 后台 loop 是否启用；false 时 index 不会 initialize/run 它。 */
+  storyAgentEnabled: boolean;
   metricService: MetricService;
   metricChartService: MetricChartService;
   metricChartDao: MetricChartDao;
@@ -311,6 +313,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     callbackServers: authModule.callbackServers,
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
+    storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
     metricChartService,
     metricChartDao,

@@ -7,6 +7,7 @@ server:
     waitToolMaxWaitMs: 600000
     notificationBatchWindowMs: 30000
     story:
+      enabled: true # 是否启用 Story Agent（后台故事写作 loop）；置 false 则不运行后台 loop，也不消费 ledger 事件
       batchSize: 24
       idleFlushMs: 120000
       memory:
