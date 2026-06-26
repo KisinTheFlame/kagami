@@ -161,4 +161,30 @@ describe("renderSupportedMessageSegments", () => {
       ]),
     ).toBe("前缀<reference>\n回复 小明 (10001):\n你好\n</reference>\n后缀");
   });
+
+  it("should render a forward segment as a [forward_id: ...] placeholder", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "forward",
+          data: {
+            id: "7655556533027578193",
+          },
+        },
+      ]),
+    ).toBe("[forward_id: 7655556533027578193]");
+  });
+
+  it("should fall back to [合并转发] when a forward segment has no id", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "forward",
+          data: {
+            id: "",
+          },
+        },
+      ]),
+    ).toBe("[合并转发]");
+  });
 });

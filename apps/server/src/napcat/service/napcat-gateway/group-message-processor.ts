@@ -1,5 +1,6 @@
 import { AppLogger } from "../../../logger/logger.js";
 import type {
+  NapcatForwardMessageNode,
   NapcatGroupMessageData,
   NapcatGroupMessageEvent,
   NapcatPersistableGroupMessageEvent,
@@ -150,6 +151,33 @@ export class NapcatGroupMessageProcessor {
       )
       .sort((left, right) => compareMessageOrder(left, right))
       .map(entry => entry.data);
+  }
+
+  /**
+   * 把合并转发里的每个节点当作一条普通消息，复用同一条 normalize 管线（@名字 → reply →
+   * 图片 vision → 渲染）。这样转发里的图片自动走和普通消息相同的 analyzeImageSegment，
+   * 无需另起一条 vision 路径；嵌套的合并转发段经渲染器变成 [forward_id: ...] 占位，不递归。
+   * 转发节点没有 groupId，所以 @ 名字若未 baked-in 就退化为 @qq，reply 查不到则退化为引用占位。
+   */
+  public async normalizeForwardMessages(
+    rawNodes: Record<string, unknown>[],
+  ): Promise<NapcatForwardMessageNode[]> {
+    return await Promise.all(
+      rawNodes.map(async rawNode => {
+        const normalizedEvent = await this.normalize({
+          post_type: "message",
+          message_type: "private",
+          ...toForwardNodePayload(rawNode),
+        });
+        const senderName = normalizedEvent.nickname?.trim() || normalizedEvent.userId || "未知用户";
+        return {
+          senderName,
+          senderUserId: normalizedEvent.userId,
+          rawMessage: normalizedEvent.rawMessage ?? "",
+          time: normalizedEvent.time,
+        };
+      }),
+    );
   }
 
   public publishGroupMessageEvent(event: NapcatPersistableGroupMessageEvent): void {
@@ -648,6 +676,40 @@ function compareMessageOrder(
 
 function defaultSubTypeForMessageType(messageType: "group" | "private"): string {
   return messageType === "private" ? "friend" : "normal";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * 把 get_forward_msg 的一个节点压平成 normalize 能吃的 message-like payload。兼容两种形态：
+ * 扁平 `{ sender, message, time, user_id }` 与 OneBot 包裹 `{ type:"node", data:{ content, ... } }`。
+ * 不写入 post_type / message_type，交由调用方统一指定。
+ */
+function toForwardNodePayload(rawNode: Record<string, unknown>): Record<string, unknown> {
+  const data = asRecord(rawNode.data);
+  const source = data && Array.isArray(data.content) ? data : rawNode;
+  const sender = asRecord(source.sender);
+  const message = Array.isArray(source.message)
+    ? source.message
+    : Array.isArray(source.content)
+      ? source.content
+      : [];
+  const userId = toNullableId(source.user_id) ?? toNullableId(sender?.user_id);
+  const nickname =
+    toNullableString(sender?.card) ??
+    toNullableString(sender?.nickname) ??
+    toNullableString(source.nickname);
+
+  return {
+    message,
+    time: source.time,
+    user_id: userId ?? undefined,
+    sender: sender ?? (nickname ? { nickname } : undefined),
+  };
 }
 
 function explainSkippedHistoricalMessageReasons(

@@ -6,6 +6,7 @@ import {
   type NapcatSendTextSegment,
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
+  type NapcatReceiveForwardSegment,
   type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
   type NapcatReceiveReplySegment,
@@ -192,9 +193,22 @@ export function renderSupportedMessageSegments(
         return formatReplySegment(segment);
       }
 
+      if (segment.type === "forward") {
+        return formatForwardSegment(segment);
+      }
+
       return "";
     })
     .join("");
+}
+
+/**
+ * 合并转发段：只渲染成带 res_id 的占位符,不内联展开内容。Kagami 想看靠 QQ App 的
+ * view_forward(forward_id) 工具按需拉取——大段聊天记录绝不直接进主上下文（KV 缓存优先）。
+ */
+export function formatForwardSegment(segment: NapcatReceiveForwardSegment): string {
+  const id = toNullableString(segment.data.id);
+  return id ? `[forward_id: ${id}]` : "[合并转发]";
 }
 
 export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {
