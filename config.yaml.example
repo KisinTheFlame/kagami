@@ -106,6 +106,10 @@ server:
     creator:
       name: "创造者"
       qq: "10000"
+  # 自建对象存储（@kagami/oss）的访问地址，给 server 把 QQ 图片原图 PUT 进去存档用。
+  # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+  oss:
+    baseUrl: http://127.0.0.1:20005 # 指向下方独立 oss 进程监听的端口
   # 每个 App 的配置切片。key 是 App.id，结构由各 App 自己的 configSchema 校验。
   # 没列出来的 App 走 schema 默认值；schema 不接受的字段会在启动时报错。
   apps:

@@ -366,6 +366,16 @@ const ConfigSchema = z.object({
       }),
     }),
     /**
+     * 自建对象存储（@kagami/oss）的访问地址，给 server 把 QQ 图片原图 PUT 进去用。
+     * 可选：缺失即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+     */
+    oss: z
+      .object({
+        baseUrl: UrlSchema,
+      })
+      .strict()
+      .optional(),
+    /**
      * 每个 App 的配置切片，key 是 App.id。结构由各 App 自己的 configSchema 在
      * AppManager.startupAll 阶段校验，loader 这一层不解读。
      */

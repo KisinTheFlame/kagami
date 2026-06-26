@@ -290,3 +290,17 @@ model TerminalOutput {
   @@index([createdAt], map: "terminal_output_created_at_idx")
   @@map("terminal_output")
 }
+
+// 内容寻址的图片资产登记：NapCat 图片 file_id（= 内容 MD5 + 扩展名）→ OSS resid +
+// vision 描述。每张不同的图全局只下载/描述/PUT 一次，命中即复用，让 resid 跨消息稳定、
+// 不膨胀；description 一并缓存，命中时连 vision 都跳过。
+model ImageAsset {
+  id          Int      @id @default(autoincrement())
+  fileId      String   @unique(map: "image_asset_file_id_uq") @map("file_id")
+  resid       String
+  description String
+  mime        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("image_asset")
+}

@@ -398,6 +398,9 @@ export type NapcatReceiveImageSegment = {
         sub_type: number;
         url: string;
         file_size: string;
+        // OSS 资产 key（resid）。入站时由图片分析器存档原图后回填，持久化进消息记录，
+        // 渲染成 [图片: 描述, resid: res-N]，让 Agent 能引用原图。NapCat 原始 payload 里没有。
+        resid?: string;
       }
     | {
         summary: string;
@@ -407,6 +410,7 @@ export type NapcatReceiveImageSegment = {
         key: string;
         emoji_id: string;
         emoji_package_id: number;
+        resid?: string;
       };
 };
 
@@ -572,6 +576,7 @@ export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegmen
       sub_type: z.number().int(),
       url: NonEmptyStringSchema,
       file_size: NonEmptyStringSchema,
+      resid: z.string().optional(),
     }),
     z.object({
       summary: z.string(),
@@ -581,6 +586,7 @@ export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegmen
       key: NonEmptyStringSchema,
       emoji_id: NonEmptyStringSchema,
       emoji_package_id: z.number().int(),
+      resid: z.string().optional(),
     }),
   ]),
 });
