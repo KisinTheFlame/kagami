@@ -22,7 +22,9 @@ import {
   type App,
   type AppId,
   type AppStartupContext,
+  type AppStateStore,
   type CanInvokeResult,
+  type JsonValue,
 } from "./app/app.js";
 import { createAppSubtoolOwner } from "./app/app-subtool-owner.js";
 import { HELP_TOOL_NAME, HelpTool, type HelpToolDeps } from "./app/help-tool.js";
@@ -99,7 +101,9 @@ export {
   type App,
   type AppId,
   type AppStartupContext,
+  type AppStateStore,
   type CanInvokeResult,
+  type JsonValue,
   type Effect,
   type EffectHandler,
   type EffectHandlerResult,

@@ -5,6 +5,27 @@ import type { ToolComponent } from "../tool/tool-component.js";
 /** App 的唯一标识符。 */
 export type AppId = string;
 
+/** JSON 可序列化值——App 持久化状态的载体类型（契约：必须能 JSON 往返）。 */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/**
+ * App 状态存储端口。内核不认识具体存储（Prisma / 文件 / 内存）——由宿主注入实现。
+ *
+ * 按 appId 存取一份**不透明 JSON**：状态的形状与版本由各 App 自己拥有（restoreState
+ * 内部自行判版本、不认就忽略）。AppManager 在 startup 时 load → restoreState、shutdown
+ * 时 exportState → save。这条侧路与消息列表 / 稳定前缀完全无关，对 KV 缓存中性。
+ */
+export interface AppStateStore {
+  load(appId: AppId): Promise<JsonValue | null>;
+  save(appId: AppId, state: JsonValue): Promise<void>;
+}
+
 /**
  * App 是 Kagami "手机" 上的一个能力单元。每个 App 自带一组 invoke 子工具、
  * 可选的生命周期钩子，以及一个能力说明（help）。
@@ -85,6 +106,18 @@ export interface App<TConfig = void> {
 
   /** 离开本 App 时调用（焦点切到桌面或其他 App）。 */
   onBlur?(): Promise<readonly Effect[]>;
+
+  /**
+   * 交出本 App 要持久化的状态（纯 JSON）。由 AppManager 在 shutdown 时调用，存进
+   * AppStateStore。未实现表示本 App 无需持久化状态。状态形状 + 版本由 App 自己拥有。
+   */
+  exportState?(): JsonValue;
+
+  /**
+   * 启动时把上次存档塞回来（先于 onStartup 调用）。App 自行校验 / 迁移；拿到不认识的
+   * 形状应安全忽略，而不是抛错。未实现表示本 App 不消费持久化状态。
+   */
+  restoreState?(state: JsonValue): void;
 }
 
 /** App.onStartup 的入参，目前只含解析后的配置。未来可能扩展（logger / 共享服务等）。 */
@@ -106,6 +139,12 @@ export class AppManager {
   // 内部存的是 App<unknown>，泛型擦除。各 App 实例自己负责 TConfig 的类型安全。
   private readonly apps = new Map<AppId, App<unknown>>();
   private readonly toolOwners = new Map<string, App<unknown>>();
+  /** App 状态持久化端口；缺省（无宿主注入）时持久化整体是 no-op。 */
+  private readonly stateStore: AppStateStore | null;
+
+  public constructor({ stateStore }: { stateStore?: AppStateStore } = {}) {
+    this.stateStore = stateStore ?? null;
+  }
 
   /** 注册一个 App。同 id 重复注册会抛错。 */
   public register<TConfig>(app: App<TConfig>): void {
@@ -198,17 +237,48 @@ export class AppManager {
         }
         config = parsed.data;
       }
+      // 存档先于 onStartup：让 App 在初始化前就拿回上次状态。
+      await this.restoreAppState(app);
       // App<unknown> 的 onStartup 期望 ctx.config: unknown，cast 是必要的。
       // 每个 App 自己的 TConfig 类型由它的实现保证（register<TConfig> 时类型已校验）。
       await app.onStartup?.({ config });
     }
   }
 
-  /** 反向调用所有 App 的 onShutdown。 */
+  /** 反向调用所有 App 的 onShutdown，并在拆解前抓取各 App 的状态存档。 */
   public async shutdownAll(): Promise<void> {
     const reversed = [...this.apps.values()].reverse();
     for (const app of reversed) {
+      // 先抓状态（此时 App 仍是活的），再 onShutdown 拆解。
+      await this.persistAppState(app);
       await app.onShutdown?.();
+    }
+  }
+
+  /** 启动时从 store 读回 App 状态并 restoreState。失败不阻断启动（降级为空状态）。 */
+  private async restoreAppState(app: App<unknown>): Promise<void> {
+    if (!this.stateStore || !app.restoreState) {
+      return;
+    }
+    try {
+      const state = await this.stateStore.load(app.id);
+      if (state !== null) {
+        app.restoreState(state);
+      }
+    } catch {
+      // 恢复失败不应阻断启动；App 以空状态继续。
+    }
+  }
+
+  /** 关停时把 App 的 exportState 存进 store。失败不阻断关停。 */
+  private async persistAppState(app: App<unknown>): Promise<void> {
+    if (!this.stateStore || !app.exportState) {
+      return;
+    }
+    try {
+      await this.stateStore.save(app.id, app.exportState());
+    } catch {
+      // 存档失败不应阻断关停。
     }
   }
 }

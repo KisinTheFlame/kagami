@@ -87,6 +87,7 @@ import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
 import type { QqApp } from "../agent/apps/qq/qq.app.js";
 import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
+import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
 import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
@@ -240,8 +241,11 @@ export async function buildAgentRuntime({
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
   // config.server.apps 切片并 onStartup；createAppSubtoolOwner 在内部摊平 App 工具
-  // 挂到主 Agent 的 InvokeTool 上。
-  const appManager = new AppManager();
+  // 挂到主 Agent 的 InvokeTool 上。注入 App 状态持久化能力：startup 时恢复、shutdown
+  // 时存档各 App 自己的状态（如 QQ 未读红点），走 app_state 通用表。
+  const appManager = new AppManager({
+    stateStore: new PrismaAppStateStore({ database }),
+  });
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
