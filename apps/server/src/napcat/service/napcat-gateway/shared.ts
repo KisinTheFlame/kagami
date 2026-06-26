@@ -160,8 +160,10 @@ export function toStoredMessageSegments(value: unknown): NapcatReceiveMessageSeg
   return parseMessageSegments(value) ?? [];
 }
 
-export function formatImageSegmentText(text: string): string {
-  return text.trim().length > 0 ? `[图片: ${text.trim()}]` : "[图片]";
+export function formatImageSegmentText(summary: string, resid?: string | null): string {
+  const description = summary.trim();
+  const head = description.length > 0 ? `图片: ${description}` : "图片";
+  return resid ? `[${head}, resid: ${resid}]` : `[${head}]`;
 }
 
 export function renderSupportedMessageSegments(
@@ -185,7 +187,8 @@ export function renderSupportedMessageSegments(
 
       if (segment.type === "image") {
         return (
-          options?.renderImageSegment?.(segment) ?? formatImageSegmentText(segment.data.summary)
+          options?.renderImageSegment?.(segment) ??
+          formatImageSegmentText(segment.data.summary, segment.data.resid)
         );
       }
 

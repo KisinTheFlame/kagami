@@ -10,6 +10,7 @@ import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
   extractDisplayNameFromGroupMemberInfo,
   extractSenderNickname,
+  formatImageSegmentText,
   parseMessageSegments,
   renderSupportedMessageSegments,
   toEventTime,
@@ -25,7 +26,10 @@ import {
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
 import type { NapcatQqMessageDao } from "../../dao/napcat-group-message.dao.js";
-import type { NapcatImageMessageAnalyzer } from "./image-message-analyzer.js";
+import type {
+  NapcatImageAnalysisResult,
+  NapcatImageMessageAnalyzer,
+} from "./image-message-analyzer.js";
 
 type GroupMemberDisplayNameCacheEntry = {
   displayName: string;
@@ -398,7 +402,10 @@ export class NapcatGroupMessageProcessor {
       renderedImageSegments,
     });
     const renderedMessage = renderSupportedMessageSegments(hydratedSegments, {
-      renderImageSegment: segment => renderedImageSegments.get(segment) ?? "[图片]",
+      renderImageSegment: segment => {
+        const analyzed = renderedImageSegments.get(segment);
+        return analyzed ? formatImageSegmentText(analyzed.description, analyzed.resid) : "[图片]";
+      },
     });
 
     return {
@@ -409,15 +416,15 @@ export class NapcatGroupMessageProcessor {
 
   private async renderImageSegments(
     messageSegments: NapcatReceiveMessageSegment[],
-  ): Promise<Map<NapcatReceiveMessageSegment, string>> {
+  ): Promise<Map<NapcatReceiveMessageSegment, NapcatImageAnalysisResult>> {
     const imageEntries = await Promise.all(
       messageSegments.map(async segment => {
         if (!isNapcatReceiveImageSegment(segment)) {
           return null;
         }
 
-        const renderedText = await this.imageMessageAnalyzer.analyzeImageSegment(segment);
-        return [segment, renderedText] as const;
+        const analyzed = await this.imageMessageAnalyzer.analyzeImageSegment(segment);
+        return [segment, analyzed] as const;
       }),
     );
 
@@ -425,8 +432,10 @@ export class NapcatGroupMessageProcessor {
       imageEntries.filter(
         (
           entry,
-        ): entry is readonly [Extract<NapcatReceiveMessageSegment, { type: "image" }>, string] =>
-          entry !== null,
+        ): entry is readonly [
+          Extract<NapcatReceiveMessageSegment, { type: "image" }>,
+          NapcatImageAnalysisResult,
+        ] => entry !== null,
       ),
     );
   }
@@ -436,24 +445,31 @@ export class NapcatGroupMessageProcessor {
     renderedImageSegments,
   }: {
     messageSegments: NapcatReceiveMessageSegment[];
-    renderedImageSegments: Map<NapcatReceiveMessageSegment, string>;
+    renderedImageSegments: Map<NapcatReceiveMessageSegment, NapcatImageAnalysisResult>;
   }): NapcatReceiveMessageSegment[] {
     return messageSegments.map(segment => {
       if (!isNapcatReceiveImageSegment(segment)) {
         return segment;
       }
 
-      const renderedText = renderedImageSegments.get(segment);
-      const description = extractImageDescription(renderedText);
-      if (!description) {
+      const analyzed = renderedImageSegments.get(segment);
+      if (!analyzed) {
         return segment;
       }
 
+      const description = analyzed.description.trim();
+      if (!description && !analyzed.resid) {
+        return segment;
+      }
+
+      // 把 vision 描述 + OSS resid 回填进消息段，持久化进消息记录，让重渲染（如 open
+      // conversation 拉历史）也能稳定显示 [图片: 描述, resid: res-N]。
       return {
         ...segment,
         data: {
           ...segment.data,
-          summary: description,
+          summary: description || segment.data.summary,
+          resid: analyzed.resid ?? segment.data.resid,
         },
       };
     });
@@ -644,15 +660,6 @@ export class NapcatGroupMessageProcessor {
       .sort((left, right) => compareMessageOrder(left, right))
       .map(entry => entry.data);
   }
-}
-
-function extractImageDescription(renderedText: string | undefined): string | null {
-  if (!renderedText) {
-    return null;
-  }
-
-  const matched = /^\[图片: (.+)\]$/u.exec(renderedText.trim());
-  return matched?.[1]?.trim() || null;
 }
 
 function compareMessageOrder(
