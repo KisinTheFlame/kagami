@@ -13,7 +13,9 @@ describe("NapcatGroupMessageProcessor", () => {
   let logs = initTestLogger();
 
   const imageMessageAnalyzer = {
-    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 一只橘猫趴在键盘上]"),
+    analyzeImageSegment: vi
+      .fn()
+      .mockResolvedValue({ description: "一只橘猫趴在键盘上", resid: null }),
   };
 
   const qqMessageDao = {
@@ -27,7 +29,10 @@ describe("NapcatGroupMessageProcessor", () => {
   beforeEach(() => {
     logs = initTestLogger();
     imageMessageAnalyzer.analyzeImageSegment.mockClear();
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 一只橘猫趴在键盘上]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({
+      description: "一只橘猫趴在键盘上",
+      resid: null,
+    });
   });
 
   afterEach(() => {
@@ -475,7 +480,7 @@ describe("NapcatGroupMessageProcessor", () => {
   });
 
   it("should fallback to placeholder when image analysis fails", async () => {
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({ description: "", resid: null });
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
       listenGroupIds: ["987654"],

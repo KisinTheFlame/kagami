@@ -62,13 +62,18 @@ async function flushMicrotasks(): Promise<void> {
 describe("DefaultNapcatGatewayService", () => {
   let logs = initTestLogger();
   const imageMessageAnalyzer = {
-    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 屏幕截图，包含错误提示]"),
+    analyzeImageSegment: vi
+      .fn()
+      .mockResolvedValue({ description: "屏幕截图，包含错误提示", resid: null }),
   };
 
   beforeEach(() => {
     logs = initTestLogger();
     imageMessageAnalyzer.analyzeImageSegment.mockClear();
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 屏幕截图，包含错误提示]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({
+      description: "屏幕截图，包含错误提示",
+      resid: null,
+    });
   });
 
   afterEach(() => {
@@ -758,7 +763,7 @@ describe("DefaultNapcatGatewayService", () => {
   it("should preserve incoming event order while image analysis runs concurrently", async () => {
     const sockets: FakeWebSocket[] = [];
     const eventQueue = createAgentEventQueue();
-    const firstImageAnalysis = createDeferred<string>();
+    const firstImageAnalysis = createDeferred<{ description: string; resid: string | null }>();
     const orderedImageAnalyzer = {
       analyzeImageSegment: vi.fn().mockImplementation(() => firstImageAnalysis.promise),
     };
@@ -833,7 +838,7 @@ describe("DefaultNapcatGatewayService", () => {
     await waitOneTick();
     expect(eventQueue.enqueue).not.toHaveBeenCalled();
 
-    firstImageAnalysis.resolve("[图片: 第一张图]");
+    firstImageAnalysis.resolve({ description: "第一张图", resid: null });
     await waitOneTick();
 
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(

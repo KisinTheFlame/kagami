@@ -7,6 +7,7 @@ import { loadStaticConfig } from "../config/config.loader.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
+import { PrismaImageAssetDao } from "../napcat/dao/impl/image-asset.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatQqMessageDao } from "../napcat/dao/impl/napcat-group-message.impl.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
@@ -47,6 +48,7 @@ import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
+import { HttpOssClient } from "../oss/oss-client.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
@@ -131,6 +133,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
+  const imageAssetDao = new PrismaImageAssetDao({ database });
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
@@ -211,8 +214,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const visionAgent = new VisionAgent({
     llmClient,
   });
+  // server.oss 缺失即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+  const ossClient = config.server.oss
+    ? new HttpOssClient({ baseUrl: config.server.oss.baseUrl })
+    : undefined;
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
+    ossClient,
+    imageAssetDao,
   });
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,

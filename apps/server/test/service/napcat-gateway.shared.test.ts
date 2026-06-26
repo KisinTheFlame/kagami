@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatImageSegmentText,
   parseOutgoingMessageSegments,
   renderSupportedMessageSegments,
 } from "../../src/napcat/service/napcat-gateway/shared.js";
@@ -186,5 +187,42 @@ describe("renderSupportedMessageSegments", () => {
         },
       ]),
     ).toBe("[合并转发]");
+  });
+
+  it("should render an image segment with its OSS resid", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "image",
+          data: {
+            summary: "一只橘猫",
+            file: "ABC.png",
+            sub_type: 0,
+            url: "https://example.com/cat.png",
+            file_size: "100",
+            resid: "res-42",
+          },
+        },
+      ]),
+    ).toBe("[图片: 一只橘猫, resid: res-42]");
+  });
+});
+
+describe("formatImageSegmentText", () => {
+  it("appends resid when present", () => {
+    expect(formatImageSegmentText("一只猫", "res-42")).toBe("[图片: 一只猫, resid: res-42]");
+  });
+
+  it("omits the resid when absent", () => {
+    expect(formatImageSegmentText("一只猫", null)).toBe("[图片: 一只猫]");
+    expect(formatImageSegmentText("一只猫")).toBe("[图片: 一只猫]");
+  });
+
+  it("keeps the resid even when there is no description", () => {
+    expect(formatImageSegmentText("", "res-7")).toBe("[图片, resid: res-7]");
+  });
+
+  it("falls back to [图片] when both description and resid are empty", () => {
+    expect(formatImageSegmentText("", null)).toBe("[图片]");
   });
 });
