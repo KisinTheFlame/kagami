@@ -32,6 +32,7 @@
 
 ### Fixed
 
+- agent: 修复 `view_forward` 展开合并转发失败（线上 Kagami 连试 4 次都被拦、根本没走到 `get_forward_msg`）。根因：转发 res_id 是 19 位长数字，PR1 的占位符 `[forward_id: 7655…]` 直接露出裸数字，LLM 当 JSON number 传——既被 `string` schema 拦下（`Expected string, received number`），又因超出 JS 安全整数而丢精度（`…405394` → `…405000`）。修法：占位符给 res_id 加 `fwd-` 前缀（`[forward_id: fwd-7655…]`）强制它在 JSON 里只能是字符串、精度无损，`view_forward` 收到后剥前缀；schema 放宽成 `string|number`，收到纯数字时不静默转换（已丢精度）而是回明确提示让其改用字符串；help / 翻页提示同步带前缀（[#112](https://github.com/KisinTheFlame/kagami/pull/112)）
 - agent: 修复 root agent 丢失 tool 的 `append_message` effect 产出消息的回归。#78 把 effect 应用下沉进 ReAct kernel 后，effect 翻译出的"屏幕"消息（App 列表 / 文章正文等）只进 `ReActRoundResult.appendedMessages`，而 `RootAgentHost.commitRoundResult` 仍只持久化 tool 结果 content + postToolEffects、从不落 `appendedMessages`——导致 `glance_hn` / `search_hn` / `open_hn_user` / `open_hn_thread` 以及 ithome 的列表 / 文章正文只在回合内可见、不进 ledger，下一轮主 Agent 只剩 tool_result 那句简短状态（如 `{"count":10}`），看不到真正内容。kernel 现在把 effect 产出挂到 `ReActToolExecution.effectMessages`，commit 按"tool 结果 → effect 屏幕 → postToolEffects"顺序持久化；新增 kernel 与 commit 两层回归测试（[#94](https://github.com/KisinTheFlame/kagami/pull/94)）
 
 ## 2026-05
