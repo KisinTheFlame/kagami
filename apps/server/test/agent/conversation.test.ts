@@ -65,20 +65,43 @@ describe("Conversation", () => {
     expect(a.getDisplayName()).toBe("王哥");
   });
 
-  it("accumulates unread up to the limit and exposes the latest", () => {
+  it("counts unread uncapped but caps the buffered content", () => {
     const group = Conversation.group("1", 2);
     expect(group.getUnreadCount()).toBe(0);
-    group.pushUnread(groupMsg("a"));
-    group.pushUnread(groupMsg("b"));
-    group.pushUnread(groupMsg("c")); // 超过上限 2，最旧的被丢
-    expect(group.getUnreadCount()).toBe(2);
+    group.pushUnread(groupMsg("a"), false);
+    group.pushUnread(groupMsg("b"), false);
+    group.pushUnread(groupMsg("c"), false); // 内容缓冲超上限 2，最旧的被丢，但计数不封顶
+    expect(group.getUnreadCount()).toBe(3);
     expect(group.getLatestUnread()?.rawMessage).toBe("c");
+  });
+
+  it("keeps counting unread across many messages, resetting only on consume", () => {
+    const group = Conversation.group("1", 5);
+    for (let i = 0; i < 12; i += 1) {
+      group.pushUnread(groupMsg(String(i)), false);
+    }
+    // 远超缓冲上限 5，仍据实累积——对应通知里"未读越积越多，30s 窗口不重新计数"。
+    expect(group.getUnreadCount()).toBe(12);
+    group.consumeUnreadTail();
+    expect(group.getUnreadCount()).toBe(0);
+  });
+
+  it("sticks the unread mention flag until consume / clear", () => {
+    const group = Conversation.group("1", 5);
+    expect(group.hasUnreadMention()).toBe(false);
+    group.pushUnread(groupMsg("a"), false);
+    expect(group.hasUnreadMention()).toBe(false);
+    group.pushUnread(groupMsg("b"), true); // 有人 @
+    group.pushUnread(groupMsg("c"), false); // 后续没 @ 也粘住
+    expect(group.hasUnreadMention()).toBe(true);
+    group.clearUnread();
+    expect(group.hasUnreadMention()).toBe(false);
   });
 
   it("consumeUnreadTail returns and clears unread", () => {
     const group = Conversation.group("1", 5);
-    group.pushUnread(groupMsg("a"));
-    group.pushUnread(groupMsg("b"));
+    group.pushUnread(groupMsg("a"), false);
+    group.pushUnread(groupMsg("b"), false);
     const tail = group.consumeUnreadTail();
     expect(tail.map(m => m.rawMessage)).toEqual(["a", "b"]);
     expect(group.getUnreadCount()).toBe(0);
@@ -89,15 +112,16 @@ describe("Conversation", () => {
     expect(priv.hasEntered()).toBe(false);
     priv.markEntered();
     expect(priv.hasEntered()).toBe(true);
-    priv.pushUnread(privateMsg("hi"));
+    priv.pushUnread(privateMsg("hi"), false);
     expect(priv.getLatestUnread()?.rawMessage).toBe("hi");
     priv.clearUnread();
     expect(priv.getUnreadCount()).toBe(0);
   });
 
-  it("honors a zero unread limit (drops everything)", () => {
+  it("with a zero unread limit buffers nothing but still counts", () => {
     const group = Conversation.group("1", 0);
-    group.pushUnread(groupMsg("a"));
-    expect(group.getUnreadCount()).toBe(0);
+    group.pushUnread(groupMsg("a"), false);
+    expect(group.getLatestUnread()).toBeNull();
+    expect(group.getUnreadCount()).toBe(1);
   });
 });

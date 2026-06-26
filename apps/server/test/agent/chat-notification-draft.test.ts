@@ -7,17 +7,17 @@ import type { NapcatReceiveMessageSegment } from "../../src/napcat/service/napca
 
 describe("ChatNotificationDraft", () => {
   it("belongs to the QQ group", () => {
-    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false).group).toBe("QQ");
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false, 1).group).toBe("QQ");
   });
 
   it("renders {name}: {latest} for a single non-@ message", () => {
-    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false).render()).toBe(
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "在吗", false, 1).render()).toBe(
       "产品群: 在吗",
     );
   });
 
   it("shows the mention tag", () => {
-    expect(new ChatNotificationDraft("qq_group:1", "产品群", "看下", true).render()).toBe(
+    expect(new ChatNotificationDraft("qq_group:1", "产品群", "看下", true, 1).render()).toBe(
       "产品群: [有人 @ 你]看下",
     );
   });
@@ -37,15 +37,16 @@ describe("ChatNotificationDraft", () => {
     );
   });
 
-  it("folds via merge(prev): latest text, sticky mention, accumulated count", () => {
-    const older = new ChatNotificationDraft("qq_group:1", "群", "第一条", true, 1); // 历史里 @ 过
-    const newer = new ChatNotificationDraft("qq_group:1", "群", "第二条", false, 1);
-    expect(newer.merge(older).render()).toBe("群: [2 条消息][有人 @ 你]第二条");
+  it("merge(prev) takes the latest snapshot (count is authoritative, not accumulated)", () => {
+    // 未读计数 / @ 标记的权威来源是 Conversation，新 draft 已带全量快照；过期 prev 被丢弃。
+    const older = new ChatNotificationDraft("qq_group:1", "群", "第一条", true, 1); // 旧快照：@ 过、count 1
+    const newer = new ChatNotificationDraft("qq_group:1", "群", "第二条", false, 5); // 新快照：count 5、未 @
+    expect(newer.merge(older).render()).toBe("群: [5 条消息]第二条");
   });
 
   it("truncates an over-long latest message", () => {
     const long = "一".repeat(50);
-    expect(new ChatNotificationDraft("qq_group:1", "群", long, false).render()).toBe(
+    expect(new ChatNotificationDraft("qq_group:1", "群", long, false, 1).render()).toBe(
       `群: ${"一".repeat(40)}…`,
     );
   });

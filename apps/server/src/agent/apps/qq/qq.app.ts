@@ -209,13 +209,15 @@ export class QqApp implements App {
     message: ConversationMessage,
     mentioned: boolean,
   ): void {
-    conversation.pushUnread(message);
+    conversation.pushUnread(message, mentioned);
+    // 通知用会话当前的权威未读状态现造 draft：计数 / @ 标记跨窗口累积，open 才清零。
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
         conversation.getShortName(),
         renderMessagePreview(message),
-        mentioned,
+        conversation.hasUnreadMention(),
+        conversation.getUnreadCount(),
       ),
     );
   }
@@ -308,9 +310,13 @@ function renderMessagePlainText(message: ConversationMessage): string {
     : renderPrivateMessagePlainText(message);
 }
 
-/** 通知行里的"最近一条内容"：只取消息文本（会话名由通知行前缀给出，不重复发送者）。 */
+/**
+ * 通知行里的"最近一条内容"。群消息带上发送者（群里不知谁说的没意义）；私聊不带——
+ * 会话名本身就是对方。会话名由通知行前缀给出，这里只补发送者。
+ */
 function renderMessagePreview(message: ConversationMessage): string {
-  return message.rawMessage?.trim() || "（非文本消息）";
+  const text = message.rawMessage?.trim() || "（非文本消息）";
+  return isGroupMessage(message) ? `${message.nickname}：${text}` : text;
 }
 
 function parseConversationGroupId(id: ConversationId): string | null {
