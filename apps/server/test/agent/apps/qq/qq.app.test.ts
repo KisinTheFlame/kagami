@@ -257,6 +257,51 @@ describe("QqApp", () => {
     expect(result.content).toContain("<qq_conversation");
   });
 
+  it("persists the unread badge: exportState → restoreState round-trips count + mention", async () => {
+    const source = createApp(new FakeScheduler(), vi.fn());
+    await source.onStartup();
+    // 群里堆 2 条、其中一条 @ 了小镜；私聊来 1 条。
+    source.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("一") });
+    source.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("二", "10001") });
+    source.handleNapcatEvent({
+      type: "napcat_private_message",
+      data: {
+        userId: "888",
+        nickname: "老王",
+        remark: null,
+        rawMessage: "在不在",
+        messageSegments: [{ type: "text", data: { text: "在不在" } } as never],
+        messageId: 1,
+        time: 1,
+      },
+    });
+
+    const snapshot = source.exportState();
+
+    // 新实例（模拟重启）恢复存档。
+    const restored = createApp(new FakeScheduler(), vi.fn());
+    restored.restoreState(snapshot);
+    await restored.onStartup();
+
+    // 群会话未读红点（2 条 + @）跨"重启"保留。
+    const groupList = (await restored.onFocus())[0];
+    const groupText = "content" in groupList ? groupList.content : "";
+    expect(groupText).toContain("产品群");
+    expect(groupText).toContain("未读 2");
+
+    // 私聊会话也被恢复出来、带未读，可打开。
+    expect((await restored.openConversation("qq_private:888")).ok).toBe(true);
+  });
+
+  it("restoreState ignores an unrecognized shape instead of throwing", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    expect(() => app.restoreState({ version: 999, junk: true })).not.toThrow();
+    expect(() => app.restoreState("garbage")).not.toThrow();
+    await app.onStartup();
+    const list = (await app.onFocus())[0];
+    expect("content" in list ? list.content : "").not.toContain("未读");
+  });
+
   it("rejects opening an unknown conversation", async () => {
     const app = createApp(new FakeScheduler(), vi.fn());
     await app.onStartup();

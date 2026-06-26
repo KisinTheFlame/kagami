@@ -147,6 +147,15 @@ export class Conversation {
     this.resetUnread();
   }
 
+  /**
+   * 从持久化存档恢复未读红点：只恢复计数 + @ 标记，**不**恢复消息内容缓冲——内容靠
+   * open_conversation 时从 napcat 实时拉，避免存陈旧原文。
+   */
+  public restoreUnread(count: number, mentioned: boolean): void {
+    this.unreadCount = Math.max(0, Math.trunc(count));
+    this.unreadHasMention = mentioned;
+  }
+
   private resetUnread(): void {
     this.unread = [];
     this.unreadCount = 0;
