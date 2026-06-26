@@ -812,7 +812,12 @@ describe("NapcatGroupMessageProcessor", () => {
         rawMessage: "[图片: 一只橘猫趴在键盘上]",
         time: 1710000001,
       },
-      { senderName: "小刚", senderUserId: "10003", rawMessage: "[forward_id: 999]", time: null },
+      {
+        senderName: "小刚",
+        senderUserId: "10003",
+        rawMessage: "[forward_id: fwd-999]",
+        time: null,
+      },
     ]);
   });
 });

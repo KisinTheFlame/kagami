@@ -107,7 +107,7 @@ export class QqApp implements App {
       "  - open_conversation(id): 打开某个会话，看最近消息并停在那；之后 send_message 发给它。",
       "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。",
       "  - back_to_conversation_list(): 离开当前会话、回到会话列表。",
-      "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: xxx] 就是一条合并转发（聊天记录），把那个 id 传进来即可；默认显示前 50 条，更长用 offset 翻页。",
+      "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
       "",
       "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
     ].join("\n");
@@ -434,7 +434,7 @@ function renderForward(forwardId: string, page: NapcatForwardMessagePage): strin
   }
   if (shownEnd < total) {
     lines.push(
-      `还有 ${total - shownEnd} 条，继续看用 view_forward(forward_id="${forwardId}", offset=${shownEnd})。`,
+      `还有 ${total - shownEnd} 条，继续看用 view_forward(forward_id="fwd-${forwardId}", offset=${shownEnd})。`,
     );
   }
   lines.push("</qq_forward>");
