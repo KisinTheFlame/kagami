@@ -1,4 +1,4 @@
-import type { App } from "@kagami/agent-runtime";
+import type { App, JsonValue } from "@kagami/agent-runtime";
 import {
   renderGroupMessagePlainText,
   renderPrivateMessagePlainText,
@@ -149,6 +149,48 @@ export class QqApp implements App {
     await this.napcatGateway.stop();
   }
 
+  /**
+   * 交出未读红点（每会话的 count + @ 标记）给 App 状态持久化能力。只存有未读的会话，
+   * 群/好友信息与消息原文不存——重启后从 napcat 实时重建。
+   */
+  public exportState(): JsonValue {
+    const conversations: JsonValue[] = [];
+    for (const conversation of this.conversations.values()) {
+      const unreadCount = conversation.getUnreadCount();
+      if (unreadCount > 0) {
+        conversations.push({
+          id: conversation.id,
+          unreadCount,
+          mentioned: conversation.hasUnreadMention(),
+        });
+      }
+    }
+    return { version: 1, conversations };
+  }
+
+  /** 启动时恢复未读红点。防御性解析：形状 / 版本不认就整体忽略，降级为零未读。 */
+  public restoreState(state: JsonValue): void {
+    const root = asRecord(state);
+    if (!root || root.version !== 1 || !Array.isArray(root.conversations)) {
+      return;
+    }
+    for (const raw of root.conversations) {
+      const entry = asRecord(raw);
+      if (!entry) {
+        continue;
+      }
+      const { id, unreadCount, mentioned } = entry;
+      if (
+        typeof id !== "string" ||
+        typeof unreadCount !== "number" ||
+        typeof mentioned !== "boolean"
+      ) {
+        continue;
+      }
+      this.ensureConversationForRestore(id)?.restoreUnread(unreadCount, mentioned);
+    }
+  }
+
   /** session.getCurrentChatTarget 委派到这里：当前会话的发送目标。 */
   public getCurrentChatTarget(): NapcatChatTarget | undefined {
     if (!this.currentConversationId) {
@@ -256,6 +298,25 @@ export class QqApp implements App {
         conversation.getUnreadCount(),
       ),
     );
+  }
+
+  /**
+   * 恢复存档时按 id 定位会话：群会话在监听列表里就用现成的（已下架的不复活）；私聊会话
+   * 按 id 现建一个空壳（好友信息留待 friend_list 事件回填）。
+   */
+  private ensureConversationForRestore(id: string): Conversation | null {
+    const existing = this.conversations.get(id as ConversationId);
+    if (existing) {
+      return existing;
+    }
+    const userId = parseConversationUserId(id as ConversationId);
+    if (userId) {
+      const conversation = Conversation.privateChat(userId, this.recentMessageLimit);
+      this.conversations.set(conversation.id, conversation);
+      return conversation;
+    }
+    // 群 id 不在当前监听列表（已下架）→ 不复活。
+    return null;
   }
 
   private ensurePrivateConversation(userId: string, friendInfo: NapcatFriendInfo): Conversation {
@@ -385,6 +446,11 @@ function renderForwardNodeBody(rawMessage: string): string {
   return text.length > FORWARD_NODE_MAX_CHARS
     ? `${text.slice(0, FORWARD_NODE_MAX_CHARS)}…（已截断）`
     : text;
+}
+
+/** 把 JsonValue 收窄成普通对象（非数组、非 null）；否则返回 null。restoreState 防御用。 */
+function asRecord(value: JsonValue): { [key: string]: JsonValue } | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
 }
 
 function parseConversationGroupId(id: ConversationId): string | null {

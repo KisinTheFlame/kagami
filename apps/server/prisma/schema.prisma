@@ -243,6 +243,16 @@ model StoryAgentRuntimeSnapshot {
   @@map("story_agent_runtime_snapshot")
 }
 
+// App 状态持久化能力的通用存储：一张表服务所有 App，按 appId 存一份不透明 JSON。
+// 形状 + 版本由各 App 自己拥有；这里只负责 KV 式存取。
+model AppState {
+  appId     String   @id @map("app_id")
+  state     Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_state")
+}
+
 model IthomeArticle {
   id                      Int       @id @default(autoincrement())
   upstreamId              String    @unique(map: "ithome_article_upstream_id_uq") @map("upstream_id")
