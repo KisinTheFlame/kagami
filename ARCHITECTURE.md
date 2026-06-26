@@ -4,37 +4,40 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 由 4 个包组成，依赖关系单向（apps → packages）：
+pnpm workspace 当前由 6 个包组成，依赖单向（apps → packages）：
 
 ```
-apps/server  ─┐
-              ├──→  packages/agent-runtime  ──→  packages/shared
-apps/web    ──┘                                 ↑
-                                                │
-                       apps/web ────────────────┘
+apps/server ──→ packages/agent-runtime ──→ packages/llm
+      │                   │                    ↑
+      ├───────────────────┴────────────────────┤
+      ├──────────────────────────────→ packages/shared
+apps/web  ───────────────────────────→ packages/shared
+apps/oss   （独立进程，零 @kagami 依赖）
 ```
 
-| 包                      | 角色                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `@kagami/server`        | Fastify 后端、Agent 业务装配、NapCat 网关、HTTP/ops 接口、Prisma DAO                                        |
-| `@kagami/web`           | React 19 + Vite 管理台                                                                                      |
-| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（AgentRuntime / TaskAgentRuntime / Operation / Tool / ToolCatalog） |
-| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                             |
+| 包                      | 角色                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `@kagami/server`        | Fastify 后端、Agent 业务装配、NapCat 网关、HTTP/ops 接口、Prisma DAO                                     |
+| `@kagami/web`           | React 19 + Vite 管理台                                                                                   |
+| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                       |
+| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（AgentRuntime / TaskAgentRuntime / Operation / Tool / App 框架） |
+| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                                |
+| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                          |
 
 ## 后端模块 DAG
 
 后端采用「扁平模块 + 模块内分层」结构，顶层目录直接位于 `apps/server/src/<module>`，模块按 DAG 单向依赖。
 
 ```
-                       app                        最高层装配：Fastify 注册、模块 wiring、启动补水
+                       app                  最高层装配：Fastify 注册、模块 wiring、启动
                         │
         ┌───────────────┼───────────────┐
         ↓               ↓               ↓
-       ops          agent           napcat       业务/能力层
+       ops          agent           napcat       业务 / 能力层
         │               │               │
         └──────┬────────┴──────┬────────┘
                ↓               ↓
-              llm           news / metric
+       llm / metric / scheduler / oss-client
                │
         auth / logger / db / config
                        │
@@ -54,36 +57,47 @@ apps/web    ──┘                                 ↑
 
 | 模块        | 职责                                                                                                     |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `common`    | `BizError`、`toHttpErrorResponse`、`registerQueryRoute` / `registerParamRoute` 等路由 helper、跨模块契约 |
+| `common`    | `BizError`、`toHttpErrorResponse`、路由 helper、`prisma-json` 等跨模块公共契约                           |
 | `config`    | `config.yaml` 加载、Zod 校验、运行时配置管理                                                             |
-| `db`        | Prisma client、事务封装                                                                                  |
+| `db`        | Prisma client（better-sqlite3 adapter）、事务封装                                                        |
 | `auth`      | OAuth（Claude Code / Codex 等）回调、secret store、usage cache / trend                                   |
-| `llm`       | LLM provider 封装、chat client、embedding、调用历史 DAO                                                  |
-| `napcat`    | NapCat gateway、入站事件归一化、消息发送                                                                 |
-| `news`      | RSS 等资讯源轮询，给 Agent 提供「读新闻」这种生活输入                                                    |
+| `llm`       | LLM provider 封装、chat client、embedding、playground、调用历史 DAO                                      |
+| `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有          |
 | `metric`    | 运行时指标采集与可视化数据接口                                                                           |
-| `agent`     | Kagami 业务层：RootAgent、capabilities、事件适配、上下文压缩、Story 记忆、RAG                            |
+| `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                                   |
+| `oss`       | `apps/oss` 内部的 HTTP 客户端（server 侧 `oss/oss-client.ts`），把图片 PUT 进自建对象存储                |
+| `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩、Story 记忆 |
 | `ops`       | 后台观测接口：app-log、llm-chat-call、embedding-cache、Story、Agent Dashboard、napcat history            |
-| `scheduler` | 后台定时任务（数据保留清理等）                                                                           |
-| `app`       | 模块装配、Fastify 路由注册、健康检查、启动上下文补水                                                     |
+| `app`       | 模块装配、Fastify 路由注册、健康检查、Agent / Story / 网关生命周期编排                                   |
 
-### Agent 子结构
+### Agent 子结构（手机 OS 模型）
+
+Kagami 不是「QQ 群聊机器人」，而是一个有自己生活的 Agent。各类输入（QQ 消息、RSS、定时任务）在架构上平级，统一进入「手机 OS」模型：
 
 ```
 apps/server/src/agent/
-├── runtime/          Kagami 定制运行时：RootAgentRuntime、session、事件队列、上下文渲染
+├── runtime/          Kagami 定制运行时
+│   ├── root-agent/     RootAgentRuntime、session（退化为 App 启动器）、NotificationCenter、tools
+│   ├── context/        上下文渲染、线性消息账本、DefaultAgentContext
+│   ├── event/          事件队列与事件类型
+│   └── app-state/      App 状态持久化的 SQLite 实现（PrismaAppStateStore）
 ├── capabilities/     按能力聚合的实现
-│   ├── messaging/      QQ 群消息收发（NapCat 是事件源，不向 runtime 泄漏）
+│   ├── messaging/      QQ 会话模型（Conversation）、send_message、AI 味门控
 │   ├── story/          长期记忆 / RAG 检索 / Story 写入
-│   ├── news/           RSS 抓取、文章阅读
+│   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
-│   └── terminal/       终端能力 App
-└── apps/             App 框架（Per-App config schema 自注册）
+│   └── terminal/       终端能力本体
+└── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
+    ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
+    ├── ithome/         IThome App：RSS 未读推送
+    ├── hn/             Hacker News App（只读）
+    ├── calc / clock /  小工具 App
+    └── terminal/       终端 App 壳
 ```
 
-通用 Agent Runtime 内核位于 `packages/agent-runtime`；Kagami 项目语义不下沉到该包。
+通用 Agent / App 框架内核位于 `packages/agent-runtime`（含 `App` 接口、`AppManager`、`AppStateStore`、`InvokeTool`、`ToolCatalog` 等）；Kagami 项目语义不下沉到该包。
 
 ## 前端结构
 
@@ -110,18 +124,28 @@ apps/web/src/
 
 ## 数据流与生命周期
 
-### 输入：事件源
+### 输入：生活输入 → NotificationCenter → 事件队列
 
-Agent 不区分输入来源；所有外部信号都归一为「生活输入」：
+Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，各 App / 源把信号折叠成通知，由被动的 `NotificationCenter` 聚合后投入共享事件队列：
 
 ```
-NapCat 群消息 ─┐
-RSS 轮询      ─┼─→  事件队列  ─→  RootAgentRuntime  ─→  ReAct 循环  ─→  Tool 调用 / 输出
-定时任务       │
-系统通知       ─┘
+NapCat 群/私聊 ─→ QQ App.handleNapcatEvent ─┐
+IThome RSS 轮询 ─→ IThome poller            ─┼─→ NotificationCenter ─→ notification 事件
+                                            │     （前沿触发 + 节流窗口）        │
+                                            ┘                                    ↓
+story_recall / wake 等内部事件 ───────────────────────────────→ 共享事件队列 ─→ RootAgentRuntime ─→ ReAct 循环
 ```
 
-`messaging`、`news`、`scheduler` 等模块负责把各自的事件归一为内部事件结构投入队列。runtime 不知道也不应该知道它们的具体协议。
+关键点：
+
+- **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 把消息累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
+- **NotificationCenter 是 App→Agent 的唯一桥**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。
+- 共享事件队列只承载 `notification` / `story_recall_completed` / `wake` 等已归一的事件，不承载原始协议消息。
+
+### App 与状态
+
+- `RootAgentSession` 退化为 **App 启动器**：Portal 列出已注册 App，`enter(<appId>)` 切焦点、`help` 披露该 App 的子工具、`switch` 在 App 间直接切、`back-to-portal` 回桌面。
+- 每个 App 自管自己的状态。需要跨重启保留的状态（如 QQ 未读红点）通过框架级 **App 状态持久化能力**（`AppStateStore` + 通用 `app_state` 表）在 `onShutdown` 存档、`onStartup` 恢复。
 
 ### 推理：稳定前缀 + 易变尾部
 
@@ -135,16 +159,18 @@ LLM 消息列表分三段：
 
 ### 工具系统：InvokeTool 顶层壳
 
-LLM API 暴露的顶层 tools 集合永远只包含少量结构性元能力（`enter` / `back-to-portal` / `wait` / `invoke` / `help`），不随 capability / App 数量增长。具体能力通过 `invoke(name, args)` 间接调用，可选 App 模式下还可通过 `enter(<appId>)` + `help` 在运行时按需披露子工具。
+LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`enter` / `back-to-portal` / `switch` / `wait` / `invoke` / `search_web` / `search_memory` / `help`），从启动到关停不变，不随 App / capability 数量增长。具体 App 工具通过 `invoke(name, args)` 间接调用，并通过 `enter(<appId>)` + `help` 在运行时按需披露。
 
 设计目的：避免新增能力让顶层 tools 列表变化、把 KV 缓存命中率降到零。详见 AGENTS.md「开发原则：KV 缓存命中率优先」。
 
 ## 持久化
 
-- **PostgreSQL**（生产 / 开发统一）通过 Prisma ORM 访问
-- Schema 源文件 `apps/server/prisma/schema.prisma`，迁移落在 `apps/server/prisma/migrations/`
-- 通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理
-- DAO 接口定义在模块内 `dao/`，实现在 `dao/impl/`
+- **进程内 SQLite 文件**（默认 `data/sqlite/kagami.db`）通过 Prisma ORM + `@prisma/adapter-better-sqlite3` 访问；宿主机不再需要外部 PostgreSQL。
+- Story 向量记忆用**进程内 HNSW 索引（hnswlib-node）**：向量以 JSON 字符串存于 `story_memory_document.embedding`（SQLite 为唯一事实来源），索引启动时重建、派生快照落 `data/vector/`。
+- App 状态走通用 `app_state` 表（appId → 不透明 JSON）。
+- Schema 源文件 `apps/server/prisma/schema.prisma`，迁移落 `apps/server/prisma/migrations/`，通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理。
+- DAO 接口在模块内 `dao/`，实现在 `dao/impl/`。
+- `apps/oss` 自带独立的 `data/oss/oss.db`（裸 better-sqlite3）与分片 blob 文件，不经 Prisma。
 
 ## HTTP 接口入口
 
@@ -153,19 +179,23 @@ LLM API 暴露的顶层 tools 集合永远只包含少量结构性元能力（`e
 | 健康检查        | `/health`                                                                                                                            |
 | OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits` \| `usage-trend`                                  |
 | LLM Playground  | `/llm/providers`、`/llm/playground-tools`、`/llm/chat`                                                                               |
-| NapCat 主动发送 | `/napcat/group/send`                                                                                                                 |
+| NapCat 主动发送 | `/napcat/group/send`、`/napcat/private/send`                                                                                         |
 | 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query`、`/story/query` |
-| Agent / 指标    | `/agent-dashboard/*`、`/main-agent-context/recent`、`/metric-chart/*`                                                                |
+| Agent / 指标    | `/agent-dashboard/*`、`/main-agent-context/recent`、`/metric-chart/*`、`/scheduler/*`                                                |
+
+> `apps/oss` 另起独立 HTTP 服务（`/objects` PUT/GET/HEAD），仅 localhost 监听，不经 Fastify。
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管两个进程：`kagami-server`（Fastify，默认 20003）+ `kagami-web`（静态 + 反代 `/api/*`，默认 20004）
-- `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`
-- PostgreSQL 与 NapCat 作为宿主机外部依赖运行；`config.yaml` 一般用 `localhost` 访问
+- PM2（`ecosystem.config.cjs`）托管三个进程：`kagami-server`（Fastify，默认 20003）、`kagami-web`（静态 + 反代 `/api/*`，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。
+- `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
+- 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
+- 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。
 
 ## 进一步阅读
 
 - [README.md](./README.md) — 项目理念与使用入口
 - [AGENTS.md](./AGENTS.md) — 面向 LLM agent 的协作指引（KV 缓存优先、capability 设计原则、代码规范、命令清单）
+- [docs/effect-model.md](./docs/effect-model.md) — Effect 模型设计
 - [CHANGELOG.md](./CHANGELOG.md) — 变更记录
 - [TODOS.md](./TODOS.md) — 待办清单

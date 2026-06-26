@@ -9,7 +9,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 群聊只是他生活的一部分，就像一个人不会把自己定义为"聊天的人"。只要给他足够多的能力（capability），他就可以像一个真正的人那样，去读新闻、去记住发生过的事、去主动做自己感兴趣的事。项目的核心概念是 **Agent as a life**：
 
 - QQ 群消息只是他接收到的一种事件，与 RSS 轮询、定时任务、系统通知在架构上是平级的"生活输入"。
-- 他有自己的记忆（Story / RAG）、自己的兴趣（News 轮询、主动发言）、自己的节奏（事件队列、空闲时刻的后台动作）。
+- 他有自己的记忆（Story / RAG）、自己的兴趣（IThome 轮询、主动发言）、自己的节奏（事件队列、空闲时刻的后台动作）。
 - 新增 capability 时，应该问自己："这是在给 Agent 的生活加一种新的存在方式吗？"，而不是"这是在给聊天机器人加一个功能吗？"。
 - 不要把 NapCat、群聊相关的概念泄漏到 `agent/runtime` 的核心抽象里。它只是众多外部事件源之一。
 
@@ -31,7 +31,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
-`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`enter` / `back-to-portal` / `wait` / `invoke` / `help` 这一类结构性能力），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
+`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`enter` / `back-to-portal` / `switch` / `wait` / `invoke` / `search_web` / `search_memory` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
 
 如果不通过 InvokeTool，每加一个工具都要在 LLM 的 tools 参数里多一个 entry，这是稳定前缀的一部分，意味着每加一个新工具都会让所有进行中的会话从零换入。InvokeTool 把"加新东西就触发一次前缀失效"的代价从"每加一个工具一次"压缩到"几乎不会发生"。
 
@@ -76,11 +76,13 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含四个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含六个工作空间包：
 
 - `apps/server`：Fastify 后端服务（`@kagami/server`）
 - `apps/web`：React 前端管理台（`@kagami/web`）
-- `packages/agent-runtime`：通用 Agent Runtime 内核（`@kagami/agent-runtime`）
+- `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
+- `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
+- `packages/llm`：前后端 / 内核共用的 LLM 消息与工具类型契约（`@kagami/llm`）
 - `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
 
 workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `apps/*` 与 `packages/*`。
@@ -187,7 +189,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
   - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationBatchWindowMs`
   - `server.agent.story.batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
-  - `server.news.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
+  - `server.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
   - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
   - `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
   - `server.llm.timeoutMs`、`authUsageRefreshIntervalMs`
@@ -256,12 +258,13 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `logger/`：日志 runtime、serializer、sink、日志 DAO
 - `auth/`：OAuth、回调服务、secret store、usage cache、usage trend 与统一认证 HTTP 接口
 - `llm/`：LLM provider、chat client、embedding、playground、相关 DAO
-- `napcat/`：NapCat gateway、入站事件归一化、消息发送、NapCat 相关持久化与 HTTP 接口（只是 Agent 的一种事件源，不是主干）
-- `news/`：IThome 等资讯源的轮询与持久化，给 Agent 提供"读新闻"这类生活输入
+- `napcat/`：NapCat 协议适配（gateway transport、入站归一化、图片分析、持久化写入）；网关实例由 QQ App 持有，只是 Agent 的一种事件源
 - `metric/`：运行时指标与可视化数据接口
-- `agent/`：Kagami 的 Agent 业务层，负责 RootAgent、capabilities、事件适配、上下文压缩、故事记忆、RAG 等
+- `scheduler/`：后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）
+- `oss/`：server 侧对象存储 HTTP 客户端，把图片 PUT 进自建 `apps/oss`
+- `agent/`：Kagami 的 Agent 业务层，负责手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩、故事记忆、RAG 等
 - `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、Story、Agent Dashboard、NapCat history
-- `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查与启动上下文补水
+- `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查、Agent / Story / 网关生命周期编排
 
 模块内优先按垂直分层组织，常见层次包括：
 
@@ -283,9 +286,10 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 Agent 相关补充约定：
 
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
-- `apps/server/src/agent` 当前按 `runtime / capabilities` 分层组织：
-  - `runtime/`：仍留在 server 的 Kagami 定制运行时，如 `RootAgentRuntime`、session、事件队列、上下文渲染
-  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`rag`、`news`、`vision`、`web-search`
+- `apps/server/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
+  - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
+  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`terminal`
+  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`terminal`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
