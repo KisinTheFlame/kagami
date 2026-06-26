@@ -119,6 +119,8 @@ type BuildAgentRuntimeInput = {
 export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
+  /** Story Agent 后台 loop 是否启用；false 时不 initialize/run、不消费 ledger 事件。 */
+  storyAgentEnabled: boolean;
   storyQueryService: StoryQueryService;
   storyReindexService: StoryReindexService;
   mainAgentContextQueryService: MainAgentContextQueryService;
@@ -261,6 +263,11 @@ export async function buildAgentRuntime({
       creatorQQ: config.server.bot.creator.qq,
     });
   };
+  // Story Agent（后台故事写作 loop）可通过 config.server.agent.story.enabled 整体关停。
+  // 关停时：不运行后台 loop，且不再向 storyEventQueue 入队（否则 ledger_appended 事件
+  // 会在无人消费下无界堆积）。这与主 Agent 前缀完全无关——search_memory 顶层工具照旧
+  // 注册、tools 列表字节不变，KV 缓存与稳定前缀不受任何影响。
+  const storyAgentEnabled = config.server.agent.story.enabled;
   const context = new LinearMessageLedgerAgentContext({
     inner: new DefaultAgentContext({
       systemPromptFactory: agentSystemPromptFactory,
@@ -268,6 +275,9 @@ export async function buildAgentRuntime({
     linearMessageLedgerDao,
     runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     onLedgerAppended: count => {
+      if (!storyAgentEnabled) {
+        return;
+      }
       storyEventQueue.enqueue({ type: "ledger_appended", count });
     },
   });
@@ -411,6 +421,11 @@ export async function buildAgentRuntime({
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     eventQueue: storyEventQueue,
   });
+  if (!storyAgentEnabled) {
+    logger.info("Story agent disabled by config", {
+      event: "agent.story.disabled",
+    });
+  }
   // Story Recall Agent（后台自动召回）可通过配置整体关停。关停时只是不注册这个
   // loop extension —— search_memory 工具仍然保留在顶层工具集里，主 Agent 暴露给
   // LLM 的 tools 列表字节不变，稳定前缀与 KV 缓存完全不受影响。
@@ -481,6 +496,7 @@ export async function buildAgentRuntime({
   return {
     rootAgentRuntime,
     storyAgentRuntime,
+    storyAgentEnabled,
     storyQueryService,
     storyReindexService,
     mainAgentContextQueryService,

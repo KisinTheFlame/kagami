@@ -100,6 +100,7 @@ export function createConfigManager(): ConfigManager {
         waitToolMaxWaitMs: 600_000,
         notificationBatchWindowMs: 30_000,
         story: {
+          enabled: true,
           batchSize: 24,
           idleFlushMs: 120_000,
           memory: {

@@ -30,6 +30,7 @@ let port: number | null = null;
 async function startAgentLoop(runtime: {
   restoredRootAgentSnapshot: boolean;
   hydrateColdStartAgentContext(): Promise<void>;
+  storyAgentEnabled: boolean;
   storyAgentRuntime: {
     initialize(): Promise<void>;
     run(): Promise<void>;
@@ -47,7 +48,9 @@ async function startAgentLoop(runtime: {
     }
 
     await runtime.rootAgentRuntime.initialize();
-    await runtime.storyAgentRuntime.initialize();
+    if (runtime.storyAgentEnabled) {
+      await runtime.storyAgentRuntime.initialize();
+    }
   } catch (error) {
     logger.errorWithCause(
       "Agent runtime initialization failed; backend will continue without agent loop",
@@ -65,11 +68,13 @@ async function startAgentLoop(runtime: {
     });
   });
 
-  void runtime.storyAgentRuntime.run().catch(error => {
-    logger.errorWithCause("Story loop crashed; backend will continue without story loop", error, {
-      event: "agent.story_loop.crashed",
+  if (runtime.storyAgentEnabled) {
+    void runtime.storyAgentRuntime.run().catch(error => {
+      logger.errorWithCause("Story loop crashed; backend will continue without story loop", error, {
+        event: "agent.story_loop.crashed",
+      });
     });
-  });
+  }
 }
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
@@ -114,7 +119,8 @@ try {
   taskScheduler = runtime.taskScheduler;
   callbackServers = runtime.callbackServers;
   rootAgentRuntime = runtime.rootAgentRuntime;
-  storyAgentRuntime = runtime.storyAgentRuntime;
+  // Story Agent 关停时不接管其生命周期：未 initialize/run，shutdown 也不必 stop。
+  storyAgentRuntime = runtime.storyAgentEnabled ? runtime.storyAgentRuntime : null;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 
