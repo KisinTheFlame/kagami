@@ -1,4 +1,4 @@
-import type { AgentRuntime, TaskAgent } from "./agent-runtime.js";
+import type { TaskAgent } from "./agent-runtime.js";
 import type {
   Effect,
   EffectHandler,
@@ -44,7 +44,6 @@ import {
 } from "./react-kernel.js";
 import {
   BaseTaskAgent,
-  TaskAgentRuntime,
   TaskEffectInterpreter,
   TerminateHandler,
   TERMINATE_EFFECT_TYPE,
@@ -90,14 +89,12 @@ export {
   REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
   ReplaceLeadingMessagesHandler,
   SerialExecutor,
-  TaskAgentRuntime,
   TaskEffectInterpreter,
   TerminateHandler,
   TERMINATE_EFFECT_TYPE,
   ToolCatalog,
   ToolSet,
   ZodToolComponent,
-  type AgentRuntime,
   type App,
   type AppId,
   type AppStartupContext,
