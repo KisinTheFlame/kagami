@@ -292,3 +292,17 @@ export const QQ_FACE_NAMES: Readonly<Record<string, string>> = {
 export function normalizeFaceText(faceText: string): string {
   return faceText.trim().replace(/^\//, "").replace(/^\[/, "").replace(/\]$/, "").trim();
 }
+
+/**
+ * 名字 → id 的反查表，从 {@link QQ_FACE_NAMES} 派生，供「发送」侧把 `[表情: 名字]` 还原成 face 段。
+ * 名字在 QQ_FACE_NAMES 中唯一（已逐条核对），故反查无歧义；表里没有的名字（更高版本、仅靠
+ * 入站 faceText 渲染出来的表情）无法回填，由上层退化成纯文本。
+ */
+export const QQ_FACE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(QQ_FACE_NAMES).map(([id, name]) => [name, id]),
+);
+
+/** 把表情名字解析成 face id；查不到返回 null（交由上层退化成纯文本，绝不静默吞掉）。 */
+export function resolveFaceId(name: string): string | null {
+  return QQ_FACE_IDS[name.trim()] ?? null;
+}

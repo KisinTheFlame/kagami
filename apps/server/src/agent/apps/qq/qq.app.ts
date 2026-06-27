@@ -30,6 +30,7 @@ import {
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
 import { BackToConversationListTool } from "./tools/back-to-conversation-list.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";
+import { ListFacesTool } from "./tools/list-faces.tool.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
 
 export const QQ_APP_ID = "qq";
@@ -92,6 +93,7 @@ export class QqApp implements App {
       new OpenConversationTool({ getApp: () => this }),
       new BackToConversationListTool({ getApp: () => this }),
       new ViewForwardTool({ getApp: () => this }),
+      new ListFacesTool(),
     ];
   }
 
@@ -105,7 +107,8 @@ export class QqApp implements App {
       "",
       "可调用工具：",
       "  - open_conversation(id): 打开某个会话，看最近消息并停在那；之后 send_message 发给它。",
-      "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。",
+      "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。想发 QQ 内置表情就在文本里写 `[表情: 名字]`（和你收到的格式一样，如 `[表情: 比心]`），会自动转成表情发出；名字不认得就原样当文字发。",
+      "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
       "  - back_to_conversation_list(): 离开当前会话、回到会话列表。",
       "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
       "",

@@ -104,6 +104,113 @@ describe("parseOutgoingMessageSegments", () => {
       },
     ]);
   });
+
+  it("should parse a single face segment by name", () => {
+    expect(parseOutgoingMessageSegments("[表情: 比心]")).toEqual([
+      {
+        type: "face",
+        data: {
+          id: "319",
+        },
+      },
+    ]);
+  });
+
+  it("should accept a face name without the space after colon", () => {
+    expect(parseOutgoingMessageSegments("[表情:爱心]")).toEqual([
+      {
+        type: "face",
+        data: {
+          id: "66",
+        },
+      },
+    ]);
+  });
+
+  it("should accept a full-width colon in the face marker", () => {
+    expect(parseOutgoingMessageSegments("[表情：比心]")).toEqual([
+      {
+        type: "face",
+        data: {
+          id: "319",
+        },
+      },
+    ]);
+  });
+
+  it("should keep a face segment inline with surrounding text", () => {
+    expect(parseOutgoingMessageSegments("抱抱 [表情: 爱心] 哦")).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "抱抱 ",
+        },
+      },
+      {
+        type: "face",
+        data: {
+          id: "66",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: " 哦",
+        },
+      },
+    ]);
+  });
+
+  it("should preserve order across mixed mention and face segments", () => {
+    expect(parseOutgoingMessageSegments("{@甲(10001)} 赞一个 [表情: 赞]")).toEqual([
+      {
+        type: "at",
+        data: {
+          qq: "10001",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: " 赞一个 ",
+        },
+      },
+      {
+        type: "face",
+        data: {
+          id: "76",
+        },
+      },
+    ]);
+  });
+
+  it("should keep an unknown face name as plain text", () => {
+    expect(parseOutgoingMessageSegments("[表情: 这不是表情]")).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "[表情: 这不是表情]",
+        },
+      },
+    ]);
+  });
+
+  it("should keep an unknown face as text while still parsing a known one", () => {
+    expect(parseOutgoingMessageSegments("[表情: 这不是表情][表情: 比心]")).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "[表情: 这不是表情]",
+        },
+      },
+      {
+        type: "face",
+        data: {
+          id: "319",
+        },
+      },
+    ]);
+  });
 });
 
 describe("buildOutgoingMessageSegments", () => {
