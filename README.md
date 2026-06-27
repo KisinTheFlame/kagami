@@ -70,8 +70,9 @@ Notes:
 
 - The repository does not provide a unified root `pnpm dev` script.
 - `@kagami/server` currently exposes `build`, `typecheck`, `test`, `test:watch`, and `db:*` scripts.
-- `@kagami/web`, `@kagami/agent-runtime`, and `@kagami/shared` currently expose `build` and `typecheck`.
-- Only `@kagami/server` declares a test script.
+- `@kagami/agent-runtime` exposes `build`, `typecheck`, `test`, `test:watch`; `@kagami/oss` exposes `build`, `typecheck`, `test`, `test:watch`, `start`.
+- `@kagami/web` and `@kagami/shared` expose `build` and `typecheck`.
+- `@kagami/server`, `@kagami/agent-runtime`, and `@kagami/oss` declare test scripts.
 
 ## Configuration
 
@@ -96,6 +97,7 @@ Key configuration sections:
 - `server.apps.*` (per-App config, e.g. `calc.precision`, `terminal.*`, `hn.*`)
 - `server.tavily.apiKey`
 - `server.bot.qq`, `server.bot.creator`
+- top-level `oss.port`: the standalone `apps/oss` process's own localhost HTTP listen port (separate from `server.oss.baseUrl`, which is how the server reaches it)
 
 Configuration conventions:
 
@@ -104,7 +106,7 @@ Configuration conventions:
   - `apps/server/src/config/config.loader.ts`
   - `config.yaml`
   - `config.yaml.example`
-- `server.llm.usages` must fully provide the attempt chains: `agent`, `storyAgent`, `contextSummarizer`, `vision`, `webSearchAgent`.
+- `server.llm.usages` must provide `agent`, `contextSummarizer`, `vision`, and `webSearchAgent`; `storyAgent` is optional and falls back to `agent` when omitted.
 
 ## Database Migrations
 
@@ -142,7 +144,7 @@ Main modules:
 - `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
 - `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
 - `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction, story memory
-- `ops/`: query endpoints for App Log, LLM Chat Call, Story, Agent Dashboard, NapCat history, etc.
+- `ops/`: query endpoints for App Log, LLM Chat Call, Story, main Agent context, NapCat history, etc.
 - `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / Story / gateway lifecycle
 
 `apps/server/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
@@ -173,8 +175,8 @@ Main endpoint groups:
 - `/napcat-event/query`
 - `/napcat-group-message/query`
 - `/story/query`
-- `/agent-dashboard/*`
 - `/main-agent-context/recent`
+- `/main-agent-context/compact`
 - `/metric-chart/*`
 - `/scheduler/*`
 
@@ -182,17 +184,17 @@ Main endpoint groups:
 
 The frontend is a React admin console used to observe the Agent's "life state" (what he has recently been thinking, doing, and seeing). Main pages:
 
-- `/agent-dashboard`: Agent overview home (default entry)
+- `/main-agent-context`: main Agent context (default entry)
 - `/auth/:provider`
+- `/control-panel`
+- `/scheduler-tasks`
 - `/llm-playground`
 - `/llm-history`
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`
 - `/story-history`
-- `/main-agent-context`
 - `/metric-charts`
-- `/scheduler-tasks`
 
 Notes:
 
@@ -208,7 +210,7 @@ Notes:
 ### Agent Runtime Package
 
 - `packages/agent-runtime` only carries the generic Agent / App framework kernel, not Kagami-specific semantics.
-- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `InvokeTool`, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions.
+- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/server`, not here.)
 - NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/server/src/agent`.
 
 ## Deployment
