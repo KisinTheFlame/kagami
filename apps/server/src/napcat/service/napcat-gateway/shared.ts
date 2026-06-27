@@ -6,12 +6,14 @@ import {
   type NapcatSendTextSegment,
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
+  type NapcatReceiveFaceSegment,
   type NapcatReceiveForwardSegment,
   type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
   type NapcatReceiveReplySegment,
   type NapcatReceiveTextSegment,
 } from "../../schema/napcat-segment.js";
+import { QQ_FACE_NAMES, normalizeFaceText } from "./qq-face-names.js";
 
 export type { NapcatReceiveAtSegment, NapcatReceiveMessageSegment, NapcatReceiveTextSegment };
 
@@ -200,6 +202,10 @@ export function renderSupportedMessageSegments(
         return formatForwardSegment(segment);
       }
 
+      if (segment.type === "face") {
+        return formatFaceSegment(segment);
+      }
+
       return "";
     })
     .join("");
@@ -219,6 +225,28 @@ export const FORWARD_ID_DISPLAY_PREFIX = "fwd-";
 export function formatForwardSegment(segment: NapcatReceiveForwardSegment): string {
   const id = toNullableString(segment.data.id);
   return id ? `[forward_id: ${FORWARD_ID_DISPLAY_PREFIX}${id}]` : "[合并转发]";
+}
+
+/**
+ * QQ 内置小表情（face 段）。此前被渲染器丢成空字符串，小镜完全感知不到群友发的表情；
+ * 现在渲染成 `[表情: 名字]`。名字优先取 NapCat 给的 `raw.faceText`（最权威），其次查兜底字典，
+ * 都没有再退化成通用 `[表情]`。和 `[图片: 描述]` / `[合并转发]` 的方括号占位约定保持一致。
+ */
+export function formatFaceSegment(segment: NapcatReceiveFaceSegment): string {
+  const name = resolveFaceName(segment);
+  return name ? `[表情: ${name}]` : "[表情]";
+}
+
+function resolveFaceName(segment: NapcatReceiveFaceSegment): string | null {
+  const faceText = toNullableString(segment.data.raw.faceText);
+  if (faceText) {
+    const normalized = normalizeFaceText(faceText);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+
+  return QQ_FACE_NAMES[segment.data.id] ?? null;
 }
 
 export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {
