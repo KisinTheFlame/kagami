@@ -67,6 +67,8 @@ import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/pri
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
+import { TodoApp } from "../agent/apps/todo/todo.app.js";
+import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
@@ -98,6 +100,7 @@ type BuildAgentRuntimeInput = {
   metricService: MetricService;
   napcatGatewayService: NapcatGatewayService;
   ithomeService: IthomeService;
+  todoService: TodoService;
   notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
   storyEventQueue: Queue<StoryAgentEvent>;
@@ -125,6 +128,7 @@ export async function buildAgentRuntime({
   metricService,
   napcatGatewayService,
   ithomeService,
+  todoService,
   notificationCenter,
   eventQueue,
   storyEventQueue,
@@ -235,6 +239,7 @@ export async function buildAgentRuntime({
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
+  appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
   appManager.register(qqApp);

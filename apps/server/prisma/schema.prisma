@@ -290,3 +290,18 @@ model TerminalOutput {
   @@index([createdAt], map: "terminal_output_created_at_idx")
   @@map("terminal_output")
 }
+
+model TodoItem {
+  id            Int       @id @default(autoincrement())
+  title         String
+  note          String?
+  status        String    @default("pending")
+  remindAt      DateTime? @map("remind_at")
+  repeatEveryMs Int?      @map("repeat_every_ms")
+  snoozedUntil  DateTime? @map("snoozed_until")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+
+  @@map("todo_item")
+}
