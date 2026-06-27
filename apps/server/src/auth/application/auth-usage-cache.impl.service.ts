@@ -19,8 +19,8 @@ import type {
 } from "@kagami/server-core/dao/auth-usage-snapshot.dao";
 import type { ClaudeCodeProviderAuth } from "../claude-code/types.js";
 import type { CodexProviderAuth } from "../codex/types.js";
-import { AppLogger } from "../../logger/logger.js";
-import { serializeError } from "../../logger/serializer.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
+import { serializeError } from "@kagami/server-core/logger/serializer";
 import type { ClaudeCodeAuthService } from "./claude-code-auth.service.js";
 import type { CodexAuthService } from "./codex-auth.service.js";
 

@@ -3,7 +3,7 @@ import {
   type LlmChatCallListQuery,
   type LlmChatCallListResponse,
 } from "@kagami/shared/schemas/llm-chat";
-import type { LlmChatCallDao } from "../../llm/dao/llm-chat-call.dao.js";
+import type { LlmChatCallDao } from "@kagami/server-core/dao/llm-chat-call.dao";
 import type { LlmChatCallQueryService } from "./llm-chat-call-query.service.js";
 import { mapLlmChatCallDetail, mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LlmChatCallDao, LlmChatCallItem } from "../../src/llm/dao/llm-chat-call.dao.js";
+import type { LlmChatCallDao, LlmChatCallItem } from "@kagami/server-core/dao/llm-chat-call.dao";
 import { DefaultLlmChatCallQueryService } from "../../src/ops/application/llm-chat-call-query.impl.service.js";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 

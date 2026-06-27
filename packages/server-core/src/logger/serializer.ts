@@ -1,4 +1,4 @@
-import { isRecord } from "@kagami/server-core/common/prisma-json";
+import { isRecord } from "../common/prisma-json.js";
 import type { LogMetadata } from "./types.js";
 
 export function serializeMetadata(metadata: LogMetadata): LogMetadata {

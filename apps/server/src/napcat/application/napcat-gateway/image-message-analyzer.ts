@@ -1,4 +1,4 @@
-import { AppLogger } from "../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import type { OssClient } from "../../../oss/oss-client.js";
 import type { ImageAssetDao } from "../../infra/image-asset.dao.js";

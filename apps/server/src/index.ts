@@ -1,7 +1,7 @@
-import { initLoggerRuntime } from "./logger/runtime.js";
+import { initLoggerRuntime } from "@kagami/server-core/logger/runtime";
 import { closeDb, type Database } from "@kagami/server-core/db/client";
-import { AppLogger } from "./logger/logger.js";
-import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
+import { StdoutLogSink } from "@kagami/server-core/logger/sinks/stdout-sink";
 import { buildServerRuntime } from "./app/server-runtime.js";
 import type { FastifyInstance } from "fastify";
 import type { TaskScheduler } from "./scheduler/application/task-scheduler.js";

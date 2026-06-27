@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   LlmChatCallItem as LlmChatCallDaoItem,
   LlmChatCallSummary as LlmChatCallDaoSummary,
-} from "../../src/llm/dao/llm-chat-call.dao.js";
+} from "@kagami/server-core/dao/llm-chat-call.dao";
 import {
   mapLlmChatCallDetail,
   mapLlmChatCallSummary,

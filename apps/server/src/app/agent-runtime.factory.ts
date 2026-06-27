@@ -11,7 +11,7 @@ import {
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import type { Database } from "@kagami/server-core/db/client";
-import { AppLogger } from "../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { LlmClient } from "../llm/client.js";
 import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";

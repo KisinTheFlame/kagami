@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AppLogger } from "../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { MetricTags } from "../domain/metric.js";
 import type { MetricDao } from "@kagami/server-core/dao/metric.dao";

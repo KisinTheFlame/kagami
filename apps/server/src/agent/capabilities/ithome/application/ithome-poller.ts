@@ -1,4 +1,4 @@
-import { AppLogger } from "../../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { IthomeService } from "./ithome.service.js";
 
 const logger = new AppLogger({ source: "ithome.poller" });

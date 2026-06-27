@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { AppLogger } from "../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";

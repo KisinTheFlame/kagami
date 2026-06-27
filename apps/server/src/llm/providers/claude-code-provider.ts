@@ -13,7 +13,7 @@ import type {
 } from "../types.js";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { Config } from "@kagami/server-core/config/config.loader";
-import { AppLogger } from "../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";

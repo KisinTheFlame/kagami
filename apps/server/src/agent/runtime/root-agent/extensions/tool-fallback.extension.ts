@@ -3,7 +3,7 @@ import type {
   ReActKernelRunRoundInput,
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import { AppLogger } from "../../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-agent-runtime.js";
 
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });

@@ -4,8 +4,8 @@ import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import type { NapcatEventDao } from "@kagami/server-core/dao/napcat-event.dao";
 import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
-import { initLoggerRuntime } from "../../src/logger/runtime.js";
-import type { LogEvent, LogSink } from "../../src/logger/types.js";
+import { initLoggerRuntime } from "@kagami/server-core/logger/runtime";
+import type { LogEvent, LogSink } from "@kagami/server-core/logger/types";
 
 export class FakeWebSocket {
   public readyState = 0;

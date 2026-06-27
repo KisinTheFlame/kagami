@@ -1,5 +1,5 @@
 import { type AppLogListQuery, type AppLogListResponse } from "@kagami/shared/schemas/app-log";
-import type { LogDao } from "../../logger/dao/log.dao.js";
+import type { LogDao } from "@kagami/server-core/logger/dao/log.dao";
 import type { AppLogQueryService } from "./app-log-query.service.js";
 import { mapAppLogList } from "../mappers/app-log.mapper.js";
 
