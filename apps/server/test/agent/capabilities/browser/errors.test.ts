@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BrowserError,
   serializeBrowserError,
-} from "../../../src/agent/capabilities/browser/domain/errors.js";
+} from "../../../../src/agent/capabilities/browser/domain/errors.js";
 
 describe("serializeBrowserError", () => {
   it("序列化 BrowserError 为冻结结构 + 有序 context 字段", () => {

@@ -3,8 +3,8 @@ import type { BrowserContext } from "playwright-core";
 import type {
   BrowserCredential,
   BrowserCredentialDao,
-} from "../../../src/agent/capabilities/browser/application/browser-credential.dao.js";
-import { initTestLoggerRuntime } from "../../helpers/logger.js";
+} from "../../../../src/agent/capabilities/browser/application/browser-credential.dao.js";
+import { initTestLoggerRuntime } from "../../../helpers/logger.js";
 
 initTestLoggerRuntime();
 
@@ -16,7 +16,7 @@ vi.mock("cloakbrowser", () => ({
 }));
 
 const { BrowserService } =
-  await import("../../../src/agent/capabilities/browser/application/browser.service.js");
+  await import("../../../../src/agent/capabilities/browser/application/browser.service.js");
 
 type FakeLocator = {
   click: ReturnType<typeof vi.fn>;
