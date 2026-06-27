@@ -70,7 +70,7 @@ import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
 import type { MetricChartService } from "../metric/application/metric-chart.service.js";
 import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
-import { PrismaMetricDao } from "../metric/infra/impl/prisma-metric.impl.dao.js";
+import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
 import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
 import type { MetricChartDao } from "../metric/infra/metric-chart.dao.js";
 import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";

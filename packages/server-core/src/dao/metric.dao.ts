@@ -1,5 +1,5 @@
 import type { MetricChartAggregator, MetricChartBucket } from "@kagami/shared/schemas/metric-chart";
-import type { MetricTags } from "../domain/metric.js";
+export type MetricTags = Record<string, string>;
 
 export type InsertMetricInput = {
   metricName: string;
