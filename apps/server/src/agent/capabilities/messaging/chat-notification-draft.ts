@@ -1,5 +1,5 @@
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
-import type { NapcatReceiveMessageSegment } from "../../../napcat/service/napcat-gateway/shared.js";
+import type { NapcatReceiveMessageSegment } from "../../../napcat/application/napcat-gateway/shared.js";
 
 const MENTION_TAG = "[有人 @ 你]";
 const MAX_PREVIEW_CHARS = 40;

@@ -11,8 +11,8 @@ import type {
   NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../../napcat/service/napcat-gateway.service.js";
-import { NapcatReceiveMessageSegmentSchema } from "../../../../napcat/schema/napcat-segment.js";
+} from "../../../../napcat/application/napcat-gateway.service.js";
+import { NapcatReceiveMessageSegmentSchema } from "../../../../napcat/domain/napcat-segment.js";
 
 const DateValueSchema = z.coerce.date();
 const JsonRecordSchema = z.record(z.string(), z.unknown());

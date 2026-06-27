@@ -24,8 +24,8 @@ import {
   type NapcatGatewayPostTypeEventPayload,
   type NapcatReceiveMessageSegment,
 } from "./shared.js";
-import { isNapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
-import type { NapcatQqMessageDao } from "../../dao/napcat-group-message.dao.js";
+import { isNapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
+import type { NapcatQqMessageDao } from "../../infra/napcat-group-message.dao.js";
 import type {
   NapcatImageAnalysisResult,
   NapcatImageMessageAnalyzer,

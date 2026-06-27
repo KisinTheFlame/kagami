@@ -3,7 +3,7 @@ import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import type { PendingDraftStore } from "../application/pending-draft.store.js";
 import type { AiToneScorer } from "../infra/ai-tone-scorer.js";
-import type { NapcatChatTarget } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 
 export const SEND_MESSAGE_TOOL_NAME = "send_message";
 

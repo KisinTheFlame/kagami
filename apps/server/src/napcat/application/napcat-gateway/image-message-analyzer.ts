@@ -1,7 +1,7 @@
 import { AppLogger } from "../../../logger/logger.js";
-import type { NapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
+import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import type { OssClient } from "../../../oss/oss-client.js";
-import type { ImageAssetDao } from "../../dao/image-asset.dao.js";
+import type { ImageAssetDao } from "../../infra/image-asset.dao.js";
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 

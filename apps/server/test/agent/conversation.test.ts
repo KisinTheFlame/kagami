@@ -3,7 +3,7 @@ import { Conversation } from "../../src/agent/capabilities/messaging/conversatio
 import type {
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../src/napcat/service/napcat-gateway.service.js";
+} from "../../src/napcat/application/napcat-gateway.service.js";
 
 function groupMsg(text: string): NapcatGroupMessageData {
   return {

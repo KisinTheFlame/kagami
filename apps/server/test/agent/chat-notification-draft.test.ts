@@ -3,7 +3,7 @@ import {
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../src/agent/capabilities/messaging/chat-notification-draft.js";
-import type { NapcatReceiveMessageSegment } from "../../src/napcat/service/napcat-gateway/shared.js";
+import type { NapcatReceiveMessageSegment } from "../../src/napcat/application/napcat-gateway/shared.js";
 
 describe("ChatNotificationDraft", () => {
   it("belongs to the QQ group", () => {

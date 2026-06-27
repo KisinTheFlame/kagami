@@ -3,11 +3,11 @@ import type { LlmMessage } from "../../../llm/types.js";
 import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
-} from "../../../napcat/service/napcat-gateway/shared.js";
+} from "../../../napcat/application/napcat-gateway/shared.js";
 import type {
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/service/napcat-gateway.service.js";
+} from "../../../napcat/application/napcat-gateway.service.js";
 import { renderServerStaticTemplate } from "../../../common/runtime/read-static-text.js";
 import type { HnFeed } from "../../apps/hn/client/firebase.js";
 import type {

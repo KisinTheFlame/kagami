@@ -1,4 +1,4 @@
-import type { NapcatChatTarget } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 
 /** 一条因 AI 味过高被拦下、等待用户二次确认的发言草稿。 */
 export interface PendingDraft {

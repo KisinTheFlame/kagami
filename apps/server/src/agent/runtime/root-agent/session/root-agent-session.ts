@@ -7,7 +7,7 @@ import {
   createStoryRecallMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
-import type { NapcatChatTarget } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 import type {
   CurrentPersistedRootAgentSessionSnapshot,
   PersistedRootAgentSessionSnapshot,

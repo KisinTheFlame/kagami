@@ -14,7 +14,7 @@ import {
   type NapcatReceiveMessageSegment,
   type NapcatReceiveReplySegment,
   type NapcatReceiveTextSegment,
-} from "../../schema/napcat-segment.js";
+} from "../../domain/napcat-segment.js";
 import { QQ_FACE_NAMES, normalizeFaceText, resolveFaceId } from "./qq-face-names.js";
 
 export type { NapcatReceiveAtSegment, NapcatReceiveMessageSegment, NapcatReceiveTextSegment };

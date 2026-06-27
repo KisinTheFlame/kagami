@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { DefaultNapcatImageMessageAnalyzer } from "../../src/napcat/service/napcat-gateway/image-message-analyzer.js";
+import { DefaultNapcatImageMessageAnalyzer } from "../../src/napcat/application/napcat-gateway/image-message-analyzer.js";
 import { type VisionAgent } from "../../src/agent/capabilities/vision/application/vision-agent.js";
 import type { OssClient } from "../../src/oss/oss-client.js";
-import type { ImageAssetDao } from "../../src/napcat/dao/image-asset.dao.js";
+import type { ImageAssetDao } from "../../src/napcat/infra/image-asset.dao.js";
 import { initTestLogger } from "./napcat-gateway.test-helper.js";
 
 function createImageSegment(url: string, file = "image.png") {

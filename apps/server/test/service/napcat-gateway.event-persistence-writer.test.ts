@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { NapcatEventPersistenceWriter } from "../../src/napcat/service/napcat-gateway/event-persistence-writer.js";
+import { NapcatEventPersistenceWriter } from "../../src/napcat/application/napcat-gateway/event-persistence-writer.js";
 import {
   createNapcatEventDao,
   createNapcatGroupMessageDao,
