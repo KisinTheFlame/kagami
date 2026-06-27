@@ -67,6 +67,8 @@ import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/pri
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
+import { PrismaBrowserCredentialDao } from "../agent/capabilities/browser/infra/prisma-browser-credential.dao.js";
+import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
@@ -220,6 +222,7 @@ export async function buildAgentRuntime({
   };
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
+  const browserCredentialDao = new PrismaBrowserCredentialDao({ database });
 
   // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
   // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
@@ -251,6 +254,7 @@ export async function buildAgentRuntime({
   appManager.register(new IthomeApp({ ithomeService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
+  appManager.register(new BrowserApp({ credentialDao: browserCredentialDao }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 

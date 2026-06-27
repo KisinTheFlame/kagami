@@ -143,6 +143,15 @@ server:
       responseMaxChars: 8000         # open_hn_thread 评论总字符预算，超出截断
       searchHitsLimit: 15            # search_hn 返回命中数
       userActivityLimit: 10          # open_hn_user 近期发言条数
+    browser:
+      # 浏览器 App（CloakBrowser 有头驱动，登录 + 交互式逛网站）。整段可省略，全部字段都有默认值。
+      # 只有这 4 个字段是环境相关的；humanize / viewport / 超时 / 截图尺寸等是代码常量，不在此暴露。
+      headless: false                       # 有头/无头。本机带显示用 false 肉眼盯；无显示服务器需 true + Xvfb
+      userDataDir: data/browser/default      # 持久 profile 目录（登录态跨重启）。相对路径相对进程 cwd
+      # proxy: http://user:pass@host:port    # 可选代理
+      # licenseKey: ""                        # 可选 CloakBrowser Pro license（也可用 CLOAKBROWSER_LICENSE_KEY 环境变量）
+      # 凭据不在这里：网站账号密码存 SQLite 的 browser_credential 表（Kagami 运行期可自管），
+      # type(secret_handle) 时按 handle 取、明文只在 fill 层停留、永不进上下文。
 
 # 自建对象存储服务（@kagami/oss，独立进程）。其余实现细节（db/blob 路径、body 上限）是代码常量。
 oss:
