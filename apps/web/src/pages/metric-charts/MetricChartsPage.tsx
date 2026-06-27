@@ -655,14 +655,17 @@ function MetricChartCard({
                   width={56}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={value => formatMetricValue(value)}
+                  tickFormatter={(value: number | string) => formatMetricValue(value)}
                 />
                 <ChartTooltip
                   content={
                     <ChartTooltipContent
                       indicator="line"
                       labelFormatter={(_label, payload) => {
-                        const bucketStart = payload?.[0]?.payload?.bucketStart;
+                        const entry = payload?.[0]?.payload as
+                          | { bucketStart?: unknown }
+                          | undefined;
+                        const bucketStart = entry?.bucketStart;
                         return typeof bucketStart === "string"
                           ? formatFullDateTime(bucketStart)
                           : "未知时间";

@@ -37,7 +37,7 @@ export function createTeiEmbeddingGemmaProvider(
       }
 
       const payload: unknown = await response.json();
-      const embedding = Array.isArray(payload) ? payload[0] : undefined;
+      const embedding: unknown = Array.isArray(payload) ? payload[0] : undefined;
       if (!Array.isArray(embedding) || embedding.some(value => typeof value !== "number")) {
         throw new BizError({
           message: "TEI Embedding Gemma 响应缺少合法 embedding",
@@ -48,7 +48,7 @@ export function createTeiEmbeddingGemmaProvider(
       return {
         provider: "tei-embedding-gemma",
         model: options.model,
-        embedding,
+        embedding: embedding as number[],
       };
     },
   };

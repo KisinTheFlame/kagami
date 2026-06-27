@@ -27,7 +27,7 @@ export function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJ
 
 export function normalizeInputJsonValue(value: unknown): Prisma.InputJsonValue {
   try {
-    const serialized = JSON.stringify(value, (_key, currentValue) => {
+    const serialized = JSON.stringify(value, (_key: string, currentValue: unknown) => {
       if (currentValue instanceof Date) {
         return currentValue.toISOString();
       }

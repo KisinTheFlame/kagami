@@ -529,7 +529,7 @@ function UsageTrendPanel({
             tickLine={false}
             axisLine={false}
             minTickGap={24}
-            tickFormatter={value => formatTrendAxisTick(value, data.range)}
+            tickFormatter={(value: string) => formatTrendAxisTick(value, data.range)}
           />
           <YAxis
             domain={[0, 100]}
