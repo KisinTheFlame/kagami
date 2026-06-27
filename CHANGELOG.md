@@ -9,6 +9,7 @@
 
 ### Removed
 
+- agent-runtime: 删除两个**零引用的 `@deprecated` 兼容别名**——`AgentRuntime`（`TaskAgent` 的类型别名）与 `TaskAgentRuntime`（`BaseTaskAgent` 的空子类）。二者均诞生于早期重构（抽出 runtime 包 / 拆 ReAct 内核）时为平滑迁移留的过渡垫片，迁移完成后全仓库已无任何调用方：新名 `TaskAgent` / `BaseTaskAgent` 已全面接管（各 10+ 处引用），旧别名 0 处使用。`@kagami/agent-runtime` 是 `private` 包、不发布、唯一消费方为 monorepo 内的 `apps/server`，不存在需向后兼容的外部消费者——任何重命名都能在一个 PR 内原子改完，别名没有保护对象；`@deprecated Use X instead` 本身就是"催迁移、预告删除"的措辞而非"长期保留"。同步撤掉 `index.ts` 的对应 re-export。纯死代码清理，行为零变化（[#117](https://github.com/KisinTheFlame/kagami/pull/117)）
 - agent: 清除**冷启动补水死链**与 **napcat 事件死分支**。`C2` 定调（不恢复冷启动补水、改 App 状态持久化 [#108](https://github.com/KisinTheFlame/kagami/pull/108)）后，这条链已是纯死代码：删 orphaned 的 `startup-context-hydrator.ts`（无人 import，却是唯一往主事件队列 enqueue napcat Event 的地方 → 永不执行）+ 其测试；删 `hydrateColdStartAgentContext` 的 no-op 调用链（index → server-runtime → factory 三处）与失去用途的 `restoredRootAgentSnapshot` 门控标志（`restorePersistedSnapshot` 本体保留、snapshot 恢复照常）；删 `hydrateStartupEvents`（host + RootLoopAgent 两处，唯一调用方即上面的 hydrator）；`Event` 联合收紧——移除 `napcat_group_message` / `napcat_private_message` / `napcat_friend_list_updated` 三个变体（只有死掉的 hydrator 在 enqueue），`createMessagesFromEvent` / `summarizeEvent` 的对应分支随之删除。行为零变化：napcat 事件本就直达 `QqApp.handleNapcatEvent`（#106 收纳后），这些路径运行时从不被触达；`event→ContextItem` 渲染入口保留（`createMessagesFromEvent` 恒返 `[]`）为未来新事件类型留口子。净删 ~569 行（[#111](https://github.com/KisinTheFlame/kagami/pull/111)）
 
 ### Added
