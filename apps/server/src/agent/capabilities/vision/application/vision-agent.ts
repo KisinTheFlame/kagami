@@ -47,7 +47,9 @@ export class VisionAgent {
               },
               {
                 type: "image",
-                content: input.content,
+                // LlmImageContentPart.content 现为 base64 字符串（JSON 安全）；
+                // VisionAgent 入参仍收 Buffer 字节，在此边缘转一次。
+                content: input.content.toString("base64"),
                 mimeType: input.mimeType,
                 filename: input.filename,
               },

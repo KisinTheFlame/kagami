@@ -18,11 +18,13 @@ All architecture, modules, and capabilities described below should be understood
 
 ## Repository Positioning
 
-Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing four workspace packages:
+Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing six workspace packages:
 
 - `apps/server`: Fastify backend service (`@kagami/server`)
 - `apps/web`: React frontend admin console (`@kagami/web`)
-- `packages/agent-runtime`: generic Agent Runtime kernel (`@kagami/agent-runtime`)
+- `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone process with zero `@kagami/*` dependencies)
+- `packages/agent-runtime`: generic Agent / App framework kernel (`@kagami/agent-runtime`)
+- `packages/llm`: LLM message and tool type contracts shared across frontend / backend / kernel (`@kagami/llm`)
 - `packages/shared`: schemas and utilities shared between frontend and backend (`@kagami/shared`)
 
 The workspace definition lives at the repository root in `pnpm-workspace.yaml`, currently covering `apps/*` and `packages/*`. Backend runtime configuration is unified under `config.yaml` at the repository root.
@@ -33,8 +35,10 @@ The workspace definition lives at the repository root in `pnpm-workspace.yaml`, 
 apps/
   server/   Fastify backend, NapCat integration, Kagami agent business layer
   web/      React admin console
+  oss/      Self-hosted content-addressed object storage (standalone process)
 packages/
-  agent-runtime/  Generic Agent Runtime abstractions and tool catalog
+  agent-runtime/  Generic Agent / App framework abstractions and tool catalog
+  llm/            Shared LLM message / tool type contracts
   shared/         Frontend/backend shared schemas / DTOs / utils
 ```
 
@@ -66,38 +70,15 @@ Notes:
 
 - The repository does not provide a unified root `pnpm dev` script.
 - `@kagami/server` currently exposes `build`, `typecheck`, `test`, `test:watch`, and `db:*` scripts.
-- `@kagami/web`, `@kagami/agent-runtime`, and `@kagami/shared` currently expose `build` and `typecheck`.
-- Only `@kagami/server` declares a test script.
+- `@kagami/agent-runtime` exposes `build`, `typecheck`, `test`, `test:watch`; `@kagami/oss` exposes `build`, `typecheck`, `test`, `test:watch`, `start`.
+- `@kagami/web` and `@kagami/shared` expose `build` and `typecheck`.
+- `@kagami/server`, `@kagami/agent-runtime`, and `@kagami/oss` declare test scripts.
 
 ## Configuration
 
 - Provide a real `config.yaml` at the repository root.
 - See [config.yaml.example](./config.yaml.example) for the field structure.
 - The service reads and validates `config.yaml` once at startup; changes require a restart to take effect.
-
-Key configuration sections:
-
-- `server.databaseUrl`, `server.port`
-- `server.agent.contextCompactionTotalTokenThreshold`, `server.agent.llmRetryBackoffMs`, `server.agent.waitToolMaxWaitMs`, `server.agent.notificationBatchWindowMs`
-- `server.agent.story.batchSize`, `idleFlushMs`, `memory.embedding`, `memory.retrieval`, `recall.topK`, `recall.scoreThreshold`
-- `server.news.ithome.pollIntervalMs`, `recentArticleLimit`, `articleMaxChars`
-- `server.napcat.wsUrl`, `server.napcat.reconnectMs`, `server.napcat.requestTimeoutMs`
-- `server.napcat.listenGroupIds`, `server.napcat.startupContextRecentMessageCount`
-- `server.llm.timeoutMs`, `server.llm.authUsageRefreshIntervalMs`
-- `server.llm.codexAuth`, `server.llm.claudeCodeAuth`
-- `server.llm.providers.deepseek`, `server.llm.providers.openai`, `server.llm.providers.openaiCodex`, `server.llm.providers.claudeCode`
-- `server.llm.usages.agent`, `storyAgent`, `contextSummarizer`, `vision`, `webSearchAgent`
-- `server.tavily.apiKey`
-- `server.bot.qq`, `server.bot.creator`
-
-Configuration conventions:
-
-- Database commands uniformly read `server.databaseUrl` from `config.yaml`.
-- When modifying the config schema, the following must be updated together:
-  - `apps/server/src/config/config.loader.ts`
-  - `config.yaml`
-  - `config.yaml.example`
-- `server.llm.usages` must fully provide the four attempt chains: `agent`, `contextSummarizer`, `vision`, `webSearchAgent`.
 
 ## Database Migrations
 
@@ -124,25 +105,27 @@ The backend has been reorganized into a "flat modules + in-module layering" stru
 
 Main modules:
 
-- `app/`: application wiring, health checks, startup context hydration
 - `common/`: shared contracts, error handling, HTTP helpers, runtime utilities
-- `config/`: configuration loading and runtime config management
+- `config/`: configuration schema, loading, and runtime config management
 - `db/`: Prisma client and database infrastructure
 - `logger/`: log runtime, serializer, sink, log DAO
 - `auth/`: OAuth, callback service, secret store, usage cache, usage trend, unified auth HTTP endpoints
 - `llm/`: providers, chat client, embedding, playground, related DAOs
-- `napcat/`: NapCat gateway, message sending, event/group message persistence and HTTP endpoints
-- `news/`: IThome and other news source polling, article persistence — provides the "read the news" kind of life input for the Agent
+- `napcat/`: NapCat protocol adapter (gateway transport, inbound normalization, image analysis, persistence) — the gateway instance is owned by the QQ App, just one of the Agent's event sources
 - `metric/`: runtime metrics and visualization data endpoints
-- `agent/`: Kagami-specific agent runtime and capabilities
-- `ops/`: query endpoints for App Log, LLM Chat Call, Story, Agent Dashboard, NapCat history, etc.
+- `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
+- `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
+- `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction, story memory
+- `ops/`: query endpoints for App Log, LLM Chat Call, Story, main Agent context, NapCat history, etc.
+- `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / Story / gateway lifecycle
 
-`apps/server/src/agent` is organized into `runtime/` and `capabilities/`:
+`apps/server/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
 
-- `runtime/`: Kagami-specific runtime such as root-agent, session, context, event queue
-- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `story`, `rag`, `news`, `vision`, `web-search`
+- `runtime/`: Kagami-specific runtime such as `RootAgentRuntime`, session (the App launcher), `NotificationCenter`, event queue, context rendering, App-state persistence
+- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `story`, `ithome`, `vision`, `web-search`, `browser`, `terminal`, `todo`
+- `apps/`: the phone-OS Apps (places reachable via `enter` from the Portal), currently `qq`, `ithome`, `hn`, `calc`, `clock`, `browser`, `terminal`, `todo`
 
-Each capability can be understood as "one more way for the Agent to live": `news` lets him read IThome, `story` lets him remember events, `rag` lets him recall, `web-search` lets him look things up online, and `vision` lets him see images. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
+Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge from Apps/sources to the Agent — sources fold signals into notifications, which it batches and enqueues to wake the Agent. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `story` lets him remember and recall, `web-search` lets him look things up, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
 
 Main endpoint groups:
 
@@ -157,20 +140,26 @@ Main endpoint groups:
 - `/llm/playground-tools`
 - `/llm/chat`
 - `/napcat/group/send`
+- `/napcat/private/send`
 - `/app-log/query`
 - `/llm-chat-call/query`
+- `/llm-chat-call/:id`
 - `/napcat-event/query`
 - `/napcat-group-message/query`
 - `/story/query`
-- `/agent-dashboard/*`
+- `/main-agent-context/recent`
+- `/main-agent-context/compact`
 - `/metric-chart/*`
+- `/scheduler/*`
 
 ### Frontend
 
 The frontend is a React admin console used to observe the Agent's "life state" (what he has recently been thinking, doing, and seeing). Main pages:
 
-- `/agent-dashboard`: Agent overview home (default entry)
+- `/main-agent-context`: main Agent context (default entry)
 - `/auth/:provider`
+- `/control-panel`
+- `/scheduler-tasks`
 - `/llm-playground`
 - `/llm-history`
 - `/app-log-history`
@@ -192,20 +181,21 @@ Notes:
 
 ### Agent Runtime Package
 
-- `packages/agent-runtime` only carries the generic Agent Runtime kernel, not Kagami-specific semantics.
-- Core exports currently include `AgentRuntime`, `TaskAgentRuntime`, `Operation`, `ToolCatalog`, `ToolComponent`, and related abstractions.
+- `packages/agent-runtime` only carries the generic Agent / App framework kernel, not Kagami-specific semantics.
+- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/server`, not here.)
 - NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/server/src/agent`.
 
 ## Deployment
 
-- The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs).
+- The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages three processes.
 - The backend service `kagami-server` runs `apps/server/dist/index.js` and listens on `20003` by default.
 - The frontend service `kagami-web` runs `scripts/web-server.mjs` and listens on `20004` by default.
+- The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
 - The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.
 - Running `pnpm app:deploy` performs the build, Prisma migrations, PM2 reload/startOrReload, and `pm2 save`.
 
 Prerequisites:
 
-- The host must provide PostgreSQL.
+- The database is an in-process SQLite file (default `data/sqlite/kagami.db`) — the host no longer needs to run an external database. It only needs to be able to compile native modules (`better-sqlite3`, `hnswlib-node`).
 - The host must provide Napcat.
-- `config.yaml` typically accesses these external dependencies via `localhost`.
+- `config.yaml` typically accesses Napcat via `localhost`.

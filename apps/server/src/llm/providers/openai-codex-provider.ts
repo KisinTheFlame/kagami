@@ -12,6 +12,7 @@ import type {
   LlmContentPart,
   LlmToolCall,
 } from "../types.js";
+import { imageContentToBase64 } from "@kagami/llm";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
@@ -340,7 +341,7 @@ function toCodexInputContentPart(part: LlmContentPart): Record<string, unknown> 
 
   return {
     type: "input_image",
-    image_url: `data:${part.mimeType};base64,${part.content.toString("base64")}`,
+    image_url: `data:${part.mimeType};base64,${imageContentToBase64(part.content)}`,
   };
 }
 

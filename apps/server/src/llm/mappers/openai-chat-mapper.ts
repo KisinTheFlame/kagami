@@ -14,6 +14,7 @@ import type {
   LlmToolCall,
   LlmUsage,
 } from "../types.js";
+import { imageContentToBase64 } from "@kagami/llm";
 import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
 
 type OpenAiStyleUsage = {
@@ -98,7 +99,7 @@ function toOpenAiUserContentPart(part: LlmContentPart): ChatCompletionContentPar
   return {
     type: "image_url",
     image_url: {
-      url: `data:${part.mimeType};base64,${part.content.toString("base64")}`,
+      url: `data:${part.mimeType};base64,${imageContentToBase64(part.content)}`,
     },
   };
 }

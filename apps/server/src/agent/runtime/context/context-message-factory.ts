@@ -34,7 +34,7 @@ export function createUserMessage(content: string): UserMessage {
  */
 export function createUserImageMessage(
   text: string,
-  image: { content: Buffer; mimeType: string; filename?: string },
+  image: { content: string; mimeType: string; filename?: string },
 ): UserMessage {
   const parts: LlmContentPart[] = [
     { type: "text", text },

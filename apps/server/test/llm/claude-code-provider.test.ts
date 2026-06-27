@@ -545,7 +545,7 @@ describe("createClaudeCodeProvider", () => {
               {
                 type: "image",
                 mimeType: "image/png",
-                content: Buffer.from("image"),
+                content: Buffer.from("image").toString("base64"),
               },
             ],
           },

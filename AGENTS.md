@@ -150,7 +150,7 @@ pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
 
 补充说明：
 
-- 当前 `@kagami/server` 与 `@kagami/agent-runtime` 声明了测试脚本（后者用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
+- 当前 `@kagami/server`、`@kagami/agent-runtime`、`@kagami/oss` 声明了测试脚本（agent-runtime 用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
 
 ## 数据库与配置
 
@@ -187,8 +187,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
-  - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationBatchWindowMs`
-  - `server.agent.story.batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
+  - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationLeadingWindowMs`、`notificationBatchWindowMs`
+  - `server.agent.story.enabled`、`batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
+  - `server.agent.messaging.aiTone`（小镜发言 AI 味实时门控的权重与阈值）
   - `server.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
   - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
   - `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
@@ -196,6 +197,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
   - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
   - `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
+  - `server.oss.baseUrl`（自建对象存储 `apps/oss` 进程地址；图片入 OSS 用）
+  - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
   - `server.tavily.apiKey`
   - `server.bot.qq`、`server.bot.creator`
 
@@ -240,7 +243,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 ### Agent Runtime 包约定
 
 - `packages/agent-runtime` 只承载通用 Agent Runtime 内核，不承载 Kagami 项目语义。
-- 允许放入该包的内容包括：`AgentRuntime`、`TaskAgentRuntime`、`Operation`、`Tool` 抽象、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等纯运行时能力。
+- 允许放入该包的内容包括：`TaskAgent`、`BaseTaskAgent`、`Operation`、`Tool` 抽象、`App` / `AppManager` / `AppStateStore` 框架、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等纯运行时能力。
 - 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 实现放入该包。
 - `apps/server` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
 
@@ -263,7 +266,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `scheduler/`：后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）
 - `oss/`：server 侧对象存储 HTTP 客户端，把图片 PUT 进自建 `apps/oss`
 - `agent/`：Kagami 的 Agent 业务层，负责手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩、故事记忆、RAG 等
-- `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、Story、Agent Dashboard、NapCat history
+- `ops/`：后台查询与观测接口，例如 app log、LLM history、embedding cache、Story、main-agent-context、NapCat history
 - `app/`：最高层运行时装配，负责模块 wiring、Fastify 路由注册、健康检查、Agent / Story / 网关生命周期编排
 
 模块内优先按垂直分层组织，常见层次包括：
@@ -288,8 +291,8 @@ Agent 相关补充约定：
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
 - `apps/server/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
-  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`terminal`
-  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`terminal`
+  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
+  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`terminal`、`todo`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
@@ -301,16 +304,18 @@ Agent 相关补充约定：
 - 健康检查：`/health`
 - OAuth 与配额管理：`/auth/:provider/status`、`/auth/:provider/login-url`、`/auth/:provider/logout`、`/auth/:provider/refresh`、`/auth/:provider/usage-limits`、`/auth/:provider/usage-trend`
 - LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
-- Napcat 主动发送：`/napcat/group/send`
+- Napcat 主动发送：`/napcat/group/send`、`/napcat/private/send`
 - 观测与历史查询：`/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query`、`/story/query`
-- Agent 状态与指标：`/agent-dashboard/*`、`/metric-chart/*`
+- Agent 状态与指标：`/main-agent-context/recent`、`/main-agent-context/compact`、`/metric-chart/*`、`/scheduler/*`
 
 ### 前端（`@kagami/web`）
 
 前端是一个 React 管理台，用于观测 Agent 的"生活状态"。使用 `react-router-dom`，当前主要页面包括：
 
-- `/agent-dashboard`：Agent 总览首页（默认入口）
+- `/main-agent-context`：主 Agent 当前上下文（默认入口）
 - `/auth/:provider`：认证管理页
+- `/control-panel`：控制面板（含上下文压缩等操作）
+- `/scheduler-tasks`：后台任务面板
 - `/llm-playground`：LLM Playground
 - `/llm-history`：LLM 调用历史
 - `/app-log-history`：应用日志历史
@@ -345,6 +350,7 @@ Agent 相关补充约定：
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
 - 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。
 - 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
+- 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
 - 部署机需要能编译/安装原生模块（`better-sqlite3`、`hnswlib-node`）；这些依赖的构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行。

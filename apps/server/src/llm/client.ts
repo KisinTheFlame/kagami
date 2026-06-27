@@ -17,6 +17,7 @@ import type {
   LlmChatResponsePayload,
   LlmToolChoice,
 } from "./types.js";
+import { imageContentToBase64 } from "@kagami/llm";
 
 const llmClientLogger = new AppLogger({ source: "llm.client" });
 
@@ -500,7 +501,9 @@ function toRecordableContentPart(part: LlmContentPart): Record<string, unknown> 
     type: "image",
     mimeType: part.mimeType,
     filename: part.filename,
-    sizeBytes: part.content.byteLength,
+    // content 一般是 base64 字符串；imageContentToBase64 兜底已被 JSON 毒过的历史图片
+    // （{type:"Buffer",data:[]} 对象），避免对对象直接 Buffer.from 崩溃。解码回字节数仅用于记录。
+    sizeBytes: Buffer.from(imageContentToBase64(part.content), "base64").byteLength,
   };
 }
 

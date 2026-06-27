@@ -101,7 +101,7 @@ function toLlmPart(part: PlaygroundContentPart): LlmContentPart {
   };
 }
 
-function parseImageDataUrl(dataUrl: string): { mimeType: string; content: Buffer } {
+function parseImageDataUrl(dataUrl: string): { mimeType: string; content: string } {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
   if (!match) {
     throw new BizError({
@@ -112,14 +112,16 @@ function parseImageDataUrl(dataUrl: string): { mimeType: string; content: Buffer
 
   const [, mimeType, encoded] = match;
   try {
-    const content = Buffer.from(encoded, "base64");
-    if (content.byteLength === 0) {
+    // 校验 base64 合法且非空，但 LlmImageContentPart.content 直接存 base64 字符串
+    // （JSON 安全），不再转成 Buffer。
+    const decoded = Buffer.from(encoded, "base64");
+    if (decoded.byteLength === 0) {
       throw new Error("empty");
     }
 
     return {
       mimeType,
-      content,
+      content: encoded,
     };
   } catch (error) {
     throw new BizError({

@@ -21,7 +21,7 @@ describe("toOpenAiChatRequest", () => {
               },
               {
                 type: "image",
-                content: Buffer.from("hello"),
+                content: Buffer.from("hello").toString("base64"),
                 mimeType: "image/png",
                 filename: "hello.png",
               },

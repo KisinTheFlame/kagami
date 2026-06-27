@@ -16,7 +16,11 @@ import { NapcatReceiveMessageSegmentSchema } from "../../../../napcat/domain/nap
 
 const DateValueSchema = z.coerce.date();
 const JsonRecordSchema = z.record(z.string(), z.unknown());
-const BufferSchema = z.custom<Buffer>(() => true);
+// 图片内容现为 base64 字符串。恢复期永不拒绝（含被 JSON 毒过的旧快照里
+// {type:"Buffer",data:[...]} 残骸——z.string() 强校验会让旧中毒快照恢复失败、丢上下文）。
+// 对象形态的恢复兜底在两个下游消费点用 imageContentToBase64 完成：provider 发送映射、
+// client 记录侧；中毒对象随上下文压缩自然老化。
+const ImageContentSchema = z.custom<string>(() => true);
 
 const LlmTextContentPartSchema: z.ZodType<LlmTextContentPart> = z.object({
   type: z.literal("text"),
@@ -25,7 +29,7 @@ const LlmTextContentPartSchema: z.ZodType<LlmTextContentPart> = z.object({
 
 const LlmImageContentPartSchema: z.ZodType<LlmImageContentPart> = z.object({
   type: z.literal("image"),
-  content: BufferSchema,
+  content: ImageContentSchema,
   mimeType: z.string(),
   filename: z.string().optional(),
 });

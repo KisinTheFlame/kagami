@@ -131,7 +131,7 @@ describe("DefaultLlmPlaygroundService", () => {
               },
               {
                 type: "image",
-                content: Buffer.from("image-bytes"),
+                content: Buffer.from("image-bytes").toString("base64"),
                 mimeType: "image/png",
                 filename: "cat.png",
               },

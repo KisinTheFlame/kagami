@@ -19,12 +19,47 @@ export type LlmTextContentPart = {
 
 export type LlmImageContentPart = {
   type: "image";
-  content: Buffer;
+  /**
+   * 图片内容的 **base64 字符串**（裸 base64，不含 `data:` 前缀）。
+   *
+   * 刻意用 string 而非 Buffer：图片内容部件会进入主 Agent 的持久上下文（快照 / ledger
+   * 都按 JSON 存），而 Buffer 经 JSON 往返会变成 `{ type:"Buffer", data:[...] }` 不再是
+   * Buffer——provider 侧 `.toString("base64")` 就会产出 "[object Object]" 这种无效 base64。
+   * string 是 JSON 原生、往返不变、且正是各 provider wire 格式所需。生产者在边缘用
+   * `buffer.toString("base64")` 转一次即可。
+   */
+  content: string;
   mimeType: string;
   filename?: string;
 };
 
 export type LlmContentPart = LlmTextContentPart | LlmImageContentPart;
+
+/**
+ * 把图片内容归一成 base64 字符串。防御性：兼容三种历史/运行时形态——
+ * - base64 字符串（当前契约）：原样返回；
+ * - Node Buffer（同进程内存中的图，如 vision/playground 同请求构造）：toString("base64")；
+ * - JSON 往返后的 Buffer 残骸 `{ type:"Buffer", data:number[] }`（旧持久化数据 / 已中毒的
+ *   历史消息）：Buffer.from(data) 还原后转 base64。
+ *
+ * 这让 provider 对"已经被 JSON 毒过的历史图片消息"也能恢复，无需手动改库。
+ */
+export function imageContentToBase64(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Buffer.isBuffer(content)) {
+    return content.toString("base64");
+  }
+  if (
+    content !== null &&
+    typeof content === "object" &&
+    Array.isArray((content as { data?: unknown }).data)
+  ) {
+    return Buffer.from((content as { data: number[] }).data).toString("base64");
+  }
+  return "";
+}
 
 export type LlmMessage =
   | { role: "user"; content: string | LlmContentPart[] }
