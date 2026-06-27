@@ -1,9 +1,9 @@
 import type { ConfigManager } from "../../../config/config.manager.js";
-import type { NapcatQqMessageDao } from "../../../napcat/dao/napcat-group-message.dao.js";
-import { DefaultNapcatGatewayService } from "../../../napcat/service/napcat-gateway.impl.service.js";
-import type { NapcatAgentEvent } from "../../../napcat/service/napcat-gateway.service.js";
-import type { NapcatGatewayPersistenceWriter } from "../../../napcat/service/napcat-gateway/event-persistence-writer.js";
-import type { NapcatImageMessageAnalyzer } from "../../../napcat/service/napcat-gateway/image-message-analyzer.js";
+import type { NapcatQqMessageDao } from "../../../napcat/infra/napcat-group-message.dao.js";
+import { DefaultNapcatGatewayService } from "../../../napcat/application/napcat-gateway.impl.service.js";
+import type { NapcatAgentEvent } from "../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatGatewayPersistenceWriter } from "../../../napcat/application/napcat-gateway/event-persistence-writer.js";
+import type { NapcatImageMessageAnalyzer } from "../../../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../../capabilities/messaging/application/agent-message.service.js";
 import { DefaultAgentMessageService } from "../../capabilities/messaging/application/default-agent-message.service.js";
 import { PendingDraftStore } from "../../capabilities/messaging/application/pending-draft.store.js";

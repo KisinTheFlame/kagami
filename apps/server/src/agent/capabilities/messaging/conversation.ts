@@ -4,7 +4,7 @@ import type {
   NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/service/napcat-gateway.service.js";
+} from "../../../napcat/application/napcat-gateway.service.js";
 import {
   type ConversationId,
   createGroupConversationId,

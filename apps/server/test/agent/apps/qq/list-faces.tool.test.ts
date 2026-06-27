@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ListFacesTool } from "../../../../src/agent/apps/qq/tools/list-faces.tool.js";
-import { QQ_FACE_NAMES } from "../../../../src/napcat/service/napcat-gateway/qq-face-names.js";
+import { QQ_FACE_NAMES } from "../../../../src/napcat/application/napcat-gateway/qq-face-names.js";
 
 describe("ListFacesTool", () => {
   it("lists every sendable face name with usage guidance", async () => {

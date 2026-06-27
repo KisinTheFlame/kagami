@@ -4,7 +4,7 @@ import {
   formatImageSegmentText,
   parseOutgoingMessageSegments,
   renderSupportedMessageSegments,
-} from "../../src/napcat/service/napcat-gateway/shared.js";
+} from "../../src/napcat/application/napcat-gateway/shared.js";
 
 describe("parseOutgoingMessageSegments", () => {
   it("should keep plain text as a single text segment", () => {

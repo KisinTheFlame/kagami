@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "../../src/db/client.js";
-import { PrismaImageAssetDao } from "../../src/napcat/dao/impl/image-asset.impl.dao.js";
+import { PrismaImageAssetDao } from "../../src/napcat/infra/impl/image-asset.impl.dao.js";
 
 describe("PrismaImageAssetDao", () => {
   it("findByFileId returns the stored resid + description", async () => {

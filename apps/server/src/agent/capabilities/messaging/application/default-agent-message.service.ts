@@ -1,4 +1,4 @@
-import type { NapcatGatewayService } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatGatewayService } from "../../../../napcat/application/napcat-gateway.service.js";
 import type { AgentMessageService } from "./agent-message.service.js";
 
 export class DefaultAgentMessageService implements AgentMessageService {

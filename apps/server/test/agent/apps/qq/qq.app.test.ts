@@ -6,8 +6,8 @@ import type { ToolComponent } from "@kagami/agent-runtime";
 import type {
   NapcatGatewayService,
   NapcatGroupMessageData,
-} from "../../../../src/napcat/service/napcat-gateway.service.js";
-import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/service/napcat-gateway/shared.js";
+} from "../../../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/application/napcat-gateway/shared.js";
 import { initTestLoggerRuntime } from "../../../helpers/logger.js";
 
 initTestLoggerRuntime();

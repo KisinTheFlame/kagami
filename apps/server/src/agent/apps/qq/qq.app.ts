@@ -13,7 +13,7 @@ import type {
   NapcatGatewayService,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/service/napcat-gateway.service.js";
+} from "../../../napcat/application/napcat-gateway.service.js";
 import {
   ChatNotificationDraft,
   detectBotMentioned,
