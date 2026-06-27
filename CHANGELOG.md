@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- llm/agent: 修复**多模态图片内容经持久化后 base64 失效**导致主 Agent 卡死的问题。`LlmImageContentPart.content` 原为 `Buffer`，而 Browser App 的 `screenshot` 是首个把图片放进**主 Agent 持久上下文**的场景——图片消息会随快照 / ledger 按 JSON 存，`Buffer` 经 JSON 往返变成 `{ type:"Buffer", data:[...] }` 不再是 Buffer，provider 侧 `part.content.toString("base64")` 于是产出 `"[object Object]"`，Claude API 报 `image.source.base64: invalid base64 data`；坏图留在历史里，每轮重发、每轮失败。修法：把 `LlmImageContentPart.content` 改为 **base64 字符串**（JSON 原生、往返不变、正是各 provider wire 格式所需），生产者（vision / playground / screenshot）在边缘 `toString("base64")` 一次；新增 `@kagami/llm` 导出 `imageContentToBase64(unknown)` 防御性归一，兼容 base64 字符串 / Buffer / `{type:"Buffer",data:[]}` 三态，让 4 个消费者（claude / openai-codex / openai-chat-mapper / 记录侧）对**已被 JSON 毒过的历史图片消息**也能恢复成合法 base64，无需手动改库；快照恢复 schema 放宽为永不拒绝（否则旧中毒快照恢复失败会丢上下文）。vision / playground 既有图片路径同步迁到字符串契约。新增 `imageContentToBase64` 三态回归测试（[#127](https://github.com/KisinTheFlame/kagami/pull/127)）
+
 ### Removed
 
 - agent-runtime: 删除两个**零引用的 `@deprecated` 兼容别名**——`AgentRuntime`（`TaskAgent` 的类型别名）与 `TaskAgentRuntime`（`BaseTaskAgent` 的空子类）。二者均诞生于早期重构（抽出 runtime 包 / 拆 ReAct 内核）时为平滑迁移留的过渡垫片，迁移完成后全仓库已无任何调用方：新名 `TaskAgent` / `BaseTaskAgent` 已全面接管（各 10+ 处引用），旧别名 0 处使用。`@kagami/agent-runtime` 是 `private` 包、不发布、唯一消费方为 monorepo 内的 `apps/server`，不存在需向后兼容的外部消费者——任何重命名都能在一个 PR 内原子改完，别名没有保护对象；`@deprecated Use X instead` 本身就是"催迁移、预告删除"的措辞而非"长期保留"。同步撤掉 `index.ts` 的对应 re-export。纯死代码清理，行为零变化（[#117](https://github.com/KisinTheFlame/kagami/pull/117)）

@@ -37,7 +37,12 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
     const appendEffect: RootAgentEffect = {
       type: "append_message",
       content: `<browser_screenshot url="${shot.url}"${input.reason ? ` reason="${input.reason}"` : ""} />`,
-      image: { content: shot.image, mimeType: shot.mimeType, filename: "screenshot.jpg" },
+      // content 用 base64 字符串：图片要进持久上下文（快照/ledger 走 JSON），Buffer 会被 JSON 毒坏。
+      image: {
+        content: shot.image.toString("base64"),
+        mimeType: shot.mimeType,
+        filename: "screenshot.jpg",
+      },
     };
     return {
       content: JSON.stringify({

@@ -1228,7 +1228,7 @@ describe("createLlmClient", () => {
                 },
                 {
                   type: "image",
-                  content: Buffer.from("image-bytes"),
+                  content: Buffer.from("image-bytes").toString("base64"),
                   mimeType: "image/png",
                   filename: "cat.png",
                 },
@@ -1264,7 +1264,7 @@ describe("createLlmClient", () => {
             },
             {
               type: "image",
-              content: Buffer.from("image-bytes"),
+              content: Buffer.from("image-bytes").toString("base64"),
               mimeType: "image/png",
               filename: "cat.png",
             },
@@ -1365,7 +1365,7 @@ describe("createLlmClient", () => {
                 },
                 {
                   type: "image",
-                  content: imageBytes,
+                  content: imageBytes.toString("base64"),
                   mimeType: "image/jpeg",
                 },
               ],
@@ -1398,7 +1398,7 @@ describe("createLlmClient", () => {
             },
             {
               type: "image",
-              content: imageBytes,
+              content: imageBytes.toString("base64"),
               mimeType: "image/jpeg",
             },
           ],
@@ -1497,7 +1497,7 @@ describe("createLlmClient", () => {
                 },
                 {
                   type: "image",
-                  content: imageBytes,
+                  content: imageBytes.toString("base64"),
                   mimeType: "image/png",
                 },
               ],
@@ -1530,7 +1530,7 @@ describe("createLlmClient", () => {
             },
             {
               type: "image",
-              content: imageBytes,
+              content: imageBytes.toString("base64"),
               mimeType: "image/png",
             },
           ],

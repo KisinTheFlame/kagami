@@ -11,6 +11,7 @@ import type {
   LlmChatResponsePayload,
   LlmContentPart,
 } from "../types.js";
+import { imageContentToBase64 } from "@kagami/llm";
 import { BizError } from "../../common/errors/biz-error.js";
 import type { Config } from "../../config/config.loader.js";
 import { AppLogger } from "../../logger/logger.js";
@@ -482,7 +483,9 @@ function toClaudeUserContentPart(part: LlmContentPart): Record<string, unknown> 
     source: {
       type: "base64",
       media_type: part.mimeType,
-      data: part.content.toString("base64"),
+      // content 现为 base64 字符串；imageContentToBase64 兜底已被 JSON 毒过的旧历史
+      // 图片（{type:"Buffer",data:[...]}）与残留的 Buffer 形态，恢复成合法 base64。
+      data: imageContentToBase64(part.content),
     },
   };
 }

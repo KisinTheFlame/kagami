@@ -500,7 +500,8 @@ function toRecordableContentPart(part: LlmContentPart): Record<string, unknown> 
     type: "image",
     mimeType: part.mimeType,
     filename: part.filename,
-    sizeBytes: part.content.byteLength,
+    // content 是 base64 字符串；解码回字节数用于记录展示。
+    sizeBytes: Buffer.from(part.content, "base64").byteLength,
   };
 }
 

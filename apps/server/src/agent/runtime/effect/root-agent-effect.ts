@@ -4,15 +4,16 @@ import type { AppId, Effect, ReplaceLeadingMessagesEffect } from "@kagami/agent-
  * 把 content（一段字符串）以 role=user 追加到主 Agent 上下文尾部。
  * 这是工具 / App 钩子 / 事件 handler "给 Agent 一段屏幕" 的标准方式。
  *
- * 可选 image：携带原图（Buffer）时，追加的是一条多模态 user 消息（文本 + 图片块），
+ * 可选 image：携带原图（base64 字符串）时，追加的是一条多模态 user 消息（文本 + 图片块），
  * 图片原图直接进上下文、不经 vision 转文字。用于 Browser App 的 screenshot。
- * KV 友好：仍只往尾部 append，不碰前缀。
+ * content 用 base64 字符串而非 Buffer：消息会进持久上下文（快照/ledger 走 JSON），
+ * Buffer 经 JSON 往返会坏掉。KV 友好：仍只往尾部 append，不碰前缀。
  */
 export type AppendMessageEffect = Effect & {
   readonly type: "append_message";
   readonly content: string;
   readonly image?: {
-    readonly content: Buffer;
+    readonly content: string;
     readonly mimeType: string;
     readonly filename?: string;
   };
