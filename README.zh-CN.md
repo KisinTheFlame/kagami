@@ -78,34 +78,6 @@ pnpm --filter @kagami/shared <script>
 - 字段结构参考 [config.yaml.example](./config.yaml.example)。
 - 服务启动时会一次性读取并校验 `config.yaml`；修改配置后需要重启服务生效。
 
-关键配置分区：
-
-- `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
-- `server.agent.contextCompactionTotalTokenThreshold`、`server.agent.llmRetryBackoffMs`、`server.agent.waitToolMaxWaitMs`、`server.agent.notificationLeadingWindowMs`、`server.agent.notificationBatchWindowMs`
-- `server.agent.story.enabled`、`batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
-- `server.agent.messaging.aiTone`（小镜发言 AI 味实时门控的权重与阈值）
-- `server.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
-- `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
-- `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
-- `server.llm.timeoutMs`、`server.llm.authUsageRefreshIntervalMs`
-- `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
-- `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
-- `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
-- `server.oss.baseUrl`（自建对象存储 `apps/oss` 进程地址；图片入 OSS 用）
-- `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
-- `server.tavily.apiKey`
-- `server.bot.qq`、`server.bot.creator`
-- 顶层 `oss.port`：独立 `apps/oss` 进程自身的 localhost HTTP 监听端口（与 `server.oss.baseUrl` 区分，后者是 server 访问它的地址）
-
-配置约定：
-
-- 数据库相关命令统一读取 `config.yaml` 中的 `server.databaseUrl`。
-- 修改配置 schema 时，必须同步更新：
-  - `apps/server/src/config/config.loader.ts`
-  - `config.yaml`
-  - `config.yaml.example`
-- `server.llm.usages` 需要提供 `agent`、`contextSummarizer`、`vision`、`webSearchAgent`；`storyAgent` 可选，缺省时回退到 `agent`。
-
 ## 数据库迁移
 
 在仓库根目录执行：

@@ -80,34 +80,6 @@ Notes:
 - See [config.yaml.example](./config.yaml.example) for the field structure.
 - The service reads and validates `config.yaml` once at startup; changes require a restart to take effect.
 
-Key configuration sections:
-
-- `server.databaseUrl` (SQLite `file:` path), `server.port`
-- `server.agent.contextCompactionTotalTokenThreshold`, `server.agent.llmRetryBackoffMs`, `server.agent.waitToolMaxWaitMs`, `server.agent.notificationLeadingWindowMs`, `server.agent.notificationBatchWindowMs`
-- `server.agent.story.enabled`, `batchSize`, `idleFlushMs`, `memory.embedding`, `memory.vectorIndexPath`, `memory.retrieval`, `recall.topK`, `recall.scoreThreshold`
-- `server.agent.messaging.aiTone` (real-time AI-tone gate weights / threshold for Kagami's speech)
-- `server.ithome.pollIntervalMs`, `recentArticleLimit`, `articleMaxChars`
-- `server.napcat.wsUrl`, `server.napcat.reconnectMs`, `server.napcat.requestTimeoutMs`
-- `server.napcat.listenGroupIds`, `server.napcat.startupContextRecentMessageCount`
-- `server.llm.timeoutMs`, `server.llm.authUsageRefreshIntervalMs`
-- `server.llm.codexAuth`, `server.llm.claudeCodeAuth`
-- `server.llm.providers.deepseek`, `server.llm.providers.openai`, `server.llm.providers.openaiCodex`, `server.llm.providers.claudeCode`
-- `server.llm.usages.agent`, `storyAgent`, `contextSummarizer`, `vision`, `webSearchAgent`
-- `server.oss.baseUrl` (address of the self-hosted `apps/oss` process; used to store images)
-- `server.apps.*` (per-App config, e.g. `calc.precision`, `terminal.*`, `hn.*`)
-- `server.tavily.apiKey`
-- `server.bot.qq`, `server.bot.creator`
-- top-level `oss.port`: the standalone `apps/oss` process's own localhost HTTP listen port (separate from `server.oss.baseUrl`, which is how the server reaches it)
-
-Configuration conventions:
-
-- Database commands uniformly read `server.databaseUrl` from `config.yaml`.
-- When modifying the config schema, the following must be updated together:
-  - `apps/server/src/config/config.loader.ts`
-  - `config.yaml`
-  - `config.yaml.example`
-- `server.llm.usages` must provide `agent`, `contextSummarizer`, `vision`, and `webSearchAgent`; `storyAgent` is optional and falls back to `agent` when omitted.
-
 ## Database Migrations
 
 From the repository root:
