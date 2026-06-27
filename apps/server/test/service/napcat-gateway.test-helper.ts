@@ -98,6 +98,7 @@ export function createConfigManager(): ConfigManager {
         contextCompactionTotalTokenThreshold: 150_000,
         llmRetryBackoffMs: 30_000,
         waitToolMaxWaitMs: 600_000,
+        notificationLeadingWindowMs: 10_000,
         notificationBatchWindowMs: 30_000,
         story: {
           enabled: true,
