@@ -164,15 +164,6 @@ export abstract class BaseTaskAgent<
   }): Promise<TOutput> | TOutput;
 }
 
-/**
- * @deprecated Use BaseTaskAgent instead.
- */
-export abstract class TaskAgentRuntime<
-  TInput,
-  TOutput,
-  TUsage extends string = string,
-> extends BaseTaskAgent<TInput, TOutput, TUsage> {}
-
 function failMissingTaskAgentModel(): never {
   throw new Error("BaseTaskAgent requires model when kernel is not provided");
 }
