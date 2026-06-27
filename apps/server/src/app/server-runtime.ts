@@ -58,6 +58,12 @@ import { DefaultIthomeClient } from "../agent/capabilities/ithome/application/it
 import { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import { IthomePoller } from "../agent/capabilities/ithome/application/ithome-poller.js";
 import { IthomeNotificationDraft } from "../agent/apps/ithome/ithome-notification-draft.js";
+import { PrismaTodoDao } from "../agent/capabilities/todo/infra/prisma-todo.dao.js";
+import { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
+import { TodoReminderPoller } from "../agent/capabilities/todo/application/todo-reminder-poller.js";
+import { buildTodoScheduledTasks } from "../agent/capabilities/todo/application/todo-scheduled-tasks.js";
+import { TodoReminderDraft } from "../agent/apps/todo/todo-reminder-draft.js";
+import { TodoDigestDraft } from "../agent/apps/todo/todo-digest-draft.js";
 import { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -134,6 +140,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const imageAssetDao = new PrismaImageAssetDao({ database });
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
+  const todoDao = new PrismaTodoDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
@@ -249,6 +256,17 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       notificationCenter.push(new IthomeNotificationDraft({ title: article.title }));
     },
   });
+  const todoService = new TodoService({ todoDao });
+  // 提醒/汇总以纯数据回调，draft 在这层（wiring 边界）构造并 push，capabilities 层不依赖 apps 层。
+  const todoReminderPoller = new TodoReminderPoller({
+    todoService,
+    onDueReminder: reminder => {
+      notificationCenter.push(new TodoReminderDraft(reminder));
+    },
+    onDigest: summary => {
+      notificationCenter.push(new TodoDigestDraft(summary));
+    },
+  });
   // 手机 OS 模型：napcat 网关收纳进 QQ App。这里只把网关的协作者（持久化 / 图片分析 /
   // DAO + configManager）传进去，网关实例由 buildQqApp 构造并独占持有，入站事件直达
   // QqApp、不再走共享事件队列（也就不再需要跨边界的 late-bind holder）。
@@ -265,6 +283,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       qqMessageDao: napcatQqMessageDao,
     },
     ithomeService,
+    todoService,
     notificationCenter,
     eventQueue,
     storyEventQueue,
@@ -284,6 +303,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     taskScheduler.register(task);
   }
   for (const task of buildIthomeScheduledTasks({ ithomePoller })) {
+    taskScheduler.register(task);
+  }
+  for (const task of buildTodoScheduledTasks({ todoReminderPoller })) {
     taskScheduler.register(task);
   }
   for (const task of buildDataRetentionTasks({ db: database, metricService })) {
