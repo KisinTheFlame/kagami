@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- llm: 修 [#127] 同源的**记录侧崩溃**。#127 把图片内容改 base64 + provider 映射走 `imageContentToBase64` 归一，但 `client.ts` 记录侧 `toRecordableContentPart` 仍 `Buffer.from(part.content, "base64")`；已被 JSON 毒过的历史图片消息（`{type:"Buffer",data:[]}` 对象）恢复后流到记录侧，对对象 `Buffer.from` 抛 `Received an instance of Object` → root agent loop 崩溃（生产部署 #127 后实测到，`invalid base64` 已消失但暴露此条）。记录侧也经 `imageContentToBase64` 归一；中毒对象随上下文压缩老化（[#128](https://github.com/KisinTheFlame/kagami/pull/128)）
 - llm/agent: 修复**多模态图片内容经持久化后 base64 失效**导致主 Agent 卡死的问题。`LlmImageContentPart.content` 原为 `Buffer`，而 Browser App 的 `screenshot` 是首个把图片放进**主 Agent 持久上下文**的场景——图片消息会随快照 / ledger 按 JSON 存，`Buffer` 经 JSON 往返变成 `{ type:"Buffer", data:[...] }` 不再是 Buffer，provider 侧 `part.content.toString("base64")` 于是产出 `"[object Object]"`，Claude API 报 `image.source.base64: invalid base64 data`；坏图留在历史里，每轮重发、每轮失败。修法：把 `LlmImageContentPart.content` 改为 **base64 字符串**（JSON 原生、往返不变、正是各 provider wire 格式所需），生产者（vision / playground / screenshot）在边缘 `toString("base64")` 一次；新增 `@kagami/llm` 导出 `imageContentToBase64(unknown)` 防御性归一，兼容 base64 字符串 / Buffer / `{type:"Buffer",data:[]}` 三态，让 4 个消费者（claude / openai-codex / openai-chat-mapper / 记录侧）对**已被 JSON 毒过的历史图片消息**也能恢复成合法 base64，无需手动改库；快照恢复 schema 放宽为永不拒绝（否则旧中毒快照恢复失败会丢上下文）。vision / playground 既有图片路径同步迁到字符串契约。新增 `imageContentToBase64` 三态回归测试（[#127](https://github.com/KisinTheFlame/kagami/pull/127)）
 
 ### Removed
