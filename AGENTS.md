@@ -291,8 +291,8 @@ Agent 相关补充约定：
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
 - `apps/server/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
-  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`terminal`、`todo`
-  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`terminal`、`todo`
+  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
+  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`terminal`、`todo`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。

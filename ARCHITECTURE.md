@@ -87,6 +87,7 @@ apps/server/src/agent/
 │   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
+│   ├── browser/        CloakBrowser 有头驱动，登录 / 点击 / 填表 / 读真实网站（能力本体）
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
 │   ├── terminal/       终端能力本体
 │   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
@@ -95,6 +96,7 @@ apps/server/src/agent/
     ├── ithome/         IThome App：RSS 未读推送
     ├── hn/             Hacker News App（只读）
     ├── calc / clock /  小工具 App
+    ├── browser/        Browser App：有头浏览器登录 + 交互式逛网站
     ├── terminal/       终端 App 壳
     └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
 ```
