@@ -1,5 +1,5 @@
 import type { Event } from "../event/event.js";
-import type { LlmMessage } from "../../../llm/types.js";
+import type { LlmContentPart, LlmMessage } from "../../../llm/types.js";
 import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
@@ -26,6 +26,26 @@ export function createUserMessage(content: string): UserMessage {
     role: "user",
     content,
   };
+}
+
+/**
+ * 一条多模态 user 消息：文本 + 原图块。图片原图直接进上下文，不经 vision 转文字。
+ * 由 Browser App 的 screenshot 经 append_message Effect（带 image）触发。
+ */
+export function createUserImageMessage(
+  text: string,
+  image: { content: Buffer; mimeType: string; filename?: string },
+): UserMessage {
+  const parts: LlmContentPart[] = [
+    { type: "text", text },
+    {
+      type: "image",
+      content: image.content,
+      mimeType: image.mimeType,
+      ...(image.filename ? { filename: image.filename } : {}),
+    },
+  ];
+  return { role: "user", content: parts };
 }
 
 export function createWakeReminderMessage(now: Date): UserMessage {

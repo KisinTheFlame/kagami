@@ -9,7 +9,7 @@ import {
 import type { AgentContext } from "../context/agent-context.js";
 import type { Event } from "../event/event.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
-import { createUserMessage } from "../context/context-message-factory.js";
+import { createUserMessage, createUserImageMessage } from "../context/context-message-factory.js";
 import type { RootAgentSessionController } from "../root-agent/session/root-agent-session.js";
 import type {
   AppendMessageEffect,
@@ -73,6 +73,11 @@ class AppendMessageHandler implements EffectHandler<never> {
 
   public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
     const append = effect as AppendMessageEffect;
+    if (append.image) {
+      return {
+        appendedMessages: [createUserImageMessage(append.content, append.image)],
+      };
+    }
     return { appendedMessages: [createUserMessage(append.content)] };
   }
 }
