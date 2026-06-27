@@ -237,6 +237,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
   // 聚合后把一条 notification 事件塞进事件队列——既投递内容也唤醒 Agent。
   const notificationCenter = new NotificationCenter({
+    leadingWindowMs: config.server.agent.notificationLeadingWindowMs,
     windowMs: config.server.agent.notificationBatchWindowMs,
     onFlush: lines => {
       eventQueue.enqueue({ type: "notification", data: { lines } });

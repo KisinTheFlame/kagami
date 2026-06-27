@@ -5,6 +5,11 @@ import { type NotificationScheduler, RealNotificationScheduler } from "./notific
 const logger = new AppLogger({ source: "agent.notification-center" });
 
 type NotificationCenterDeps = {
+  /**
+   * 前沿短窗（毫秒）：空闲时第一条 push **不再立即发**，而是开这么长的短窗聚合首批突发，
+   * 窗结束才 flush。首批通知因此最多延迟 leadingWindowMs。
+   */
+  leadingWindowMs: number;
   /** 节流窗口（毫秒）：一次 flush 后的这段时间内，新通知攒着不立即发。 */
   windowMs: number;
   /**
@@ -20,13 +25,12 @@ type NotificationCenterDeps = {
 /**
  * 被动、同步、源无关的通知中心（手机 OS 模型）。
  *
- * **前沿触发 + 节流窗口（leading-edge throttle）**——既聚合突发、又让安静时的单条
- * 通知零延迟直达：
- * - **空闲**（没有进行中的窗口）时 `push` 一条 → **立即 flush 直达 Agent**，并开启一个
- *   windowMs 的窗。
+ * **前沿短窗 + 节流窗口**——既聚合突发、又不让首批通知一来就把 Agent 打断：
+ * - **空闲**（没有进行中的窗口）时 `push` 一条 → 开一个 **leadingWindowMs 的前沿短窗**攒着，
+ *   **不立即发**；短窗结束才 flush（首批因此最多延迟 leadingWindowMs，用来聚合一小撮突发）。
  * - **窗口中** `push` → 同 source 折叠后攒着，不立即发。
- * - **窗结束**：还有攒着的 → flush 出那一批 + 再开一个窗（继续节流）；没攒着的 → 回到空闲，
- *   下一条又会立即直达。
+ * - **窗结束**：还有攒着的 → flush 出那一批 + 再开一个 **windowMs 的节流窗**（继续节流后续）；
+ *   没攒着的 → 回到空闲，下一条又会重新走前沿短窗。
  *
  * 折叠：`push` 同 source 走 `draft.merge(prev)`；同步操作（只 `Map.set`），Node 单线程下
  * 与 flush 无竞争。flush 按 `draft.group` 分段（`{group}:` 标题 + 每源 `render()` 一行，
@@ -36,13 +40,15 @@ type NotificationCenterDeps = {
  */
 export class NotificationCenter {
   private readonly pending = new Map<string, NotificationDraft>();
+  private readonly leadingWindowMs: number;
   private readonly windowMs: number;
   private readonly onFlush: (lines: string[]) => void;
   private readonly scheduler: NotificationScheduler;
   /** 进行中窗口的取消函数；null 表示空闲。 */
   private cancelWindow: (() => void) | null = null;
 
-  public constructor({ windowMs, onFlush, scheduler }: NotificationCenterDeps) {
+  public constructor({ leadingWindowMs, windowMs, onFlush, scheduler }: NotificationCenterDeps) {
+    this.leadingWindowMs = leadingWindowMs;
     this.windowMs = windowMs;
     this.onFlush = onFlush;
     this.scheduler = scheduler ?? new RealNotificationScheduler();
@@ -54,9 +60,8 @@ export class NotificationCenter {
     this.pending.set(draft.sourceId, prev ? draft.merge(prev) : draft);
 
     if (this.cancelWindow === null) {
-      // 空闲：前沿立即触发，这条直达；随后开一个窗节流后续。
-      this.flush();
-      this.openWindow();
+      // 空闲：开一个前沿短窗聚合首批突发，窗结束才 flush（不再前沿立即发）。
+      this.openWindow(this.leadingWindowMs);
     }
     // 窗口中：攒着，窗结束时一并 flush。
   }
@@ -71,17 +76,17 @@ export class NotificationCenter {
     this.cancelWindow = null;
   }
 
-  private openWindow(): void {
-    this.cancelWindow = this.scheduler.schedule(this.windowMs, () => this.onWindowEnd());
+  private openWindow(delayMs: number): void {
+    this.cancelWindow = this.scheduler.schedule(delayMs, () => this.onWindowEnd());
   }
 
   private onWindowEnd(): void {
     if (this.pending.size > 0) {
-      // 窗内攒了东西：聚合发出，再开一个窗继续节流。
+      // 窗内攒了东西：聚合发出，再开一个节流窗继续节流后续。
       this.flush();
-      this.openWindow();
+      this.openWindow(this.windowMs);
     } else {
-      // 静默一整窗：回到空闲，下一条又会前沿立即触发。
+      // 静默一整窗：回到空闲，下一条又会重新走前沿短窗。
       this.cancelWindow = null;
     }
   }
