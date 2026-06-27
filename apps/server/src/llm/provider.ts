@@ -71,7 +71,7 @@ export function toSerializableLlmNativeRecordOrNull(
 
 function toSerializableLlmNativeValue(value: unknown): unknown {
   try {
-    const serialized = JSON.stringify(value, (_key, currentValue) => {
+    const serialized = JSON.stringify(value, (_key: string, currentValue: unknown) => {
       if (currentValue instanceof Error) {
         const withStatus = currentValue as Error & { status?: unknown; code?: unknown };
         return {
