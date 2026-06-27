@@ -88,13 +88,15 @@ apps/server/src/agent/
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
-│   └── terminal/       终端能力本体
+│   ├── terminal/       终端能力本体
+│   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
     ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
     ├── ithome/         IThome App：RSS 未读推送
     ├── hn/             Hacker News App（只读）
     ├── calc / clock /  小工具 App
-    └── terminal/       终端 App 壳
+    ├── terminal/       终端 App 壳
+    └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
 ```
 
 通用 Agent / App 框架内核位于 `packages/agent-runtime`（含 `App` 接口、`AppManager`、`AppStateStore`、`InvokeTool`、`ToolCatalog` 等）；Kagami 项目语义不下沉到该包。

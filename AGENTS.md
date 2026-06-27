@@ -187,8 +187,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
-  - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationBatchWindowMs`
-  - `server.agent.story.batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
+  - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationLeadingWindowMs`、`notificationBatchWindowMs`
+  - `server.agent.story.enabled`、`batchSize`、`idleFlushMs`、`memory.embedding`、`memory.vectorIndexPath`、`memory.retrieval`、`recall.topK`、`recall.scoreThreshold`
+  - `server.agent.messaging.aiTone`（小镜发言 AI 味实时门控的权重与阈值）
   - `server.ithome.pollIntervalMs`、`recentArticleLimit`、`articleMaxChars`
   - `server.napcat.wsUrl`、`server.napcat.reconnectMs`、`server.napcat.requestTimeoutMs`
   - `server.napcat.listenGroupIds`、`server.napcat.startupContextRecentMessageCount`
@@ -196,6 +197,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
   - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
   - `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
+  - `server.oss.baseUrl`（自建对象存储 `apps/oss` 进程地址；图片入 OSS 用）
+  - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
   - `server.tavily.apiKey`
   - `server.bot.qq`、`server.bot.creator`
 
@@ -288,8 +291,8 @@ Agent 相关补充约定：
 - 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
 - `apps/server/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
-  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`terminal`
-  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`terminal`
+  - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`terminal`、`todo`
+  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`terminal`、`todo`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
@@ -301,9 +304,9 @@ Agent 相关补充约定：
 - 健康检查：`/health`
 - OAuth 与配额管理：`/auth/:provider/status`、`/auth/:provider/login-url`、`/auth/:provider/logout`、`/auth/:provider/refresh`、`/auth/:provider/usage-limits`、`/auth/:provider/usage-trend`
 - LLM Playground：`/llm/providers`、`/llm/playground-tools`、`/llm/chat`
-- Napcat 主动发送：`/napcat/group/send`
+- Napcat 主动发送：`/napcat/group/send`、`/napcat/private/send`
 - 观测与历史查询：`/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query`、`/story/query`
-- Agent 状态与指标：`/agent-dashboard/*`、`/metric-chart/*`
+- Agent 状态与指标：`/agent-dashboard/*`、`/main-agent-context/recent`、`/metric-chart/*`、`/scheduler/*`
 
 ### 前端（`@kagami/web`）
 
@@ -317,7 +320,9 @@ Agent 相关补充约定：
 - `/napcat-event-history`：Napcat 事件历史
 - `/napcat-group-message-history`：群消息历史
 - `/story-history`：Story 记忆历史
+- `/main-agent-context`：主 Agent 当前上下文
 - `/metric-charts`：运行时指标可视化
+- `/scheduler-tasks`：后台任务面板
 
 补充说明：
 
