@@ -301,6 +301,21 @@ model TerminalOutput {
   @@map("terminal_output")
 }
 
+model TodoItem {
+  id            Int       @id @default(autoincrement())
+  title         String
+  note          String?
+  status        String    @default("pending")
+  remindAt      DateTime? @map("remind_at")
+  repeatEveryMs Int?      @map("repeat_every_ms")
+  snoozedUntil  DateTime? @map("snoozed_until")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+
+  @@map("todo_item")
+}
+
 // 内容寻址的图片资产登记：NapCat 图片 file_id（= 内容 MD5 + 扩展名）→ OSS resid +
 // vision 描述。每张不同的图全局只下载/描述/PUT 一次，命中即复用，让 resid 跨消息稳定、
 // 不膨胀；description 一并缓存，命中时连 vision 都跳过。

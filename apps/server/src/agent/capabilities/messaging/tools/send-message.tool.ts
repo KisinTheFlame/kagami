@@ -3,12 +3,13 @@ import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import type { PendingDraftStore } from "../application/pending-draft.store.js";
 import type { AiToneScorer } from "../infra/ai-tone-scorer.js";
-import type { NapcatChatTarget } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 
 export const SEND_MESSAGE_TOOL_NAME = "send_message";
 
 const SendMessageArgumentsSchema = z.object({
   message: z.string().trim().min(1).optional(),
+  reply_to: z.number().int().positive().optional(),
   confirm_last: z.boolean().optional().default(false),
 });
 
@@ -29,13 +30,20 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
   public readonly name = SEND_MESSAGE_TOOL_NAME;
   public readonly description =
     "向当前 QQ 会话发送一条文本消息。发送前会对内容做 AI 味评分（0~1），响应里的 aiToneScore 越高越像 AI 腔；" +
-    "若评分过高会被拦下不发，可在下次调用带 confirm_last=true 原样补发上一条被拦的内容。";
+    "若评分过高会被拦下不发，可在下次调用带 confirm_last=true 原样补发上一条被拦的内容。" +
+    '想引用回复某条消息时，带上 reply_to=那条消息的 id（消息渲染里 <qq_message id="..."> 的 id）。';
   public readonly parameters = {
     type: "object",
     properties: {
       message: {
         type: "string",
         description: "要发送到当前会话里的文本内容。confirm_last 为 true 时可省略。",
+      },
+      reply_to: {
+        type: "number",
+        description:
+          '可选。要引用回复的目标消息 id，取自消息渲染里的 <qq_message id="...">。' +
+          "带上后这条消息会作为对该消息的引用回复发出；不需要引用就省略。",
       },
       confirm_last: {
         type: "boolean",
@@ -93,15 +101,20 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
 
     // 门控关闭：完全退化为原发送行为，不打分、不拦截、响应不含 aiToneScore。
     if (!this.aiTone.enabled) {
-      const result = await this.dispatch(chatTarget, input.message);
+      const result = await this.dispatch(chatTarget, input.message, input.reply_to);
       this.pendingDraftStore.clear();
       return JSON.stringify({ ok: true, ...result });
     }
 
     const score = this.aiToneScorer.proba(input.message);
     if (score >= this.aiTone.blockThreshold) {
-      // 拦截：不发，存草稿（覆盖旧草稿），回带分数与提示。
-      this.pendingDraftStore.set({ chatTarget, message: input.message, score });
+      // 拦截：不发，存草稿（覆盖旧草稿），回带分数与提示。回复目标一并存，补发时保留引用。
+      this.pendingDraftStore.set({
+        chatTarget,
+        message: input.message,
+        score,
+        replyToMessageId: input.reply_to,
+      });
       return JSON.stringify({
         ok: false,
         blocked: true,
@@ -112,7 +125,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     }
 
     // 通过：正常发送，回带分数（教学信号）；成功即清空待确认草稿。
-    const result = await this.dispatch(chatTarget, input.message);
+    const result = await this.dispatch(chatTarget, input.message, input.reply_to);
     this.pendingDraftStore.clear();
     return JSON.stringify({ ok: true, ...result, aiToneScore: round(score) });
   }
@@ -128,7 +141,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     }
 
     try {
-      const result = await this.dispatch(draft.chatTarget, draft.message);
+      const result = await this.dispatch(draft.chatTarget, draft.message, draft.replyToMessageId);
       this.pendingDraftStore.clear();
       return JSON.stringify({
         ok: true,
@@ -149,11 +162,16 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     }
   }
 
-  private async dispatch(chatTarget: NapcatChatTarget, message: string): Promise<DispatchResult> {
+  private async dispatch(
+    chatTarget: NapcatChatTarget,
+    message: string,
+    replyToMessageId?: number,
+  ): Promise<DispatchResult> {
     if (chatTarget.chatType === "group") {
       const result = await this.agentMessageService.sendGroupMessage({
         groupId: chatTarget.groupId,
         message,
+        replyToMessageId,
       });
       return { chatType: "group", groupId: chatTarget.groupId, messageId: result.messageId };
     }
@@ -161,6 +179,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     const result = await this.agentMessageService.sendPrivateMessage({
       userId: chatTarget.userId,
       message,
+      replyToMessageId,
     });
     return { chatType: "private", userId: chatTarget.userId, messageId: result.messageId };
   }

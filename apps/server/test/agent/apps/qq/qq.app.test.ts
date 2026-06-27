@@ -6,8 +6,8 @@ import type { ToolComponent } from "@kagami/agent-runtime";
 import type {
   NapcatGatewayService,
   NapcatGroupMessageData,
-} from "../../../../src/napcat/service/napcat-gateway.service.js";
-import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/service/napcat-gateway/shared.js";
+} from "../../../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/application/napcat-gateway/shared.js";
 import { initTestLoggerRuntime } from "../../../helpers/logger.js";
 
 initTestLoggerRuntime();
@@ -71,7 +71,7 @@ function groupMessage(text: string, atQQ?: string): NapcatGroupMessageData {
 }
 
 function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void) {
-  const center = new NotificationCenter({ windowMs: 100, onFlush, scheduler });
+  const center = new NotificationCenter({ leadingWindowMs: 50, windowMs: 100, onFlush, scheduler });
   return new QqApp({
     napcatGateway: fakeGateway(),
     notificationCenter: center,
@@ -97,6 +97,7 @@ describe("QqApp", () => {
     const app = new QqApp({
       napcatGateway: fakeGateway({ start, stop }),
       notificationCenter: new NotificationCenter({
+        leadingWindowMs: 50,
         windowMs: 100,
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
@@ -121,6 +122,7 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("在吗") });
+    scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
     expect(onFlush).toHaveBeenCalledTimes(1);
     // 群通知行带发送者：`{群名}: {发送者}：{内容}`。
@@ -133,8 +135,9 @@ describe("QqApp", () => {
     const app = createApp(scheduler, onFlush);
     await app.onStartup();
 
-    // 空闲第一条→立即直达，count 1（无条数标签）。
+    // 空闲第一条→开前沿短窗，窗结束 flush，count 1（无条数标签）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("1") });
+    scheduler.fireWindowEnd();
     expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友：1"]);
 
     // 再来一条→窗内攒着，窗结束 flush，count 2。
@@ -151,8 +154,9 @@ describe("QqApp", () => {
     await app.openConversation("qq_group:1");
     scheduler.fireWindowEnd();
 
-    // 之后的新消息从 count 1 重新开始。
+    // 之后的新消息从 count 1 重新开始（又走前沿短窗）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("4") });
+    scheduler.fireWindowEnd();
     expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 群友：4"]);
   });
 
@@ -163,13 +167,19 @@ describe("QqApp", () => {
     await app.onStartup();
 
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("看下", "10001") });
+    scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
     expect(onFlush.mock.calls[0][0][1]).toContain("[有人 @ 你]");
   });
 
   it("open_conversation sets the current chat target and clears that source", async () => {
     const scheduler = new FakeScheduler();
-    const center = new NotificationCenter({ windowMs: 100, onFlush: vi.fn(), scheduler });
+    const center = new NotificationCenter({
+      leadingWindowMs: 50,
+      windowMs: 100,
+      onFlush: vi.fn(),
+      scheduler,
+    });
     const clearSpy = vi.spyOn(center, "clearForSource");
     const app = new QqApp({
       napcatGateway: fakeGateway(),
@@ -227,6 +237,7 @@ describe("QqApp", () => {
         time: 1,
       },
     });
+    scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
     expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
     // 会话被建出来，能打开
@@ -240,6 +251,7 @@ describe("QqApp", () => {
         getRecentGroupMessages: vi.fn().mockResolvedValue([groupMessage("历史一条")]),
       }),
       notificationCenter: new NotificationCenter({
+        leadingWindowMs: 50,
         windowMs: 100,
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
@@ -255,6 +267,8 @@ describe("QqApp", () => {
     expect(result.ok).toBe(true);
     expect(result.content).toContain("历史一条");
     expect(result.content).toContain("<qq_conversation");
+    // message_id 作为「回复哪条」的句柄暴露在渲染里（groupMessage 默认 messageId=1）。
+    expect(result.content).toContain('<qq_message id="1">');
   });
 
   it("persists the unread badge: exportState → restoreState round-trips count + mention", async () => {
@@ -322,6 +336,7 @@ describe("QqApp", () => {
     const app = new QqApp({
       napcatGateway: fakeGateway({ getForwardMessages }),
       notificationCenter: new NotificationCenter({
+        leadingWindowMs: 50,
         windowMs: 100,
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
@@ -349,6 +364,7 @@ describe("QqApp", () => {
         getForwardMessages: vi.fn().mockRejectedValue(new Error("boom")),
       }),
       notificationCenter: new NotificationCenter({
+        leadingWindowMs: 50,
         windowMs: 100,
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),

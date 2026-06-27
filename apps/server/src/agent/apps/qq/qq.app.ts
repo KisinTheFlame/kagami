@@ -13,7 +13,7 @@ import type {
   NapcatGatewayService,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/service/napcat-gateway.service.js";
+} from "../../../napcat/application/napcat-gateway.service.js";
 import {
   ChatNotificationDraft,
   detectBotMentioned,
@@ -30,6 +30,7 @@ import {
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
 import { BackToConversationListTool } from "./tools/back-to-conversation-list.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";
+import { ListFacesTool } from "./tools/list-faces.tool.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
 
 export const QQ_APP_ID = "qq";
@@ -92,6 +93,7 @@ export class QqApp implements App {
       new OpenConversationTool({ getApp: () => this }),
       new BackToConversationListTool({ getApp: () => this }),
       new ViewForwardTool({ getApp: () => this }),
+      new ListFacesTool(),
     ];
   }
 
@@ -105,9 +107,10 @@ export class QqApp implements App {
       "",
       "可调用工具：",
       "  - open_conversation(id): 打开某个会话，看最近消息并停在那；之后 send_message 发给它。",
-      "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。",
+      "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。想发 QQ 内置表情就在文本里写 `[表情: 名字]`（和你收到的格式一样，如 `[表情: 比心]`），会自动转成表情发出；名字不认得就原样当文字发。",
+      "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
       "  - back_to_conversation_list(): 离开当前会话、回到会话列表。",
-      "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: xxx] 就是一条合并转发（聊天记录），把那个 id 传进来即可；默认显示前 50 条，更长用 offset 翻页。",
+      "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
       "",
       "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
     ].join("\n");
@@ -434,7 +437,7 @@ function renderForward(forwardId: string, page: NapcatForwardMessagePage): strin
   }
   if (shownEnd < total) {
     lines.push(
-      `还有 ${total - shownEnd} 条，继续看用 view_forward(forward_id="${forwardId}", offset=${shownEnd})。`,
+      `还有 ${total - shownEnd} 条，继续看用 view_forward(forward_id="fwd-${forwardId}", offset=${shownEnd})。`,
     );
   }
   lines.push("</qq_forward>");

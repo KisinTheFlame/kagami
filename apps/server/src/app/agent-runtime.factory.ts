@@ -18,9 +18,9 @@ import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.i
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import type { ConfigManager } from "../config/config.manager.js";
-import type { NapcatQqMessageDao } from "../napcat/dao/napcat-group-message.dao.js";
-import type { NapcatGatewayPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
-import type { NapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
+import type { NapcatQqMessageDao } from "../napcat/infra/napcat-group-message.dao.js";
+import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
+import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { StoryQueryService } from "../ops/application/story-query.service.js";
@@ -69,6 +69,8 @@ import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { PrismaBrowserCredentialDao } from "../agent/capabilities/browser/infra/prisma-browser-credential.dao.js";
 import { BrowserApp } from "../agent/apps/browser/browser.app.js";
+import { TodoApp } from "../agent/apps/todo/todo.app.js";
+import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
 import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
@@ -113,6 +115,7 @@ type BuildAgentRuntimeInput = {
   metricService: MetricService;
   napcat: NapcatGatewayDeps;
   ithomeService: IthomeService;
+  todoService: TodoService;
   notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
   storyEventQueue: Queue<StoryAgentEvent>;
@@ -144,6 +147,7 @@ export async function buildAgentRuntime({
   metricService,
   napcat,
   ithomeService,
+  todoService,
   notificationCenter,
   eventQueue,
   storyEventQueue,
@@ -252,6 +256,7 @@ export async function buildAgentRuntime({
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
+  appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
   appManager.register(new BrowserApp({ credentialDao: browserCredentialDao }));

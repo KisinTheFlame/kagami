@@ -1,4 +1,4 @@
-import type { NapcatChatTarget } from "../../../../napcat/service/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 
 /** 一条因 AI 味过高被拦下、等待用户二次确认的发言草稿。 */
 export interface PendingDraft {
@@ -8,6 +8,8 @@ export interface PendingDraft {
   readonly message: string;
   /** 被拦时算出的 AI 味分数；confirm_last 补发时回带此原始分（不重新打分）。 */
   readonly score: number;
+  /** 被拦时的回复目标 message_id（若这条是引用回复）；confirm_last 补发时原样带上。 */
+  readonly replyToMessageId?: number;
 }
 
 /**
