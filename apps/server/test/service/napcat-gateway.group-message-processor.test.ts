@@ -423,7 +423,7 @@ describe("NapcatGroupMessageProcessor", () => {
     );
   });
 
-  it("should ignore face segments when rendering rawMessage", async () => {
+  it("should render face segments via the face name map when faceText is absent", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
       listenGroupIds: ["987654"],
@@ -474,7 +474,52 @@ describe("NapcatGroupMessageProcessor", () => {
 
     expect(eventQueue.enqueue).toHaveBeenCalledWith(
       expectEnqueuedGroupMessage({
-        rawMessage: "前后",
+        rawMessage: "前[表情: 爱心]后",
+      }),
+    );
+  });
+
+  it("should render face segments using faceText when present", async () => {
+    const eventQueue = createAgentEventQueue();
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      imageMessageAnalyzer,
+      qqMessageDao,
+    });
+
+    await processor.handle({
+      post_type: "message",
+      message_type: "group",
+      group_id: "987654",
+      user_id: 123456,
+      self_id: 654321,
+      raw_message: "[CQ:face,id=319]",
+      message: [
+        {
+          type: "face",
+          data: {
+            id: "319",
+            raw: {
+              faceIndex: 319,
+              faceText: "/比心",
+            },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+      ],
+      sender: {
+        card: "测试群名片",
+      },
+    });
+
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expectEnqueuedGroupMessage({
+        rawMessage: "[表情: 比心]",
       }),
     );
   });
@@ -614,17 +659,12 @@ describe("NapcatGroupMessageProcessor", () => {
       group_id: "987654",
       user_id: 123456,
       self_id: 654321,
-      raw_message: "[CQ:face,id=66]",
+      raw_message: "[CQ:dice,result=5]",
       message: [
         {
-          type: "face",
+          type: "dice",
           data: {
-            id: "66",
-            raw: {
-              faceIndex: 66,
-            },
-            resultId: null,
-            chainCount: null,
+            result: "5",
           },
         },
       ],
@@ -638,14 +678,9 @@ describe("NapcatGroupMessageProcessor", () => {
         rawMessage: "",
         messageSegments: [
           {
-            type: "face",
+            type: "dice",
             data: {
-              id: "66",
-              raw: {
-                faceIndex: 66,
-              },
-              resultId: null,
-              chainCount: null,
+              result: "5",
             },
           },
         ],

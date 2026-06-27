@@ -206,6 +206,72 @@ describe("renderSupportedMessageSegments", () => {
       ]),
     ).toBe("[图片: 一只橘猫, resid: res-42]");
   });
+
+  it("should render a face segment using faceText when present", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "face",
+          data: {
+            id: "319",
+            raw: { faceIndex: 319, faceText: "/比心" },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+      ]),
+    ).toBe("[表情: 比心]");
+  });
+
+  it("should render a face segment via the name map when faceText is absent", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "face",
+          data: {
+            id: "66",
+            raw: { faceIndex: 66 },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+      ]),
+    ).toBe("[表情: 爱心]");
+  });
+
+  it("should fall back to [表情] when the face is unknown", () => {
+    expect(
+      renderSupportedMessageSegments([
+        {
+          type: "face",
+          data: {
+            id: "99999",
+            raw: {},
+            resultId: null,
+            chainCount: null,
+          },
+        },
+      ]),
+    ).toBe("[表情]");
+  });
+
+  it("should keep face segments inline with surrounding text", () => {
+    expect(
+      renderSupportedMessageSegments([
+        { type: "text", data: { text: "前" } },
+        {
+          type: "face",
+          data: {
+            id: "66",
+            raw: { faceIndex: 66 },
+            resultId: null,
+            chainCount: null,
+          },
+        },
+        { type: "text", data: { text: "后" } },
+      ]),
+    ).toBe("前[表情: 爱心]后");
+  });
 });
 
 describe("formatImageSegmentText", () => {
