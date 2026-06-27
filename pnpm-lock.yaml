@@ -240,6 +240,9 @@ importers:
 
   packages/server-core:
     dependencies:
+      '@kagami/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@prisma/adapter-better-sqlite3':
         specifier: ^7.8.0
         version: 7.8.0

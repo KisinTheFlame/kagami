@@ -2,8 +2,8 @@ import { vi } from "vitest";
 import { type AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
 import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { Config } from "@kagami/server-core/config/config.loader";
-import type { NapcatEventDao } from "../../src/napcat/infra/napcat-event.dao.js";
-import type { NapcatQqMessageDao } from "../../src/napcat/infra/napcat-group-message.dao.js";
+import type { NapcatEventDao } from "@kagami/server-core/dao/napcat-event.dao";
+import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
 import { initLoggerRuntime } from "../../src/logger/runtime.js";
 import type { LogEvent, LogSink } from "../../src/logger/types.js";
 

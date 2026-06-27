@@ -2,7 +2,7 @@ import { type AuthUsageLimitsResponse } from "@kagami/shared/schemas/auth";
 import { SharedOAuthCallbackServer } from "./shared/callback-server.js";
 import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { Database } from "@kagami/server-core/db/client";
-import { PrismaAuthUsageSnapshotDao } from "./dao/impl/auth-usage-snapshot.impl.dao.js";
+import { PrismaAuthUsageSnapshotDao } from "@kagami/server-core/dao/impl/auth-usage-snapshot.impl.dao";
 import { DefaultAuthUsageTrendQueryService } from "./application/auth-usage-trend-query.impl.service.js";
 import { AuthUsageCacheManager } from "./application/auth-usage-cache.impl.service.js";
 import { OAuthAuthRefreshScheduler } from "./application/oauth-auth-refresh.scheduler.js";

@@ -16,7 +16,7 @@ import {
 import type {
   AuthUsageSnapshotDao,
   InsertAuthUsageSnapshotInput,
-} from "../dao/auth-usage-snapshot.dao.js";
+} from "@kagami/server-core/dao/auth-usage-snapshot.dao";
 import type { ClaudeCodeProviderAuth } from "../claude-code/types.js";
 import type { CodexProviderAuth } from "../codex/types.js";
 import { AppLogger } from "../../logger/logger.js";

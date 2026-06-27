@@ -18,7 +18,7 @@ import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.i
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import type { ConfigManager } from "@kagami/server-core/config/config.manager";
-import type { NapcatQqMessageDao } from "../napcat/infra/napcat-group-message.dao.js";
+import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
 import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";

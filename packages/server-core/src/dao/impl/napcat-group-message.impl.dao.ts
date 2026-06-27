@@ -1,7 +1,7 @@
-import * as Prisma from "@kagami/server-core/prisma";
+import * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
 import { type JsonValue } from "@kagami/shared/schemas/base";
-import { normalizeInputJsonValue, toJsonRecord } from "@kagami/server-core/common/prisma-json";
-import type { Database } from "@kagami/server-core/db/client";
+import { normalizeInputJsonValue, toJsonRecord } from "../../common/prisma-json.js";
+import type { Database } from "../../db/client.js";
 import type {
   InsertNapcatQqMessageItem,
   NapcatQqMessageContextItem,

@@ -1,11 +1,11 @@
-import type * as Prisma from "@kagami/server-core/prisma";
+import type * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
 import type {
   AuthUsageSnapshotDao,
   AuthUsageSnapshotItem,
   InsertAuthUsageSnapshotInput,
   QueryAuthUsageSnapshotInput,
 } from "../auth-usage-snapshot.dao.js";
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "../../db/client.js";
 
 type PrismaAuthUsageSnapshotDaoDeps = {
   database: Database;

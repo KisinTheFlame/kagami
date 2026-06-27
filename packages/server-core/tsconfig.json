@@ -6,7 +6,10 @@
     "target": "ES2022",
     "types": ["node"],
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@kagami/shared/*": ["./../shared/src/*"]
+    }
   },
   "include": ["src"]
 }

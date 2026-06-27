@@ -1,6 +1,6 @@
-import type * as Prisma from "@kagami/server-core/prisma";
-import { toJsonRecord, toInputJsonObject } from "@kagami/server-core/common/prisma-json";
-import type { Database } from "@kagami/server-core/db/client";
+import type * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
+import { toJsonRecord, toInputJsonObject } from "../../common/prisma-json.js";
+import type { Database } from "../../db/client.js";
 import type {
   InsertNapcatEventItem,
   NapcatEventDao,
