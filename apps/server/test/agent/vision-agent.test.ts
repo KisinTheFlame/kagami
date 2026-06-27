@@ -47,7 +47,7 @@ describe("VisionAgent", () => {
               }),
               {
                 type: "image",
-                content: Buffer.from("image"),
+                content: Buffer.from("image").toString("base64"),
                 mimeType: "image/png",
                 filename: "cat.png",
               },
@@ -105,7 +105,7 @@ describe("VisionAgent", () => {
               },
               {
                 type: "image",
-                content: Buffer.from("image"),
+                content: Buffer.from("image").toString("base64"),
                 mimeType: "image/jpeg",
                 filename: undefined,
               },
