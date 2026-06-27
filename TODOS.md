@@ -81,3 +81,35 @@
 - **Status:** open
 - **Context:** `apps/oss/src/store/object-store.ts` 的 `ensureBlobFile` 只 `writeFile` + `rename`，未 fsync 文件与目录。断电/内核崩溃后可能 SQLite 事务已提交（库说有）但文件内容/目录项未落盘（文件空或丢失），`sweepOrphans` 只回收"文件在、行不在"，不修复"行在、文件没内容"。Codex 对抗式评审发现。概率低且内容可重新拉取（QQ 图片源可重取 + put 自愈），故定 P3。
 - **Notes:** 修法：写完 tmp 后 fd.sync()，rename 后再 fsync 父目录。
+
+---
+
+## browser（Browser App 设计衍生，2026-06-27 /plan-eng-review）
+
+### 运行时"工具异步调用、稍后回结果"原语
+
+- **Priority:** P1
+- **Status:** open
+- **Context:** Browser App 的浏览器动作会阻塞单线程主循环（humanize + 慢站，单动作可达数秒），延迟 Kagami 对 QQ 等事件的响应。v1 用有界阻塞 + 收紧 `actionTimeoutMs` 顶着，但根因是运行时缺"tool 返 `pending`、完成后再唤醒主循环"的能力。这是横切能力：terminal 长命令、web-search 也都受益，浏览器只是第一个撞上它的地方。
+- **Notes:** 与 wait/event 循环、Effect 模型对接；做成后 Browser/terminal 长动作改异步。设计文档见 `~/.gstack/projects/KisinTheFlame-kagami/kisin-claude/exciting-driscoll-d160ec-design-20260627-164048.md`（T2 节）。
+
+### Browser App fast-follow 工具
+
+- **Priority:** P2
+- **Status:** open
+- **Context:** v1 砍/缓的工具，等真用到再补：`read_page`（observe+screenshot 覆盖读需后才需要的长正文 dump，且需自带正文提取）；`list_pages`/`switch_page`（v1 用 opener stack 顶着，多页真复杂了再显式化）。
+- **Notes:** 详见设计文档"Eng-Review 决策修订"。
+
+### Browser 责任护栏（想做时）
+
+- **Priority:** P2
+- **Status:** open
+- **Context:** v1 明示无护栏（"相信 AI"），eval 全权、写操作直执行。终态若要边界：写操作 pending→confirm、不可逆动作经 messaging 升级给创造者批准、按域 allowlist、action journal 审计。三次跨模型评审都点了这个软肋，留作知情后续。
+- **Notes:** 依赖上面"工具异步调用"原语做升级问答更顺。
+
+### Browser 隔离 reader / 目标委派（长会话再上）
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** v1 交互观察直进主上下文。若长会话被语义树+截图撑爆压缩频繁：重读走隔离子 Agent 只回摘要（B），或整任务委派 Browser TaskAgent 只回结果（C）。`read_page`/observe 已留干净函数接缝。多身份/多 profile（终态自有网络身份）也归此批。
+- **Notes:** 详见设计文档 Approaches B/C。

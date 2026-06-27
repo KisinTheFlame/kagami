@@ -329,3 +329,19 @@ model ImageAsset {
 
   @@map("image_asset")
 }
+
+// Browser App 的网站登录凭据：按 handle 存账号密码。Kagami 在 type(secretHandle) 时
+// 只引用 handle，明文密码经 BrowserService 直接 fill 进输入框，永不进 tool result /
+// 语义树 / 截图 / 上下文。明文存储与现有 auth secret store（encode/decode 明文透传）
+// posture 一致；data/ 已 gitignore，单机自用。Kagami 运行期可自己增改（区别于 config
+// 静态密钥）。
+model BrowserCredential {
+  id        Int      @id @default(autoincrement())
+  handle    String   @unique(map: "browser_credential_handle_uq")
+  username  String
+  secret    String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("browser_credential")
+}
