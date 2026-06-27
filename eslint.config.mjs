@@ -23,7 +23,12 @@ export default tseslint.config(
   // 所有需要类型信息的规则配置都必须留在本块（src），不能下放到下面的全局块，
   // 否则会对无类型信息的文件报致命错。
   {
-    files: ["apps/server/src/**/*.ts", "apps/web/src/**/*.{ts,tsx}", "packages/*/src/**/*.ts"],
+    files: [
+      "apps/server/src/**/*.ts",
+      "apps/oss/src/**/*.ts",
+      "apps/web/src/**/*.{ts,tsx}",
+      "packages/*/src/**/*.ts",
+    ],
     extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {

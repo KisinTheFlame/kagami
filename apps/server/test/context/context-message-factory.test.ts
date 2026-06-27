@@ -5,9 +5,8 @@ import {
   createIthomeArticleListMessage,
   createMergedGroupMessagesMessage,
   createNotificationMessage,
-  createPortalSnapshotMessage,
+  createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
-  createStateSystemReminderMessage,
   createStoryContextSummaryReminderMessage,
   createWakeReminderMessage,
   createWebSearchInstructionMessage,
@@ -87,96 +86,36 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should render portal snapshot for unread and unseen groups", () => {
+  it("should render portal reminder listing enterable apps", () => {
     expect(
-      createPortalSnapshotMessage(
-        [
-          {
-            groupId: "10001",
-            groupName: "测试群",
-            unreadCount: 3,
-            hasEntered: true,
-          },
-          {
-            groupId: "10002",
-            unreadCount: 0,
-            hasEntered: false,
-          },
+      createPortalReminderMessage({
+        apps: [
+          { id: "qq", displayName: "QQ" },
+          { id: "calc", displayName: "计算器" },
         ],
-        [
-          {
-            kind: "ithome",
-            label: "IT之家",
-            unreadCount: 2,
-            hasEntered: true,
-          },
-        ],
-      ),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<system_reminder>",
-        "你当前处于门户状态。",
-        "这里会显示可进入的目标；如果你想进入某个目标，调用 enter。",
-        "可进入目标：",
-        '- QQ 群 测试群 (10001)，未读 3 条，可通过 enter(kind="qq_group", id="10001") 进入',
-        '- QQ 群 10002，尚未查看，可通过 enter(kind="qq_group", id="10002") 进去看看最近消息',
-        '- IT之家(kind="ithome")，新文章 2 篇，可通过 enter(kind="ithome") 进入',
-        "</system_reminder>",
-      ].join("\n"),
-    });
-  });
-
-  it("should render state reminder without invoke tools section", () => {
-    expect(
-      createStateSystemReminderMessage({
-        displayName: "QQ 群 程序喵AI竞技场 (253631878)",
       }),
     ).toEqual({
       role: "user",
       content: [
         "<system_reminder>",
-        "你进入了 QQ 群 程序喵AI竞技场 (253631878) 节点",
-        "</system_reminder>",
-      ].join("\n"),
-    });
-  });
-
-  it("should render apps section when apps are provided", () => {
-    expect(
-      createStateSystemReminderMessage({
-        displayName: "门户",
-        children: [
-          {
-            id: "qq_group:123",
-            displayName: "QQ 群 测试群",
-            description: "聊天",
-          },
-        ],
-        apps: [{ id: "calc", displayName: "计算器" }],
-      }),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<system_reminder>",
-        "你进入了 门户 节点，有以下子节点可进入：",
-        "- QQ 群 测试群 (qq_group:123): 聊天",
-        "也可以进入以下 App：",
+        "你现在在桌面（Portal）。",
+        "可以进入以下 App（用 enter）：",
+        "- qq：QQ",
         "- calc：计算器",
         "</system_reminder>",
       ].join("\n"),
     });
   });
 
-  it("should omit apps section when apps array is empty", () => {
-    expect(
-      createStateSystemReminderMessage({
-        displayName: "门户",
-        apps: [],
-      }),
-    ).toEqual({
+  it("should render portal reminder when no apps are available", () => {
+    expect(createPortalReminderMessage({ apps: [] })).toEqual({
       role: "user",
-      content: ["<system_reminder>", "你进入了 门户 节点", "</system_reminder>"].join("\n"),
+      content: [
+        "<system_reminder>",
+        "你现在在桌面（Portal）。",
+        "当前没有可进入的 App。",
+        "</system_reminder>",
+      ].join("\n"),
     });
   });
 
@@ -203,7 +142,7 @@ describe("context-message-factory", () => {
         "你已进入 IT之家 资讯空间。",
         "以下是游标之后最新的一批新文章。",
         "本轮只展示最新几篇；更早的 3 篇新文章已随本次进入一起略过。",
-        '如果想阅读全文，调用 invoke(tool="open_ithome_article", articleId=...)；如果想离开，调用 back。',
+        '如果想阅读全文，调用 invoke(tool="open_ithome_article", articleId=...)；如果想离开，调用 back_to_portal 回桌面。',
         "</system_instruction>",
         "<ithome_article_list>",
         "[11] 测试文章",
@@ -232,7 +171,7 @@ describe("context-message-factory", () => {
         "以下是当前打开的 IT 之家文章。",
         "正文暂不可用，以下内容来自 RSS 摘要整理。",
         "正文过长，以下仅保留前 8000 字。",
-        "看完后可以继续打开别的文章，或者调用 back 离开资讯空间。",
+        "看完后可以继续打开别的文章，或者调用 back_to_portal 离开资讯空间回桌面。",
         "</system_instruction>",
         "<ithome_article>",
         "标题：测试文章",

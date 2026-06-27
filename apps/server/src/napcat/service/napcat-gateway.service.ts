@@ -96,6 +96,21 @@ export type NapcatPersistableQqMessage = {
   payload: Record<string, unknown>;
 };
 
+/** 合并转发里的一条消息（已渲染、图片已经过 vision 描述）。 */
+export type NapcatForwardMessageNode = {
+  senderName: string;
+  senderUserId: string | null;
+  rawMessage: string;
+  time: number | null;
+};
+
+/** view_forward 的一页结果：当页节点 + 转发内总条数（用于分页提示）。 */
+export type NapcatForwardMessagePage = {
+  nodes: NapcatForwardMessageNode[];
+  total: number;
+  offset: number;
+};
+
 export interface NapcatGatewayService {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -112,4 +127,13 @@ export interface NapcatGatewayService {
     count: number;
     messageSeq?: number;
   }): Promise<NapcatPersistableQqMessage[]>;
+  /**
+   * 按 res_id 拉取一条合并转发消息的内容（OneBot get_forward_msg），按 offset/limit 分页。
+   * 当页内的图片会经过 vision 描述;嵌套的合并转发只渲染成 [forward_id: ...] 占位,不递归展开。
+   */
+  getForwardMessages(input: {
+    id: string;
+    offset: number;
+    limit: number;
+  }): Promise<NapcatForwardMessagePage>;
 }

@@ -1,5 +1,6 @@
 import { AppLogger } from "../../../logger/logger.js";
 import type {
+  NapcatForwardMessageNode,
   NapcatGroupMessageData,
   NapcatGroupMessageEvent,
   NapcatPersistableGroupMessageEvent,
@@ -9,6 +10,7 @@ import {
   GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS,
   extractDisplayNameFromGroupMemberInfo,
   extractSenderNickname,
+  formatImageSegmentText,
   parseMessageSegments,
   renderSupportedMessageSegments,
   toEventTime,
@@ -24,7 +26,10 @@ import {
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../schema/napcat-segment.js";
 import type { NapcatQqMessageDao } from "../../dao/napcat-group-message.dao.js";
-import type { NapcatImageMessageAnalyzer } from "./image-message-analyzer.js";
+import type {
+  NapcatImageAnalysisResult,
+  NapcatImageMessageAnalyzer,
+} from "./image-message-analyzer.js";
 
 type GroupMemberDisplayNameCacheEntry = {
   displayName: string;
@@ -150,6 +155,33 @@ export class NapcatGroupMessageProcessor {
       )
       .sort((left, right) => compareMessageOrder(left, right))
       .map(entry => entry.data);
+  }
+
+  /**
+   * 把合并转发里的每个节点当作一条普通消息，复用同一条 normalize 管线（@名字 → reply →
+   * 图片 vision → 渲染）。这样转发里的图片自动走和普通消息相同的 analyzeImageSegment，
+   * 无需另起一条 vision 路径；嵌套的合并转发段经渲染器变成 [forward_id: ...] 占位，不递归。
+   * 转发节点没有 groupId，所以 @ 名字若未 baked-in 就退化为 @qq，reply 查不到则退化为引用占位。
+   */
+  public async normalizeForwardMessages(
+    rawNodes: Record<string, unknown>[],
+  ): Promise<NapcatForwardMessageNode[]> {
+    return await Promise.all(
+      rawNodes.map(async rawNode => {
+        const normalizedEvent = await this.normalize({
+          post_type: "message",
+          message_type: "private",
+          ...toForwardNodePayload(rawNode),
+        });
+        const senderName = normalizedEvent.nickname?.trim() || normalizedEvent.userId || "未知用户";
+        return {
+          senderName,
+          senderUserId: normalizedEvent.userId,
+          rawMessage: normalizedEvent.rawMessage ?? "",
+          time: normalizedEvent.time,
+        };
+      }),
+    );
   }
 
   public publishGroupMessageEvent(event: NapcatPersistableGroupMessageEvent): void {
@@ -370,7 +402,10 @@ export class NapcatGroupMessageProcessor {
       renderedImageSegments,
     });
     const renderedMessage = renderSupportedMessageSegments(hydratedSegments, {
-      renderImageSegment: segment => renderedImageSegments.get(segment) ?? "[图片]",
+      renderImageSegment: segment => {
+        const analyzed = renderedImageSegments.get(segment);
+        return analyzed ? formatImageSegmentText(analyzed.description, analyzed.resid) : "[图片]";
+      },
     });
 
     return {
@@ -381,15 +416,15 @@ export class NapcatGroupMessageProcessor {
 
   private async renderImageSegments(
     messageSegments: NapcatReceiveMessageSegment[],
-  ): Promise<Map<NapcatReceiveMessageSegment, string>> {
+  ): Promise<Map<NapcatReceiveMessageSegment, NapcatImageAnalysisResult>> {
     const imageEntries = await Promise.all(
       messageSegments.map(async segment => {
         if (!isNapcatReceiveImageSegment(segment)) {
           return null;
         }
 
-        const renderedText = await this.imageMessageAnalyzer.analyzeImageSegment(segment);
-        return [segment, renderedText] as const;
+        const analyzed = await this.imageMessageAnalyzer.analyzeImageSegment(segment);
+        return [segment, analyzed] as const;
       }),
     );
 
@@ -397,8 +432,10 @@ export class NapcatGroupMessageProcessor {
       imageEntries.filter(
         (
           entry,
-        ): entry is readonly [Extract<NapcatReceiveMessageSegment, { type: "image" }>, string] =>
-          entry !== null,
+        ): entry is readonly [
+          Extract<NapcatReceiveMessageSegment, { type: "image" }>,
+          NapcatImageAnalysisResult,
+        ] => entry !== null,
       ),
     );
   }
@@ -408,24 +445,31 @@ export class NapcatGroupMessageProcessor {
     renderedImageSegments,
   }: {
     messageSegments: NapcatReceiveMessageSegment[];
-    renderedImageSegments: Map<NapcatReceiveMessageSegment, string>;
+    renderedImageSegments: Map<NapcatReceiveMessageSegment, NapcatImageAnalysisResult>;
   }): NapcatReceiveMessageSegment[] {
     return messageSegments.map(segment => {
       if (!isNapcatReceiveImageSegment(segment)) {
         return segment;
       }
 
-      const renderedText = renderedImageSegments.get(segment);
-      const description = extractImageDescription(renderedText);
-      if (!description) {
+      const analyzed = renderedImageSegments.get(segment);
+      if (!analyzed) {
         return segment;
       }
 
+      const description = analyzed.description.trim();
+      if (!description && !analyzed.resid) {
+        return segment;
+      }
+
+      // 把 vision 描述 + OSS resid 回填进消息段，持久化进消息记录，让重渲染（如 open
+      // conversation 拉历史）也能稳定显示 [图片: 描述, resid: res-N]。
       return {
         ...segment,
         data: {
           ...segment.data,
-          summary: description,
+          summary: description || segment.data.summary,
+          resid: analyzed.resid ?? segment.data.resid,
         },
       };
     });
@@ -618,15 +662,6 @@ export class NapcatGroupMessageProcessor {
   }
 }
 
-function extractImageDescription(renderedText: string | undefined): string | null {
-  if (!renderedText) {
-    return null;
-  }
-
-  const matched = /^\[图片: (.+)\]$/u.exec(renderedText.trim());
-  return matched?.[1]?.trim() || null;
-}
-
 function compareMessageOrder(
   left: { index: number; data: { time: number | null; messageId: number | null } },
   right: { index: number; data: { time: number | null; messageId: number | null } },
@@ -648,6 +683,40 @@ function compareMessageOrder(
 
 function defaultSubTypeForMessageType(messageType: "group" | "private"): string {
   return messageType === "private" ? "friend" : "normal";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * 把 get_forward_msg 的一个节点压平成 normalize 能吃的 message-like payload。兼容两种形态：
+ * 扁平 `{ sender, message, time, user_id }` 与 OneBot 包裹 `{ type:"node", data:{ content, ... } }`。
+ * 不写入 post_type / message_type，交由调用方统一指定。
+ */
+function toForwardNodePayload(rawNode: Record<string, unknown>): Record<string, unknown> {
+  const data = asRecord(rawNode.data);
+  const source = data && Array.isArray(data.content) ? data : rawNode;
+  const sender = asRecord(source.sender);
+  const message = Array.isArray(source.message)
+    ? source.message
+    : Array.isArray(source.content)
+      ? source.content
+      : [];
+  const userId = toNullableId(source.user_id) ?? toNullableId(sender?.user_id);
+  const nickname =
+    toNullableString(sender?.card) ??
+    toNullableString(sender?.nickname) ??
+    toNullableString(source.nickname);
+
+  return {
+    message,
+    time: source.time,
+    user_id: userId ?? undefined,
+    sender: sender ?? (nickname ? { nickname } : undefined),
+  };
 }
 
 function explainSkippedHistoricalMessageReasons(

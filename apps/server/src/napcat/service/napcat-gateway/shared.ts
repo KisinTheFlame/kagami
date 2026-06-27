@@ -6,6 +6,7 @@ import {
   type NapcatSendTextSegment,
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
+  type NapcatReceiveForwardSegment,
   type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
   type NapcatReceiveReplySegment,
@@ -159,8 +160,10 @@ export function toStoredMessageSegments(value: unknown): NapcatReceiveMessageSeg
   return parseMessageSegments(value) ?? [];
 }
 
-export function formatImageSegmentText(text: string): string {
-  return text.trim().length > 0 ? `[图片: ${text.trim()}]` : "[图片]";
+export function formatImageSegmentText(summary: string, resid?: string | null): string {
+  const description = summary.trim();
+  const head = description.length > 0 ? `图片: ${description}` : "图片";
+  return resid ? `[${head}, resid: ${resid}]` : `[${head}]`;
 }
 
 export function renderSupportedMessageSegments(
@@ -184,7 +187,8 @@ export function renderSupportedMessageSegments(
 
       if (segment.type === "image") {
         return (
-          options?.renderImageSegment?.(segment) ?? formatImageSegmentText(segment.data.summary)
+          options?.renderImageSegment?.(segment) ??
+          formatImageSegmentText(segment.data.summary, segment.data.resid)
         );
       }
 
@@ -192,9 +196,29 @@ export function renderSupportedMessageSegments(
         return formatReplySegment(segment);
       }
 
+      if (segment.type === "forward") {
+        return formatForwardSegment(segment);
+      }
+
       return "";
     })
     .join("");
+}
+
+/**
+ * 渲染合并转发占位符里 res_id 的前缀。res_id 是 19 位长数字，直接露出会被 LLM 当 JSON number
+ * 传给 view_forward——既被 string schema 拦下，又因超出安全整数而丢精度。加个非数字前缀强制
+ * 它在 JSON 里只能是字符串，精度无损；view_forward 收到后剥掉前缀。
+ */
+export const FORWARD_ID_DISPLAY_PREFIX = "fwd-";
+
+/**
+ * 合并转发段：只渲染成带 res_id 的占位符,不内联展开内容。Kagami 想看靠 QQ App 的
+ * view_forward(forward_id) 工具按需拉取——大段聊天记录绝不直接进主上下文（KV 缓存优先）。
+ */
+export function formatForwardSegment(segment: NapcatReceiveForwardSegment): string {
+  const id = toNullableString(segment.data.id);
+  return id ? `[forward_id: ${FORWARD_ID_DISPLAY_PREFIX}${id}]` : "[合并转发]";
 }
 
 export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {

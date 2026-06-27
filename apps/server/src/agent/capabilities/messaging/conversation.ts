@@ -32,7 +32,16 @@ export class Conversation {
   public readonly id: ConversationId;
   private readonly meta: GroupMeta | PrivateMeta;
   private readonly unreadLimit: number;
+  /** 未读消息内容缓冲，封顶 unreadLimit（只为渲染最近几条）。 */
   private unread: ConversationMessage[] = [];
+  /**
+   * 未读条数：**不封顶**的真实计数，权威来源在 QQ App 这里。只增不减，唯一清零点是
+   * open_conversation（consumeUnreadTail / clearUnread）。小镜一直不来看，它就一直涨——
+   * 通知里显示的就是这个，而不是某个 30s 窗口内的临时计数。
+   */
+  private unreadCount = 0;
+  /** 未读里是否有人 @ 过小镜：出现一次就粘住，同样到 open_conversation 才清。 */
+  private unreadHasMention = false;
   private entered = false;
 
   private constructor(id: ConversationId, meta: GroupMeta | PrivateMeta, unreadLimit: number) {
@@ -89,8 +98,14 @@ export class Conversation {
     return this.getDisplayName();
   }
 
+  /** 权威未读条数（不封顶，跨通知窗口持续累积，open 才清零）。 */
   public getUnreadCount(): number {
-    return this.unread.length;
+    return this.unreadCount;
+  }
+
+  /** 未读里是否有人 @ 过小镜（粘住，open 才清零）。 */
+  public hasUnreadMention(): boolean {
+    return this.unreadHasMention;
   }
 
   public hasEntered(): boolean {
@@ -113,20 +128,38 @@ export class Conversation {
     }
   }
 
-  public pushUnread(message: ConversationMessage): void {
+  public pushUnread(message: ConversationMessage, mentioned: boolean): void {
     this.unread.push(message);
     this.unread = takeLast(this.unread, this.unreadLimit);
+    // 计数与 @ 标记独立于封顶缓冲：缓冲只留最近几条内容，计数据实累积。
+    this.unreadCount += 1;
+    this.unreadHasMention ||= mentioned;
   }
 
-  /** 进入会话：取未读尾、清空。没进过时调用方会另外拉历史。 */
+  /** 进入会话：取未读尾、清空未读（含计数 + @ 标记）。没进过时调用方会另外拉历史。 */
   public consumeUnreadTail(): ConversationMessage[] {
     const consumed = takeLast(this.unread, this.unreadLimit);
-    this.unread = [];
+    this.resetUnread();
     return consumed;
   }
 
   public clearUnread(): void {
+    this.resetUnread();
+  }
+
+  /**
+   * 从持久化存档恢复未读红点：只恢复计数 + @ 标记，**不**恢复消息内容缓冲——内容靠
+   * open_conversation 时从 napcat 实时拉，避免存陈旧原文。
+   */
+  public restoreUnread(count: number, mentioned: boolean): void {
+    this.unreadCount = Math.max(0, Math.trunc(count));
+    this.unreadHasMention = mentioned;
+  }
+
+  private resetUnread(): void {
     this.unread = [];
+    this.unreadCount = 0;
+    this.unreadHasMention = false;
   }
 
   public markEntered(): void {

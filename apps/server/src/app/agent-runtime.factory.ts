@@ -17,7 +17,11 @@ import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
-import type { NapcatGatewayService } from "../napcat/service/napcat-gateway.service.js";
+import type { ConfigManager } from "../config/config.manager.js";
+import type { NapcatQqMessageDao } from "../napcat/dao/napcat-group-message.dao.js";
+import type { NapcatGatewayPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
+import type { NapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
+import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { StoryQueryService } from "../ops/application/story-query.service.js";
 import type { StoryReindexService } from "../ops/application/story-reindex.service.js";
@@ -34,22 +38,18 @@ import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
-import { BackTool, BACK_TOOL_NAME } from "../agent/runtime/root-agent/tools/back.tool.js";
 import {
   BackToPortalTool,
   BACK_TO_PORTAL_TOOL_NAME,
 } from "../agent/runtime/root-agent/tools/back-to-portal.tool.js";
 import { EnterTool, ENTER_TOOL_NAME } from "../agent/runtime/root-agent/tools/enter.tool.js";
+import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import {
   createRootContextSummaryReminderMessage,
   createStoryContextSummaryReminderMessage,
 } from "../agent/runtime/context/context-message-factory.js";
-import { DefaultAgentMessageService } from "../agent/capabilities/messaging/application/default-agent-message.service.js";
-import { PendingDraftStore } from "../agent/capabilities/messaging/application/pending-draft.store.js";
-import { AiToneScorer } from "../agent/capabilities/messaging/infra/ai-tone-scorer.js";
-import { SendMessageTool } from "../agent/capabilities/messaging/tools/send-message.tool.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -87,10 +87,23 @@ import {
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
-import { QqApp } from "../agent/apps/qq/qq.app.js";
+import type { QqApp } from "../agent/apps/qq/qq.app.js";
+import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
+import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
 import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
+
+/**
+ * napcat 网关的协作者（组合根构造后注入）。网关本身在 buildQqApp 内构造、归 QQ App 持有；
+ * 这些是跨切面基础设施：持久化写入器 + 图片分析 + 消息 DAO（DAO 同时被 ops 查询侧读）。
+ */
+type NapcatGatewayDeps = {
+  configManager: ConfigManager;
+  persistenceWriter: NapcatGatewayPersistenceWriter;
+  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
+  qqMessageDao: NapcatQqMessageDao;
+};
 
 type BuildAgentRuntimeInput = {
   config: Config;
@@ -98,7 +111,7 @@ type BuildAgentRuntimeInput = {
   llmClient: LlmClient;
   embeddingClient: EmbeddingClient;
   metricService: MetricService;
-  napcatGatewayService: NapcatGatewayService;
+  napcat: NapcatGatewayDeps;
   ithomeService: IthomeService;
   todoService: TodoService;
   notificationCenter: NotificationCenter;
@@ -109,15 +122,19 @@ type BuildAgentRuntimeInput = {
 export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
+  /** Story Agent 后台 loop 是否启用；false 时不 initialize/run、不消费 ledger 事件。 */
+  storyAgentEnabled: boolean;
   storyQueryService: StoryQueryService;
   storyReindexService: StoryReindexService;
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
-  restoredRootAgentSnapshot: boolean;
-  hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
-  /** QQ App：手机 OS 模型下聊天的承载者。server-runtime 把 napcat 事件接到它。 */
+  /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
+  /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
+  qqOutboundService: AgentMessageService;
+  /** 反序关停所有 App 的 onShutdown（含 QQ App 停网关）。由服务关停链调用。 */
+  shutdownApps: () => Promise<void>;
 };
 
 export async function buildAgentRuntime({
@@ -126,7 +143,7 @@ export async function buildAgentRuntime({
   llmClient,
   embeddingClient,
   metricService,
-  napcatGatewayService,
+  napcat,
   ithomeService,
   todoService,
   notificationCenter,
@@ -205,37 +222,34 @@ export async function buildAgentRuntime({
       return await taskAgent.invoke(input);
     },
   };
-  const agentMessageService = new DefaultAgentMessageService({
-    napcatGatewayService,
-  });
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
 
-  // send_message（带 AI 味门控）迁进 QQ App 的工具集；不再是状态树子工具。
-  const sendMessageTool = new SendMessageTool({
-    agentMessageService,
-    aiToneScorer: new AiToneScorer(),
-    pendingDraftStore: new PendingDraftStore(),
+  // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
+  // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
+  // 统一走 outboundService（收口）。这里不再见到裸网关。
+  const { qqApp, outboundService: qqOutboundService } = await buildQqApp({
+    configManager: napcat.configManager,
+    persistenceWriter: napcat.persistenceWriter,
+    imageMessageAnalyzer: napcat.imageMessageAnalyzer,
+    qqMessageDao: napcat.qqMessageDao,
+    notificationCenter,
+    botQQ: config.server.bot.qq,
+    listenGroupIds: config.server.napcat.listenGroupIds,
+    recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     aiTone: {
       enabled: config.server.agent.messaging.aiTone.enabled,
       blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
     },
   });
-  // QQ App：手机 OS 模型下聊天的承载者，持会话表 + 当前会话 + 订阅 napcat。napcat
-  // 事件由 server-runtime 接到 qqApp.handleNapcatEvent（不再走共享事件队列）。
-  const qqApp = new QqApp({
-    napcatGateway: napcatGatewayService,
-    notificationCenter,
-    botQQ: config.server.bot.qq,
-    listenGroupIds: config.server.napcat.listenGroupIds,
-    recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
-    sendMessageTool,
-  });
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
   // config.server.apps 切片并 onStartup；createAppSubtoolOwner 在内部摊平 App 工具
-  // 挂到主 Agent 的 InvokeTool 上。
-  const appManager = new AppManager();
+  // 挂到主 Agent 的 InvokeTool 上。注入 App 状态持久化能力：startup 时恢复、shutdown
+  // 时存档各 App 自己的状态（如 QQ 未读红点），走 app_state 通用表。
+  const appManager = new AppManager({
+    stateStore: new PrismaAppStateStore({ database }),
+  });
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));
   appManager.register(new IthomeApp({ ithomeService }));
@@ -252,6 +266,11 @@ export async function buildAgentRuntime({
       creatorQQ: config.server.bot.creator.qq,
     });
   };
+  // Story Agent（后台故事写作 loop）可通过 config.server.agent.story.enabled 整体关停。
+  // 关停时：不运行后台 loop，且不再向 storyEventQueue 入队（否则 ledger_appended 事件
+  // 会在无人消费下无界堆积）。这与主 Agent 前缀完全无关——search_memory 顶层工具照旧
+  // 注册、tools 列表字节不变，KV 缓存与稳定前缀不受任何影响。
+  const storyAgentEnabled = config.server.agent.story.enabled;
   const context = new LinearMessageLedgerAgentContext({
     inner: new DefaultAgentContext({
       systemPromptFactory: agentSystemPromptFactory,
@@ -259,6 +278,9 @@ export async function buildAgentRuntime({
     linearMessageLedgerDao,
     runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     onLedgerAppended: count => {
+      if (!storyAgentEnabled) {
+        return;
+      }
       storyEventQueue.enqueue({ type: "ledger_appended", count });
     },
   });
@@ -285,8 +307,8 @@ export async function buildAgentRuntime({
   // 定义（通过 OutOfScopeTool 包一层），保证两个 agent 暴露给 LLM 的 tools
   // 字段字节相等，命中 KV cache。
   const enterTool = new EnterTool({ appManager });
-  const backTool = new BackTool();
   const backToPortalTool = new BackToPortalTool({ appManager });
+  const switchTool = new SwitchTool({ appManager });
   const waitTool = new WaitTool({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
@@ -301,8 +323,8 @@ export async function buildAgentRuntime({
   const summaryTool = new SummaryTool();
   const toolCatalog = new ToolCatalog([
     enterTool,
-    backTool,
     backToPortalTool,
+    switchTool,
     waitTool,
     mainInvokeTool,
     searchWebTool,
@@ -312,8 +334,8 @@ export async function buildAgentRuntime({
   ]);
   const rootAgentTools = toolCatalog.pick([
     ENTER_TOOL_NAME,
-    BACK_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
+    SWITCH_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
@@ -335,12 +357,12 @@ export async function buildAgentRuntime({
         '在网页搜索子任务中不可调用 enter。请用 invoke(tool="search_web_raw", ...) 检索，必要时反复，信息足够后用 invoke(tool="finalize_web_search", summary=...) 输出最终摘要。',
     }),
     new OutOfScopeTool({
-      inner: backTool,
-      reason: "在网页搜索子任务中不可调用 back。",
-    }),
-    new OutOfScopeTool({
       inner: backToPortalTool,
       reason: "在网页搜索子任务中不可调用 back_to_portal。",
+    }),
+    new OutOfScopeTool({
+      inner: switchTool,
+      reason: "在网页搜索子任务中不可调用 switch。",
     }),
     new OutOfScopeTool({
       inner: waitTool,
@@ -362,8 +384,8 @@ export async function buildAgentRuntime({
   ]);
   const webSearchAgentTools = webSearchAgentToolCatalog.pick([
     ENTER_TOOL_NAME,
-    BACK_TOOL_NAME,
     BACK_TO_PORTAL_TOOL_NAME,
+    SWITCH_TOOL_NAME,
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
@@ -402,6 +424,11 @@ export async function buildAgentRuntime({
     sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
     eventQueue: storyEventQueue,
   });
+  if (!storyAgentEnabled) {
+    logger.info("Story agent disabled by config", {
+      event: "agent.story.disabled",
+    });
+  }
   // Story Recall Agent（后台自动召回）可通过配置整体关停。关停时只是不注册这个
   // loop extension —— search_memory 工具仍然保留在顶层工具集里，主 Agent 暴露给
   // LLM 的 tools 列表字节不变，稳定前缀与 KV 缓存完全不受影响。
@@ -443,10 +470,8 @@ export async function buildAgentRuntime({
   const restoredSnapshot = await rootAgentRuntimeSnapshotRepository.load(
     ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   );
-  let restoredRootAgentSnapshot = false;
   if (restoredSnapshot) {
     await rootAgentRuntime.restorePersistedSnapshot(restoredSnapshot);
-    restoredRootAgentSnapshot = true;
   }
 
   const llmPlaygroundService = new DefaultLlmPlaygroundService({
@@ -458,8 +483,8 @@ export async function buildAgentRuntime({
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEARCH_MEMORY_TOOL_NAME,
-        BACK_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
+        SWITCH_TOOL_NAME,
         HELP_TOOL_NAME,
         SUMMARY_TOOL_NAME,
       ])
@@ -472,16 +497,15 @@ export async function buildAgentRuntime({
   return {
     rootAgentRuntime,
     storyAgentRuntime,
+    storyAgentEnabled,
     storyQueryService,
     storyReindexService,
     mainAgentContextQueryService,
     llmPlaygroundService,
-    restoredRootAgentSnapshot,
-    // 手机 OS 模型下冷启动不再把"最近群消息"灌进上下文——聊天归 QQ App，小镜进
-    // QQ App、open_conversation 时才按需拉取最近消息。
-    hydrateColdStartAgentContext: async () => {},
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     qqApp,
+    qqOutboundService,
+    shutdownApps: () => appManager.shutdownAll(),
   };
 }
 

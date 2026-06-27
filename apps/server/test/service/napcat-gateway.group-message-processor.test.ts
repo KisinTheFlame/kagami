@@ -13,7 +13,9 @@ describe("NapcatGroupMessageProcessor", () => {
   let logs = initTestLogger();
 
   const imageMessageAnalyzer = {
-    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 一只橘猫趴在键盘上]"),
+    analyzeImageSegment: vi
+      .fn()
+      .mockResolvedValue({ description: "一只橘猫趴在键盘上", resid: null }),
   };
 
   const qqMessageDao = {
@@ -27,7 +29,10 @@ describe("NapcatGroupMessageProcessor", () => {
   beforeEach(() => {
     logs = initTestLogger();
     imageMessageAnalyzer.analyzeImageSegment.mockClear();
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 一只橘猫趴在键盘上]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({
+      description: "一只橘猫趴在键盘上",
+      resid: null,
+    });
   });
 
   afterEach(() => {
@@ -475,7 +480,7 @@ describe("NapcatGroupMessageProcessor", () => {
   });
 
   it("should fallback to placeholder when image analysis fails", async () => {
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({ description: "", resid: null });
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
       listenGroupIds: ["987654"],
@@ -748,5 +753,71 @@ describe("NapcatGroupMessageProcessor", () => {
     expect(logs.some(log => log.metadata.event === "napcat.gateway.history_message_skipped")).toBe(
       false,
     );
+  });
+
+  it("normalizeForwardMessages reuses vision for images and placeholders nested forwards", async () => {
+    const processor = new NapcatGroupMessageProcessor({
+      listenGroupIds: ["987654"],
+      actionRequester: {
+        request: vi.fn(),
+      },
+      enqueueGroupMessageEvent: vi.fn(),
+      imageMessageAnalyzer,
+      qqMessageDao,
+    });
+
+    const nodes = await processor.normalizeForwardMessages([
+      // 扁平节点：纯文本
+      {
+        user_id: 10001,
+        time: 1710000000,
+        message: [{ type: "text", data: { text: "上午开会" } }],
+        sender: { nickname: "小明" },
+      },
+      // 扁平节点：图片，应复用同一个 analyzeImageSegment
+      {
+        user_id: 10002,
+        time: 1710000001,
+        message: [
+          {
+            type: "image",
+            data: {
+              summary: "图片",
+              file: "abc.jpg",
+              sub_type: 0,
+              url: "https://example.com/cat.jpg",
+              file_size: "100",
+            },
+          },
+        ],
+        sender: { nickname: "小红" },
+      },
+      // 包裹节点 { type:"node", data:{ content } } + 嵌套合并转发，应只渲染成占位符
+      {
+        type: "node",
+        data: {
+          user_id: 10003,
+          nickname: "小刚",
+          content: [{ type: "forward", data: { id: "999" } }],
+        },
+      },
+    ]);
+
+    expect(imageMessageAnalyzer.analyzeImageSegment).toHaveBeenCalledTimes(1);
+    expect(nodes).toEqual([
+      { senderName: "小明", senderUserId: "10001", rawMessage: "上午开会", time: 1710000000 },
+      {
+        senderName: "小红",
+        senderUserId: "10002",
+        rawMessage: "[图片: 一只橘猫趴在键盘上]",
+        time: 1710000001,
+      },
+      {
+        senderName: "小刚",
+        senderUserId: "10003",
+        rawMessage: "[forward_id: fwd-999]",
+        time: null,
+      },
+    ]);
   });
 });

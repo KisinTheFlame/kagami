@@ -45,51 +45,22 @@ export function createWakeReminderMessage(now: Date): UserMessage {
   );
 }
 
-export function createWaitResumeMessage(input: {
-  reason: "timeout" | "event";
-  resumedStateLabel: string;
-  eventSummary?: string;
+/**
+ * 桌面（Portal）reminder：手机 OS 模型下桌面只列出可进入的 App，没有别的子状态。
+ * 进入某个 App 用 enter；App 之间直接切用 switch；从 App 回桌面用 back_to_portal。
+ */
+export function createPortalReminderMessage(input: {
+  apps: Array<{ id: string; displayName: string }>;
 }): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/wait-resume.hbs", {
-      resumedStateLabel: input.resumedStateLabel,
-      isTimeout: input.reason === "timeout",
-      isEvent: input.reason === "event",
-      eventSummary: input.eventSummary?.trim(),
-    }),
-  );
-}
+  const lines = ["<system_reminder>", "你现在在桌面（Portal）。"];
 
-export function createStateSystemReminderMessage(input: {
-  displayName: string;
-  children?: Array<{
-    id: string;
-    displayName: string;
-    description: string;
-  }>;
-  apps?: Array<{
-    id: string;
-    displayName: string;
-  }>;
-}): UserMessage {
-  const children = input.children ?? [];
-  const apps = input.apps ?? [];
-  const lines = ["<system_reminder>"];
-
-  if (children.length > 0) {
-    lines.push(`你进入了 ${input.displayName} 节点，有以下子节点可进入：`);
-    for (const child of children) {
-      lines.push(`- ${child.displayName} (${child.id}): ${child.description}`);
-    }
-  } else {
-    lines.push(`你进入了 ${input.displayName} 节点`);
-  }
-
-  if (apps.length > 0) {
-    lines.push("也可以进入以下 App：");
-    for (const app of apps) {
+  if (input.apps.length > 0) {
+    lines.push("可以进入以下 App（用 enter）：");
+    for (const app of input.apps) {
       lines.push(`- ${app.id}：${app.displayName}`);
     }
+  } else {
+    lines.push("当前没有可进入的 App。");
   }
 
   lines.push("</system_reminder>");
@@ -115,58 +86,6 @@ export function createStoryContextSummaryReminderMessage(): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/story-context-summary-reminder.hbs"),
   );
-}
-
-export function createPortalSnapshotMessage(
-  groups: Array<{ groupId: string; groupName?: string; unreadCount: number; hasEntered: boolean }>,
-  feeds: Array<{ kind: "ithome"; label: string; unreadCount: number; hasEntered: boolean }> = [],
-): UserMessage {
-  const renderedGroups = groups.map(group => {
-    const groupLabel = group.groupName
-      ? `QQ 群 ${group.groupName} (${group.groupId})`
-      : `QQ 群 ${group.groupId}`;
-
-    return {
-      ...group,
-      groupLabel,
-      enterCommandText: `enter(kind="qq_group", id="${group.groupId}")`,
-    };
-  });
-  const renderedFeeds = feeds.map(feed => ({
-    ...feed,
-    enterCommandText: `enter(kind="${feed.kind}")`,
-  }));
-
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/portal-snapshot.hbs", {
-      groups: renderedGroups,
-      feeds: renderedFeeds,
-    }),
-  );
-}
-
-export type CrossStateNotification = {
-  stateId: string;
-  displayName: string;
-  summary: string;
-};
-
-export function createCrossStateNotificationMessage(
-  notifications: CrossStateNotification[],
-): UserMessage {
-  const lines = [
-    "<system_reminder>",
-    "[跨状态通知]",
-    "以下状态有新的活动，你可以决定是否需要切换过去处理：",
-  ];
-
-  for (const notification of notifications) {
-    lines.push(`- ${notification.displayName}：${notification.summary}`);
-  }
-
-  lines.push("你可以使用 back 工具返回门户，再 enter 到需要处理的状态。也可以继续当前对话。");
-  lines.push("</system_reminder>");
-  return createUserMessage(lines.join("\n"));
 }
 
 /**
@@ -392,27 +311,12 @@ export function renderHnUserContent(result: HnUserResult): string {
   return lines.join("\n");
 }
 
-export function createMessagesFromEvent(event: Event): UserMessage[] {
-  switch (event.type) {
-    case "napcat_group_message":
-      if ((event.data.messageSegments?.length ?? 0) === 0) {
-        return [];
-      }
-
-      return [createUserMessage(renderGroupMessagePlainText(event.data))];
-    case "napcat_private_message":
-      if ((event.data.messageSegments?.length ?? 0) === 0) {
-        return [];
-      }
-
-      return [createUserMessage(renderPrivateMessagePlainText(event.data))];
-    case "napcat_friend_list_updated":
-      return [];
-    default:
-      // `notification` 事件不走这里——它由 session 直接装配成 <notification> 消息
-      // 追加（createNotificationMessage），不是 event 类 ContextItem。
-      return [];
-  }
+export function createMessagesFromEvent(_event: Event): UserMessage[] {
+  // 目前没有任何事件类型需要渲染成上下文消息：notification / story_recall 由 session
+  // 直接装配成 <notification> / <story_recall> 消息追加（不是 event 类 ContextItem），
+  // wake 是纯唤醒。保留此入口是为 event→ContextItem 渲染路径留口子——未来若有需要直接
+  // 进上下文的新事件类型，在这里加分支即可。
+  return [];
 }
 
 export function renderMergedGroupMessagesContent(

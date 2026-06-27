@@ -38,11 +38,9 @@ describe("shutdownServerResources", () => {
         order.push("app.close");
       }),
     } as unknown as FastifyInstance;
-    const napcatGatewayService = {
-      stop: vi.fn(async () => {
-        order.push("napcatGateway.stop");
-      }),
-    };
+    const shutdownApps = vi.fn(async () => {
+      order.push("shutdownApps");
+    });
     const taskScheduler = {
       stop: vi.fn(async () => {
         order.push("taskScheduler.stop");
@@ -74,7 +72,7 @@ describe("shutdownServerResources", () => {
       isServerStarted: true,
       app,
       database: {} as never,
-      napcatGatewayService: napcatGatewayService as never,
+      shutdownApps,
       taskScheduler: taskScheduler as never,
       callbackServers: [callbackServer],
       rootAgentRuntime,
@@ -90,7 +88,7 @@ describe("shutdownServerResources", () => {
 
     expect(order).toEqual([
       "app.close",
-      "napcatGateway.stop",
+      "shutdownApps",
       "taskScheduler.stop",
       "callbackServer.stop",
       "rootAgentRuntime.stop",
@@ -117,7 +115,7 @@ describe("shutdownServerResources", () => {
       isServerStarted: false,
       app: null,
       database: {} as never,
-      napcatGatewayService: null,
+      shutdownApps: null,
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime: null,
@@ -148,7 +146,7 @@ describe("shutdownServerResources", () => {
       isServerStarted: false,
       app: null,
       database: null,
-      napcatGatewayService: null,
+      shutdownApps: null,
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime,
@@ -188,7 +186,7 @@ describe("shutdownServerResources", () => {
       isServerStarted: false,
       app: null,
       database: {} as never,
-      napcatGatewayService: null,
+      shutdownApps: null,
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime,

@@ -243,6 +243,16 @@ model StoryAgentRuntimeSnapshot {
   @@map("story_agent_runtime_snapshot")
 }
 
+// App 状态持久化能力的通用存储：一张表服务所有 App，按 appId 存一份不透明 JSON。
+// 形状 + 版本由各 App 自己拥有；这里只负责 KV 式存取。
+model AppState {
+  appId     String   @id @map("app_id")
+  state     Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_state")
+}
+
 model IthomeArticle {
   id                      Int       @id @default(autoincrement())
   upstreamId              String    @unique(map: "ithome_article_upstream_id_uq") @map("upstream_id")
@@ -304,4 +314,18 @@ model TodoItem {
   completedAt   DateTime? @map("completed_at")
 
   @@map("todo_item")
+}
+
+// 内容寻址的图片资产登记：NapCat 图片 file_id（= 内容 MD5 + 扩展名）→ OSS resid +
+// vision 描述。每张不同的图全局只下载/描述/PUT 一次，命中即复用，让 resid 跨消息稳定、
+// 不膨胀；description 一并缓存，命中时连 vision 都跳过。
+model ImageAsset {
+  id          Int      @id @default(autoincrement())
+  fileId      String   @unique(map: "image_asset_file_id_uq") @map("file_id")
+  resid       String
+  description String
+  mime        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("image_asset")
 }

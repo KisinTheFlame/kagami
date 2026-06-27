@@ -7,6 +7,7 @@ import { loadStaticConfig } from "../config/config.loader.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { PrismaLlmChatCallDao } from "../llm/dao/impl/llm-chat-call.impl.dao.js";
 import { PrismaLogDao } from "../logger/dao/impl/log.impl.dao.js";
+import { PrismaImageAssetDao } from "../napcat/dao/impl/image-asset.impl.dao.js";
 import { PrismaNapcatEventDao } from "../napcat/dao/impl/napcat-event.impl.dao.js";
 import { PrismaNapcatQqMessageDao } from "../napcat/dao/impl/napcat-group-message.impl.dao.js";
 import { BizError } from "../common/errors/biz-error.js";
@@ -47,11 +48,7 @@ import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/service/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/service/napcat-gateway/image-message-analyzer.js";
-import { DefaultNapcatGatewayService } from "../napcat/service/napcat-gateway.impl.service.js";
-import type {
-  NapcatAgentEvent,
-  NapcatGatewayService,
-} from "../napcat/service/napcat-gateway.service.js";
+import { HttpOssClient } from "../oss/oss-client.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
@@ -89,19 +86,20 @@ type AppRouteHandler = {
 export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
-  napcatGatewayService: NapcatGatewayService;
+  /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的裸 napcatGatewayService.stop。 */
+  shutdownApps: () => Promise<void>;
   taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
   storyAgentRuntime: StoryLoopAgent;
+  /** Story Agent 后台 loop 是否启用；false 时 index 不会 initialize/run 它。 */
+  storyAgentEnabled: boolean;
   metricService: MetricService;
   metricChartService: MetricChartService;
   metricChartDao: MetricChartDao;
-  restoredRootAgentSnapshot: boolean;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
-  hydrateColdStartAgentContext: () => Promise<void>;
   hasTavilyApiKey: boolean;
   closeLlmProviders: () => Promise<void>;
   listAvailableAgentProviders: () => Promise<
@@ -139,6 +137,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
+  const imageAssetDao = new PrismaImageAssetDao({ database });
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const todoDao = new PrismaTodoDao({ database });
@@ -220,8 +219,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const visionAgent = new VisionAgent({
     llmClient,
   });
+  // server.oss 缺失即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+  const ossClient = config.server.oss
+    ? new HttpOssClient({ baseUrl: config.server.oss.baseUrl })
+    : undefined;
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
+    ossClient,
+    imageAssetDao,
   });
   const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
     napcatEventDao,
@@ -262,34 +267,27 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       notificationCenter.push(new TodoDigestDraft(summary));
     },
   });
-  // 手机 OS 模型：napcat 事件不再进共享事件队列，直达 QQ App。QqApp 在
-  // buildAgentRuntime 里才构造，这里用 late-bind holder 接线。
-  let onNapcatEvent: ((event: NapcatAgentEvent) => void) | null = null;
-  const napcatGatewayService = await DefaultNapcatGatewayService.create({
-    configManager,
-    enqueueGroupMessageEvent: event => {
-      onNapcatEvent?.(event);
-      return 0;
-    },
-    persistenceWriter: napcatPersistenceWriter,
-    imageMessageAnalyzer,
-    qqMessageDao: napcatQqMessageDao,
-  });
-
+  // 手机 OS 模型：napcat 网关收纳进 QQ App。这里只把网关的协作者（持久化 / 图片分析 /
+  // DAO + configManager）传进去，网关实例由 buildQqApp 构造并独占持有，入站事件直达
+  // QqApp、不再走共享事件队列（也就不再需要跨边界的 late-bind holder）。
   const agentRuntime = await buildAgentRuntime({
     config,
     database,
     llmClient,
     embeddingClient,
     metricService,
-    napcatGatewayService,
+    napcat: {
+      configManager,
+      persistenceWriter: napcatPersistenceWriter,
+      imageMessageAnalyzer,
+      qqMessageDao: napcatQqMessageDao,
+    },
     ithomeService,
     todoService,
     notificationCenter,
     eventQueue,
     storyEventQueue,
   });
-  onNapcatEvent = event => agentRuntime.qqApp.handleNapcatEvent(event);
 
   const taskScheduler = new TaskScheduler();
   const [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler] =
@@ -331,7 +329,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         storyQueryService: agentRuntime.storyQueryService,
         storyReindexService: agentRuntime.storyReindexService,
       }),
-      new NapcatHandler({ napcatGatewayService }),
+      new NapcatHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
       new SchedulerHandler({ taskScheduler }),
     ],
   });
@@ -339,19 +337,18 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   return {
     app,
     database,
-    napcatGatewayService,
+    shutdownApps: agentRuntime.shutdownApps,
     taskScheduler,
     callbackServers: authModule.callbackServers,
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
+    storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
     metricChartService,
     metricChartDao,
-    restoredRootAgentSnapshot: agentRuntime.restoredRootAgentSnapshot,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
-    hydrateColdStartAgentContext: agentRuntime.hydrateColdStartAgentContext,
     hasTavilyApiKey: agentRuntime.hasTavilyApiKey,
     closeLlmProviders: async () => {
       await closeLlmProviders(llmProviders);

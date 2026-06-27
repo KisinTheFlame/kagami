@@ -62,13 +62,18 @@ async function flushMicrotasks(): Promise<void> {
 describe("DefaultNapcatGatewayService", () => {
   let logs = initTestLogger();
   const imageMessageAnalyzer = {
-    analyzeImageSegment: vi.fn().mockResolvedValue("[图片: 屏幕截图，包含错误提示]"),
+    analyzeImageSegment: vi
+      .fn()
+      .mockResolvedValue({ description: "屏幕截图，包含错误提示", resid: null }),
   };
 
   beforeEach(() => {
     logs = initTestLogger();
     imageMessageAnalyzer.analyzeImageSegment.mockClear();
-    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue("[图片: 屏幕截图，包含错误提示]");
+    imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({
+      description: "屏幕截图，包含错误提示",
+      resid: null,
+    });
   });
 
   afterEach(() => {
@@ -758,7 +763,7 @@ describe("DefaultNapcatGatewayService", () => {
   it("should preserve incoming event order while image analysis runs concurrently", async () => {
     const sockets: FakeWebSocket[] = [];
     const eventQueue = createAgentEventQueue();
-    const firstImageAnalysis = createDeferred<string>();
+    const firstImageAnalysis = createDeferred<{ description: string; resid: string | null }>();
     const orderedImageAnalyzer = {
       analyzeImageSegment: vi.fn().mockImplementation(() => firstImageAnalysis.promise),
     };
@@ -833,7 +838,7 @@ describe("DefaultNapcatGatewayService", () => {
     await waitOneTick();
     expect(eventQueue.enqueue).not.toHaveBeenCalled();
 
-    firstImageAnalysis.resolve("[图片: 第一张图]");
+    firstImageAnalysis.resolve({ description: "第一张图", resid: null });
     await waitOneTick();
 
     expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
@@ -1200,6 +1205,113 @@ describe("DefaultNapcatGatewayService", () => {
       maxMemberCount: 200,
       groupRemark: "",
       groupAllShut: true,
+    });
+
+    await gateway.stop();
+  });
+
+  it("should fetch a forward message page via get_forward_msg and paginate from cache", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const firstPagePromise = gateway.getForwardMessages({ id: "res-1", offset: 0, limit: 2 });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      action: string;
+      params: Record<string, unknown>;
+    };
+
+    expect(sentPayload.action).toBe("get_forward_msg");
+    expect(sentPayload.params).toEqual({ id: "res-1", message_id: "res-1" });
+
+    emitActionResponse(socket, 0, {
+      messages: [
+        {
+          user_id: 10001,
+          time: 1,
+          message: [{ type: "text", data: { text: "甲说的话" } }],
+          sender: { nickname: "甲" },
+        },
+        {
+          user_id: 10002,
+          time: 2,
+          message: [{ type: "text", data: { text: "乙说的话" } }],
+          sender: { nickname: "乙" },
+        },
+        {
+          user_id: 10003,
+          time: 3,
+          message: [{ type: "text", data: { text: "丙说的话" } }],
+          sender: { nickname: "丙" },
+        },
+      ],
+    });
+
+    await expect(firstPagePromise).resolves.toEqual({
+      total: 3,
+      offset: 0,
+      nodes: [
+        { senderName: "甲", senderUserId: "10001", rawMessage: "甲说的话", time: 1 },
+        { senderName: "乙", senderUserId: "10002", rawMessage: "乙说的话", time: 2 },
+      ],
+    });
+
+    // 第二页：命中原始节点缓存，不再发新的 get_forward_msg。
+    await expect(gateway.getForwardMessages({ id: "res-1", offset: 2, limit: 2 })).resolves.toEqual(
+      {
+        total: 3,
+        offset: 2,
+        nodes: [{ senderName: "丙", senderUserId: "10003", rawMessage: "丙说的话", time: 3 }],
+      },
+    );
+    expect(socket.sentPayloads).toHaveLength(1);
+
+    await gateway.stop();
+  });
+
+  it("should reject getForwardMessages when NapCat returns an invalid structure", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const forwardPromise = gateway.getForwardMessages({ id: "res-9", offset: 0, limit: 50 });
+    emitActionResponse(socket, 0, { messages: "not-an-array" });
+
+    await expect(forwardPromise).rejects.toMatchObject({
+      meta: {
+        reason: "INVALID_FORWARD_MESSAGE_RESPONSE",
+      },
     });
 
     await gateway.stop();
