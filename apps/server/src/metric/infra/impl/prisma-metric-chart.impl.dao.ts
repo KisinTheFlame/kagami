@@ -1,5 +1,5 @@
-import type * as Prisma from "../../../generated/prisma/internal/prismaNamespace.js";
-import type { Database } from "../../../db/client.js";
+import type * as Prisma from "@kagami/server-core/prisma";
+import type { Database } from "@kagami/server-core/db/client";
 import type { MetricChartDao } from "../metric-chart.dao.js";
 import type { CreateMetricChartInput, MetricChartItem } from "../../domain/metric.js";
 

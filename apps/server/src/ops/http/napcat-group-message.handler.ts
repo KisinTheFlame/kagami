@@ -4,7 +4,7 @@ import {
   NapcatQqMessageListResponseSchema,
 } from "@kagami/shared/schemas/napcat-group-message";
 import type { NapcatQqMessageQueryService } from "../application/napcat-group-message-query.service.js";
-import { registerQueryRoute } from "../../common/http/route.helper.js";
+import { registerQueryRoute } from "@kagami/server-core/common/http/route.helper";
 
 type NapcatQqMessageHandlerDeps = {
   napcatQqMessageQueryService: NapcatQqMessageQueryService;

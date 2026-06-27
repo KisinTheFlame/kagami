@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "../../src/db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 import { PrismaImageAssetDao } from "../../src/napcat/infra/impl/image-asset.impl.dao.js";
 
 describe("PrismaImageAssetDao", () => {

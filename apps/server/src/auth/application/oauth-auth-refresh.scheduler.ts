@@ -1,5 +1,5 @@
-import { AppLogger } from "../../logger/logger.js";
-import { serializeError } from "../../logger/serializer.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
+import { serializeError } from "@kagami/server-core/logger/serializer";
 import type { OAuthAuthService } from "./oauth-auth.service.js";
 
 const logger = new AppLogger({ source: "oauth-auth-refresh-scheduler" });

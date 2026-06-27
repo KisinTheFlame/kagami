@@ -1,5 +1,5 @@
-import * as Prisma from "../../../generated/prisma/internal/prismaNamespace.js";
-import type { Database } from "../../../db/client.js";
+import * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
+import type { Database } from "../../db/client.js";
 import type {
   InsertMetricInput,
   MetricChartSeriesRow,

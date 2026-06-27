@@ -1,6 +1,6 @@
 import type { AppStateStore, JsonValue } from "@kagami/agent-runtime";
-import { normalizeInputJsonValue } from "../../../common/prisma-json.js";
-import type { Database } from "../../../db/client.js";
+import { normalizeInputJsonValue } from "@kagami/server-core/common/prisma-json";
+import type { Database } from "@kagami/server-core/db/client";
 
 /**
  * App 状态持久化能力的 SQLite 实现：一张 `app_state` 表服务所有 App，按 appId 存取一份

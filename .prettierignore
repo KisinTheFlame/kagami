@@ -3,7 +3,7 @@ pnpm-lock.yaml
 dist
 build
 coverage
-apps/server/src/generated/prisma
+packages/server-core/src/generated/prisma
 apps/server/static/**/*.hbs
 apps/server/static/ai-tone-model.json
 .gstack

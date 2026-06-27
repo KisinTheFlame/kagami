@@ -6,7 +6,7 @@ import {
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
 } from "@kagami/shared/schemas/auth";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { SharedOAuthServiceCore } from "../shared/service.js";
 import type {
   OAuthCallbackInput,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Config } from "../../src/config/config.loader.js";
+import type { Config } from "@kagami/server-core/config/config.loader";
 import type { EmbeddingCacheDao } from "../../src/llm/embedding/cache.dao.js";
 import { createEmbeddingClient } from "../../src/llm/embedding/client.js";
 import type { EmbeddingProvider } from "../../src/llm/embedding/provider.js";

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Config } from "../../src/config/config.loader.js";
-import type { LlmChatCallDao } from "../../src/llm/dao/llm-chat-call.dao.js";
-import { BizError } from "../../src/common/errors/biz-error.js";
+import type { Config } from "@kagami/server-core/config/config.loader";
+import type { LlmChatCallDao } from "@kagami/server-core/dao/llm-chat-call.dao";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
 import type { MetricService } from "../../src/metric/application/metric.service.js";
 import {
@@ -9,7 +9,7 @@ import {
   type LlmProvider,
   type LlmProviderChatResult,
 } from "../../src/llm/provider.js";
-import type { LlmProviderId, LlmUsageId } from "../../src/common/contracts/llm.js";
+import type { LlmProviderId, LlmUsageId } from "@kagami/server-core/common/contracts/llm";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 
 type LlmProviderConfig = {

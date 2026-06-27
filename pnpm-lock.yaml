@@ -75,18 +75,12 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@kagami/server-core':
+        specifier: workspace:*
+        version: link:../../packages/server-core
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@prisma/adapter-better-sqlite3':
-        specifier: ^7.8.0
-        version: 7.8.0
-      '@prisma/client':
-        specifier: ^7.6.0
-        version: 7.6.0(prisma@7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
-      better-sqlite3:
-        specifier: ^12.11.1
-        version: 12.11.1
       cloakbrowser:
         specifier: ^0.4.3
         version: 0.4.3(playwright-core@1.61.1)
@@ -114,9 +108,6 @@ importers:
       playwright-core:
         specifier: ^1.61.1
         version: 1.61.1
-      prisma:
-        specifier: ^7.6.0
-        version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -239,6 +230,40 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/llm:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/server-core:
+    dependencies:
+      '@kagami/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@prisma/adapter-better-sqlite3':
+        specifier: ^7.8.0
+        version: 7.8.0
+      '@prisma/client':
+        specifier: ^7.6.0
+        version: 7.6.0(prisma@7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
+      handlebars:
+        specifier: ^4.7.8
+        version: 4.7.8
+      prisma:
+        specifier: ^7.6.0
+        version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^24.10.1

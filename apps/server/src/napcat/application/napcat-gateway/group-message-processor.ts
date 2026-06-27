@@ -1,4 +1,4 @@
-import { AppLogger } from "../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type {
   NapcatForwardMessageNode,
   NapcatGroupMessageData,
@@ -25,7 +25,7 @@ import {
   type NapcatReceiveMessageSegment,
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
-import type { NapcatQqMessageDao } from "../../infra/napcat-group-message.dao.js";
+import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
 import type {
   NapcatImageAnalysisResult,
   NapcatImageMessageAnalyzer,

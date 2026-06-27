@@ -4,26 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm db:generate && tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
     "pretest": "pnpm --filter \"@kagami/server^...\" build",
     "test": "NODE_OPTIONS=--max-old-space-size=2048 vitest run",
     "test:watch": "NODE_OPTIONS=--max-old-space-size=2048 vitest",
-    "typecheck": "pnpm db:generate && tsc --noEmit",
-    "db:generate": "bash ../../scripts/prisma.sh generate",
-    "db:migrate:dev": "bash ../../scripts/prisma.sh migrate dev",
-    "db:migrate:deploy": "bash ../../scripts/prisma.sh migrate deploy",
-    "db:migrate:status": "bash ../../scripts/prisma.sh migrate status",
-    "db:migrate:reset": "bash ../../scripts/prisma.sh migrate reset",
-    "db:migrate:resolve": "bash ../../scripts/prisma.sh migrate resolve"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@kagami/agent-runtime": "workspace:*",
     "@kagami/llm": "workspace:*",
+    "@kagami/server-core": "workspace:*",
     "@kagami/shared": "workspace:*",
-    "@prisma/adapter-better-sqlite3": "^7.8.0",
-    "@prisma/client": "^7.6.0",
-    "better-sqlite3": "^12.11.1",
     "cloakbrowser": "^0.4.3",
     "croner": "^10.0.1",
     "fast-xml-parser": "^5.5.9",
@@ -33,7 +25,6 @@
     "node-html-parser": "^7.1.0",
     "openai": "^6.25.0",
     "playwright-core": "^1.61.1",
-    "prisma": "^7.6.0",
     "yaml": "^2.8.2",
     "zod": "^3.24.4"
   },

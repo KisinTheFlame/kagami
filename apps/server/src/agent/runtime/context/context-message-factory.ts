@@ -8,7 +8,7 @@ import type {
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
 } from "../../../napcat/application/napcat-gateway.service.js";
-import { renderServerStaticTemplate } from "../../../common/runtime/read-static-text.js";
+import { renderServerStaticTemplate } from "@kagami/server-core/common/runtime/read-static-text";
 import type { HnFeed } from "../../apps/hn/client/firebase.js";
 import type {
   HnGlanceResult,

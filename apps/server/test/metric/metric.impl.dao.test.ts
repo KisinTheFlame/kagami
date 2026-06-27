@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "../../src/db/client.js";
-import { PrismaMetricDao } from "../../src/metric/infra/impl/prisma-metric.impl.dao.js";
+import type { Database } from "@kagami/server-core/db/client";
+import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
 import { PrismaMetricChartDao } from "../../src/metric/infra/impl/prisma-metric-chart.impl.dao.js";
 
 describe("PrismaMetricDao", () => {

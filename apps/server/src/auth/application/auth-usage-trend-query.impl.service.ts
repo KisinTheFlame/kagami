@@ -3,7 +3,7 @@ import {
   type AuthUsageTrendResponse,
   type AuthUsageTrendWindow,
 } from "@kagami/shared/schemas/auth-usage-trend";
-import type { AuthUsageSnapshotDao } from "../dao/auth-usage-snapshot.dao.js";
+import type { AuthUsageSnapshotDao } from "@kagami/server-core/dao/auth-usage-snapshot.dao";
 import type {
   AuthUsageTrendQueryService,
   QueryAuthUsageTrendInput,

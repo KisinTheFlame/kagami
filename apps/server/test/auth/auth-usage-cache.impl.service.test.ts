@@ -4,8 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ClaudeCodeUsageLimitsResponse } from "@kagami/shared/schemas/claude-code-auth";
 import { type CodexUsageLimitsResponse } from "@kagami/shared/schemas/codex-auth";
-import { BizError } from "../../src/common/errors/biz-error.js";
-import type { AuthUsageSnapshotDao } from "../../src/auth/dao/auth-usage-snapshot.dao.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import type { AuthUsageSnapshotDao } from "@kagami/server-core/dao/auth-usage-snapshot.dao";
 import {
   AuthUsageCacheManager,
   EMPTY_CLAUDE_CODE_USAGE_LIMITS,

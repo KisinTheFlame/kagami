@@ -2,7 +2,7 @@ import {
   type AuthUsageTrendRange,
   type AuthUsageTrendWindow,
 } from "@kagami/shared/schemas/auth-usage-trend";
-import type { LlmProviderId } from "../../common/contracts/llm.js";
+import type { LlmProviderId } from "../common/contracts/llm.js";
 
 export type AuthUsageSnapshotItem = {
   id: number;

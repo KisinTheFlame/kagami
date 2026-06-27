@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER_DIR="$ROOT_DIR/apps/server"
+# Prisma schema / migrations / 生成的 client 都归属共享包 @kagami/server-core。
+CORE_DIR="$ROOT_DIR/packages/server-core"
 
 if [ "$#" -eq 0 ]; then
   echo "Usage: scripts/prisma.sh <prisma args...>"
@@ -42,5 +43,5 @@ if [ "$1" = "migrate" ] && [ "${2:-}" = "dev" ]; then
   fi
 fi
 
-cd "$SERVER_DIR"
+cd "$CORE_DIR"
 DATABASE_URL="$DATABASE_URL" pnpm exec prisma "${prisma_args[@]}"

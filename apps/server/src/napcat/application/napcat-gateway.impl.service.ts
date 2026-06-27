@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { ConfigManager } from "../../config/config.manager.js";
-import type { Config } from "../../config/config.loader.js";
-import { BizError } from "../../common/errors/biz-error.js";
-import { AppLogger } from "../../logger/logger.js";
+import type { ConfigManager } from "@kagami/server-core/config/config.manager";
+import type { Config } from "@kagami/server-core/config/config.loader";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
-import type { NapcatQqMessageDao } from "../infra/napcat-group-message.dao.js";
+import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
 import { buildOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";

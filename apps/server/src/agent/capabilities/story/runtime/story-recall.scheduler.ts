@@ -3,7 +3,7 @@ import type { AgentContext } from "../../../runtime/context/agent-context.js";
 import type { Event, StoryRecallStoryPayload } from "../../../runtime/event/event.js";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
-import { AppLogger } from "../../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { StoryRecallService } from "../application/story-recall.service.js";
 
 const logger = new AppLogger({ source: "agent.story-recall" });

@@ -6,7 +6,7 @@ import {
 import type {
   LlmChatCallItem as LlmChatCallDaoItem,
   LlmChatCallSummary as LlmChatCallDaoSummary,
-} from "../../llm/dao/llm-chat-call.dao.js";
+} from "@kagami/server-core/dao/llm-chat-call.dao";
 
 type MapLlmChatCallListInput = {
   page: number;

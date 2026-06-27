@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MetricDao } from "../../src/metric/infra/metric.dao.js";
+import type { MetricDao } from "@kagami/server-core/dao/metric.dao";
 import { DefaultMetricService } from "../../src/metric/application/metric.impl.service.js";
 import { initTestLogger } from "../helpers/logger.js";
 

@@ -1,6 +1,6 @@
-import { toInputJsonObject } from "../../../../common/prisma-json.js";
-import type { Database } from "../../../../db/client.js";
-import { AppLogger } from "../../../../logger/logger.js";
+import { toInputJsonObject } from "@kagami/server-core/common/prisma-json";
+import type { Database } from "@kagami/server-core/db/client";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { RootAgentRuntimeSnapshotRepository } from "./root-agent-runtime-snapshot.repository.js";
 import {
   PersistedRootAgentRuntimeSnapshotSchema,

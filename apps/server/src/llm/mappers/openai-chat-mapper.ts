@@ -15,7 +15,7 @@ import type {
   LlmUsage,
 } from "../types.js";
 import { imageContentToBase64 } from "@kagami/llm";
-import type { LlmProviderId } from "../../common/contracts/llm.js";
+import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
 
 type OpenAiStyleUsage = {
   prompt_tokens?: number;

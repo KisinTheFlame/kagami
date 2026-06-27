@@ -1,4 +1,4 @@
-import { AppLogger } from "../../../../logger/logger.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { TODO_LIST_RENDER_LIMIT } from "./todo.constants.js";
 import type { DigestSummary, DueReminder, TodoService } from "./todo.service.js";
 
