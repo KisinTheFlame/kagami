@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isRecord } from "../../../common/prisma-json.js";
 import {
   type NapcatSendAtSegment,
+  type NapcatSendFaceSegment,
   type NapcatSendMessageSegment,
   type NapcatSendReplySegment,
   type NapcatSendTextSegment,
@@ -14,7 +15,7 @@ import {
   type NapcatReceiveReplySegment,
   type NapcatReceiveTextSegment,
 } from "../../schema/napcat-segment.js";
-import { QQ_FACE_NAMES, normalizeFaceText } from "./qq-face-names.js";
+import { QQ_FACE_NAMES, normalizeFaceText, resolveFaceId } from "./qq-face-names.js";
 
 export type { NapcatReceiveAtSegment, NapcatReceiveMessageSegment, NapcatReceiveTextSegment };
 
@@ -250,30 +251,40 @@ function resolveFaceName(segment: NapcatReceiveFaceSegment): string | null {
   return QQ_FACE_NAMES[segment.data.id] ?? null;
 }
 
+/**
+ * 出站文本 → NapCat 消息段。识别两种内联标记并还原成对应段，其余按纯文本处理：
+ *   - `{@昵称(qq)}` → at 段（@提及）
+ *   - `[表情: 名字]` → face 段（QQ 内置表情），名字查不到时原样保留为文本，绝不静默丢弃
+ *
+ * 两种标记都与「接收侧」的渲染格式对称（见 {@link formatAtSegment} / {@link formatFaceSegment}）：
+ * 小镜照着自己收到的样子写，就能把同样的 @ 和表情发出去。表情标记的冒号半角 / 全角都认——
+ * 中文输出常打出全角 `：`，不放宽会让它漏成纯文本。
+ */
 export function parseOutgoingMessageSegments(message: string): NapcatSendMessageSegment[] {
-  const mentionPattern = /\{@([^{}()\n]+)\((\d+|all)\)\}/g;
-  const segments: Array<NapcatSendTextSegment | NapcatSendAtSegment> = [];
+  const tokenPattern = /\{@([^{}()\n]+)\((\d+|all)\)\}|\[表情[:：]\s*([^\]\n]+)\]/g;
+  const segments: NapcatSendMessageSegment[] = [];
   let lastIndex = 0;
 
-  for (const match of message.matchAll(mentionPattern)) {
-    const fullMatch = match[0];
-    const nickname = match[1];
-    const qq = match[2];
+  for (const match of message.matchAll(tokenPattern)) {
     const index = match.index;
-    if (index === undefined || nickname.trim().length === 0) {
+    if (index === undefined) {
+      continue;
+    }
+
+    const [fullMatch, mentionNickname, mentionQq, faceName] = match;
+    const replacement: NapcatSendAtSegment | NapcatSendFaceSegment | null = mentionQq
+      ? createMentionSegment(mentionNickname, mentionQq)
+      : createFaceSegment(faceName);
+
+    // 标记无效（@昵称为空 / 表情名查不到）：不消费成段，保留原文当文本一起发出去。
+    if (!replacement) {
       continue;
     }
 
     if (index > lastIndex) {
       segments.push(createOutgoingTextSegment(message.slice(lastIndex, index)));
     }
-
-    segments.push({
-      type: "at",
-      data: {
-        qq,
-      },
-    });
+    segments.push(replacement);
     lastIndex = index + fullMatch.length;
   }
 
@@ -289,7 +300,7 @@ export function parseOutgoingMessageSegments(message: string): NapcatSendMessage
 }
 
 /**
- * 组装一条出站消息的 segment 数组：先按文本/@ 标记解析正文，若指定了回复目标，再把一个
+ * 组装一条出站消息的 segment 数组：先按文本/@/表情标记解析正文，若指定了回复目标，再把一个
  * reply 段前置到最前面（OneBot 约定 reply 段在首位，整条消息即成为对该消息的引用回复）。
  */
 export function buildOutgoingMessageSegments(
@@ -310,6 +321,24 @@ function createOutgoingReplySegment(messageId: number): NapcatSendReplySegment {
       id: String(messageId),
     },
   };
+}
+
+function createMentionSegment(nickname: string, qq: string): NapcatSendAtSegment | null {
+  if (nickname.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    type: "at",
+    data: {
+      qq,
+    },
+  };
+}
+
+function createFaceSegment(name: string): NapcatSendFaceSegment | null {
+  const id = resolveFaceId(name);
+  return id ? { type: "face", data: { id } } : null;
 }
 
 export function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
