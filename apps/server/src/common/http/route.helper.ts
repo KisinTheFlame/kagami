@@ -49,7 +49,7 @@ export function registerQueryRoute<
   execute,
 }: QueryRouteDef<TQuerySchema, TResponseSchema>): void {
   app.get(path, async (request, reply) => {
-    const query = querySchema.parse(request.query);
+    const query = querySchema.parse(request.query) as z.infer<TQuerySchema>;
     const result = await execute({ query, request, reply });
     return responseSchema.parse(result);
   });
@@ -66,7 +66,7 @@ export function registerParamRoute<
   execute,
 }: ParamRouteDef<TParamSchema, TResponseSchema>): void {
   app.get(path, async (request, reply) => {
-    const params = paramSchema.parse(request.params);
+    const params = paramSchema.parse(request.params) as z.infer<TParamSchema>;
     const result = await execute({ params, request, reply });
     return responseSchema.parse(result);
   });
@@ -84,9 +84,9 @@ export function registerCommandRoute<
   execute,
 }: CommandRouteDef<TBodySchema, TResponseSchema>): void {
   app.post(path, async (request, reply) => {
-    const body = bodySchema.parse(request.body);
+    const body = bodySchema.parse(request.body) as z.infer<TBodySchema>;
     const result = await execute({ body, request, reply });
-    const response = responseSchema.parse(result);
+    const response = responseSchema.parse(result) as z.infer<TResponseSchema>;
     return reply.code(statusCode).send(response);
   });
 }
