@@ -1,5 +1,5 @@
 import { initLoggerRuntime } from "./logger/runtime.js";
-import { closeDb, type Database } from "./db/client.js";
+import { closeDb, type Database } from "@kagami/server-core/db/client";
 import { AppLogger } from "./logger/logger.js";
 import { StdoutLogSink } from "./logger/sinks/stdout-sink.js";
 import { buildServerRuntime } from "./app/server-runtime.js";

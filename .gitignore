@@ -10,6 +10,6 @@ build
 coverage
 .DS_Store
 .vscode
-apps/server/src/generated/prisma
+packages/server-core/src/generated/prisma
 .claude/worktrees
 .gstack

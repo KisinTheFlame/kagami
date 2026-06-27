@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "../../src/db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 import type { MetricService } from "../../src/metric/application/metric.service.js";
 import { buildDataRetentionTasks } from "../../src/scheduler/tasks/data-retention/data-retention-task.factory.js";
 import { RETENTION_TASKS } from "../../src/scheduler/tasks/data-retention/retention-tasks.js";

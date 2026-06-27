@@ -1,4 +1,4 @@
-import type { ConfigManager } from "../../../config/config.manager.js";
+import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { NapcatQqMessageDao } from "../../../napcat/infra/napcat-group-message.dao.js";
 import { DefaultNapcatGatewayService } from "../../../napcat/application/napcat-gateway.impl.service.js";
 import type { NapcatAgentEvent } from "../../../napcat/application/napcat-gateway.service.js";

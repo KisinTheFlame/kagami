@@ -5,7 +5,7 @@ import {
   NapcatSendGroupMessageRequestSchema,
   NapcatSendGroupMessageResponseSchema,
 } from "@kagami/shared/schemas/napcat-message";
-import { registerCommandRoute } from "../../common/http/route.helper.js";
+import { registerCommandRoute } from "@kagami/server-core/common/http/route.helper";
 
 /**
  * 管理台直发 QQ 消息的最小出站端口。结构化定义，避免 napcat/http 反向依赖 agent 模块——

@@ -1,4 +1,4 @@
-import type { Database } from "../../../db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 
 /**
  * `findMany` / `deleteMany` subset of a Prisma delegate that this factory needs.

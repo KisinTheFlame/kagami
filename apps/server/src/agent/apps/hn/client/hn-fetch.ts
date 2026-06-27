@@ -1,4 +1,4 @@
-import { BizError } from "../../../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 
 /**
  * Hacker News 两个只读 API（Firebase + Algolia）共用的 HTTP 取数助手。

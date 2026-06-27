@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BizError } from "../../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { AppLogger } from "../../../logger/logger.js";
 import {
   type NapcatGatewayActionResponse,

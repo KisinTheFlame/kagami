@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { OAuthCallbackHandler, OAuthCallbackInput, OAuthCallbackServerLike } from "./types.js";
 
 type OAuthCallbackServerConfig = {

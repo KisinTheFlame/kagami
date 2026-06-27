@@ -1,5 +1,5 @@
-import { toInputJsonObject } from "../../../../../common/prisma-json.js";
-import type { Database } from "../../../../../db/client.js";
+import { toInputJsonObject } from "@kagami/server-core/common/prisma-json";
+import type { Database } from "@kagami/server-core/db/client";
 import {
   PersistedStoryAgentRuntimeSnapshotSchema,
   type PersistedStoryAgentRuntimeSnapshot,

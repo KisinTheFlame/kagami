@@ -4,7 +4,7 @@ import {
   NapcatEventListResponseSchema,
 } from "@kagami/shared/schemas/napcat-event";
 import type { NapcatEventQueryService } from "../application/napcat-event-query.service.js";
-import { registerQueryRoute } from "../../common/http/route.helper.js";
+import { registerQueryRoute } from "@kagami/server-core/common/http/route.helper";
 
 type NapcatEventHandlerDeps = {
   napcatEventQueryService: NapcatEventQueryService;

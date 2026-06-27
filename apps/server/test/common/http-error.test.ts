@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { BizError } from "../../src/common/errors/biz-error.js";
-import { toHttpErrorResponse } from "../../src/common/errors/http-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { toHttpErrorResponse } from "@kagami/server-core/common/errors/http-error";
 
 describe("toHttpErrorResponse", () => {
   it("should map ZodError to 400 response", () => {

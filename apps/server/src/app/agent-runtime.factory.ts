@@ -9,15 +9,15 @@ import {
   type ToolComponent,
 } from "@kagami/agent-runtime";
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
-import type { Config } from "../config/config.loader.js";
-import type { Database } from "../db/client.js";
+import type { Config } from "@kagami/server-core/config/config.loader";
+import type { Database } from "@kagami/server-core/db/client";
 import { AppLogger } from "../logger/logger.js";
 import type { LlmClient } from "../llm/client.js";
 import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
-import type { ConfigManager } from "../config/config.manager.js";
+import type { ConfigManager } from "@kagami/server-core/config/config.manager";
 import type { NapcatQqMessageDao } from "../napcat/infra/napcat-group-message.dao.js";
 import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";

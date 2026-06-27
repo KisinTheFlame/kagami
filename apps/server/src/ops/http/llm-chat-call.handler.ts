@@ -6,7 +6,10 @@ import {
   LlmChatCallListResponseSchema,
 } from "@kagami/shared/schemas/llm-chat";
 import type { LlmChatCallQueryService } from "../application/llm-chat-call-query.service.js";
-import { registerParamRoute, registerQueryRoute } from "../../common/http/route.helper.js";
+import {
+  registerParamRoute,
+  registerQueryRoute,
+} from "@kagami/server-core/common/http/route.helper";
 
 const LlmChatCallDetailParamSchema = z.object({
   id: z.preprocess(

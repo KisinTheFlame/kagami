@@ -14,7 +14,7 @@ import type {
   LlmToolCall,
   LlmUsage,
 } from "../types.js";
-import type { LlmProviderId } from "../../common/contracts/llm.js";
+import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
 
 type OpenAiStyleUsage = {
   prompt_tokens?: number;

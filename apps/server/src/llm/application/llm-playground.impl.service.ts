@@ -7,7 +7,7 @@ import {
   type LlmProviderListResponse,
   type PlaygroundMessage,
 } from "@kagami/shared/schemas/llm-chat";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { LlmClient } from "../client.js";
 import type { LlmChatRequest, LlmContentPart, LlmMessage } from "../types.js";
 import type { LlmPlaygroundService } from "./llm-playground.service.js";

@@ -9,13 +9,30 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
 const PrismaClient = getPrismaClientClass();
 
+// 锁等待超时：并发写同一 SQLite 文件时，等待持锁方释放的毫秒数，超时才抛 SQLITE_BUSY。
+// 经由 better-sqlite3 的 `timeout` 选项对每条连接生效。
+const SQLITE_BUSY_TIMEOUT_MS = 5000;
+
 export type Database = PrismaClientInstance;
 
 export function createDbClient({ databaseUrl }: { databaseUrl: string }): Database {
   const filePath = sqliteFilePathFromUrl(databaseUrl);
   mkdirSync(path.dirname(filePath), { recursive: true });
-  const adapter = new PrismaBetterSqlite3({ url: `file:${filePath}` });
+  const adapter = new PrismaBetterSqlite3({
+    url: `file:${filePath}`,
+    timeout: SQLITE_BUSY_TIMEOUT_MS,
+  });
   return new PrismaClient({ adapter });
+}
+
+/**
+ * 开启 WAL 日志模式，让 Agent 进程与管理台后端进程能并发读写同一个 SQLite 库文件而不互相阻塞。
+ * WAL 是库文件级别的持久设置，设一次即长期生效；busy_timeout 已由 `createDbClient` 的
+ * `timeout` 选项对每条连接生效，这里再设一次兜底。应在进程启动、拿到 db client 后调用一次。
+ */
+export async function configureSqlite(database: Database): Promise<void> {
+  await database.$queryRawUnsafe("PRAGMA journal_mode = WAL;");
+  await database.$queryRawUnsafe(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
 }
 
 export async function closeDb(database: Database): Promise<void> {

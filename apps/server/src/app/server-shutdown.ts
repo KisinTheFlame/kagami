@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { Database } from "../db/client.js";
-import { closeDb as defaultCloseDb } from "../db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
+import { closeDb as defaultCloseDb } from "@kagami/server-core/db/client";
 import { AppLogger } from "../logger/logger.js";
 import { getLoggerRuntime } from "../logger/runtime.js";
 import type { TaskScheduler } from "../scheduler/application/task-scheduler.js";

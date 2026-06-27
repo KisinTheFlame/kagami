@@ -11,7 +11,7 @@ import type {
   MetricChartRangePreset,
   MetricChartSeries,
 } from "@kagami/shared/schemas/metric-chart";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { MetricChartItem } from "../domain/metric.js";
 import type { MetricChartDao } from "../infra/metric-chart.dao.js";
 import type { MetricChartSeriesRow, MetricDao } from "../infra/metric.dao.js";

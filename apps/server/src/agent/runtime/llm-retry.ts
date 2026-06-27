@@ -4,7 +4,7 @@ import type {
   ReActKernelRunRoundInput,
 } from "@kagami/agent-runtime";
 import type { LlmMessage } from "../../llm/types.js";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 
 export const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
 

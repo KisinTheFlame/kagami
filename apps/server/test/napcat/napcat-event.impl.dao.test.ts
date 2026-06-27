@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "../../src/db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 import { PrismaNapcatEventDao } from "../../src/napcat/infra/impl/napcat-event.impl.dao.js";
 
 describe("PrismaNapcatEventDao", () => {

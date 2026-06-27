@@ -11,8 +11,8 @@ import type {
   LlmChatResponsePayload,
   LlmContentPart,
 } from "../types.js";
-import { BizError } from "../../common/errors/biz-error.js";
-import type { Config } from "../../config/config.loader.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import type { Config } from "@kagami/server-core/config/config.loader";
 import { AppLogger } from "../../logger/logger.js";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 

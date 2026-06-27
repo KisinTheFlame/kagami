@@ -1,4 +1,4 @@
-import type { Database } from "../../../../db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 import type {
   IthomeFeedCursorDao,
   IthomeFeedCursorRecord,

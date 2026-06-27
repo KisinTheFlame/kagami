@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AppLogger } from "../../logger/logger.js";
-import { BizError } from "../../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { MetricTags } from "../domain/metric.js";
 import type { MetricDao } from "../infra/metric.dao.js";
 import type { MetricService, RecordMetricInput } from "./metric.service.js";

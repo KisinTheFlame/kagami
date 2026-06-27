@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BizError } from "../../src/common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { serializeError } from "../../src/logger/serializer.js";
 
 describe("serializeError", () => {

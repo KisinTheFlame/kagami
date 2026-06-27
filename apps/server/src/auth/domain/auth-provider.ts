@@ -1,6 +1,6 @@
 import { type AuthProvider } from "@kagami/shared/schemas/auth";
-import type { LlmProviderId } from "../../common/contracts/llm.js";
-import { BizError } from "../../common/errors/biz-error.js";
+import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 
 export type InternalAuthProvider = Extract<LlmProviderId, "openai-codex" | "claude-code">;
 

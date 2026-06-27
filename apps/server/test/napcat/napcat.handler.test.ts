@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { BizError } from "../../src/common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { NapcatHandler } from "../../src/napcat/http/napcat.handler.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 

@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
-import { BizError } from "../../common/errors/biz-error.js";
-import type { Config } from "../../config/config.loader.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import type { Config } from "@kagami/server-core/config/config.loader";
 import {
   attachLlmProviderFailureContext,
   toSerializableLlmNativeRecord,

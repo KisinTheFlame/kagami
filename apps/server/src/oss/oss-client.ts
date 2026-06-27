@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BizError } from "../common/errors/biz-error.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
 
 /**
  * 自建对象存储（@kagami/oss）的最小 HTTP client：把二进制 PUT 进去，拿对外 key（resid）。

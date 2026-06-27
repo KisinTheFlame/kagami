@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type JsonValue } from "@kagami/shared/schemas/base";
-import type { Database } from "../../src/db/client.js";
+import type { Database } from "@kagami/server-core/db/client";
 import { PrismaNapcatQqMessageDao } from "../../src/napcat/infra/impl/napcat-group-message.impl.dao.js";
 
 describe("PrismaNapcatQqMessageDao", () => {

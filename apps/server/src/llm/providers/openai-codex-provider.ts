@@ -12,8 +12,8 @@ import type {
   LlmContentPart,
   LlmToolCall,
 } from "../types.js";
-import { BizError } from "../../common/errors/biz-error.js";
-import type { Config } from "../../config/config.loader.js";
+import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import type { Config } from "@kagami/server-core/config/config.loader";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
 
 const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
