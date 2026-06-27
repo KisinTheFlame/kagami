@@ -8,7 +8,7 @@ import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-proc
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
 import type { NapcatQqMessageDao } from "../dao/napcat-group-message.dao.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
-import { parseOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
+import { buildOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
   NapcatAgentEvent,
@@ -246,8 +246,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   public async sendGroupMessage({
     groupId,
     message,
+    replyToMessageId,
   }: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult> {
-    const messageSegments = parseOutgoingMessageSegments(message);
+    const messageSegments = buildOutgoingMessageSegments(message, replyToMessageId);
     const data = await this.transport.request("send_group_msg", {
       group_id: groupId,
       message: messageSegments,
@@ -272,8 +273,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   public async sendPrivateMessage({
     userId,
     message,
+    replyToMessageId,
   }: NapcatSendPrivateMessageInput): Promise<NapcatSendPrivateMessageResult> {
-    const messageSegments = parseOutgoingMessageSegments(message);
+    const messageSegments = buildOutgoingMessageSegments(message, replyToMessageId);
     const data = await this.transport.request("send_private_msg", {
       user_id: userId,
       message: messageSegments,

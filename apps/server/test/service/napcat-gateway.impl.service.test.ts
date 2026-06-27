@@ -203,6 +203,71 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
+  it("should prepend a reply segment when sendGroupMessage carries a reply target", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const sendPromise = gateway.sendGroupMessage({
+      groupId: "123456",
+      message: "收到",
+      replyToMessageId: 9988,
+    });
+    const sentPayload = JSON.parse(socket.sentPayloads[0]) as {
+      echo: string;
+      params: {
+        group_id: string;
+        message: unknown;
+      };
+    };
+
+    expect(sentPayload.params.group_id).toBe("123456");
+    expect(sentPayload.params.message).toEqual([
+      {
+        type: "reply",
+        data: {
+          id: "9988",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: "收到",
+        },
+      },
+    ]);
+
+    socket.emitMessage(
+      JSON.stringify({
+        status: "ok",
+        retcode: 0,
+        data: {
+          message_id: 9531,
+        },
+        message: "",
+        echo: sentPayload.echo,
+      }),
+    );
+
+    await expect(sendPromise).resolves.toEqual({ messageId: 9531 });
+    await gateway.stop();
+  });
+
   it("should resolve sendPrivateMessage when NapCat returns success response", async () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = await DefaultNapcatGatewayService.create({

@@ -57,6 +57,33 @@ describe("send_message tool", () => {
     });
   });
 
+  it("带 reply_to 时把回复目标透传给发送服务", async () => {
+    const { tool, agentMessageService } = buildTool({ score: 0.1 });
+
+    await tool.execute({ message: "收到", reply_to: 9988 }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
+      groupId: "987654",
+      message: "收到",
+      replyToMessageId: 9988,
+    });
+  });
+
+  it("被拦的引用回复经 confirm_last 补发时保留回复目标", async () => {
+    const { tool, agentMessageService } = buildTool({ score: 0.9 });
+
+    await tool.execute({ message: "这不是结束，而是开始", reply_to: 9988 }, groupContext());
+    expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
+
+    await tool.execute({ confirm_last: true }, groupContext());
+
+    expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
+      groupId: "987654",
+      message: "这不是结束，而是开始",
+      replyToMessageId: 9988,
+    });
+  });
+
   it("私聊发言正常发送", async () => {
     const { tool, agentMessageService } = buildTool({ score: 0.2 });
 

@@ -6,9 +6,18 @@ import {
   type NapcatSendGroupMessageResponse,
 } from "@kagami/shared/schemas/napcat-message";
 
-export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest;
+/**
+ * 出站消息的内部输入：在 HTTP wire schema 之上加一个**仅内部使用**的可选 `replyToMessageId`。
+ * 带上它时，发送链路会前置一个 reply 段，让这条消息成为对目标消息的引用回复。HTTP 请求
+ * schema（/napcat/group/send）保持纯净，不暴露该字段。
+ */
+export type NapcatSendGroupMessageInput = NapcatSendGroupMessageRequest & {
+  replyToMessageId?: number;
+};
 export type NapcatSendGroupMessageResult = NapcatSendGroupMessageResponse;
-export type NapcatSendPrivateMessageInput = NapcatSendPrivateMessageRequest;
+export type NapcatSendPrivateMessageInput = NapcatSendPrivateMessageRequest & {
+  replyToMessageId?: number;
+};
 export type NapcatSendPrivateMessageResult = NapcatSendPrivateMessageResponse;
 export type NapcatGetGroupInfoInput = {
   groupId: string;

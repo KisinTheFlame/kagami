@@ -3,6 +3,7 @@ import { isRecord } from "../../../common/prisma-json.js";
 import {
   type NapcatSendAtSegment,
   type NapcatSendMessageSegment,
+  type NapcatSendReplySegment,
   type NapcatSendTextSegment,
   NapcatReceiveMessageSegmentSchema,
   type NapcatReceiveAtSegment,
@@ -285,6 +286,30 @@ export function parseOutgoingMessageSegments(message: string): NapcatSendMessage
   }
 
   return segments;
+}
+
+/**
+ * 组装一条出站消息的 segment 数组：先按文本/@ 标记解析正文，若指定了回复目标，再把一个
+ * reply 段前置到最前面（OneBot 约定 reply 段在首位，整条消息即成为对该消息的引用回复）。
+ */
+export function buildOutgoingMessageSegments(
+  message: string,
+  replyToMessageId?: number,
+): NapcatSendMessageSegment[] {
+  const body = parseOutgoingMessageSegments(message);
+  if (replyToMessageId === undefined) {
+    return body;
+  }
+  return [createOutgoingReplySegment(replyToMessageId), ...body];
+}
+
+function createOutgoingReplySegment(messageId: number): NapcatSendReplySegment {
+  return {
+    type: "reply",
+    data: {
+      id: String(messageId),
+    },
+  };
 }
 
 export function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
