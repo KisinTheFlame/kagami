@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm db:generate && tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "pretest": "pnpm --filter \"@kagami/server^...\" build",
     "test": "NODE_OPTIONS=--max-old-space-size=2048 vitest run",
     "test:watch": "NODE_OPTIONS=--max-old-space-size=2048 vitest",
     "typecheck": "pnpm db:generate && tsc --noEmit",
