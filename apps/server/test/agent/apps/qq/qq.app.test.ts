@@ -255,6 +255,8 @@ describe("QqApp", () => {
     expect(result.ok).toBe(true);
     expect(result.content).toContain("历史一条");
     expect(result.content).toContain("<qq_conversation");
+    // message_id 作为「回复哪条」的句柄暴露在渲染里（groupMessage 默认 messageId=1）。
+    expect(result.content).toContain('<qq_message id="1">');
   });
 
   it("persists the unread badge: exportState → restoreState round-trips count + mention", async () => {

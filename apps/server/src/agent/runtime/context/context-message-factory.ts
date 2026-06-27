@@ -361,12 +361,14 @@ export function renderGroupMessagePlainText(input: {
   userId: string;
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
+  messageId?: number | null;
 }): string {
   return renderQqMessagePlainText({
     displayName: input.nickname,
     userId: input.userId,
     rawMessage: input.rawMessage,
     messageSegments: input.messageSegments,
+    messageId: input.messageId,
   });
 }
 
@@ -376,12 +378,14 @@ export function renderPrivateMessagePlainText(input: {
   userId: string;
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
+  messageId?: number | null;
 }): string {
   return renderQqMessagePlainText({
     displayName: formatPrivateChatDisplayName(input),
     userId: input.userId,
     rawMessage: input.rawMessage,
     messageSegments: input.messageSegments,
+    messageId: input.messageId,
   });
 }
 
@@ -408,12 +412,15 @@ function renderQqMessagePlainText(input: {
   userId: string;
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
+  messageId?: number | null;
 }): string {
   const renderedMessage = renderQqMessageBody(input);
   return renderServerStaticTemplate(import.meta.url, "context/qq-message.hbs", {
     nickname: input.displayName,
     userId: input.userId,
     messageBody: renderedMessage,
+    // 暴露 QQ message_id 作为「回复哪条」的句柄；缺失时模板不渲染 id 属性。
+    messageId: input.messageId ?? null,
   });
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOutgoingMessageSegments,
   formatImageSegmentText,
   parseOutgoingMessageSegments,
   renderSupportedMessageSegments,
@@ -99,6 +100,59 @@ describe("parseOutgoingMessageSegments", () => {
         type: "text",
         data: {
           text: "{@闻震(abc)}",
+        },
+      },
+    ]);
+  });
+});
+
+describe("buildOutgoingMessageSegments", () => {
+  it("falls back to plain parsing when no reply target is given", () => {
+    expect(buildOutgoingMessageSegments("hello group")).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "hello group",
+        },
+      },
+    ]);
+  });
+
+  it("prepends a reply segment when a reply target is given", () => {
+    expect(buildOutgoingMessageSegments("好的", 9988)).toEqual([
+      {
+        type: "reply",
+        data: {
+          id: "9988",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: "好的",
+        },
+      },
+    ]);
+  });
+
+  it("keeps the reply segment before parsed mention segments", () => {
+    expect(buildOutgoingMessageSegments("{@闻震(870853294)} 收到", 9988)).toEqual([
+      {
+        type: "reply",
+        data: {
+          id: "9988",
+        },
+      },
+      {
+        type: "at",
+        data: {
+          qq: "870853294",
+        },
+      },
+      {
+        type: "text",
+        data: {
+          text: " 收到",
         },
       },
     ]);

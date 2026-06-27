@@ -266,16 +266,28 @@ describe("context-message-factory", () => {
     ).toEqual({
       role: "user",
       content: [
-        "<qq_message>",
+        '<qq_message id="1001">',
         "测试昵称 (654321):",
         "first",
         "</qq_message>",
         "",
-        "<qq_message>",
+        '<qq_message id="1002">',
         "另一个群友 (123456):",
         "second",
         "</qq_message>",
       ].join("\n"),
     });
+  });
+
+  it("should expose message_id as the reply handle when present", () => {
+    expect(
+      renderGroupMessagePlainText({
+        nickname: "测试昵称",
+        userId: "654321",
+        rawMessage: "hi",
+        messageSegments: [{ type: "text", data: { text: "hi" } }],
+        messageId: 9988,
+      }),
+    ).toBe('<qq_message id="9988">\n测试昵称 (654321):\nhi\n</qq_message>');
   });
 });
