@@ -17,7 +17,8 @@ describe("context-message-factory", () => {
   it("should render the wake reminder with beijing time", () => {
     expect(createWakeReminderMessage(new Date("2026-03-09T10:21:00.000Z"))).toEqual({
       role: "user",
-      content: "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 18:21</system_reminder>",
+      content:
+        "<system_reminder>当前时间为北京时间 2026 年 3 月 9 日 星期一 18:21</system_reminder>",
     });
   });
 
