@@ -84,6 +84,31 @@
 
 ---
 
+## resource（资源 / 文件能力）
+
+### QQ 群文件的列表查询、上传、下载
+
+- **Priority:** P1
+- **Status:** open
+- **Context:** 给小镜的 QQ App 增加群文件能力：列出群文件、上传文件到群、从群下载文件。上传与下载都走自建 OSS 作为中转——下载即把群文件落进 OSS 成为一个 res，上传即把 OSS 里的 res 推到群文件。视角上这是"给 Agent 的生活添一种新的存在方式"，群文件只是 QQ App 内的一个能力，概念不要泄漏到 runtime。
+- **Notes:** 依赖下面的 `download_resource` / `upload_resource` 全局工具与 OSS。NapCat 侧需要对应的群文件 list/upload/download 协议接口。
+
+### `download_resource` 全局工具
+
+- **Priority:** P1
+- **Status:** open
+- **Context:** 提供一个全局工具 `download_resource`，允许小镜把一个 res 下载到它指定的路径。文件名必须由小镜来给出（而不是沿用 res 自身的 key / 内容寻址名）。这是把 OSS 里的资源落地成本地文件的桥。
+- **Notes:** 作为全局工具暴露——评估是否真的需要顶层工具，还是仍走 InvokeTool 子工具（按 KV 缓存原则，新增能力第一反应是做成 InvokeTool 子工具，除非它是结构性元能力）。入参至少含 res 标识 + 目标路径 + 文件名。
+
+### `upload_resource` 全局工具
+
+- **Priority:** P1
+- **Status:** open
+- **Context:** 提供一个全局工具 `upload_resource`，允许小镜把一个指定路径的本地文件保存进 OSS，得到一个 res。是 `download_resource` 的反向操作，把本地文件提升为可被其他能力引用的 OSS 资源。
+- **Notes:** 同样评估顶层工具 vs InvokeTool 子工具。复用 OSS 现有的 sha256 内容去重 + refcount；入参为源文件路径。
+
+---
+
 ## browser（Browser App 设计衍生，2026-06-27 /plan-eng-review）
 
 ### 运行时"工具异步调用、稍后回结果"原语
