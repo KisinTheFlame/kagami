@@ -15,14 +15,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # PR 必须 bump 版本号：根目录 VERSION 要严格高于 base 分支，否则判失败。
+      # 首次引入版本号时 base 尚无 VERSION，脚本会 bootstrap 放行。
+      - name: Version bump gate
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-version-bump.sh
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
 
       # pnpm/action-setup 读 package.json 的 packageManager 字段，安装对应版本 pnpm。
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
