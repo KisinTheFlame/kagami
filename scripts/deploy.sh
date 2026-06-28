@@ -17,12 +17,12 @@ if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
   echo "[app:deploy]   检测到待应用迁移，暂停写库进程后迁移..."
-  pnpm exec pm2 stop kagami-server kagami-console >/dev/null 2>&1 || true
+  pnpm exec pm2 stop kagami-agent kagami-console >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
   else
     echo "[app:deploy]   迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-server kagami-console >/dev/null 2>&1 || true
+    pnpm exec pm2 start kagami-agent kagami-console >/dev/null 2>&1 || true
     exit 1
   fi
 fi

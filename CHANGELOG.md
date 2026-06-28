@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.2] - 2026-06-29
+
+### Changed
+
+- agent: 把后端主进程从 `@kagami/server` 改名为 `@kagami/agent`（目录 `apps/server` → `apps/agent`、PM2 进程 `kagami-server` → `kagami-agent`），让命名与「这个进程就是 Agent 本体」的定位一致——console 拆出后，server 进程已纯粹是 Agent 生活运行时。**纯机械改名、零行为变化**：apps/agent 是 leaf app（仓库内无任何 `import ... from "@kagami/server"`），内部相对 import 与 tsconfig 源码 path 随目录移动自洽。同步改 `ecosystem.config.cjs`（name / cwd）、`scripts/deploy.sh`（停写库进程的进程名）、`eslint.config.mjs`（类型感知 glob `apps/agent/src/**`）、`.prettierignore`（`apps/agent/static/*.hbs` 忽略路径）、`apps/agent` 的 `pretest` filter，以及 AGENTS / ARCHITECTURE / README / README.zh-CN / effect-model 的结构化引用（顺手把 AGENTS 里 `config.loader` 的过期路径改正到 `packages/server-core`）。`scripts/web-server.mjs` 用端口不用进程名、不动；CHANGELOG 历史条目不改写。部署时 PM2 改名需一次性 `pm2 delete kagami-server` 再起 `kagami-agent`（端口 `20003` 不变）。下一步若做「console 单一前门 + 代理活操作」则另议——目前 web-server 按前缀分流已达成单一入口且故障隔离更好（console 挂不影响活操作）
+
 ## [0.3.1.1] - 2026-06-29
 
 ### Fixed

@@ -20,7 +20,7 @@ All architecture, modules, and capabilities described below should be understood
 
 Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing eight workspace packages:
 
-- `apps/server`: Fastify backend service (`@kagami/server`)
+- `apps/agent`: Fastify backend service (`@kagami/agent`)
 - `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/server-core` shared DAOs against the same SQLite database)
 - `apps/web`: React frontend admin console (`@kagami/web`)
 - `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone process with zero `@kagami/*` dependencies)
@@ -64,7 +64,7 @@ pnpm app:deploy
 Single-package commands:
 
 ```bash
-pnpm --filter @kagami/server <script>
+pnpm --filter @kagami/agent <script>
 pnpm --filter @kagami/web <script>
 pnpm --filter @kagami/agent-runtime <script>
 pnpm --filter @kagami/shared <script>
@@ -73,10 +73,10 @@ pnpm --filter @kagami/shared <script>
 Notes:
 
 - The repository does not provide a unified root `pnpm dev` script.
-- `@kagami/server` currently exposes `build`, `typecheck`, `test`, `test:watch`, and `db:*` scripts.
+- `@kagami/agent` currently exposes `build`, `typecheck`, `test`, `test:watch`, and `db:*` scripts.
 - `@kagami/agent-runtime` exposes `build`, `typecheck`, `test`, `test:watch`; `@kagami/oss` exposes `build`, `typecheck`, `test`, `test:watch`, `start`.
 - `@kagami/web` and `@kagami/shared` expose `build` and `typecheck`.
-- `@kagami/server`, `@kagami/agent-runtime`, and `@kagami/oss` declare test scripts.
+- `@kagami/agent`, `@kagami/agent-runtime`, and `@kagami/oss` declare test scripts.
 
 ## Configuration
 
@@ -105,7 +105,7 @@ Notes:
 
 ### Backend
 
-The backend has been reorganized into a "flat modules + in-module layering" structure. Top-level directories live directly under `apps/server/src/<module>`, with runtime assembly handled by `apps/server/src/app/server-runtime.ts`.
+The backend has been reorganized into a "flat modules + in-module layering" structure. Top-level directories live directly under `apps/agent/src/<module>`, with runtime assembly handled by `apps/agent/src/app/server-runtime.ts`.
 
 Main modules:
 
@@ -123,7 +123,7 @@ Main modules:
 - `ops/`: query endpoints for App Log, LLM Chat Call, Story, main Agent context, NapCat history, etc.
 - `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / Story / gateway lifecycle
 
-`apps/server/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
+`apps/agent/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
 
 - `runtime/`: Kagami-specific runtime such as `RootAgentRuntime`, session (the App launcher), `NotificationCenter`, event queue, context rendering, App-state persistence
 - `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `story`, `ithome`, `vision`, `web-search`, `browser`, `terminal`, `todo`
@@ -186,13 +186,13 @@ Notes:
 ### Agent Runtime Package
 
 - `packages/agent-runtime` only carries the generic Agent / App framework kernel, not Kagami-specific semantics.
-- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/server`, not here.)
-- NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/server/src/agent`.
+- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/agent`, not here.)
+- NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/agent/src/agent`.
 
 ## Deployment
 
 - The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages three processes.
-- The backend service `kagami-server` runs `apps/server/dist/index.js` and listens on `20003` by default.
+- The backend service `kagami-agent` runs `apps/agent/dist/index.js` and listens on `20003` by default.
 - The frontend service `kagami-web` runs `scripts/web-server.mjs` and listens on `20004` by default.
 - The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
 - The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.

@@ -3,8 +3,8 @@ const path = require("node:path");
 module.exports = {
   apps: [
     {
-      name: "kagami-server",
-      cwd: path.join(__dirname, "apps/server"),
+      name: "kagami-agent",
+      cwd: path.join(__dirname, "apps/agent"),
       script: "dist/index.js",
       interpreter: "node",
       exec_mode: "fork",
