@@ -31,7 +31,6 @@ export class PrismaRootAgentRuntimeSnapshotRepository implements RootAgentRuntim
       runtimeKey: row.runtimeKey,
       schemaVersion: row.schemaVersion,
       contextSnapshot: row.contextSnapshot,
-      sessionSnapshot: row.sessionSnapshot,
       lastWakeReminderAt: row.lastWakeReminderAt,
     });
 
@@ -56,13 +55,11 @@ export class PrismaRootAgentRuntimeSnapshotRepository implements RootAgentRuntim
         runtimeKey: snapshot.runtimeKey,
         schemaVersion: snapshot.schemaVersion,
         contextSnapshot: toInputJsonObject(snapshot.contextSnapshot),
-        sessionSnapshot: toInputJsonObject(snapshot.sessionSnapshot),
         lastWakeReminderAt: snapshot.lastWakeReminderAt,
       },
       update: {
         schemaVersion: snapshot.schemaVersion,
         contextSnapshot: toInputJsonObject(snapshot.contextSnapshot),
-        sessionSnapshot: toInputJsonObject(snapshot.sessionSnapshot),
         lastWakeReminderAt: snapshot.lastWakeReminderAt,
       },
     });

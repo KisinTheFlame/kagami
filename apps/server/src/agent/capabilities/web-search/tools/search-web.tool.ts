@@ -6,7 +6,6 @@ import {
   type ToolKind,
 } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../../runtime/context/agent-context.js";
-import type { RootAgentSessionController } from "../../../runtime/root-agent/session/root-agent-session.js";
 import type { WebSearchTaskInput } from "../task-agent/web-search-task-agent.js";
 
 type WebSearchTaskAgentLike =
@@ -23,7 +22,6 @@ const SearchWebArgumentsSchema = z.object({
 
 type SearchWebToolContext = ToolContext & {
   agentContext?: AgentContext;
-  rootAgentSession?: RootAgentSessionController;
 };
 
 export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema> {
@@ -61,21 +59,6 @@ export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSch
   ): Promise<string> {
     const typedContext = context as SearchWebToolContext;
     const agentContext = typedContext.agentContext;
-    const rootAgentSession = typedContext.rootAgentSession;
-
-    if (!rootAgentSession) {
-      return JSON.stringify({
-        ok: false,
-        error: "SESSION_UNAVAILABLE",
-      });
-    }
-
-    if (!rootAgentSession.getCurrentChatTarget()) {
-      return JSON.stringify({
-        ok: false,
-        error: "STATE_TRANSITION_NOT_ALLOWED",
-      });
-    }
 
     const inlineSystemPrompt = typedContext.systemPrompt?.trim();
     const inlineMessages = typedContext.messages ? structuredClone(typedContext.messages) : null;

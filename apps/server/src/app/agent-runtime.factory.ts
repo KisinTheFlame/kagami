@@ -291,8 +291,6 @@ export async function buildAgentRuntime({
   const rootAgentSession = new RootAgentSession({
     context,
     appManager,
-    // send_message 的目标 = QQ App 当前打开的会话。
-    chatTargetProvider: () => qqApp.getCurrentChatTarget(),
   });
   const helpTool = new HelpTool({
     appManager,

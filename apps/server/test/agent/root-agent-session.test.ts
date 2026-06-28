@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { AppManager, type App } from "@kagami/agent-runtime";
 import { DefaultAgentContext } from "../../src/agent/runtime/context/default-agent-context.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
-import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 initTestLoggerRuntime();
@@ -29,7 +28,6 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(reminder?.content).toContain("<system_reminder>");
     expect(reminder?.content).toContain("桌面（Portal）");
     expect(typeof reminder?.content === "string" ? reminder.content : "").toContain("QQ");
-    expect(session.getState()).toEqual({ focusedStateId: "portal", stateStack: ["portal"] });
   });
 
   it("appends a <notification> message and triggers a round on notification events", async () => {
@@ -68,18 +66,42 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(wake).toEqual({ shouldTriggerRound: false });
   });
 
-  it("delegates getCurrentChatTarget to the chat target provider (QQ App current conversation)", async () => {
-    const holder: { target: NapcatChatTarget | undefined } = { target: undefined };
-    const session = new RootAgentSession({
-      context: createContext(),
-      appManager: new AppManager(),
-      chatTargetProvider: () => holder.target,
-    });
+  it("markRestored marks context initialized so the portal reminder is not re-appended", async () => {
+    const context = createContext();
+    const appManager = new AppManager();
+    appManager.register(createTestApp("qq", "QQ"));
+    const session = new RootAgentSession({ context, appManager });
 
-    expect(session.getCurrentChatTarget()).toBeUndefined();
-    holder.target = { chatType: "group", groupId: "group-1" };
-    expect(session.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "group-1" });
-    expect(session.getCurrentGroupId()).toBe("group-1");
+    // 模拟恢复路径：上下文已含上一会话的 portal reminder（这里用一条占位消息代表旧前缀）。
+    await context.appendMessages([{ role: "user", content: "restored-prefix" }]);
+    session.markRestored();
+
+    await session.initializeContext();
+
+    const snapshot = await context.getSnapshot();
+    const portalReminders = snapshot.messages.filter(
+      message => typeof message.content === "string" && message.content.includes("桌面（Portal）"),
+    );
+    expect(portalReminders).toHaveLength(0);
+  });
+
+  it("reset re-enables initialization so the portal reminder is re-appended", async () => {
+    const context = createContext();
+    const appManager = new AppManager();
+    appManager.register(createTestApp("qq", "QQ"));
+    const session = new RootAgentSession({ context, appManager });
+
+    await session.initializeContext();
+    session.reset();
+    // reset 把 initialized 置回 false（与 markRestored 相反）：下一次 initializeContext 必须
+    // 重新追加 portal reminder。配合上下文 reset 一起用，重建稳定前缀。
+    await session.initializeContext();
+
+    const snapshot = await context.getSnapshot();
+    const portalReminders = snapshot.messages.filter(
+      message => typeof message.content === "string" && message.content.includes("桌面（Portal）"),
+    );
+    expect(portalReminders).toHaveLength(2);
   });
 
   it("tracks the current app", () => {

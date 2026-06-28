@@ -189,7 +189,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   ): Promise<void> {
     await this.mutationExecutor.submit(async () => {
       await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
-      this.session.restorePersistedSnapshot(snapshot.sessionSnapshot);
+      this.session.markRestored();
       await this.session.flushPendingIncomingEffects();
       this.lastWakeReminderAt = cloneDate(snapshot.lastWakeReminderAt);
       this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
@@ -220,10 +220,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
     });
   }
 
-  public getSessionState() {
-    return this.session.getState();
-  }
-
   public async consumePendingEvents(): Promise<{ shouldTriggerRound: boolean }> {
     return await this.mutationExecutor.submit(async () => {
       while (true) {
@@ -252,7 +248,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
       },
       tools,
       toolContext: {
-        chatTarget: this.session.getCurrentChatTarget(),
         systemPrompt: snapshot.systemPrompt,
         messages: [...snapshot.messages],
         agentContext: this.context,
@@ -503,7 +498,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
       runtimeKey: this.runtimeKey,
       schemaVersion: ROOT_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
       contextSnapshot: await this.context.exportPersistedSnapshot(),
-      sessionSnapshot: this.session.exportPersistedSnapshot(),
       lastWakeReminderAt: cloneDate(this.lastWakeReminderAt),
     };
   }
@@ -832,7 +826,6 @@ function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot):
     runtimeKey: snapshot.runtimeKey,
     schemaVersion: snapshot.schemaVersion,
     contextSnapshot: snapshot.contextSnapshot,
-    sessionSnapshot: snapshot.sessionSnapshot,
     lastWakeReminderAt: snapshot.lastWakeReminderAt?.toISOString() ?? null,
   });
 }
