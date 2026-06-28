@@ -3,9 +3,11 @@
 本项目所有重要变更记录在此文件。
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
-本仓库目前以日期分节，未启用语义化版本号；`package.json` 中的 `version` 字段长期保持 `0.0.0`，仅为 npm 字段合法性而存在。新条目按提交时间倒序追加在 `## [Unreleased]` 下，定期归档到具体日期分节。
+本仓库启用 4 位版本号 `MAJOR.MINOR.PATCH.MICRO`，事实来源为仓库根目录 `VERSION` 文件，`package.json` 的 `version` 字段与之保持同步。Kagami 自部署、不对外分发，版本号仅用于标记部署节点与变更归档，不承载语义化版本对外兼容承诺。新条目按提交时间倒序追加在 `## [Unreleased]` 下，发布时归档到对应版本分节（`## [x.y.z.w] - YYYY-MM-DD`）。每个 PR 必须 bump `VERSION`（CI 强制校验 PR 版本号高于 master）。
 
 ## [Unreleased]
+
+## [0.3.0.0] - 2026-06-29
 
 ### Added
 
