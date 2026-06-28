@@ -23,10 +23,22 @@ export type WakeEvent = {
   type: "wake";
 };
 
+import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
+
 export type StoryRecallStoryPayload = {
   id: string;
   markdown: string;
   createdAt: Date;
+};
+
+/**
+ * 异步工具任务完成后，AsyncTaskManager 的 onComplete 把结果以事件形式塞回主 Agent
+ * 的事件队列。Session 路由时装配成一条 `<async_tool_result>` user message 追加到上下文，
+ * 并触发新一轮 round，让主 Agent 凭 task_id 对应到当初的发起。
+ */
+export type AsyncToolResultCompletedEvent = {
+  type: "async_tool_result_completed";
+  data: AsyncTaskCompletion;
 };
 
 /**
@@ -41,4 +53,8 @@ export type StoryRecallCompletedEvent = {
   };
 };
 
-export type Event = NotificationEvent | StoryRecallCompletedEvent | WakeEvent;
+export type Event =
+  | NotificationEvent
+  | StoryRecallCompletedEvent
+  | AsyncToolResultCompletedEvent
+  | WakeEvent;

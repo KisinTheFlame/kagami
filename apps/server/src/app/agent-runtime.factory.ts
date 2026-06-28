@@ -1,5 +1,6 @@
 import {
   AppManager,
+  AsyncTaskManager,
   createAppSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
@@ -55,7 +56,7 @@ import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/to
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
 import { WebSearchTaskAgent } from "../agent/capabilities/web-search/task-agent/web-search-task-agent.js";
 import {
-  SearchWebTool,
+  createSearchWebTool,
   SEARCH_WEB_TOOL_NAME,
 } from "../agent/capabilities/web-search/tools/search-web.tool.js";
 import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
@@ -317,8 +318,16 @@ export async function buildAgentRuntime({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
   const mainInvokeTool = new InvokeTool({ owners: mainSubtoolOwners });
-  const searchWebTool = new SearchWebTool({
+  // 异步工具原语：在飞任务跑完/超时通过 onComplete 把结果以事件回流给主 Agent，
+  // session 路由后追加成 <async_tool_result> 消息并触发新一轮。首个消费者是 search_web。
+  const asyncTaskManager = new AsyncTaskManager({
+    maxTaskDurationMs: config.server.agent.asyncTask.maxTaskDurationMs,
+    onComplete: completion =>
+      eventQueue.enqueue({ type: "async_tool_result_completed", data: completion }),
+  });
+  const searchWebTool = createSearchWebTool({
     webSearchTaskAgent: webSearchTaskAgentInvoker,
+    asyncTaskManager,
   });
   const searchMemoryTool = new SearchMemoryTool({
     storyRecallService,

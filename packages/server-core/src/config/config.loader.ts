@@ -51,6 +51,7 @@ const DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH = "./data/vector/story-memory.hnsw"
 const DEFAULT_STORY_RECALL_TOP_K = 2;
 const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
 const DEFAULT_STORY_RECALL_ENABLED = true;
+const DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS = 10 * 60 * 1000;
 
 const UrlSchema = z.string().url();
 /**
@@ -262,6 +263,13 @@ const ConfigSchema = z.object({
                 .default({}),
             })
             .default({}),
+          asyncTask: z
+            .object({
+              maxTaskDurationMs: PositiveIntSchema.default(
+                DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS,
+              ),
+            })
+            .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),
         })
         .superRefine((value, ctx) => {
@@ -282,6 +290,7 @@ const ConfigSchema = z.object({
           notificationBatchWindowMs: value.notificationBatchWindowMs,
           story: value.story,
           messaging: value.messaging,
+          asyncTask: value.asyncTask,
         })),
     ),
     ithome: z
