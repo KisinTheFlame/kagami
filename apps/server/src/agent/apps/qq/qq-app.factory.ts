@@ -87,6 +87,7 @@ export async function buildQqApp({
   const sendResourceTool = new SendResourceTool({
     resourceService,
     agentMessageService: outboundService,
+    getChatTarget: () => qqAppRef.current?.getCurrentChatTarget(),
   });
   const qqApp = new QqApp({
     napcatGateway,
