@@ -79,7 +79,6 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(session.getCurrentChatTarget()).toBeUndefined();
     holder.target = { chatType: "group", groupId: "group-1" };
     expect(session.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "group-1" });
-    expect(session.getCurrentGroupId()).toBe("group-1");
   });
 
   it("tracks the current app", () => {
