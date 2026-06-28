@@ -7,7 +7,7 @@
 pnpm workspace 当前由 8 个包组成，依赖单向（apps → packages）：
 
 ```
-apps/server  ──→ packages/agent-runtime ──→ packages/llm ──→ packages/shared
+apps/server  ──→ packages/agent-runtime ──→ packages/llm
       ├────────→ packages/server-core ──→ packages/shared
 apps/console ──→ packages/server-core ──→ packages/shared
 apps/web     ──→ packages/shared
@@ -173,7 +173,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 - **进程内 SQLite 文件**（默认 `data/sqlite/kagami.db`）通过 Prisma ORM + `@prisma/adapter-better-sqlite3` 访问；宿主机不再需要外部 PostgreSQL。
 - Story 向量记忆用**进程内 HNSW 索引（hnswlib-node）**：向量以 JSON 字符串存于 `story_memory_document.embedding`（SQLite 为唯一事实来源），索引启动时重建、派生快照落 `data/vector/`。
 - App 状态走通用 `app_state` 表（appId → 不透明 JSON）。
-- Schema 源文件 `apps/server/prisma/schema.prisma`，迁移落 `apps/server/prisma/migrations/`，通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理。
+- Schema 源文件 `packages/server-core/prisma/schema.prisma`，迁移落 `packages/server-core/prisma/migrations/`，通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理。
 - DAO 按模块内分层组织：port / 接口在 `domain/` 或模块根，Prisma 实现多放在 `infra/`（`infra/impl/`），早期代码也有 `dao/` / `dao/impl/` 的形态。
 - `apps/oss` 自带独立的 `data/oss/oss.db`（裸 better-sqlite3）与分片 blob 文件，不经 Prisma。
 

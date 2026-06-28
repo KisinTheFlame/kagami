@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.0.1] - 2026-06-29
+
+### Changed
+
+- docs: 文档同步 server-core 包与 Prisma 路径，修正依赖图。承接 [#149](https://github.com/KisinTheFlame/kagami/pull/149)（已补全 zh-CN/AGENTS/ARCHITECTURE 的八包列表），收口其未覆盖的三处真实漂移：(1) `README.md`（英文）#149 未触及，仍写 six packages，补到 eight 并在包列表与目录树补 `apps/console`、`packages/server-core`；(2) Prisma 路径——四个文档里 `apps/server/prisma/*` 全过期，schema 与 migrations 实际在 `packages/server-core/prisma/*`（见 `scripts/prisma.sh` 的 `CORE_DIR`），四处全改正；(3) `ARCHITECTURE.md` 依赖图——`@kagami/llm` 零 `@kagami` 依赖，删掉错误的 `llm ──→ shared` 箭头使图与真实 DAG 一致。纯文档、无源码改动（[#151](https://github.com/KisinTheFlame/kagami/pull/151)）
+
 ## [0.3.0.0] - 2026-06-29
 
 ### Added
