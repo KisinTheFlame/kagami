@@ -383,8 +383,9 @@ Key routing rules:
 - Code quality, health check → invoke health
 
 ## Deploy Configuration (configured by /setup-deploy)
+
 - Platform: 本地宿主机（PM2 fork 模式，无任何云平台 / PaaS）
-- Production URL: http://localhost:20003（server）、http://localhost:20004（web 静态服务，代理 /api/*）
+- Production URL: http://localhost:20003（server）、http://localhost:20004（web 静态服务，代理 /api/\*）
 - Deploy workflow: 手动触发，无自动 push 部署
 - Deploy status command: pm2 status / pm2 list
 - Merge method: PR merge（主分支 master）
@@ -392,11 +393,14 @@ Key routing rules:
 - Post-deploy health check: curl http://localhost:20003/health（web: http://localhost:20004/health）
 
 ### Custom deploy hooks
+
 - Pre-merge: pnpm build && pnpm typecheck && pnpm lint && pnpm format
 - Deploy trigger: pnpm app:deploy（= bash ./scripts/deploy.sh：build → prisma migrate deploy → PM2 reload/startOrReload → pm2 save）
 - Deploy status: pm2 status
 - Health check: curl -sf http://localhost:20003/health
 
 ### ⚠️ 部署红线（用户硬约束）
+
 - **未经用户明确要求，绝不自行执行 `pnpm app:deploy` 或任何部署动作。**
-- gstack 的 `/land-and-deploy`（为云平台 PR-merge→自动部署设计）与 Kagami 的本地 PM2 模型不匹配，不使用；部署一律走 `pnpm app:deploy`。
+- gstack 的 `/land-and-deploy` **仅用于合并 PR**：跑到合并 PR（Step 4）即停，绝不进入它后续的自动部署（Step 5/6）与 canary 验证（Step 7）。它默认的「merge→自动 deploy」尾巴与 Kagami 的本地 PM2 模型不匹配，必须砍掉。
+- 部署一律单独走 `pnpm app:deploy`，且只在用户当轮明确要求时执行。
