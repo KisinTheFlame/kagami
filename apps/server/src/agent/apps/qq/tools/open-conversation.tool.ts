@@ -38,7 +38,7 @@ export class OpenConversationTool extends ZodToolComponent<typeof OpenConversati
         content: JSON.stringify({
           ok: false,
           error: result.error,
-          note: "会话不存在。先看会话列表（back_to_conversation_list）拿正确的 id。",
+          note: "会话不存在。先用 list_conversations 看会话列表拿正确的 id。",
         }),
       };
     }
