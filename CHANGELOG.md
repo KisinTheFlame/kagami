@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.1] - 2026-06-29
+
+### Fixed
+
+- deploy: 修 `pnpm app:deploy` 在 console 拆分后**卡在 Prisma 迁移步**报 `database is locked`、无法部署。根因：拆出 `kagami-console` 后有两个后端进程（`kagami-server` + `kagami-console`）持有同一个 WAL SQLite 库，而 `prisma migrate deploy` 的 schema engine 用独立连接、不带 busy_timeout，初始化 `_prisma_migrations` 时抢不到锁即直接失败（拆分前只有 server 一个进程时还能挤进去）。`scripts/deploy.sh` 改为先 `db:migrate:status`（只读，WAL 下与运行进程并存无碍）判断：无待应用迁移（绝大多数部署）直接跳过 `migrate deploy`、零停机；确有待应用迁移时先 `pm2 stop kagami-server kagami-console` 腾出独占访问再迁，且迁移失败也立刻把进程拉回来再中止、绝不留下停机的 agent，Step 3 的 `startOrReload` 照常重载。失败的迁移在碰 PM2 前 abort，不影响运行中的进程（[#146](https://github.com/KisinTheFlame/kagami/pull/146) 的部署副作用修复）
+
 ## [0.3.1.0] - 2026-06-29
 
 ### Changed
