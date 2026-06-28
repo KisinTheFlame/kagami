@@ -1,7 +1,11 @@
 import type { Database } from "@kagami/server-core/db/client";
 import type { MetricService } from "../../../metric/application/metric.service.js";
 import type { ScheduledTask, TaskRunMetadata } from "../../domain/scheduled-task.js";
-import { RETENTION_TASKS, type RetentionSpec } from "./retention-tasks.js";
+import {
+  RETENTION_TASKS,
+  type PrismaRetentionDelegate,
+  type RetentionSpec,
+} from "./retention-tasks.js";
 
 const CHUNK_SIZE = 5_000;
 const DAY_MS = 86_400_000;
@@ -21,7 +25,7 @@ function buildTask({ db, metricService, spec }: DataRetentionTaskDeps): Schedule
     schedule: { kind: "cron", expression },
     async run(signal: AbortSignal): Promise<TaskRunMetadata> {
       const threshold = new Date(Date.now() - spec.days * DAY_MS);
-      const delegate = spec.getDelegate(db);
+      const delegate = spec.getDelegate(db) as PrismaRetentionDelegate;
 
       let deletedRows = 0;
       let chunks = 0;

@@ -24,8 +24,13 @@ export type RetentionSpec = {
   days: number;
   /** Stagger offset in minutes, combined with the 00:00 base cron to form `<offset> 0 * * *`. */
   offsetMinutes: number;
-  /** Resolve the Prisma delegate for this table. */
-  getDelegate: (db: Database) => PrismaRetentionDelegate;
+  /**
+   * Pick the Prisma delegate for this table. Returns `unknown` because each
+   * concrete delegate has a model-specific `findMany`/`deleteMany` signature
+   * that does not structurally match the loose {@link PrismaRetentionDelegate};
+   * the single narrowing cast lives at the call site in the task factory.
+   */
+  getDelegate: (db: Database) => unknown;
 };
 
 /**
@@ -59,62 +64,62 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     field: "createdAt",
     days: 7,
     offsetMinutes: 0,
-    getDelegate: db => db.appLog as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.appLog,
   },
   {
     displayName: "llm_chat_call",
     field: "createdAt",
     days: 3,
     offsetMinutes: 5,
-    getDelegate: db => db.llmChatCall as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.llmChatCall,
   },
   {
     displayName: "metric",
     field: "createdAt",
     days: 7,
     offsetMinutes: 10,
-    getDelegate: db => db.metric as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.metric,
   },
   {
     displayName: "napcat_event",
     field: "createdAt",
     days: 7,
     offsetMinutes: 15,
-    getDelegate: db => db.napcatEvent as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.napcatEvent,
   },
   {
     displayName: "napcat_qq_message",
     field: "createdAt",
     days: 7,
     offsetMinutes: 20,
-    getDelegate: db => db.napcatQqMessage as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.napcatQqMessage,
   },
   {
     displayName: "terminal_output",
     field: "createdAt",
     days: 7,
     offsetMinutes: 25,
-    getDelegate: db => db.terminalOutput as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.terminalOutput,
   },
   {
     displayName: "auth_usage_snapshot",
     field: "capturedAt",
     days: 30,
     offsetMinutes: 30,
-    getDelegate: db => db.authUsageSnapshot as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.authUsageSnapshot,
   },
   {
     displayName: "embedding_cache",
     field: "createdAt",
     days: 30,
     offsetMinutes: 35,
-    getDelegate: db => db.embeddingCache as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.embeddingCache,
   },
   {
     displayName: "oauth_state",
     field: "expiresAt",
     days: 7,
     offsetMinutes: 40,
-    getDelegate: db => db.oauthState as unknown as PrismaRetentionDelegate,
+    getDelegate: db => db.oauthState,
   },
 ];

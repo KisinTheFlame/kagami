@@ -20,7 +20,7 @@ async function writeConfigFile(content: string): Promise<string> {
 function buildConfigYaml(napcatBlock: string, extraServerBlock = ""): string {
   return `
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
@@ -135,7 +135,7 @@ startupContextRecentMessageCount: 0
 
     await expect(manager.config()).resolves.toMatchObject({
       server: {
-        databaseUrl: "postgresql://user:password@localhost:5432/kagami",
+        databaseUrl: "file::memory:",
         port: 3100,
         agent: {
           contextCompactionTotalTokenThreshold: 150_000,
@@ -329,7 +329,7 @@ listenGroupIds:
   it("should default context compaction threshold to 60", async () => {
     const configPath = await writeConfigFile(`
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
   agent:
     story:
       memory:
@@ -634,7 +634,7 @@ listenGroupIds:
   it("should allow overriding context compaction total token threshold", async () => {
     const configPath = await writeConfigFile(`
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
   agent:
     contextCompactionTotalTokenThreshold: 80000
     story:
@@ -705,7 +705,7 @@ server:
   it("should reject the legacy context compaction threshold field", async () => {
     const configPath = await writeConfigFile(`
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
   agent:
     contextCompactionThreshold: 80
     story:
@@ -779,7 +779,7 @@ server:
   it("should allow overriding llm retry backoff ms", async () => {
     const configPath = await writeConfigFile(`
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
   agent:
     llmRetryBackoffMs: 45000
     story:
@@ -849,7 +849,7 @@ server:
   it("should allow overriding wait tool max wait ms", async () => {
     const configPath = await writeConfigFile(`
 server:
-  databaseUrl: postgresql://user:password@localhost:5432/kagami
+  databaseUrl: "file::memory:"
   agent:
     waitToolMaxWaitMs: 120000
     story:
