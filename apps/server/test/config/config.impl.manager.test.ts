@@ -394,6 +394,7 @@ server:
     expect(config.server.agent.contextCompactionTotalTokenThreshold).toBe(150_000);
     expect(config.server.agent.llmRetryBackoffMs).toBe(30_000);
     expect(config.server.agent.waitToolMaxWaitMs).toBe(600_000);
+    expect(config.server.agent.asyncTask.maxTaskDurationMs).toBe(600_000);
   });
 
   it("should default claude code keep alive replay interval minutes to 30", async () => {
@@ -852,6 +853,8 @@ server:
   databaseUrl: "file::memory:"
   agent:
     waitToolMaxWaitMs: 120000
+    asyncTask:
+      maxTaskDurationMs: 120000
     story:
       memory:
         embedding:
@@ -913,6 +916,7 @@ server:
     const config = await loadStaticConfig({ configPath });
 
     expect(config.server.agent.waitToolMaxWaitMs).toBe(120_000);
+    expect(config.server.agent.asyncTask.maxTaskDurationMs).toBe(120_000);
   });
 
   it("should allow zero startup context recent message count", async () => {

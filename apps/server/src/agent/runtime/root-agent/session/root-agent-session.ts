@@ -2,6 +2,7 @@ import type { AppId, AppManager } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "../../../../llm/types.js";
 import {
+  createAsyncToolResultMessage,
   createNotificationMessage,
   createPortalReminderMessage,
   createStoryRecallMessage,
@@ -162,6 +163,12 @@ export class RootAgentSession implements RootAgentSessionController {
 
     if (event.type === "story_recall_completed") {
       this.pendingIncomingMessages.push(createStoryRecallMessage(event.data.stories));
+      return { shouldTriggerRound: true };
+    }
+
+    if (event.type === "async_tool_result_completed") {
+      // 异步工具任务完成：装配成 <async_tool_result> 消息追加到尾部，触发一轮 round。
+      this.pendingIncomingMessages.push(createAsyncToolResultMessage(event.data));
       return { shouldTriggerRound: true };
     }
 
