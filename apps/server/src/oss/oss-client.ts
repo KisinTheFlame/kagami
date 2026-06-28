@@ -5,9 +5,25 @@ import { BizError } from "@kagami/server-core/common/errors/biz-error";
  * 自建对象存储（@kagami/oss）的最小 HTTP client：把二进制 PUT 进去，拿对外 key（resid）。
  * 业务无关——只认 bytes + mime，不关心图片语义。
  */
+/** getObject 取回的一份资源：原始字节 + MIME + 字节数。 */
+export type OssObject = {
+  bytes: Buffer;
+  mimeType: string;
+  size: number;
+};
+
 export interface OssClient {
   /** 上传一份二进制对象，返回对外不透明 key（`res-<id>`）。失败抛 BizError。 */
   putObject(input: { bytes: Buffer; mimeType: string }): Promise<string>;
+  /**
+   * 按 resId 取回一份对象的字节 + MIME。
+   * - 404 → BizError(OSS_OBJECT_NOT_FOUND)
+   * - 指定 maxBytes 时：先看 content-length 早拒，再按"实际读到的字节数"二次校验，
+   *   任一超限 → BizError(OSS_OBJECT_TOO_LARGE)。content-length 缺失也靠实际字节兜底，
+   *   不只信 header。
+   * - 其余非 2xx → BizError(OSS_GET_FAILED)。
+   */
+  getObject(resId: string, opts?: { maxBytes?: number }): Promise<OssObject>;
 }
 
 type FetchLike = typeof fetch;
@@ -60,5 +76,51 @@ export class HttpOssClient implements OssClient {
     }
 
     return parsed.data.key;
+  }
+
+  public async getObject(resId: string, opts?: { maxBytes?: number }): Promise<OssObject> {
+    const maxBytes = opts?.maxBytes;
+    const url = this.objectUrl(resId);
+    const response = await this.fetchImpl(url, { method: "GET" });
+
+    if (response.status === 404) {
+      throw new BizError({
+        message: `OSS 对象不存在：${resId}`,
+        meta: { reason: "OSS_OBJECT_NOT_FOUND", resId },
+      });
+    }
+    if (!response.ok) {
+      throw new BizError({
+        message: `OSS 读取失败：HTTP ${response.status}`,
+        meta: { reason: "OSS_GET_FAILED", status: response.status, resId },
+      });
+    }
+
+    // content-length 早拒：能提前知道超限就别把整块下载下来。但它可能缺失或被代理改写，
+    // 所以下载完还要按实际字节数兜底校验。
+    if (maxBytes !== undefined) {
+      const declared = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        throw new BizError({
+          message: `OSS 对象过大：${declared} > ${maxBytes} 字节`,
+          meta: { reason: "OSS_OBJECT_TOO_LARGE", declared, maxBytes, resId },
+        });
+      }
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (maxBytes !== undefined && bytes.byteLength > maxBytes) {
+      throw new BizError({
+        message: `OSS 对象过大：${bytes.byteLength} > ${maxBytes} 字节`,
+        meta: { reason: "OSS_OBJECT_TOO_LARGE", actual: bytes.byteLength, maxBytes, resId },
+      });
+    }
+
+    const mimeType = response.headers.get("content-type") ?? "application/octet-stream";
+    return { bytes, mimeType, size: bytes.byteLength };
+  }
+
+  private objectUrl(resId: string): string {
+    return `${this.objectsUrl}/${encodeURIComponent(resId)}`;
   }
 }
