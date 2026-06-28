@@ -1,5 +1,6 @@
 import {
   AppManager,
+  AsyncTaskManager,
   createAppSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
@@ -55,7 +56,7 @@ import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/to
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
 import { WebSearchTaskAgent } from "../agent/capabilities/web-search/task-agent/web-search-task-agent.js";
 import {
-  SearchWebTool,
+  createSearchWebTool,
   SEARCH_WEB_TOOL_NAME,
 } from "../agent/capabilities/web-search/tools/search-web.tool.js";
 import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
@@ -86,6 +87,12 @@ import {
   SearchMemoryTool,
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
+import { ResourceService } from "../agent/capabilities/resource/application/resource.service.js";
+import {
+  ReadResourceTool,
+  READ_RESOURCE_TOOL_NAME,
+} from "../agent/capabilities/resource/tools/read-resource.tool.js";
+import type { OssClient } from "../oss/oss-client.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
@@ -119,6 +126,8 @@ type BuildAgentRuntimeInput = {
   notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
   storyEventQueue: Queue<StoryAgentEvent>;
+  /** 自建对象存储客户端；缺省（server.oss 未配）时资源读取/发送/截图落 OSS 优雅降级。 */
+  ossClient?: OssClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -151,6 +160,7 @@ export async function buildAgentRuntime({
   notificationCenter,
   eventQueue,
   storyEventQueue,
+  ossClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -228,6 +238,13 @@ export async function buildAgentRuntime({
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
   const browserCredentialDao = new PrismaBrowserCredentialDao({ database });
 
+  // 资源读取层：read_resource（全局工具）与 send_resource（QQ 子工具）共用。OSS 关闭时
+  // 调用层报错，构造本身不依赖 OSS 在线。
+  const resourceService = new ResourceService({
+    ossClient,
+    maxBytes: config.server.agent.resource.maxBytes,
+  });
+
   // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
   // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
   // 统一走 outboundService（收口）。这里不再见到裸网关。
@@ -244,6 +261,7 @@ export async function buildAgentRuntime({
       enabled: config.server.agent.messaging.aiTone.enabled,
       blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
     },
+    resourceService,
   });
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
@@ -259,7 +277,7 @@ export async function buildAgentRuntime({
   appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
-  appManager.register(new BrowserApp({ credentialDao: browserCredentialDao }));
+  appManager.register(new BrowserApp({ credentialDao: browserCredentialDao, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 
@@ -315,13 +333,22 @@ export async function buildAgentRuntime({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
   const mainInvokeTool = new InvokeTool({ owners: mainSubtoolOwners });
-  const searchWebTool = new SearchWebTool({
+  // 异步工具原语：在飞任务跑完/超时通过 onComplete 把结果以事件回流给主 Agent，
+  // session 路由后追加成 <async_tool_result> 消息并触发新一轮。首个消费者是 search_web。
+  const asyncTaskManager = new AsyncTaskManager({
+    maxTaskDurationMs: config.server.agent.asyncTask.maxTaskDurationMs,
+    onComplete: completion =>
+      eventQueue.enqueue({ type: "async_tool_result_completed", data: completion }),
+  });
+  const searchWebTool = createSearchWebTool({
     webSearchTaskAgent: webSearchTaskAgentInvoker,
+    asyncTaskManager,
   });
   const searchMemoryTool = new SearchMemoryTool({
     storyRecallService,
     topK: config.server.agent.story.memory.retrieval.topK,
   });
+  const readResourceTool = new ReadResourceTool({ resourceService });
   const summaryTool = new SummaryTool();
   const toolCatalog = new ToolCatalog([
     enterTool,
@@ -331,6 +358,7 @@ export async function buildAgentRuntime({
     mainInvokeTool,
     searchWebTool,
     searchMemoryTool,
+    readResourceTool,
     summaryTool,
     helpTool,
   ]);
@@ -342,14 +370,15 @@ export async function buildAgentRuntime({
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
+    READ_RESOURCE_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
 
-  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 8 个工具的
+  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 9 个工具的
   // name / description / parameters / llmTool），但执行语义完全隔离——
   //  - invoke 换成 webSearchInvokeTool（owner = webSearchSubtoolOwner，只识别
   //    search_web_raw / finalize_web_search）
-  //  - 其余 7 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
+  //  - 其余 8 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
   //    不会真的改主 Agent 的 session / 触发嵌套搜索
   // 这是 prompt cache 字节相等 + 行为隔离的关键搭配。
   const webSearchAgentToolCatalog = new ToolCatalog([
@@ -380,6 +409,10 @@ export async function buildAgentRuntime({
       reason: "在网页搜索子任务中不可调用 search_memory。",
     }),
     new OutOfScopeTool({
+      inner: readResourceTool,
+      reason: "在网页搜索子任务中不可调用 read_resource。",
+    }),
+    new OutOfScopeTool({
       inner: helpTool,
       reason: "在网页搜索子任务中不可调用 help。",
     }),
@@ -392,6 +425,7 @@ export async function buildAgentRuntime({
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
+    READ_RESOURCE_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
 
@@ -485,6 +519,7 @@ export async function buildAgentRuntime({
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
         SEARCH_MEMORY_TOOL_NAME,
+        READ_RESOURCE_TOOL_NAME,
         BACK_TO_PORTAL_TOOL_NAME,
         SWITCH_TOOL_NAME,
         HELP_TOOL_NAME,

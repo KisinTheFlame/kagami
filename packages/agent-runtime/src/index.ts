@@ -1,4 +1,16 @@
 import type { TaskAgent } from "./agent-runtime.js";
+import {
+  AsyncTaskManager,
+  type AsyncTaskCompletion,
+  type AsyncTaskManagerDeps,
+  type AsyncTaskOutcome,
+} from "./async-task-manager.js";
+import {
+  AsyncTool,
+  formatAsyncTaskSubmitted,
+  type AsyncToolConfig,
+  type AsyncToolPreparation,
+} from "./tool/async-tool.js";
 import type {
   Effect,
   EffectHandler,
@@ -76,9 +88,12 @@ import type { InvokeSubtoolOwner, SubtoolGuardResult } from "./tool/subtool-owne
 
 export {
   AppManager,
+  AsyncTaskManager,
+  AsyncTool,
   BaseLoopAgent,
   BaseTaskAgent,
   createAppSubtoolOwner,
+  formatAsyncTaskSubmitted,
   HandlerEffectInterpreter,
   HELP_TOOL_NAME,
   HelpTool,
@@ -99,6 +114,11 @@ export {
   type AppId,
   type AppStartupContext,
   type AppStateStore,
+  type AsyncTaskCompletion,
+  type AsyncTaskManagerDeps,
+  type AsyncTaskOutcome,
+  type AsyncToolConfig,
+  type AsyncToolPreparation,
   type CanInvokeResult,
   type JsonValue,
   type Effect,

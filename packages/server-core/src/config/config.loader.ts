@@ -19,6 +19,9 @@ const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
 const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
+// 资源读取/发送的字节上限：read_resource 入上下文 / send_resource 发图共用。
+// 4 MiB 贴合 QQ 图片实际体量，也避免把巨型资源灌进上下文或 napcat WS。
+const DEFAULT_AGENT_RESOURCE_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -51,6 +54,7 @@ const DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH = "./data/vector/story-memory.hnsw"
 const DEFAULT_STORY_RECALL_TOP_K = 2;
 const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
 const DEFAULT_STORY_RECALL_ENABLED = true;
+const DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS = 10 * 60 * 1000;
 
 const UrlSchema = z.string().url();
 /**
@@ -262,6 +266,18 @@ const ConfigSchema = z.object({
                 .default({}),
             })
             .default({}),
+          asyncTask: z
+            .object({
+              maxTaskDurationMs: PositiveIntSchema.default(
+                DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS,
+              ),
+            })
+            .default({}),
+          resource: z
+            .object({
+              maxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_MAX_BYTES),
+            })
+            .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),
         })
         .superRefine((value, ctx) => {
@@ -282,6 +298,8 @@ const ConfigSchema = z.object({
           notificationBatchWindowMs: value.notificationBatchWindowMs,
           story: value.story,
           messaging: value.messaging,
+          asyncTask: value.asyncTask,
+          resource: value.resource,
         })),
     ),
     ithome: z

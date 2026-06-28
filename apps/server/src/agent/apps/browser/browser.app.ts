@@ -11,6 +11,7 @@ import { BrowserWaitForTool } from "../../capabilities/browser/tools/wait-for.to
 import { BrowserScreenshotTool } from "../../capabilities/browser/tools/screenshot.tool.js";
 import { BrowserEvalTool } from "../../capabilities/browser/tools/eval.tool.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
+import type { OssClient } from "../../../oss/oss-client.js";
 
 export const BROWSER_APP_ID = "browser";
 
@@ -32,6 +33,8 @@ type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
 
 type BrowserAppDeps = {
   credentialDao: BrowserCredentialDao;
+  /** 截图叠加落 OSS 用；缺省（OSS 关闭）时截图仍入上下文，只是没有 resid。 */
+  ossClient?: OssClient;
 };
 
 type BrowserPersistedState = {
@@ -86,7 +89,7 @@ export class BrowserApp implements App<BrowserConfig> {
   private browserService: BrowserService | null = null;
   private pendingRestore: BrowserPersistedState | null = null;
 
-  public constructor({ credentialDao }: BrowserAppDeps) {
+  public constructor({ credentialDao, ossClient }: BrowserAppDeps) {
     this.credentialDao = credentialDao;
     const getBrowserService = (): BrowserService => {
       if (!this.browserService) {
@@ -101,7 +104,7 @@ export class BrowserApp implements App<BrowserConfig> {
       new BrowserTypeTool({ getBrowserService }),
       new BrowserPressTool({ getBrowserService }),
       new BrowserWaitForTool({ getBrowserService }),
-      new BrowserScreenshotTool({ getBrowserService }),
+      new BrowserScreenshotTool({ getBrowserService, ossClient }),
       new BrowserEvalTool({ getBrowserService }),
     ];
   }

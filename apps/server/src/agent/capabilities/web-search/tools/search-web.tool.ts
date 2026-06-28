@@ -1,9 +1,12 @@
 import { z } from "zod";
 import {
-  ZodToolComponent,
+  AsyncTool,
+  type AsyncTaskManager,
+  type AsyncToolPreparation,
+  type JsonSchema,
   type TaskAgentInvoker,
+  type ToolComponent,
   type ToolContext,
-  type ToolKind,
 } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../../runtime/context/agent-context.js";
 import type { WebSearchTaskInput } from "../task-agent/web-search-task-agent.js";
@@ -19,80 +22,100 @@ export const SEARCH_WEB_TOOL_NAME = "search_web";
 const SearchWebArgumentsSchema = z.object({
   question: z.string().trim().min(1),
 });
+type SearchWebInput = z.infer<typeof SearchWebArgumentsSchema>;
+
+const SEARCH_WEB_DESCRIPTION =
+  "把一个自然语言问题交给网页搜索子 Agent，让它自行拆词、多次检索并返回摘要。这是异步工具：调用后立即返回，结果稍后以 async_tool_result 回来。";
+
+const SEARCH_WEB_PARAMETERS = {
+  type: "object",
+  properties: {
+    question: {
+      type: "string",
+      description: "需要查询的自然语言问题。",
+    },
+  },
+} as const satisfies JsonSchema;
 
 type SearchWebToolContext = ToolContext & {
   agentContext?: AgentContext;
 };
 
-export class SearchWebTool extends ZodToolComponent<typeof SearchWebArgumentsSchema> {
-  public readonly name = SEARCH_WEB_TOOL_NAME;
-  public readonly description =
-    "把一个自然语言问题交给网页搜索子 Agent，让它自行拆词、多次检索并返回摘要。";
-  public readonly parameters = {
-    type: "object",
-    properties: {
-      question: {
-        type: "string",
-        description: "需要查询的自然语言问题。",
-      },
-    },
-  } as const;
-  public readonly kind: ToolKind = "business";
-  protected readonly inputSchema = SearchWebArgumentsSchema;
-  private readonly webSearchTaskAgent: WebSearchTaskAgentLike;
+export type CreateSearchWebToolDeps = {
+  webSearchTaskAgent: WebSearchTaskAgentLike;
+  asyncTaskManager: AsyncTaskManager;
+};
 
-  public constructor({
-    webSearchTaskAgent,
-    webSearchAgent,
-  }: {
-    webSearchTaskAgent?: WebSearchTaskAgentLike;
-    webSearchAgent?: WebSearchTaskAgentLike;
-  }) {
-    super();
-    this.webSearchTaskAgent =
-      webSearchTaskAgent ?? webSearchAgent ?? failMissingWebSearchTaskAgent();
+function rejectWith(error: string): AsyncToolPreparation {
+  return { kind: "reject", content: JSON.stringify({ ok: false, error }) };
+}
+
+/**
+ * search_web 的同步准备：决定上下文来源，返回 reject|submit。web 搜索是通用生活能力，
+ * 不门控 QQ 会话焦点——只在拿不到任何上下文时 reject（CONTEXT_UNAVAILABLE）。
+ *
+ * 通过时返回 submit，其 run thunk：优先用提交时刻已 structuredClone 冻结的 inline 快照
+ * （与主上下文后续漂移解耦）；无 inline 时才在后台 await agentContext.getSnapshot() 兜底。
+ * run 内才真正跑子 Agent。
+ *
+ * 近乎纯函数，独立可测。
+ */
+export function prepareSearchWeb(
+  input: SearchWebInput,
+  context: ToolContext,
+  webSearchTaskAgent: WebSearchTaskAgentLike,
+): AsyncToolPreparation {
+  const typedContext = context as SearchWebToolContext;
+  const agentContext = typedContext.agentContext;
+
+  const inlineSystemPrompt = typedContext.systemPrompt?.trim();
+  const inlineMessages = typedContext.messages ? structuredClone(typedContext.messages) : null;
+  const hasInlineContext = Boolean(inlineSystemPrompt) && inlineMessages !== null;
+
+  // 既无可用 inline 上下文、又无 agentContext 兜底 → 同步拒绝。
+  if (!hasInlineContext && !agentContext) {
+    return rejectWith("CONTEXT_UNAVAILABLE");
   }
 
-  protected async executeTyped(
-    input: z.infer<typeof SearchWebArgumentsSchema>,
-    context: ToolContext,
-  ): Promise<string> {
-    const typedContext = context as SearchWebToolContext;
-    const agentContext = typedContext.agentContext;
-
-    const inlineSystemPrompt = typedContext.systemPrompt?.trim();
-    const inlineMessages = typedContext.messages ? structuredClone(typedContext.messages) : null;
-    const snapshot =
-      inlineSystemPrompt && inlineMessages !== null
-        ? null
-        : agentContext
-          ? await agentContext.getSnapshot()
-          : null;
+  const run = async (): Promise<string> => {
+    const snapshot = hasInlineContext
+      ? null
+      : agentContext
+        ? await agentContext.getSnapshot()
+        : null;
     const systemPrompt = inlineSystemPrompt ?? snapshot?.systemPrompt.trim() ?? "";
     const contextMessages = inlineMessages ?? structuredClone(snapshot?.messages ?? []);
-    const hasInlineMessages = inlineMessages !== null;
 
-    if (!systemPrompt || (!hasInlineMessages && !agentContext)) {
-      return JSON.stringify({
-        ok: false,
-        error: "CONTEXT_UNAVAILABLE",
-      });
+    if (!systemPrompt) {
+      return JSON.stringify({ ok: false, error: "CONTEXT_UNAVAILABLE" });
     }
 
-    const taskInput = {
+    const taskInput: WebSearchTaskInput = {
       question: input.question,
       systemPrompt,
       contextMessages,
     };
 
-    if ("invoke" in this.webSearchTaskAgent) {
-      return await this.webSearchTaskAgent.invoke(taskInput);
+    if ("invoke" in webSearchTaskAgent) {
+      return await webSearchTaskAgent.invoke(taskInput);
     }
+    return await webSearchTaskAgent.search(taskInput);
+  };
 
-    return await this.webSearchTaskAgent.search(taskInput);
-  }
+  return { kind: "submit", run };
 }
 
-function failMissingWebSearchTaskAgent(): never {
-  throw new Error("SearchWebTool requires webSearchTaskAgent");
+/**
+ * 用 AsyncTool 装配出 search_web 工具实例（组合而非继承）。占位由 AsyncTool 统一产出，
+ * 本工厂只提供 name/描述/schema + 注入 prepareSearchWeb 与 asyncTaskManager。
+ */
+export function createSearchWebTool(deps: CreateSearchWebToolDeps): ToolComponent {
+  return new AsyncTool({
+    name: SEARCH_WEB_TOOL_NAME,
+    description: SEARCH_WEB_DESCRIPTION,
+    parameters: SEARCH_WEB_PARAMETERS,
+    inputSchema: SearchWebArgumentsSchema,
+    asyncTaskManager: deps.asyncTaskManager,
+    prepareAsync: (input, context) => prepareSearchWeb(input, context, deps.webSearchTaskAgent),
+  });
 }

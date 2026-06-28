@@ -341,15 +341,16 @@ Agent 相关补充约定：
 
 ### 前端代理与静态托管
 
-- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并将 `/api/*` 代理到 `http://localhost:20003/*`。
+- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`，env `CONSOLE_TARGET`），其余仍代理到 `kagami-server`（默认 `20003`，env `API_TARGET`）。
 - 该静态服务还暴露 `/health`。
 - 当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中补充 `server.proxy`。
 
 ### PM2
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
-- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。
-- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
+- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
+- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（env `PORT`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-server` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
+- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-server`。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
@@ -381,3 +382,26 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Deploy Configuration (configured by /setup-deploy)
+
+- Platform: 本地宿主机（PM2 fork 模式，无任何云平台 / PaaS）
+- Production URL: http://localhost:20003（server）、http://localhost:20004（web 静态服务，代理 /api/\*）
+- Deploy workflow: 手动触发，无自动 push 部署
+- Deploy status command: pm2 status / pm2 list
+- Merge method: PR merge（主分支 master）
+- Project type: 后端 Agent 服务 + React 管理台（monorepo）
+- Post-deploy health check: curl http://localhost:20003/health（web: http://localhost:20004/health）
+
+### Custom deploy hooks
+
+- Pre-merge: pnpm build && pnpm typecheck && pnpm lint && pnpm format
+- Deploy trigger: pnpm app:deploy（= bash ./scripts/deploy.sh：build → prisma migrate deploy → PM2 reload/startOrReload → pm2 save）
+- Deploy status: pm2 status
+- Health check: curl -sf http://localhost:20003/health
+
+### ⚠️ 部署红线（用户硬约束）
+
+- **未经用户明确要求，绝不自行执行 `pnpm app:deploy` 或任何部署动作。**
+- gstack 的 `/land-and-deploy` **仅用于合并 PR**：跑到合并 PR（Step 4）即停，绝不进入它后续的自动部署（Step 5/6）与 canary 验证（Step 7）。它默认的「merge→自动 deploy」尾巴与 Kagami 的本地 PM2 模型不匹配，必须砍掉。
+- 部署一律单独走 `pnpm app:deploy`，且只在用户当轮明确要求时执行。

@@ -1,3 +1,4 @@
+import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { LlmContentPart, LlmMessage } from "../../../llm/types.js";
 import {
@@ -126,6 +127,23 @@ export function createStoryRecallMessage(
   });
 
   return createUserMessage(["<story_recall>", ...parts, "</story_recall>"].join("\n"));
+}
+
+/**
+ * 异步工具任务完成后的回流消息：包成一条 `<async_tool_result>` user message 追加到尾部。
+ * 凭 task_id 对应到当初的 `<async_task_submitted>`。content/message 原样插入，不做 XML 转义
+ * （与 `<notification>` / `<story_recall>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。
+ */
+export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): UserMessage {
+  const { taskId, toolName, outcome } = completion;
+  const head = `<async_tool_result task_id="${taskId}" tool="${toolName}"`;
+  if (outcome.status === "success") {
+    return createUserMessage(`${head}>\n${outcome.content}\n</async_tool_result>`);
+  }
+  if (outcome.status === "error") {
+    return createUserMessage(`${head} status="error">\n${outcome.message}\n</async_tool_result>`);
+  }
+  return createUserMessage(`${head} status="timeout">\n任务超时未完成\n</async_tool_result>`);
 }
 
 function formatStoryRecallDate(date: Date): string {

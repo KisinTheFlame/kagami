@@ -9,6 +9,8 @@ import { DefaultAgentMessageService } from "../../capabilities/messaging/applica
 import { PendingDraftStore } from "../../capabilities/messaging/application/pending-draft.store.js";
 import { AiToneScorer } from "../../capabilities/messaging/infra/ai-tone-scorer.js";
 import { SendMessageTool } from "../../capabilities/messaging/tools/send-message.tool.js";
+import { SendResourceTool } from "../../capabilities/messaging/tools/send-resource.tool.js";
+import type { ResourceService } from "../../capabilities/resource/application/resource.service.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
 import { QqApp } from "./qq.app.js";
 
@@ -23,6 +25,8 @@ type BuildQqAppInput = {
   listenGroupIds: string[];
   recentMessageLimit: number;
   aiTone: { enabled: boolean; blockThreshold: number };
+  /** 资源读取（send_resource 按 resid 取图字节）。OSS 关闭时调用层报错。 */
+  resourceService: ResourceService;
 };
 
 export type QqAppBundle = {
@@ -52,6 +56,7 @@ export async function buildQqApp({
   listenGroupIds,
   recentMessageLimit,
   aiTone,
+  resourceService,
 }: BuildQqAppInput): Promise<QqAppBundle> {
   const inbound: { handle: (event: NapcatAgentEvent) => void } = {
     handle: () => {},
@@ -79,6 +84,10 @@ export async function buildQqApp({
     aiTone,
     getChatTarget: () => qqAppRef.current?.getCurrentChatTarget(),
   });
+  const sendResourceTool = new SendResourceTool({
+    resourceService,
+    agentMessageService: outboundService,
+  });
   const qqApp = new QqApp({
     napcatGateway,
     notificationCenter,
@@ -86,6 +95,7 @@ export async function buildQqApp({
     listenGroupIds,
     recentMessageLimit,
     sendMessageTool,
+    sendResourceTool,
   });
   qqAppRef.current = qqApp;
   inbound.handle = event => qqApp.handleNapcatEvent(event);
