@@ -1,15 +1,13 @@
 import {
   type LlmChatCallItem,
+  type LlmChatRequestPayload,
   type LlmPlaygroundChatRequest,
   type LlmProviderOption,
+  type LlmRequestMessage,
+  type LlmRequestUserContentPart,
   type PlaygroundContentPart,
   type PlaygroundMessage,
 } from "@kagami/shared/schemas/llm-chat";
-import type {
-  ParsedLlmChatRequestPayload,
-  ParsedLlmRequestMessage,
-  ParsedLlmUserContentPart,
-} from "@/pages/llm-history/llm-chat-call-detail-parser";
 
 export type PlaygroundImportWarningCode =
   | "image_omitted"
@@ -51,7 +49,7 @@ export type ResolvedPlaygroundImport = {
 
 export function buildPlaygroundImportDraftFromHistory(params: {
   item: LlmChatCallItem;
-  request: ParsedLlmChatRequestPayload;
+  request: LlmChatRequestPayload;
 }): PlaygroundImportDraft {
   const { item, request } = params;
   const imageStats = { count: 0 };
@@ -158,7 +156,7 @@ export function getPlaygroundImportDraftFromLocationState(
 }
 
 function toPlaygroundMessage(params: {
-  message: ParsedLlmRequestMessage;
+  message: LlmRequestMessage;
   imageStats: { count: number };
 }): PlaygroundMessage {
   const { message, imageStats } = params;
@@ -188,7 +186,7 @@ function toPlaygroundMessage(params: {
 }
 
 function toPlaygroundContentPart(params: {
-  part: ParsedLlmUserContentPart;
+  part: LlmRequestUserContentPart;
   imageStats: { count: number };
 }): PlaygroundContentPart {
   const { part, imageStats } = params;
@@ -207,7 +205,7 @@ function toPlaygroundContentPart(params: {
 }
 
 function buildImagePlaceholderText(
-  part: Extract<ParsedLlmUserContentPart, { type: "image" }>,
+  part: Extract<LlmRequestUserContentPart, { type: "image" }>,
 ): string {
   const meta = [
     part.filename ? `文件名：${part.filename}` : null,

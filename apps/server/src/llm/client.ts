@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+import {
+  type LlmChatRequestPayload,
+  type LlmProviderOption,
+  type LlmRequestUserContentPart,
+} from "@kagami/shared/schemas/llm-chat";
 import type { LlmProviderId, LlmUsageId } from "@kagami/server-core/common/contracts/llm";
 import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { Config } from "@kagami/server-core/config/config.loader";
@@ -459,7 +463,9 @@ function requireUsage(usage: LlmUsageId | undefined): LlmUsageId {
 }
 
 function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknown> {
-  return {
+  // payload 显式标注为共享契约类型，把「落库 shape」钉死在 @kagami/shared 上：
+  // 后端序列化结构一旦漂移，这里立刻编译报错，前端 viewer 与之同源不再静默失配。
+  const payload: LlmChatRequestPayload = {
     ...(request.system ? { system: request.system } : {}),
     model: request.model,
     messages: request.messages.map(message => {
@@ -490,9 +496,11 @@ function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknow
     tools: request.tools,
     toolChoice: request.toolChoice,
   };
+
+  return payload;
 }
 
-function toRecordableContentPart(part: LlmContentPart): Record<string, unknown> {
+function toRecordableContentPart(part: LlmContentPart): LlmRequestUserContentPart {
   if (part.type === "text") {
     return part;
   }
