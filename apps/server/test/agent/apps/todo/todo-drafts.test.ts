@@ -17,22 +17,29 @@ describe("TodoReminderDraft", () => {
   });
 });
 
+const NUDGE = "顺便想想接下来打算做什么，去 todo App 按自己的计划添几条新待办吧。";
+
 describe("TodoDigestDraft", () => {
-  it("无截断：列出全部", () => {
+  it("无截断：列出全部，附创建提示", () => {
     const draft = new TodoDigestDraft({
       totalCount: 2,
       items: [{ title: "a" }, { title: "b" }],
     });
     expect(draft.sourceId).toBe("todo:digest");
     expect(draft.group).toBe("待办");
-    expect(draft.render()).toBe("还有 2 件没做：《a》《b》");
+    expect(draft.render()).toBe(`还有 2 件没做：《a》《b》。${NUDGE}`);
   });
 
-  it("有截断：附「其余 N 件」", () => {
+  it("有截断：附「其余 N 件」与创建提示", () => {
     const draft = new TodoDigestDraft({
       totalCount: 5,
       items: [{ title: "a" }, { title: "b" }],
     });
-    expect(draft.render()).toBe("还有 5 件没做：《a》《b》…（其余 3 件）");
+    expect(draft.render()).toBe(`还有 5 件没做：《a》《b》…（其余 3 件）。${NUDGE}`);
+  });
+
+  it("零未完成项：兜底文案 + 创建提示", () => {
+    const draft = new TodoDigestDraft({ totalCount: 0, items: [] });
+    expect(draft.render()).toBe(`待办都清空了，没有未完成的事。${NUDGE}`);
   });
 });
