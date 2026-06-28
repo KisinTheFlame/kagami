@@ -8,7 +8,7 @@ type TodoReminderPollerDeps = {
   todoService: TodoService;
   /** 每条到点提醒回调一次（由上层构造 TodoReminderDraft 并 push）。 */
   onDueReminder: (reminder: DueReminder) => void;
-  /** 每日 digest 有未完成项时回调一次（由上层构造 TodoDigestDraft 并 push）。 */
+  /** 每次待办回顾（每天两次）无条件回调一次（由上层构造 TodoDigestDraft 并 push）。 */
   onDigest: (summary: DigestSummary) => void;
 };
 
@@ -46,13 +46,16 @@ export class TodoReminderPoller {
     }
   }
 
-  /** 每日回顾：有未完成项才回调。 */
+  /**
+   * 待办回顾：每天两次（09:00 / 21:00）无条件回调一次。
+   *
+   * 即使当前没有未完成项也照样回调——这条 App 级提醒除了汇总未完成项，还要顺带推动小镜去
+   * todo App 按自己打算做的事添新待办，所以空待办时也得发（由 TodoDigestDraft 渲染兜底文案）。
+   */
   public async runDigest(): Promise<void> {
     try {
       const summary = await this.todoService.buildDigest({ limit: TODO_LIST_RENDER_LIMIT });
-      if (summary.totalCount > 0) {
-        this.onDigest(summary);
-      }
+      this.onDigest(summary);
     } catch (error) {
       logger.warn("Failed to run todo daily digest", {
         event: "todo.digest_failed",

@@ -9,6 +9,7 @@
 
 ### Changed
 
+- todo: App 级回顾由**每天一次**改为**每天两次**（09:00 / 21:00）的统一提醒，并加入推动小镜规划的固定提示。每条 todo 自己的 `remindAt` 到点提醒（`reminder-tick`）不变，只动 App 级 digest：`DAILY_DIGEST_CRON` 由 `0 9 * * *` 改为 `0 9,21 * * *`（croner 原生支持 `9,21` 列表）；`TodoReminderPoller.runDigest` 去掉 `totalCount > 0` 守卫改为**无条件回调**——即使当前没有未完成项也照发，因为这条提醒除汇总未完成项外还要顺带提示小镜「去 todo App 按自己打算做的事添几条新待办」，空待办时同样需要推动规划。`TodoDigestDraft.render` 改为两段式：有未完成项时在「还有 N 件没做…」后追加创建提示，零未完成项时输出兜底文案「待办都清空了，没有未完成的事。」+ 同一句提示。两次回顾间隔 12h、共用 `sourceId="todo:digest"` 互不重叠，提醒仍经 NotificationCenter append 到尾部、不碰稳定前缀，对 KV 缓存中性。同步更新 digest draft 渲染与 runDigest 空待办两处用例
 - todo: `add_todo` 工具把 `note` 与 `remindAt` 由可选改为**必填**（`repeatEvery` 仍可选），让每条新建待办都带备注与未来提醒时刻、到点必走通知。强制点落在工具的 Zod schema 与 `parameters.required`，并同步收紧 todo App `help()` 文案（`add_todo(title, note, remindAt, repeatEvery?)`）；`TodoService.addTodo` 签名刻意保持宽松（tool 是 Agent 唯一写入口，service 为内部 API），DB 列保持 nullable、不迁移、不回填存量。保证的是「创建时必填」而非全局不变量——一次性提醒（无 `repeatEvery`）触发后 `remindAt` 仍按既有设计被 `clearReminder` 清空。补 `缺 note` / `缺 remindAt` → `INVALID_ARGUMENTS` 两个用例，并修 happy-path 与「过去 remindAt → INVALID_TIME」用例补齐必填字段
 
 ### Fixed

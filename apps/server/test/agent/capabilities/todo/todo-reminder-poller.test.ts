@@ -69,9 +69,10 @@ describe("TodoReminderPoller.runDigest", () => {
     expect(digests[0].totalCount).toBe(1);
   });
 
-  it("零未完成项 → 不回调", async () => {
+  it("零未完成项 → 仍回调一次（无条件触发，用于推动小镜创建新待办）", async () => {
     const { poller, digests } = setup();
     await poller.runDigest();
-    expect(digests).toEqual([]);
+    expect(digests).toHaveLength(1);
+    expect(digests[0].totalCount).toBe(0);
   });
 });
