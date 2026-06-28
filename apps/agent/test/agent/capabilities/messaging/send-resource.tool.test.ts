@@ -9,12 +9,15 @@ const GROUP_TARGET: NapcatChatTarget = { chatType: "group", groupId: "123" };
 
 function build(opts: {
   resolve: ResourceService["resolve"];
+  // 发送目标来自持有该工具的 QqApp 当前会话（实时回调）；undefined = 没有打开的会话。
+  chatTarget?: NapcatChatTarget;
   sendImage?: AgentMessageService["sendImage"];
 }) {
   const sendImage = opts.sendImage ?? vi.fn().mockResolvedValue({ messageId: 555 });
   const tool = new SendResourceTool({
     resourceService: { resolve: opts.resolve } as unknown as ResourceService,
     agentMessageService: { sendImage } as unknown as AgentMessageService,
+    getChatTarget: () => opts.chatTarget,
   });
   return { tool, sendImage };
 }
@@ -29,6 +32,7 @@ describe("SendResourceTool", () => {
 
   it("refuses non-image resources", async () => {
     const { tool, sendImage } = build({
+      chatTarget: GROUP_TARGET,
       resolve: vi.fn().mockResolvedValue({
         resId: "res-2",
         bytes: Buffer.from("%PDF"),
@@ -37,7 +41,7 @@ describe("SendResourceTool", () => {
         isImage: false,
       }),
     });
-    const result = await tool.execute({ resid: "res-2" }, { chatTarget: GROUP_TARGET } as never);
+    const result = await tool.execute({ resid: "res-2" }, {});
     expect(JSON.parse(result.content)).toMatchObject({
       error: "NON_IMAGE_RESOURCE",
       mime: "application/pdf",
@@ -47,6 +51,7 @@ describe("SendResourceTool", () => {
 
   it("surfaces OSS errors without sending", async () => {
     const { tool, sendImage } = build({
+      chatTarget: GROUP_TARGET,
       resolve: vi.fn().mockRejectedValue(
         new BizError({
           message: "OSS 对象不存在：res-404",
@@ -54,13 +59,14 @@ describe("SendResourceTool", () => {
         }),
       ),
     });
-    const result = await tool.execute({ resid: "res-404" }, { chatTarget: GROUP_TARGET } as never);
+    const result = await tool.execute({ resid: "res-404" }, {});
     expect(JSON.parse(result.content).error).toBe("OSS_OBJECT_NOT_FOUND");
     expect(sendImage).not.toHaveBeenCalled();
   });
 
   it("sends an image as base64://, mapping caption→summary and reply_to→reply", async () => {
     const { tool, sendImage } = build({
+      chatTarget: GROUP_TARGET,
       resolve: vi.fn().mockResolvedValue({
         resId: "res-7",
         bytes: Buffer.from("imgbytes"),
@@ -69,9 +75,7 @@ describe("SendResourceTool", () => {
         isImage: true,
       }),
     });
-    const result = await tool.execute({ resid: "res-7", caption: "看这个", reply_to: 42 }, {
-      chatTarget: GROUP_TARGET,
-    } as never);
+    const result = await tool.execute({ resid: "res-7", caption: "看这个", reply_to: 42 }, {});
 
     expect(sendImage).toHaveBeenCalledWith({
       target: GROUP_TARGET,
@@ -80,5 +84,31 @@ describe("SendResourceTool", () => {
       replyToMessageId: 42,
     });
     expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-7", messageId: 555 });
+  });
+
+  // 回归：发送目标必须取自实时 getChatTarget()（持有工具的 QqApp 当前会话），
+  // 绝不读 ToolContext —— 主 Agent 每轮的 toolContext 不再携带 chatTarget（QQ 私有概念，
+  // 不经 session），早期写法读 context.chatTarget 会恒为 undefined、send_resource 永远报
+  // "没有打开的会话"。这里特意往 context 塞一个会误导的 chatTarget，断言工具忽略它、用回调值。
+  it("reads the live chat target from the callback, ignoring any ToolContext.chatTarget", async () => {
+    const MISLEADING_CONTEXT_TARGET: NapcatChatTarget = { chatType: "private", userId: "999" };
+    const { tool, sendImage } = build({
+      chatTarget: GROUP_TARGET,
+      resolve: vi.fn().mockResolvedValue({
+        resId: "res-9",
+        bytes: Buffer.from("img"),
+        mimeType: "image/png",
+        size: 3,
+        isImage: true,
+      }),
+    });
+
+    const result = await tool.execute({ resid: "res-9" }, {
+      chatTarget: MISLEADING_CONTEXT_TARGET,
+    } as never);
+
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-9" });
+    expect(sendImage).toHaveBeenCalledTimes(1);
+    expect(sendImage).toHaveBeenCalledWith(expect.objectContaining({ target: GROUP_TARGET }));
   });
 });

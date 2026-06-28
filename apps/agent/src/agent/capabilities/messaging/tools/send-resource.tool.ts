@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent-runtime";
+import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 import type { ResourceService } from "../../resource/application/resource.service.js";
@@ -12,10 +12,6 @@ const SendResourceArgumentsSchema = z.object({
   caption: z.string().trim().min(1).optional(),
   reply_to: z.number().int().positive().optional(),
 });
-
-type SendResourceToolContext = ToolContext & {
-  chatTarget?: NapcatChatTarget;
-};
 
 /**
  * 按 resId 把一份已存图片资源发到当前 QQ 会话。资源经 OSS 取回字节、以 base64:// 形态
@@ -46,24 +42,28 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
   protected readonly inputSchema = SendResourceArgumentsSchema;
   private readonly resourceService: ResourceService;
   private readonly agentMessageService: AgentMessageService;
+  /** 当前发送目标：来自持有该工具的 QqApp 的当前会话。chatTarget 是 QQ 私有概念，不经 session。 */
+  private readonly getChatTarget: () => NapcatChatTarget | undefined;
 
   public constructor({
     resourceService,
     agentMessageService,
+    getChatTarget,
   }: {
     resourceService: ResourceService;
     agentMessageService: AgentMessageService;
+    getChatTarget: () => NapcatChatTarget | undefined;
   }) {
     super();
     this.resourceService = resourceService;
     this.agentMessageService = agentMessageService;
+    this.getChatTarget = getChatTarget;
   }
 
   protected async executeTyped(
     input: z.infer<typeof SendResourceArgumentsSchema>,
-    context: ToolContext,
   ): Promise<string> {
-    const chatTarget = (context as SendResourceToolContext).chatTarget;
+    const chatTarget = this.getChatTarget();
     if (!chatTarget) {
       return JSON.stringify({
         ok: false,
