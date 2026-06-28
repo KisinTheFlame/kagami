@@ -92,7 +92,7 @@ export function createNapcatGroupMessageDao(): NapcatQqMessageDao & {
 export function createConfigManager(): ConfigManager {
   const config: Config = {
     server: {
-      databaseUrl: "postgresql://localhost:5432/kagami",
+      databaseUrl: "file::memory:",
       port: 20003,
       agent: {
         contextCompactionTotalTokenThreshold: 150_000,

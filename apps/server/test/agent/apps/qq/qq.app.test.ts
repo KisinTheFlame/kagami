@@ -193,6 +193,7 @@ describe("QqApp", () => {
       sendResourceTool: dummySendTool,
     });
     await app.onStartup();
+    await app.onFocus(); // 进入 QQ（前台）才会对外暴露发送目标
 
     expect(app.getCurrentChatTarget()).toBeUndefined();
     const result = await app.openConversation("qq_group:1");
@@ -204,6 +205,7 @@ describe("QqApp", () => {
   it("creates a private conversation from a friend list update", async () => {
     const app = createApp(new FakeScheduler(), vi.fn());
     await app.onStartup();
+    await app.onFocus();
     app.handleNapcatEvent({
       type: "napcat_friend_list_updated",
       data: { friends: [{ userId: "888", nickname: "老王", remark: null }] },
@@ -213,13 +215,140 @@ describe("QqApp", () => {
     expect(app.getCurrentChatTarget()).toEqual({ chatType: "private", userId: "888" });
   });
 
-  it("back_to_conversation_list clears the current conversation", async () => {
+  it("gates the chat target on being in the foreground: blur hides it, focus restores it", async () => {
     const app = createApp(new FakeScheduler(), vi.fn());
     await app.onStartup();
+    await app.onFocus();
     await app.openConversation("qq_group:1");
-    expect(app.getCurrentChatTarget()).toBeDefined();
-    app.backToConversationList();
+    // 前台 + 有当前会话 → 暴露发送目标。
+    expect(app.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "1" });
+
+    // 退到后台：当前会话焦点保留，但不再对外暴露发送目标（防泄漏到 QQ 之外）。
+    await app.onBlur();
     expect(app.getCurrentChatTarget()).toBeUndefined();
+
+    // 回到 QQ：焦点续上原会话，发送目标重新可用。
+    await app.onFocus();
+    expect(app.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "1" });
+  });
+
+  it("returns no chat target when focused but no conversation is open", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    await app.onFocus();
+    expect(app.getCurrentChatTarget()).toBeUndefined();
+  });
+
+  it("list_conversations is a pure read: lists conversations, marks current, leaves focus unchanged", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    await app.onFocus();
+    await app.openConversation("qq_group:1");
+
+    const listed = app.listConversations();
+    expect(listed).toContain("<qq_conversation_list>");
+    expect(listed).toContain("产品群");
+    expect(listed).toContain("← 当前会话"); // 标注当前焦点
+    // 纯读：当前会话 / 发送目标不变。
+    expect(app.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "1" });
+  });
+
+  it("onFocus keeps the current conversation and replays messages received while backgrounded", async () => {
+    const scheduler = new FakeScheduler();
+    const center = new NotificationCenter({
+      leadingWindowMs: 50,
+      windowMs: 100,
+      onFlush: vi.fn(),
+      scheduler,
+    });
+    const clearSpy = vi.spyOn(center, "clearForSource");
+    const app = new QqApp({
+      napcatGateway: fakeGateway(),
+      notificationCenter: center,
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 5,
+      sendMessageTool: dummySendTool,
+    });
+    await app.onStartup();
+    await app.onFocus();
+    await app.openConversation("qq_group:1"); // 进过一次，之后取未读尾补档
+
+    // 退到后台，期间来两条消息（攒成未读）。
+    await app.onBlur();
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("后台消息一") });
+    app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("后台消息二") });
+    clearSpy.mockClear();
+
+    // 回到 QQ：列表 + 当前会话补档（后台两条），未读清零、该源通知清掉。
+    const effect = (await app.onFocus())[0];
+    const content = "content" in effect ? effect.content : "";
+    expect(content).toContain("<qq_conversation_list>");
+    expect(content).toContain("← 当前会话");
+    expect(content).toContain("后台消息一");
+    expect(content).toContain("后台消息二");
+    expect(clearSpy).toHaveBeenCalledWith("qq_group:1");
+    // 未读已清零：列表里当前会话不再带未读标。
+    expect(content).not.toContain("未读 2");
+  });
+
+  it("onFocus tells you the current conversation had no new messages while away", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    await app.onFocus();
+    await app.openConversation("qq_group:1");
+    await app.onBlur();
+
+    const effect = (await app.onFocus())[0];
+    const content = "content" in effect ? effect.content : "";
+    expect(content).toContain("当前会话期间无新消息");
+  });
+
+  it("onFocus with no open conversation renders only the list, no replay block", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    const effect = (await app.onFocus())[0];
+    const content = "content" in effect ? effect.content : "";
+    expect(content).toContain("<qq_conversation_list>");
+    expect(content).not.toContain("<qq_conversation "); // 没有会话补档块
+  });
+
+  it("onFocus replay shows the recent tail and flags older unread beyond the buffer", async () => {
+    const app = new QqApp({
+      napcatGateway: fakeGateway(),
+      notificationCenter: new NotificationCenter({
+        leadingWindowMs: 50,
+        windowMs: 100,
+        onFlush: vi.fn(),
+        scheduler: new FakeScheduler(),
+      }),
+      botQQ: "10001",
+      listenGroupIds: ["1"],
+      recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
+      sendMessageTool: dummySendTool,
+    });
+    await app.onStartup();
+    await app.onFocus();
+    await app.openConversation("qq_group:1");
+    await app.onBlur();
+
+    // 后台来 5 条：缓冲只留最近 2，未读计数 5。
+    for (const n of ["1", "2", "3", "4", "5"]) {
+      app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage(`m${n}`) });
+    }
+
+    const effect = (await app.onFocus())[0];
+    const content = "content" in effect ? effect.content : "";
+    expect(content).toContain("m4");
+    expect(content).toContain("m5");
+    expect(content).not.toContain("m1");
+    expect(content).toContain("更早 3 条未读未展示"); // 5 - 2
+
+    // 未读清零：再退再回，不再有补档内容。
+    await app.onBlur();
+    const again = (await app.onFocus())[0];
+    const againContent = "content" in again ? again.content : "";
+    expect(againContent).toContain("当前会话期间无新消息");
   });
 
   it("ingests a private message: creates the conversation and pushes a notification", async () => {
@@ -227,6 +356,7 @@ describe("QqApp", () => {
     const onFlush = vi.fn();
     const app = createApp(scheduler, onFlush);
     await app.onStartup();
+    await app.onFocus();
 
     app.handleNapcatEvent({
       type: "napcat_private_message",

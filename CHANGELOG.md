@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- todo: App 级回顾由**每天一次**改为**每天两次**（09:00 / 21:00）的统一提醒，并加入推动小镜规划的固定提示。每条 todo 自己的 `remindAt` 到点提醒（`reminder-tick`）不变，只动 App 级 digest：`DAILY_DIGEST_CRON` 由 `0 9 * * *` 改为 `0 9,21 * * *`（croner 原生支持 `9,21` 列表）；`TodoReminderPoller.runDigest` 去掉 `totalCount > 0` 守卫改为**无条件回调**——即使当前没有未完成项也照发，因为这条提醒除汇总未完成项外还要顺带提示小镜「去 todo App 按自己打算做的事添几条新待办」，空待办时同样需要推动规划。`TodoDigestDraft.render` 改为两段式：有未完成项时在「还有 N 件没做…」后追加创建提示，零未完成项时输出兜底文案「待办都清空了，没有未完成的事。」+ 同一句提示。两次回顾间隔 12h、共用 `sourceId="todo:digest"` 互不重叠，提醒仍经 NotificationCenter append 到尾部、不碰稳定前缀，对 KV 缓存中性。同步更新 digest draft 渲染与 runDigest 空待办两处用例
+- todo: `add_todo` 工具把 `note` 与 `remindAt` 由可选改为**必填**（`repeatEvery` 仍可选），让每条新建待办都带备注与未来提醒时刻、到点必走通知。强制点落在工具的 Zod schema 与 `parameters.required`，并同步收紧 todo App `help()` 文案（`add_todo(title, note, remindAt, repeatEvery?)`）；`TodoService.addTodo` 签名刻意保持宽松（tool 是 Agent 唯一写入口，service 为内部 API），DB 列保持 nullable、不迁移、不回填存量。保证的是「创建时必填」而非全局不变量——一次性提醒（无 `repeatEvery`）触发后 `remindAt` 仍按既有设计被 `clearReminder` 清空。补 `缺 note` / `缺 remindAt` → `INVALID_ARGUMENTS` 两个用例，并修 happy-path 与「过去 remindAt → INVALID_TIME」用例补齐必填字段
+
 ### Fixed
 
 - llm: 修 [#127] 同源的**记录侧崩溃**。#127 把图片内容改 base64 + provider 映射走 `imageContentToBase64` 归一，但 `client.ts` 记录侧 `toRecordableContentPart` 仍 `Buffer.from(part.content, "base64")`；已被 JSON 毒过的历史图片消息（`{type:"Buffer",data:[]}` 对象）恢复后流到记录侧，对对象 `Buffer.from` 抛 `Received an instance of Object` → root agent loop 崩溃（生产部署 #127 后实测到，`invalid base64` 已消失但暴露此条）。记录侧也经 `imageContentToBase64` 归一；中毒对象随上下文压缩老化（[#128](https://github.com/KisinTheFlame/kagami/pull/128)）
@@ -41,6 +46,7 @@
 
 ### Changed
 
+- agent: **QQ 会话导航去掉 `back_to_conversation_list`，改 `list_conversations`（纯读）+ 任意时刻 `open_conversation` 切焦点**。旧 `back_to_conversation_list` 把"看列表"和"离开当前会话"耦在一个工具里（清焦点 + 重渲列表），强加了"先回列表再开下一个"的状态机。现在焦点只由 `open_conversation` 管（随时切到任意会话，无需先回列表），新增纯读子工具 `list_conversations`——列当前已知会话含未读、标注当前焦点，**不动 `currentConversationId`**。`openConversation` 与回到 QQ 的补档共用抽出的私有 `enterConversation()`（一份"清未读 + 清该会话 pending 通知 + 渲染"逻辑）。**焦点跨后台保留**：`onBlur` 不再清当前会话（回来能续上），但新增 `focused` 标志门控 `getCurrentChatTarget()`——仅前台才对外暴露发送目标，退出 QQ 后返回 `undefined`，堵住"离开 QQ 后顶层能力（send_message / search_web）仍看到 chat target"的泄漏（codex 跨模型评审指出，`focused` 不持久化、重启即 false）。`onFocus` 回到 QQ：先补档（清当前会话未读）再渲列表，输出会话列表（标注当前）+ 焦点会话后台期间收到的消息；`unreadCount` 超缓冲上限时提示"更早 N 条未读未展示"避免信息静默丢失，无新消息则给"当前会话期间无新消息"。子工具增删经 InvokeTool 披露、顶层工具集不变，对稳定前缀与 KV 缓存中性。新增 9 条 vitest 覆盖 focused 三路门控 / onBlur 保焦点 / onFocus 补档 / 超缓冲提示（[#133](https://github.com/KisinTheFlame/kagami/issues/133)）
 - agent: **通知中心空闲首条改为前沿短窗聚合**。此前 NotificationCenter 是「前沿立即发 + 30s 节流」——空闲来第一条立即 flush 直达 Agent；现在空闲来第一条改为开一个 `leadingWindowMs`（默认 10s）的**前沿短窗**攒着、窗结束才 flush，用来聚合一小撮突发，避免首条一来就打断 Agent。窗结束仍有攒着的 → flush + 开 `windowMs`（30s）节流窗，空了回空闲、下一条重新走短窗；`openWindow(delayMs)` 改带时长参数（`push` 传 leading、窗结束传 batch）。新增配置 `server.agent.notificationLeadingWindowMs`（默认 10000）与兄弟 `notificationBatchWindowMs` 并列。只影响事件入队时机、不改消息序列化，对稳定前缀与 KV 缓存中性（[#120](https://github.com/KisinTheFlame/kagami/pull/120)）
 - build/server: **test 前置构建 workspace 依赖**。vitest 经 `package.json` 的 `exports` 以 dist 形式消费 `@kagami/shared` 等内部包，干净 worktree 下 dist 缺失会解析失败、改 dist 不重建又会跑陈旧产物；新增 `pretest` 在 vitest 前先构建 server 的依赖包（`@kagami/server^...`，不含自身），让「dist 缺失 / 陈旧」不再咬人（[#120](https://github.com/KisinTheFlame/kagami/pull/120)）
 - build/lint: ESLint 开启类型感知 linting（`typescript-eslint` `recommendedTypeChecked` + `projectService`，仅作用于各包 src，测试 / 配置文件不进 scope），抓 `no-floating-promises`（现状 0）/ `no-misused-promises` / `no-unsafe-*` / `switch` 穷尽 / `base-to-string` 等只有类型信息才能发现的问题。仅关闭 `require-await`（满足接口契约的 async，留着只有噪声）；`unbound-method` 的依赖注入解构误报改用**代码**消除（OAuth 工厂参数改 `deps.` 直接调用、依赖映射类型用箭头属性语法），不靠关规则；`no-unsafe-*` 暂设 `warn` 做棘轮（可见不阻塞，后续逐步收紧）；首轮高价值违例（冗余 union、`base-to-string`、模板表达式、回调 handler 改显式 `void` fire-and-forget 而非 inline disable 等）一并修掉（[#95](https://github.com/KisinTheFlame/kagami/pull/95)、[#96](https://github.com/KisinTheFlame/kagami/pull/96)）

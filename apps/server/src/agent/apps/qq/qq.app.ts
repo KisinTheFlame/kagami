@@ -28,7 +28,7 @@ import {
   createPrivateConversationId,
 } from "../../capabilities/messaging/conversation-id.js";
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
-import { BackToConversationListTool } from "./tools/back-to-conversation-list.tool.js";
+import { ListConversationsTool } from "./tools/list-conversations.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";
 import { ListFacesTool } from "./tools/list-faces.tool.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
@@ -56,11 +56,17 @@ type QqAppDeps = {
  * QQ App（手机 OS 模型，B 形态：持久当前会话视图）。
  *
  * 取代旧聊天状态树：自己持会话表（群 + 私聊）、订阅 napcat、来消息向
- * NotificationCenter push 通知。内部维护"当前会话"——open_conversation 打开并停在
- * 那、send_message 发给当前、back_to_conversation_list 回列表。
+ * NotificationCenter push 通知。内部维护"当前会话"——open_conversation 随时打开/切换
+ * 并停在那、send_message 发给当前；list_conversations 是纯读列表，不动焦点。没有"回列表"
+ * 这个状态切换：焦点只由 open_conversation 管。
+ *
+ * 焦点跨 blur 保留：退到后台（onBlur）不清 currentConversationId，回来（onFocus）能续上
+ * 原会话并补看后台期间的消息。但用 focused 标志门控 getCurrentChatTarget——只在前台才对外
+ * 暴露发送目标，退出 QQ 后返回 undefined，避免 chatTarget 泄漏到 QQ 之外。focused 不持久化，
+ * 重启后为 false。
  *
  * 所有进来的消息都走 center 成通知（含当前会话，不做实时 append）；current 只决定
- * send 目标 + onFocus 渲染谁。读会话内容靠 open_conversation。
+ * send 目标 + onFocus 渲染谁。读会话内容靠 open_conversation / onFocus 补档。
  */
 export class QqApp implements App {
   public readonly id = QQ_APP_ID;
@@ -73,6 +79,11 @@ export class QqApp implements App {
   private readonly recentMessageLimit: number;
   private readonly conversations = new Map<ConversationId, Conversation>();
   private currentConversationId: ConversationId | null = null;
+  /**
+   * QQ 是否在前台（onFocus 置 true / onBlur 置 false）。门控 getCurrentChatTarget：只在前台
+   * 才暴露发送目标，退出 QQ 后即便 currentConversationId 仍保留也不对外泄漏。不持久化。
+   */
+  private focused = false;
 
   public constructor({
     napcatGateway,
@@ -95,7 +106,7 @@ export class QqApp implements App {
       sendMessageTool,
       sendResourceTool,
       new OpenConversationTool({ getApp: () => this }),
-      new BackToConversationListTool({ getApp: () => this }),
+      new ListConversationsTool({ getApp: () => this }),
       new ViewForwardTool({ getApp: () => this }),
       new ListFacesTool(),
     ];
@@ -110,11 +121,11 @@ export class QqApp implements App {
       "你在 QQ App 里。这里是你的 QQ 会话列表（群 + 私聊）。",
       "",
       "可调用工具：",
-      "  - open_conversation(id): 打开某个会话，看最近消息并停在那；之后 send_message 发给它。",
+      "  - list_conversations(): 列出当前已知的会话（群 + 私聊）含未读数，并标出你现在停在哪个会话。纯读，不改变焦点。",
+      "  - open_conversation(id): 打开/切换到某个会话，看最近消息并停在那；之后 send_message 发给它。任意时刻都能直接切换到别的会话，不用先回列表。",
       "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。想发 QQ 内置表情就在文本里写 `[表情: 名字]`（和你收到的格式一样，如 `[表情: 比心]`），会自动转成表情发出；名字不认得就原样当文字发。",
       "  - send_resource(resid, caption?, reply_to?): 按 resid 把一张已存图片发到当前会话。resid 形如 res-N（取自消息里 [resid: res-N] 占位符或截图返回）。先 open_conversation 才能发；目前只支持图片。",
       "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
-      "  - back_to_conversation_list(): 离开当前会话、回到会话列表。",
       "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
       "",
       "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
@@ -142,13 +153,30 @@ export class QqApp implements App {
     );
   }
 
+  /**
+   * 回到 QQ：进入前台，渲染会话列表（标注当前焦点）。若有保留的当前会话，补上它在后台期间
+   * 收到的消息（走 enterConversation 那条清未读 + 清通知 + 渲染的统一路径）。current 跨 blur
+   * 保留，所以不在这里清空。整体仍是单条 append_message，KV 友好。
+   */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
-    this.currentConversationId = null;
-    return [{ type: "append_message", content: this.renderConversationList() }];
+    this.focused = true;
+    const current = this.currentConversationId
+      ? (this.conversations.get(this.currentConversationId) ?? null)
+      : null;
+    // 先补档（清掉当前会话未读），再渲染列表——这样列表里当前会话显示的是清零后的未读状态。
+    const replay = current
+      ? await this.enterConversation(current, "（当前会话期间无新消息）")
+      : null;
+    const sections = [this.renderConversationList()];
+    if (replay) {
+      sections.push(replay);
+    }
+    return [{ type: "append_message", content: sections.join("\n") }];
   }
 
+  /** 退到后台：保留当前会话焦点（回来续上），仅退出前台——getCurrentChatTarget 随即对外停摆。 */
   public async onBlur(): Promise<readonly RootAgentEffect[]> {
-    this.currentConversationId = null;
+    this.focused = false;
     return [];
   }
 
@@ -199,9 +227,13 @@ export class QqApp implements App {
     }
   }
 
-  /** session.getCurrentChatTarget 委派到这里：当前会话的发送目标。 */
+  /**
+   * session.getCurrentChatTarget 委派到这里：当前会话的发送目标。仅在 QQ 处于前台（focused）
+   * 时返回——current 跨 blur 保留供回来补档，但退出 QQ 后不对外暴露发送目标，避免 chatTarget
+   * 泄漏到 QQ 之外的顶层能力。
+   */
   public getCurrentChatTarget(): NapcatChatTarget | undefined {
-    if (!this.currentConversationId) {
+    if (!this.focused || !this.currentConversationId) {
       return undefined;
     }
     return this.conversations.get(this.currentConversationId)?.getChatTarget();
@@ -241,7 +273,7 @@ export class QqApp implements App {
     this.ingestMessage(conversation, event.data, false);
   }
 
-  /** open_conversation 工具调用：设当前会话、渲染最近消息、清未读 + 清该会话待发通知。 */
+  /** open_conversation 工具调用：把某个会话设为当前并渲染（清未读 + 清该会话待发通知）。 */
   public async openConversation(
     id: string,
   ): Promise<{ ok: boolean; content?: string; error?: string }> {
@@ -249,8 +281,22 @@ export class QqApp implements App {
     if (!conversation) {
       return { ok: false, error: "CONVERSATION_NOT_FOUND" };
     }
+    return { ok: true, content: await this.enterConversation(conversation) };
+  }
 
+  /** list_conversations 工具调用：纯读会话列表，不改当前焦点（不动 currentConversationId / focused）。 */
+  public listConversations(): string {
+    return this.renderConversationList();
+  }
+
+  /**
+   * 进入一个会话：取它的未读（进过的取未读尾、没进过的拉历史）、清未读、设为当前、清该会话
+   * 尚未 flush 的待发通知，渲染会话块。openConversation 与 onFocus 补档共用这条统一路径——
+   * 一份"清 + 渲染"逻辑。emptyHint 让两个调用点对"无消息"给各自贴切的措辞。
+   */
+  private async enterConversation(conversation: Conversation, emptyHint?: string): Promise<string> {
     const hadEntered = conversation.hasEntered();
+    const unreadBefore = conversation.getUnreadCount();
     const recent = hadEntered
       ? conversation.consumeUnreadTail()
       : await this.fetchRecent(conversation);
@@ -261,13 +307,10 @@ export class QqApp implements App {
     this.currentConversationId = conversation.id;
     this.notificationCenter.clearForSource(conversation.id);
 
-    return { ok: true, content: this.renderConversation(conversation, recent) };
-  }
-
-  /** back_to_conversation_list 工具调用：离开当前会话、回列表。 */
-  public backToConversationList(): { ok: boolean; content: string } {
-    this.currentConversationId = null;
-    return { ok: true, content: this.renderConversationList() };
+    // 仅"进过的会话取未读尾"这条路有意义：未读计数不封顶、内容缓冲封顶，差额即被清掉但未展示的更早未读。
+    // 首次进入拉的是历史而非未读，不提示。
+    const olderUnread = hadEntered ? Math.max(0, unreadBefore - recent.length) : 0;
+    return this.renderConversation(conversation, recent, olderUnread, emptyHint);
   }
 
   /**
@@ -383,23 +426,38 @@ export class QqApp implements App {
     for (const conversation of this.conversations.values()) {
       const unread = conversation.getUnreadCount();
       const unreadText = unread > 0 ? `（未读 ${unread}）` : "";
-      lines.push(`- ${conversation.getDisplayName()}${unreadText} [id: ${conversation.id}]`);
+      const currentMark = conversation.id === this.currentConversationId ? "  ← 当前会话" : "";
+      lines.push(
+        `- ${conversation.getDisplayName()}${unreadText} [id: ${conversation.id}]${currentMark}`,
+      );
     }
-    lines.push("用 open_conversation(id) 打开一个会话。");
+    lines.push("用 open_conversation(id) 打开/切换任意会话。");
     lines.push("</qq_conversation_list>");
     return lines.join("\n");
   }
 
-  private renderConversation(conversation: Conversation, recent: ConversationMessage[]): string {
+  /**
+   * 渲染一个会话块。recent 为本次展示的最近消息；olderUnread > 0 时提示更早未读已清但未展示，
+   * 避免"消息缓冲封顶截断 + consumeUnreadTail 全清"造成的信息静默丢失。
+   */
+  private renderConversation(
+    conversation: Conversation,
+    recent: ConversationMessage[],
+    olderUnread = 0,
+    emptyHint = "（暂无最近消息）",
+  ): string {
     const lines = [`<qq_conversation name="${conversation.getDisplayName()}">`];
     if (recent.length === 0) {
-      lines.push("（暂无最近消息）");
+      lines.push(emptyHint);
     } else {
+      if (olderUnread > 0) {
+        lines.push(`（更早 ${olderUnread} 条未读未展示）`);
+      }
       for (const message of recent) {
         lines.push(renderMessagePlainText(message));
       }
     }
-    lines.push("用 send_message 发言，或 back_to_conversation_list 回列表。");
+    lines.push("用 send_message 发言；list_conversations 看会话列表、open_conversation 切换会话。");
     lines.push("</qq_conversation>");
     return lines.join("\n");
   }

@@ -24,22 +24,50 @@ export const LlmToolDefinitionSchema = z
   .object({
     name: z.string().min(1),
     description: z.string().optional(),
-    parameters: z
-      .object({
-        type: z.literal("object"),
-        properties: JsonRecordSchema,
-      })
-      .strict(),
+    // parameters 是开放式 JSON Schema：真实工具普遍带 required / enum / $defs 等关键字，
+    // 故只校验 object 顶层骨架、不加 .strict()，其余关键字按 zod 默认 strip。viewer 仅用
+    // tool.name，playground replay 也只需骨架，丢弃这些关键字无影响（与旧手搓 parser 一致）。
+    parameters: z.object({
+      type: z.literal("object"),
+      properties: JsonRecordSchema,
+    }),
   })
   .strict();
 
 export type LlmToolDefinition = z.infer<typeof LlmToolDefinitionSchema>;
 
+export const LlmRequestTextContentPartSchema = z
+  .object({
+    type: z.literal("text"),
+    text: z.string(),
+  })
+  .strict();
+
+/**
+ * user 消息里的图片内容块在落库前已剥掉 base64 原图（见 server 侧
+ * `toRecordableChatRequest`），只留元数据：`mimeType` + 可选 `filename` + 原图字节数。
+ */
+export const LlmRequestImageContentPartSchema = z
+  .object({
+    type: z.literal("image"),
+    mimeType: z.string(),
+    filename: z.string().optional(),
+    sizeBytes: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const LlmRequestUserContentPartSchema = z.discriminatedUnion("type", [
+  LlmRequestTextContentPartSchema,
+  LlmRequestImageContentPartSchema,
+]);
+
+export type LlmRequestUserContentPart = z.infer<typeof LlmRequestUserContentPartSchema>;
+
 export const LlmRequestMessageSchema = z.discriminatedUnion("role", [
   z
     .object({
       role: z.literal("user"),
-      content: z.string(),
+      content: z.union([z.string(), z.array(LlmRequestUserContentPartSchema)]),
     })
     .strict(),
   z

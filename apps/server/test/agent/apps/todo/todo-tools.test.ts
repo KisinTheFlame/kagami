@@ -25,7 +25,11 @@ async function run(tool: ToolComponent, args: Record<string, unknown>): Promise<
 describe("AddTodoTool", () => {
   it("happy → ok + message", async () => {
     const { getTodoService } = setup();
-    const out = await run(new AddTodoTool({ getTodoService }), { title: "写周报" });
+    const out = await run(new AddTodoTool({ getTodoService }), {
+      title: "写周报",
+      note: "本周进展汇总",
+      remindAt: "1h",
+    });
     expect(out).toMatchObject({ ok: true, id: 1 });
   });
 
@@ -35,10 +39,23 @@ describe("AddTodoTool", () => {
     expect(out).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
   });
 
+  it("缺 note → INVALID_ARGUMENTS（Zod 边界）", async () => {
+    const { getTodoService } = setup();
+    const out = await run(new AddTodoTool({ getTodoService }), { title: "x", remindAt: "1h" });
+    expect(out).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
+  });
+
+  it("缺 remindAt → INVALID_ARGUMENTS（Zod 边界）", async () => {
+    const { getTodoService } = setup();
+    const out = await run(new AddTodoTool({ getTodoService }), { title: "x", note: "n" });
+    expect(out).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
+  });
+
   it("过去 remindAt → INVALID_TIME", async () => {
     const { getTodoService } = setup();
     const out = await run(new AddTodoTool({ getTodoService }), {
       title: "x",
+      note: "n",
       remindAt: "2020-01-01T00:00:00.000Z",
     });
     expect(out).toMatchObject({ ok: false, error: "INVALID_TIME" });

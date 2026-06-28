@@ -2,6 +2,8 @@ import {
   type LlmChatCallItem,
   type LlmChatCallStatus,
   type LlmChatCallSummary,
+  type LlmRequestMessage,
+  type LlmRequestUserContentPart,
 } from "@kagami/shared/schemas/llm-chat";
 import { FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -18,11 +20,7 @@ import {
   buildPlaygroundImportDraftFromHistory,
   type PlaygroundImportLocationState,
 } from "@/pages/llm-playground/playground-import";
-import {
-  parseLlmChatCallDetail,
-  type ParsedLlmRequestMessage,
-  type ParsedLlmUserContentPart,
-} from "./llm-chat-call-detail-parser";
+import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallDetail } from "./useLlmChatCallDetail";
 
 type LlmChatCallDetailPanelProps = {
@@ -48,7 +46,7 @@ type InputEntry =
     }
   | {
       type: "message";
-      message: ParsedLlmRequestMessage;
+      message: LlmRequestMessage;
       originalIndex: number;
     };
 
@@ -429,7 +427,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function MessageCard({ message, index }: { message: ParsedLlmRequestMessage; index: number }) {
+function MessageCard({ message, index }: { message: LlmRequestMessage; index: number }) {
   const title = `消息 #${index + 1}`;
   const preview = buildMessagePreview({
     content: renderMessageContent(message.content),
@@ -472,7 +470,7 @@ function MessageContent({ content, emptyHint }: { content: string; emptyHint?: s
   return <pre className="whitespace-pre-wrap break-words text-xs leading-6">{content}</pre>;
 }
 
-function renderMessageContent(content: ParsedLlmRequestMessage["content"]): string {
+function renderMessageContent(content: LlmRequestMessage["content"]): string {
   if (typeof content === "string") {
     return content;
   }
@@ -480,7 +478,7 @@ function renderMessageContent(content: ParsedLlmRequestMessage["content"]): stri
   return content.map(renderUserContentPart).join("\n");
 }
 
-function renderUserContentPart(part: ParsedLlmUserContentPart): string {
+function renderUserContentPart(part: LlmRequestUserContentPart): string {
   if (part.type === "text") {
     return part.text;
   }

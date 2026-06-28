@@ -25,7 +25,7 @@ export type VectorIndexPoint = {
 };
 
 /**
- * Story 向量记忆的进程内 HNSW 索引（替代 pgvector）。
+ * Story 向量记忆的进程内 HNSW 索引。
  *
  * 设计：SQLite 是唯一事实来源（每条 `story_memory_document` 行内存归一化向量的 JSON），
  * HNSW 仅是派生的内存索引。启动时由 {@link rebuildFrom} 从 SQLite 全量重建，因此索引文件
