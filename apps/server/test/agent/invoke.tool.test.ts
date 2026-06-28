@@ -16,6 +16,7 @@ function createAgentMessageService() {
   return {
     sendGroupMessage: vi.fn(),
     sendPrivateMessage: vi.fn(),
+    sendImage: vi.fn(),
   };
 }
 

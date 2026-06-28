@@ -79,6 +79,7 @@ function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void)
     listenGroupIds: ["1"],
     recentMessageLimit: 5,
     sendMessageTool: dummySendTool,
+    sendResourceTool: dummySendTool,
   });
 }
 
@@ -106,6 +107,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     await app.onStartup();
@@ -188,6 +190,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
     await app.onFocus(); // 进入 QQ（前台）才会对外暴露发送目标
@@ -266,6 +269,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
     await app.onFocus();
@@ -323,6 +327,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
     await app.onFocus();
@@ -390,6 +395,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
 
@@ -475,6 +481,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     const result = await app.viewForward("res-123", 0);
@@ -503,6 +510,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     const result = await app.viewForward("res-404", 0);

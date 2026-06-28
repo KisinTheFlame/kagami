@@ -8,7 +8,11 @@ import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-proc
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
 import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
-import { buildOutgoingMessageSegments, type WebSocketLike } from "./napcat-gateway/shared.js";
+import {
+  buildOutgoingImageSegments,
+  buildOutgoingMessageSegments,
+  type WebSocketLike,
+} from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
 import type {
   NapcatAgentEvent,
@@ -25,6 +29,8 @@ import type {
   NapcatSendPrivateMessageResult,
   NapcatSendGroupMessageInput,
   NapcatSendGroupMessageResult,
+  NapcatSendImageInput,
+  NapcatSendImageResult,
 } from "./napcat-gateway.service.js";
 
 type CreateNapcatGatewayOptions = {
@@ -295,6 +301,41 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return {
       messageId: messageIdResult.data,
     };
+  }
+
+  /**
+   * 出站发图：单一入口，按 target.chatType 分发到 send_group_msg / send_private_msg。
+   * 段用 base64:// 形态（自包含，不依赖 napcat 访问 OSS）。**不记录 fileRef**——
+   * base64 串落库/日志会爆。
+   */
+  public async sendImage({
+    target,
+    fileRef,
+    summary,
+    replyToMessageId,
+  }: NapcatSendImageInput): Promise<NapcatSendImageResult> {
+    const messageSegments = buildOutgoingImageSegments({ fileRef, summary, replyToMessageId });
+    const data =
+      target.chatType === "group"
+        ? await this.transport.request("send_group_msg", {
+            group_id: target.groupId,
+            message: messageSegments,
+          })
+        : await this.transport.request("send_private_msg", {
+            user_id: target.userId,
+            message: messageSegments,
+          });
+
+    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
+    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
+    if (!messageIdResult.success) {
+      throw new BizError({
+        message: "NapCat 返回结果缺少 message_id",
+        meta: { reason: "MISSING_MESSAGE_ID" },
+      });
+    }
+
+    return { messageId: messageIdResult.data };
   }
 
   public async getFriendList(): Promise<NapcatFriendInfo[]> {
