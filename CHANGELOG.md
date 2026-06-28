@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.4] - 2026-06-29
+
+### Added
+
+- deploy: 新增 `pnpm app:restart <agent|console|web|oss>`——只重建并重载单个服务进程，不动其它进程、不跑 Prisma 迁移。补上 `app:deploy`（重载全部）与 `app:stop`（停全部）之间缺的「单服务」粒度。核心价值贴合**KV 缓存优先**：只改了前端 / console 时 `pnpm app:restart console` 仅重载 console，`kagami-agent` 的热状态（KV 前缀、HNSW 索引、活内存上下文）完全不被打断（已实测：reload console 时 agent 的 uptime 持续增长、重启数不变）。实现 `scripts/restart.sh`：把服务名映射到包名与 PM2 进程名，`pnpm --filter "@kagami/<svc>..." build` 只重建该服务及其依赖包，再 `pm2 startOrReload ecosystem.config.cjs --only kagami-<svc> --update-env` 收口到单进程（进程不在跑则按 ecosystem 配置启动）。非法服务名打印用法并退出。涉及 DB schema 变更仍需走 `pnpm app:deploy`（它会跑迁移）
+
 ## [0.3.1.3] - 2026-06-29
 
 ### Fixed
