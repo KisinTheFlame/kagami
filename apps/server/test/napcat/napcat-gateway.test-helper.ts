@@ -132,6 +132,9 @@ export function createConfigManager(): ConfigManager {
             blockThreshold: 0.8,
           },
         },
+        resource: {
+          maxBytes: 4 * 1024 * 1024,
+        },
       },
       ithome: {
         pollIntervalMs: 300_000,

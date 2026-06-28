@@ -30,6 +30,8 @@ server:
         blockThreshold: 0.8 # P(AI) >= 该值则拦下不发，等 confirm_last 二次确认
     asyncTask:
       maxTaskDurationMs: 600000 # 异步工具任务的 manager 级安全超时；超过则以超时结果回流（底层可能仍在跑）
+    resource:
+      maxBytes: 4194304 # read_resource 入上下文 / send_resource 发图的字节上限（4 MiB）
   ithome:
     pollIntervalMs: 300000
     recentArticleLimit: 8

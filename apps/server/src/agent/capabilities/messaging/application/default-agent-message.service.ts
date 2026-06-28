@@ -1,4 +1,7 @@
-import type { NapcatGatewayService } from "../../../../napcat/application/napcat-gateway.service.js";
+import type {
+  NapcatChatTarget,
+  NapcatGatewayService,
+} from "../../../../napcat/application/napcat-gateway.service.js";
 import type { AgentMessageService } from "./agent-message.service.js";
 
 export class DefaultAgentMessageService implements AgentMessageService {
@@ -22,5 +25,14 @@ export class DefaultAgentMessageService implements AgentMessageService {
     replyToMessageId?: number;
   }): Promise<{ messageId: number }> {
     return await this.napcatGatewayService.sendPrivateMessage(input);
+  }
+
+  public async sendImage(input: {
+    target: NapcatChatTarget;
+    fileRef: string;
+    summary?: string;
+    replyToMessageId?: number;
+  }): Promise<{ messageId: number }> {
+    return await this.napcatGatewayService.sendImage(input);
   }
 }
