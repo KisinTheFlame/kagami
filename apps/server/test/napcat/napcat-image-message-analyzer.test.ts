@@ -131,7 +131,10 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     const visionAgent = {
       analyzeImage: vi.fn().mockResolvedValue({ description: "一张架构图" }),
     } as unknown as VisionAgent;
-    const ossClient: OssClient = { putObject: vi.fn().mockResolvedValue("res-7") };
+    const ossClient: OssClient = {
+      putObject: vi.fn().mockResolvedValue("res-7"),
+      getObject: vi.fn(),
+    };
     const imageAssetDao: ImageAssetDao = {
       findByFileId: vi.fn().mockResolvedValue(null),
       upsert: vi.fn().mockResolvedValue(undefined),
@@ -168,7 +171,7 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     };
     const analyzer = new DefaultNapcatImageMessageAnalyzer({
       visionAgent,
-      ossClient: { putObject: vi.fn() },
+      ossClient: { putObject: vi.fn(), getObject: vi.fn() },
       imageAssetDao,
       fetch: fetchMock,
     });
@@ -194,7 +197,10 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     };
     const analyzer = new DefaultNapcatImageMessageAnalyzer({
       visionAgent,
-      ossClient: { putObject: vi.fn().mockRejectedValue(new Error("oss down")) },
+      ossClient: {
+        putObject: vi.fn().mockRejectedValue(new Error("oss down")),
+        getObject: vi.fn(),
+      },
       imageAssetDao,
       fetch: vi.fn().mockResolvedValue(imageResponse({ "content-type": "image/png" })),
     });

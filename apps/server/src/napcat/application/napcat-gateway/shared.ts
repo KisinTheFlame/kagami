@@ -3,6 +3,7 @@ import { isRecord } from "@kagami/server-core/common/prisma-json";
 import {
   type NapcatSendAtSegment,
   type NapcatSendFaceSegment,
+  type NapcatSendImageSegment,
   type NapcatSendMessageSegment,
   type NapcatSendReplySegment,
   type NapcatSendTextSegment,
@@ -312,6 +313,28 @@ export function buildOutgoingMessageSegments(
     return body;
   }
   return [createOutgoingReplySegment(replyToMessageId), ...body];
+}
+
+/**
+ * 组装一条出站「图片」消息的 segment 数组：一个 image 段 + 可选 reply 前置。
+ * `file` 走 OneBot 的 base64:// 形态（不依赖 napcat 能访问 OSS）。复用 reply helper。
+ */
+export function buildOutgoingImageSegments(input: {
+  fileRef: string;
+  summary?: string;
+  replyToMessageId?: number;
+}): NapcatSendMessageSegment[] {
+  const imageSegment: NapcatSendImageSegment = {
+    type: "image",
+    data: {
+      file: input.fileRef,
+      ...(input.summary ? { summary: input.summary } : {}),
+    },
+  };
+  if (input.replyToMessageId === undefined) {
+    return [imageSegment];
+  }
+  return [createOutgoingReplySegment(input.replyToMessageId), imageSegment];
 }
 
 function createOutgoingReplySegment(messageId: number): NapcatSendReplySegment {

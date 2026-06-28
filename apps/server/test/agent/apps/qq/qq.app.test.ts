@@ -79,6 +79,7 @@ function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void)
     listenGroupIds: ["1"],
     recentMessageLimit: 5,
     sendMessageTool: dummySendTool,
+    sendResourceTool: dummySendTool,
   });
 }
 
@@ -106,6 +107,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     await app.onStartup();
@@ -188,6 +190,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
 
@@ -260,6 +263,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
 
@@ -345,6 +349,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     const result = await app.viewForward("res-123", 0);
@@ -373,6 +378,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
 
     const result = await app.viewForward("res-404", 0);
