@@ -28,6 +28,8 @@ server:
       aiTone:
         enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
         blockThreshold: 0.8 # P(AI) >= 该值则拦下不发，等 confirm_last 二次确认
+    resource:
+      maxBytes: 4194304 # read_resource 入上下文 / send_resource 发图的字节上限（4 MiB）
   ithome:
     pollIntervalMs: 300000
     recentArticleLimit: 8

@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 资源(多媒体)能力：给小镜补上「读回 / 转发已存资源」这条线，让资源从一次性投影变成可读、可回溯、可分享的一等公民（[#135](https://github.com/KisinTheFlame/kagami/issues/135)）。包含四块：(1) `OssClient.getObject(resId,{maxBytes})` —— 按 resId 取回字节+MIME，404→`OSS_OBJECT_NOT_FOUND`，content-length 早拒 + 实际字节兜底→`OSS_OBJECT_TOO_LARGE`，作为读/发共享地基；(2) `read_resource` 顶层全局工具（与 search_web/search_memory 同级）—— 按 resId 直连 OSS GET，图片原图入多模态上下文、非图片回元数据、错误自包含，注册时同步 root / web-search 子 agent / context-summarizer / playground 四处保持 LLM tools 逐字节相等（稳定前缀 8→9，一次性 KV 代价、集中提交）；(3) 浏览器截图叠加落 OSS —— 截图仍原图入上下文，同时 PUT OSS 返回 `resid` 便于日后转发/重看，PUT 失败或 OSS 关闭优雅降级（截图照常入上下文、无 resid）；(4) QQ `send_resource` 子工具 —— 按 resid 取字节以 OneBot `base64://` 形态发图（自包含、不依赖 napcat 访问 OSS，拆分部署安全），底层单一 `sendImage(target)` 按 `chatType` 内部分发群/私，出站只记 resid 不落 base64，刻意绕过 AI 味门控（图片非文本发言）。新增配置 `server.agent.resource.maxBytes`（默认 4 MiB，读/发共用上限）。v1 只接线图片资源（非图片回元数据/拒发），资源抽象媒体无关、签名为未来视频/音频/文件预留。
+
 ### Changed
 
 - server/console: 后端进程拆分第一步——把**服务前端管理台的纯 DB 查询**从单进程 `apps/server` 抽成独立进程 `@kagami/console`（Fastify，env `PORT` 默认 `20006`）。迁入 5 条纯查询链（handler + service + mapper）：`app-log` / `llm-chat-call` / `napcat-event` / `napcat-group-message` / `metric-chart`，经 `@kagami/server-core` 的共享 DAO 各自直读同一个 SQLite 库（console 只读 + metric-chart 写、stdout 日志）。`apps/server` **不改名、Agent 生活核心未动**，仅删除这些 query service 与 handler 注册（DAO 保留：日志 / 记录 / 持久化写入 / 打点仍需，`metricService` / `metricDao` 留给 agent 打点）。metric domain 按链拆分：chart 相关类型（`MetricChartItem` / `CreateMetricChartInput` / `MetricChartAggregator`）随 metric-chart 入 console，server 侧 `metric/domain/metric.ts` 收缩成只含 `MetricTags`（`Record<string,string>` 平凡别名，与 console 侧、server-core 侧同名定义结构等价、互通）。`scripts/web-server.mjs` 把这 5 个前缀的 `/api/*` 分流到 `kagami-console`、其余仍到 `kagami-server`；`ecosystem.config.cjs` 新增 `kagami-console`、`kagami-web` 加 `CONSOLE_TARGET`。两个后端进程并发读写同一库靠库文件级 WAL（两进程启动均 `configureSqlite`，Phase 1 写好的助手这步接线，已本地验证 `delete→wal`）。顺手修测试并发竞态：根 `test` 加 `--workspace-concurrency=1`，避免 console / server 两个 `pretest` 同时 `prisma generate` 撞 server-core 生成目录（`EEXIST`）。下一步「server 改名 `agent` + 内部控制面 + console 代理活操作」另开 PR（[#146](https://github.com/KisinTheFlame/kagami/pull/146)）

@@ -14,6 +14,7 @@ function buildTool(options?: {
     sendGroupMessage: options?.sendGroupMessage ?? vi.fn().mockResolvedValue({ messageId: 9527 }),
     sendPrivateMessage:
       options?.sendPrivateMessage ?? vi.fn().mockResolvedValue({ messageId: 9630 }),
+    sendImage: vi.fn().mockResolvedValue({ messageId: 9777 }),
   };
   const aiToneScorer = { proba: vi.fn().mockReturnValue(options?.score ?? 0.1) };
   const pendingDraftStore = options?.pendingDraftStore ?? new PendingDraftStore();
