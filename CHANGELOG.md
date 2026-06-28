@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- todo: `add_todo` 工具把 `note` 与 `remindAt` 由可选改为**必填**（`repeatEvery` 仍可选），让每条新建待办都带备注与未来提醒时刻、到点必走通知。强制点落在工具的 Zod schema 与 `parameters.required`，并同步收紧 todo App `help()` 文案（`add_todo(title, note, remindAt, repeatEvery?)`）；`TodoService.addTodo` 签名刻意保持宽松（tool 是 Agent 唯一写入口，service 为内部 API），DB 列保持 nullable、不迁移、不回填存量。保证的是「创建时必填」而非全局不变量——一次性提醒（无 `repeatEvery`）触发后 `remindAt` 仍按既有设计被 `clearReminder` 清空。补 `缺 note` / `缺 remindAt` → `INVALID_ARGUMENTS` 两个用例，并修 happy-path 与「过去 remindAt → INVALID_TIME」用例补齐必填字段
+
 ### Fixed
 
 - llm: 修 [#127] 同源的**记录侧崩溃**。#127 把图片内容改 base64 + provider 映射走 `imageContentToBase64` 归一，但 `client.ts` 记录侧 `toRecordableContentPart` 仍 `Buffer.from(part.content, "base64")`；已被 JSON 毒过的历史图片消息（`{type:"Buffer",data:[]}` 对象）恢复后流到记录侧，对对象 `Buffer.from` 抛 `Received an instance of Object` → root agent loop 崩溃（生产部署 #127 后实测到，`invalid base64` 已消失但暴露此条）。记录侧也经 `imageContentToBase64` 归一；中毒对象随上下文压缩老化（[#128](https://github.com/KisinTheFlame/kagami/pull/128)）
