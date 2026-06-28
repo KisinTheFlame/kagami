@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 资源(多媒体)能力：给小镜补上「读回 / 转发已存资源」这条线，让资源从一次性投影变成可读、可回溯、可分享的一等公民（[#135](https://github.com/KisinTheFlame/kagami/issues/135)）。包含四块：(1) `OssClient.getObject(resId,{maxBytes})` —— 按 resId 取回字节+MIME，404→`OSS_OBJECT_NOT_FOUND`，content-length 早拒 + 实际字节兜底→`OSS_OBJECT_TOO_LARGE`，作为读/发共享地基；(2) `read_resource` 顶层全局工具（与 search_web/search_memory 同级）—— 按 resId 直连 OSS GET，图片原图入多模态上下文、非图片回元数据、错误自包含，注册时同步 root / web-search 子 agent / context-summarizer / playground 四处保持 LLM tools 逐字节相等（稳定前缀 8→9，一次性 KV 代价、集中提交）；(3) 浏览器截图叠加落 OSS —— 截图仍原图入上下文，同时 PUT OSS 返回 `resid` 便于日后转发/重看，PUT 失败或 OSS 关闭优雅降级（截图照常入上下文、无 resid）；(4) QQ `send_resource` 子工具 —— 按 resid 取字节以 OneBot `base64://` 形态发图（自包含、不依赖 napcat 访问 OSS，拆分部署安全），底层单一 `sendImage(target)` 按 `chatType` 内部分发群/私，出站只记 resid 不落 base64，刻意绕过 AI 味门控（图片非文本发言）。新增配置 `server.agent.resource.maxBytes`（默认 4 MiB，读/发共用上限）。v1 只接线图片资源（非图片回元数据/拒发），资源抽象媒体无关、签名为未来视频/音频/文件预留。
+
 ### Changed
 
 - todo: App 级回顾由**每天一次**改为**每天两次**（09:00 / 21:00）的统一提醒，并加入推动小镜规划的固定提示。每条 todo 自己的 `remindAt` 到点提醒（`reminder-tick`）不变，只动 App 级 digest：`DAILY_DIGEST_CRON` 由 `0 9 * * *` 改为 `0 9,21 * * *`（croner 原生支持 `9,21` 列表）；`TodoReminderPoller.runDigest` 去掉 `totalCount > 0` 守卫改为**无条件回调**——即使当前没有未完成项也照发，因为这条提醒除汇总未完成项外还要顺带提示小镜「去 todo App 按自己打算做的事添几条新待办」，空待办时同样需要推动规划。`TodoDigestDraft.render` 改为两段式：有未完成项时在「还有 N 件没做…」后追加创建提示，零未完成项时输出兜底文案「待办都清空了，没有未完成的事。」+ 同一句提示。两次回顾间隔 12h、共用 `sourceId="todo:digest"` 互不重叠，提醒仍经 NotificationCenter append 到尾部、不碰稳定前缀，对 KV 缓存中性。同步更新 digest draft 渲染与 runDigest 空待办两处用例
