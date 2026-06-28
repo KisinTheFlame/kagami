@@ -76,9 +76,10 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含七个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含八个工作空间包：
 
 - `apps/server`：Fastify 后端服务（`@kagami/server`）
+- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
@@ -342,15 +343,16 @@ Agent 相关补充约定：
 
 ### 前端代理与静态托管
 
-- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并将 `/api/*` 代理到 `http://localhost:20003/*`。
+- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`，env `CONSOLE_TARGET`），其余仍代理到 `kagami-server`（默认 `20003`，env `API_TARGET`）。
 - 该静态服务还暴露 `/health`。
 - 当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中补充 `server.proxy`。
 
 ### PM2
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
-- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。
-- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并代理 `/api/*`。
+- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
+- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（env `PORT`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-server` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
+- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-server`。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。

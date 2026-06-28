@@ -4,7 +4,7 @@ import { z } from "zod";
 import { InMemoryQueue } from "@kagami/agent-runtime";
 import { DefaultConfigManager } from "@kagami/server-core/config/config.impl.manager";
 import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
-import { createDbClient, type Database } from "@kagami/server-core/db/client";
+import { configureSqlite, createDbClient, type Database } from "@kagami/server-core/db/client";
 import { PrismaLlmChatCallDao } from "@kagami/server-core/dao/impl/llm-chat-call.impl.dao";
 import { PrismaLogDao } from "@kagami/server-core/logger/dao/impl/log.impl.dao";
 import { PrismaImageAssetDao } from "../napcat/infra/impl/image-asset.impl.dao.js";
@@ -12,13 +12,9 @@ import { PrismaNapcatEventDao } from "@kagami/server-core/dao/impl/napcat-event.
 import { PrismaNapcatQqMessageDao } from "@kagami/server-core/dao/impl/napcat-group-message.impl.dao";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/server-core/common/errors/http-error";
-import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
-import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
-import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
-import { NapcatQqMessageHandler } from "../ops/http/napcat-group-message.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { createLlmClient } from "../llm/client.js";
 import { createEmbeddingClient } from "../llm/embedding/client.js";
@@ -39,18 +35,14 @@ import type { Event } from "../agent/runtime/event/event.js";
 import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import type { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
-import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { buildAuthScheduledTasks } from "../auth/application/auth-scheduled-tasks.js";
 import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
 import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
 import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
-import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../oss/oss-client.js";
-import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
-import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -68,12 +60,7 @@ import { NotificationCenter } from "../agent/runtime/root-agent/notification/not
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
-import type { MetricChartService } from "../metric/application/metric-chart.service.js";
-import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
 import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
-import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
-import type { MetricChartDao } from "../metric/infra/metric-chart.dao.js";
-import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -95,8 +82,6 @@ export type ServerRuntime = {
   /** Story Agent 后台 loop 是否启用；false 时 index 不会 initialize/run 它。 */
   storyAgentEnabled: boolean;
   metricService: MetricService;
-  metricChartService: MetricChartService;
-  metricChartDao: MetricChartDao;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
@@ -117,15 +102,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const database = createDbClient({
     databaseUrl: config.server.databaseUrl,
   });
+  // 与 console 进程并发读写同一 SQLite 文件：开 WAL（库文件级持久设置，设一次长期生效）。
+  await configureSqlite(database);
 
   const logDao = new PrismaLogDao({ database });
   const metricDao = new PrismaMetricDao({ database });
-  const metricChartDao = new PrismaMetricChartDao({ database });
   const metricService = new DefaultMetricService({ metricDao });
-  const metricChartService = new DefaultMetricChartService({
-    metricDao,
-    metricChartDao,
-  });
   initLoggerRuntime({
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
@@ -142,16 +124,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const todoDao = new PrismaTodoDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
-  const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
-    llmChatCallDao,
-  });
-  const appLogQueryService = new DefaultAppLogQueryService({ logDao });
-  const napcatEventQueryService = new DefaultNapcatEventQueryService({
-    napcatEventDao,
-  });
-  const napcatQqMessageQueryService = new DefaultNapcatQqMessageQueryService({
-    napcatQqMessageDao,
-  });
 
   const claudeCodeAuthStore = new ClaudeCodeAuthStore({
     claudeCodeAuthService: authModule.authServices["claude-code"],
@@ -322,11 +294,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new LlmChatCallHandler({ llmChatCallQueryService }),
-      new AppLogHandler({ appLogQueryService }),
-      new MetricChartHandler({ metricChartService }),
-      new NapcatEventHandler({ napcatEventQueryService }),
-      new NapcatQqMessageHandler({ napcatQqMessageQueryService }),
       new StoryHandler({
         storyQueryService: agentRuntime.storyQueryService,
         storyReindexService: agentRuntime.storyReindexService,
@@ -346,8 +313,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
     storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
-    metricChartService,
-    metricChartDao,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,

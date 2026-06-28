@@ -16,9 +16,10 @@ Kagami 是一个**拥有自己生活的 Agent**。群聊只是他生活的一部
 
 ## 仓库定位
 
-Kagami 是一个基于 `pnpm workspace` 的全栈 TypeScript Monorepo，当前包含七个工作空间包：
+Kagami 是一个基于 `pnpm workspace` 的全栈 TypeScript Monorepo，当前包含八个工作空间包：
 
 - `apps/server`：Fastify 后端服务（`@kagami/server`）
+- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
@@ -33,6 +34,7 @@ workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前包含 `apps
 ```text
 apps/
   server/   Fastify 后端、NapCat 集成、Kagami agent 业务层
+  console/  管理台后端独立进程，服务前端纯 DB 查询
   web/      React 管理台
   oss/      自建内容寻址对象存储（独立进程）
 packages/

@@ -14,6 +14,18 @@ module.exports = {
       },
     },
     {
+      name: "kagami-console",
+      cwd: path.join(__dirname, "apps/console"),
+      script: "dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+        PORT: "20006",
+      },
+    },
+    {
       name: "kagami-web",
       cwd: __dirname,
       script: "scripts/web-server.mjs",
@@ -24,6 +36,7 @@ module.exports = {
         NODE_ENV: "production",
         PORT: "20004",
         API_TARGET: "http://localhost:20003",
+        CONSOLE_TARGET: "http://localhost:20006",
       },
     },
     {
