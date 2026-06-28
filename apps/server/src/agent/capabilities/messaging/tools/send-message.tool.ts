@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ZodToolComponent, type ToolContext, type ToolKind } from "@kagami/agent-runtime";
+import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import type { PendingDraftStore } from "../application/pending-draft.store.js";
 import type { AiToneScorer } from "../infra/ai-tone-scorer.js";
@@ -12,10 +12,6 @@ const SendMessageArgumentsSchema = z.object({
   reply_to: z.number().int().positive().optional(),
   confirm_last: z.boolean().optional().default(false),
 });
-
-type SendMessageToolContext = ToolContext & {
-  chatTarget?: NapcatChatTarget;
-};
 
 export interface AiToneGuardConfig {
   readonly enabled: boolean;
@@ -59,29 +55,31 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
   private readonly aiToneScorer: AiToneScorer;
   private readonly pendingDraftStore: PendingDraftStore;
   private readonly aiTone: AiToneGuardConfig;
+  /** 当前发送目标：来自持有该工具的 QqApp 的当前会话。chatTarget 是 QQ 私有概念，不经 session。 */
+  private readonly getChatTarget: () => NapcatChatTarget | undefined;
 
   public constructor({
     agentMessageService,
     aiToneScorer,
     pendingDraftStore,
     aiTone,
+    getChatTarget,
   }: {
     agentMessageService: AgentMessageService;
     aiToneScorer: AiToneScorer;
     pendingDraftStore: PendingDraftStore;
     aiTone: AiToneGuardConfig;
+    getChatTarget: () => NapcatChatTarget | undefined;
   }) {
     super();
     this.agentMessageService = agentMessageService;
     this.aiToneScorer = aiToneScorer;
     this.pendingDraftStore = pendingDraftStore;
     this.aiTone = aiTone;
+    this.getChatTarget = getChatTarget;
   }
 
-  protected async executeTyped(
-    input: z.infer<typeof SendMessageArgumentsSchema>,
-    context: ToolContext,
-  ): Promise<string> {
+  protected async executeTyped(input: z.infer<typeof SendMessageArgumentsSchema>): Promise<string> {
     if (input.confirm_last) {
       return await this.handleConfirmLast(input.message);
     }
@@ -94,7 +92,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
       });
     }
 
-    const chatTarget = (context as SendMessageToolContext).chatTarget;
+    const chatTarget = this.getChatTarget();
     if (!chatTarget) {
       return JSON.stringify({ ok: false, error: "CHAT_CONTEXT_UNAVAILABLE" });
     }

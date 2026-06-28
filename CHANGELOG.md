@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [0.3.1.0] - 2026-06-29
+
+### Changed
+
+- agent: 把 **send_message 的发送目标（当前聊天会话）** 从 `RootAgentSession` 收归 QQ App——chatTarget 是 QQ 私有概念，不该泄漏进通用 session。`RootAgentSession` 删掉 `chatTargetProvider` / `getCurrentChatTarget` / `getCurrentGroupId`；`send_message`（QQ App 自己的子工具）改从构造期注入的 `getChatTarget` provider 取目标——在 `qq-app.factory.ts` 用局部 forward-ref 接到 `qqApp.getCurrentChatTarget()`（与文件里既有的 inbound holder 同套路就地解环），`createRoundInput` 不再往 toolContext 塞 `chatTarget`。同时**移除 `search_web` 的「必须在活跃 QQ 会话里」门控**：这道门控把通用联网能力错误耦合到 QQ 焦点，与「Agent as a life」定位冲突，而 web-search task agent 本就只消费 `systemPrompt`+`contextMessages`、从不读 chatTarget。移除后小镜在 Portal 或任意 App 里都能联网搜，只在真正拿不到上下文时返回 `CONTEXT_UNAVAILABLE`，且 `search_web` 不再依赖 `rootAgentSession`。在 master 落地异步工具原语（#141 把 `search_web` 重构为 `createSearchWebTool`/`prepareSearchWeb`）之上重新应用：门控移除落在 `prepareSearchWeb`，异步装配不变。两处改动对主 Agent 稳定前缀与 KV 缓存中性（顶层工具集字节不变）
+
+### Removed
+
+- agent: 退役**手机 OS 状态树遗留代码 + sessionSnapshot 持久化空壳**。状态树早已退化为 App 启动器（`focusedStateId` 恒 `"portal"`、`stateStack` 恒 `["portal"]`），相关方法 `getState` / `getFocusedStateId` / `getStateView` / `getAvailableInvokeTools` / 类型 `RootAgentSessionState` / `RootAgentSessionStateView` 与 runtime 的 `getSessionState` 全是零引用死代码，一并删除。`session.restorePersistedSnapshot(snapshot)` 早已退化成只搬运空壳，改为无参 `markRestored()`——**保留关键副作用**：恢复后置 `initialized=true`，使后续 `initializeContext` 成 no-op、不重复追加 portal reminder 破坏 KV 前缀（`reset()` 反向置 `false`，两条路径各有单测断言）。在 master #147（删快照 schema 的 napcat legacy 子字段、持久化层脱 QQ 类型）基础上更进一步：`sessionSnapshot` 整体只装恒定 `{stateStack:["portal"]}` 且 restore 时被完全忽略，从 Zod schema / 子 schema / runtime 组装 / 快照指纹 / Prisma 读写整条移除，`schemaVersion` 3→4，并配套 Prisma 迁移 drop 掉 `root_agent_runtime_snapshot.session_snapshot`（NOT NULL JSON 列，SQLite 标准表重建，`INSERT...SELECT` 保留其余列与唯一索引、无数据丢失）。旧 v3 快照前向兼容：load 不 gate 版本、只读仍存在的 `contextSnapshot`，恢复后下次 save 自然写回 v4
+
 ## [0.3.0.1] - 2026-06-29
 
 ### Changed

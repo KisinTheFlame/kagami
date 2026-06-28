@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
+import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
+
+/** chatTarget 现由 QqApp 经 getChatTarget 注入（不再走 tool 执行上下文），执行上下文置空即可。 */
+const emptyContext = {} as Parameters<SendMessageTool["execute"]>[1];
 
 function buildTool(options?: {
   score?: number;
@@ -9,6 +13,7 @@ function buildTool(options?: {
   pendingDraftStore?: PendingDraftStore;
   sendGroupMessage?: ReturnType<typeof vi.fn>;
   sendPrivateMessage?: ReturnType<typeof vi.fn>;
+  getChatTarget?: () => NapcatChatTarget | undefined;
 }) {
   const agentMessageService = {
     sendGroupMessage: options?.sendGroupMessage ?? vi.fn().mockResolvedValue({ messageId: 9527 }),
@@ -28,21 +33,17 @@ function buildTool(options?: {
       enabled: options?.enabled ?? true,
       blockThreshold: options?.blockThreshold ?? 0.8,
     },
+    getChatTarget:
+      options?.getChatTarget ?? (() => ({ chatType: "group", groupId: "987654" }) as const),
   });
   return { tool, agentMessageService, aiToneScorer, pendingDraftStore };
-}
-
-function groupContext(groupId = "987654") {
-  return {
-    chatTarget: { chatType: "group", groupId },
-  } as Parameters<SendMessageTool["execute"]>[1];
 }
 
 describe("send_message tool", () => {
   it("低 AI 味发言正常发送，响应回带 aiToneScore", async () => {
     const { tool, agentMessageService } = buildTool({ score: 0.1 });
 
-    const result = await tool.execute({ message: "  hello group  " }, groupContext());
+    const result = await tool.execute({ message: "  hello group  " }, emptyContext);
 
     expect(tool.name).toBe("send_message");
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
@@ -61,7 +62,7 @@ describe("send_message tool", () => {
   it("带 reply_to 时把回复目标透传给发送服务", async () => {
     const { tool, agentMessageService } = buildTool({ score: 0.1 });
 
-    await tool.execute({ message: "收到", reply_to: 9988 }, groupContext());
+    await tool.execute({ message: "收到", reply_to: 9988 }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
       groupId: "987654",
@@ -73,10 +74,10 @@ describe("send_message tool", () => {
   it("被拦的引用回复经 confirm_last 补发时保留回复目标", async () => {
     const { tool, agentMessageService } = buildTool({ score: 0.9 });
 
-    await tool.execute({ message: "这不是结束，而是开始", reply_to: 9988 }, groupContext());
+    await tool.execute({ message: "这不是结束，而是开始", reply_to: 9988 }, emptyContext);
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
 
-    await tool.execute({ confirm_last: true }, groupContext());
+    await tool.execute({ confirm_last: true }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
       groupId: "987654",
@@ -86,11 +87,12 @@ describe("send_message tool", () => {
   });
 
   it("私聊发言正常发送", async () => {
-    const { tool, agentMessageService } = buildTool({ score: 0.2 });
+    const { tool, agentMessageService } = buildTool({
+      score: 0.2,
+      getChatTarget: () => ({ chatType: "private", userId: "123456" }),
+    });
 
-    const result = await tool.execute({ message: "  hello friend  " }, {
-      chatTarget: { chatType: "private", userId: "123456" },
-    } as Parameters<SendMessageTool["execute"]>[1]);
+    const result = await tool.execute({ message: "  hello friend  " }, emptyContext);
 
     expect(agentMessageService.sendPrivateMessage).toHaveBeenCalledWith({
       userId: "123456",
@@ -108,22 +110,16 @@ describe("send_message tool", () => {
   it("message 为空返回参数错误", async () => {
     const { tool, agentMessageService } = buildTool();
 
-    const result = await tool.execute(
-      { message: "   " },
-      {} as Parameters<SendMessageTool["execute"]>[1],
-    );
+    const result = await tool.execute({ message: "   " }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
     expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
   });
 
   it("缺少会话上下文返回 CHAT_CONTEXT_UNAVAILABLE", async () => {
-    const { tool, agentMessageService } = buildTool();
+    const { tool, agentMessageService } = buildTool({ getChatTarget: () => undefined });
 
-    const result = await tool.execute(
-      { message: "hello" },
-      {} as Parameters<SendMessageTool["execute"]>[1],
-    );
+    const result = await tool.execute({ message: "hello" }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
     expect(JSON.parse(result.content)).toMatchObject({
@@ -135,7 +131,7 @@ describe("send_message tool", () => {
   it("AI 味超阈值则拦截不发，并存草稿", async () => {
     const { tool, agentMessageService, pendingDraftStore } = buildTool({ score: 0.9 });
 
-    const result = await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+    const result = await tool.execute({ message: "这不是结束，而是开始" }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
     expect(JSON.parse(result.content)).toMatchObject({
@@ -153,8 +149,8 @@ describe("send_message tool", () => {
   it("confirm_last 补发上一条被拦草稿并清空草稿", async () => {
     const { tool, agentMessageService, pendingDraftStore } = buildTool({ score: 0.9 });
 
-    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
-    const result = await tool.execute({ confirm_last: true }, groupContext());
+    await tool.execute({ message: "这不是结束，而是开始" }, emptyContext);
+    const result = await tool.execute({ confirm_last: true }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalledWith({
       groupId: "987654",
@@ -171,8 +167,8 @@ describe("send_message tool", () => {
   it("confirm_last 同时带 message 会忽略本次 message 并提示", async () => {
     const { tool, agentMessageService } = buildTool({ score: 0.9 });
 
-    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
-    const result = await tool.execute({ confirm_last: true, message: "另一句话" }, groupContext());
+    await tool.execute({ message: "这不是结束，而是开始" }, emptyContext);
+    const result = await tool.execute({ confirm_last: true, message: "另一句话" }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).toHaveBeenLastCalledWith({
       groupId: "987654",
@@ -185,7 +181,7 @@ describe("send_message tool", () => {
   it("没有待确认草稿时 confirm_last 返回 NO_PENDING_DRAFT", async () => {
     const { tool, agentMessageService } = buildTool();
 
-    const result = await tool.execute({ confirm_last: true }, groupContext());
+    const result = await tool.execute({ confirm_last: true }, emptyContext);
 
     expect(agentMessageService.sendGroupMessage).not.toHaveBeenCalled();
     expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "NO_PENDING_DRAFT" });
@@ -198,8 +194,8 @@ describe("send_message tool", () => {
       .mockResolvedValue({ messageId: 1 });
     const { tool, pendingDraftStore } = buildTool({ score: 0.9, sendGroupMessage });
 
-    await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
-    const result = await tool.execute({ confirm_last: true }, groupContext());
+    await tool.execute({ message: "这不是结束，而是开始" }, emptyContext);
+    const result = await tool.execute({ confirm_last: true }, emptyContext);
 
     expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "RESEND_FAILED" });
     expect(pendingDraftStore.peek()).not.toBeNull();
@@ -210,7 +206,7 @@ describe("send_message tool", () => {
     store.set({ chatTarget: { chatType: "group", groupId: "1" }, message: "旧草稿", score: 0.9 });
     const { tool } = buildTool({ score: 0.1, pendingDraftStore: store });
 
-    await tool.execute({ message: "正常发言" }, groupContext());
+    await tool.execute({ message: "正常发言" }, emptyContext);
 
     expect(store.peek()).toBeNull();
   });
@@ -221,7 +217,7 @@ describe("send_message tool", () => {
       enabled: false,
     });
 
-    const result = await tool.execute({ message: "这不是结束，而是开始" }, groupContext());
+    const result = await tool.execute({ message: "这不是结束，而是开始" }, emptyContext);
 
     expect(aiToneScorer.proba).not.toHaveBeenCalled();
     expect(agentMessageService.sendGroupMessage).toHaveBeenCalled();

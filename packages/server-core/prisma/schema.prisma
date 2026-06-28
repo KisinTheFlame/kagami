@@ -181,7 +181,6 @@ model RootAgentRuntimeSnapshot {
   runtimeKey         String    @unique(map: "root_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")
   schemaVersion      Int       @map("schema_version")
   contextSnapshot    Json      @map("context_snapshot")
-  sessionSnapshot    Json      @map("session_snapshot")
   lastWakeReminderAt DateTime? @map("last_wake_reminder_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @default(now()) @map("updated_at")

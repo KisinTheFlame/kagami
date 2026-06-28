@@ -61,24 +61,10 @@ export const PersistedAgentContextSnapshotSchema = z.object({
 
 export type PersistedAgentContextSnapshot = z.infer<typeof PersistedAgentContextSnapshotSchema>;
 
-export const PersistedRootAgentSessionSnapshotSchema = z.object({
-  // 手机 OS 模型下 session 退化为 App 启动器，不再持聊天状态。stateStack 恒为
-  // ["portal"]。状态树时代的 legacy 字段（waitOverlay / groups / privateChats /
-  // ithomeFeedState）已不再声明：会话状态归 QqApp，旧快照里若仍带这些键，非 strict
-  // 对象解析会自动 strip，反序列化照常成功。
-  stateStack: z.array(z.string().min(1)).min(1).default(["portal"]),
-});
-
-export type PersistedRootAgentSessionSnapshot = z.infer<
-  typeof PersistedRootAgentSessionSnapshotSchema
->;
-export type CurrentPersistedRootAgentSessionSnapshot = PersistedRootAgentSessionSnapshot;
-
 export const PersistedRootAgentRuntimeSnapshotSchema = z.object({
   runtimeKey: z.string().min(1),
   schemaVersion: z.number().int().positive(),
   contextSnapshot: PersistedAgentContextSnapshotSchema,
-  sessionSnapshot: PersistedRootAgentSessionSnapshotSchema,
   lastWakeReminderAt: DateValueSchema.nullable(),
 });
 
