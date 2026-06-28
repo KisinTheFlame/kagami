@@ -61,7 +61,7 @@ export class TodoApp implements App {
       "你在待办 App 里。这是你自己的待办本，想怎么用都行。",
       "",
       "可调用工具：",
-      "  - add_todo(title, note?, remindAt?, repeatEvery?): 记一条。remindAt/repeatEvery 收相对时长（30m/1d）或 ISO。",
+      "  - add_todo(title, note, remindAt, repeatEvery?): 记一条。note、remindAt 必填；remindAt/repeatEvery 收相对时长（30m/1d）或 ISO。",
       "  - list_todos(filter?): 列出待办（pending 默认 / all / done）。",
       "  - complete_todo(id): 标记完成。",
       "  - snooze_todo(id, until? | forMinutes?): 稍后再提醒。",
