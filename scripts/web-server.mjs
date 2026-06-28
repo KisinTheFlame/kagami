@@ -9,6 +9,14 @@ const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../a
 const indexPath = path.join(distDir, "index.html");
 const port = Number(process.env.PORT ?? "20004");
 const apiTarget = new URL(process.env.API_TARGET ?? "http://localhost:20003");
+const consoleTarget = new URL(process.env.CONSOLE_TARGET ?? "http://localhost:20006");
+// 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
+const CONSOLE_PATH_PREFIXES = [
+  "/app-log",
+  "/llm-chat-call",
+  "/napcat-event",
+  "/napcat-group-message",
+];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
 const MIME_TYPES = {
@@ -56,9 +64,20 @@ server.listen(port, "0.0.0.0", () => {
   process.stdout.write(`[kagami-web] listening on http://0.0.0.0:${port}\n`);
 });
 
+function selectUpstreamTarget(upstreamPath) {
+  for (const prefix of CONSOLE_PATH_PREFIXES) {
+    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
+      return consoleTarget;
+    }
+  }
+
+  return apiTarget;
+}
+
 async function proxyApiRequest(req, res, requestUrl) {
   const upstreamPath = requestUrl.pathname.slice(4) || "/";
-  const upstreamUrl = new URL(`${upstreamPath}${requestUrl.search}`, apiTarget);
+  const target = selectUpstreamTarget(upstreamPath);
+  const upstreamUrl = new URL(`${upstreamPath}${requestUrl.search}`, target);
   const headers = new Headers();
 
   for (const [key, value] of Object.entries(req.headers)) {
@@ -69,7 +88,7 @@ async function proxyApiRequest(req, res, requestUrl) {
     headers.set(key, Array.isArray(value) ? value.join(", ") : value);
   }
 
-  headers.set("host", apiTarget.host);
+  headers.set("host", target.host);
 
   const upstreamResponse = await fetch(upstreamUrl, {
     method: req.method,
