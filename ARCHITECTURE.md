@@ -22,6 +22,7 @@ apps/oss   （独立进程，零 @kagami 依赖）
 | `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                 |
 | `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架） |
 | `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                          |
+| `@kagami/server-core`   | 后端共享基础设施（Prisma 客户端与 DAO、db、logger、config、common 契约/错误）                      |
 | `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                    |
 
 ## 后端模块 DAG
