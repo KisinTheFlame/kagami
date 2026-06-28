@@ -51,7 +51,6 @@ export type RootAgentSessionController = {
   setCurrentApp(appId: AppId): void;
   clearCurrentApp(): void;
   getCurrentChatTarget(): NapcatChatTarget | undefined;
-  getCurrentGroupId(): string | undefined;
   getAvailableInvokeTools(): string[];
   getStateView(): Promise<RootAgentSessionStateView>;
   exportPersistedSnapshot(): CurrentPersistedRootAgentSessionSnapshot;
@@ -109,11 +108,6 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public getCurrentChatTarget(): NapcatChatTarget | undefined {
     return this.chatTargetProvider?.() ?? undefined;
-  }
-
-  public getCurrentGroupId(): string | undefined {
-    const chatTarget = this.getCurrentChatTarget();
-    return chatTarget?.chatType === "group" ? chatTarget.groupId : undefined;
   }
 
   public getAvailableInvokeTools(): string[] {
