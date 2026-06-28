@@ -13,6 +13,7 @@ import type {
 } from "../types.js";
 import { imageContentToBase64 } from "@kagami/llm";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { isRecord } from "@kagami/server-core/common/prisma-json";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import { AppLogger } from "@kagami/server-core/logger/logger";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
@@ -911,10 +912,6 @@ function requireRequestModel(request: { model?: string }): string {
   }
 
   return request.model;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toClaudeCodeRuntimeArch(): string {
