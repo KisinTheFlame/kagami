@@ -1,0 +1,24 @@
+{
+  "name": "@kagami/console",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "pnpm --filter \"@kagami/console^...\" build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kagami/server-core": "workspace:*",
+    "@kagami/shared": "workspace:*",
+    "fastify": "^5.6.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
