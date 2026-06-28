@@ -60,12 +60,7 @@ import { NotificationCenter } from "../agent/runtime/root-agent/notification/not
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
-import type { MetricChartService } from "../metric/application/metric-chart.service.js";
-import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
 import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
-import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
-import type { MetricChartDao } from "../metric/infra/metric-chart.dao.js";
-import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -87,8 +82,6 @@ export type ServerRuntime = {
   /** Story Agent 后台 loop 是否启用；false 时 index 不会 initialize/run 它。 */
   storyAgentEnabled: boolean;
   metricService: MetricService;
-  metricChartService: MetricChartService;
-  metricChartDao: MetricChartDao;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
@@ -114,12 +107,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
 
   const logDao = new PrismaLogDao({ database });
   const metricDao = new PrismaMetricDao({ database });
-  const metricChartDao = new PrismaMetricChartDao({ database });
   const metricService = new DefaultMetricService({ metricDao });
-  const metricChartService = new DefaultMetricChartService({
-    metricDao,
-    metricChartDao,
-  });
   initLoggerRuntime({
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
@@ -305,7 +293,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new MetricChartHandler({ metricChartService }),
       new StoryHandler({
         storyQueryService: agentRuntime.storyQueryService,
         storyReindexService: agentRuntime.storyReindexService,
@@ -325,8 +312,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
     storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
-    metricChartService,
-    metricChartDao,
     port: config.server.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,

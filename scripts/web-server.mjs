@@ -16,6 +16,7 @@ const CONSOLE_PATH_PREFIXES = [
   "/llm-chat-call",
   "/napcat-event",
   "/napcat-group-message",
+  "/metric-chart",
 ];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
