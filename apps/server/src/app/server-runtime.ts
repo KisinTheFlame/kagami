@@ -288,6 +288,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     notificationCenter,
     eventQueue,
     storyEventQueue,
+    ossClient,
   });
 
   const taskScheduler = new TaskScheduler();

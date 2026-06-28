@@ -19,6 +19,19 @@ export type NapcatSendPrivateMessageInput = NapcatSendPrivateMessageRequest & {
   replyToMessageId?: number;
 };
 export type NapcatSendPrivateMessageResult = NapcatSendPrivateMessageResponse;
+
+/**
+ * 出站发图：单一入口，按 target.chatType 内部分发 send_group_msg / send_private_msg。
+ * `fileRef` 是 OneBot file 字段（send_resource 用 base64:// 形态，自包含、不依赖
+ * napcat 能访问 OSS）。**不要记录 fileRef**——base64 串落库/日志会爆。
+ */
+export type NapcatSendImageInput = {
+  target: NapcatChatTarget;
+  fileRef: string;
+  summary?: string;
+  replyToMessageId?: number;
+};
+export type NapcatSendImageResult = { messageId: number };
 export type NapcatGetGroupInfoInput = {
   groupId: string;
 };
@@ -125,6 +138,7 @@ export interface NapcatGatewayService {
   stop(): Promise<void>;
   sendGroupMessage(input: NapcatSendGroupMessageInput): Promise<NapcatSendGroupMessageResult>;
   sendPrivateMessage(input: NapcatSendPrivateMessageInput): Promise<NapcatSendPrivateMessageResult>;
+  sendImage(input: NapcatSendImageInput): Promise<NapcatSendImageResult>;
   getFriendList?(): Promise<NapcatFriendInfo[]>;
   getGroupInfo(input: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult>;
   getRecentGroupMessages(input: {
