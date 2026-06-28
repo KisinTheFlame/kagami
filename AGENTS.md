@@ -173,9 +173,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 数据库变更流程：
 
-1. 修改 `apps/server/prisma/schema.prisma`。
+1. 修改 `packages/server-core/prisma/schema.prisma`。
 2. 在仓库根目录执行 `pnpm db:migrate:dev -- --name <migration_name>`。
-3. 提交 schema 变更和 `apps/server/prisma/migrations/*`。
+3. 提交 schema 变更和 `packages/server-core/prisma/migrations/*`。
 4. 在目标环境执行 `pnpm db:migrate:deploy`，或通过 `pnpm app:deploy` 一并完成。
 
 已有数据库接入 Prisma Migrate（基线）：

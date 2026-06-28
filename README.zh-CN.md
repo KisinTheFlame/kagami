@@ -97,7 +97,7 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 说明：
 
 - `db:migrate:dev` 会自动补上 `--create-only`，只生成迁移文件，不直接改库结构。
-- 标准流程是：修改 `apps/server/prisma/schema.prisma` -> 生成迁移 -> 提交 schema 与 migration -> 在目标环境执行 `db:migrate:deploy`。
+- 标准流程是：修改 `packages/server-core/prisma/schema.prisma` -> 生成迁移 -> 提交 schema 与 migration -> 在目标环境执行 `db:migrate:deploy`。
 
 ## 架构概览
 

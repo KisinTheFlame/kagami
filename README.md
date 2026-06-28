@@ -18,13 +18,15 @@ All architecture, modules, and capabilities described below should be understood
 
 ## Repository Positioning
 
-Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing six workspace packages:
+Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing eight workspace packages:
 
 - `apps/server`: Fastify backend service (`@kagami/server`)
+- `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/server-core` shared DAOs against the same SQLite database)
 - `apps/web`: React frontend admin console (`@kagami/web`)
 - `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone process with zero `@kagami/*` dependencies)
 - `packages/agent-runtime`: generic Agent / App framework kernel (`@kagami/agent-runtime`)
 - `packages/llm`: LLM message and tool type contracts shared across frontend / backend / kernel (`@kagami/llm`)
+- `packages/server-core`: shared backend infrastructure kernel (`@kagami/server-core`, Prisma client and DAOs, db, logger, config, common contracts and errors)
 - `packages/shared`: schemas and utilities shared between frontend and backend (`@kagami/shared`)
 
 The workspace definition lives at the repository root in `pnpm-workspace.yaml`, currently covering `apps/*` and `packages/*`. Backend runtime configuration is unified under `config.yaml` at the repository root.
@@ -34,11 +36,13 @@ The workspace definition lives at the repository root in `pnpm-workspace.yaml`, 
 ```text
 apps/
   server/   Fastify backend, NapCat integration, Kagami agent business layer
+  console/  Standalone admin-console backend serving read-only DB queries
   web/      React admin console
   oss/      Self-hosted content-addressed object storage (standalone process)
 packages/
   agent-runtime/  Generic Agent / App framework abstractions and tool catalog
   llm/            Shared LLM message / tool type contracts
+  server-core/    Shared backend infrastructure (Prisma client / DAOs / db / logger / config / common)
   shared/         Frontend/backend shared schemas / DTOs / utils
 ```
 
@@ -95,7 +99,7 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 Notes:
 
 - `db:migrate:dev` automatically appends `--create-only`, generating the migration file without altering the database directly.
-- Standard flow: edit `apps/server/prisma/schema.prisma` → generate migration → commit both the schema and migration → run `db:migrate:deploy` in the target environment.
+- Standard flow: edit `packages/server-core/prisma/schema.prisma` → generate migration → commit both the schema and migration → run `db:migrate:deploy` in the target environment.
 
 ## Architecture Overview
 
