@@ -74,11 +74,15 @@ export async function buildQqApp({
   const outboundService = new DefaultAgentMessageService({
     napcatGatewayService: napcatGateway,
   });
+  // send_message 的发送目标 = QqApp 当前打开的会话。QqApp 与工具互为引用（工具要问 App 当前
+  // 会话，App 持有工具），用一个局部 forward-ref 就地解环——和上面 inbound holder 同套路。
+  const qqAppRef: { current: QqApp | undefined } = { current: undefined };
   const sendMessageTool = new SendMessageTool({
     agentMessageService: outboundService,
     aiToneScorer: new AiToneScorer(),
     pendingDraftStore: new PendingDraftStore(),
     aiTone,
+    getChatTarget: () => qqAppRef.current?.getCurrentChatTarget(),
   });
   const sendResourceTool = new SendResourceTool({
     resourceService,
@@ -93,6 +97,7 @@ export async function buildQqApp({
     sendMessageTool,
     sendResourceTool,
   });
+  qqAppRef.current = qqApp;
   inbound.handle = event => qqApp.handleNapcatEvent(event);
   return { qqApp, outboundService };
 }

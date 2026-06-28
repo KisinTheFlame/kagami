@@ -8,6 +8,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
+import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 
 const TEST_QQ_APP_ID = "qq";
@@ -21,8 +22,12 @@ function createAgentMessageService() {
 }
 
 // AI 味门控不是本套件的关注点：以 enabled=false 构造，完全退化为原发送行为，
-// 保证这些断言只校验 InvokeTool 的路由与发送语义。
-function createSendMessageTool(agentMessageService = createAgentMessageService()) {
+// 保证这些断言只校验 InvokeTool 的路由与发送语义。chatTarget 由 getChatTarget 注入
+// （手机 OS 模型下来自 QqApp 当前会话），不再走 tool 执行上下文。
+function createSendMessageTool(
+  agentMessageService = createAgentMessageService(),
+  getChatTarget: () => NapcatChatTarget | undefined = () => undefined,
+) {
   return new SendMessageTool({
     agentMessageService,
     aiToneScorer: { proba: () => 0 } as unknown as ConstructorParameters<
@@ -30,6 +35,7 @@ function createSendMessageTool(agentMessageService = createAgentMessageService()
     >[0]["aiToneScorer"],
     pendingDraftStore: new PendingDraftStore(),
     aiTone: { enabled: false, blockThreshold: 0.8 },
+    getChatTarget,
   });
 }
 
@@ -98,7 +104,12 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendGroupMessage.mockResolvedValue({ messageId: 9527 });
     const tool = createTestInvokeTool({
-      appTools: [createSendMessageTool(agentMessageService)],
+      appTools: [
+        createSendMessageTool(agentMessageService, () => ({
+          chatType: "group",
+          groupId: "group-1",
+        })),
+      ],
     });
 
     const result = await tool.execute(
@@ -107,10 +118,6 @@ describe("invoke tool", () => {
         message: "  hello group  ",
       },
       {
-        chatTarget: {
-          chatType: "group",
-          groupId: "group-1",
-        },
         rootAgentSession: {
           getCurrentApp: () => TEST_QQ_APP_ID,
         },
@@ -133,7 +140,12 @@ describe("invoke tool", () => {
     const agentMessageService = createAgentMessageService();
     agentMessageService.sendPrivateMessage.mockResolvedValue({ messageId: 9630 });
     const tool = createTestInvokeTool({
-      appTools: [createSendMessageTool(agentMessageService)],
+      appTools: [
+        createSendMessageTool(agentMessageService, () => ({
+          chatType: "private",
+          userId: "user-1",
+        })),
+      ],
     });
 
     const result = await tool.execute(
@@ -142,10 +154,6 @@ describe("invoke tool", () => {
         message: "  hello private  ",
       },
       {
-        chatTarget: {
-          chatType: "private",
-          userId: "user-1",
-        },
         rootAgentSession: {
           getCurrentApp: () => TEST_QQ_APP_ID,
         },

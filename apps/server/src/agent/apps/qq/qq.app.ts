@@ -228,9 +228,9 @@ export class QqApp implements App {
   }
 
   /**
-   * session.getCurrentChatTarget 委派到这里：当前会话的发送目标。仅在 QQ 处于前台（focused）
-   * 时返回——current 跨 blur 保留供回来补档，但退出 QQ 后不对外暴露发送目标，避免 chatTarget
-   * 泄漏到 QQ 之外的顶层能力。
+   * send_message 工具的 getChatTarget provider（在 qq-app.factory.ts 注入）委派到这里：当前
+   * 会话的发送目标。仅在 QQ 处于前台（focused）时返回——current 跨 blur 保留供回来补档，但退出
+   * QQ 后不对外暴露发送目标，避免 chatTarget 泄漏到 QQ 之外的顶层能力。
    */
   public getCurrentChatTarget(): NapcatChatTarget | undefined {
     if (!this.focused || !this.currentConversationId) {

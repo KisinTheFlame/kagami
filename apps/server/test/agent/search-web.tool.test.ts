@@ -32,9 +32,6 @@ describe("search_web tool (async)", () => {
       asyncTaskManager: manager,
     });
     const toolContext = {
-      rootAgentSession: {
-        getCurrentChatTarget: () => ({ chatType: "group" as const, groupId: "group-1" }),
-      },
       systemPrompt: "runtime-system-prompt",
       messages: [{ role: "user" as const, content: "这份消息应该优先透传" }],
     };
@@ -67,9 +64,6 @@ describe("search_web tool (async)", () => {
       asyncTaskManager: manager,
     });
     const toolContext = {
-      rootAgentSession: {
-        getCurrentChatTarget: () => ({ chatType: "group" as const, groupId: "g1" }),
-      },
       systemPrompt: "sp",
       messages: [{ role: "user" as const, content: "m" }],
     };
@@ -93,27 +87,14 @@ describe("search_web tool (async)", () => {
     expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
   });
 
-  it("prepareSearchWeb：无 session 同步 reject SESSION_UNAVAILABLE，不构造 submit", () => {
+  it("prepareSearchWeb：无任何上下文（无 inline 也无 agentContext）同步 reject CONTEXT_UNAVAILABLE", () => {
+    // 门控已移除（web 搜索不再要求活跃 QQ 会话）：唯一的同步 reject 路径是真正拿不到上下文。
     const webSearchAgent = { search: vi.fn() };
     const prep = prepareSearchWeb({ question: "OpenAI latest news" }, {}, webSearchAgent);
 
     expect(prep).toEqual({
       kind: "reject",
-      content: JSON.stringify({ ok: false, error: "SESSION_UNAVAILABLE" }),
-    });
-    expect(webSearchAgent.search).not.toHaveBeenCalled();
-  });
-
-  it("prepareSearchWeb：桌面态（无 chatTarget）同步 reject STATE_TRANSITION_NOT_ALLOWED", () => {
-    const webSearchAgent = { search: vi.fn() };
-    const toolContext = {
-      rootAgentSession: { getCurrentChatTarget: () => undefined },
-    } as Parameters<typeof prepareSearchWeb>[1];
-    const prep = prepareSearchWeb({ question: "OpenAI latest news" }, toolContext, webSearchAgent);
-
-    expect(prep).toEqual({
-      kind: "reject",
-      content: JSON.stringify({ ok: false, error: "STATE_TRANSITION_NOT_ALLOWED" }),
+      content: JSON.stringify({ ok: false, error: "CONTEXT_UNAVAILABLE" }),
     });
     expect(webSearchAgent.search).not.toHaveBeenCalled();
   });
@@ -133,9 +114,6 @@ describe("search_web tool (async)", () => {
     });
     const toolContext = {
       agentContext,
-      rootAgentSession: {
-        getCurrentChatTarget: () => ({ chatType: "group" as const, groupId: "group-1" }),
-      },
       systemPrompt: undefined,
       messages: undefined,
     };

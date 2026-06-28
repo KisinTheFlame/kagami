@@ -48,7 +48,6 @@ describe("enter tool", () => {
         enter: async () => {
           throw new Error("should not delegate to state tree when id matches an App");
         },
-        getFocusedStateId: () => "portal",
         getCurrentApp: () => undefined,
         setCurrentApp: () => {
           throw new Error("EnterTool must not call setCurrentApp directly; goes through effects");
@@ -77,7 +76,6 @@ describe("enter tool", () => {
         enter: async () => {
           throw new Error("should not delegate to state tree");
         },
-        getFocusedStateId: () => "portal",
         getCurrentApp: () => "another",
         setCurrentApp: () => {},
       },
