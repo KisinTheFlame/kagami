@@ -9,7 +9,6 @@ export type { JsonSchema, Tool };
 export type ToolKind = "business" | "control";
 
 export type ToolContext = {
-  groupId?: string;
   systemPrompt?: string;
   messages?: LlmMessage[];
 };
