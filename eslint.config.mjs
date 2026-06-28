@@ -24,7 +24,7 @@ export default tseslint.config(
   // 否则会对无类型信息的文件报致命错。
   {
     files: [
-      "apps/server/src/**/*.ts",
+      "apps/agent/src/**/*.ts",
       "apps/oss/src/**/*.ts",
       "apps/web/src/**/*.{ts,tsx}",
       "packages/*/src/**/*.ts",

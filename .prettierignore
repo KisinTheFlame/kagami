@@ -4,6 +4,6 @@ dist
 build
 coverage
 packages/server-core/src/generated/prisma
-apps/server/static/**/*.hbs
-apps/server/static/ai-tone-model.json
+apps/agent/static/**/*.hbs
+apps/agent/static/ai-tone-model.json
 .gstack

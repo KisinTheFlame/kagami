@@ -17,7 +17,7 @@
 
 还有第五条"暗道"：
 
-**E. LoopAgent 内部特权方法**：[ContextCompactionExtension](apps/server/src/agent/runtime/root-agent/extensions/context-compaction.extension.ts) 在每轮结束后调 `host.compactContextIfNeeded(...)`，内部直接 `context.replaceMessages(...)`。这条路径绕过工具、绕过 Effect、绕过任何形式的描述层，是 LoopAgent 私有的"破坏前缀"特权动作。
+**E. LoopAgent 内部特权方法**：[ContextCompactionExtension](apps/agent/src/agent/runtime/root-agent/extensions/context-compaction.extension.ts) 在每轮结束后调 `host.compactContextIfNeeded(...)`，内部直接 `context.replaceMessages(...)`。这条路径绕过工具、绕过 Effect、绕过任何形式的描述层，是 LoopAgent 私有的"破坏前缀"特权动作。
 
 五条路径并存导致：
 
@@ -277,7 +277,7 @@ EnterTool 调 App.onFocus 把结果拼进自己的 effects 列表（见上文 En
 
 ### 场景 2：FinalizeWebSearch（TaskAgent 终止）
 
-**今天**：[FinalizeWebSearchTool](apps/server/src/agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.ts) 自己 executeTyped 返回 summary 字符串。WebSearchTaskAgent 通过 `terminalToolPredicate(toolCall) => toolCall.args?.tool === "finalize_web_search"` 识别终止，把 result.content 喂给 buildResult。
+**今天**：[FinalizeWebSearchTool](apps/agent/src/agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.ts) 自己 executeTyped 返回 summary 字符串。WebSearchTaskAgent 通过 `terminalToolPredicate(toolCall) => toolCall.args?.tool === "finalize_web_search"` 识别终止，把 result.content 喂给 buildResult。
 
 **Effect 模型**：
 
@@ -429,7 +429,7 @@ class RootEffectInterpreter {
 - agent-runtime 定义 `Effect` 联合 + `ToolExecutionResult` + `EffectInterpreter` 抽象。
 - 工具签名扩展为 `Promise<string | ToolExecutionResult>`（兼容旧工具，便于渐进）。
 - App 接口加 `onFocus?` / `onBlur?` 返 `Effect[]`。
-- apps/server 实现 `RootEffectInterpreter`，初版支持 `append_message` + `switch_app` + `switch_state`。
+- apps/agent 实现 `RootEffectInterpreter`，初版支持 `append_message` + `switch_app` + `switch_state`。
 - RootLoopAgent 接 Interpreter，工具执行后走 `interpreter.apply` 链。
 - 写 IthomeApp 用 `onFocus` 产 `append_message`，删 IthomeState，迁 config，更新 EnterTool 让它能展开 App.onFocus。
 - 验收：ithome 进入 → 看文章列表 → open_ithome_article → back_to_portal 路径走通。
