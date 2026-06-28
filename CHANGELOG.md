@@ -17,6 +17,12 @@
 
 - agent: 退役**手机 OS 状态树遗留代码 + sessionSnapshot 持久化空壳**。状态树早已退化为 App 启动器（`focusedStateId` 恒 `"portal"`、`stateStack` 恒 `["portal"]`），相关方法 `getState` / `getFocusedStateId` / `getStateView` / `getAvailableInvokeTools` / 类型 `RootAgentSessionState` / `RootAgentSessionStateView` 与 runtime 的 `getSessionState` 全是零引用死代码，一并删除。`session.restorePersistedSnapshot(snapshot)` 早已退化成只搬运空壳，改为无参 `markRestored()`——**保留关键副作用**：恢复后置 `initialized=true`，使后续 `initializeContext` 成 no-op、不重复追加 portal reminder 破坏 KV 前缀（`reset()` 反向置 `false`，两条路径各有单测断言）。在 master #147（删快照 schema 的 napcat legacy 子字段、持久化层脱 QQ 类型）基础上更进一步：`sessionSnapshot` 整体只装恒定 `{stateStack:["portal"]}` 且 restore 时被完全忽略，从 Zod schema / 子 schema / runtime 组装 / 快照指纹 / Prisma 读写整条移除，`schemaVersion` 3→4，并配套 Prisma 迁移 drop 掉 `root_agent_runtime_snapshot.session_snapshot`（NOT NULL JSON 列，SQLite 标准表重建，`INSERT...SELECT` 保留其余列与唯一索引、无数据丢失）。旧 v3 快照前向兼容：load 不 gate 版本、只读仍存在的 `contextSnapshot`，恢复后下次 save 自然写回 v4
 
+## [0.3.0.1] - 2026-06-29
+
+### Changed
+
+- docs: 文档同步 server-core 包与 Prisma 路径，修正依赖图。承接 [#149](https://github.com/KisinTheFlame/kagami/pull/149)（已补全 zh-CN/AGENTS/ARCHITECTURE 的八包列表），收口其未覆盖的三处真实漂移：(1) `README.md`（英文）#149 未触及，仍写 six packages，补到 eight 并在包列表与目录树补 `apps/console`、`packages/server-core`；(2) Prisma 路径——四个文档里 `apps/server/prisma/*` 全过期，schema 与 migrations 实际在 `packages/server-core/prisma/*`（见 `scripts/prisma.sh` 的 `CORE_DIR`），四处全改正；(3) `ARCHITECTURE.md` 依赖图——`@kagami/llm` 零 `@kagami` 依赖，删掉错误的 `llm ──→ shared` 箭头使图与真实 DAG 一致。纯文档、无源码改动（[#151](https://github.com/KisinTheFlame/kagami/pull/151)）
+
 ## [0.3.0.0] - 2026-06-29
 
 ### Added
