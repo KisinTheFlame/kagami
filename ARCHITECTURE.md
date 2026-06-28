@@ -7,7 +7,7 @@
 pnpm workspace 当前由 8 个包组成，依赖单向（apps → packages）：
 
 ```
-apps/server  ──→ packages/agent-runtime ──→ packages/llm
+apps/agent  ──→ packages/agent-runtime ──→ packages/llm
       ├────────→ packages/server-core ──→ packages/shared
 apps/console ──→ packages/server-core ──→ packages/shared
 apps/web     ──→ packages/shared
@@ -16,7 +16,7 @@ apps/oss     （独立进程，零 @kagami 依赖）
 
 | 包                      | 角色                                                                                                                                                                   |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kagami/server`        | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                        |
+| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                        |
 | `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 server-core 共享 DAO 直读 SQLite |
 | `@kagami/server-core`   | 前后端进程共享的后端基础设施：Prisma client / 共享 DAO / config / logger / 后端 common                                                                                 |
 | `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                 |
@@ -27,7 +27,7 @@ apps/oss     （独立进程，零 @kagami 依赖）
 
 ## 后端模块 DAG
 
-后端采用「扁平模块 + 模块内分层」结构，顶层目录直接位于 `apps/server/src/<module>`，模块按 DAG 单向依赖。
+后端采用「扁平模块 + 模块内分层」结构，顶层目录直接位于 `apps/agent/src/<module>`，模块按 DAG 单向依赖。
 
 ```
                        app                  最高层装配：Fastify 注册、模块 wiring、启动
@@ -76,7 +76,7 @@ apps/oss     （独立进程，零 @kagami 依赖）
 Kagami 不是「QQ 群聊机器人」，而是一个有自己生活的 Agent。各类输入（QQ 消息、RSS、定时任务）在架构上平级，统一进入「手机 OS」模型：
 
 ```
-apps/server/src/agent/
+apps/agent/src/agent/
 ├── runtime/          Kagami 定制运行时
 │   ├── root-agent/     RootAgentRuntime、session（退化为 App 启动器）、NotificationCenter、tools
 │   ├── context/        上下文渲染、线性消息账本、DefaultAgentContext
@@ -102,7 +102,7 @@ apps/server/src/agent/
     └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
 ```
 
-通用 Agent / App 框架内核位于 `packages/agent-runtime`（含 `App` 接口、`AppManager`、`AppStateStore`、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等）；具体的 `InvokeTool` 在 server 侧（`apps/server/.../root-agent/tools/invoke.tool.ts`），Kagami 项目语义不下沉到该包。
+通用 Agent / App 框架内核位于 `packages/agent-runtime`（含 `App` 接口、`AppManager`、`AppStateStore`、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等）；具体的 `InvokeTool` 在 server 侧（`apps/agent/.../root-agent/tools/invoke.tool.ts`），Kagami 项目语义不下沉到该包。
 
 ## 前端结构
 
@@ -192,7 +192,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-server`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-web`（静态 + 按前缀把 `/api/*` 分流到 console/server，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
+- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-web`（静态 + 按前缀把 `/api/*` 分流到 console/server，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
 - 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。

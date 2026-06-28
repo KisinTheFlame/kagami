@@ -78,7 +78,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含八个工作空间包：
 
-- `apps/server`：Fastify 后端服务（`@kagami/server`）
+- `apps/agent`：Fastify 后端服务（`@kagami/agent`）
 - `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
@@ -95,7 +95,7 @@ workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `a
 - 除非任务明确要求，否则默认在仓库根目录执行命令。
 - 数据库相关命令统一读取仓库根目录 `config.yaml` 中的 `server.databaseUrl`。
 - 修改配置 schema 时，必须同步更新：
-  - `apps/server/src/config/config.loader.ts`
+  - `packages/server-core/src/config/config.loader.ts`
   - `config.yaml`
   - `config.yaml.example`
 - 提交前至少执行：
@@ -127,7 +127,7 @@ pnpm app:deploy # build -> prisma migrate deploy -> PM2 reload/startOrReload -> 
 ### 单包命令
 
 ```bash
-pnpm --filter @kagami/server <script>
+pnpm --filter @kagami/agent <script>
 pnpm --filter @kagami/web <script>
 pnpm --filter @kagami/agent-runtime <script>
 pnpm --filter @kagami/shared <script>
@@ -136,7 +136,7 @@ pnpm --filter @kagami/shared <script>
 ### 当前开发现状
 
 - 当前仓库没有统一的根目录 `pnpm dev` 脚本。
-- `apps/server` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
+- `apps/agent` 当前提供 `build`、`typecheck`、`test`、`test:watch`、`db:*` 脚本。
 - `apps/web` 当前提供 `build`、`typecheck` 脚本。
 - `packages/agent-runtime` 当前提供 `build`、`typecheck`、`test`、`test:watch` 脚本。
 - `packages/shared` 当前提供 `build`、`typecheck` 脚本。
@@ -146,13 +146,13 @@ pnpm --filter @kagami/shared <script>
 
 ```bash
 pnpm test # 运行整个 Monorepo 中声明了 test 脚本的包
-pnpm --filter @kagami/server test # 运行后端 Vitest
-pnpm --filter @kagami/server test:watch # 以后端 watch 模式运行测试
+pnpm --filter @kagami/agent test # 运行后端 Vitest
+pnpm --filter @kagami/agent test:watch # 以后端 watch 模式运行测试
 ```
 
 补充说明：
 
-- 当前 `@kagami/server`、`@kagami/agent-runtime`、`@kagami/oss` 声明了测试脚本（agent-runtime 用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
+- 当前 `@kagami/agent`、`@kagami/agent-runtime`、`@kagami/oss` 声明了测试脚本（agent-runtime 用 vitest 直接测源码，覆盖 Effect / 队列 / 串行执行器 / 工具组件的不变量）。
 
 ## 数据库与配置
 
@@ -185,7 +185,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 ### 配置文件
 
-- 后端启动时通过 `apps/server/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
+- 后端启动时通过 `packages/server-core/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
 - `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
@@ -225,8 +225,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 路径别名现状：
 
-- 后端 `apps/server/tsconfig.json` 为 `@kagami/shared/*` 配置了源码路径映射。
-- 后端 `apps/server/tsconfig.json` 也为 `@kagami/agent-runtime` 和 `@kagami/agent-runtime/*` 配置了源码路径映射。
+- 后端 `apps/agent/tsconfig.json` 为 `@kagami/shared/*` 配置了源码路径映射。
+- 后端 `apps/agent/tsconfig.json` 也为 `@kagami/agent-runtime` 和 `@kagami/agent-runtime/*` 配置了源码路径映射。
 - 前端显式配置了 `@/* -> apps/web/src/*`。
 - 不要假设前端也单独声明了 `@kagami/shared` 的源码路径别名；它当前通过 workspace 依赖使用该包。
 
@@ -247,13 +247,13 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - `packages/agent-runtime` 只承载通用 Agent Runtime 内核，不承载 Kagami 项目语义。
 - 允许放入该包的内容包括：`TaskAgent`、`BaseTaskAgent`、`Operation`、`Tool` 抽象、`App` / `AppManager` / `AppStateStore` 框架、`ToolCatalog`、`ToolSet`、`ToolExecutor` 等纯运行时能力。
 - 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 实现放入该包。
-- `apps/server` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
+- `apps/agent` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
 
 ## 架构概览
 
-### 后端（`@kagami/server`）
+### 后端（`@kagami/agent`）
 
-后端当前已经重组为“扁平模块 + 模块内分层”的结构，顶级目录直接位于 `apps/server/src/<module>`，以模块 DAG 为主，而不是旧的全局 `service / handler / dao / agents` 横向分层。
+后端当前已经重组为“扁平模块 + 模块内分层”的结构，顶级目录直接位于 `apps/agent/src/<module>`，以模块 DAG 为主，而不是旧的全局 `service / handler / dao / agents` 横向分层。
 
 当前主要模块如下（非穷举）：
 
@@ -290,8 +290,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 Agent 相关补充约定：
 
-- 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/server/src/agent`。
-- `apps/server/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
+- 通用 Agent Runtime 内核放在 `packages/agent-runtime`，Kagami 项目语义放在 `apps/agent/src/agent`。
+- `apps/agent/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
   - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
   - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`terminal`、`todo`
@@ -299,7 +299,7 @@ Agent 相关补充约定：
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
 - `Tool` 的职责是上层调用入口，不承载能力本体；业务语义应放在 capability service、task-agent 或 operation 中。
-- 新实现只放在 `runtime/` 或 `capabilities/`；不要重新向 `apps/server/src/agent/agents`、`apps/server/src/agent/service`、`apps/server/src/agent/dao`、`apps/server/src/agent/tools/*` 等旧风格目录补内容。
+- 新实现只放在 `runtime/` 或 `capabilities/`；不要重新向 `apps/agent/src/agent/agents`、`apps/agent/src/agent/service`、`apps/agent/src/agent/dao`、`apps/agent/src/agent/tools/*` 等旧风格目录补内容。
 
 后端当前对外接口大致分为：
 
@@ -343,16 +343,16 @@ Agent 相关补充约定：
 
 ### 前端代理与静态托管
 
-- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`，env `CONSOLE_TARGET`），其余仍代理到 `kagami-server`（默认 `20003`，env `API_TARGET`）。
+- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`，env `CONSOLE_TARGET`），其余仍代理到 `kagami-agent`（默认 `20003`，env `API_TARGET`）。
 - 该静态服务还暴露 `/health`。
 - 当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中补充 `server.proxy`。
 
 ### PM2
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
-- 后端（`kagami-server`）：单进程 `fork` 模式运行 `apps/server/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
-- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（env `PORT`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-server` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
-- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-server`。
+- 后端（`kagami-agent`）：单进程 `fork` 模式运行 `apps/agent/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
+- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（env `PORT`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
+- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。

@@ -1,11 +1,11 @@
 {
-  "name": "@kagami/server",
+  "name": "@kagami/agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
-    "pretest": "pnpm --filter \"@kagami/server^...\" build",
+    "pretest": "pnpm --filter \"@kagami/agent^...\" build",
     "test": "NODE_OPTIONS=--max-old-space-size=2048 vitest run",
     "test:watch": "NODE_OPTIONS=--max-old-space-size=2048 vitest",
     "typecheck": "tsc --noEmit"
