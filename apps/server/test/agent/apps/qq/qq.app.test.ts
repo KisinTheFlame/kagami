@@ -269,6 +269,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
     await app.onFocus();
@@ -326,6 +327,7 @@ describe("QqApp", () => {
       listenGroupIds: ["1"],
       recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
       sendMessageTool: dummySendTool,
+      sendResourceTool: dummySendTool,
     });
     await app.onStartup();
     await app.onFocus();
