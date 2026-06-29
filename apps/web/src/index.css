@@ -116,5 +116,11 @@
   /* 数据是 Kagami 的笔触：等宽数字不跳动 */
   :where(code, pre, kbd, samp) {
     @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 所有等宽数据一律 tabular-nums：ID / token / 时间戳列不抖动 */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 }
