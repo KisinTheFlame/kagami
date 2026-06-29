@@ -1,5 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
-import { renderIthomeArticleListContent } from "../../runtime/context/context-message-factory.js";
+import { renderIthomeArticleListContent } from "./ithome-screen.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { IthomeService } from "../../capabilities/ithome/application/ithome.service.js";
 import { OpenIthomeArticleTool } from "./tools/open-ithome-article.tool.js";

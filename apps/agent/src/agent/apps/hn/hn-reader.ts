@@ -17,7 +17,7 @@ import type {
  * 一个读取器，整个住在 apps/hn/ 下，不进 capabilities/。ithome 的 DAO/cursor/poller
  * 那套是 RSS（必须轮询 + 落库 + 记未读）逼出来的，HN 一样都不需要。
  *
- * - 领域模型只带 `Date`，不做渲染；格式化交给 context-message-factory（解耦 + 测试确定性）。
+ * - 领域模型只带 `Date`，不做渲染；格式化交给 hn-screen（解耦 + 测试确定性）。
  * - 所有面向上下文的文本都过 htmlToPlainText，绝不让原始 HTML 进上下文（Codex #9）。
  */
 
