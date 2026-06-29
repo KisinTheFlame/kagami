@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.10] - 2026-06-30
+
+### Fixed
+
+- napcat: 修复部分合并转发用 `view_forward` 展开时显示「（合并转发为空或不可读）」——尤其是把「我和小镜的对话」截成转发再发回时常复现。根因有两层：① NapCat 对刚到达 / 内层是旧消息的转发，`get_forward_msg` 会**瞬时返回空**（内层尚未解析，稍候即有，已实测）；② 我们一次取空就**把空也缓存了 10 分钟**，等于把瞬时失败固化成 TTL 内永久失败。改法（参考规范客户端 node-napcat-ts 的读法，但保留我们的懒加载架构）：转发读取主路径改走 **`get_msg(forwardId)`**——容器消息的 forward 段自带内联 `content`，比 `get_forward_msg`（resId→getMsgHistory 多一跳）更稳；`get_msg` 拿不到内容再兜底 `get_forward_msg`；取到空就**重试 2~3 次带退避**，且**不缓存空结果**（raw 节点缓存与分页缓存均只在非空时写），让下次调用还能再试。转发内容仍只回到 tool result 尾部，绝不进稳定前缀（KV 缓存优先不变）。实测：之前「看不到」的转发现在经 get_msg 正常展开。仅改 `napcat-gateway.impl.service.ts` + 对应测试（新增 get_msg 主路径 / 回退 get_forward_msg / 重试不缓存空三个场景）
+
 ## [0.3.1.9] - 2026-06-30
 
 ### Changed
