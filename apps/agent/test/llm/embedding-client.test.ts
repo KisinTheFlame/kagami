@@ -306,6 +306,7 @@ describe("createEmbeddingClient", () => {
       body: JSON.stringify({
         inputs: "hello tei",
       }),
+      signal: expect.any(AbortSignal),
     });
   });
 
