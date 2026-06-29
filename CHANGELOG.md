@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.5] - 2026-06-29
+
+### Changed
+
+- deploy: 把上一版（0.3.1.4）的独立 `app:restart` 命令**收进 `app:deploy` 的可选服务参数**，少记一个命令。`pnpm app:deploy`（无参）= 全量：构建 + 迁移 + 重载所有进程；`pnpm app:deploy <agent|console|web|oss>`（带服务名）= 只重建并重载该服务、不跑迁移、不动其它进程。语义更顺：deploy 不带参就是「整体上线」，带服务名就是「只重启那一个」。单服务路径的价值不变——重载 console / web 不打断 `kagami-agent` 的热状态（KV 前缀 / HNSW / 活内存），合 KV 缓存优先。删除 `scripts/restart.sh` 与 `app:restart` script 入口，逻辑合进 `scripts/deploy.sh`：带参分支 `pnpm --filter "@kagami/<svc>..." build` + `pm2 startOrReload ecosystem.config.cjs --only kagami-<svc>`，无参分支保留原有全量构建 + 迁移（含 WAL 锁规避）逻辑
+
 ## [0.3.1.4] - 2026-06-29
 
 ### Added

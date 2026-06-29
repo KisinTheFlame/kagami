@@ -121,8 +121,8 @@ pnpm lint # ESLint 检查
 pnpm lint:fix # ESLint 自动修复
 pnpm format # Prettier 格式检查
 pnpm format:write # Prettier 自动格式化
-pnpm app:deploy # build -> prisma migrate deploy -> PM2 reload/startOrReload -> pm2 save
-pnpm app:restart <agent|console|web|oss> # 仅重建并重载单个服务进程，不动其它、不跑迁移
+pnpm app:deploy # 无参=全量：build -> prisma migrate deploy -> PM2 reload/startOrReload(全部) -> pm2 save
+pnpm app:deploy <agent|console|web|oss> # 单服务：只重建并重载该服务，不跑迁移、不动其它进程
 ```
 
 ### 单包命令
@@ -356,7 +356,7 @@ Agent 相关补充约定：
 - 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
-- `pnpm app:restart <agent|console|web|oss>` 只重建并重载单个服务进程（含其依赖包），不动其它进程、不跑迁移。改了某个服务时用它即可——尤其重载 `console` / `web` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍需走 `pnpm app:deploy`。
+- `pnpm app:deploy <agent|console|web|oss>`（带服务名）只重建并重载该服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——尤其重载 `console` / `web` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍走无参 `pnpm app:deploy`。
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
 - 部署机需要能编译/安装原生模块（`better-sqlite3`、`hnswlib-node`）；这些依赖的构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行。
 
