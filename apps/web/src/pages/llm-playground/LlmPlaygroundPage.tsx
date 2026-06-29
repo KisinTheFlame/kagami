@@ -321,9 +321,14 @@ export function LlmPlaygroundPage() {
   ]);
 
   function handleProviderChange(nextProviderId: string): void {
-    setSelectedProviderId(nextProviderId as LlmProviderOption["id"]);
     const nextProvider = providers.find(provider => provider.id === nextProviderId);
-    setModel(nextProvider?.models[0] ?? "");
+    if (nextProvider === undefined) {
+      // 未知/陈旧的 provider id 直接忽略，避免把页面切到空白选择。
+      return;
+    }
+
+    setSelectedProviderId(nextProvider.id);
+    setModel(nextProvider.models[0] ?? "");
   }
 
   function handleReset(): void {
@@ -761,7 +766,7 @@ export function LlmPlaygroundPage() {
                         <span className="text-sm text-muted-foreground">正在读取工具定义...</span>
                       ) : toolLibraryQuery.isError ? (
                         <span className="text-sm text-destructive">
-                          {toolLibraryQuery.error.message}
+                          {getApiErrorMessage(toolLibraryQuery.error)}
                         </span>
                       ) : toolLibrary.length === 0 ? (
                         <span className="text-sm text-muted-foreground">
@@ -940,7 +945,7 @@ export function LlmPlaygroundPage() {
                   {providersQuery.isLoading ? (
                     <StateHint text="正在读取 provider 列表..." />
                   ) : providersQuery.isError ? (
-                    <StateHint text={providersQuery.error.message} tone="error" />
+                    <StateHint text={getApiErrorMessage(providersQuery.error)} tone="error" />
                   ) : providers.length === 0 ? (
                     <StateHint
                       text="没有可用 provider，请先在服务端配置 LLM 凭证。"

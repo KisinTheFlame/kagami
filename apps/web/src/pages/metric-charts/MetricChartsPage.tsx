@@ -245,7 +245,7 @@ export function MetricChartsPage() {
       setCreateError(null);
       await createChartMutation.mutateAsync(input);
     } catch (error) {
-      setCreateError(getErrorMessage(error));
+      setCreateError(getApiErrorMessage(error));
     }
   }
 
@@ -514,7 +514,7 @@ export function MetricChartsPage() {
             <Card>
               <CardContent className="flex min-h-40 items-center justify-center">
                 <p className="text-sm text-destructive">
-                  图表定义加载失败：{getErrorMessage(chartListQuery.error)}
+                  图表定义加载失败：{getApiErrorMessage(chartListQuery.error)}
                 </p>
               </CardContent>
             </Card>
@@ -562,7 +562,7 @@ export function MetricChartsPage() {
           void deleteChartMutation.mutateAsync(chartPendingDelete.chartName);
         }}
         errorMessage={
-          deleteChartMutation.isError ? getErrorMessage(deleteChartMutation.error) : null
+          deleteChartMutation.isError ? getApiErrorMessage(deleteChartMutation.error) : null
         }
       />
     </div>
@@ -635,7 +635,9 @@ function MetricChartCard({
 
         {query.isError ? (
           <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
-            <p className="text-sm text-destructive">数据加载失败：{getErrorMessage(query.error)}</p>
+            <p className="text-sm text-destructive">
+              数据加载失败：{getApiErrorMessage(query.error)}
+            </p>
           </div>
         ) : null}
 
@@ -894,8 +896,4 @@ function formatMetricValue(value: number | string): string {
   return value.toLocaleString("zh-CN", {
     maximumFractionDigits: 2,
   });
-}
-
-function getErrorMessage(error: unknown): string {
-  return getApiErrorMessage(error);
 }
