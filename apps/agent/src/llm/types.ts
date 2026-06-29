@@ -1,12 +1,12 @@
-import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
-// LLM 协议层的通用消息类型已下沉到 @kagami/llm（agent-runtime 也直接用它，不再走
-// TMessage 泛型）。这里 import 后再 export，保持 server 侧既有 import 路径不变，
+// LLM 协议层的通用消息类型与 provider 标识都在 @kagami/llm（agent-runtime 也直接用它，
+// 不再走 TMessage 泛型）。这里 import 后再 export，保持 server 侧既有 import 路径不变，
 // 同时避开 `export ... from` 的 re-export 限制。
 import type {
   JsonSchema,
   LlmContentPart,
   LlmImageContentPart,
   LlmMessage,
+  LlmProviderId,
   LlmTextContentPart,
   LlmToolCall,
   Tool,

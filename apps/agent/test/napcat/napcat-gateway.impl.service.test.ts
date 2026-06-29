@@ -1275,7 +1275,7 @@ describe("DefaultNapcatGatewayService", () => {
     await gateway.stop();
   });
 
-  it("should fetch a forward message page via get_forward_msg and paginate from cache", async () => {
+  it("should fetch a forward page via get_msg inline content and paginate from cache", async () => {
     const sockets: FakeWebSocket[] = [];
     const gateway = await DefaultNapcatGatewayService.create({
       configManager: createConfigManager(),
@@ -1302,28 +1302,37 @@ describe("DefaultNapcatGatewayService", () => {
       params: Record<string, unknown>;
     };
 
-    expect(sentPayload.action).toBe("get_forward_msg");
-    expect(sentPayload.params).toEqual({ id: "res-1", message_id: "res-1" });
+    // 主路径先发 get_msg（容器消息），转发段自带内联 content。
+    expect(sentPayload.action).toBe("get_msg");
+    expect(sentPayload.params).toEqual({ message_id: "res-1" });
 
     emitActionResponse(socket, 0, {
-      messages: [
+      message: [
         {
-          user_id: 10001,
-          time: 1,
-          message: [{ type: "text", data: { text: "甲说的话" } }],
-          sender: { nickname: "甲" },
-        },
-        {
-          user_id: 10002,
-          time: 2,
-          message: [{ type: "text", data: { text: "乙说的话" } }],
-          sender: { nickname: "乙" },
-        },
-        {
-          user_id: 10003,
-          time: 3,
-          message: [{ type: "text", data: { text: "丙说的话" } }],
-          sender: { nickname: "丙" },
+          type: "forward",
+          data: {
+            id: "res-1",
+            content: [
+              {
+                user_id: 10001,
+                time: 1,
+                message: [{ type: "text", data: { text: "甲说的话" } }],
+                sender: { nickname: "甲" },
+              },
+              {
+                user_id: 10002,
+                time: 2,
+                message: [{ type: "text", data: { text: "乙说的话" } }],
+                sender: { nickname: "乙" },
+              },
+              {
+                user_id: 10003,
+                time: 3,
+                message: [{ type: "text", data: { text: "丙说的话" } }],
+                sender: { nickname: "丙" },
+              },
+            ],
+          },
         },
       ],
     });
@@ -1337,7 +1346,7 @@ describe("DefaultNapcatGatewayService", () => {
       ],
     });
 
-    // 第二页：命中原始节点缓存，不再发新的 get_forward_msg。
+    // 第二页：命中原始节点缓存，不再发新请求。
     await expect(gateway.getForwardMessages({ id: "res-1", offset: 2, limit: 2 })).resolves.toEqual(
       {
         total: 3,
@@ -1346,6 +1355,130 @@ describe("DefaultNapcatGatewayService", () => {
       },
     );
     expect(socket.sentPayloads).toHaveLength(1);
+
+    await gateway.stop();
+  });
+
+  it("should fall back to get_forward_msg when get_msg carries no forward content", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const pagePromise = gateway.getForwardMessages({ id: "res-2", offset: 0, limit: 50 });
+
+    // 第一发 get_msg，但容器里没有 forward 段（无内联 content）。
+    const first = JSON.parse(socket.sentPayloads[0]) as { action: string };
+    expect(first.action).toBe("get_msg");
+    emitActionResponse(socket, 0, { message: [{ type: "text", data: { text: "不是转发" } }] });
+    await flushMicrotasks();
+
+    // 回退到 get_forward_msg。
+    const second = JSON.parse(socket.sentPayloads[1]) as { action: string; params: unknown };
+    expect(second.action).toBe("get_forward_msg");
+    expect(second.params).toEqual({ message_id: "res-2" });
+    emitActionResponse(socket, 1, {
+      messages: [
+        {
+          user_id: 20001,
+          time: 5,
+          message: [{ type: "text", data: { text: "兜底拿到的" } }],
+          sender: { nickname: "丁" },
+        },
+      ],
+    });
+
+    await expect(pagePromise).resolves.toEqual({
+      total: 1,
+      offset: 0,
+      nodes: [{ senderName: "丁", senderUserId: "20001", rawMessage: "兜底拿到的", time: 5 }],
+    });
+    expect(socket.sentPayloads).toHaveLength(2);
+
+    await gateway.stop();
+  });
+
+  it("should retry on transient empty and not cache the empty result", async () => {
+    vi.useFakeTimers();
+
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    // 每轮尝试都先 get_msg（空）再 get_forward_msg（空）；穷尽 3 次后返回 total 0。
+    const answerEmptyRound = async (getMsgIndex: number): Promise<void> => {
+      await flushMicrotasks();
+      emitActionResponse(socket, getMsgIndex, { message: [] });
+      await flushMicrotasks();
+      emitActionResponse(socket, getMsgIndex + 1, { messages: [] });
+      await flushMicrotasks();
+    };
+
+    const firstPromise = gateway.getForwardMessages({ id: "res-empty", offset: 0, limit: 50 });
+    await answerEmptyRound(0); // 尝试 1
+    await vi.advanceTimersByTimeAsync(400); // 退避 1
+    await answerEmptyRound(2); // 尝试 2
+    await vi.advanceTimersByTimeAsync(800); // 退避 2
+    await answerEmptyRound(4); // 尝试 3
+    await expect(firstPromise).resolves.toEqual({ total: 0, offset: 0, nodes: [] });
+    expect(socket.sentPayloads).toHaveLength(6); // 3 轮 × 2 请求
+
+    // 空结果没缓存：第二次调用会重新发请求，这次 get_msg 拿到内容。
+    const secondPromise = gateway.getForwardMessages({ id: "res-empty", offset: 0, limit: 50 });
+    await flushMicrotasks();
+    emitActionResponse(socket, 6, {
+      message: [
+        {
+          type: "forward",
+          data: {
+            id: "res-empty",
+            content: [
+              {
+                user_id: 30001,
+                time: 9,
+                message: [{ type: "text", data: { text: "稍后就有了" } }],
+                sender: { nickname: "戊" },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    await expect(secondPromise).resolves.toEqual({
+      total: 1,
+      offset: 0,
+      nodes: [{ senderName: "戊", senderUserId: "30001", rawMessage: "稍后就有了", time: 9 }],
+    });
+    expect(socket.sentPayloads).toHaveLength(7); // 第二次确实重新发了请求
 
     await gateway.stop();
   });
@@ -1371,7 +1504,10 @@ describe("DefaultNapcatGatewayService", () => {
     await startPromise;
 
     const forwardPromise = gateway.getForwardMessages({ id: "res-9", offset: 0, limit: 50 });
-    emitActionResponse(socket, 0, { messages: "not-an-array" });
+    // get_msg 拿不到内联 content（回退），再由 get_forward_msg 的非法结构触发拒绝。
+    emitActionResponse(socket, 0, { message: [{ type: "text", data: { text: "x" } }] });
+    await flushMicrotasks();
+    emitActionResponse(socket, 1, { messages: "not-an-array" });
 
     await expect(forwardPromise).rejects.toMatchObject({
       meta: {

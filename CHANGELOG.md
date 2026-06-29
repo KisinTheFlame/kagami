@@ -7,9 +7,29 @@
 
 ## [Unreleased]
 
+## [0.3.1.14] - 2026-06-30
+
 ### Changed
 
 - deploy/config: 把散装根脚本 `scripts/web-server.mjs` 提升为一等公民 TS 包 `apps/gateway`（`@kagami/gateway`，零 `@kagami/*` 依赖、只依赖 `yaml`），并在 `config.yaml` 引入顶层 `services` 块作为**所有服务监听端口与地址的唯一事实来源**——每个进程（agent / console / gateway / oss）从 `config.yaml` 自读自己的端口与依赖服务地址，`ecosystem.config.cjs` 不再持有任何端口/地址 env（删 `kagami-console` 的 `PORT`、`kagami-web` 的 `PORT`/`API_TARGET`/`CONSOLE_TARGET`）。收敛前同一端口散落在 ecosystem / web-server.mjs / config.loader / 各 app 入口共 2~4 处（含两处隐蔽的 OAuth `publicBaseUrl` 默认），现在只在 `services` 块定义一次（见 [#162](https://github.com/KisinTheFlame/kagami/issues/162)）。`apps/gateway` 用 TS 重写 web-server 全部逻辑（静态托管 `apps/web/dist` + `/api/*` 按五个 console 前缀分流 + `/health`），行为等价，地址改读 `services`（复刻 `apps/oss` 的 config.yaml 定位算法）。`config.loader` 新增 `ServicesSchema`（顶层、与 `server` 平级）；agent 监听端口改读 `services.agent.port`，OAuth `publicBaseUrl` 改为可显式覆盖、缺省派生 `http://localhost:${services.gateway.port}`（host 固定 localhost：浏览器回调 origin ≠ reachable host）；`server.oss.baseUrl` 收敛为 `server.oss.enabled` 开关，OSS 地址由 `services.oss` 派生（presence/enabled 仍是启用开关，缺省=禁用优雅降级，语义不变）。PM2 进程 `kagami-web` → `kagami-gateway`：`scripts/deploy.sh` 全量与单服务路径都加幂等 `pm2 delete kagami-web` 兜底改名后旧进程残留占端口；`pnpm app:deploy <agent|console|gateway|oss>`，`web` 保留为 `gateway` 的已弃用别名。同步更新 AGENTS / ARCHITECTURE / README(.zh-CN) 与 `config.yaml.example`。纯结构重构，端口数字不变、无 DB 变更；**部署机的 gitignored `config.yaml` 需手动对齐新结构**（加 `services` 块、删 `server.port` 与顶层 `oss.port`、`server.oss.baseUrl` 改 `enabled`）才能启动
+
+## [0.3.1.13] - 2026-06-30
+
+### Changed
+
+- todos: `TODOS.md` 新增 `## napcat` 分组并记录一条 P3 已确诊的上游限制——「合并转发里小镜看不到自己的消息」。范围：在和小镜的私聊里选中**包含小镜自己发出的消息**生成合并转发再发给小镜，小镜 `view_forward` 展开时只看得到对方消息、看不到自己那部分。已 live 实测确诊（转发 `7656887019929762382` 实含 4 条＝闻震 2＋小镜 2，但 NapCat 经 `get_msg` / `get_forward_msg` 都只返回 2 条对方消息，小镜自己的 2 条不在返回里）：根因在 NapCat / NTQQ 数据层按 `resId` 重建转发时丢弃本账号自己的消息，self 节点在进入 NapCat 解析前就已不存在（NapCat 源码 `parseMultiMessageContent` / `parseMessageV2` 并不过滤 self），客户端无解、与我们的 `view_forward` 实现无关（[0.3.1.6] / [0.3.1.10] 已分别确认无关）。对路修法是上报 NapCat；本地不做脆弱的时间戳穿插拼接。纯文档，无代码改动
+
+## [0.3.1.12] - 2026-06-30
+
+### Changed
+
+- agent/runtime: 修复 `InvokeTool` 顶层 dispatcher 的抽象泄漏——`buildInvokeSubtoolFailureMessage` 原本按错误码硬编码了两条 App 专属文案（`CHAT_CONTEXT_UNAVAILABLE` → "当前缺少可发消息的 QQ 会话上下文"、`ARTICLE_NOT_FOUND` → "当前 IT 之家列表中找不到该文章 ID"），把 QQ / IT 之家的业务概念塞进了"本身不知道任何 App"的稳定壳，违反"群聊只是众多生活输入之一、不应泄漏进 runtime 核心"的项目定位。改法：失败文案由各 App 自己的子工具随结果返回（`send_message` / `send_resource` 的无会话分支、`open_ithome_article` 的文章缺失分支各自带上 `message` 字段；`send_resource` 顺手把旧的 `note` 字段名统一成 `message`），`InvokeTool` 只负责原样透传子工具自带文案 + 追加该子工具的 schema 文档，不再按错误码合成 App 语义。保留结构性的 `INVALID_ARGUMENTS` 分支（那是 `ZodToolComponent` 的通用参数校验错误、非 App 概念）。纯重构：错误码与对 LLM 可见的提示内容不变，仅迁移文案的构造位置；不触碰稳定前缀（KV 缓存无影响）。新增 `open-ithome-article.tool.test.ts` 与 2 条 `invoke.tool` 回归测试，锁定"子工具自带文案被保留、被删的 App 硬编码不再由 InvokeTool 合成、结构性错误提示仍合成"这三条边界。
+
+## [0.3.1.11] - 2026-06-30
+
+### Changed
+
+- llm/config: 把 LLM provider 标识字面量联合 `["deepseek", "openai", "openai-codex", "claude-code"]` 收敛到最底层 `@kagami/llm` 包单源（新增 `LLM_PROVIDER_IDS` 常量数组 + 派生 `LlmProviderId` 类型），消除原本散落 4 处的重复（server-core contracts 手写 type union、shared 的 `z.enum` + `z.infer`、config.loader 的 `z.enum ... satisfies`、agent client 的 `as const` 数组）——加 / 删 provider 从此只改一处，杜绝类型与 schema 漂移。shared 与 server-core 各新增一条对 `@kagami/llm` 的 workspace 依赖（均指向 DAG 最底层，无环）；因项目禁止 re-export barrel，所有 `LlmProviderId` 消费方（server-core config / 2 个 DAO、agent 的 llm / auth 共 6 个文件 + 1 个测试）改为直接从 `@kagami/llm` 导入。`@kagami/llm` 保持零 zod 依赖，需要校验的下游用 `z.enum(LLM_PROVIDER_IDS)` 自行派生。纯重构：provider 枚举值与顺序不变、配置校验行为不变、不触碰任何稳定前缀（KV 缓存无影响）。`LlmUsageId` 未动（其 type 本就单源）。
 
 ## [0.3.1.10] - 2026-06-30
 

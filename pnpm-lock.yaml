@@ -275,6 +275,9 @@ importers:
 
   packages/server-core:
     dependencies:
+      '@kagami/llm':
+        specifier: workspace:*
+        version: link:../llm
       '@kagami/shared':
         specifier: workspace:*
         version: link:../shared
@@ -309,6 +312,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@kagami/llm':
+        specifier: workspace:*
+        version: link:../llm
       zod:
         specifier: ^3.24.4
         version: 3.25.76
