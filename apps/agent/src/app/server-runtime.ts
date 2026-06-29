@@ -191,9 +191,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const visionAgent = new VisionAgent({
     llmClient,
   });
-  // server.oss 缺失即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
-  const ossClient = config.server.oss
-    ? new HttpOssClient({ baseUrl: config.server.oss.baseUrl })
+  // server.oss 缺失/禁用即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+  // 启用时地址统一从顶层 services.oss 派生（host 是 reachable host，agent 据此 PUT）。
+  const ossClient = config.server.oss?.enabled
+    ? new HttpOssClient({
+        baseUrl: `http://${config.services.oss.host}:${config.services.oss.port}`,
+      })
     : undefined;
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
@@ -313,7 +316,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
     storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
-    port: config.server.port,
+    port: config.services.agent.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: agentRuntime.hasTavilyApiKey,

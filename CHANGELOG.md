@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.15] - 2026-06-30
+
+### Changed
+
+- deploy/config: 把散装根脚本 `scripts/web-server.mjs` 提升为一等公民 TS 包 `apps/gateway`（`@kagami/gateway`，零 `@kagami/*` 依赖、只依赖 `yaml`），并在 `config.yaml` 引入顶层 `services` 块作为**所有服务监听端口与地址的唯一事实来源**——每个进程（agent / console / gateway / oss）从 `config.yaml` 自读自己的端口与依赖服务地址，`ecosystem.config.cjs` 不再持有任何端口/地址 env（删 `kagami-console` 的 `PORT`、`kagami-web` 的 `PORT`/`API_TARGET`/`CONSOLE_TARGET`）。收敛前同一端口散落在 ecosystem / web-server.mjs / config.loader / 各 app 入口共 2~4 处（含两处隐蔽的 OAuth `publicBaseUrl` 默认），现在只在 `services` 块定义一次（见 [#162](https://github.com/KisinTheFlame/kagami/issues/162)）。`apps/gateway` 用 TS 重写 web-server 全部逻辑（静态托管 `apps/web/dist` + `/api/*` 按五个 console 前缀分流 + `/health`），行为等价，地址改读 `services`（复刻 `apps/oss` 的 config.yaml 定位算法）。`config.loader` 新增 `ServicesSchema`（顶层、与 `server` 平级）；agent 监听端口改读 `services.agent.port`，OAuth `publicBaseUrl` 改为可显式覆盖、缺省派生 `http://localhost:${services.gateway.port}`（host 固定 localhost：浏览器回调 origin ≠ reachable host）；`server.oss.baseUrl` 收敛为 `server.oss.enabled` 开关，OSS 地址由 `services.oss` 派生（presence/enabled 仍是启用开关，缺省=禁用优雅降级，语义不变）。PM2 进程 `kagami-web` → `kagami-gateway`：`scripts/deploy.sh` 全量与单服务路径都加幂等 `pm2 delete kagami-web` 兜底改名后旧进程残留占端口；`pnpm app:deploy <agent|console|gateway|oss>`，`web` 保留为 `gateway` 的已弃用别名。同步更新 AGENTS / ARCHITECTURE / README(.zh-CN) 与 `config.yaml.example`。纯结构重构，端口数字不变、无 DB 变更；**部署机的 gitignored `config.yaml` 需手动对齐新结构**（加 `services` 块、删 `server.port` 与顶层 `oss.port`、`server.oss.baseUrl` 改 `enabled`）才能启动
+
 ## [0.3.1.14] - 2026-06-30
 
 ### Changed

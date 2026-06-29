@@ -192,7 +192,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-web`（静态 + 按前缀把 `/api/*` 分流到 console/server，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
+- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
 - 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。
