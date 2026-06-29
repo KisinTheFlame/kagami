@@ -26,7 +26,10 @@ describe("SendResourceTool", () => {
   it("errors when there is no open conversation", async () => {
     const { tool, sendImage } = build({ resolve: vi.fn() });
     const result = await tool.execute({ resid: "res-1" }, {});
-    expect(JSON.parse(result.content).error).toBe("CHAT_CONTEXT_UNAVAILABLE");
+    const parsed = JSON.parse(result.content);
+    expect(parsed.error).toBe("CHAT_CONTEXT_UNAVAILABLE");
+    // 文案由子工具自带（字段名为 message，非旧的 note），InvokeTool 不再替它合成。
+    expect(parsed.message).toBe("当前没有打开的会话，先用 open_conversation 打开一个会话再发。");
     expect(sendImage).not.toHaveBeenCalled();
   });
 

@@ -63,6 +63,7 @@ export class OpenIthomeArticleTool extends ZodToolComponent<
           ok: false,
           error: "ARTICLE_NOT_FOUND",
           articleId: input.articleId,
+          message: "当前 IT 之家列表中找不到该文章 ID。",
         }),
       };
     }

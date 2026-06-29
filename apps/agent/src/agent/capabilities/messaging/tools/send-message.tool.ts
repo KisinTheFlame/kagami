@@ -94,7 +94,11 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
 
     const chatTarget = this.getChatTarget();
     if (!chatTarget) {
-      return JSON.stringify({ ok: false, error: "CHAT_CONTEXT_UNAVAILABLE" });
+      return JSON.stringify({
+        ok: false,
+        error: "CHAT_CONTEXT_UNAVAILABLE",
+        message: "当前没有打开的会话，先用 open_conversation 打开一个会话再发。",
+      });
     }
 
     // 门控关闭：完全退化为原发送行为，不打分、不拦截、响应不含 aiToneScore。

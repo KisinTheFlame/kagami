@@ -191,20 +191,6 @@ function buildInvokeSubtoolFailureMessage(input: {
     );
   }
 
-  if (input.error === "CHAT_CONTEXT_UNAVAILABLE") {
-    return appendInvokeToolDefinitionMessage(
-      `当前缺少可发消息的 QQ 会话上下文，不能调用 ${input.tool}。`,
-      input.currentToolDefinition,
-    );
-  }
-
-  if (input.error === "ARTICLE_NOT_FOUND") {
-    return appendInvokeToolDefinitionMessage(
-      "当前 IT 之家列表中找不到该文章 ID。",
-      input.currentToolDefinition,
-    );
-  }
-
   if (input.error) {
     return appendInvokeToolDefinitionMessage(
       `invoke 子工具 ${input.tool} 调用失败：${input.error}。`,
