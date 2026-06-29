@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.16] - 2026-06-30
+
+### Changed
+
+- test(oss): `object-store.test.ts` 的「unlink 失败容错」用例在跑通时会把被测代码的 best-effort 容错日志（`console.error("unlink orphan blob failed: ...")`）连同完整 stack trace 裸喷到 stderr，看着像测试出错，实则用例 `✓` 通过、日志是预期行为。改为在该用例内 `vi.spyOn(console, "error")` 把这条日志收掉，并顺手加一条 `toHaveBeenCalledWith` 断言确认确实走了容错分支——既消除测试输出噪音，又把「我们是故意触发这个日志」显式化。纯测试改动，不碰生产代码与行为。
+
 ## [0.3.1.15] - 2026-06-30
 
 ### Changed
