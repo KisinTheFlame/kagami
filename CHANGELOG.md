@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [0.3.1.8] - 2026-06-30
+
+### Changed
+
+- agent: 把各 App 专属的屏幕渲染函数从共享的 `runtime/context/context-message-factory.ts` 下沉到各自 App 目录，消除 runtime 核心层对上层 App / napcat 的反向依赖（runtime 是被所有 App 依赖的最底层，原文件却反向 import 了 `apps/hn` 与 `napcat`，违反分层与"群聊概念只属于 messaging/QQ App"的约束）。HN 渲染（`renderHn*Content`）迁入新建的 `apps/hn/hn-screen.ts`，IT之家渲染（`renderIthomeArticle*Content`）迁入 `apps/ithome/ithome-screen.ts`，QQ 群/私聊消息渲染（`render*MessagePlainText` 及 napcat 段渲染）迁入 `apps/qq/qq-message-render.ts`。`context-message-factory.ts` 只保留与具体业务无关的通用消息构造器（user / wake / portal / notification / story_recall / async_tool_result / 摘要类），不再 import 任何 `apps/*` 或 `napcat`。纯代码搬移：所有渲染函数逐字迁移、行为与序列化输出（含 `<hn_*>` / `<ithome_*>` / `<qq_message>` 伪标签与 `.hbs` 模板）完全一致，对 KV 缓存前缀无影响；对应单测一并拆分到各 App 的测试目录，并补齐 QQ 私聊显示名 remark>nickname>userId 回退的单测
+
+### Removed
+
+- agent: 删除 6 个无任何调用方的死函数（`createIthomeArticleListMessage`、`createIthomeArticleDetailMessage`、`createMergedGroupMessagesMessage` 及其 `Content` 版本、`createMergedPrivateMessagesMessage` 及其 `Content` 版本），随本次下沉一并清理，不搬运死代码
+
 ## [0.3.1.7] - 2026-06-30
 
 ### Added
