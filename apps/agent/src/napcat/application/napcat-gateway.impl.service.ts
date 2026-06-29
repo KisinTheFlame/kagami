@@ -11,6 +11,7 @@ import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-mess
 import {
   buildOutgoingImageSegments,
   buildOutgoingMessageSegments,
+  type NapcatGatewayActionResponseData,
   type WebSocketLike,
 } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
@@ -84,9 +85,30 @@ const GroupInfoResponseSchema = z.object({
 const ForwardMessageResponseSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())).optional(),
 });
+// get_msg 主路径：容器消息的 forward 段自带内联 content（节点形态与 get_forward_msg 的 messages 一致），
+// 比 get_forward_msg（resId→getMsgHistory 多一跳）更稳。这里只取 message 段数组，逐段挑出 forward。
+const GetMsgResponseSchema = z.object({
+  message: z.array(z.unknown()).optional(),
+});
+const ForwardSegmentWithContentSchema = z.object({
+  type: z.literal("forward"),
+  data: z
+    .object({
+      content: z.array(z.record(z.string(), z.unknown())).optional(),
+    })
+    .passthrough(),
+});
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
 const FORWARD_MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+// 转发刚到达 / 内层是旧消息时，NapCat 对 get_msg / get_forward_msg 会瞬时返回空（内层尚未解析），
+// 稍候即有（实测）。一次取空就重试几次带退避；仍空则不缓存，留给下次调用再试，避免把瞬时空固化成永久失败。
+const FORWARD_FETCH_MAX_ATTEMPTS = 3;
+const FORWARD_FETCH_RETRY_BACKOFF_MS = 400;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 type OrderedPostTypeEventResult =
   | {
@@ -529,11 +551,14 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     const pageRawNodes = rawNodes.slice(pageOffset, pageOffset + pageLimit);
     const nodes = await this.groupMessageProcessor.normalizeForwardMessages(pageRawNodes);
 
-    this.forwardPageCache.set(pageCacheKey, {
-      nodes,
-      total,
-      expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
-    });
+    // 同样不缓存空结果（total 为 0 多是瞬时未解析）：缓存空会让 TTL 内的重试都命中空，下次本可成功也读不到。
+    if (total > 0) {
+      this.forwardPageCache.set(pageCacheKey, {
+        nodes,
+        total,
+        expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
+      });
+    }
 
     return { nodes, total, offset: pageOffset };
   }
@@ -547,7 +572,88 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       this.forwardRawNodeCache.delete(forwardId);
     }
 
-    // 入参对齐 node-napcat-ts：只传 message_id（NapCat 内部 `message_id || id`，多带 id 无意义）。
+    const nodes = await this.fetchForwardRawNodesWithRetry(forwardId);
+    // 只缓存非空结果：空往往是 NapCat 的瞬时未解析，缓存空会把它固化成 TTL 内（10 分钟）永久失败，
+    // 下次调用本可成功却被空缓存挡住。空就不写缓存，留给下次 view_forward 重新拉。
+    if (nodes.length > 0) {
+      this.forwardRawNodeCache.set(forwardId, {
+        nodes,
+        expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
+      });
+    }
+    return nodes;
+  }
+
+  /** 取一条合并转发的原始节点，空就重试带退避（NapCat 对刚到达 / 内层旧消息会瞬时返回空，稍候即有）。 */
+  private async fetchForwardRawNodesWithRetry(
+    forwardId: string,
+  ): Promise<Record<string, unknown>[]> {
+    for (let attempt = 1; attempt <= FORWARD_FETCH_MAX_ATTEMPTS; attempt += 1) {
+      const nodes = await this.requestForwardRawNodes(forwardId);
+      if (nodes.length > 0) {
+        return nodes;
+      }
+      if (attempt < FORWARD_FETCH_MAX_ATTEMPTS) {
+        logger.info("Forward fetch returned empty, retrying", {
+          event: "napcat.gateway.forward_fetch_empty_retry",
+          forwardId,
+          attempt,
+        });
+        await delay(FORWARD_FETCH_RETRY_BACKOFF_MS * attempt);
+      }
+    }
+    logger.warn("Forward fetch still empty after retries", {
+      event: "napcat.gateway.forward_fetch_empty",
+      forwardId,
+      attempts: FORWARD_FETCH_MAX_ATTEMPTS,
+    });
+    return [];
+  }
+
+  /**
+   * 单次拉取转发节点：主路径走 get_msg（容器消息的 forward 段自带内联 content，更稳），
+   * 拿不到再兜底 get_forward_msg（resId→getMsgHistory，会瞬时返回空的那条）。
+   */
+  private async requestForwardRawNodes(forwardId: string): Promise<Record<string, unknown>[]> {
+    const viaGetMsg = await this.loadForwardNodesViaGetMsg(forwardId);
+    if (viaGetMsg.length > 0) {
+      return viaGetMsg;
+    }
+    return await this.loadForwardNodesViaGetForwardMsg(forwardId);
+  }
+
+  /** 主路径：get_msg(forwardId) 拿容器消息，挑出 forward 段的内联 content 作为节点。失败/无内容返回空。 */
+  private async loadForwardNodesViaGetMsg(forwardId: string): Promise<Record<string, unknown>[]> {
+    let data: NapcatGatewayActionResponseData;
+    try {
+      data = await this.transport.request("get_msg", { message_id: forwardId });
+    } catch (error) {
+      // get_msg 失败不致命，交给 get_forward_msg 兜底。
+      logger.info("get_msg path for forward failed, will fall back", {
+        event: "napcat.gateway.forward_get_msg_failed",
+        forwardId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+
+    const parsed = GetMsgResponseSchema.safeParse(data ?? {});
+    if (!parsed.success) {
+      return [];
+    }
+    for (const segment of parsed.data.message ?? []) {
+      const forwardSegment = ForwardSegmentWithContentSchema.safeParse(segment);
+      if (forwardSegment.success && forwardSegment.data.data.content) {
+        return forwardSegment.data.data.content;
+      }
+    }
+    return [];
+  }
+
+  /** 兜底路径：get_forward_msg（入参对齐 node-napcat-ts，只传 message_id）。 */
+  private async loadForwardNodesViaGetForwardMsg(
+    forwardId: string,
+  ): Promise<Record<string, unknown>[]> {
     const data = await this.transport.request("get_forward_msg", {
       message_id: forwardId,
     });
@@ -562,12 +668,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       });
     }
 
-    const nodes = responseResult.data.messages ?? [];
-    this.forwardRawNodeCache.set(forwardId, {
-      nodes,
-      expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
-    });
-    return nodes;
+    return responseResult.data.messages ?? [];
   }
 
   private async toPrivateMessageEvent(input: {
