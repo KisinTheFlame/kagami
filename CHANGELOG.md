@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.12] - 2026-06-30
+
+### Changed
+
+- agent/runtime: 修复 `InvokeTool` 顶层 dispatcher 的抽象泄漏——`buildInvokeSubtoolFailureMessage` 原本按错误码硬编码了两条 App 专属文案（`CHAT_CONTEXT_UNAVAILABLE` → "当前缺少可发消息的 QQ 会话上下文"、`ARTICLE_NOT_FOUND` → "当前 IT 之家列表中找不到该文章 ID"），把 QQ / IT 之家的业务概念塞进了"本身不知道任何 App"的稳定壳，违反"群聊只是众多生活输入之一、不应泄漏进 runtime 核心"的项目定位。改法：失败文案由各 App 自己的子工具随结果返回（`send_message` / `send_resource` 的无会话分支、`open_ithome_article` 的文章缺失分支各自带上 `message` 字段；`send_resource` 顺手把旧的 `note` 字段名统一成 `message`），`InvokeTool` 只负责原样透传子工具自带文案 + 追加该子工具的 schema 文档，不再按错误码合成 App 语义。保留结构性的 `INVALID_ARGUMENTS` 分支（那是 `ZodToolComponent` 的通用参数校验错误、非 App 概念）。纯重构：错误码与对 LLM 可见的提示内容不变，仅迁移文案的构造位置；不触碰稳定前缀（KV 缓存无影响）。新增 `open-ithome-article.tool.test.ts` 与 2 条 `invoke.tool` 回归测试，锁定"子工具自带文案被保留、被删的 App 硬编码不再由 InvokeTool 合成、结构性错误提示仍合成"这三条边界。
+
 ## [0.3.1.11] - 2026-06-30
 
 ### Changed

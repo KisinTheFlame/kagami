@@ -68,7 +68,7 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
       return JSON.stringify({
         ok: false,
         error: "CHAT_CONTEXT_UNAVAILABLE",
-        note: "当前没有打开的会话，先用 open_conversation 打开一个会话再发。",
+        message: "当前没有打开的会话，先用 open_conversation 打开一个会话再发。",
       });
     }
 
