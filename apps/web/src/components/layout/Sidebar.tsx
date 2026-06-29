@@ -18,7 +18,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       )}
     >
       <div className="flex h-14 items-center border-b border-sidebar-active/20 px-4">
-        <span className="font-serif text-xl font-semibold tracking-tight text-sidebar-active">
+        <span className="font-serif text-xl font-semibold tracking-tight text-sidebar-active dark:text-sidebar-active-foreground">
           鏡 Kagami
         </span>
       </div>
