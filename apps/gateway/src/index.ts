@@ -64,7 +64,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`[kagami-web] listening on http://0.0.0.0:${port}\n`);
+  process.stdout.write(`[kagami-gateway] listening on http://0.0.0.0:${port}\n`);
 });
 
 function selectUpstreamTarget(upstreamPath: string): URL {
