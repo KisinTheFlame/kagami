@@ -7,7 +7,7 @@
 
 ## [Unreleased]
 
-## [0.3.1.11] - 2026-06-30
+## [0.3.1.12] - 2026-06-30
 
 ### Changed
 
@@ -26,11 +26,13 @@
 - agent: `auth-usage-cache` 子进程 `waitForChildExit` 不再静默吞异常，真正异常退出记 warn（未登录/无 codex CLI/正常退出仍走正常分支不刷 error）。
 - agent: QQ App 三处 `id as ConversationId` 收敛到 `toConversationId`，外部入口宽松校验、非规范 id 记 warn 后透传（不 throw，不拦截内部既有数据）。
 
-## [0.3.1.10] - 2026-06-30
+## [0.3.1.11] - 2026-06-30
 
 ### Changed
 
 - llm/config: 把 LLM provider 标识字面量联合 `["deepseek", "openai", "openai-codex", "claude-code"]` 收敛到最底层 `@kagami/llm` 包单源（新增 `LLM_PROVIDER_IDS` 常量数组 + 派生 `LlmProviderId` 类型），消除原本散落 4 处的重复（server-core contracts 手写 type union、shared 的 `z.enum` + `z.infer`、config.loader 的 `z.enum ... satisfies`、agent client 的 `as const` 数组）——加 / 删 provider 从此只改一处，杜绝类型与 schema 漂移。shared 与 server-core 各新增一条对 `@kagami/llm` 的 workspace 依赖（均指向 DAG 最底层，无环）；因项目禁止 re-export barrel，所有 `LlmProviderId` 消费方（server-core config / 2 个 DAO、agent 的 llm / auth 共 6 个文件 + 1 个测试）改为直接从 `@kagami/llm` 导入。`@kagami/llm` 保持零 zod 依赖，需要校验的下游用 `z.enum(LLM_PROVIDER_IDS)` 自行派生。纯重构：provider 枚举值与顺序不变、配置校验行为不变、不触碰任何稳定前缀（KV 缓存无影响）。`LlmUsageId` 未动（其 type 本就单源）。
+
+## [0.3.1.10] - 2026-06-30
 
 ### Fixed
 
