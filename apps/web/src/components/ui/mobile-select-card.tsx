@@ -17,7 +17,7 @@ export function MobileSelectCard({
     <button
       type={type}
       className={cn(
-        "w-full rounded-none border px-4 py-3 text-left transition-colors",
+        "w-full rounded-none border px-4 py-3 text-left ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         isSelected
           ? "border-primary bg-accent"
           : "border-border bg-background hover:border-primary hover:bg-accent/60",

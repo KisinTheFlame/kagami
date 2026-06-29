@@ -80,7 +80,7 @@ function SortableTableHead({
       <button
         type="button"
         onClick={onToggle}
-        className="inline-flex items-center gap-1 text-left text-inherit transition-colors hover:text-foreground"
+        className="inline-flex items-center gap-1 rounded-none text-left text-inherit ring-offset-background transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <span>{label}</span>
         {active ? (
