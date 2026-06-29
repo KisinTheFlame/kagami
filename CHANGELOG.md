@@ -7,6 +7,44 @@
 
 ## [Unreleased]
 
+### Changed
+
+- deploy/config: 把散装根脚本 `scripts/web-server.mjs` 提升为一等公民 TS 包 `apps/gateway`（`@kagami/gateway`，零 `@kagami/*` 依赖、只依赖 `yaml`），并在 `config.yaml` 引入顶层 `services` 块作为**所有服务监听端口与地址的唯一事实来源**——每个进程（agent / console / gateway / oss）从 `config.yaml` 自读自己的端口与依赖服务地址，`ecosystem.config.cjs` 不再持有任何端口/地址 env（删 `kagami-console` 的 `PORT`、`kagami-web` 的 `PORT`/`API_TARGET`/`CONSOLE_TARGET`）。收敛前同一端口散落在 ecosystem / web-server.mjs / config.loader / 各 app 入口共 2~4 处（含两处隐蔽的 OAuth `publicBaseUrl` 默认），现在只在 `services` 块定义一次（见 [#162](https://github.com/KisinTheFlame/kagami/issues/162)）。`apps/gateway` 用 TS 重写 web-server 全部逻辑（静态托管 `apps/web/dist` + `/api/*` 按五个 console 前缀分流 + `/health`），行为等价，地址改读 `services`（复刻 `apps/oss` 的 config.yaml 定位算法）。`config.loader` 新增 `ServicesSchema`（顶层、与 `server` 平级）；agent 监听端口改读 `services.agent.port`，OAuth `publicBaseUrl` 改为可显式覆盖、缺省派生 `http://localhost:${services.gateway.port}`（host 固定 localhost：浏览器回调 origin ≠ reachable host）；`server.oss.baseUrl` 收敛为 `server.oss.enabled` 开关，OSS 地址由 `services.oss` 派生（presence/enabled 仍是启用开关，缺省=禁用优雅降级，语义不变）。PM2 进程 `kagami-web` → `kagami-gateway`：`scripts/deploy.sh` 全量与单服务路径都加幂等 `pm2 delete kagami-web` 兜底改名后旧进程残留占端口；`pnpm app:deploy <agent|console|gateway|oss>`，`web` 保留为 `gateway` 的已弃用别名。同步更新 AGENTS / ARCHITECTURE / README(.zh-CN) 与 `config.yaml.example`。纯结构重构，端口数字不变、无 DB 变更；**部署机的 gitignored `config.yaml` 需手动对齐新结构**（加 `services` 块、删 `server.port` 与顶层 `oss.port`、`server.oss.baseUrl` 改 `enabled`）才能启动
+
+## [0.3.1.10] - 2026-06-30
+
+### Fixed
+
+- napcat: 修复部分合并转发用 `view_forward` 展开时显示「（合并转发为空或不可读）」——尤其是把「我和小镜的对话」截成转发再发回时常复现。根因有两层：① NapCat 对刚到达 / 内层是旧消息的转发，`get_forward_msg` 会**瞬时返回空**（内层尚未解析，稍候即有，已实测）；② 我们一次取空就**把空也缓存了 10 分钟**，等于把瞬时失败固化成 TTL 内永久失败。改法（参考规范客户端 node-napcat-ts 的读法，但保留我们的懒加载架构）：转发读取主路径改走 **`get_msg(forwardId)`**——容器消息的 forward 段自带内联 `content`，比 `get_forward_msg`（resId→getMsgHistory 多一跳）更稳；`get_msg` 拿不到内容再兜底 `get_forward_msg`；取到空就**重试 2~3 次带退避**，且**不缓存空结果**（raw 节点缓存与分页缓存均只在非空时写），让下次调用还能再试。转发内容仍只回到 tool result 尾部，绝不进稳定前缀（KV 缓存优先不变）。实测：之前「看不到」的转发现在经 get_msg 正常展开。仅改 `napcat-gateway.impl.service.ts` + 对应测试（新增 get_msg 主路径 / 回退 get_forward_msg / 重试不缓存空三个场景）
+
+## [0.3.1.9] - 2026-06-30
+
+### Changed
+
+- agent: 把各 App 专属的屏幕渲染函数从共享的 `runtime/context/context-message-factory.ts` 下沉到各自 App 目录，消除 runtime 核心层对上层 App 与 napcat 的反向依赖（runtime 是被所有 App 依赖的最底层，原文件却反向 import 了 `apps/hn` 与 `napcat`，违反分层与「群聊概念只属于 messaging / QQ App」的约束）。HN 渲染迁入新建的 `apps/hn/hn-screen.ts`，IT之家渲染迁入 `apps/ithome/ithome-screen.ts`，QQ 群与私聊消息渲染（含 napcat 段渲染）迁入 `apps/qq/qq-message-render.ts`。`context-message-factory.ts` 只保留与具体业务无关的通用消息构造器（user、wake、portal、notification、story-recall、async-tool-result、摘要类），不再 import 任何 App 或 napcat。纯代码搬移：所有渲染函数逐字迁移，行为与序列化输出（各自的 XML 伪标签与 `.hbs` 模板）完全一致，对 KV 缓存前缀无影响；对应单测一并拆分到各 App 的测试目录，并补齐 QQ 私聊显示名 remark 优先于 nickname 再退到 userId 的回退单测
+
+### Removed
+
+- agent: 删除 6 个无任何调用方的死函数（`createIthomeArticleListMessage`、`createIthomeArticleDetailMessage`、`createMergedGroupMessagesMessage` 及其 `Content` 版本、`createMergedPrivateMessagesMessage` 及其 `Content` 版本），随本次下沉一并清理，不搬运死代码
+
+## [0.3.1.8] - 2026-06-30
+
+### Fixed
+
+- web/metric-charts: 修复图表图例（legend）在序列过多时单行横向溢出、末项被截断的问题。共享图例组件 `ChartLegendContent`（`apps/web/src/components/ui/chart.tsx`）的容器原本是 `flex ... justify-center gap-4`，不换行，图例项一多就溢出卡片宽度。改为 `flex flex-wrap ... gap-x-4 gap-y-1.5`，图例项过多时自动换行并整体居中；recharts `Legend` 按自定义内容的真实 DOM 高度（含多行）测量并预留垂直空间，折线图不会被压住。该组件为 metric-charts 页所有图表共用，一并受益
+
+## [0.3.1.7] - 2026-06-30
+
+### Added
+
+- todos: `TODOS.md` 新增一条「自动推荐可新增的待办事项」（P3，open，归入新建的 `## todo` 分组）。方向是让小镜在自己的生活里自发发现"值得做的事"并主动推荐进 todo App，而非只能被动记录别人交代的事，符合"给 Agent 的生活添一种新的存在方式"的定位。Context/Notes 已写明待想清楚的点：推荐触发时机（空闲后台动作 vs 事件后）、内容来源（近期对话 / 新闻 / 未完话题）、去重防噪，以及 KV 缓存红线——推荐过程的中间素材走子 Agent / Operation 只回候选摘要，不进主上下文
+
+## [0.3.1.6] - 2026-06-29
+
+### Changed
+
+- napcat: `get_forward_msg`（view_forward 子工具底层）的请求/返回契约对齐规范 TS 客户端 [node-napcat-ts](https://github.com/HkTeamX/node-napcat-ts)（已核对最新 `origin/main`）。请求参数从 `{ id, message_id }` 收敛为 `{ message_id }`——NapCat 内部 `payload.message_id || payload.id`，多带的 `id` 本就被忽略，纯冗余；返回 schema 删掉不存在的 `message`（单数）兜底字段，只留 `messages`，节点提取相应改为 `messages ?? []`。纯整洁性收敛，行为与对齐前完全一致：**不修复**「旧合并转发展开为空/不可读」——那是 NapCat 侧时效限制（转发 id 实为内部 msgId，`get_forward_msg` 回进程内 5000 条 LRU 捞原消息，消息被挤出/重启丢失即解析不出），与客户端调用方式无关。改动仅 `napcat-gateway.impl.service.ts` 一处 + 对应测试断言
+
 ## [0.3.1.5] - 2026-06-29
 
 ### Changed

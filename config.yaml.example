@@ -1,6 +1,14 @@
+# 服务拓扑：单机各进程的监听端口与地址的唯一事实来源（见 issue #162）。
+# 每个进程从这里读自己的端口和依赖服务的地址；改端口只改这里一处，全网生效。
+# host 是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——各进程一律绑 0.0.0.0。
+services:
+  agent: { host: localhost, port: 20003 } # kagami-agent
+  console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
+  gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
+  oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
+
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
-  port: 20003
   agent:
     contextCompactionTotalTokenThreshold: 150000
     llmRetryBackoffMs: 30000
@@ -112,10 +120,11 @@ server:
     creator:
       name: "创造者"
       qq: "10000"
-  # 自建对象存储（@kagami/oss）的访问地址，给 server 把 QQ 图片原图 PUT 进去存档用。
-  # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+  # 自建对象存储（@kagami/oss）启用开关。地址不在这里——统一来自顶层 services.oss。
+  # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）；
+  # 写出该块即启用，enabled: false 可显式关闭。
   oss:
-    baseUrl: http://127.0.0.1:20005 # 指向下方独立 oss 进程监听的端口
+    enabled: true
   # 每个 App 的配置切片。key 是 App.id，结构由各 App 自己的 configSchema 校验。
   # 没列出来的 App 走 schema 默认值；schema 不接受的字段会在启动时报错。
   apps:
@@ -157,7 +166,3 @@ server:
       # licenseKey: ""                        # 可选 CloakBrowser Pro license（也可用 CLOAKBROWSER_LICENSE_KEY 环境变量）
       # 凭据不在这里：网站账号密码存 SQLite 的 browser_credential 表（Kagami 运行期可自管），
       # type(secret_handle) 时按 handle 取、明文只在 fill 层停留、永不进上下文。
-
-# 自建对象存储服务（@kagami/oss，独立进程）。其余实现细节（db/blob 路径、body 上限）是代码常量。
-oss:
-  port: 20005 # 仅此一项可调：localhost HTTP 监听端口，避开 server 20003 / web 20004

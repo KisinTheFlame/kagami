@@ -16,8 +16,9 @@ const logger = new AppLogger({ source: "console-bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let isShuttingDown = false;
-
-const port = Number(process.env.PORT ?? "20006");
+// 监听端口来自 config.yaml 的 services.console.port（由 buildConsoleRuntime 读出），
+// 不再走 PM2 注入的 PORT env——服务寻址单一事实来源见 issue #162。
+let port: number | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (isShuttingDown) {
@@ -52,6 +53,7 @@ try {
   const runtime = await buildConsoleRuntime();
   app = runtime.app;
   database = runtime.database;
+  port = runtime.port;
 
   await runtime.app.listen({ host: "0.0.0.0", port });
 

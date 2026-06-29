@@ -6,25 +6,30 @@ cd "$ROOT_DIR"
 
 SERVICE="${1:-}"
 
-# ── 单服务模式：pnpm app:deploy <agent|console|web|oss> ────────────────────────
+# ── 单服务模式：pnpm app:deploy <agent|console|gateway|oss> ────────────────────
 # 只重建并重载指定服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——
-# 尤其重载 console / web 不会打断 kagami-agent 的热状态（KV 缓存前缀、HNSW 索引、活内存
+# 尤其重载 console / gateway 不会打断 kagami-agent 的热状态（KV 缓存前缀、HNSW 索引、活内存
 # 上下文），符合「KV 缓存命中率优先」原则。涉及 DB schema 变更请用无参 `pnpm app:deploy`
 # （它会跑迁移）。
 if [ -n "$SERVICE" ]; then
   case "$SERVICE" in
-    agent) PKG="@kagami/agent" ;;
-    console) PKG="@kagami/console" ;;
-    web) PKG="@kagami/web" ;;
-    oss) PKG="@kagami/oss" ;;
+    agent) PKG="@kagami/agent"; PM2_NAME="kagami-agent" ;;
+    console) PKG="@kagami/console"; PM2_NAME="kagami-console" ;;
+    # web 是已弃用别名，等价于 gateway（kagami-web → kagami-gateway 改名见 issue #162）。
+    gateway | web) PKG="@kagami/gateway"; PM2_NAME="kagami-gateway" ;;
+    oss) PKG="@kagami/oss"; PM2_NAME="kagami-oss" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|web|oss>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|oss>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1
       ;;
   esac
-  PM2_NAME="kagami-${SERVICE}"
+  # 一次性迁移兜底：旧 kagami-web 进程改名为 kagami-gateway，startOrReload 不会自动删旧名，
+  # 残留旧进程会占着 web 端口让 gateway 起不来。重载 gateway 前先幂等清理旧名。
+  if [ "$PM2_NAME" = "kagami-gateway" ]; then
+    pnpm exec pm2 delete kagami-web >/dev/null 2>&1 || true
+  fi
   echo "[app:deploy] 单服务部署：构建 ${PKG}（含其依赖包）..."
   pnpm --filter "${PKG}..." build
   echo "[app:deploy] 重载 ${PM2_NAME}（不动其它进程、不跑迁移）..."
@@ -59,6 +64,8 @@ else
 fi
 
 echo "[app:deploy] Step 3/4: Reloading PM2 apps..."
+# 一次性迁移兜底：清理改名前的旧 kagami-web 进程（见单服务分支注释）。
+pnpm exec pm2 delete kagami-web >/dev/null 2>&1 || true
 pnpm exec pm2 startOrReload ecosystem.config.cjs --update-env
 
 echo "[app:deploy] Step 4/4: Saving PM2 process list..."

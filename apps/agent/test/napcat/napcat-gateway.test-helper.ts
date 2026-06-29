@@ -91,9 +91,14 @@ export function createNapcatGroupMessageDao(): NapcatQqMessageDao & {
 
 export function createConfigManager(): ConfigManager {
   const config: Config = {
+    services: {
+      agent: { host: "localhost", port: 20003 },
+      console: { host: "localhost", port: 20006 },
+      gateway: { host: "localhost", port: 20004 },
+      oss: { host: "127.0.0.1", port: 20005 },
+    },
     server: {
       databaseUrl: "file::memory:",
-      port: 20003,
       agent: {
         contextCompactionTotalTokenThreshold: 150_000,
         llmRetryBackoffMs: 30_000,
