@@ -25,10 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
+import { formatDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
+import { toStatusLabel } from "./format-status";
 import { useLlmChatCallList } from "./useLlmChatCallList";
 
 const PAGE_SIZE = 20;
@@ -256,7 +258,7 @@ export function LlmHistoryPage() {
                     onClick={() => handleSelectItem(item.id)}
                   >
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {formatDate(item.createdAt)}
+                      {formatDateTime(item.createdAt)}
                     </TableCell>
                     <TableCell className="truncate text-sm">{item.provider}</TableCell>
                     <TableCell className="truncate text-sm">{item.model}</TableCell>
@@ -359,21 +361,6 @@ function parseStatus(value: string | null): LlmChatCallStatus | undefined {
   return undefined;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function toStatusLabel(status: LlmChatCallStatus): string {
-  return status === "success" ? "成功" : "失败";
-}
-
 function getDetailTitle(item: LlmChatCallSummary | null): string {
   if (item === null) {
     return "LLM 调用详情";
@@ -406,7 +393,7 @@ function LlmHistoryMobileCard({
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{formatDate(item.createdAt)}</span>
+        <span>{formatDateTime(item.createdAt)}</span>
       </div>
     </MobileSelectCard>
   );

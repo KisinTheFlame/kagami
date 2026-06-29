@@ -20,9 +20,9 @@ type BackToPortalToolContext = ToolContext & {
 /**
  * 退出当前 App，把 currentApp 置回 undefined（即 Portal 桌面）。
  *
- * 跟 back 工具的区别：
- * - back：状态树 pop 一级（QQ 群里 → QQ 列表 → Portal 这种垂直导航）
- * - back_to_portal：清空 currentApp（从 App 维度退出，跟状态树正交）
+ * 手机 OS 模型下只有 App 一个维度的进/出：enter 进 App、back_to_portal 退回桌面。
+ * App 内部的导航（如 QQ 的会话列表 ↔ 单个会话）由各 App 自己的工具承担，不再有
+ * 跨 App 的状态树 / back 一级 pop（聊天状态树已退役）。
  *
  * 当前未进入任何 App 时调用会得到 ok: false 错误响应，Kagami 自己读了 fix。
  */

@@ -133,7 +133,7 @@ function SchedulerTaskCard({
                 .reverse()
                 .slice(1)
                 .map((run, index) => (
-                  <li key={index}>
+                  <li key={`${run.startedAt}-${index}`}>
                     {formatDateTime(run.startedAt) ?? "—"} · {formatRunStatus(run.status)}
                     {run.durationMs !== null ? ` · ${run.durationMs} ms` : ""}
                   </li>

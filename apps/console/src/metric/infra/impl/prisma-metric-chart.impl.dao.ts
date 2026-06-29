@@ -1,7 +1,33 @@
 import type * as Prisma from "@kagami/server-core/prisma";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { Database } from "@kagami/server-core/db/client";
 import type { MetricChartDao } from "../metric-chart.dao.js";
-import type { CreateMetricChartInput, MetricChartItem } from "../../domain/metric.js";
+import {
+  METRIC_CHART_AGGREGATORS,
+  type CreateMetricChartInput,
+  type MetricChartAggregator,
+  type MetricChartItem,
+} from "../../domain/metric.js";
+
+const logger = new AppLogger({ source: "prisma-metric-chart-dao" });
+
+// aggregator 是 DB 出参的 enum 字段，校验失败时降级用的兜底值。
+// console 是只读查询页后端，单条脏数据不应让整页抛 500。
+const DEFAULT_AGGREGATOR: MetricChartAggregator = "sum";
+
+function toMetricChartAggregator(value: string): MetricChartAggregator {
+  if ((METRIC_CHART_AGGREGATORS as readonly string[]).includes(value)) {
+    return value as MetricChartAggregator;
+  }
+
+  logger.warn("Unexpected metric chart aggregator from db, falling back to default", {
+    event: "metric_chart_dao.invalid_aggregator",
+    value,
+    fallback: DEFAULT_AGGREGATOR,
+  });
+
+  return DEFAULT_AGGREGATOR;
+}
 
 type PrismaMetricChartDaoDeps = {
   database: Database;
@@ -71,7 +97,7 @@ function mapMetricChartRow(row: {
     id: row.id,
     chartName: row.chartName,
     metricName: row.metricName,
-    aggregator: row.aggregator as MetricChartItem["aggregator"],
+    aggregator: toMetricChartAggregator(row.aggregator),
     tagFilters: toMetricTags(row.tagFilters),
     groupByTag: row.groupByTag,
     createdAt: row.createdAt,

@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 
+## [0.3.1.14] - 2026-06-30
+
+### Changed
+
+- 多包: 清理一轮代码审查发现的低危技术债（见 issue #163），单 PR 收口，逐条经 grep/read 核对位置。机械清理与行为修正分离，会把历史脏数据从「能跑」变成「启动即崩」的校验类改动一律 fail-soft。本批不触碰 system prompt 文案、工具描述、消息序列化格式/字段顺序，对 KV 缓存前缀无影响。
+- web: 13 处本地 `formatDate`/`formatDateTime` 收敛到新建 `apps/web/src/lib/format.ts`（`formatDateTime` 非空语义 + `formatOptionalDateTime` 容忍 null/undefined/非法值）；`toStatusLabel` 两处（`LlmChatCallStatus` 版）合并到 `pages/llm-history/format-status.ts`。`ControlPanelPage`/`SchedulerTasksPage` 的 locale 默认格式 formatter 因展示文本不同而保留。
+- web: `MetricChartsPage` 删除仅转发的 `getErrorMessage` wrapper，调用点直接用 `getApiErrorMessage`；`LlmPlaygroundPage` 错误展示改用 `getApiErrorMessage`，provider 切换校验候选 id（去裸断言、未知 id 不再使页面空白）。
+- web: `SchedulerTasksPage` 列表 `key={index}` 改用稳定组合键；新增 class 版 `ErrorBoundary` 包裹 `AppLayout` 内容边界并随路由切换 reset。
+- agent: `root-effect-interpreter` 三处 `effect as XxxEffect` 改用类型守卫（接口签名固定为基类 `Effect`，无法收窄参数）；`ContextGroupMessageEventItem` 重命名为 `ContextEventItem`（去 QQ 残留命名）；`event.ts` 中段 import 上移；`hn-reader` 重复的 isComment 判定抽出 `isCommentHit`；`vision-agent` 三处裸 `throw new Error` 统一为 `BizError`；`back-to-portal.tool.ts` 注释修正（状态树已退役）。
+- packages: `prisma-metric.impl.dao.ts` 复用 `common/prisma-json.ts` 的 `toInputJsonObject`；`db/client.ts` 加注释说明 WAL/busy_timeout 两条 PRAGMA 不能合并（adapter prepared-statement 只执行首条）；`shared/schemas/auth.ts` 加注释标注 Claude Code usage API snake_case 字段勿改名。
+- agent: `closeLlmProviders` 由 `Promise.all` 改 `Promise.allSettled`（单个失败不短路其余清理）；story 搜索 `topK` 加 `MAX_SEARCH_TOP_K=200` 上限（深翻页 capped，不抛错）；`tei-embedding-gemma-provider` 的 `fetch` 加 `AbortSignal.timeout(30s)`。
+- console: `prisma-metric-chart.impl.dao.ts` 的 `aggregator` 枚举出参加类型守卫，脏值降级为默认 `"sum"` + warn（不抛 500）。
+
+### Fixed
+
+- agent: `prisma-app-state-store` 读出 `app_state` 时校验结构，非法持久化数据记 warn 并按「无状态」处理（返回 null 走首次初始化），避免坏数据导致启动/主流程崩溃。
+- agent: `auth-usage-cache` 子进程 `waitForChildExit` 不再静默吞异常，真正异常退出记 warn（未登录/无 codex CLI/正常退出仍走正常分支不刷 error）。
+- agent: QQ App 三处 `id as ConversationId` 收敛到 `toConversationId`，外部入口宽松校验、非规范 id 记 warn 后透传（不 throw，不拦截内部既有数据）。
+
 ## [0.3.1.13] - 2026-06-30
 
 ### Changed

@@ -31,6 +31,9 @@ export function createDbClient({ databaseUrl }: { databaseUrl: string }): Databa
  * `timeout` 选项对每条连接生效，这里再设一次兜底。应在进程启动、拿到 db client 后调用一次。
  */
 export async function configureSqlite(database: Database): Promise<void> {
+  // 两条 PRAGMA 故意分开调用：`$queryRawUnsafe` 经 better-sqlite3 adapter 走 prepared
+  // statement 路径，一次只编译并执行 SQL 中的第一条语句，把两条 PRAGMA 拼进同一个字符串
+  // 会导致 busy_timeout 被静默丢弃。合并需改用 exec 风格 API，这里维持两次独立调用。
   await database.$queryRawUnsafe("PRAGMA journal_mode = WAL;");
   await database.$queryRawUnsafe(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
 }

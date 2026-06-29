@@ -329,7 +329,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
 async function closeLlmProviders(
   providers: Partial<Record<string, LlmProvider | undefined>>,
 ): Promise<void> {
-  await Promise.all(
+  const results = await Promise.allSettled(
     Object.values(providers).map(async provider => {
       if (!provider?.close) {
         return;
@@ -338,6 +338,12 @@ async function closeLlmProviders(
       await provider.close();
     }),
   );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      logger.warn("LLM provider close failed", { reason: result.reason });
+    }
+  }
 }
 
 function createServerApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {

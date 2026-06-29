@@ -87,14 +87,23 @@ export class VisionAgent {
 
 function validateAnalyzeImageInput(input: AnalyzeImageInput): void {
   if (input.content.byteLength === 0) {
-    throw new Error("VisionAgent.analyzeImage requires non-empty image content");
+    throw new BizError({
+      message: "VisionAgent.analyzeImage requires non-empty image content",
+      meta: { reason: "EMPTY_CONTENT" },
+    });
   }
 
   if (input.mimeType.trim().length === 0) {
-    throw new Error("VisionAgent.analyzeImage requires a mimeType");
+    throw new BizError({
+      message: "VisionAgent.analyzeImage requires a mimeType",
+      meta: { reason: "MISSING_MIME_TYPE" },
+    });
   }
 
   if (!input.mimeType.toLowerCase().startsWith("image/")) {
-    throw new Error("VisionAgent.analyzeImage only accepts image/* mime types");
+    throw new BizError({
+      message: "VisionAgent.analyzeImage only accepts image/* mime types",
+      meta: { reason: "INVALID_MIME_TYPE", mimeType: input.mimeType },
+    });
   }
 }

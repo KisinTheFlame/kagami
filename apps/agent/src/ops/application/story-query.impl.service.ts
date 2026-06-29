@@ -9,6 +9,10 @@ import type { StoryDao } from "../../agent/capabilities/story/infra/story.dao.js
 import type { StoryQueryService } from "./story-query.service.js";
 
 const DEFAULT_SEARCH_TOP_K = 100;
+// 向量召回 topK 的硬上限：防止深翻页（page * pageSize 很大）把 topK 抬到无界，
+// 进而退化成「全量取回再 slice」。语义为 capped：topK 不超过 MAX_SEARCH_TOP_K，
+// 超出该窗口的深翻页 offset 会落在召回结果之外，slice 后自然返回空数组（不抛错）。
+const MAX_SEARCH_TOP_K = 200;
 
 type DefaultStoryQueryServiceDeps = {
   storyDao: StoryDao;
@@ -26,7 +30,10 @@ export class DefaultStoryQueryService implements StoryQueryService {
 
   public async queryList(query: StoryListQuery): Promise<StoryListResponse> {
     if (query.query) {
-      const topK = Math.max(DEFAULT_SEARCH_TOP_K, query.page * query.pageSize);
+      const topK = Math.min(
+        MAX_SEARCH_TOP_K,
+        Math.max(DEFAULT_SEARCH_TOP_K, query.page * query.pageSize),
+      );
       const results = await this.storyRecallService.search({
         query: query.query,
         topK,
