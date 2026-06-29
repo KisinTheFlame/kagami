@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { LLM_PROVIDER_IDS, type LlmProviderId } from "@kagami/llm";
 import {
   type LlmChatRequestPayload,
   type LlmProviderOption,
   type LlmRequestUserContentPart,
 } from "@kagami/shared/schemas/llm-chat";
-import type { LlmProviderId, LlmUsageId } from "@kagami/server-core/common/contracts/llm";
+import type { LlmUsageId } from "@kagami/server-core/common/contracts/llm";
 import { AppLogger } from "@kagami/server-core/logger/logger";
 import type { Config } from "@kagami/server-core/config/config.loader";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -417,7 +418,7 @@ async function listAvailableProviders(
 ): Promise<LlmProviderOption[]> {
   const preferredProvider = usageConfig.attempts[0]?.provider;
   const availability = await Promise.all(
-    (["deepseek", "openai", "openai-codex", "claude-code"] as const).map(async providerId => {
+    LLM_PROVIDER_IDS.map(async providerId => {
       const provider = providers[providerId];
       if (!provider) {
         return null;

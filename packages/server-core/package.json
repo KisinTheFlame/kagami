@@ -19,6 +19,7 @@
     "db:generate": "bash ../../scripts/prisma.sh generate"
   },
   "dependencies": {
+    "@kagami/llm": "workspace:*",
     "@kagami/shared": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.6.0",

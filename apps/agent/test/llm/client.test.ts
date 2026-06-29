@@ -9,7 +9,8 @@ import {
   type LlmProvider,
   type LlmProviderChatResult,
 } from "../../src/llm/provider.js";
-import type { LlmProviderId, LlmUsageId } from "@kagami/server-core/common/contracts/llm";
+import type { LlmProviderId } from "@kagami/llm";
+import type { LlmUsageId } from "@kagami/server-core/common/contracts/llm";
 import type { LlmChatResponsePayload } from "../../src/llm/types.js";
 
 type LlmProviderConfig = {
