@@ -22,7 +22,7 @@
     --secondary: 36.8 49.2% 87.6%;
     --secondary-foreground: 30 16.7% 9.4%;
     --muted: 36.8 49.2% 87.6%;
-    --muted-foreground: 35 11.3% 41.6%;
+    --muted-foreground: 35 12.2% 38.4%;
     --accent: 36.8 49.2% 87.6%;
     --accent-foreground: 30 16.7% 9.4%;
     --destructive: 6.3 60.4% 43.5%;
@@ -39,7 +39,7 @@
     --llm-foreground: 40 39.1% 91%;
     --scheduler: 41.1 68.1% 50.8%; /* 赭黄 · scheduler · 等待 · pending */
     --scheduler-foreground: 30 16.7% 9.4%;
-    --story: 118 13.8% 42.7%; /* 绿土 · Story · 记忆 · recall */
+    --story: 112.8 13.7% 35.9%; /* 绿土 · Story · 记忆 · recall（晒暗以达 WCAG AA） */
     --story-foreground: 40 39.1% 91%;
     --cost: 0 37.8% 47.3%; /* 茜草玫红 · 高 token 成本 · 风险 */
     --cost-foreground: 40 39.1% 91%;
