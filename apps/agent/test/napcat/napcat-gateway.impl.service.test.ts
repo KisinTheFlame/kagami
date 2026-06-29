@@ -1303,7 +1303,7 @@ describe("DefaultNapcatGatewayService", () => {
     };
 
     expect(sentPayload.action).toBe("get_forward_msg");
-    expect(sentPayload.params).toEqual({ id: "res-1", message_id: "res-1" });
+    expect(sentPayload.params).toEqual({ message_id: "res-1" });
 
     emitActionResponse(socket, 0, {
       messages: [
