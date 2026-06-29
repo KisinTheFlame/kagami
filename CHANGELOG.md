@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.8] - 2026-06-30
+
+### Fixed
+
+- web/metric-charts: 修复图表图例（legend）在序列过多时单行横向溢出、末项被截断的问题。共享图例组件 `ChartLegendContent`（`apps/web/src/components/ui/chart.tsx`）的容器原本是 `flex ... justify-center gap-4`，不换行，图例项一多就溢出卡片宽度。改为 `flex flex-wrap ... gap-x-4 gap-y-1.5`，图例项过多时自动换行并整体居中；recharts `Legend` 按自定义内容的真实 DOM 高度（含多行）测量并预留垂直空间，折线图不会被压住。该组件为 metric-charts 页所有图表共用，一并受益
+
 ## [0.3.1.7] - 2026-06-30
 
 ### Added
