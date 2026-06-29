@@ -2,10 +2,11 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LLM_PROVIDER_IDS, type LlmProviderId } from "@kagami/llm";
 import { parse } from "yaml";
 import { z } from "zod";
 import { BizError } from "../common/errors/biz-error.js";
-import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
+import type { LlmUsageId } from "../common/contracts/llm.js";
 
 const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
@@ -101,10 +102,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
 }, z.string().trim().min(1).optional());
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
 const StringLikeArraySchema = z.array(StringLikeSchema).min(1);
-const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-code"] satisfies [
-  LlmProviderId,
-  ...LlmProviderId[],
-]);
+const LlmProviderSchema = z.enum(LLM_PROVIDER_IDS);
 const GoogleStoryMemoryEmbeddingConfigSchema = z.object({
   provider: z.literal("google"),
   apiKey: NonEmptyStringSchema,

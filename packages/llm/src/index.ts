@@ -1,10 +1,25 @@
 /**
  * LLM 协议层的消息表示。OpenAI 风格的 user / assistant / tool 三态，完全通用，
- * 不含任何具体 provider 或项目（Kagami / napcat）语义。
+ * 不含任何具体 provider 的 wire 格式细节，也不含项目（Kagami / napcat）业务语义。
+ * （provider 标识枚举 `LLM_PROVIDER_IDS` 例外：它是协议契约层"接入了哪些 provider"
+ * 的清单，属跨前后端/内核共享的契约本身，故收在此最底层包里单源维护。）
  *
  * 这是 Agent Runtime 与 LLM 之间流动的基本单元——`@kagami/agent-runtime` 的
  * ReAct kernel、Tool、Effect 等都直接用它，不再用 `TMessage` 泛型抽象。
  */
+
+/**
+ * Kagami 当前接入的 LLM provider 标识全集。这是 LLM 协议层的契约枚举：前端
+ * playground、config schema、后端 provider 装配、auth 全部从这里派生，避免
+ * 字面量在多处各写一遍而漂移。**新增 / 删除 provider 只改这一处。**
+ *
+ * 刻意用 `as const` 数组而非单独写 type union：既派生出字面量联合类型，又能在
+ * 运行时遍历（如 client 探测可用 provider）。本包保持零 zod 依赖，需要 zod 校验
+ * 的下游用 `z.enum(LLM_PROVIDER_IDS)` 自行派生 schema。
+ */
+export const LLM_PROVIDER_IDS = ["deepseek", "openai", "openai-codex", "claude-code"] as const;
+
+export type LlmProviderId = (typeof LLM_PROVIDER_IDS)[number];
 
 export type LlmToolCall = {
   id: string;
