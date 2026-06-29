@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import { renderIthomeArticleDetailContent } from "../../../runtime/context/context-message-factory.js";
+import { renderIthomeArticleDetailContent } from "../ithome-screen.js";
 import type { IthomeService } from "../../../capabilities/ithome/application/ithome.service.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 

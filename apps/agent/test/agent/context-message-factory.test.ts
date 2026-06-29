@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   createConversationSummaryMessage,
-  createIthomeArticleDetailMessage,
-  createIthomeArticleListMessage,
-  createMergedGroupMessagesMessage,
   createNotificationMessage,
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
   createStoryContextSummaryReminderMessage,
   createWakeReminderMessage,
   createWebSearchInstructionMessage,
-  renderGroupMessagePlainText,
 } from "../../src/agent/runtime/context/context-message-factory.js";
 
 describe("context-message-factory", () => {
@@ -120,72 +116,6 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should render ithome article list and detail messages", () => {
-    expect(
-      createIthomeArticleListMessage({
-        displayName: "IT之家",
-        mode: "new",
-        hiddenNewCount: 3,
-        articles: [
-          {
-            id: 11,
-            title: "测试文章",
-            url: "https://www.ithome.com/test",
-            publishedAt: new Date("2026-03-30T04:21:03.000Z"),
-            rssSummary: "这是摘要",
-          },
-        ],
-      }),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<system_instruction>",
-        "你已进入 IT之家 资讯空间。",
-        "以下是游标之后最新的一批新文章。",
-        "本轮只展示最新几篇；更早的 3 篇新文章已随本次进入一起略过。",
-        '如果想阅读全文，调用 invoke(tool="open_ithome_article", articleId=...)；如果想离开，调用 back_to_portal 回桌面。',
-        "</system_instruction>",
-        "<ithome_article_list>",
-        "[11] 测试文章",
-        "发布时间：2026/3/30 12:21",
-        "链接：https://www.ithome.com/test",
-        "摘要：这是摘要",
-        "",
-        "</ithome_article_list>",
-      ].join("\n"),
-    });
-
-    expect(
-      createIthomeArticleDetailMessage({
-        title: "测试文章",
-        url: "https://www.ithome.com/test",
-        publishedAt: new Date("2026-03-30T04:21:03.000Z"),
-        content: "正文内容",
-        contentSource: "rss_summary",
-        truncated: true,
-        maxChars: 8000,
-      }),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<system_instruction>",
-        "以下是当前打开的 IT 之家文章。",
-        "正文暂不可用，以下内容来自 RSS 摘要整理。",
-        "正文过长，以下仅保留前 8000 字。",
-        "看完后可以继续打开别的文章，或者调用 back_to_portal 离开资讯空间回桌面。",
-        "</system_instruction>",
-        "<ithome_article>",
-        "标题：测试文章",
-        "发布时间：2026/3/30 12:21",
-        "链接：https://www.ithome.com/test",
-        "",
-        "正文：",
-        "正文内容",
-        "</ithome_article>",
-      ].join("\n"),
-    });
-  });
-
   it("should render the web search instruction message", () => {
     const message = createWebSearchInstructionMessage(" OpenAI 最近有什么新动态？ ");
     expect(message.role).toBe("user");
@@ -197,98 +127,5 @@ describe("context-message-factory", () => {
     expect(content).toContain('invoke(tool="search_web_raw"');
     expect(content).toContain('invoke(tool="finalize_web_search"');
     expect(content).toContain("</system_instruction>");
-  });
-
-  it("should render qq messages from structured message bodies", () => {
-    expect(
-      renderGroupMessagePlainText({
-        nickname: "测试昵称",
-        userId: "654321",
-        rawMessage: "raw fallback",
-        messageSegments: [
-          {
-            type: "text",
-            data: {
-              text: "hello structured",
-            },
-          },
-        ],
-      }),
-    ).toBe("<qq_message>\n测试昵称 (654321):\nhello structured\n</qq_message>");
-  });
-
-  it("should keep qq message wrapper when rendered body is empty", () => {
-    expect(
-      renderGroupMessagePlainText({
-        nickname: "测试昵称",
-        userId: "654321",
-        rawMessage: "",
-        messageSegments: [],
-      }),
-    ).toBe("<qq_message>\n测试昵称 (654321):\n\n</qq_message>");
-  });
-
-  it("should merge multiple qq messages into one user message", () => {
-    expect(
-      createMergedGroupMessagesMessage([
-        {
-          groupId: "group-1",
-          userId: "654321",
-          nickname: "测试昵称",
-          rawMessage: "first",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "first",
-              },
-            },
-          ],
-          messageId: 1001,
-          time: 1710000000,
-        },
-        {
-          groupId: "group-1",
-          userId: "123456",
-          nickname: "另一个群友",
-          rawMessage: "second",
-          messageSegments: [
-            {
-              type: "text",
-              data: {
-                text: "second",
-              },
-            },
-          ],
-          messageId: 1002,
-          time: 1710000001,
-        },
-      ]),
-    ).toEqual({
-      role: "user",
-      content: [
-        '<qq_message id="1001">',
-        "测试昵称 (654321):",
-        "first",
-        "</qq_message>",
-        "",
-        '<qq_message id="1002">',
-        "另一个群友 (123456):",
-        "second",
-        "</qq_message>",
-      ].join("\n"),
-    });
-  });
-
-  it("should expose message_id as the reply handle when present", () => {
-    expect(
-      renderGroupMessagePlainText({
-        nickname: "测试昵称",
-        userId: "654321",
-        rawMessage: "hi",
-        messageSegments: [{ type: "text", data: { text: "hi" } }],
-        messageId: 9988,
-      }),
-    ).toBe('<qq_message id="9988">\n测试昵称 (654321):\nhi\n</qq_message>');
   });
 });

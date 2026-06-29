@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+## [0.3.1.9] - 2026-06-30
+
+### Changed
+
+- agent: 把各 App 专属的屏幕渲染函数从共享的 `runtime/context/context-message-factory.ts` 下沉到各自 App 目录，消除 runtime 核心层对上层 App 与 napcat 的反向依赖（runtime 是被所有 App 依赖的最底层，原文件却反向 import 了 `apps/hn` 与 `napcat`，违反分层与「群聊概念只属于 messaging / QQ App」的约束）。HN 渲染迁入新建的 `apps/hn/hn-screen.ts`，IT之家渲染迁入 `apps/ithome/ithome-screen.ts`，QQ 群与私聊消息渲染（含 napcat 段渲染）迁入 `apps/qq/qq-message-render.ts`。`context-message-factory.ts` 只保留与具体业务无关的通用消息构造器（user、wake、portal、notification、story-recall、async-tool-result、摘要类），不再 import 任何 App 或 napcat。纯代码搬移：所有渲染函数逐字迁移，行为与序列化输出（各自的 XML 伪标签与 `.hbs` 模板）完全一致，对 KV 缓存前缀无影响；对应单测一并拆分到各 App 的测试目录，并补齐 QQ 私聊显示名 remark 优先于 nickname 再退到 userId 的回退单测
+
+### Removed
+
+- agent: 删除 6 个无任何调用方的死函数（`createIthomeArticleListMessage`、`createIthomeArticleDetailMessage`、`createMergedGroupMessagesMessage` 及其 `Content` 版本、`createMergedPrivateMessagesMessage` 及其 `Content` 版本），随本次下沉一并清理，不搬运死代码
+
+## [0.3.1.8] - 2026-06-30
+
+### Fixed
+
+- web/metric-charts: 修复图表图例（legend）在序列过多时单行横向溢出、末项被截断的问题。共享图例组件 `ChartLegendContent`（`apps/web/src/components/ui/chart.tsx`）的容器原本是 `flex ... justify-center gap-4`，不换行，图例项一多就溢出卡片宽度。改为 `flex flex-wrap ... gap-x-4 gap-y-1.5`，图例项过多时自动换行并整体居中；recharts `Legend` 按自定义内容的真实 DOM 高度（含多行）测量并预留垂直空间，折线图不会被压住。该组件为 metric-charts 页所有图表共用，一并受益
+
 ## [0.3.1.7] - 2026-06-30
 
 ### Added
