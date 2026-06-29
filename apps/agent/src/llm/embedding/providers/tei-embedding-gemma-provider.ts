@@ -7,6 +7,10 @@ type TeiEmbeddingGemmaProviderOptions = {
   model: string;
 };
 
+// TEI /embed 请求超时（毫秒）。该 provider 配置中没有可复用的 timeoutMs 字段，
+// 使用合理默认值，避免无超时的 fetch 在后端挂死。
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export function createTeiEmbeddingGemmaProvider(
   options: TeiEmbeddingGemmaProviderOptions,
 ): EmbeddingProvider {
@@ -23,6 +27,7 @@ export function createTeiEmbeddingGemmaProvider(
         body: JSON.stringify({
           inputs: request.content,
         }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
       if (!response.ok) {
