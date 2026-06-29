@@ -2209,7 +2209,7 @@ function Panel({
 }) {
   return (
     <section
-      className={`rounded-none border bg-background/88 p-5 backdrop-blur ${className ?? ""}`}
+      className={`rounded-none border bg-card p-5 ${className ?? ""}`}
     >
       <div className="mb-4 space-y-1">
         <h2 className="text-base font-semibold">{title}</h2>
