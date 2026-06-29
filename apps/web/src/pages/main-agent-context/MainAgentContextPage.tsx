@@ -57,7 +57,7 @@ export function MainAgentContextPage() {
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-hidden">
             {items.length === 0 ? (
-              <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+              <div className="flex min-h-[120px] items-center justify-center rounded-none border border-dashed text-sm text-muted-foreground">
                 当前上下文还没有可展示的内容。
               </div>
             ) : (
@@ -81,7 +81,7 @@ export function MainAgentContextPage() {
 
 function ContextItemCard({ item }: { item: MainAgentContextItem }) {
   return (
-    <div className="rounded-md border bg-card p-3">
+    <div className="rounded-none border bg-card p-3">
       <div className="flex items-center gap-2">
         <Badge variant="outline">{item.kind === "event" ? "事件" : "消息"}</Badge>
         <span className="truncate text-sm font-medium">{item.label}</span>

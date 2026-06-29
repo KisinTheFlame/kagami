@@ -253,7 +253,7 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
         </div>
 
         {parsed.hasSchemaError ? (
-          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="mt-3 rounded-none border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             <p className="font-medium">结构化解析失败</p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               {parsed.schemaErrors.map(message => (
@@ -291,7 +291,7 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
                 </ContentCard>
 
                 {parsed.response.usage ? (
-                  <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+                  <div className="rounded-none border bg-muted/20 p-3 text-xs text-muted-foreground">
                     promptTokens: {parsed.response.usage.promptTokens ?? "—"} | completionTokens:{" "}
                     {parsed.response.usage.completionTokens ?? "—"} | totalTokens:{" "}
                     {parsed.response.usage.totalTokens ?? "—"} | cacheHitTokens:{" "}
@@ -306,7 +306,7 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
               </p>
             )
           ) : parsed.error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
+            <div className="rounded-none border border-destructive/30 bg-destructive/10 p-3 text-sm">
               <p className="font-medium text-destructive">{parsed.error.name}</p>
               <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-6 text-destructive">
                 {parsed.error.message}
@@ -504,7 +504,7 @@ function ToolCallsList({
       <p className="text-xs font-medium text-muted-foreground">Tool Calls</p>
       <div className="mt-2 space-y-2">
         {toolCalls.map(toolCall => (
-          <details key={toolCall.id} open className="rounded-md border bg-muted/20 p-2">
+          <details key={toolCall.id} open className="rounded-none border bg-muted/20 p-2">
             <summary className="cursor-pointer text-xs">
               {toolCall.name} ({toolCall.id})
             </summary>
@@ -530,7 +530,7 @@ function ContentCard({
   children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="rounded-md border bg-muted/20 p-3">
+    <details open={defaultOpen} className="rounded-none border bg-muted/20 p-3">
       <summary className="cursor-pointer text-sm font-medium">
         {title}
         <span className="mt-1 block text-xs font-normal text-muted-foreground sm:ml-2 sm:mt-0 sm:inline">
@@ -552,7 +552,7 @@ function MetaItem({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-md border bg-muted/20 px-3 py-2">
+    <div className="rounded-none border bg-muted/20 px-3 py-2">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={mono ? "break-all font-mono text-xs text-foreground" : "text-xs text-foreground"}

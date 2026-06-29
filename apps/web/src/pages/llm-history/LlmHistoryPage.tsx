@@ -118,7 +118,7 @@ export function LlmHistoryPage() {
       filterForm={
         <form
           onSubmit={handleFilterSubmit}
-          className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+          className={cn("rounded-none border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
@@ -224,7 +224,7 @@ export function LlmHistoryPage() {
         </form>
       }
       desktopList={
-        <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-none border">
           <Table className="min-w-[680px] table-fixed">
             <TableHeader>
               <TableRow>
@@ -275,11 +275,11 @@ export function LlmHistoryPage() {
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
           {isInitialLoading ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               加载中…
             </div>
           ) : items.length === 0 ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               暂无数据
             </div>
           ) : (

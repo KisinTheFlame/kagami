@@ -85,7 +85,7 @@ export function NapcatGroupMessageHistoryPage() {
       filterForm={
         <form
           onSubmit={handleFilterSubmit}
-          className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+          className={cn("rounded-none border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
@@ -100,7 +100,7 @@ export function NapcatGroupMessageHistoryPage() {
                     messageType: event.target.value as FilterFormState["messageType"],
                   }))
                 }
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <option value="">全部</option>
                 <option value="group">群聊</option>
@@ -116,7 +116,7 @@ export function NapcatGroupMessageHistoryPage() {
                 value={formState.groupId}
                 onChange={event => setFormState(prev => ({ ...prev, groupId: event.target.value }))}
                 placeholder="精确匹配"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
 
@@ -128,7 +128,7 @@ export function NapcatGroupMessageHistoryPage() {
                 value={formState.userId}
                 onChange={event => setFormState(prev => ({ ...prev, userId: event.target.value }))}
                 placeholder="精确匹配"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
 
@@ -140,7 +140,7 @@ export function NapcatGroupMessageHistoryPage() {
                   setFormState(prev => ({ ...prev, nickname: event.target.value }))
                 }
                 placeholder="包含匹配"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
 
@@ -152,7 +152,7 @@ export function NapcatGroupMessageHistoryPage() {
                 value={formState.keyword}
                 onChange={event => setFormState(prev => ({ ...prev, keyword: event.target.value }))}
                 placeholder="匹配 message JSON 文本"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
 
@@ -166,7 +166,7 @@ export function NapcatGroupMessageHistoryPage() {
                 onChange={event =>
                   setFormState(prev => ({ ...prev, startAtLocal: event.target.value }))
                 }
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
 
@@ -180,7 +180,7 @@ export function NapcatGroupMessageHistoryPage() {
                 onChange={event =>
                   setFormState(prev => ({ ...prev, endAtLocal: event.target.value }))
                 }
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
           </div>
@@ -196,7 +196,7 @@ export function NapcatGroupMessageHistoryPage() {
         </form>
       }
       desktopList={
-        <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-none border">
           <Table className="min-w-[760px] table-fixed">
             <TableHeader>
               <TableRow>
@@ -257,11 +257,11 @@ export function NapcatGroupMessageHistoryPage() {
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
           {isInitialLoading ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               加载中…
             </div>
           ) : items.length === 0 ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               暂无数据
             </div>
           ) : (

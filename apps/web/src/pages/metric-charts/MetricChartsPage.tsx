@@ -115,10 +115,10 @@ const seriesColors = [
 ] as const;
 
 const inputClassName =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 const textareaClassName =
-  "flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex min-h-28 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function MetricChartsPage() {
   const queryClient = useQueryClient();
@@ -308,7 +308,7 @@ export function MetricChartsPage() {
                   </Select>
                 </div>
 
-                <div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+                <div className="flex flex-col gap-3 rounded-none border bg-background p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium">高级时间</p>
@@ -369,7 +369,7 @@ export function MetricChartsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-none border bg-background p-4">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
                     当前范围：
@@ -629,19 +629,19 @@ function MetricChartCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {query.isLoading ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-muted-foreground">正在加载图表数据…</p>
           </div>
         ) : null}
 
         {query.isError ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-destructive">数据加载失败：{getErrorMessage(query.error)}</p>
           </div>
         ) : null}
 
         {!query.isLoading && !query.isError && !hasSeries ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-muted-foreground">当前时间范围内没有数据。</p>
           </div>
         ) : null}

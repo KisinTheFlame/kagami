@@ -34,14 +34,14 @@ export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetail
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <section className="space-y-2">
           <h3 className="text-base font-semibold">Message (JSON)</h3>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-none border bg-muted/20 p-3 text-xs leading-6">
             {safeStringify(item.message)}
           </pre>
         </section>
 
         <section className="space-y-2">
           <h3 className="text-base font-semibold">Payload (JSON)</h3>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-xs leading-6">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-none border bg-muted/20 p-3 text-xs leading-6">
             {safeStringify(item.payload)}
           </pre>
         </section>
@@ -60,7 +60,7 @@ function MetaItem({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-md border bg-muted/20 px-3 py-2">
+    <div className="rounded-none border bg-muted/20 px-3 py-2">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={mono ? "break-all font-mono text-xs text-foreground" : "text-xs text-foreground"}

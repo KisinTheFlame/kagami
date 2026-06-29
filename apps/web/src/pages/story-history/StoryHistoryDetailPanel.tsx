@@ -51,7 +51,7 @@ export function StoryHistoryDetailPanel({ item }: { item: StoryItem | null }) {
           <h3 className="text-sm font-medium text-foreground">原始 Markdown</h3>
           <pre
             className={cn(
-              "overflow-x-auto rounded-lg border bg-muted/20 px-4 py-3",
+              "overflow-x-auto rounded-none border bg-muted/20 px-4 py-3",
               "font-mono text-[13px] leading-6 text-foreground/90 whitespace-pre-wrap break-words",
             )}
           >

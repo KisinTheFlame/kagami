@@ -83,7 +83,7 @@ export function StoryHistoryPage() {
       filterForm={
         <form
           onSubmit={handleFilterSubmit}
-          className={cn("rounded-md border p-4", showMobileDetail && "hidden")}
+          className={cn("rounded-none border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3">
             <label className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:gap-3">
@@ -94,7 +94,7 @@ export function StoryHistoryPage() {
                 value={formState.query}
                 onChange={event => setFormState(prev => ({ ...prev, query: event.target.value }))}
                 placeholder="例如：闻震承诺给小镜做记忆系统那次讨论"
-                className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </label>
           </div>
@@ -110,7 +110,7 @@ export function StoryHistoryPage() {
         </form>
       }
       desktopList={
-        <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-none border">
           <Table className="min-w-[920px] table-fixed">
             <TableHeader>
               <TableRow>
@@ -205,11 +205,11 @@ export function StoryHistoryPage() {
       mobileList={
         <div className="min-h-0 flex-1 overflow-auto">
           {isInitialLoading ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               加载中…
             </div>
           ) : items.length === 0 ? (
-            <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
+            <div className="flex h-24 items-center justify-center rounded-none border text-sm text-muted-foreground">
               暂无数据
             </div>
           ) : (

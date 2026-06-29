@@ -1160,7 +1160,7 @@ function MessageEditorCard({
               <Plus className="mr-2 h-4 w-4" />
               文本片段
             </Button>
-            <label className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+            <label className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-none border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
               <ImagePlus className="mr-2 h-4 w-4" />
               上传图片
               <input
