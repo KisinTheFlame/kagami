@@ -251,4 +251,48 @@ describe("invoke tool", () => {
     });
     expect(parsed.message).toContain("invoke 子工具 calculate 不存在。");
   });
+
+  it("preserves the subtool's own failure message instead of synthesizing app-specific text", async () => {
+    // 抽象边界回归：子工具失败时自带 message（这里 send_message 无会话→CHAT_CONTEXT_UNAVAILABLE
+    // + 自带文案），InvokeTool 只负责原样透传 + 追加该子工具 schema 文档，绝不再像旧版那样
+    // 按错误码硬编码 "当前缺少可发消息的 QQ 会话上下文" 这类 App 专属文案。
+    const tool = createTestInvokeTool({
+      appTools: [createSendMessageTool(createAgentMessageService(), () => undefined)],
+    });
+
+    const result = await tool.execute({ tool: "send_message", message: "hi" }, {
+      rootAgentSession: {
+        getCurrentApp: () => TEST_QQ_APP_ID,
+      },
+    } as Parameters<typeof tool.execute>[1]);
+
+    const parsed = JSON.parse(result.content);
+    expect(parsed.error).toBe("CHAT_CONTEXT_UNAVAILABLE");
+    // 子工具自己的文案被原样保留在最前
+    expect(
+      parsed.message.startsWith("当前没有打开的会话，先用 open_conversation 打开一个会话再发。"),
+    ).toBe(true);
+    // 被删的硬编码 App 文案不再由 InvokeTool 合成
+    expect(parsed.message).not.toContain("当前缺少可发消息的");
+    // 只追加当前子工具的 schema 文档
+    expect(parsed.message).toContain("`send_message`");
+  });
+
+  it("still synthesizes the structural INVALID_ARGUMENTS hint (not an App concept)", async () => {
+    // INVALID_ARGUMENTS 是 ZodToolComponent 的结构性通用错误，由 InvokeTool 合成参数提示
+    // 这条分支保留——它不是 App 业务语义。message 传错类型触发 Zod 校验失败。
+    const tool = createTestInvokeTool({
+      appTools: [createSendMessageTool()],
+    });
+
+    const result = await tool.execute({ tool: "send_message", message: 123 }, {
+      rootAgentSession: {
+        getCurrentApp: () => TEST_QQ_APP_ID,
+      },
+    } as Parameters<typeof tool.execute>[1]);
+
+    const parsed = JSON.parse(result.content);
+    expect(parsed.error).toBe("INVALID_ARGUMENTS");
+    expect(parsed.message).toContain("参数不合法");
+  });
 });
