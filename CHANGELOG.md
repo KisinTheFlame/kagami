@@ -7,11 +7,17 @@
 
 ## [Unreleased]
 
-## [0.3.1.6] - 2026-06-30
+## [0.3.1.7] - 2026-06-30
 
 ### Added
 
 - todos: `TODOS.md` 新增一条「自动推荐可新增的待办事项」（P3，open，归入新建的 `## todo` 分组）。方向是让小镜在自己的生活里自发发现"值得做的事"并主动推荐进 todo App，而非只能被动记录别人交代的事，符合"给 Agent 的生活添一种新的存在方式"的定位。Context/Notes 已写明待想清楚的点：推荐触发时机（空闲后台动作 vs 事件后）、内容来源（近期对话 / 新闻 / 未完话题）、去重防噪，以及 KV 缓存红线——推荐过程的中间素材走子 Agent / Operation 只回候选摘要，不进主上下文
+
+## [0.3.1.6] - 2026-06-29
+
+### Changed
+
+- napcat: `get_forward_msg`（view_forward 子工具底层）的请求/返回契约对齐规范 TS 客户端 [node-napcat-ts](https://github.com/HkTeamX/node-napcat-ts)（已核对最新 `origin/main`）。请求参数从 `{ id, message_id }` 收敛为 `{ message_id }`——NapCat 内部 `payload.message_id || payload.id`，多带的 `id` 本就被忽略，纯冗余；返回 schema 删掉不存在的 `message`（单数）兜底字段，只留 `messages`，节点提取相应改为 `messages ?? []`。纯整洁性收敛，行为与对齐前完全一致：**不修复**「旧合并转发展开为空/不可读」——那是 NapCat 侧时效限制（转发 id 实为内部 msgId，`get_forward_msg` 回进程内 5000 条 LRU 捞原消息，消息被挤出/重启丢失即解析不出），与客户端调用方式无关。改动仅 `napcat-gateway.impl.service.ts` 一处 + 对应测试断言
 
 ## [0.3.1.5] - 2026-06-29
 

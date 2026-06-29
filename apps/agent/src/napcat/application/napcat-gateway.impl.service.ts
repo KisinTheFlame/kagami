@@ -80,10 +80,9 @@ const GroupInfoResponseSchema = z.object({
   member_count: NonNegativeIntSchema,
   max_member_count: NonNegativeIntSchema,
 });
-// get_forward_msg 返回结构在不同 NapCat 版本上略有差异：内层节点可能挂在 messages 或 message 下。
+// get_forward_msg 返回结构对齐 node-napcat-ts（规范 TS 客户端）：节点只挂在 messages 下。
 const ForwardMessageResponseSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())).optional(),
-  message: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
@@ -548,9 +547,8 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       this.forwardRawNodeCache.delete(forwardId);
     }
 
-    // 同时给 id 与 message_id：不同 NapCat 版本认的入参名不同，多给一个未知字段通常被忽略。
+    // 入参对齐 node-napcat-ts：只传 message_id（NapCat 内部 `message_id || id`，多带 id 无意义）。
     const data = await this.transport.request("get_forward_msg", {
-      id: forwardId,
       message_id: forwardId,
     });
 
@@ -564,7 +562,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       });
     }
 
-    const nodes = responseResult.data.messages ?? responseResult.data.message ?? [];
+    const nodes = responseResult.data.messages ?? [];
     this.forwardRawNodeCache.set(forwardId, {
       nodes,
       expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
