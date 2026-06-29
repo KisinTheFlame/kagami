@@ -7,7 +7,7 @@
 
 ## [Unreleased]
 
-## [0.3.1.13] - 2026-06-30
+## [0.3.1.14] - 2026-06-30
 
 ### Changed
 
@@ -25,6 +25,12 @@
 - agent: `prisma-app-state-store` 读出 `app_state` 时校验结构，非法持久化数据记 warn 并按「无状态」处理（返回 null 走首次初始化），避免坏数据导致启动/主流程崩溃。
 - agent: `auth-usage-cache` 子进程 `waitForChildExit` 不再静默吞异常，真正异常退出记 warn（未登录/无 codex CLI/正常退出仍走正常分支不刷 error）。
 - agent: QQ App 三处 `id as ConversationId` 收敛到 `toConversationId`，外部入口宽松校验、非规范 id 记 warn 后透传（不 throw，不拦截内部既有数据）。
+
+## [0.3.1.13] - 2026-06-30
+
+### Changed
+
+- todos: `TODOS.md` 新增 `## napcat` 分组并记录一条 P3 已确诊的上游限制——「合并转发里小镜看不到自己的消息」。范围：在和小镜的私聊里选中**包含小镜自己发出的消息**生成合并转发再发给小镜，小镜 `view_forward` 展开时只看得到对方消息、看不到自己那部分。已 live 实测确诊（转发 `7656887019929762382` 实含 4 条＝闻震 2＋小镜 2，但 NapCat 经 `get_msg` / `get_forward_msg` 都只返回 2 条对方消息，小镜自己的 2 条不在返回里）：根因在 NapCat / NTQQ 数据层按 `resId` 重建转发时丢弃本账号自己的消息，self 节点在进入 NapCat 解析前就已不存在（NapCat 源码 `parseMultiMessageContent` / `parseMessageV2` 并不过滤 self），客户端无解、与我们的 `view_forward` 实现无关（[0.3.1.6] / [0.3.1.10] 已分别确认无关）。对路修法是上报 NapCat；本地不做脆弱的时间戳穿插拼接。纯文档，无代码改动
 
 ## [0.3.1.12] - 2026-06-30
 
