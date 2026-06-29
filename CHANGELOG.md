@@ -26,6 +26,16 @@
 - agent: `auth-usage-cache` 子进程 `waitForChildExit` 不再静默吞异常，真正异常退出记 warn（未登录/无 codex CLI/正常退出仍走正常分支不刷 error）。
 - agent: QQ App 三处 `id as ConversationId` 收敛到 `toConversationId`，外部入口宽松校验、非规范 id 记 warn 后透传（不 throw，不拦截内部既有数据）。
 
+## [0.3.1.10] - 2026-06-30
+
+### Changed
+
+- llm/config: 把 LLM provider 标识字面量联合 `["deepseek", "openai", "openai-codex", "claude-code"]` 收敛到最底层 `@kagami/llm` 包单源（新增 `LLM_PROVIDER_IDS` 常量数组 + 派生 `LlmProviderId` 类型），消除原本散落 4 处的重复（server-core contracts 手写 type union、shared 的 `z.enum` + `z.infer`、config.loader 的 `z.enum ... satisfies`、agent client 的 `as const` 数组）——加 / 删 provider 从此只改一处，杜绝类型与 schema 漂移。shared 与 server-core 各新增一条对 `@kagami/llm` 的 workspace 依赖（均指向 DAG 最底层，无环）；因项目禁止 re-export barrel，所有 `LlmProviderId` 消费方（server-core config / 2 个 DAO、agent 的 llm / auth 共 6 个文件 + 1 个测试）改为直接从 `@kagami/llm` 导入。`@kagami/llm` 保持零 zod 依赖，需要校验的下游用 `z.enum(LLM_PROVIDER_IDS)` 自行派生。纯重构：provider 枚举值与顺序不变、配置校验行为不变、不触碰任何稳定前缀（KV 缓存无影响）。`LlmUsageId` 未动（其 type 本就单源）。
+
+### Fixed
+
+- napcat: 修复部分合并转发用 `view_forward` 展开时显示「（合并转发为空或不可读）」——尤其是把「我和小镜的对话」截成转发再发回时常复现。根因有两层：① NapCat 对刚到达 / 内层是旧消息的转发，`get_forward_msg` 会**瞬时返回空**（内层尚未解析，稍候即有，已实测）；② 我们一次取空就**把空也缓存了 10 分钟**，等于把瞬时失败固化成 TTL 内永久失败。改法（参考规范客户端 node-napcat-ts 的读法，但保留我们的懒加载架构）：转发读取主路径改走 **`get_msg(forwardId)`**——容器消息的 forward 段自带内联 `content`，比 `get_forward_msg`（resId→getMsgHistory 多一跳）更稳；`get_msg` 拿不到内容再兜底 `get_forward_msg`；取到空就**重试 2~3 次带退避**，且**不缓存空结果**（raw 节点缓存与分页缓存均只在非空时写），让下次调用还能再试。转发内容仍只回到 tool result 尾部，绝不进稳定前缀（KV 缓存优先不变）。实测：之前「看不到」的转发现在经 get_msg 正常展开。仅改 `napcat-gateway.impl.service.ts` + 对应测试（新增 get_msg 主路径 / 回退 get_forward_msg / 重试不缓存空三个场景）
+
 ## [0.3.1.9] - 2026-06-30
 
 ### Changed

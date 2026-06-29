@@ -1,4 +1,4 @@
-import type { LlmProviderId } from "../common/contracts/llm.js";
+import type { LlmProviderId } from "@kagami/llm";
 
 export type LlmChatCallStatus = "success" | "failed";
 

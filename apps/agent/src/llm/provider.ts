@@ -1,4 +1,4 @@
-import type { LlmProviderId } from "@kagami/server-core/common/contracts/llm";
+import type { LlmProviderId } from "@kagami/llm";
 import type { LlmChatRequest, LlmChatResponsePayload } from "./types.js";
 
 export type LlmProviderChatResult = {
