@@ -1,3 +1,5 @@
+import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
+
 /**
  * 聚合后的通知事件，由 NotificationCenter 在窗口 flush 时塞进事件队列（手机 OS
  * 模型里 center 是 App→Agent 的唯一桥）。每个 source 一行 `lines`。Session 路由时
@@ -22,8 +24,6 @@ export type NotificationEvent = {
 export type WakeEvent = {
   type: "wake";
 };
-
-import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 
 export type StoryRecallStoryPayload = {
   id: string;

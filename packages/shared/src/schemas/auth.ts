@@ -88,6 +88,8 @@ export const CodexUsageLimitsSchema = z
 
 export type CodexUsageLimits = z.infer<typeof CodexUsageLimitsSchema>;
 
+// 以下 ClaudeCode 用量 schema 中的 snake_case 字段（resets_at / is_enabled / five_hour /
+// seven_day 等）刻意保持原样，镜像上游 Claude Code usage API 的响应字段格式，请勿改成 camelCase。
 export const ClaudeCodeUsageLimitWindowSchema = z
   .object({
     utilization: z.number(),

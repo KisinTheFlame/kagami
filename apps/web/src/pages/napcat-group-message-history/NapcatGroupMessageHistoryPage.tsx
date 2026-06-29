@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
+import { formatOptionalDateTime } from "@/lib/format";
 import {
   isoToLocalDateTime,
   localDateTimeToIso,
@@ -230,7 +231,7 @@ export function NapcatGroupMessageHistoryPage() {
                     onClick={() => handleSelectItem(item.id)}
                   >
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDate(item.eventTime)}
+                      {formatOptionalDateTime(item.eventTime)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {formatMessageType(item.messageType)}
@@ -352,21 +353,6 @@ function createEmptyFormState(): FilterFormState {
   };
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) {
-    return "—";
-  }
-
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 function getDetailTitle(
   item: {
     messageType: NapcatQqMessageType;
@@ -408,7 +394,7 @@ function NapcatGroupMessageMobileCard({
       <p className="mt-3 text-sm text-foreground">
         {truncateText(renderNapcatMessagePreview(item.message), 140)}
       </p>
-      <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.eventTime)}</p>
+      <p className="mt-3 text-xs text-muted-foreground">{formatOptionalDateTime(item.eventTime)}</p>
     </MobileSelectCard>
   );
 }

@@ -63,6 +63,7 @@ export function MainAgentContextPage() {
             ) : (
               <div className="h-full overflow-y-auto pr-1">
                 <div className="space-y-3">
+                  {/* 上下文 item 没有天然唯一键（schema 只有 kind/label/preview/truncated），列表为 append-only 顺序稳定，故用 index 作 key 是可接受的。 */}
                   {items.map((item, index) => (
                     <ContextItemCard key={`${item.kind}-${index}`} item={item} />
                   ))}

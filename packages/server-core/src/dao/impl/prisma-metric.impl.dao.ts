@@ -1,4 +1,5 @@
 import * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
+import { toInputJsonObject } from "../../common/prisma-json.js";
 import type { Database } from "../../db/client.js";
 import type {
   InsertMetricInput,
@@ -108,10 +109,6 @@ export class PrismaMetricDao implements MetricDao {
       ORDER BY "bucketStart" ASC, "seriesKey" ASC
     `);
   }
-}
-
-function toInputJsonObject(tags: Record<string, string>): Prisma.InputJsonObject {
-  return tags as Prisma.InputJsonObject;
 }
 
 type RawMetricChartSeriesRow = {

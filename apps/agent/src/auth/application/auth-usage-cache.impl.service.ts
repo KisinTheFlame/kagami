@@ -545,9 +545,20 @@ async function readCodexRateLimitsFromChildProcess(input: {
 }
 
 async function waitForChildExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+  // 幂等：进程已退出时直接返回，重复调用不会挂起或抛错。
   if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
 
-  await once(child, "exit").catch(() => {});
+  try {
+    await once(child, "exit");
+  } catch (error) {
+    // 这里等待的是子进程「退出」事件本身的失败（罕见的 EventEmitter 错误）。
+    // 「未登录 / 无 codex CLI / 正常退出」都不会走到这条 catch（它们会正常 emit exit），
+    // 因此只在真正异常时记 warn，绝不刷 error，也不向上抛断 finally 清理链。
+    logger.warn("Failed while waiting for codex app-server child exit", {
+      event: "auth_usage_cache.codex_child_exit_wait_failed",
+      error: serializeError(error),
+    });
+  }
 }

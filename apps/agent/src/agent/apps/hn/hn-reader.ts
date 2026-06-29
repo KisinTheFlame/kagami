@@ -258,8 +258,14 @@ export class HnReader {
     };
   }
 
+  /** Algolia hit 是评论还是 story：带 comment 标签且不带 story 标签才算评论。 */
+  private isCommentHit(hit: HnSearchHit): boolean {
+    const tags = hit._tags ?? [];
+    return tags.includes("comment") && !tags.includes("story");
+  }
+
   private toSearchResultItem(hit: HnSearchHit): HnSearchResultItem {
-    const isComment = (hit._tags ?? []).includes("comment") && !(hit._tags ?? []).includes("story");
+    const isComment = this.isCommentHit(hit);
     const rawSnippet = isComment ? hit.comment_text : hit.story_text;
     return {
       id: Number(hit.objectID),
@@ -278,7 +284,7 @@ export class HnReader {
   }
 
   private toUserActivityItem(hit: HnSearchHit): HnUserActivityItem {
-    const isComment = (hit._tags ?? []).includes("comment") && !(hit._tags ?? []).includes("story");
+    const isComment = this.isCommentHit(hit);
     return {
       id: Number(hit.objectID),
       kind: isComment ? "comment" : "story",

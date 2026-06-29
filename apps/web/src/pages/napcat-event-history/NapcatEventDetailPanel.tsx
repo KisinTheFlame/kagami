@@ -1,4 +1,5 @@
 import { type NapcatEventItem } from "@kagami/shared/schemas/napcat-event";
+import { formatOptionalDateTime } from "@/lib/format";
 
 type NapcatEventDetailPanelProps = {
   item: NapcatEventItem | null;
@@ -25,8 +26,8 @@ export function NapcatEventDetailPanel({ item }: NapcatEventDetailPanelProps) {
           <MetaItem label="Sub Type" value={item.subType ?? "—"} />
           <MetaItem label="User ID" value={item.userId ?? "—"} mono />
           <MetaItem label="Group ID" value={item.groupId ?? "—"} mono />
-          <MetaItem label="事件时间" value={formatDate(item.eventTime)} />
-          <MetaItem label="入库时间" value={formatDate(item.createdAt)} />
+          <MetaItem label="事件时间" value={formatOptionalDateTime(item.eventTime)} />
+          <MetaItem label="入库时间" value={formatOptionalDateTime(item.createdAt)} />
         </div>
       </div>
 
@@ -61,21 +62,6 @@ function MetaItem({
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) {
-    return "—";
-  }
-
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 function safeStringify(value: unknown): string {

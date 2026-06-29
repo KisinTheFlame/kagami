@@ -1,4 +1,5 @@
 import { type AppLogItem } from "@kagami/shared/schemas/app-log";
+import { formatDateTime } from "@/lib/format";
 
 type AppLogDetailPanelProps = {
   item: AppLogItem | null;
@@ -25,7 +26,7 @@ export function AppLogDetailPanel({ item }: AppLogDetailPanelProps) {
           <MetaItem label="Level" value={item.level} />
           <MetaItem label="Source" value={source} />
           <MetaItem label="Trace ID" value={item.traceId} mono />
-          <MetaItem label="时间" value={formatDate(item.createdAt)} />
+          <MetaItem label="时间" value={formatDateTime(item.createdAt)} />
         </div>
       </div>
 
@@ -67,17 +68,6 @@ function MetaItem({
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 function safeStringify(value: unknown): string {
