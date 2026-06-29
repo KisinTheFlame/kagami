@@ -19,6 +19,18 @@ import type {
 
 type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp" | "clearCurrentApp">;
 
+function isAppendMessageEffect(effect: Effect): effect is AppendMessageEffect {
+  return effect.type === "append_message";
+}
+
+function isSwitchAppEffect(effect: Effect): effect is SwitchAppEffect {
+  return effect.type === "switch_app";
+}
+
+function isWaitForEventEffect(effect: Effect): effect is WaitForEventEffect {
+  return effect.type === "wait_for_event";
+}
+
 /** wait_for_event 超时时由 Interpreter 自己 push 进队列的 wake 事件类型。 */
 type WakeEvent = Extract<Event, { type: "wake" }>;
 
@@ -68,11 +80,14 @@ export function createRootEffectInterpreter({
  */
 class AppendMessageHandler implements EffectHandler<never> {
   public matches(effect: Effect): boolean {
-    return effect.type === "append_message";
+    return isAppendMessageEffect(effect);
   }
 
   public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
-    const append = effect as AppendMessageEffect;
+    if (!isAppendMessageEffect(effect)) {
+      throw new Error(`AppendMessageHandler received non-append effect: ${effect.type}`);
+    }
+    const append = effect;
     if (append.image) {
       return {
         appendedMessages: [createUserImageMessage(append.content, append.image)],
@@ -91,11 +106,14 @@ class SwitchAppHandler implements EffectHandler<never> {
   }
 
   public matches(effect: Effect): boolean {
-    return effect.type === "switch_app";
+    return isSwitchAppEffect(effect);
   }
 
   public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
-    const switchApp = effect as SwitchAppEffect;
+    if (!isSwitchAppEffect(effect)) {
+      throw new Error(`SwitchAppHandler received non-switch_app effect: ${effect.type}`);
+    }
+    const switchApp = effect;
     if (switchApp.appId === null) {
       this.session.clearCurrentApp();
     } else {
@@ -118,11 +136,14 @@ class WaitForEventHandler implements EffectHandler<never> {
   }
 
   public matches(effect: Effect): boolean {
-    return effect.type === "wait_for_event";
+    return isWaitForEventEffect(effect);
   }
 
   public async handle(effect: Effect): Promise<EffectHandlerResult<never>> {
-    const wait = effect as WaitForEventEffect;
+    if (!isWaitForEventEffect(effect)) {
+      throw new Error(`WaitForEventHandler received non-wait_for_event effect: ${effect.type}`);
+    }
+    const wait = effect;
     const wakeEvent: WakeEvent = { type: "wake" };
     const timerHandle = setTimeout(() => {
       this.eventQueue.enqueue(wakeEvent);
