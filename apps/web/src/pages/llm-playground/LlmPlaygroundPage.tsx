@@ -644,10 +644,10 @@ export function LlmPlaygroundPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto bg-[radial-gradient(circle_at_top_left,_rgba(14,116,144,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(226,232,240,0.92))] p-3 md:p-6 xl:overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto bg-background p-3 md:p-6 xl:overflow-hidden">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 xl:h-full xl:min-h-0 xl:flex-1">
         <div className="grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-border/80 bg-white/75 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-none border bg-card">
             <div className="border-b border-border/80 px-6 py-5">
               <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
                 Playground Canvas
