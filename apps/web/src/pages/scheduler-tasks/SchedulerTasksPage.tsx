@@ -98,7 +98,7 @@ function SchedulerTaskCard({
                 variant="outline"
                 className={cn(
                   latest.status === "error" && "border-destructive/40 text-destructive",
-                  latest.status === "skipped_overlap" && "border-amber-300 text-amber-700",
+                  latest.status === "skipped_overlap" && "border-scheduler/50 text-foreground",
                 )}
               >
                 {formatRunStatus(latest.status)}

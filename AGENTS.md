@@ -250,6 +250,15 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 - 不要把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 实现放入该包。
 - `apps/agent` 中如果需要使用这些通用能力，优先直接从 `@kagami/agent-runtime` 导入，而不是继续依赖 server 内部的兼容 re-export 路径。
 
+## 设计系统
+
+任何视觉 / UI 改动前，先读仓库根目录 `DESIGN.md`。字体、颜色、间距、布局、美术方向全部定义在那里，未经用户明确批准不要偏离。
+
+- 方向代号：**晒褪了色的蒙德里安 / The Painted Ledger**（蒙德里安骨架 + 文艺复兴 / 印象派颜料色）。
+- 前端**不再使用 shadcn 的有样式组件与默认 slate 主题**；保留 Radix 无样式行为基元（焦点 / 键盘可访问性），其余 class 体系与组件外观自定义。
+- 配色铁律：颜色是配给不是涂抹，90% 中性 + 暖近黑，饱和色只落在「活着 / 有语义」的数据上（红=错/主动发言、蓝=LLM/context、黄=scheduler/等待、绿=Story/记忆、茜=高成本）。
+- QA / Review 时，发现不符合 `DESIGN.md` 的代码要标出来。
+
 ## 架构概览
 
 ### 后端（`@kagami/agent`）

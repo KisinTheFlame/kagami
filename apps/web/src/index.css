@@ -2,50 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * The Painted Ledger / 晒褪了色的蒙德里安
+ * 颜料盘以 HSL 通道三元组存放，沿用 hsl(var(--x)) + 透明度修饰符的写法。
+ * 颜色全部为颜料调出来的晒暗色，绝无数字纯色；色块内永不渐变。
+ * 详见仓库根 DESIGN.md。
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    /* 中性：石膏暖白底 + 生赭弱字 + 骨黑墨 */
+    --background: 40 39.1% 91%;
+    --foreground: 30 16.7% 9.4%;
+    --card: 40 54.5% 95.7%;
+    --card-foreground: 30 16.7% 9.4%;
+    --popover: 40 54.5% 95.7%;
+    --popover-foreground: 30 16.7% 9.4%;
+    --primary: 30 16.7% 9.4%;
+    --primary-foreground: 40 39.1% 91%;
+    --secondary: 36.8 49.2% 87.6%;
+    --secondary-foreground: 30 16.7% 9.4%;
+    --muted: 36.8 49.2% 87.6%;
+    --muted-foreground: 35 11.3% 41.6%;
+    --accent: 36.8 49.2% 87.6%;
+    --accent-foreground: 30 16.7% 9.4%;
+    --destructive: 6.3 60.4% 43.5%;
+    --destructive-foreground: 40 39.1% 91%;
+    --border: 36 31.5% 78.2%;
+    --input: 36 31.5% 78.2%;
+    --ring: 216 52.9% 33.3%;
+    --radius: 0rem;
+
+    /* 语义颜料色：一块色 = 一种含义 */
+    --signal: 6.3 60.4% 43.5%; /* 朱砂红 · 错误 · 主动事件 · Agent 发言 */
+    --signal-foreground: 40 39.1% 91%;
+    --llm: 216 52.9% 33.3%; /* 群青 · LLM · 推理 · context */
+    --llm-foreground: 40 39.1% 91%;
+    --scheduler: 41.1 68.1% 50.8%; /* 赭黄 · scheduler · 等待 · pending */
+    --scheduler-foreground: 30 16.7% 9.4%;
+    --story: 118 13.8% 42.7%; /* 绿土 · Story · 记忆 · recall */
+    --story-foreground: 40 39.1% 91%;
+    --cost: 0 37.8% 47.3%; /* 茜草玫红 · 高 token 成本 · 风险 */
+    --cost-foreground: 40 39.1% 91%;
+
+    /* 侧栏：一条暖近黑的画布边竖栏 */
+    --sidebar: 30 16.7% 9.4%;
+    --sidebar-foreground: 38.8 30.4% 78%;
+    --sidebar-active: 40 39.1% 91%;
+    --sidebar-active-foreground: 30 16.7% 9.4%;
+    --sidebar-border: 30 16.7% 9.4%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* 守夜 · 夜间画室 · 明暗对照（非简单反相） */
+    --background: 33.3 27.3% 6.5%;
+    --foreground: 41.5 40.6% 87.5%;
+    --card: 35 23.1% 10.2%;
+    --card-foreground: 41.5 40.6% 87.5%;
+    --popover: 33.3 27.3% 12.9%;
+    --popover-foreground: 41.5 40.6% 87.5%;
+    --primary: 41.5 40.6% 87.5%;
+    --primary-foreground: 33.3 27.3% 6.5%;
+    --secondary: 33.3 27.3% 12.9%;
+    --secondary-foreground: 41.5 40.6% 87.5%;
+    --muted: 35 23.1% 10.2%;
+    --muted-foreground: 34 11.8% 49.8%;
+    --accent: 33.3 27.3% 12.9%;
+    --accent-foreground: 41.5 40.6% 87.5%;
+    --destructive: 8 59.8% 53.1%;
+    --destructive-foreground: 41.5 40.6% 87.5%;
+    --border: 32.7 24.4% 17.6%;
+    --input: 32.7 24.4% 17.6%;
+    --ring: 216.2 45.7% 54.5%;
+
+    --signal: 8 59.8% 53.1%;
+    --signal-foreground: 33.3 27.3% 6.5%;
+    --llm: 216.2 45.7% 54.5%;
+    --llm-foreground: 33.3 27.3% 6.5%;
+    --scheduler: 42.3 75.7% 59.6%;
+    --scheduler-foreground: 33.3 27.3% 6.5%;
+    --story: 106.2 17% 55.1%;
+    --story-foreground: 33.3 27.3% 6.5%;
+    --cost: 4.1 48.6% 58.8%;
+    --cost-foreground: 33.3 27.3% 6.5%;
+
+    --sidebar: 35 23.1% 10.2%;
+    --sidebar-foreground: 37.5 18.2% 65.5%;
+    --sidebar-active: 33.3 27.3% 12.9%;
+    --sidebar-active-foreground: 41.5 40.6% 87.5%;
+    --sidebar-border: 32.7 24.4% 17.6%;
   }
 }
 
@@ -55,7 +99,22 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
+    /* 颜料底色带一点纸感的暖，禁止子像素发蓝 */
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 标题走衬线：拉丁 Fraunces，中文思源宋体——像 Agent 在写日记 */
+  h1,
+  h2,
+  h3 {
+    @apply font-serif;
+  }
+
+  /* 数据是 Kagami 的笔触：等宽数字不跳动 */
+  :where(code, pre, kbd, samp) {
+    @apply font-mono;
   }
 }

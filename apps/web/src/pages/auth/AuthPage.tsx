@@ -64,13 +64,12 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     badge: "Codex 内置登录",
     title: "管理 Codex 登录状态",
     actionDescription: "首版按单账号设计。登录会跳转到 OpenAI 的授权页，成功后回到当前管理页。",
-    backgroundClassName:
-      "bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.10),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
+    backgroundClassName: "bg-background",
     successMessage: "Codex 登录已完成。",
     errorMessage: "Codex 登录失败。",
     trendColors: {
-      fiveHour: "#16a34a",
-      sevenDay: "#2563eb",
+      fiveHour: "#5F7C5E",
+      sevenDay: "#284C82",
     },
   },
   "claude-code": {
@@ -79,13 +78,12 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     badge: "Claude Code 内置登录",
     title: "管理 Claude Code 登录状态",
     actionDescription: "首版按单账号设计。登录会跳转到 Anthropic 的授权页，成功后回到当前管理页。",
-    backgroundClassName:
-      "bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.12),_transparent_24%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.88))]",
+    backgroundClassName: "bg-background",
     successMessage: "Claude Code 登录已完成。",
     errorMessage: "Claude Code 登录失败。",
     trendColors: {
-      fiveHour: "#f59e0b",
-      sevenDay: "#0ea5e9",
+      fiveHour: "#D7A12C",
+      sevenDay: "#284C82",
     },
   },
 };
@@ -192,16 +190,16 @@ export function AuthPage() {
       className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto p-3 md:p-6 ${providerConfig.backgroundClassName}`}
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur">
+        <section className="rounded-none border border-border bg-card p-6 backdrop-blur">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                <div className="inline-flex items-center gap-2 rounded-none border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
                   <KeyRound className="h-3.5 w-3.5" />
                   {providerConfig.badge}
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                     {providerConfig.title}
                   </h1>
                 </div>
@@ -210,17 +208,17 @@ export function AuthPage() {
               <StatusChip status={primaryStatus} tone={statusTone} />
             </div>
 
-            <div className="inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1 sm:w-auto">
+            <div className="inline-flex w-full flex-wrap gap-2 rounded-none border border-border bg-secondary p-1 sm:w-auto">
               {providerOrder.map(item => (
                 <NavLink
                   key={item}
                   to={`/auth/${item}`}
                   className={({ isActive }) =>
                     [
-                      "inline-flex min-w-[8.5rem] items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                      "inline-flex min-w-[8.5rem] items-center justify-center rounded-none px-4 py-2 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:bg-white/70 hover:text-slate-900",
+                        ? "bg-card text-foreground"
+                        : "text-muted-foreground hover:bg-card hover:text-foreground",
                     ].join(" ")
                   }
                 >
@@ -233,10 +231,10 @@ export function AuthPage() {
 
         {result ? (
           <section
-            className={`rounded-2xl border px-4 py-3 text-sm ${
+            className={`rounded-none border px-4 py-3 text-sm ${
               result === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-amber-200 bg-amber-50 text-amber-800"
+                ? "border-story/40 bg-story/10 text-story"
+                : "border-scheduler/50 bg-scheduler/15 text-foreground"
             }`}
           >
             {result === "success"
@@ -246,29 +244,31 @@ export function AuthPage() {
         ) : null}
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm">
+          <article className="rounded-none border border-border bg-card p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">当前状态</h2>
-                <p className="mt-1 text-sm text-slate-500">来自服务端的活动账号和刷新信息。</p>
+                <h2 className="text-lg font-semibold text-foreground">当前状态</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  来自服务端的活动账号和刷新信息。
+                </p>
               </div>
               {statusData?.isLoggedIn ? (
-                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                <ShieldCheck className="h-5 w-5 text-story" />
               ) : (
-                <ShieldX className="h-5 w-5 text-slate-400" />
+                <ShieldX className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
 
             {statusQuery.isLoading ? (
-              <p className="mt-6 text-sm text-slate-500">
+              <p className="mt-6 text-sm text-muted-foreground">
                 正在读取 {providerConfig.label} 登录状态...
               </p>
             ) : statusQuery.isError ? (
-              <p className="mt-6 text-sm text-rose-600">{statusQuery.error.message}</p>
+              <p className="mt-6 text-sm text-destructive">{statusQuery.error.message}</p>
             ) : (
               <>
                 {warningMessage ? (
-                  <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className="mt-6 rounded-none border border-scheduler/50 bg-scheduler/15 px-4 py-3 text-sm text-foreground">
                     {warningMessage}
                   </p>
                 ) : null}
@@ -290,14 +290,14 @@ export function AuthPage() {
             )}
           </article>
 
-          <article className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">操作</h2>
-            <p className="mt-1 text-sm text-slate-500">{providerConfig.actionDescription}</p>
+          <article className="rounded-none border border-border bg-card p-6">
+            <h2 className="text-lg font-semibold text-foreground">操作</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{providerConfig.actionDescription}</p>
 
             <div className="mt-6 flex flex-col gap-3">
               <Button
                 type="button"
-                className="justify-between rounded-2xl"
+                className="justify-between rounded-none"
                 onClick={() => loginMutation.mutate()}
                 disabled={loginMutation.isPending}
               >
@@ -308,7 +308,7 @@ export function AuthPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="justify-between rounded-2xl"
+                className="justify-between rounded-none"
                 onClick={() => refreshMutation.mutate()}
                 disabled={refreshMutation.isPending}
               >
@@ -319,7 +319,7 @@ export function AuthPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="justify-between rounded-2xl border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-700"
+                className="justify-between rounded-none border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => logoutMutation.mutate()}
                 disabled={logoutMutation.isPending}
               >
@@ -328,7 +328,7 @@ export function AuthPage() {
               </Button>
             </div>
 
-            <div className="mt-6 space-y-2 text-sm text-slate-500">
+            <div className="mt-6 space-y-2 text-sm text-muted-foreground">
               {loginMutation.isError ? <p>{loginMutation.error.message}</p> : null}
               {refreshMutation.isError ? <p>{refreshMutation.error.message}</p> : null}
               {logoutMutation.isError ? <p>{logoutMutation.error.message}</p> : null}
@@ -336,45 +336,47 @@ export function AuthPage() {
           </article>
         </section>
 
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm">
+        <section className="rounded-none border border-border bg-card p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">额度</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-foreground">额度</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 展示当前 {providerConfig.label} 登录账号的额度快照。
               </p>
             </div>
           </div>
 
           {usageLimitsQuery.isLoading ? (
-            <p className="mt-6 text-sm text-slate-500">正在读取 {providerConfig.label} 额度...</p>
+            <p className="mt-6 text-sm text-muted-foreground">
+              正在读取 {providerConfig.label} 额度...
+            </p>
           ) : usageLimitsQuery.isError ? (
-            <p className="mt-6 text-sm text-rose-600">{usageLimitsQuery.error.message}</p>
+            <p className="mt-6 text-sm text-destructive">{usageLimitsQuery.error.message}</p>
           ) : usageLimitsQuery.data ? (
             <div className="mt-6">
               <UsageLimitsPanel data={usageLimitsQuery.data} />
             </div>
           ) : (
-            <p className="mt-6 text-sm text-slate-500">暂无额度信息。</p>
+            <p className="mt-6 text-sm text-muted-foreground">暂无额度信息。</p>
           )}
 
-          <div className="mt-8 border-t border-slate-200/80 pt-6">
+          <div className="mt-8 border-t border-border pt-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">剩余额度趋势</h3>
-                <p className="mt-1 text-sm text-slate-500">
+                <h3 className="text-base font-semibold text-foreground">剩余额度趋势</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
                   按分钟采样记录当前账号的 5 小时与 7 天剩余额度变化。
                 </p>
               </div>
 
-              <div className="inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-1 md:w-auto">
+              <div className="inline-flex w-full flex-wrap gap-2 rounded-none border border-border bg-muted p-1 md:w-auto">
                 {(["24h", "7d"] as const).map(range => (
                   <Button
                     key={range}
                     type="button"
                     size="sm"
                     variant={trendRange === range ? "default" : "ghost"}
-                    className="rounded-xl"
+                    className="rounded-none"
                     onClick={() => setTrendRange(range)}
                   >
                     {range === "24h" ? "24 小时" : "7 天"}
@@ -384,9 +386,9 @@ export function AuthPage() {
             </div>
 
             {usageTrendQuery.isLoading ? (
-              <p className="mt-6 text-sm text-slate-500">正在读取趋势数据...</p>
+              <p className="mt-6 text-sm text-muted-foreground">正在读取趋势数据...</p>
             ) : usageTrendQuery.isError ? (
-              <p className="mt-6 text-sm text-rose-600">{usageTrendQuery.error.message}</p>
+              <p className="mt-6 text-sm text-destructive">{usageTrendQuery.error.message}</p>
             ) : usageTrendQuery.data ? (
               <div className="mt-6">
                 <UsageTrendPanel
@@ -396,7 +398,7 @@ export function AuthPage() {
                 />
               </div>
             ) : (
-              <p className="mt-6 text-sm text-slate-500">
+              <p className="mt-6 text-sm text-muted-foreground">
                 暂无趋势数据，历史数据会从部署后开始积累。
               </p>
             )}
@@ -463,7 +465,7 @@ function ClaudeUsageLimitsPanel({ limits }: { limits: ClaudeCodeUsageLimits }) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-slate-500">暂无额度信息。</p>;
+    return <p className="text-sm text-muted-foreground">暂无额度信息。</p>;
   }
 
   return <div className={getUsageGridClassName(items.length)}>{items}</div>;
@@ -497,7 +499,7 @@ function UsageTrendPanel({
 
   if (!hasPoints) {
     return (
-      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-sm text-slate-500">
+      <p className="rounded-none border border-dashed border-border bg-muted px-4 py-6 text-sm text-muted-foreground">
         暂无趋势数据，历史数据会从部署后开始积累。
       </p>
     );
@@ -506,7 +508,7 @@ function UsageTrendPanel({
   const gradientPrefix = `usage-trend-${providerKey}`;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:p-5">
+    <div className="rounded-none border border-border bg-muted p-4 md:p-5">
       <ChartContainer config={chartConfig} className="h-[300px] w-full">
         <AreaChart
           accessibilityLayer
@@ -616,7 +618,7 @@ function CodexUsageLimitsPanel({ limits }: { limits: CodexUsageLimits }) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-slate-500">暂无额度信息。</p>;
+    return <p className="text-sm text-muted-foreground">暂无额度信息。</p>;
   }
 
   return <div className={getUsageGridClassName(items.length)}>{items}</div>;
@@ -643,31 +645,31 @@ function UsageLimitCard({
       : `剩余 ${formatRemainingPercent(normalizedPercent)}`);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+    <article className="rounded-none border border-border bg-muted p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
             {displayPrimaryText}
           </p>
         </div>
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getUsageToneClass(normalizedPercent)}`}
+          className={`inline-flex rounded-none px-2.5 py-1 text-xs font-medium ${getUsageToneClass(normalizedPercent)}`}
         >
           {normalizedPercent === null ? "未知" : `已用 ${formatPercent(normalizedPercent)}`}
         </span>
       </div>
 
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+      <div className="mt-4 h-2 overflow-hidden rounded-none bg-secondary">
         <div
-          className={`h-full rounded-full transition-[width] ${getUsageBarClass(normalizedPercent)}`}
+          className={`h-full rounded-none transition-[width] ${getUsageBarClass(normalizedPercent)}`}
           style={{
             width: `${remainingPercent ?? 0}%`,
           }}
         />
       </div>
 
-      <p className="mt-3 text-sm leading-6 text-slate-600">{secondaryText}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{secondaryText}</p>
     </article>
   );
 }
@@ -686,14 +688,14 @@ function buildAuthEndpoint(
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {
   const toneClass =
     tone === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-story/40 bg-story/10 text-story"
       : tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-slate-200 bg-slate-50 text-slate-600";
+        ? "border-scheduler/50 bg-scheduler/15 text-foreground"
+        : "border-border bg-muted text-muted-foreground";
 
   return (
     <div
-      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium ${toneClass}`}
+      className={`inline-flex items-center rounded-none border px-3 py-1 text-sm font-medium ${toneClass}`}
     >
       {toStatusLabel(status)}
     </div>
@@ -702,9 +704,11 @@ function StatusChip({ status, tone }: { status: string; tone: "success" | "warni
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-      <dt className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{label}</dt>
-      <dd className="mt-2 break-all text-sm text-slate-900">{value}</dd>
+    <div className="rounded-none border border-border bg-muted p-4">
+      <dt className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="mt-2 break-all text-sm text-foreground">{value}</dd>
     </div>
   );
 }
@@ -865,34 +869,34 @@ function getUsageGridClassName(itemCount: number): string {
 
 function getUsageBarClass(usedPercent: number | null): string {
   if (usedPercent === null) {
-    return "bg-slate-300";
+    return "bg-muted-foreground/40";
   }
 
   if (usedPercent >= 80) {
-    return "bg-rose-500";
+    return "bg-destructive/100";
   }
 
   if (usedPercent >= 50) {
-    return "bg-amber-500";
+    return "bg-scheduler/150";
   }
 
-  return "bg-emerald-500";
+  return "bg-story/100";
 }
 
 function getUsageToneClass(usedPercent: number | null): string {
   if (usedPercent === null) {
-    return "bg-slate-100 text-slate-600";
+    return "bg-secondary text-muted-foreground";
   }
 
   if (usedPercent >= 80) {
-    return "bg-rose-100 text-rose-700";
+    return "bg-destructive/15 text-destructive";
   }
 
   if (usedPercent >= 50) {
-    return "bg-amber-100 text-amber-700";
+    return "bg-scheduler/20 text-foreground";
   }
 
-  return "bg-emerald-100 text-emerald-700";
+  return "bg-story/15 text-story";
 }
 
 function buildTrendChartData(data: AuthUsageTrendData): TrendChartRow[] {

@@ -69,7 +69,7 @@ function DetailChip({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="inline-flex max-w-full items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+    <div className="inline-flex max-w-full items-center gap-1 rounded-none border bg-background px-2.5 py-1 text-xs text-muted-foreground">
       <span className="shrink-0">{label}</span>
       <span className="truncate text-foreground">{value}</span>
     </div>

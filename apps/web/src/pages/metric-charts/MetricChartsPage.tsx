@@ -746,7 +746,7 @@ function DeleteMetricChartDialog({
 
 function InfoPill({ label }: { label: string }) {
   return (
-    <span className="rounded-full border bg-muted px-2.5 py-1 font-medium text-foreground/80">
+    <span className="rounded-none border bg-muted px-2.5 py-1 font-medium text-foreground/80">
       {label}
     </span>
   );
