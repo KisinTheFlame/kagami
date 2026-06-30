@@ -43,6 +43,7 @@ import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../oss/oss-client.js";
+import { HttpBrowserClient } from "../browser/browser-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -198,6 +199,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         baseUrl: `http://${config.services.oss.host}:${config.services.oss.port}`,
       })
     : undefined;
+  // 浏览器拆成独立 kagami-browser 进程（issue #173）：agent 经 HTTP client 调它，地址
+  // 从顶层 services.browser 派生（host 是 reachable host）。浏览器进程未起时，client
+  // 把错误归一成 BROWSER_NOT_READY，工具仍回规整失败结构。
+  const browserClient = new HttpBrowserClient({
+    baseUrl: `http://${config.services.browser.host}:${config.services.browser.port}`,
+  });
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
     ossClient,
@@ -264,6 +271,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     eventQueue,
     storyEventQueue,
     ossClient,
+    browserClient,
   });
 
   const taskScheduler = new TaskScheduler();

@@ -26,6 +26,8 @@ const HUMANIZE = true;
 const HUMAN_PRESET = "default" as const;
 const VIEWPORT = { width: 1024, height: 768 };
 const NAVIGATION_TIMEOUT_MS = 30_000;
+/** 死等（waitFor ms）上限：防止超大 ms 永久占住串行动作队列。 */
+const MAX_WAIT_MS = 30_000;
 /** 单步动作超时收紧到 10s：浏览器动作阻塞单线程主循环，超时上限即 QQ 最坏延迟（T2）。 */
 const ACTION_TIMEOUT_MS = 10_000;
 const SCREENSHOT_JPEG_QUALITY = 60;
@@ -298,7 +300,9 @@ export class BrowserService {
     const page = await this.getActivePage();
     try {
       if (typeof input.ms === "number") {
-        await page.waitForTimeout(input.ms);
+        // 死等上限：拆进程后动作走串行队列，一个超大 ms 会永久占住队尾、堵死后续所有动作。
+        // 钳到 MAX_WAIT_MS（issue #173 codex 评审：SerialExecutor wedge）。
+        await page.waitForTimeout(Math.min(input.ms, MAX_WAIT_MS));
       } else if (input.selector) {
         await page.locator(input.selector).first().waitFor({ timeout: ACTION_TIMEOUT_MS });
       }

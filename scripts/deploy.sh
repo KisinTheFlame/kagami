@@ -18,8 +18,9 @@ if [ -n "$SERVICE" ]; then
     # web 是已弃用别名，等价于 gateway（kagami-web → kagami-gateway 改名见 issue #162）。
     gateway | web) PKG="@kagami/gateway"; PM2_NAME="kagami-gateway" ;;
     oss) PKG="@kagami/oss"; PM2_NAME="kagami-oss" ;;
+    browser) PKG="@kagami/browser"; PM2_NAME="kagami-browser" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|gateway|oss>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1
@@ -52,13 +53,14 @@ echo "[app:deploy] Step 2/4: Applying Prisma migrations..."
 if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
-  echo "[app:deploy]   检测到待应用迁移，暂停写库进程后迁移..."
-  pnpm exec pm2 stop kagami-agent kagami-console >/dev/null 2>&1 || true
+  echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
+  # kagami-browser 也开同一 SQLite（读 browser_credential + configureSqlite），一并暂停腾出独占锁。
+  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
   else
     echo "[app:deploy]   迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console >/dev/null 2>&1 || true
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser >/dev/null 2>&1 || true
     exit 1
   fi
 fi
