@@ -50,12 +50,18 @@ importers:
       '@kagami/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
       '@kagami/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@kagami/server-core':
+      '@kagami/persistence':
         specifier: workspace:*
-        version: link:../../packages/server-core
+        version: link:../../packages/persistence
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -108,9 +114,15 @@ importers:
 
   apps/console:
     dependencies:
-      '@kagami/server-core':
+      '@kagami/http':
         specifier: workspace:*
-        version: link:../../packages/server-core
+        version: link:../../packages/http
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@kagami/persistence':
+        specifier: workspace:*
+        version: link:../../packages/persistence
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -264,6 +276,44 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/http:
+    dependencies:
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/kernel:
+    dependencies:
+      '@kagami/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@kagami/shared':
+        specifier: workspace:*
+        version: link:../shared
+      handlebars:
+        specifier: ^4.7.8
+        version: 4.7.8
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/llm:
     devDependencies:
       '@types/node':
@@ -273,8 +323,11 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/server-core:
+  packages/persistence:
     dependencies:
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
@@ -290,12 +343,6 @@ importers:
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
-      fastify:
-        specifier: ^5.6.2
-        version: 5.7.4
-      handlebars:
-        specifier: ^4.7.8
-        version: 4.7.8
       prisma:
         specifier: ^7.6.0
         version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
