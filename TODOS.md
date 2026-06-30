@@ -173,9 +173,9 @@
 ### 填实状态色块铺到剩余数据页
 
 - **Priority:** P3
-- **Status:** open
-- **Context:** 调度任务 / Story / 应用日志 / NapCat 事件 / QQ 消息等页的状态·级别·类型徽章目前多为中性，应按语义映射改成 `Badge` 填实变体（signal/llm/scheduler/story/cost），与 main-agent-context、Auth 一致。本轮已做共享 Badge + landing + Auth，其余页面按页 enum 逐个映射。
-- **Notes:** 后端没起时无法逐页视觉验证，建议跑通后端后边看边刷。
+- **Status:** in-progress（2026-07-01 /design-review DR-4 已做大部分）
+- **Context:** 已改填实语义变体：app-log 级别、scheduler 状态、llm-history 状态、story matchedKinds/人物、playground StateHint。**剩余**：NapCat 事件 / QQ 消息行**没有**类型徽章（要新增 event=signal/message=llm 的填实行标，属 additive）；llm-history 详情的 message role badge 仍 `secondary`（role→语义映射偏主观，待定）。
+- **Notes:** 后端没起时无法逐页视觉验证，本轮按 enum 映射 + build/类型校验为准；跑通后端后再目检。napcat 行标是新增控件，单独评估。
 
 ### 历史表格行键盘可达（a11y）
 
