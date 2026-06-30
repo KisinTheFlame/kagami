@@ -4,11 +4,11 @@ import { BrowserScreenshotTool } from "../../../../src/agent/capabilities/browse
 
 // 截图降级路径会 logger.warn，需要先初始化日志 runtime（否则 getLoggerRuntime 抛）。
 initTestLoggerRuntime();
-import type { BrowserService } from "../../../../src/agent/capabilities/browser/application/browser.service.js";
+import type { BrowserClient } from "../../../../src/browser/browser-client.js";
 import type { OssClient } from "../../../../src/oss/oss-client.js";
 import type { AppendMessageEffect } from "../../../../src/agent/runtime/effect/root-agent-effect.js";
 
-function fakeBrowserService(): BrowserService {
+function fakeBrowserClient(): BrowserClient {
   return {
     screenshot: vi.fn().mockResolvedValue({
       image: Buffer.from("shot"),
@@ -17,12 +17,12 @@ function fakeBrowserService(): BrowserService {
       height: 768,
       url: "https://example.com",
     }),
-  } as unknown as BrowserService;
+  } as unknown as BrowserClient;
 }
 
 function buildTool(ossClient?: OssClient): BrowserScreenshotTool {
-  const service = fakeBrowserService();
-  return new BrowserScreenshotTool({ getBrowserService: () => service, ossClient });
+  const service = fakeBrowserClient();
+  return new BrowserScreenshotTool({ getBrowserClient: () => service, ossClient });
 }
 
 describe("BrowserScreenshotTool", () => {

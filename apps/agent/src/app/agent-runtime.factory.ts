@@ -68,8 +68,8 @@ import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/pri
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
-import { PrismaBrowserCredentialDao } from "../agent/capabilities/browser/infra/prisma-browser-credential.dao.js";
 import { BrowserApp } from "../agent/apps/browser/browser.app.js";
+import type { BrowserClient } from "../browser/browser-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -128,6 +128,8 @@ type BuildAgentRuntimeInput = {
   storyEventQueue: Queue<StoryAgentEvent>;
   /** 自建对象存储客户端；缺省（server.oss 未配）时资源读取/发送/截图落 OSS 优雅降级。 */
   ossClient?: OssClient;
+  /** 浏览器动作客户端：打到独立的 kagami-browser 进程（issue #173）。 */
+  browserClient: BrowserClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -161,6 +163,7 @@ export async function buildAgentRuntime({
   eventQueue,
   storyEventQueue,
   ossClient,
+  browserClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -236,7 +239,6 @@ export async function buildAgentRuntime({
   };
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
-  const browserCredentialDao = new PrismaBrowserCredentialDao({ database });
 
   // 资源读取层：read_resource（全局工具）与 send_resource（QQ 子工具）共用。OSS 关闭时
   // 调用层报错，构造本身不依赖 OSS 在线。
@@ -277,7 +279,7 @@ export async function buildAgentRuntime({
   appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
-  appManager.register(new BrowserApp({ credentialDao: browserCredentialDao, ossClient }));
+  appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 

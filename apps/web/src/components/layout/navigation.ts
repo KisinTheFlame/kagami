@@ -24,7 +24,12 @@ export const navItems: readonly NavItem[] = [
   { to: "/main-agent-context", label: "主 Agent 上下文", icon: Bot },
   { to: "/control-panel", label: "控制面板", icon: SlidersHorizontal },
   { to: "/scheduler-tasks", label: "调度任务", icon: CalendarClock },
-  { to: "/auth/codex", label: "内置登录", icon: KeyRound, matchPrefixes: ["/auth", "/auth/"] },
+  {
+    to: "/auth/claude-code",
+    label: "内置登录",
+    icon: KeyRound,
+    matchPrefixes: ["/auth", "/auth/"],
+  },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/metric-charts", label: "Metric 图表", icon: Activity },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },

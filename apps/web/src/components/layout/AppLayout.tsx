@@ -61,7 +61,9 @@ export function AppLayout() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold tracking-tight">{pageTitle}</p>
+            <p className="truncate font-serif text-base font-semibold tracking-tight">
+              {pageTitle}
+            </p>
           </div>
         </header>
 
@@ -91,7 +93,7 @@ export function AppLayout() {
         />
         <Sidebar
           className={cn(
-            "absolute left-0 top-0 h-[100dvh] w-72 max-w-[85vw] shadow-lg transition-transform duration-200",
+            "absolute left-0 top-0 h-[100dvh] w-72 max-w-[85vw] transition-transform duration-200",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
           onNavigate={() => setIsSidebarOpen(false)}

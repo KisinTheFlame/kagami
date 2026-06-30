@@ -7,9 +7,34 @@
 
 ## [Unreleased]
 
+## [0.3.2.3] - 2026-07-01
+
 ### Changed
 
-- refactor: 把后端共享包 `@kagami/server-core` 按「是否绑原生模块 / 是否绑 fastify」两条接缝拆分为三个职责单一的小包（见 [#174](https://github.com/KisinTheFlame/kagami/issues/174)）：`@kagami/kernel`（纯净基础设施——config / logger / common 契约与错误 / `isRecord` 等纯工具，**无 fastify / 无 Prisma / 无 better-sqlite3**）、`@kagami/http`（仅 `route.helper`，依赖 fastify + zod，**零 `@kagami/*` 依赖**的叶子包）、`@kagami/persistence`（Prisma client + generated client + 所有业务 DAO + Prisma JSON helper，依赖 `@kagami/kernel`）。动机：项目即将出现**不碰 DB / 不提供 HTTP 接口**的轻量服务，单包结构会强迫它们拖入整条 Prisma + `better-sqlite3` 原生模块或 fastify；拆分后这类服务可在零原生模块 / 零 fastify 的依赖闭包下复用 kernel。落地细节：`prisma-json` 中与 Prisma 无关的纯 `isRecord` 抽到 `@kagami/kernel/json/is-record`，Prisma 专用 JSON helper 留在 persistence；全仓 80+ 处 import 子路径迁移；`scripts/prisma.sh` 的 `CORE_DIR`、apps/agent + apps/console 的 tsconfig 源码别名与 package.json 依赖、`.gitignore` 的 generated 路径同步更新；`packages/server-core` 整体删除。**纯移动重构**：不改任何 DAO / config / logger 内部逻辑、不改 Prisma schema、运行时行为零变化（不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响）。build / typecheck / lint / format 与 731 项测试全绿。
+- refactor: 把后端共享包 `@kagami/server-core` 按「是否绑原生模块 / 是否绑 fastify」两条接缝拆分为三个职责单一的小包（见 [#174](https://github.com/KisinTheFlame/kagami/issues/174)）：`@kagami/kernel`（纯净基础设施——config / logger / common 契约与错误 / `isRecord` 等纯工具，**无 fastify / 无 Prisma / 无 better-sqlite3**）、`@kagami/http`（仅 `route.helper`，依赖 fastify + zod，**零 `@kagami/*` 依赖**的叶子包）、`@kagami/persistence`（Prisma client + generated client + 所有业务 DAO + Prisma JSON helper，依赖 `@kagami/kernel`）。动机：项目即将出现**不碰 DB / 不提供 HTTP 接口**的轻量服务，单包结构会强迫它们拖入整条 Prisma + `better-sqlite3` 原生模块或 fastify；拆分后这类服务可在零原生模块 / 零 fastify 的依赖闭包下复用 kernel。落地细节：`prisma-json` 中与 Prisma 无关的纯 `isRecord` 抽到 `@kagami/kernel/json/is-record`，Prisma 专用 JSON helper 留在 persistence；全仓 80+ 处 import 子路径迁移；`scripts/prisma.sh` 的 `CORE_DIR`、apps/agent + apps/console + apps/browser 的 tsconfig 源码别名与 package.json 依赖、`.gitignore` 的 generated 路径同步更新；`packages/server-core` 整体删除（合并 master 的 `apps/browser` 独立进程后，其对 server-core 的引用一并迁移到 kernel/http/persistence）。**纯移动重构**：不改任何 DAO / config / logger 内部逻辑、不改 Prisma schema、运行时行为零变化（不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响）。
+
+## [0.3.2.2] - 2026-07-01
+
+### Changed
+
+- agent/browser: 把浏览器从 agent 进程内拆成独立 PM2 进程 `kagami-browser`（新包 `@kagami/browser`），让 `pnpm app:deploy agent` 重启 agent 时活的 Chromium / 登录会话不再被杀（见 [#173](https://github.com/KisinTheFlame/kagami/issues/173)）。新进程是 server-core-based 的 Fastify 服务，仅绑 `127.0.0.1`（API 暴露 `type secret_handle` / `eval` / `screenshot`，绝不对外网卡），把原 `BrowserService` / 错误体系 / 凭据 DAO 从 `apps/agent` 整体移入；agent 侧新增 `HttpBrowserClient` 逐一镜像 `BrowserService` 方法签名，8 个浏览器工具只把取数来源从进程内 service 换成 HTTP client，**tool_result 字节保持与拆分前逐字一致**（KV 缓存契约，由 golden 测试守住）。凭据：`type(secret_handle)` 在浏览器进程内直读 SQLite `browser_credential` 注入 fill 层，明文永不过 HTTP、永不回 agent。并发：所有动作经进程内 `SerialExecutor` 串行执行，保住 `observeEpoch` / pageStack / locator 不变量（不再依赖"调用方单线程"假设）。健壮性：client 用 `AbortSignal.timeout` + 把 `ECONNREFUSED` / 超时 / 非 JSON 响应统一映射成 `BROWSER_NOT_READY`；进程关停加 deadline 兜底；`waitFor` 死等毫秒数加上限防串行队列被永久占住。配置：顶层 `services` 块新增 `browser`（`127.0.0.1:20007`，同步 `config.loader` / `config.yaml.example`）；`server.apps.browser` 行为配置改由浏览器进程消费。部署：`ecosystem.config.cjs` 新增 `kagami-browser`（PM2 `cwd` 固定仓库根，让 `userDataDir` 落仓库根 `data/browser/`），`scripts/deploy.sh` 单服务分支加 `browser`、迁移暂停库进程列表纳入 `kagami-browser`；`app:deploy agent` 不再触及浏览器进程。无 DB schema 变更。**部署前置（部署机 gitignored `config.yaml`）：加 `services.browser` 块；一次性迁移 `mv apps/agent/data/browser data/browser` 把现存登录 profile 搬到仓库根，否则登录态不会跨重启续上。**
+
+## [0.3.2.1] - 2026-07-01
+
+### Changed
+
+- web: 内置登录页把 **Claude Code** tab 排到 Codex 前面，并将所有默认入口（侧栏「内置登录」链接、`/auth` 重定向、非法 provider 兜底、页内重定向）统一指向 `/auth/claude-code`，使默认打开的就是 Claude Code tab。纯前端表现层改动，不涉及后端、API 或 Agent 上下文。
+
+## [0.3.2.0] - 2026-06-30
+
+### Changed
+
+- web: 前端管理台整套美术风格重做为 **「晒褪了色的蒙德里安 / The Painted Ledger」**（蒙德里安骨架 + 文艺复兴/印象派颜料色）。刻意**弃用 shadcn 的有样式组件层与默认 slate 主题**，仅保留 `@radix-ui/*` 无样式行为基元（焦点陷阱、键盘可访问性），其余 class 体系与组件外观全部自定义。新增仓库根 `DESIGN.md` 作为设计源真理，`AGENTS.md` 增设计系统章节。
+  - 配色：`index.css` 的 `:root` / `.dark` 改为颜料盘（HSL 通道，沿用 `hsl(var(--x))` + 透明度修饰符），新增 5 个语义颜料色（朱砂红=错误/主动事件、群青=LLM/context、赭黄=scheduler/等待、绿土=Story/记忆、茜草=高成本）+ 侧栏 token；深色为「夜间画室」明暗对照整套重设，非简单反相。
+  - 字体：经 Google Fonts 加载 Fraunces/思源宋体（标题）、Literata/思源黑体（正文）、JetBrains Mono（数据）；结构边界默认 `border` 宽度提到 2px、`--radius` 归零、全局等宽数据 `tabular-nums`。
+  - 组件：`button/card/table/badge/dialog/select/chart/json-panel/mobile-card` 与 layout（侧栏暖近黑画布边竖栏、列表/详情画框）按本系统重写；`AuthPage`、`LlmPlayground`、`MetricCharts` 等自带 slate/粉彩/玻璃拟态样式的页面并入颜料盘。
+- web: 经 `/design-review`（Codex + opus 子 Agent 双路外部意见）走查并修复 11 项：暗色侧栏字标可读性、Playground 玻璃拟态块去渐变/圆角/阴影/blur、图表系列色去数字纯色、弱字/绿土文字色晒暗达 WCAG AA、结构层圆角统一 `rounded-none`、`focus-visible` 键盘焦点环统一、全局 `tabular-nums`、`prefers-reduced-motion` 门控、移动端触控目标抬到 ≥44px（仅移动断点，桌面密度不变）等。
+  - 纯表现层改动，不涉及后端、API、数据流或 system prompt / 工具描述，对 KV 缓存前缀无影响。
 
 ## [0.3.1.17] - 2026-06-30
 

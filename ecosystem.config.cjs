@@ -48,5 +48,18 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // 浏览器进程：独立 PM2 生命周期，agent 重启不杀它（issue #173）。cwd 固定为仓库根，
+      // 让 userDataDir(data/browser/default) 落在仓库根 data/ 下，登录态跨 agent 重启留存。
+      name: "kagami-browser",
+      cwd: __dirname,
+      script: "apps/browser/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
