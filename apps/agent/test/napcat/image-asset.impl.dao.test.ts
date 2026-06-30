@@ -31,12 +31,12 @@ describe("PrismaImageAssetDao", () => {
     const database = { imageAsset: { upsert } } as unknown as Database;
     const dao = new PrismaImageAssetDao({ database });
 
-    await dao.upsert({ fileId: "MD5.png", resid: "res-9", description: "图", mime: "image/png" });
+    await dao.upsert({ fileId: "MD5.png", resid: "res-9", description: "图" });
 
     expect(upsert).toHaveBeenCalledWith({
       where: { fileId: "MD5.png" },
-      create: { fileId: "MD5.png", resid: "res-9", description: "图", mime: "image/png" },
-      update: { resid: "res-9", description: "图", mime: "image/png" },
+      create: { fileId: "MD5.png", resid: "res-9", description: "图" },
+      update: { resid: "res-9", description: "图" },
     });
   });
 });

@@ -323,7 +323,6 @@ model ImageAsset {
   fileId      String   @unique(map: "image_asset_file_id_uq") @map("file_id")
   resid       String
   description String
-  mime        String?
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("image_asset")

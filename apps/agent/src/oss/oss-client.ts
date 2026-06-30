@@ -2,8 +2,9 @@ import { z } from "zod";
 import { BizError } from "@kagami/server-core/common/errors/biz-error";
 
 /**
- * 自建对象存储（@kagami/oss）的最小 HTTP client：把二进制 PUT 进去，拿对外 key（resid）。
- * 业务无关——只认 bytes + mime，不关心图片语义。
+ * 自建对象存储（@kagami/oss）的最小 HTTP client：把「bytes + content-type」PUT 进去，拿对外
+ * key（resid）。对标 S3 / MinIO 的 typed object store——content-type 随对象存取，但 client 不关心
+ * 图片等媒体语义（isImage 之类的判定留给上层 resource service）。
  */
 /** getObject 取回的一份资源：原始字节 + MIME + 字节数。 */
 export type OssObject = {

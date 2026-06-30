@@ -4,7 +4,10 @@ import path from "node:path";
 import type Database from "better-sqlite3";
 
 /**
- * 业务无关的内容寻址对象仓库（只认字节 + mime）。
+ * Typed content-addressed object store（对标 S3 / MinIO）。对外是「bytes + content-type」的
+ * 对象——content-type 是对象的一等元数据，原样存、原样回，服务端不嗅探也不改写（信任写入方
+ * 传来的 mime，缺失则 application/octet-stream）。内容寻址去重（sha256）是纯内部实现细节，
+ * 对外不可见、不影响对象语义。
  *
  *   命名层 (object)            内容层 (blob)          物理层 (filesystem)
  *   ┌───────────────┐        ┌────────────────┐     ┌────────────────────────────┐
