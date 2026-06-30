@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.1.17] - 2026-06-30
+
+### Changed
+
+- browser: 浏览器截图 JPEG 质量常量 `SCREENSHOT_JPEG_QUALITY` 由 `60` 提到 `85`，消除低质量 JPEG 在文字边缘的压缩噪点/块效应（实测「截图太糊」的主因）。视口分辨率不变（仍 `1024×768`、`deviceScaleFactor` 维持默认 1），故进多模态上下文的截图 token 占用基本不变，只是单张图字节略增。属 `BrowserService` 代码常量调整，不进 `config.yaml`（行为参数仍按 browser app 约定走代码常量）；不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响。
+
 ## [0.3.1.16] - 2026-06-30
 
 ### Changed
