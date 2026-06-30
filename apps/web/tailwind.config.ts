@@ -81,6 +81,7 @@ const config: Config = {
         sidebar: {
           DEFAULT: "hsl(var(--sidebar))",
           foreground: "hsl(var(--sidebar-foreground))",
+          brand: "hsl(var(--sidebar-brand))",
           active: "hsl(var(--sidebar-active))",
           "active-foreground": "hsl(var(--sidebar-active-foreground))",
           border: "hsl(var(--sidebar-border))",

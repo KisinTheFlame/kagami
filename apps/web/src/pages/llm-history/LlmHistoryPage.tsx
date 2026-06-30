@@ -263,7 +263,7 @@ export function LlmHistoryPage() {
                     <TableCell className="truncate text-sm">{item.provider}</TableCell>
                     <TableCell className="truncate text-sm">{item.model}</TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Badge variant={item.status === "success" ? "default" : "destructive"}>
+                      <Badge variant={item.status === "success" ? "story" : "destructive"}>
                         {toStatusLabel(item.status)}
                       </Badge>
                     </TableCell>

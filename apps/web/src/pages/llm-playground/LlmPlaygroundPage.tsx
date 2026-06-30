@@ -2249,9 +2249,9 @@ function StateHint({
 }) {
   const toneClassName =
     tone === "error"
-      ? "border-destructive/30 bg-destructive/10 text-destructive"
+      ? "border-foreground bg-signal text-signal-foreground"
       : tone === "warning"
-        ? "border-scheduler/50 bg-scheduler/15 text-foreground"
+        ? "border-foreground bg-scheduler text-scheduler-foreground"
         : "border-dashed bg-muted/20 text-muted-foreground";
 
   return (

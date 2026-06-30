@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+## [0.3.3.0] - 2026-07-01
+
+### Changed
+
+- web: 前端配色方向从「晒褪 / 配给」转为 **「鲜艳大胆 + 二维大色块」**（仍是蒙德里安骨架：2px 黑硬线 / 0 圆角 / 衬线标题 / 等宽数据）。用户反馈旧版太灰、色彩做没了，遂把语义色换成蒙德里安**饱和原色**（红 `#D62818` / 蓝 `#143CB0` / 黄 `#F7C400` / 绿 `#2F8F4E` / 玫红 `#B61E3C`，浅深两套），颜色从「配给」改为「结构」——以填实色块 / 状态格 / 大数字上墙。
+  - `Badge` 新增 `signal/llm/scheduler/story/cost` 填实语义变体（2px 黑描边、不渐变、不 hover 淡化）；侧栏选中改正黄色块、字标用新增的 `--sidebar-brand` token。
+  - 主 Agent 上下文页：feed 事件=红 / 消息=蓝填实标签、轮询状态=黄；AuthPage 登录状态 / 警告 / 额度改填实，**额度卡做成填实大色块**（按用量绿→黄→玫红，大号 mono 数字 + 白/黑字，去掉冗余进度条与 tone pill）。
+  - `DESIGN.md` 美术方向 / 色彩 / 布局 / 决策日志同步改向（饱和原色 + 填实大色块 + **二维横竖构图**，不再是从上往下的等宽卡片流）。
+  - 经三档 HTML 样例对比后用户选「档 3」；纯前端表现层，不涉及后端 / API / 数据流，对 KV 缓存前缀无影响。landing 的统计大色块簇需后端补聚合数据（已记 TODOS），本轮只在数据已就绪处上色块。
+- web(design-review): 经 `/design-review`（Codex + opus 子 Agent 双路）走查并修复鲜艳版 4 类问题：①填实色块文字达 WCAG AA（浅色把红/绿晒深至白字 4.5:1，暗色改「亮原色 + 黑字」）；②补回填实徽章丢失的 2px 黑描边（`border-foreground` 漏了 `border` 宽度类）；③Auth 趋势 / Metric 系列图表色换饱和原色；④把填实语义 `Badge` 变体铺到 app-log 级别 / scheduler 状态 / llm-history / Story / Playground（此前只在 main-agent-context 落地）。
+
 ## [0.3.2.4] - 2026-07-01
 
 ### Changed
