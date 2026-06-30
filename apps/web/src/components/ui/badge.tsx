@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 // 蒙德里安色块徽章：2px 黑描边 + 填实色，色块内不渐变、不做 hover 淡化
 const badgeVariants = cva(
-  "inline-flex items-center rounded-none border-foreground px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  "inline-flex items-center rounded-none border border-foreground px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
