@@ -1,6 +1,6 @@
 import { type AuthProvider } from "@kagami/shared/schemas/auth";
 import type { LlmProviderId } from "@kagami/llm";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 export type InternalAuthProvider = Extract<LlmProviderId, "openai-codex" | "claude-code">;
 

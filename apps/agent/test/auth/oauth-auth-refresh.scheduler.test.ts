@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OAuthAuthRefreshScheduler } from "../../src/auth/application/oauth-auth-refresh.scheduler.js";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { OAuthAuthService } from "../../src/auth/application/oauth-auth.service.js";
 import { initTestLogger } from "../helpers/logger.js";
 

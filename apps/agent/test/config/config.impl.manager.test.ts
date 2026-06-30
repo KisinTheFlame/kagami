@@ -2,9 +2,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DefaultConfigManager } from "@kagami/server-core/config/config.impl.manager";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
+import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 
 const tempDirs: string[] = [];
 
@@ -24,6 +24,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
@@ -141,6 +142,7 @@ startupContextRecentMessageCount: 0
         console: { host: "localhost", port: 20006 },
         gateway: { host: "localhost", port: 20004 },
         oss: { host: "127.0.0.1", port: 20005 },
+        browser: { host: "127.0.0.1", port: 20007 },
       },
       server: {
         databaseUrl: "file::memory:",
@@ -340,6 +342,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -651,6 +654,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -727,6 +731,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -806,6 +811,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -881,6 +887,7 @@ services:
   console: { host: localhost, port: 20006 }
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
+  browser: { host: 127.0.0.1, port: 20007 }
 server:
   databaseUrl: "file::memory:"
   agent:

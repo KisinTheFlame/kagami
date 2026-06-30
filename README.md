@@ -18,15 +18,18 @@ All architecture, modules, and capabilities described below should be understood
 
 ## Repository Positioning
 
-Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing eight workspace packages:
+Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing twelve workspace packages:
 
 - `apps/agent`: Fastify backend service (`@kagami/agent`)
-- `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/server-core` shared DAOs against the same SQLite database)
+- `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/persistence` shared DAOs against the same SQLite database)
 - `apps/web`: React frontend admin console (`@kagami/web`)
 - `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone process with zero `@kagami/*` dependencies)
+- `apps/browser`: standalone browser process (`@kagami/browser`, server-core-based Fastify, localhost-only; owns CloakBrowser and credential injection, driven by the agent over HTTP so an agent restart no longer kills the browser)
 - `packages/agent-runtime`: generic Agent / App framework kernel (`@kagami/agent-runtime`)
 - `packages/llm`: LLM message and tool type contracts shared across frontend / backend / kernel (`@kagami/llm`)
-- `packages/server-core`: shared backend infrastructure kernel (`@kagami/server-core`, Prisma client and DAOs, db, logger, config, common contracts and errors)
+- `packages/kernel`: pure backend infrastructure kernel (`@kagami/kernel`, config, logger, common contracts and errors, pure utils like `isRecord`; no fastify / Prisma / better-sqlite3, reusable by services that touch neither the DB nor HTTP)
+- `packages/http`: HTTP route helper (`@kagami/http`, `route.helper`, depends only on fastify + zod; not needed by services that expose no HTTP)
+- `packages/persistence`: persistence infrastructure (`@kagami/persistence`, Prisma client and generated client, db, all business DAOs, Prisma JSON helpers; depends on `@kagami/kernel` + Prisma + better-sqlite3)
 - `packages/shared`: schemas and utilities shared between frontend and backend (`@kagami/shared`)
 
 The workspace definition lives at the repository root in `pnpm-workspace.yaml`, currently covering `apps/*` and `packages/*`. Backend runtime configuration is unified under `config.yaml` at the repository root.
@@ -42,7 +45,9 @@ apps/
 packages/
   agent-runtime/  Generic Agent / App framework abstractions and tool catalog
   llm/            Shared LLM message / tool type contracts
-  server-core/    Shared backend infrastructure (Prisma client / DAOs / db / logger / config / common)
+  kernel/         Pure backend infrastructure (config / logger / common; no Prisma / fastify)
+  http/           HTTP route helper (fastify + zod only)
+  persistence/    Persistence infrastructure (Prisma client / DAOs / db)
   shared/         Frontend/backend shared schemas / DTOs / utils
 ```
 
@@ -99,7 +104,7 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 Notes:
 
 - `db:migrate:dev` automatically appends `--create-only`, generating the migration file without altering the database directly.
-- Standard flow: edit `packages/server-core/prisma/schema.prisma` → generate migration → commit both the schema and migration → run `db:migrate:deploy` in the target environment.
+- Standard flow: edit `packages/persistence/prisma/schema.prisma` → generate migration → commit both the schema and migration → run `db:migrate:deploy` in the target environment.
 
 ## Architecture Overview
 
@@ -195,6 +200,7 @@ Notes:
 - The backend service `kagami-agent` runs `apps/agent/dist/index.js` and listens on `20003` by default.
 - The gateway service `kagami-gateway` runs `apps/gateway/dist/index.js` and listens on `20004` by default.
 - The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
+- The browser service `kagami-browser` runs `apps/browser/dist/index.js` and listens on `20007` by default (localhost only); it owns CloakBrowser so an agent restart does not kill the browser. `app:deploy agent` does not touch it (see issue #173).
 - The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.
 - Running `pnpm app:deploy` performs the build, Prisma migrations, PM2 reload/startOrReload, and `pm2 save`.
 

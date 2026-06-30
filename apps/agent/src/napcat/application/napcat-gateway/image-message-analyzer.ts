@@ -1,4 +1,4 @@
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import { detectMime } from "../../../oss/detect-mime.js";
 import type { OssClient } from "../../../oss/oss-client.js";

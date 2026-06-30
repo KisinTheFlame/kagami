@@ -1,5 +1,5 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import type { Config } from "@kagami/server-core/config/config.loader";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import type { Config } from "@kagami/kernel/config/config.loader";
 import type { PkcePair } from "../shared/pkce.js";
 import type { CodexTokenResponse } from "./types.js";
 

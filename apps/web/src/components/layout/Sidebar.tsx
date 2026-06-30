@@ -11,9 +11,16 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const location = useLocation();
 
   return (
-    <aside className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-background", className)}>
-      <div className="flex h-14 items-center border-b px-4">
-        <span className="text-base font-semibold tracking-tight">Kagami</span>
+    <aside
+      className={cn(
+        "flex h-full w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+        className,
+      )}
+    >
+      <div className="flex h-14 items-center border-b border-sidebar-active/20 px-4">
+        <span className="font-serif text-xl font-semibold tracking-tight text-sidebar-active dark:text-sidebar-active-foreground">
+          鏡 Kagami
+        </span>
       </div>
       <nav className="flex flex-col gap-1 p-2">
         {navItems.map(({ to, label, icon: Icon, matchPrefixes }) => {
@@ -30,10 +37,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               to={to}
               className={() =>
                 cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex min-h-11 items-center gap-3 rounded-none px-3 py-2 text-sm transition-colors md:min-h-0",
                   isActive
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    ? "bg-sidebar-active font-medium text-sidebar-active-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-active/10 hover:text-sidebar-active",
                 )
               }
               onClick={onNavigate}

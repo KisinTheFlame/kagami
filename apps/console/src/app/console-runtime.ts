@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
-import { configureSqlite, createDbClient, type Database } from "@kagami/server-core/db/client";
-import { PrismaLogDao } from "@kagami/server-core/logger/dao/impl/log.impl.dao";
-import { PrismaLlmChatCallDao } from "@kagami/server-core/dao/impl/llm-chat-call.impl.dao";
-import { PrismaNapcatEventDao } from "@kagami/server-core/dao/impl/napcat-event.impl.dao";
-import { PrismaNapcatQqMessageDao } from "@kagami/server-core/dao/impl/napcat-group-message.impl.dao";
-import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { toHttpErrorResponse } from "@kagami/server-core/common/errors/http-error";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { withTraceContext } from "@kagami/server-core/logger/runtime";
+import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
+import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
+import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
+import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
+import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
+import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
+import { PrismaMetricDao } from "@kagami/persistence/dao/impl/prisma-metric.impl.dao";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { withTraceContext } from "@kagami/kernel/logger/runtime";
 import { HealthHandler } from "./http/health.handler.js";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
@@ -41,7 +41,7 @@ export type ConsoleRuntime = {
 /**
  * 管理台后端（console）运行时装配。console 是独立进程，只服务前端的纯 DB 查询接口，
  * 不持有任何 Agent 活内存（事件队列 / HNSW / NapCat 网关都在 server 进程）。它与 server
- * 经 `@kagami/server-core` 共享 Prisma DAO，各自 new 一份 DAO 连同一个 SQLite 库文件。
+ * 经 `@kagami/persistence` 共享 Prisma DAO，各自 new 一份 DAO 连同一个 SQLite 库文件。
  */
 export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const config = await loadStaticConfig();

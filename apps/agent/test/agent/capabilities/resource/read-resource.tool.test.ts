@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { ReadResourceTool } from "../../../../src/agent/capabilities/resource/tools/read-resource.tool.js";
 import type { ResourceService } from "../../../../src/agent/capabilities/resource/application/resource.service.js";
 import type { AppendMessageEffect } from "../../../../src/agent/runtime/effect/root-agent-effect.js";

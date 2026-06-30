@@ -6,10 +6,22 @@ const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        // 正文 / UI：拉丁 Literata（纸本感）+ 中文思源黑体
+        sans: ['"Literata"', '"Noto Sans SC"', "ui-sans-serif", "system-ui", "sans-serif"],
+        // 标题 / display：Fraunces（文艺复兴刻字）+ 中文思源宋体
+        serif: ['"Fraunces"', '"Noto Serif SC"', "ui-serif", "Georgia", "serif"],
+        // 数据 / ID / token / 时间戳
+        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      borderWidth: {
+        // 蒙德里安硬线：结构边界一律 2px 暖近黑
+        DEFAULT: "2px",
       },
       colors: {
         background: "hsl(var(--background))",
@@ -45,6 +57,34 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // 语义颜料色（配给制，只落在「活着 / 有语义」的数据上）
+        signal: {
+          DEFAULT: "hsl(var(--signal))",
+          foreground: "hsl(var(--signal-foreground))",
+        },
+        llm: {
+          DEFAULT: "hsl(var(--llm))",
+          foreground: "hsl(var(--llm-foreground))",
+        },
+        scheduler: {
+          DEFAULT: "hsl(var(--scheduler))",
+          foreground: "hsl(var(--scheduler-foreground))",
+        },
+        story: {
+          DEFAULT: "hsl(var(--story))",
+          foreground: "hsl(var(--story-foreground))",
+        },
+        cost: {
+          DEFAULT: "hsl(var(--cost))",
+          foreground: "hsl(var(--cost-foreground))",
+        },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          active: "hsl(var(--sidebar-active))",
+          "active-foreground": "hsl(var(--sidebar-active-foreground))",
+          border: "hsl(var(--sidebar-border))",
+        },
       },
       keyframes: {
         "accordion-down": {

@@ -102,22 +102,23 @@ const defaultBucketByPreset: Record<MetricChartRangePreset, MetricChartBucket> =
   "2d": "1h",
 };
 
+// The Painted Ledger 颜料系列色：语义颜料 + 去饱和的文艺复兴/印象派扩展，无数字纯色
 const seriesColors = [
-  "#0f766e",
-  "#2563eb",
-  "#dc2626",
-  "#7c3aed",
-  "#d97706",
-  "#059669",
-  "#db2777",
-  "#0891b2",
+  "#284C82", // 群青
+  "#B23A2C", // 朱砂
+  "#5F7C5E", // 绿土
+  "#D7A12C", // 赭黄
+  "#A64B4B", // 茜草
+  "#3F6B68", // 暗绿松石
+  "#6B5D82", // 灰紫
+  "#8A5A38", // 赭石棕
 ] as const;
 
 const inputClassName =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 const textareaClassName =
-  "flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex min-h-28 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function MetricChartsPage() {
   const queryClient = useQueryClient();
@@ -307,7 +308,7 @@ export function MetricChartsPage() {
                   </Select>
                 </div>
 
-                <div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+                <div className="flex flex-col gap-3 rounded-none border bg-background p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium">高级时间</p>
@@ -368,7 +369,7 @@ export function MetricChartsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-none border bg-background p-4">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
                     当前范围：
@@ -628,13 +629,13 @@ function MetricChartCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {query.isLoading ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-muted-foreground">正在加载图表数据…</p>
           </div>
         ) : null}
 
         {query.isError ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-destructive">
               数据加载失败：{getApiErrorMessage(query.error)}
             </p>
@@ -642,7 +643,7 @@ function MetricChartCard({
         ) : null}
 
         {!query.isLoading && !query.isError && !hasSeries ? (
-          <div className="flex h-72 items-center justify-center rounded-lg border border-dashed">
+          <div className="flex h-72 items-center justify-center rounded-none border border-dashed">
             <p className="text-sm text-muted-foreground">当前时间范围内没有数据。</p>
           </div>
         ) : null}
@@ -748,7 +749,7 @@ function DeleteMetricChartDialog({
 
 function InfoPill({ label }: { label: string }) {
   return (
-    <span className="rounded-full border bg-muted px-2.5 py-1 font-medium text-foreground/80">
+    <span className="rounded-none border bg-muted px-2.5 py-1 font-medium text-foreground/80">
       {label}
     </span>
   );

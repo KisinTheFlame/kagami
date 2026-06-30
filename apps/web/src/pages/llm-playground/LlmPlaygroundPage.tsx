@@ -649,16 +649,16 @@ export function LlmPlaygroundPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto bg-[radial-gradient(circle_at_top_left,_rgba(14,116,144,0.12),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(226,232,240,0.92))] p-3 md:p-6 xl:overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto bg-background p-3 md:p-6 xl:overflow-hidden">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 xl:h-full xl:min-h-0 xl:flex-1">
         <div className="grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/75 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
-            <div className="border-b border-slate-200/80 px-6 py-5">
-              <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-500">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-none border bg-card">
+            <div className="border-b border-border/80 px-6 py-5">
+              <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
                 Playground Canvas
               </p>
-              <h2 className="mt-2 text-lg font-semibold text-slate-900">上下文编排区</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <h2 className="mt-2 text-lg font-semibold text-foreground">上下文编排区</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 在一个连续工作台里组织 prompt、消息、工具定义和响应结果。
               </p>
             </div>
@@ -669,7 +669,7 @@ export function LlmPlaygroundPage() {
                   value={systemPrompt}
                   onChange={event => setSystemPrompt(event.target.value)}
                   placeholder="可选，例如：你是一名严谨的代码评审助手。"
-                  className="min-h-[120px] w-full resize-y rounded-2xl border bg-background p-4 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="min-h-[120px] w-full resize-y rounded-none border bg-background p-4 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </Panel>
 
@@ -751,7 +751,7 @@ export function LlmPlaygroundPage() {
                     </Button>
                   </div>
 
-                  <section className="rounded-2xl border border-dashed bg-muted/20 p-4">
+                  <section className="rounded-none border border-dashed bg-muted/20 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold">快速添加</h3>
@@ -828,7 +828,7 @@ export function LlmPlaygroundPage() {
                 ) : (
                   <div className="space-y-4">
                     {lastPayload ? (
-                      <div className="grid grid-cols-1 gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-3 rounded-none border bg-muted/20 p-4 md:grid-cols-3">
                         <MetaItem label="Provider" value={lastPayload.provider} />
                         <MetaItem label="Model" value={lastPayload.model} />
                         <MetaItem
@@ -839,27 +839,27 @@ export function LlmPlaygroundPage() {
                     ) : null}
 
                     {responseError ? (
-                      <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-none border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                         {responseError}
                       </div>
                     ) : null}
 
                     {lastParsedResponse ? (
                       <>
-                        <section className="rounded-2xl border bg-background/80 p-4">
+                        <section className="rounded-none border bg-background/80 p-4">
                           <div className="flex items-center justify-between gap-3">
                             <h2 className="text-sm font-semibold">Assistant Output</h2>
                             <span className="text-xs text-muted-foreground">
                               {lastParsedResponse.provider} · {lastParsedResponse.model}
                             </span>
                           </div>
-                          <pre className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-muted/30 p-4 text-xs leading-6">
+                          <pre className="mt-3 whitespace-pre-wrap break-words rounded-none bg-muted/30 p-4 text-xs leading-6">
                             {lastParsedResponse.message.content || "模型未返回文本内容。"}
                           </pre>
                         </section>
 
                         <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                          <div className="rounded-2xl border bg-background/80 p-4">
+                          <div className="rounded-none border bg-background/80 p-4">
                             <h2 className="text-sm font-semibold">Tool Calls</h2>
                             {lastParsedResponse.message.toolCalls.length === 0 ? (
                               <p className="mt-3 text-sm text-muted-foreground">
@@ -874,7 +874,7 @@ export function LlmPlaygroundPage() {
                             )}
                           </div>
 
-                          <div className="rounded-2xl border bg-background/80 p-4">
+                          <div className="rounded-none border bg-background/80 p-4">
                             <h2 className="text-sm font-semibold">Usage</h2>
                             {lastParsedResponse.usage ? (
                               <div className="mt-3 space-y-2 text-sm">
@@ -1029,7 +1029,7 @@ export function LlmPlaygroundPage() {
                   </Field>
                 ) : null}
 
-                <div className="rounded-2xl border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground">
+                <div className="rounded-none border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground">
                   <p>当前 provider：{selectedProvider?.id ?? "未选择"}</p>
                   <p className="mt-1">
                     当前 model：{selectedModel.trim().length > 0 ? selectedModel : "未选择"}
@@ -1039,10 +1039,10 @@ export function LlmPlaygroundPage() {
                 </div>
               </div>
 
-              <div className="mt-8 space-y-4 border-t border-slate-200/80 pt-5">
+              <div className="mt-8 space-y-4 border-t border-border/80 pt-5">
                 <Button
                   type="button"
-                  className="h-12 w-full justify-center rounded-2xl"
+                  className="h-12 w-full justify-center rounded-none"
                   onClick={handleSubmit}
                   disabled={requestMutation.isPending}
                 >
@@ -1052,14 +1052,14 @@ export function LlmPlaygroundPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12 w-full justify-center rounded-2xl"
+                  className="h-12 w-full justify-center rounded-none"
                   onClick={handleReset}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   重置示例
                 </Button>
                 {editorError ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <div className="rounded-none border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {editorError}
                   </div>
                 ) : null}
@@ -1113,7 +1113,7 @@ function MessageEditorCard({
   onAssistantToolCallDelete: (toolCallId: string) => void;
 }) {
   return (
-    <section className="rounded-2xl border bg-background/80 p-4">
+    <section className="rounded-none border bg-background/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -1165,7 +1165,7 @@ function MessageEditorCard({
               <Plus className="mr-2 h-4 w-4" />
               文本片段
             </Button>
-            <label className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+            <label className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-none border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
               <ImagePlus className="mr-2 h-4 w-4" />
               上传图片
               <input
@@ -1186,7 +1186,7 @@ function MessageEditorCard({
           ) : (
             <div className="space-y-3">
               {message.parts.map((part, partIndex) => (
-                <section key={part.id} className="rounded-xl border bg-muted/20 p-3">
+                <section key={part.id} className="rounded-none border bg-muted/20 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">
@@ -1238,14 +1238,14 @@ function MessageEditorCard({
                         )
                       }
                       placeholder="输入文本内容"
-                      className="min-h-[110px] w-full resize-y rounded-xl border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="min-h-[110px] w-full resize-y rounded-none border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     />
                   ) : (
                     <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
                       <img
                         src={part.dataUrl}
                         alt={part.fileName || "uploaded"}
-                        className="h-36 w-full rounded-xl border object-cover"
+                        className="h-36 w-full rounded-none border object-cover"
                       />
                       <div className="space-y-3">
                         <Field label="文件名">
@@ -1261,7 +1261,7 @@ function MessageEditorCard({
                                   : currentPart,
                               )
                             }
-                            className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           />
                         </Field>
                         <Field label="MIME Type">
@@ -1277,7 +1277,7 @@ function MessageEditorCard({
                                   : currentPart,
                               )
                             }
-                            className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           />
                         </Field>
                       </div>
@@ -1296,10 +1296,10 @@ function MessageEditorCard({
             value={message.content}
             onChange={event => onTextChange(event.target.value)}
             placeholder="assistant 文本内容"
-            className="min-h-[120px] w-full resize-y rounded-xl border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="min-h-[120px] w-full resize-y rounded-none border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
 
-          <div className="rounded-xl border border-dashed bg-muted/20 p-4">
+          <div className="rounded-none border border-dashed bg-muted/20 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">Tool Calls</h3>
@@ -1316,7 +1316,7 @@ function MessageEditorCard({
             ) : (
               <div className="mt-3 space-y-3">
                 {message.toolCalls.map(toolCall => (
-                  <section key={toolCall.id} className="rounded-xl border bg-background p-3">
+                  <section key={toolCall.id} className="rounded-none border bg-background p-3">
                     <div className="mb-3 flex justify-end">
                       <Button
                         type="button"
@@ -1338,7 +1338,7 @@ function MessageEditorCard({
                               toolCallId: event.target.value,
                             }))
                           }
-                          className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         />
                       </Field>
                       <Field label="Tool Name">
@@ -1350,7 +1350,7 @@ function MessageEditorCard({
                               name: event.target.value,
                             }))
                           }
-                          className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         />
                       </Field>
                     </div>
@@ -1364,7 +1364,7 @@ function MessageEditorCard({
                             argumentsText: event.target.value,
                           }))
                         }
-                        className="min-h-[110px] w-full resize-y rounded-xl border bg-background p-3 font-mono text-xs outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="min-h-[110px] w-full resize-y rounded-none border bg-background p-3 font-mono text-xs outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       />
                     </Field>
                   </section>
@@ -1382,7 +1382,7 @@ function MessageEditorCard({
               value={message.toolCallId}
               onChange={event => onToolCallIdChange(event.target.value)}
               placeholder="例如 call_123"
-              className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </Field>
           <Field label="Tool Output">
@@ -1390,7 +1390,7 @@ function MessageEditorCard({
               value={message.content}
               onChange={event => onTextChange(event.target.value)}
               placeholder="工具返回内容"
-              className="min-h-[120px] w-full resize-y rounded-xl border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-h-[120px] w-full resize-y rounded-none border bg-background p-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </Field>
         </div>
@@ -1428,7 +1428,7 @@ function ToolEditorCard({
   onPropertyDelete: (propertyId: string) => void;
 }) {
   return (
-    <section className="rounded-2xl border bg-background/80 p-4">
+    <section className="rounded-none border bg-background/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Tool {index + 1}</p>
@@ -1470,7 +1470,7 @@ function ToolEditorCard({
                 name: event.target.value,
               }))
             }
-            className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
         </Field>
         <Field label="Description">
@@ -1482,12 +1482,12 @@ function ToolEditorCard({
                 description: event.target.value,
               }))
             }
-            className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
         </Field>
       </div>
 
-      <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-4">
+      <div className="mt-4 rounded-none border border-dashed bg-muted/20 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">Properties</h3>
@@ -1504,7 +1504,7 @@ function ToolEditorCard({
         ) : (
           <div className="mt-3 space-y-3">
             {tool.properties.map((property, propertyIndex) => (
-              <section key={property.id} className="rounded-xl border bg-background p-3">
+              <section key={property.id} className="rounded-none border bg-background p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium">{property.name.trim() || "未命名属性"}</p>
@@ -1550,7 +1550,7 @@ function ToolEditorCard({
                           name: event.target.value,
                         }))
                       }
-                      className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     />
                   </Field>
 
@@ -1592,7 +1592,7 @@ function ToolEditorCard({
                         description: event.target.value,
                       }))
                     }
-                    className="h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   />
                 </Field>
               </section>
@@ -2213,9 +2213,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section
-      className={`rounded-2xl border bg-background/88 p-5 shadow-sm backdrop-blur ${className ?? ""}`}
-    >
+    <section className={`rounded-none border bg-card p-5 ${className ?? ""}`}>
       <div className="mb-4 space-y-1">
         <h2 className="text-base font-semibold">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -2253,12 +2251,12 @@ function StateHint({
     tone === "error"
       ? "border-destructive/30 bg-destructive/10 text-destructive"
       : tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-800"
+        ? "border-scheduler/50 bg-scheduler/15 text-foreground"
         : "border-dashed bg-muted/20 text-muted-foreground";
 
   return (
     <div
-      className={`flex min-h-[100px] items-center justify-center rounded-2xl border px-4 py-6 text-center text-sm ${toneClassName}`}
+      className={`flex min-h-[100px] items-center justify-center rounded-none border px-4 py-6 text-center text-sm ${toneClassName}`}
     >
       {text}
     </div>
@@ -2267,12 +2265,12 @@ function StateHint({
 
 function ToolCallCard({ toolCall }: { toolCall: LlmToolCallPayload }) {
   return (
-    <details className="rounded-xl border bg-muted/20 p-3">
+    <details className="rounded-none border bg-muted/20 p-3">
       <summary className="cursor-pointer text-sm font-medium">
         {toolCall.name}
         <span className="ml-2 font-mono text-xs text-muted-foreground">{toolCall.id}</span>
       </summary>
-      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 font-mono text-xs leading-6 text-slate-100">
+      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-none bg-foreground p-3 font-mono text-xs leading-6 text-background">
         {formatJson(toolCall.arguments)}
       </pre>
     </details>

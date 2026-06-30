@@ -5,10 +5,7 @@ import {
   StoryReindexRequestSchema,
   StoryReindexResponseSchema,
 } from "@kagami/shared/schemas/story";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 import type { StoryQueryService } from "../application/story-query.service.js";
 import type { StoryReindexService } from "../application/story-reindex.service.js";
 

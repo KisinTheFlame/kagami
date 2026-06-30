@@ -2,7 +2,7 @@ import {
   type NapcatQqMessageItem,
   type NapcatQqMessageListResponse,
 } from "@kagami/shared/schemas/napcat-group-message";
-import type { NapcatQqMessageItem as NapcatQqMessageDaoItem } from "@kagami/server-core/dao/napcat-group-message.dao";
+import type { NapcatQqMessageItem as NapcatQqMessageDaoItem } from "@kagami/persistence/dao/napcat-group-message.dao";
 
 type MapNapcatQqMessageListInput = {
   page: number;

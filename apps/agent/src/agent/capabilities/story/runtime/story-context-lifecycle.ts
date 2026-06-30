@@ -11,7 +11,7 @@ import type {
 import { DefaultAgentContext } from "../../../runtime/context/default-agent-context.js";
 import { createContextCompactionPlan } from "../../../runtime/context/context-compaction.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { DEFAULT_LLM_RETRY_BACKOFF_MS, isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
 import { STORY_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION, STORY_RUNTIME_KEY } from "../domain/story.js";

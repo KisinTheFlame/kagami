@@ -9,10 +9,7 @@ import {
 } from "@kagami/shared/schemas/metric-chart";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 import type { MetricChartService } from "../application/metric-chart.service.js";
 
 const EmptyQuerySchema = z.object({}).strict();

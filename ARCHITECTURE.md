@@ -4,26 +4,32 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 当前由 8 个包组成，依赖单向（apps → packages）：
+pnpm workspace 当前由 12 个包组成，依赖单向（apps → packages）：
 
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
-      ├────────→ packages/server-core ──→ packages/shared
-apps/console ──→ packages/server-core ──→ packages/shared
+      ├────────→ packages/persistence ──→ packages/kernel ──→ packages/shared
+      └────────→ packages/http
+apps/console ──→ packages/persistence ──→ packages/kernel ──→ packages/shared
+      └────────→ packages/http
 apps/web     ──→ packages/shared
 apps/oss     （独立进程，零 @kagami 依赖）
+apps/browser ──→ packages/persistence / kernel / http  （独立进程，持有 CloakBrowser）
 ```
 
-| 包                      | 角色                                                                                                                                                                   |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                        |
-| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 server-core 共享 DAO 直读 SQLite |
-| `@kagami/server-core`   | 前后端进程共享的后端基础设施：Prisma client / 共享 DAO / config / logger / 后端 common                                                                                 |
-| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                 |
-| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                                                                                     |
-| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                     |
-| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                                                                                              |
-| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                        |
+| 包                      | 角色                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                                       |
+| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 @kagami/persistence 共享 DAO 直读 SQLite        |
+| `@kagami/kernel`        | 后端纯净基础设施：config / logger / 后端 common 契约与错误 / `isRecord` 等纯工具（无 fastify / 无 Prisma / 无 better-sqlite3）                                                        |
+| `@kagami/http`          | HTTP 路由辅助（`route.helper`，仅 fastify + zod，零 `@kagami/*` 依赖）                                                                                                                |
+| `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                         |
+| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                                |
+| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                                                                                                    |
+| `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173） |
+| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                                    |
+| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                                                                                                             |
+| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                                       |
 
 ## 后端模块 DAG
 
@@ -88,7 +94,7 @@ apps/agent/src/agent/
 │   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
-│   ├── browser/        CloakBrowser 有头驱动，登录 / 点击 / 填表 / 读真实网站（能力本体）
+│   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
 │   ├── terminal/       终端能力本体
 │   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
@@ -173,7 +179,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 - **进程内 SQLite 文件**（默认 `data/sqlite/kagami.db`）通过 Prisma ORM + `@prisma/adapter-better-sqlite3` 访问；宿主机不再需要外部 PostgreSQL。
 - Story 向量记忆用**进程内 HNSW 索引（hnswlib-node）**：向量以 JSON 字符串存于 `story_memory_document.embedding`（SQLite 为唯一事实来源），索引启动时重建、派生快照落 `data/vector/`。
 - App 状态走通用 `app_state` 表（appId → 不透明 JSON）。
-- Schema 源文件 `packages/server-core/prisma/schema.prisma`，迁移落 `packages/server-core/prisma/migrations/`，通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理。
+- Schema 源文件 `packages/persistence/prisma/schema.prisma`，迁移落 `packages/persistence/prisma/migrations/`，通过 `pnpm db:migrate:dev` / `db:migrate:deploy` 管理。
 - DAO 按模块内分层组织：port / 接口在 `domain/` 或模块根，Prisma 实现多放在 `infra/`（`infra/impl/`），早期代码也有 `dao/` / `dao/impl/` 的形态。
 - `apps/oss` 自带独立的 `data/oss/oss.db`（裸 better-sqlite3）与分片 blob 文件，不经 Prisma。
 
@@ -192,7 +198,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
+- PM2（`ecosystem.config.cjs`）托管五个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）。后端进程并发读写同一 SQLite 库靠库文件级 WAL。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
 - 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。

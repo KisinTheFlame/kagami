@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { ResourceService } from "../application/resource.service.js";
 

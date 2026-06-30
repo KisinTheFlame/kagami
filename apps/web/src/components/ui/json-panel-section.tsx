@@ -25,7 +25,7 @@ export function JsonPanelSection({
 }) {
   return (
     <section className="space-y-3">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="font-serif text-base font-semibold">{title}</h3>
       {items.map(item => (
         <JsonPanel
           key={item.key}
@@ -60,7 +60,7 @@ function JsonPanel({
     copyStatus === "success" ? "已复制" : copyStatus === "error" ? "复制失败" : "复制";
 
   return (
-    <details open={defaultOpen} className="relative rounded-md border bg-muted/20 p-3">
+    <details open={defaultOpen} className="relative rounded-none border bg-muted/20 p-3">
       <summary className="cursor-pointer pr-12 text-sm font-medium">{title}</summary>
       <Button
         type="button"

@@ -2,16 +2,16 @@ import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import { InMemoryQueue } from "@kagami/agent-runtime";
-import { DefaultConfigManager } from "@kagami/server-core/config/config.impl.manager";
-import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
-import { configureSqlite, createDbClient, type Database } from "@kagami/server-core/db/client";
-import { PrismaLlmChatCallDao } from "@kagami/server-core/dao/impl/llm-chat-call.impl.dao";
-import { PrismaLogDao } from "@kagami/server-core/logger/dao/impl/log.impl.dao";
+import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
+import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
+import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
+import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
+import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaImageAssetDao } from "../napcat/infra/impl/image-asset.impl.dao.js";
-import { PrismaNapcatEventDao } from "@kagami/server-core/dao/impl/napcat-event.impl.dao";
-import { PrismaNapcatQqMessageDao } from "@kagami/server-core/dao/impl/napcat-group-message.impl.dao";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { toHttpErrorResponse } from "@kagami/server-core/common/errors/http-error";
+import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
+import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
@@ -26,10 +26,10 @@ import { createClaudeCodeProvider } from "../llm/providers/claude-code-provider.
 import { OpenAiCodexAuthStore } from "../llm/providers/openai-codex-auth.js";
 import { createOpenAiCodexProvider } from "../llm/providers/openai-codex-provider.js";
 import { createOpenAiProvider } from "../llm/providers/openai-provider.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { initLoggerRuntime, withTraceContext } from "@kagami/server-core/logger/runtime";
-import { DbLogSink } from "@kagami/server-core/logger/sinks/db-sink";
-import { StdoutLogSink } from "@kagami/server-core/logger/sinks/stdout-sink";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
+import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
+import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import { createAuthModule } from "../auth/index.js";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
@@ -43,6 +43,7 @@ import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../oss/oss-client.js";
+import { HttpBrowserClient } from "../browser/browser-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -60,7 +61,7 @@ import { NotificationCenter } from "../agent/runtime/root-agent/notification/not
 import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
-import { PrismaMetricDao } from "@kagami/server-core/dao/impl/prisma-metric.impl.dao";
+import { PrismaMetricDao } from "@kagami/persistence/dao/impl/prisma-metric.impl.dao";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -198,6 +199,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         baseUrl: `http://${config.services.oss.host}:${config.services.oss.port}`,
       })
     : undefined;
+  // 浏览器拆成独立 kagami-browser 进程（issue #173）：agent 经 HTTP client 调它，地址
+  // 从顶层 services.browser 派生（host 是 reachable host）。浏览器进程未起时，client
+  // 把错误归一成 BROWSER_NOT_READY，工具仍回规整失败结构。
+  const browserClient = new HttpBrowserClient({
+    baseUrl: `http://${config.services.browser.host}:${config.services.browser.port}`,
+  });
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
     ossClient,
@@ -264,6 +271,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     eventQueue,
     storyEventQueue,
     ossClient,
+    browserClient,
   });
 
   const taskScheduler = new TaskScheduler();

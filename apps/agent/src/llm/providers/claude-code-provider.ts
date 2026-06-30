@@ -12,10 +12,10 @@ import type {
   LlmContentPart,
 } from "../types.js";
 import { imageContentToBase64 } from "@kagami/llm";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { isRecord } from "@kagami/server-core/common/prisma-json";
-import type { Config } from "@kagami/server-core/config/config.loader";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import { isRecord } from "@kagami/kernel/json/is-record";
+import type { Config } from "@kagami/kernel/config/config.loader";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";

@@ -83,7 +83,7 @@ export function HistoryListPageLayout({
 
         <aside
           className={cn(
-            "min-w-0 rounded-md border bg-background",
+            "min-w-0 rounded-none border bg-card",
             showMobileDetail
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : isMobile

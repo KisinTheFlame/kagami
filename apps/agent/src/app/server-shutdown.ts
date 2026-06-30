@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { Database } from "@kagami/server-core/db/client";
-import { closeDb as defaultCloseDb } from "@kagami/server-core/db/client";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { getLoggerRuntime } from "@kagami/server-core/logger/runtime";
+import type { Database } from "@kagami/persistence/db/client";
+import { closeDb as defaultCloseDb } from "@kagami/persistence/db/client";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { getLoggerRuntime } from "@kagami/kernel/logger/runtime";
 import type { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 
 export type AgentRuntimeController = {
