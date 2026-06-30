@@ -69,8 +69,8 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     successMessage: "Codex 登录已完成。",
     errorMessage: "Codex 登录失败。",
     trendColors: {
-      fiveHour: "#5F7C5E",
-      sevenDay: "#284C82",
+      fiveHour: "#2F8F4E",
+      sevenDay: "#143CB0",
     },
   },
   "claude-code": {
@@ -83,8 +83,8 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     successMessage: "Claude Code 登录已完成。",
     errorMessage: "Claude Code 登录失败。",
     trendColors: {
-      fiveHour: "#D7A12C",
-      sevenDay: "#284C82",
+      fiveHour: "#D62818",
+      sevenDay: "#143CB0",
     },
   },
 };
