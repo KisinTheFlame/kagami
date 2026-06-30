@@ -1,15 +1,17 @@
-import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { fileURLToPath } from "node:url";
+import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
+import { loadGatewayConfig } from "./config.js";
 
-const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/web/dist");
+const config = loadGatewayConfig();
+const distDir = config.distDir;
 const indexPath = path.join(distDir, "index.html");
-const port = Number(process.env.PORT ?? "20004");
-const apiTarget = new URL(process.env.API_TARGET ?? "http://localhost:20003");
-const consoleTarget = new URL(process.env.CONSOLE_TARGET ?? "http://localhost:20006");
+const port = config.port;
+const apiTarget = config.agentTarget;
+const consoleTarget = config.consoleTarget;
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
@@ -20,7 +22,7 @@ const CONSOLE_PATH_PREFIXES = [
 ];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
-const MIME_TYPES = {
+const MIME_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
   ".ico": "image/x-icon",
@@ -62,10 +64,10 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`[kagami-web] listening on http://0.0.0.0:${port}\n`);
+  process.stdout.write(`[kagami-gateway] listening on http://0.0.0.0:${port}\n`);
 });
 
-function selectUpstreamTarget(upstreamPath) {
+function selectUpstreamTarget(upstreamPath: string): URL {
   for (const prefix of CONSOLE_PATH_PREFIXES) {
     if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
       return consoleTarget;
@@ -75,7 +77,11 @@ function selectUpstreamTarget(upstreamPath) {
   return apiTarget;
 }
 
-async function proxyApiRequest(req, res, requestUrl) {
+async function proxyApiRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestUrl: URL,
+): Promise<void> {
   const upstreamPath = requestUrl.pathname.slice(4) || "/";
   const target = selectUpstreamTarget(upstreamPath);
   const upstreamUrl = new URL(`${upstreamPath}${requestUrl.search}`, target);
@@ -94,10 +100,10 @@ async function proxyApiRequest(req, res, requestUrl) {
   const upstreamResponse = await fetch(upstreamUrl, {
     method: req.method,
     headers,
-    body: req.method === "GET" || req.method === "HEAD" ? undefined : req,
+    body: req.method === "GET" || req.method === "HEAD" ? undefined : (req as unknown as BodyInit),
     duplex: req.method === "GET" || req.method === "HEAD" ? undefined : "half",
     redirect: "manual",
-  });
+  } as RequestInit & { duplex?: "half" });
 
   const responseHeaders = Object.fromEntries(upstreamResponse.headers.entries());
   res.writeHead(upstreamResponse.status, responseHeaders);
@@ -107,10 +113,15 @@ async function proxyApiRequest(req, res, requestUrl) {
     return;
   }
 
-  Readable.fromWeb(upstreamResponse.body).pipe(res);
+  // fetch 返回的是 DOM 流类型，Readable.fromWeb 要的是 node:stream/web 的流；两者运行时一致，仅类型分叉，故收窄转换。
+  Readable.fromWeb(upstreamResponse.body as unknown as NodeWebReadableStream<Uint8Array>).pipe(res);
 }
 
-async function serveStaticAsset(req, res, requestUrl) {
+async function serveStaticAsset(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestUrl: URL,
+): Promise<void> {
   const assetPath = resolveAssetPath(requestUrl.pathname);
   const selectedPath = await resolveResponsePath(assetPath, req.headers.accept);
 
@@ -135,7 +146,7 @@ async function serveStaticAsset(req, res, requestUrl) {
   createReadStream(selectedPath).pipe(res);
 }
 
-function resolveAssetPath(pathname) {
+function resolveAssetPath(pathname: string): string {
   const decodedPath = decodeURIComponent(pathname);
   const relativePath = decodedPath === "/" ? "/index.html" : decodedPath;
   const resolvedPath = path.resolve(distDir, `.${relativePath}`);
@@ -147,7 +158,10 @@ function resolveAssetPath(pathname) {
   return resolvedPath;
 }
 
-async function resolveResponsePath(targetPath, acceptHeader) {
+async function resolveResponsePath(
+  targetPath: string,
+  acceptHeader: string | undefined,
+): Promise<string | null> {
   if (await fileExists(targetPath)) {
     return targetPath;
   }
@@ -163,7 +177,7 @@ async function resolveResponsePath(targetPath, acceptHeader) {
   return indexPath;
 }
 
-async function fileExists(targetPath) {
+async function fileExists(targetPath: string): Promise<boolean> {
   try {
     const targetStat = await stat(targetPath);
     return targetStat.isFile();
@@ -172,7 +186,7 @@ async function fileExists(targetPath) {
   }
 }
 
-function getCacheControlHeader(targetPath) {
+function getCacheControlHeader(targetPath: string): string {
   if (targetPath === indexPath) {
     return "no-cache";
   }
@@ -192,6 +206,6 @@ function getCacheControlHeader(targetPath) {
   return "no-cache";
 }
 
-function isHashedAsset(fileName) {
+function isHashedAsset(fileName: string): boolean {
   return HASHED_ASSET_NAME_PATTERN.test(fileName);
 }

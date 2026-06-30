@@ -1,6 +1,7 @@
 import { Menu } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -67,9 +68,11 @@ export function AppLayout() {
         </header>
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden pt-14 md:pt-0">
-          <Suspense fallback={<RouteLoadingIndicator />}>
-            <Outlet />
-          </Suspense>
+          <ErrorBoundary key={location.pathname}>
+            <Suspense fallback={<RouteLoadingIndicator />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 

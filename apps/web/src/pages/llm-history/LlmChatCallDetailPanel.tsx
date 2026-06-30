@@ -9,6 +9,7 @@ import { FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ import {
   buildPlaygroundImportDraftFromHistory,
   type PlaygroundImportLocationState,
 } from "@/pages/llm-playground/playground-import";
+import { toStatusLabel } from "./format-status";
 import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallDetail } from "./useLlmChatCallDetail";
 
@@ -230,7 +232,7 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
             label="延迟"
             value={headerInfo.latencyMs === null ? "—" : `${headerInfo.latencyMs} ms`}
           />
-          <MetaItem label="时间" value={formatDate(headerInfo.createdAt)} />
+          <MetaItem label="时间" value={formatDateTime(headerInfo.createdAt)} />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -561,21 +563,6 @@ function MetaItem({
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function toStatusLabel(status: LlmChatCallStatus): string {
-  return status === "success" ? "成功" : "失败";
 }
 
 function buildPreview(content: string): string {

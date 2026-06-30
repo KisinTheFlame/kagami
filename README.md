@@ -193,7 +193,7 @@ Notes:
 
 - The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages three processes.
 - The backend service `kagami-agent` runs `apps/agent/dist/index.js` and listens on `20003` by default.
-- The frontend service `kagami-web` runs `scripts/web-server.mjs` and listens on `20004` by default.
+- The gateway service `kagami-gateway` runs `apps/gateway/dist/index.js` and listens on `20004` by default.
 - The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
 - The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.
 - Running `pnpm app:deploy` performs the build, Prisma migrations, PM2 reload/startOrReload, and `pm2 save`.

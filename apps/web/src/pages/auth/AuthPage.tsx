@@ -29,6 +29,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { apiPost, apiPostWithSchema } from "@/lib/api";
+import { formatOptionalDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
@@ -278,11 +279,11 @@ export function AuthPage() {
                   <InfoCard label="邮箱" value={statusData!.session?.email ?? "未记录"} />
                   <InfoCard
                     label="Access Token 过期时间"
-                    value={formatDateTime(statusData!.session?.expiresAt)}
+                    value={formatOptionalDateTime(statusData!.session?.expiresAt, "未记录")}
                   />
                   <InfoCard
                     label="最后刷新时间"
-                    value={formatDateTime(statusData!.session?.lastRefreshAt)}
+                    value={formatOptionalDateTime(statusData!.session?.lastRefreshAt, "未记录")}
                   />
                   <InfoCard label="最近刷新错误" value={statusData!.session?.lastError ?? "无"} />
                 </dl>
@@ -765,26 +766,6 @@ function getStatusWarningMessage(statusData: AuthStatusResponse | null | undefin
   }
 
   return `最近一次后台刷新失败，当前 Access Token 已过期：${statusData.session.lastError}`;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) {
-    return "未记录";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
 }
 
 function clampPercent(value: number): number {

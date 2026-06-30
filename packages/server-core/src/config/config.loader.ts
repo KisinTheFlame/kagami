@@ -2,12 +2,12 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LLM_PROVIDER_IDS, type LlmProviderId } from "@kagami/llm";
 import { parse } from "yaml";
 import { z } from "zod";
 import { BizError } from "../common/errors/biz-error.js";
-import type { LlmProviderId, LlmUsageId } from "../common/contracts/llm.js";
+import type { LlmUsageId } from "../common/contracts/llm.js";
 
-const DEFAULT_PORT = 20003;
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
@@ -34,14 +34,12 @@ const DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-4-20250514";
 const DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES = 30;
 const DEFAULT_AUTH_USAGE_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_CODEX_AUTH_ENABLED = true;
-const DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CODEX_AUTH_REDIRECT_PATH = "/auth/callback";
 const DEFAULT_CODEX_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS = 60_000;
 const DEFAULT_OPENAI_CODEX_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_CODEX_AUTH_BINARY_PATH = "codex";
 const DEFAULT_CLAUDE_CODE_AUTH_ENABLED = true;
-const DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL = "http://localhost:20004";
 const DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH = "/callback";
 const DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS = 7_200_000;
@@ -101,10 +99,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
 }, z.string().trim().min(1).optional());
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
 const StringLikeArraySchema = z.array(StringLikeSchema).min(1);
-const LlmProviderSchema = z.enum(["deepseek", "openai", "openai-codex", "claude-code"] satisfies [
-  LlmProviderId,
-  ...LlmProviderId[],
-]);
+const LlmProviderSchema = z.enum(LLM_PROVIDER_IDS);
 const GoogleStoryMemoryEmbeddingConfigSchema = z.object({
   provider: z.literal("google"),
   apiKey: NonEmptyStringSchema,
@@ -194,10 +189,30 @@ const NapcatConfigSchema = z.preprocess(
     })),
 );
 
+/**
+ * 单机服务拓扑的唯一事实来源。每个进程从这里读自己的监听端口与依赖服务的地址；
+ * `host` 语义是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——
+ * 各进程一律绑 0.0.0.0。详见 issue #162。
+ */
+const ServiceEndpointSchema = z
+  .object({
+    host: NonEmptyStringSchema,
+    port: PositiveIntSchema,
+  })
+  .strict();
+const ServicesSchema = z
+  .object({
+    agent: ServiceEndpointSchema,
+    console: ServiceEndpointSchema,
+    gateway: ServiceEndpointSchema,
+    oss: ServiceEndpointSchema,
+  })
+  .strict();
+
 const ConfigSchema = z.object({
+  services: ServicesSchema,
   server: z.object({
     databaseUrl: DatabaseUrlSchema,
-    port: PositiveIntSchema.default(DEFAULT_PORT),
     agent: z.preprocess(
       value => {
         if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -316,7 +331,9 @@ const ConfigSchema = z.object({
       codexAuth: z
         .object({
           enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),
-          publicBaseUrl: UrlSchema.default(DEFAULT_CODEX_AUTH_PUBLIC_BASE_URL),
+          // 缺省时在 loadStaticConfig 里派生为 http://localhost:${services.gateway.port}
+          // （host 固定 localhost：浏览器回调 origin 不等于 reachable host）。可显式覆盖。
+          publicBaseUrl: UrlSchema.optional(),
           oauthRedirectPath: z.string().trim().min(1).default(DEFAULT_CODEX_AUTH_REDIRECT_PATH),
           oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CODEX_AUTH_STATE_TTL_MS),
           refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
@@ -329,7 +346,8 @@ const ConfigSchema = z.object({
       claudeCodeAuth: z
         .object({
           enabled: z.boolean().default(DEFAULT_CLAUDE_CODE_AUTH_ENABLED),
-          publicBaseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_AUTH_PUBLIC_BASE_URL),
+          // 同 codexAuth：缺省派生 http://localhost:${services.gateway.port}，可显式覆盖。
+          publicBaseUrl: UrlSchema.optional(),
           oauthRedirectPath: z
             .string()
             .trim()
@@ -391,12 +409,13 @@ const ConfigSchema = z.object({
       }),
     }),
     /**
-     * 自建对象存储（@kagami/oss）的访问地址，给 server 把 QQ 图片原图 PUT 进去用。
-     * 可选：缺失即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
+     * 自建对象存储（@kagami/oss）的启用开关。地址不在这里——统一来自顶层 `services.oss`，
+     * agent 把 QQ 图片原图 PUT 进去用。整段可省略（=禁用，resid 恒为 null，只走 vision
+     * 文字描述，优雅降级）；写出该块即启用，`enabled: false` 可显式关闭。
      */
     oss: z
       .object({
-        baseUrl: UrlSchema,
+        enabled: z.boolean().default(true),
       })
       .strict()
       .optional(),
@@ -419,11 +438,17 @@ type LlmUsageConfig = {
 };
 
 type RawConfig = z.infer<typeof ConfigSchema>;
+type RawServerLlm = RawConfig["server"]["llm"];
 
 export type Config = Omit<RawConfig, "server"> & {
   server: Omit<RawConfig["server"], "llm"> & {
-    llm: Omit<RawConfig["server"]["llm"], "usages"> & {
+    llm: Omit<RawServerLlm, "usages" | "codexAuth" | "claudeCodeAuth"> & {
       usages: Record<LlmUsageId, LlmUsageConfig>;
+      // publicBaseUrl 在 loader 里派生填充，对外恒为 string。
+      codexAuth: Omit<RawServerLlm["codexAuth"], "publicBaseUrl"> & { publicBaseUrl: string };
+      claudeCodeAuth: Omit<RawServerLlm["claudeCodeAuth"], "publicBaseUrl"> & {
+        publicBaseUrl: string;
+      };
     };
   };
 };
@@ -480,6 +505,9 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
   const configDir = path.dirname(configPath);
   const data = parsedConfig.data;
   const memory = data.server.agent.story.memory;
+  // OAuth 回调 origin 默认派生自 services.gateway 端口，host 固定 localhost（不取
+  // services.gateway.host：reachable host ≠ 浏览器可访问的 public origin）；可被显式覆盖。
+  const defaultPublicBaseUrl = `http://localhost:${data.services.gateway.port}`;
 
   return {
     ...data,
@@ -499,6 +527,14 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       llm: {
         ...data.server.llm,
         usages: normalizeLlmUsages(data.server.llm),
+        codexAuth: {
+          ...data.server.llm.codexAuth,
+          publicBaseUrl: data.server.llm.codexAuth.publicBaseUrl ?? defaultPublicBaseUrl,
+        },
+        claudeCodeAuth: {
+          ...data.server.llm.claudeCodeAuth,
+          publicBaseUrl: data.server.llm.claudeCodeAuth.publicBaseUrl ?? defaultPublicBaseUrl,
+        },
       },
     },
   };

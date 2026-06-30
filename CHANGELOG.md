@@ -7,6 +7,77 @@
 
 ## [Unreleased]
 
+## [0.3.1.17] - 2026-06-30
+
+### Changed
+
+- browser: 浏览器截图 JPEG 质量常量 `SCREENSHOT_JPEG_QUALITY` 由 `60` 提到 `85`，消除低质量 JPEG 在文字边缘的压缩噪点/块效应（实测「截图太糊」的主因）。视口分辨率不变（仍 `1024×768`、`deviceScaleFactor` 维持默认 1），故进多模态上下文的截图 token 占用基本不变，只是单张图字节略增。属 `BrowserService` 代码常量调整，不进 `config.yaml`（行为参数仍按 browser app 约定走代码常量）；不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响。
+
+## [0.3.1.16] - 2026-06-30
+
+### Changed
+
+- test(oss): `object-store.test.ts` 的「unlink 失败容错」用例在跑通时会把被测代码的 best-effort 容错日志（`console.error("unlink orphan blob failed: ...")`）连同完整 stack trace 裸喷到 stderr，看着像测试出错，实则用例 `✓` 通过、日志是预期行为。改为在该用例内 `vi.spyOn(console, "error")` 把这条日志收掉，并顺手加一条 `toHaveBeenCalledWith` 断言确认确实走了容错分支——既消除测试输出噪音，又把「我们是故意触发这个日志」显式化。纯测试改动，不碰生产代码与行为。
+
+## [0.3.1.15] - 2026-06-30
+
+### Changed
+
+- deploy/config: 把散装根脚本 `scripts/web-server.mjs` 提升为一等公民 TS 包 `apps/gateway`（`@kagami/gateway`，零 `@kagami/*` 依赖、只依赖 `yaml`），并在 `config.yaml` 引入顶层 `services` 块作为**所有服务监听端口与地址的唯一事实来源**——每个进程（agent / console / gateway / oss）从 `config.yaml` 自读自己的端口与依赖服务地址，`ecosystem.config.cjs` 不再持有任何端口/地址 env（删 `kagami-console` 的 `PORT`、`kagami-web` 的 `PORT`/`API_TARGET`/`CONSOLE_TARGET`）。收敛前同一端口散落在 ecosystem / web-server.mjs / config.loader / 各 app 入口共 2~4 处（含两处隐蔽的 OAuth `publicBaseUrl` 默认），现在只在 `services` 块定义一次（见 [#162](https://github.com/KisinTheFlame/kagami/issues/162)）。`apps/gateway` 用 TS 重写 web-server 全部逻辑（静态托管 `apps/web/dist` + `/api/*` 按五个 console 前缀分流 + `/health`），行为等价，地址改读 `services`（复刻 `apps/oss` 的 config.yaml 定位算法）。`config.loader` 新增 `ServicesSchema`（顶层、与 `server` 平级）；agent 监听端口改读 `services.agent.port`，OAuth `publicBaseUrl` 改为可显式覆盖、缺省派生 `http://localhost:${services.gateway.port}`（host 固定 localhost：浏览器回调 origin ≠ reachable host）；`server.oss.baseUrl` 收敛为 `server.oss.enabled` 开关，OSS 地址由 `services.oss` 派生（presence/enabled 仍是启用开关，缺省=禁用优雅降级，语义不变）。PM2 进程 `kagami-web` → `kagami-gateway`：`scripts/deploy.sh` 全量与单服务路径都加幂等 `pm2 delete kagami-web` 兜底改名后旧进程残留占端口；`pnpm app:deploy <agent|console|gateway|oss>`，`web` 保留为 `gateway` 的已弃用别名。同步更新 AGENTS / ARCHITECTURE / README(.zh-CN) 与 `config.yaml.example`。纯结构重构，端口数字不变、无 DB 变更；**部署机的 gitignored `config.yaml` 需手动对齐新结构**（加 `services` 块、删 `server.port` 与顶层 `oss.port`、`server.oss.baseUrl` 改 `enabled`）才能启动
+
+## [0.3.1.14] - 2026-06-30
+
+### Changed
+
+- 多包: 清理一轮代码审查发现的低危技术债（见 issue #163），单 PR 收口，逐条经 grep/read 核对位置。机械清理与行为修正分离，会把历史脏数据从「能跑」变成「启动即崩」的校验类改动一律 fail-soft。本批不触碰 system prompt 文案、工具描述、消息序列化格式/字段顺序，对 KV 缓存前缀无影响。
+- web: 13 处本地 `formatDate`/`formatDateTime` 收敛到新建 `apps/web/src/lib/format.ts`（`formatDateTime` 非空语义 + `formatOptionalDateTime` 容忍 null/undefined/非法值）；`toStatusLabel` 两处（`LlmChatCallStatus` 版）合并到 `pages/llm-history/format-status.ts`。`ControlPanelPage`/`SchedulerTasksPage` 的 locale 默认格式 formatter 因展示文本不同而保留。
+- web: `MetricChartsPage` 删除仅转发的 `getErrorMessage` wrapper，调用点直接用 `getApiErrorMessage`；`LlmPlaygroundPage` 错误展示改用 `getApiErrorMessage`，provider 切换校验候选 id（去裸断言、未知 id 不再使页面空白）。
+- web: `SchedulerTasksPage` 列表 `key={index}` 改用稳定组合键；新增 class 版 `ErrorBoundary` 包裹 `AppLayout` 内容边界并随路由切换 reset。
+- agent: `root-effect-interpreter` 三处 `effect as XxxEffect` 改用类型守卫（接口签名固定为基类 `Effect`，无法收窄参数）；`ContextGroupMessageEventItem` 重命名为 `ContextEventItem`（去 QQ 残留命名）；`event.ts` 中段 import 上移；`hn-reader` 重复的 isComment 判定抽出 `isCommentHit`；`vision-agent` 三处裸 `throw new Error` 统一为 `BizError`；`back-to-portal.tool.ts` 注释修正（状态树已退役）。
+- packages: `prisma-metric.impl.dao.ts` 复用 `common/prisma-json.ts` 的 `toInputJsonObject`；`db/client.ts` 加注释说明 WAL/busy_timeout 两条 PRAGMA 不能合并（adapter prepared-statement 只执行首条）；`shared/schemas/auth.ts` 加注释标注 Claude Code usage API snake_case 字段勿改名。
+- agent: `closeLlmProviders` 由 `Promise.all` 改 `Promise.allSettled`（单个失败不短路其余清理）；story 搜索 `topK` 加 `MAX_SEARCH_TOP_K=200` 上限（深翻页 capped，不抛错）；`tei-embedding-gemma-provider` 的 `fetch` 加 `AbortSignal.timeout(30s)`。
+- console: `prisma-metric-chart.impl.dao.ts` 的 `aggregator` 枚举出参加类型守卫，脏值降级为默认 `"sum"` + warn（不抛 500）。
+
+### Fixed
+
+- agent: `prisma-app-state-store` 读出 `app_state` 时校验结构，非法持久化数据记 warn 并按「无状态」处理（返回 null 走首次初始化），避免坏数据导致启动/主流程崩溃。
+- agent: `auth-usage-cache` 子进程 `waitForChildExit` 不再静默吞异常，真正异常退出记 warn（未登录/无 codex CLI/正常退出仍走正常分支不刷 error）。
+- agent: QQ App 三处 `id as ConversationId` 收敛到 `toConversationId`，外部入口宽松校验、非规范 id 记 warn 后透传（不 throw，不拦截内部既有数据）。
+
+## [0.3.1.13] - 2026-06-30
+
+### Changed
+
+- todos: `TODOS.md` 新增 `## napcat` 分组并记录一条 P3 已确诊的上游限制——「合并转发里小镜看不到自己的消息」。范围：在和小镜的私聊里选中**包含小镜自己发出的消息**生成合并转发再发给小镜，小镜 `view_forward` 展开时只看得到对方消息、看不到自己那部分。已 live 实测确诊（转发 `7656887019929762382` 实含 4 条＝闻震 2＋小镜 2，但 NapCat 经 `get_msg` / `get_forward_msg` 都只返回 2 条对方消息，小镜自己的 2 条不在返回里）：根因在 NapCat / NTQQ 数据层按 `resId` 重建转发时丢弃本账号自己的消息，self 节点在进入 NapCat 解析前就已不存在（NapCat 源码 `parseMultiMessageContent` / `parseMessageV2` 并不过滤 self），客户端无解、与我们的 `view_forward` 实现无关（[0.3.1.6] / [0.3.1.10] 已分别确认无关）。对路修法是上报 NapCat；本地不做脆弱的时间戳穿插拼接。纯文档，无代码改动
+
+## [0.3.1.12] - 2026-06-30
+
+### Changed
+
+- agent/runtime: 修复 `InvokeTool` 顶层 dispatcher 的抽象泄漏——`buildInvokeSubtoolFailureMessage` 原本按错误码硬编码了两条 App 专属文案（`CHAT_CONTEXT_UNAVAILABLE` → "当前缺少可发消息的 QQ 会话上下文"、`ARTICLE_NOT_FOUND` → "当前 IT 之家列表中找不到该文章 ID"），把 QQ / IT 之家的业务概念塞进了"本身不知道任何 App"的稳定壳，违反"群聊只是众多生活输入之一、不应泄漏进 runtime 核心"的项目定位。改法：失败文案由各 App 自己的子工具随结果返回（`send_message` / `send_resource` 的无会话分支、`open_ithome_article` 的文章缺失分支各自带上 `message` 字段；`send_resource` 顺手把旧的 `note` 字段名统一成 `message`），`InvokeTool` 只负责原样透传子工具自带文案 + 追加该子工具的 schema 文档，不再按错误码合成 App 语义。保留结构性的 `INVALID_ARGUMENTS` 分支（那是 `ZodToolComponent` 的通用参数校验错误、非 App 概念）。纯重构：错误码与对 LLM 可见的提示内容不变，仅迁移文案的构造位置；不触碰稳定前缀（KV 缓存无影响）。新增 `open-ithome-article.tool.test.ts` 与 2 条 `invoke.tool` 回归测试，锁定"子工具自带文案被保留、被删的 App 硬编码不再由 InvokeTool 合成、结构性错误提示仍合成"这三条边界。
+
+## [0.3.1.11] - 2026-06-30
+
+### Changed
+
+- llm/config: 把 LLM provider 标识字面量联合 `["deepseek", "openai", "openai-codex", "claude-code"]` 收敛到最底层 `@kagami/llm` 包单源（新增 `LLM_PROVIDER_IDS` 常量数组 + 派生 `LlmProviderId` 类型），消除原本散落 4 处的重复（server-core contracts 手写 type union、shared 的 `z.enum` + `z.infer`、config.loader 的 `z.enum ... satisfies`、agent client 的 `as const` 数组）——加 / 删 provider 从此只改一处，杜绝类型与 schema 漂移。shared 与 server-core 各新增一条对 `@kagami/llm` 的 workspace 依赖（均指向 DAG 最底层，无环）；因项目禁止 re-export barrel，所有 `LlmProviderId` 消费方（server-core config / 2 个 DAO、agent 的 llm / auth 共 6 个文件 + 1 个测试）改为直接从 `@kagami/llm` 导入。`@kagami/llm` 保持零 zod 依赖，需要校验的下游用 `z.enum(LLM_PROVIDER_IDS)` 自行派生。纯重构：provider 枚举值与顺序不变、配置校验行为不变、不触碰任何稳定前缀（KV 缓存无影响）。`LlmUsageId` 未动（其 type 本就单源）。
+
+## [0.3.1.10] - 2026-06-30
+
+### Fixed
+
+- napcat: 修复部分合并转发用 `view_forward` 展开时显示「（合并转发为空或不可读）」——尤其是把「我和小镜的对话」截成转发再发回时常复现。根因有两层：① NapCat 对刚到达 / 内层是旧消息的转发，`get_forward_msg` 会**瞬时返回空**（内层尚未解析，稍候即有，已实测）；② 我们一次取空就**把空也缓存了 10 分钟**，等于把瞬时失败固化成 TTL 内永久失败。改法（参考规范客户端 node-napcat-ts 的读法，但保留我们的懒加载架构）：转发读取主路径改走 **`get_msg(forwardId)`**——容器消息的 forward 段自带内联 `content`，比 `get_forward_msg`（resId→getMsgHistory 多一跳）更稳；`get_msg` 拿不到内容再兜底 `get_forward_msg`；取到空就**重试 2~3 次带退避**，且**不缓存空结果**（raw 节点缓存与分页缓存均只在非空时写），让下次调用还能再试。转发内容仍只回到 tool result 尾部，绝不进稳定前缀（KV 缓存优先不变）。实测：之前「看不到」的转发现在经 get_msg 正常展开。仅改 `napcat-gateway.impl.service.ts` + 对应测试（新增 get_msg 主路径 / 回退 get_forward_msg / 重试不缓存空三个场景）
+
+## [0.3.1.9] - 2026-06-30
+
+### Changed
+
+- agent: 把各 App 专属的屏幕渲染函数从共享的 `runtime/context/context-message-factory.ts` 下沉到各自 App 目录，消除 runtime 核心层对上层 App 与 napcat 的反向依赖（runtime 是被所有 App 依赖的最底层，原文件却反向 import 了 `apps/hn` 与 `napcat`，违反分层与「群聊概念只属于 messaging / QQ App」的约束）。HN 渲染迁入新建的 `apps/hn/hn-screen.ts`，IT之家渲染迁入 `apps/ithome/ithome-screen.ts`，QQ 群与私聊消息渲染（含 napcat 段渲染）迁入 `apps/qq/qq-message-render.ts`。`context-message-factory.ts` 只保留与具体业务无关的通用消息构造器（user、wake、portal、notification、story-recall、async-tool-result、摘要类），不再 import 任何 App 或 napcat。纯代码搬移：所有渲染函数逐字迁移，行为与序列化输出（各自的 XML 伪标签与 `.hbs` 模板）完全一致，对 KV 缓存前缀无影响；对应单测一并拆分到各 App 的测试目录，并补齐 QQ 私聊显示名 remark 优先于 nickname 再退到 userId 的回退单测
+
+### Removed
+
+- agent: 删除 6 个无任何调用方的死函数（`createIthomeArticleListMessage`、`createIthomeArticleDetailMessage`、`createMergedGroupMessagesMessage` 及其 `Content` 版本、`createMergedPrivateMessagesMessage` 及其 `Content` 版本），随本次下沉一并清理，不搬运死代码
+
 ## [0.3.1.8] - 2026-06-30
 
 ### Fixed

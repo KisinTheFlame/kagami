@@ -76,11 +76,12 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含八个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含九个工作空间包：
 
 - `apps/agent`：Fastify 后端服务（`@kagami/agent`）
 - `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
+- `apps/gateway`：前门网关进程（`@kagami/gateway`，独立进程、零 `@kagami/*` 依赖；托管 `apps/web/dist` 静态资源 + `/api/*` 反向代理分流到 console/agent）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
 - `packages/llm`：前后端 / 内核共用的 LLM 消息与工具类型契约（`@kagami/llm`）
@@ -200,7 +201,8 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
   - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
   - `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
-  - `server.oss.baseUrl`（自建对象存储 `apps/oss` 进程地址；图片入 OSS 用）
+  - 顶层 `services`（与 `server` 平级）：各服务监听端口与地址的唯一事实来源，`services.{agent,console,gateway,oss}.{host,port}`，所有进程读它寻址（见 issue #162）
+  - `server.oss.enabled`（自建对象存储启用开关；地址来自 `services.oss`，整段省略=禁用、优雅降级）
   - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
   - `server.tavily.apiKey`
   - `server.bot.qq`、`server.bot.creator`
@@ -353,7 +355,7 @@ Agent 相关补充约定：
 
 ### 前端代理与静态托管
 
-- 生产环境中，PM2 托管的 Node 静态服务会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`，env `CONSOLE_TARGET`），其余仍代理到 `kagami-agent`（默认 `20003`，env `API_TARGET`）。
+- 生产环境中，PM2 托管的网关进程 `kagami-gateway`（`apps/gateway`）会提供 `apps/web/dist`，并按路径前缀分流 `/api/*`：`/app-log`、`/llm-chat-call`、`/napcat-event`、`/napcat-group-message`、`/metric-chart` 这几类纯查询代理到管理台后端进程 `kagami-console`（默认 `20006`），其余仍代理到 `kagami-agent`（默认 `20003`）。上游地址不再走 env，由网关自读 `config.yaml` 顶层 `services` 块寻址（见 issue #162）。
 - 该静态服务还暴露 `/health`。
 - 当前仓库中的 Vite 配置未内置开发代理；如需本地前后端分离调试，需要自行在 `apps/web/vite.config.ts` 中补充 `server.proxy`。
 
@@ -361,11 +363,11 @@ Agent 相关补充约定：
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
 - 后端（`kagami-agent`）：单进程 `fork` 模式运行 `apps/agent/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
-- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（env `PORT`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
-- 前端（`kagami-web`）：单进程 Node 静态服务运行 `scripts/web-server.mjs`，默认监听 `20004`，并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。
-- 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口由顶层 `oss.port` 配置。
+- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（端口取 `config.yaml` 的 `services.console.port`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
+- 网关（`kagami-gateway`）：单进程运行 `apps/gateway/dist/index.js`（TS，零 `@kagami/*` 依赖），默认监听 `20004`，托管 `apps/web/dist` 静态资源并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。监听端口与上游地址全部自读 `config.yaml` 的 `services` 块。
+- 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口取 `config.yaml` 的 `services.oss.port`。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
-- `pnpm app:deploy <agent|console|web|oss>`（带服务名）只重建并重载该服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——尤其重载 `console` / `web` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍走无参 `pnpm app:deploy`。
+- `pnpm app:deploy <agent|console|gateway|oss>`（带服务名）只重建并重载该服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——尤其重载 `console` / `gateway` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍走无参 `pnpm app:deploy`。（`web` 作为 `gateway` 的已弃用别名仍可用。）
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
 - 部署机需要能编译/安装原生模块（`better-sqlite3`、`hnswlib-node`）；这些依赖的构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行。
 
@@ -399,7 +401,7 @@ Key routing rules:
 ## Deploy Configuration (configured by /setup-deploy)
 
 - Platform: 本地宿主机（PM2 fork 模式，无任何云平台 / PaaS）
-- Production URL: http://localhost:20003（server）、http://localhost:20004（web 静态服务，代理 /api/\*）
+- Production URL: http://localhost:20003（agent）、http://localhost:20004（kagami-gateway：静态托管 + 代理 /api/\*）
 - Deploy workflow: 手动触发，无自动 push 部署
 - Deploy status command: pm2 status / pm2 list
 - Merge method: PR merge（主分支 master）

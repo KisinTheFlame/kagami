@@ -14,7 +14,7 @@ export type AgentContextDashboardSummary = {
   recentItems: AgentContextDashboardItem[];
   recentItemsTruncated: boolean;
 };
-export type ContextGroupMessageEventItem = {
+export type ContextEventItem = {
   kind: "event";
   event: Event;
 };
@@ -22,7 +22,7 @@ export type ContextLlmMessageItem = {
   kind: "llm_message";
   message: LlmMessage;
 };
-export type ContextItem = ContextGroupMessageEventItem | ContextLlmMessageItem;
+export type ContextItem = ContextEventItem | ContextLlmMessageItem;
 
 export type AgentContextSnapshot = {
   systemPrompt: string;

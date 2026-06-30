@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
+import { formatDateTime } from "@/lib/format";
 import {
   isoToLocalDateTime,
   localDateTimeToIso,
@@ -223,7 +224,7 @@ export function AppLogHistoryPage() {
                     onClick={() => handleSelectItem(item.id)}
                   >
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDate(item.createdAt)}
+                      {formatDateTime(item.createdAt)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
@@ -362,17 +363,6 @@ function toBadgeVariant(level: AppLogLevel): "default" | "secondary" | "destruct
   return "default";
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 function getSource(metadata: Record<string, unknown>): string {
   const source = metadata.source;
   return typeof source === "string" && source.length > 0 ? source : "—";
@@ -406,7 +396,7 @@ function AppLogMobileCard({
       </div>
 
       <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-        <p>{formatDate(item.createdAt)}</p>
+        <p>{formatDateTime(item.createdAt)}</p>
         <p>Source: {getSource(item.metadata)}</p>
       </div>
     </MobileSelectCard>

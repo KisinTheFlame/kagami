@@ -35,6 +35,7 @@ type AppRouteHandler = {
 export type ConsoleRuntime = {
   app: FastifyInstance;
   database: Database;
+  port: number;
 };
 
 /**
@@ -85,7 +86,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
     ],
   });
 
-  return { app, database };
+  return { app, database, port: config.services.console.port };
 }
 
 function createConsoleApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {

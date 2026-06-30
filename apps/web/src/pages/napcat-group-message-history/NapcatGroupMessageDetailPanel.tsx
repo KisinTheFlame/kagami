@@ -1,4 +1,5 @@
 import { type NapcatQqMessageItem } from "@kagami/shared/schemas/napcat-group-message";
+import { formatOptionalDateTime } from "@/lib/format";
 import { safeStringify } from "./message-render";
 
 type NapcatGroupMessageDetailPanelProps = {
@@ -27,7 +28,7 @@ export function NapcatGroupMessageDetailPanel({ item }: NapcatGroupMessageDetail
           <MetaItem label="User ID" value={item.userId ?? "—"} mono />
           <MetaItem label="昵称" value={item.nickname ?? "—"} />
           <MetaItem label="Message ID" value={item.messageId ? String(item.messageId) : "—"} mono />
-          <MetaItem label="事件时间" value={formatDate(item.eventTime)} />
+          <MetaItem label="事件时间" value={formatOptionalDateTime(item.eventTime)} />
         </div>
       </div>
 
@@ -69,19 +70,4 @@ function MetaItem({
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) {
-    return "—";
-  }
-
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }

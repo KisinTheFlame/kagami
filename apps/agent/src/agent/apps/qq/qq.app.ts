@@ -1,8 +1,5 @@
 import type { App, JsonValue } from "@kagami/agent-runtime";
-import {
-  renderGroupMessagePlainText,
-  renderPrivateMessagePlainText,
-} from "../../runtime/context/context-message-factory.js";
+import { renderGroupMessagePlainText, renderPrivateMessagePlainText } from "./qq-message-render.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
 import type {
@@ -26,12 +23,31 @@ import {
   type ConversationId,
   createGroupConversationId,
   createPrivateConversationId,
+  isConversationId,
 } from "../../capabilities/messaging/conversation-id.js";
+import { AppLogger } from "@kagami/server-core/logger/logger";
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
 import { ListConversationsTool } from "./tools/list-conversations.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";
 import { ListFacesTool } from "./tools/list-faces.tool.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
+
+const logger = new AppLogger({ source: "agent.qq-app" });
+
+/**
+ * 把外部入口拿到的 id 解释为 ConversationId。fail-soft：内部既有读路径（DB / 事件里
+ * 已存的会话 id）可能不完全符合当前字面规则但仍合法，所以不合规也不 throw，只记 warn
+ * 后透传——既消除裸 `as`，又不让宽松数据被新校验拦死。
+ */
+function toConversationId(id: string): ConversationId {
+  if (!isConversationId(id)) {
+    logger.warn("Coercing non-canonical conversation id", {
+      event: "agent.qq.conversation_id.non_canonical",
+      id,
+    });
+  }
+  return id as ConversationId;
+}
 
 export const QQ_APP_ID = "qq";
 
@@ -277,7 +293,7 @@ export class QqApp implements App {
   public async openConversation(
     id: string,
   ): Promise<{ ok: boolean; content?: string; error?: string }> {
-    const conversation = this.conversations.get(id as ConversationId);
+    const conversation = this.conversations.get(toConversationId(id));
     if (!conversation) {
       return { ok: false, error: "CONVERSATION_NOT_FOUND" };
     }
@@ -356,11 +372,12 @@ export class QqApp implements App {
    * 按 id 现建一个空壳（好友信息留待 friend_list 事件回填）。
    */
   private ensureConversationForRestore(id: string): Conversation | null {
-    const existing = this.conversations.get(id as ConversationId);
+    const conversationId = toConversationId(id);
+    const existing = this.conversations.get(conversationId);
     if (existing) {
       return existing;
     }
-    const userId = parseConversationUserId(id as ConversationId);
+    const userId = parseConversationUserId(conversationId);
     if (userId) {
       const conversation = Conversation.privateChat(userId, this.recentMessageLimit);
       this.conversations.set(conversation.id, conversation);

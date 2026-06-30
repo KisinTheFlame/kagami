@@ -19,6 +19,11 @@ async function writeConfigFile(content: string): Promise<string> {
 
 function buildConfigYaml(napcatBlock: string, extraServerBlock = ""): string {
   return `
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
@@ -114,8 +119,7 @@ afterEach(async () => {
 describe("Static config loading", () => {
   it("should parse config.yaml and expose the normalized multi-group config", async () => {
     const configPath = await writeConfigFile(
-      buildConfigYaml(
-        `
+      buildConfigYaml(`
 wsUrl: wss://example.com/napcat
 reconnectMs: 3000
 requestTimeoutMs: 10000
@@ -123,9 +127,7 @@ listenGroupIds:
   - "123456"
   - "234567"
 startupContextRecentMessageCount: 0
-`,
-        "port: 3100\n",
-      ),
+`),
     );
 
     const config = await loadStaticConfig({ configPath });
@@ -134,9 +136,14 @@ startupContextRecentMessageCount: 0
     });
 
     await expect(manager.config()).resolves.toMatchObject({
+      services: {
+        agent: { host: "localhost", port: 20003 },
+        console: { host: "localhost", port: 20006 },
+        gateway: { host: "localhost", port: 20004 },
+        oss: { host: "127.0.0.1", port: 20005 },
+      },
       server: {
         databaseUrl: "file::memory:",
-        port: 3100,
         agent: {
           contextCompactionTotalTokenThreshold: 150_000,
           llmRetryBackoffMs: 30_000,
@@ -172,15 +179,15 @@ startupContextRecentMessageCount: 0
 
   it("should reject invalid config values", async () => {
     const configPath = await writeConfigFile(
-      buildConfigYaml(
-        `
+      buildConfigYaml(`
 wsUrl: wss://example.com/napcat
 reconnectMs: 3000
 requestTimeoutMs: 10000
 listenGroupIds:
   - "123456"
-`,
-        "port: not-a-number\n",
+`).replace(
+        "agent: { host: localhost, port: 20003 }",
+        "agent: { host: localhost, port: not-a-number }",
       ),
     );
 
@@ -188,7 +195,7 @@ listenGroupIds:
       name: "BizError",
       message: "配置值不合法",
       meta: {
-        key: "server.port",
+        key: "services.agent.port",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<BizError>);
@@ -328,6 +335,11 @@ listenGroupIds:
 
   it("should default context compaction threshold to 60", async () => {
     const configPath = await writeConfigFile(`
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -634,6 +646,11 @@ listenGroupIds:
 
   it("should allow overriding context compaction total token threshold", async () => {
     const configPath = await writeConfigFile(`
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -705,6 +722,11 @@ server:
 
   it("should reject the legacy context compaction threshold field", async () => {
     const configPath = await writeConfigFile(`
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -779,6 +801,11 @@ server:
 
   it("should allow overriding llm retry backoff ms", async () => {
     const configPath = await writeConfigFile(`
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -849,6 +876,11 @@ server:
 
   it("should allow overriding wait tool max wait ms", async () => {
     const configPath = await writeConfigFile(`
+services:
+  agent: { host: localhost, port: 20003 }
+  console: { host: localhost, port: 20006 }
+  gateway: { host: localhost, port: 20004 }
+  oss: { host: 127.0.0.1, port: 20005 }
 server:
   databaseUrl: "file::memory:"
   agent:
