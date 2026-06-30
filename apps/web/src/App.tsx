@@ -60,7 +60,7 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/main-agent-context" replace />} />
-          <Route path="/auth" element={<Navigate to="/auth/codex" replace />} />
+          <Route path="/auth" element={<Navigate to="/auth/claude-code" replace />} />
           <Route path="/auth/:provider" element={<AuthPage />} />
           <Route path="/main-agent-context" element={<MainAgentContextPage />} />
           <Route path="/control-panel" element={<ControlPanelPage />} />
