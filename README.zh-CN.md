@@ -19,12 +19,14 @@ Kagami 是一个**拥有自己生活的 Agent**。群聊只是他生活的一部
 Kagami 是一个基于 `pnpm workspace` 的全栈 TypeScript Monorepo，当前包含八个工作空间包：
 
 - `apps/agent`：Fastify 后端服务（`@kagami/agent`）
-- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
+- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 @kagami/persistence 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
 - `packages/llm`：前后端 / 内核共用的 LLM 消息与工具类型契约（`@kagami/llm`）
-- `packages/server-core`：后端共享基础设施内核（Prisma 客户端与 DAO、db、logger、config、common 契约与错误，`@kagami/server-core`）
+- `packages/kernel`：后端纯净基础设施内核（config、logger、common 契约与错误、`isRecord` 等纯工具，`@kagami/kernel`，无 fastify / Prisma / better-sqlite3，可被不碰 DB / 不提供 HTTP 的服务复用）
+- `packages/http`：HTTP 路由辅助（`route.helper`，`@kagami/http`，仅依赖 fastify + zod；不提供 HTTP 接口的服务无需引入）
+- `packages/persistence`：持久化基础设施（Prisma 客户端与 generated client、db、所有业务 DAO、Prisma JSON helper，`@kagami/persistence`，依赖 `@kagami/kernel` + Prisma + better-sqlite3）
 - `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
 
 workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前包含 `apps/*` 与 `packages/*`。后端运行配置统一来自仓库根目录 `config.yaml`。
@@ -40,7 +42,9 @@ apps/
 packages/
   agent-runtime/  通用 Agent / App 框架抽象与工具目录
   llm/            前后端共用的 LLM 消息 / 工具类型契约
-  server-core/    后端共享基础设施（Prisma 客户端 / DAO / db / logger / config / common）
+  kernel/         后端纯净基础设施（config / logger / common；无 Prisma / fastify）
+  http/           HTTP 路由辅助（仅 fastify + zod）
+  persistence/    持久化基础设施（Prisma 客户端 / DAO / db）
   shared/         前后端共享 schema / DTO / utils
 ```
 
@@ -97,7 +101,7 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 说明：
 
 - `db:migrate:dev` 会自动补上 `--create-only`，只生成迁移文件，不直接改库结构。
-- 标准流程是：修改 `packages/server-core/prisma/schema.prisma` -> 生成迁移 -> 提交 schema 与 migration -> 在目标环境执行 `db:migrate:deploy`。
+- 标准流程是：修改 `packages/persistence/prisma/schema.prisma` -> 生成迁移 -> 提交 schema 与 migration -> 在目标环境执行 `db:migrate:deploy`。
 
 ## 架构概览
 

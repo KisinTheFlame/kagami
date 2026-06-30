@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- refactor: 把后端共享包 `@kagami/server-core` 按「是否绑原生模块 / 是否绑 fastify」两条接缝拆分为三个职责单一的小包（见 [#174](https://github.com/KisinTheFlame/kagami/issues/174)）：`@kagami/kernel`（纯净基础设施——config / logger / common 契约与错误 / `isRecord` 等纯工具，**无 fastify / 无 Prisma / 无 better-sqlite3**）、`@kagami/http`（仅 `route.helper`，依赖 fastify + zod，**零 `@kagami/*` 依赖**的叶子包）、`@kagami/persistence`（Prisma client + generated client + 所有业务 DAO + Prisma JSON helper，依赖 `@kagami/kernel`）。动机：项目即将出现**不碰 DB / 不提供 HTTP 接口**的轻量服务，单包结构会强迫它们拖入整条 Prisma + `better-sqlite3` 原生模块或 fastify；拆分后这类服务可在零原生模块 / 零 fastify 的依赖闭包下复用 kernel。落地细节：`prisma-json` 中与 Prisma 无关的纯 `isRecord` 抽到 `@kagami/kernel/json/is-record`，Prisma 专用 JSON helper 留在 persistence；全仓 80+ 处 import 子路径迁移；`scripts/prisma.sh` 的 `CORE_DIR`、apps/agent + apps/console 的 tsconfig 源码别名与 package.json 依赖、`.gitignore` 的 generated 路径同步更新；`packages/server-core` 整体删除。**纯移动重构**：不改任何 DAO / config / logger 内部逻辑、不改 Prisma schema、运行时行为零变化（不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响）。build / typecheck / lint / format 与 731 项测试全绿。
+
 ## [0.3.1.17] - 2026-06-30
 
 ### Changed
