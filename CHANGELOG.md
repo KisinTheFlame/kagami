@@ -13,6 +13,12 @@
 
 - browser: 浏览器截图 JPEG 质量常量 `SCREENSHOT_JPEG_QUALITY` 由 `60` 提到 `85`，消除低质量 JPEG 在文字边缘的压缩噪点/块效应（实测「截图太糊」的主因）。视口分辨率不变（仍 `1024×768`、`deviceScaleFactor` 维持默认 1），故进多模态上下文的截图 token 占用基本不变，只是单张图字节略增。属 `BrowserService` 代码常量调整，不进 `config.yaml`（行为参数仍按 browser app 约定走代码常量）；不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响。
 
+## [0.3.1.16] - 2026-06-30
+
+### Changed
+
+- test(oss): `object-store.test.ts` 的「unlink 失败容错」用例在跑通时会把被测代码的 best-effort 容错日志（`console.error("unlink orphan blob failed: ...")`）连同完整 stack trace 裸喷到 stderr，看着像测试出错，实则用例 `✓` 通过、日志是预期行为。改为在该用例内 `vi.spyOn(console, "error")` 把这条日志收掉，并顺手加一条 `toHaveBeenCalledWith` 断言确认确实走了容错分支——既消除测试输出噪音，又把「我们是故意触发这个日志」显式化。纯测试改动，不碰生产代码与行为。
+
 ## [0.3.1.15] - 2026-06-30
 
 ### Changed

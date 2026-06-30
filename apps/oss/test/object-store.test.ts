@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, stat, unlink, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ObjectStore } from "../src/store/object-store.js";
 
 let blobDir: string;
@@ -170,8 +170,19 @@ describe("ObjectStore", () => {
     const { key } = await store.put(bytes, "text/plain");
     await unlink(blobFilePath(bytes)); // 提交后 unlink 将抛 ENOENT，应被吞掉
 
-    expect(await store.delete(key)).toBe(true);
-    expect(refcountOf(sha256(bytes))).toBeUndefined();
+    // 容错路径会 console.error 一条 best-effort 日志，属预期行为：spy 掉以免污染测试输出，
+    // 同时断言确实走了该分支。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await store.delete(key)).toBe(true);
+      expect(refcountOf(sha256(bytes))).toBeUndefined();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("unlink orphan blob failed"),
+        expect.anything(),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("并发 delete-last + 重新 put 同内容 → 新对象可读(写锁消除竞态)", async () => {
