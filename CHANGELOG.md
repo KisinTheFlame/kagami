@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.2.1] - 2026-07-01
+
+### Changed
+
+- web: 内置登录页把 **Claude Code** tab 排到 Codex 前面，并将所有默认入口（侧栏「内置登录」链接、`/auth` 重定向、非法 provider 兜底、页内重定向）统一指向 `/auth/claude-code`，使默认打开的就是 Claude Code tab。纯前端表现层改动，不涉及后端、API 或 Agent 上下文。
+
 ## [0.3.2.0] - 2026-06-30
 
 ### Changed
