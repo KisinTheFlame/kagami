@@ -37,7 +37,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               to={to}
               className={() =>
                 cn(
-                  "flex items-center gap-3 rounded-none px-3 py-2 text-sm transition-colors",
+                  "flex min-h-11 items-center gap-3 rounded-none px-3 py-2 text-sm transition-colors md:min-h-0",
                   isActive
                     ? "bg-sidebar-active font-medium text-sidebar-active-foreground"
                     : "text-sidebar-foreground hover:bg-sidebar-active/10 hover:text-sidebar-active",

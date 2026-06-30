@@ -215,7 +215,7 @@ export function AuthPage() {
                   to={`/auth/${item}`}
                   className={({ isActive }) =>
                     [
-                      "inline-flex min-w-[8.5rem] items-center justify-center rounded-none px-4 py-2 text-sm font-medium transition-colors",
+                      "inline-flex min-h-11 min-w-[8.5rem] items-center justify-center rounded-none px-4 py-2 text-sm font-medium transition-colors md:min-h-0",
                       isActive
                         ? "bg-card text-foreground"
                         : "text-muted-foreground hover:bg-card hover:text-foreground",
