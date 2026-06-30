@@ -162,9 +162,9 @@
 ### 触控目标 44px（移动端）
 
 - **Priority:** P3
-- **Status:** open
-- **Context:** 导航项 36px、`Button size="sm"` 36px、默认按钮 40px，低于 44px 触控下限。桌面单人观测台可接受，但代码有移动端布局（useIsMobile + mobile cards），移动断点下应抬到 `min-h-11`。DESIGN.md 密度是「comfortable 偏紧」，桌面不要无脑加高。
-- **Notes:** 仅在移动断点 bump，避免破坏桌面密度。
+- **Status:** done（2026-06-30 /design-review F10，commit 9da64b8）
+- **Context:** 导航项 / `Button size="sm"` / Codex-Claude 切换标签 / select 原 36–40px。已用 `max-md:` / `md:min-h-0` 仅在移动断点抬到 ≥44px，桌面密度零改动；390px 实测无 <44px 交互目标。
+- **Notes:** 桌面（≥md）保持原 36/40px 密度。
 
 ### 抽共享 Input 基元
 
