@@ -30,7 +30,7 @@ const NAVIGATION_TIMEOUT_MS = 30_000;
 const MAX_WAIT_MS = 30_000;
 /** 单步动作超时收紧到 10s：浏览器动作阻塞单线程主循环，超时上限即 QQ 最坏延迟（T2）。 */
 const ACTION_TIMEOUT_MS = 10_000;
-const SCREENSHOT_JPEG_QUALITY = 60;
+const SCREENSHOT_JPEG_QUALITY = 85;
 
 /** Kagami 看到的 observe 结果：带 epoch 的语义树文本。 */
 export type ObserveResult = {

@@ -7,6 +7,35 @@
 
 ## [Unreleased]
 
+## [0.3.2.1] - 2026-07-01
+
+### Changed
+
+- web: 内置登录页把 **Claude Code** tab 排到 Codex 前面，并将所有默认入口（侧栏「内置登录」链接、`/auth` 重定向、非法 provider 兜底、页内重定向）统一指向 `/auth/claude-code`，使默认打开的就是 Claude Code tab。纯前端表现层改动，不涉及后端、API 或 Agent 上下文。
+
+## [0.3.2.0] - 2026-06-30
+
+### Changed
+
+- web: 前端管理台整套美术风格重做为 **「晒褪了色的蒙德里安 / The Painted Ledger」**（蒙德里安骨架 + 文艺复兴/印象派颜料色）。刻意**弃用 shadcn 的有样式组件层与默认 slate 主题**，仅保留 `@radix-ui/*` 无样式行为基元（焦点陷阱、键盘可访问性），其余 class 体系与组件外观全部自定义。新增仓库根 `DESIGN.md` 作为设计源真理，`AGENTS.md` 增设计系统章节。
+  - 配色：`index.css` 的 `:root` / `.dark` 改为颜料盘（HSL 通道，沿用 `hsl(var(--x))` + 透明度修饰符），新增 5 个语义颜料色（朱砂红=错误/主动事件、群青=LLM/context、赭黄=scheduler/等待、绿土=Story/记忆、茜草=高成本）+ 侧栏 token；深色为「夜间画室」明暗对照整套重设，非简单反相。
+  - 字体：经 Google Fonts 加载 Fraunces/思源宋体（标题）、Literata/思源黑体（正文）、JetBrains Mono（数据）；结构边界默认 `border` 宽度提到 2px、`--radius` 归零、全局等宽数据 `tabular-nums`。
+  - 组件：`button/card/table/badge/dialog/select/chart/json-panel/mobile-card` 与 layout（侧栏暖近黑画布边竖栏、列表/详情画框）按本系统重写；`AuthPage`、`LlmPlayground`、`MetricCharts` 等自带 slate/粉彩/玻璃拟态样式的页面并入颜料盘。
+- web: 经 `/design-review`（Codex + opus 子 Agent 双路外部意见）走查并修复 11 项：暗色侧栏字标可读性、Playground 玻璃拟态块去渐变/圆角/阴影/blur、图表系列色去数字纯色、弱字/绿土文字色晒暗达 WCAG AA、结构层圆角统一 `rounded-none`、`focus-visible` 键盘焦点环统一、全局 `tabular-nums`、`prefers-reduced-motion` 门控、移动端触控目标抬到 ≥44px（仅移动断点，桌面密度不变）等。
+  - 纯表现层改动，不涉及后端、API、数据流或 system prompt / 工具描述，对 KV 缓存前缀无影响。
+
+## [0.3.1.17] - 2026-06-30
+
+### Changed
+
+- browser: 浏览器截图 JPEG 质量常量 `SCREENSHOT_JPEG_QUALITY` 由 `60` 提到 `85`，消除低质量 JPEG 在文字边缘的压缩噪点/块效应（实测「截图太糊」的主因）。视口分辨率不变（仍 `1024×768`、`deviceScaleFactor` 维持默认 1），故进多模态上下文的截图 token 占用基本不变，只是单张图字节略增。属 `BrowserService` 代码常量调整，不进 `config.yaml`（行为参数仍按 browser app 约定走代码常量）；不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响。
+
+## [0.3.1.16] - 2026-06-30
+
+### Changed
+
+- test(oss): `object-store.test.ts` 的「unlink 失败容错」用例在跑通时会把被测代码的 best-effort 容错日志（`console.error("unlink orphan blob failed: ...")`）连同完整 stack trace 裸喷到 stderr，看着像测试出错，实则用例 `✓` 通过、日志是预期行为。改为在该用例内 `vi.spyOn(console, "error")` 把这条日志收掉，并顺手加一条 `toHaveBeenCalledWith` 断言确认确实走了容错分支——既消除测试输出噪音，又把「我们是故意触发这个日志」显式化。纯测试改动，不碰生产代码与行为。
+
 ## [0.3.1.15] - 2026-06-30
 
 ### Changed

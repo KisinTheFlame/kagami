@@ -52,7 +52,7 @@ export function StoryHistoryDetailPanel({ item }: { item: StoryItem | null }) {
           <h3 className="text-sm font-medium text-foreground">原始 Markdown</h3>
           <pre
             className={cn(
-              "overflow-x-auto rounded-lg border bg-muted/20 px-4 py-3",
+              "overflow-x-auto rounded-none border bg-muted/20 px-4 py-3",
               "font-mono text-[13px] leading-6 text-foreground/90 whitespace-pre-wrap break-words",
             )}
           >
@@ -70,7 +70,7 @@ function DetailChip({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="inline-flex max-w-full items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+    <div className="inline-flex max-w-full items-center gap-1 rounded-none border bg-background px-2.5 py-1 text-xs text-muted-foreground">
       <span className="shrink-0">{label}</span>
       <span className="truncate text-foreground">{value}</span>
     </div>
