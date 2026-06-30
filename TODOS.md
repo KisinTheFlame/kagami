@@ -163,6 +163,20 @@
 
 ## Web 设计走查（2026-06-30 /design-review）延后项
 
+### landing 统计大色块需后端聚合数据
+
+- **Priority:** P2
+- **Status:** open
+- **Context:** 「鲜艳蒙德里安」方向要把 `main-agent-context` landing 做成二维大色块 dashboard（Story 总数 / LLM token / 主动发言数 / 高成本 / scheduler pending / context tokens 等填实色块）。但当前 `main-agent-context` 接口只返回 `recentItems`，没有这些聚合统计。要真实呈现需**改后端 + shared schema** 加聚合字段，属跨前后端的新功能。前端这轮只在数据已就绪处上大色块（Auth 额度），landing 暂留 feed + 轮询状态，不硬编假数。
+- **Notes:** 设计样张见 `/private/tmp/kagami-v3-light.html`（二维构图 + 大色块）。后端补聚合后，landing 按该构图实现。
+
+### 填实状态色块铺到剩余数据页
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** 调度任务 / Story / 应用日志 / NapCat 事件 / QQ 消息等页的状态·级别·类型徽章目前多为中性，应按语义映射改成 `Badge` 填实变体（signal/llm/scheduler/story/cost），与 main-agent-context、Auth 一致。本轮已做共享 Badge + landing + Auth，其余页面按页 enum 逐个映射。
+- **Notes:** 后端没起时无法逐页视觉验证，建议跑通后端后边看边刷。
+
 ### 历史表格行键盘可达（a11y）
 
 - **Priority:** P2
