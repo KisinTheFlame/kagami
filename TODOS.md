@@ -160,3 +160,40 @@
 - **Status:** open
 - **Context:** v1 交互观察直进主上下文。若长会话被语义树+截图撑爆压缩频繁：重读走隔离子 Agent 只回摘要（B），或整任务委派 Browser TaskAgent 只回结果（C）。`read_page`/observe 已留干净函数接缝。多身份/多 profile（终态自有网络身份）也归此批。
 - **Notes:** 详见设计文档 Approaches B/C。
+
+## Web 设计走查（2026-06-30 /design-review）延后项
+
+### 历史表格行键盘可达（a11y）
+
+- **Priority:** P2
+- **Status:** open
+- **Context:** llm-history / app-log / napcat-event / story 等页面用 `<tr onClick>` 做行选择，无 `role`/`tabIndex`/`onKeyDown`/focus-visible，键盘用户不可达（Codex 指出，4 处）。属交互行为改动，超出本轮 CSS-first 范围。
+- **Notes:** 给行加 `role="button" tabIndex=0`，回车/空格触发，补 focus-visible ring；或抽成可复用的可点击行组件。
+
+### 触控目标 44px（移动端）
+
+- **Priority:** P3
+- **Status:** done（2026-06-30 /design-review F10，commit 9da64b8）
+- **Context:** 导航项 / `Button size="sm"` / Codex-Claude 切换标签 / select 原 36–40px。已用 `max-md:` / `md:min-h-0` 仅在移动断点抬到 ≥44px，桌面密度零改动；390px 实测无 <44px 交互目标。
+- **Notes:** 桌面（≥md）保持原 36/40px 密度。
+
+### 抽共享 Input 基元
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** 7 个 history 页面的过滤输入框/textarea 都是手抄一长串 class（`rounded-none border bg-background px-3 py-2 …`），focus ring 靠复制维护，必然漂移（子 Agent + Codex 都点了）。抽 `components/ui/input.tsx` 统一。
+- **Notes:** 把 MetricCharts 的 inputClassName/textareaClassName 也并进去。
+
+### Auth 趋势图面积渐变（待定）
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** AuthPage 趋势 AreaChart 用 `<linearGradient>` 做面积淡出填充，Codex 按「色块内永不做渐变」标了。判断题：面积图淡出是数据可视化惯例，未必算装饰性「色块」。若决定严格扁平，改 Area 为 flat `fillOpacity` 并删 defs + 清掉随之未用的 `providerKey` 形参链。
+- **Notes:** 留给用户定夺要不要图表也强制纯色。
+
+### scheduler 黄不可作浅底文字（护栏）
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** `--scheduler`（赭黄）当浅底文字仅 ~1.96:1，严重不达 AA。当前仅作 `bg-scheduler text-scheduler-foreground` 使用（安全）。永远不要引入 `text-scheduler` 落在中性底上。
+- **Notes:** 已是配给制约束，记此防回归。

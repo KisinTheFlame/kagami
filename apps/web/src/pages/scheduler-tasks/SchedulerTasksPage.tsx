@@ -20,7 +20,7 @@ export function SchedulerTasksPage() {
   if (query.isError || !query.data) {
     return (
       <PageShell>
-        <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed text-sm text-destructive">
+        <div className="flex min-h-[120px] items-center justify-center rounded-none border border-dashed text-sm text-destructive">
           调度任务查询失败，请检查后端 /scheduler/tasks 接口
         </div>
       </PageShell>
@@ -98,7 +98,7 @@ function SchedulerTaskCard({
                 variant="outline"
                 className={cn(
                   latest.status === "error" && "border-destructive/40 text-destructive",
-                  latest.status === "skipped_overlap" && "border-amber-300 text-amber-700",
+                  latest.status === "skipped_overlap" && "border-scheduler/50 text-foreground",
                 )}
               >
                 {formatRunStatus(latest.status)}
@@ -154,7 +154,7 @@ function SchedulerTaskCard({
 
 function EmptyBlock({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+    <div className="flex min-h-[120px] items-center justify-center rounded-none border border-dashed text-sm text-muted-foreground">
       {label}
     </div>
   );

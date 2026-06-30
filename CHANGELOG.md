@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+## [0.3.2.0] - 2026-06-30
+
+### Changed
+
+- web: 前端管理台整套美术风格重做为 **「晒褪了色的蒙德里安 / The Painted Ledger」**（蒙德里安骨架 + 文艺复兴/印象派颜料色）。刻意**弃用 shadcn 的有样式组件层与默认 slate 主题**，仅保留 `@radix-ui/*` 无样式行为基元（焦点陷阱、键盘可访问性），其余 class 体系与组件外观全部自定义。新增仓库根 `DESIGN.md` 作为设计源真理，`AGENTS.md` 增设计系统章节。
+  - 配色：`index.css` 的 `:root` / `.dark` 改为颜料盘（HSL 通道，沿用 `hsl(var(--x))` + 透明度修饰符），新增 5 个语义颜料色（朱砂红=错误/主动事件、群青=LLM/context、赭黄=scheduler/等待、绿土=Story/记忆、茜草=高成本）+ 侧栏 token；深色为「夜间画室」明暗对照整套重设，非简单反相。
+  - 字体：经 Google Fonts 加载 Fraunces/思源宋体（标题）、Literata/思源黑体（正文）、JetBrains Mono（数据）；结构边界默认 `border` 宽度提到 2px、`--radius` 归零、全局等宽数据 `tabular-nums`。
+  - 组件：`button/card/table/badge/dialog/select/chart/json-panel/mobile-card` 与 layout（侧栏暖近黑画布边竖栏、列表/详情画框）按本系统重写；`AuthPage`、`LlmPlayground`、`MetricCharts` 等自带 slate/粉彩/玻璃拟态样式的页面并入颜料盘。
+- web: 经 `/design-review`（Codex + opus 子 Agent 双路外部意见）走查并修复 11 项：暗色侧栏字标可读性、Playground 玻璃拟态块去渐变/圆角/阴影/blur、图表系列色去数字纯色、弱字/绿土文字色晒暗达 WCAG AA、结构层圆角统一 `rounded-none`、`focus-visible` 键盘焦点环统一、全局 `tabular-nums`、`prefers-reduced-motion` 门控、移动端触控目标抬到 ≥44px（仅移动断点，桌面密度不变）等。
+  - 纯表现层改动，不涉及后端、API、数据流或 system prompt / 工具描述，对 KV 缓存前缀无影响。
+
 ## [0.3.1.17] - 2026-06-30
 
 ### Changed
