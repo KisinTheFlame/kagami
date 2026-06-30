@@ -1,11 +1,18 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
+import { detectMime } from "../../../oss/detect-mime.js";
 import type { OssClient } from "../../../oss/oss-client.js";
 import type { ImageAssetDao } from "../../infra/image-asset.dao.js";
 
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 
 const MAX_IMAGE_DESCRIPTION_LENGTH = 180;
+
+/**
+ * 下载图片字节的硬上限（32 MiB）。先判 MIME 后下 body 意味着非图也会被拉下来，所以这里
+ * 用 content-length 早拒 + 实际字节兜底，防一个坏 URL / 过期 CDN / 大 HTML 响应打满带宽或 OOM。
+ */
+const MAX_IMAGE_DOWNLOAD_BYTES = 32 * 1024 * 1024;
 
 type FetchLike = typeof fetch;
 
@@ -81,15 +88,13 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
 
     // 完整成功（描述 + 存档）才落库，让下次同图走缓存；OSS 挂时不缓存，下次重试。
     if (this.imageAssetDao && fileId && resid) {
-      void this.imageAssetDao
-        .upsert({ fileId, resid, description, mime: mimeType })
-        .catch(error => {
-          logger.warn("Failed to persist image asset", {
-            event: "napcat.gateway.image_asset_upsert_failed",
-            fileId,
-            error: error instanceof Error ? error.message : String(error),
-          });
+      void this.imageAssetDao.upsert({ fileId, resid, description }).catch(error => {
+        logger.warn("Failed to persist image asset", {
+          event: "napcat.gateway.image_asset_upsert_failed",
+          fileId,
+          error: error instanceof Error ? error.message : String(error),
         });
+      });
     }
 
     return { description, resid };
@@ -124,14 +129,13 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
         return null;
       }
 
-      const mimeType = inferImageMimeType({
-        url: imageUrl,
-        contentType: response.headers.get("content-type"),
-      });
-      if (!mimeType) {
-        logger.warn("Failed to infer image mime type for NapCat image", {
-          event: "napcat.gateway.image_mime_type_invalid",
+      // content-length 早拒：能提前知道超限就别把整块拉下来（先 sniff 后判图意味着非图也会下载）。
+      const declaredLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        logger.warn("NapCat image exceeds size cap (content-length), skipping download", {
+          event: "napcat.gateway.image_download_too_large",
           url: imageUrl,
+          declaredLength,
         });
         return null;
       }
@@ -142,6 +146,28 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
         logger.warn("Downloaded NapCat image is empty", {
           event: "napcat.gateway.image_download_empty",
           url: imageUrl,
+        });
+        return null;
+      }
+      // content-length 缺失/被改写时按实际字节兜底，绝不把超限字节喂给 vision / OSS。
+      if (content.byteLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        logger.warn("NapCat image exceeds size cap (actual bytes), skipping", {
+          event: "napcat.gateway.image_download_too_large",
+          url: imageUrl,
+          actualBytes: content.byteLength,
+        });
+        return null;
+      }
+
+      // 按真实字节探测 content-type（magic bytes 优先，header 兜底）。比从 URL 扩展名猜可靠：
+      // header 缺失/错误、URL 无扩展名的合法图不再被误丢。非图（探测不出且 header 非 image/*）
+      // 才丢弃，因为 vision 描述不了非图。
+      const mimeType = detectMime(content, response.headers.get("content-type"));
+      if (!mimeType.startsWith("image/")) {
+        logger.warn("Downloaded NapCat resource is not a recognizable image", {
+          event: "napcat.gateway.image_mime_type_invalid",
+          url: imageUrl,
+          mimeType,
         });
         return null;
       }
@@ -219,40 +245,6 @@ function sanitizeVisionDescription(description: string): string {
   }
 
   return `${flattened.slice(0, MAX_IMAGE_DESCRIPTION_LENGTH - 1).trimEnd()}…`;
-}
-
-export function inferImageMimeType(input: {
-  url: string;
-  contentType: string | null;
-}): string | null {
-  const headerMimeType = input.contentType?.split(";")[0]?.trim().toLowerCase() ?? null;
-  if (headerMimeType?.startsWith("image/")) {
-    return headerMimeType;
-  }
-
-  const filename = inferFilenameFromUrl(input.url);
-  if (!filename) {
-    return null;
-  }
-
-  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
-  switch (extension) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    case "bmp":
-      return "image/bmp";
-    case "svg":
-      return "image/svg+xml";
-    default:
-      return null;
-  }
 }
 
 function inferFilenameFromUrl(url: string): string | undefined {

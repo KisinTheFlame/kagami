@@ -27,12 +27,10 @@ export class PrismaImageAssetDao implements ImageAssetDao {
         fileId: item.fileId,
         resid: item.resid,
         description: item.description,
-        mime: item.mime,
       },
       update: {
         resid: item.resid,
         description: item.description,
-        mime: item.mime,
       },
     });
   }

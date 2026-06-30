@@ -7,7 +7,6 @@ export type UpsertImageAssetItem = {
   fileId: string;
   resid: string;
   description: string;
-  mime: string | null;
 };
 
 /**

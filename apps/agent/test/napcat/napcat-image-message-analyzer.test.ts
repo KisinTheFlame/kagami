@@ -71,7 +71,7 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     ).resolves.toEqual({ description: "", resid: null });
   });
 
-  it("should infer mime type from url when header is missing", async () => {
+  it("should detect mime from bytes when header is missing (byte-sniff, not url extension)", async () => {
     const visionAgent = {
       analyzeImage: vi.fn().mockResolvedValue({
         description: "一只猫",
@@ -79,18 +79,71 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
         model: "gpt-4o-mini",
       }),
     } as unknown as VisionAgent;
+    // 无 content-type 头、URL 也无扩展名，但字节是合法 JPEG（magic FF D8 FF）。
+    const jpegBytes = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8)]);
     const analyzer = new DefaultNapcatImageMessageAnalyzer({
       visionAgent,
-      fetch: vi.fn().mockResolvedValue(new Response(Buffer.from("image"), { status: 200 })),
+      fetch: vi.fn().mockResolvedValue(new Response(jpegBytes, { status: 200 })),
     });
 
     await expect(
-      analyzer.analyzeImageSegment(createImageSegment("https://example.com/cat.jpeg", "cat.jpeg")),
+      analyzer.analyzeImageSegment(createImageSegment("https://example.com/cat", "cat")),
     ).resolves.toEqual({ description: "一只猫", resid: null });
 
     expect(visionAgent.analyzeImage).toHaveBeenCalledWith(
       expect.objectContaining({ mimeType: "image/jpeg" }),
     );
+  });
+
+  it("should trust bytes over a wrong header (text/html header + PNG magic → image/png)", async () => {
+    const visionAgent = {
+      analyzeImage: vi.fn().mockResolvedValue({ description: "一张图" }),
+    } as unknown as VisionAgent;
+    const ossClient: OssClient = {
+      putObject: vi.fn().mockResolvedValue("res-8"),
+      getObject: vi.fn(),
+    };
+    // 服务器谎报 text/html，但字节是合法 PNG（magic 89 50 4E 47 0D 0A 1A 0A），URL 无扩展名。
+    const pngBytes = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(8),
+    ]);
+    const analyzer = new DefaultNapcatImageMessageAnalyzer({
+      visionAgent,
+      ossClient,
+      fetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(pngBytes, { status: 200, headers: { "content-type": "text/html" } }),
+        ),
+    });
+
+    await expect(
+      analyzer.analyzeImageSegment(createImageSegment("https://example.com/mislabeled", "MD5P")),
+    ).resolves.toEqual({ description: "一张图", resid: "res-8" });
+
+    expect(ossClient.putObject).toHaveBeenCalledWith({
+      bytes: pngBytes,
+      mimeType: "image/png",
+    });
+  });
+
+  it("should skip download when content-length exceeds the size cap", async () => {
+    const visionAgent = { analyzeImage: vi.fn() } as unknown as VisionAgent;
+    const analyzer = new DefaultNapcatImageMessageAnalyzer({
+      visionAgent,
+      fetch: vi.fn().mockResolvedValue(
+        new Response(Buffer.from("image"), {
+          status: 200,
+          headers: { "content-type": "image/png", "content-length": String(64 * 1024 * 1024) },
+        }),
+      ),
+    });
+
+    await expect(
+      analyzer.analyzeImageSegment(createImageSegment("https://example.com/huge.png")),
+    ).resolves.toEqual({ description: "", resid: null });
+    expect(visionAgent.analyzeImage).not.toHaveBeenCalled();
   });
 
   it("should return empty description when vision agent throws", async () => {
@@ -158,7 +211,6 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
       fileId: "MD5A.png",
       resid: "res-7",
       description: "一张架构图",
-      mime: "image/png",
     });
   });
 
