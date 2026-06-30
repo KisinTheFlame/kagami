@@ -26,7 +26,7 @@
     --muted-foreground: 35 12.2% 38.4%;
     --accent: 36.8 49.2% 87.6%;
     --accent-foreground: 30 16.7% 9.4%;
-    --destructive: 5.1 79.8% 46.7%;
+    --destructive: 5.3 81.9% 43.3%;
     --destructive-foreground: 40 39.1% 91%;
     --border: 36 31.5% 78.2%;
     --input: 36 31.5% 78.2%;
@@ -34,13 +34,13 @@
     --radius: 0rem;
 
     /* 语义原色：一块色 = 一种含义，饱和上墙 */
-    --signal: 5.1 79.8% 46.7%; /* 正红 · 错误 · 主动事件 · Agent 发言 */
+    --signal: 5.3 81.9% 43.3%; /* 正红 · 错误 · 主动事件 · Agent 发言（晒深至白字 AA） */
     --signal-foreground: 40 39.1% 91%;
     --llm: 224.6 79.6% 38.4%; /* 正蓝 · LLM · 推理 · context */
     --llm-foreground: 40 39.1% 91%;
     --scheduler: 47.6 100% 48.4%; /* 正黄 · scheduler · 等待 · pending */
     --scheduler-foreground: 30 16.7% 9.4%;
-    --story: 139.4 50.5% 37.3%; /* 正绿 · Story · 记忆 · recall */
+    --story: 139.1 55.6% 30%; /* 正绿 · Story · 记忆 · recall（晒深至白字 AA） */
     --story-foreground: 40 39.1% 91%;
     --cost: 348.2 71.7% 41.6%; /* 玫红 · 高 token 成本 · 风险 */
     --cost-foreground: 40 39.1% 91%;
@@ -71,21 +71,22 @@
     --accent: 33.3 27.3% 12.9%;
     --accent-foreground: 41.5 40.6% 87.5%;
     --destructive: 6.1 80.2% 54.5%;
-    --destructive-foreground: 41.5 40.6% 87.5%;
+    --destructive-foreground: 33.3 27.3% 6.5%;
     --border: 32.7 24.4% 17.6%;
     --input: 32.7 24.4% 17.6%;
-    --ring: 225.3 66.5% 54.3%;
+    --ring: 223.2 73.5% 62.9%;
 
+    /* 暗色填实块：黑底上的亮原色配黑字（对比度更高、更跳） */
     --signal: 6.1 80.2% 54.5%;
-    --signal-foreground: 41.5 40.6% 87.5%;
-    --llm: 225.3 66.5% 54.3%;
-    --llm-foreground: 41.5 40.6% 87.5%;
+    --signal-foreground: 33.3 27.3% 6.5%;
+    --llm: 223.2 73.5% 62.9%;
+    --llm-foreground: 33.3 27.3% 6.5%;
     --scheduler: 46.2 96.5% 55.1%;
     --scheduler-foreground: 33.3 27.3% 6.5%;
     --story: 140 45.5% 45.3%;
-    --story-foreground: 41.5 40.6% 87.5%;
-    --cost: 345.2 64.2% 52.9%;
-    --cost-foreground: 41.5 40.6% 87.5%;
+    --story-foreground: 33.3 27.3% 6.5%;
+    --cost: 345 67.4% 65.1%;
+    --cost-foreground: 33.3 27.3% 6.5%;
 
     --sidebar: 35 23.1% 10.2%;
     --sidebar-foreground: 37.1 16.3% 59.2%;
