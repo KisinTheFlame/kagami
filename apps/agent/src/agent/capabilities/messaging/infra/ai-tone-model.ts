@@ -1,4 +1,4 @@
-import { readServerStaticText } from "@kagami/server-core/common/runtime/read-static-text";
+import { readServerStaticText } from "@kagami/kernel/runtime/read-static-text";
 
 /**
  * 中文「AI 味」检测器的模型权重类型（TF-IDF 字符 n-gram + 逻辑回归）。

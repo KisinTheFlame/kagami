@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 const STORY_MARKDOWN_FIELD_LABELS = {
   time: "时间",

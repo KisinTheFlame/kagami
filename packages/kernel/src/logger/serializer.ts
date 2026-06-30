@@ -1,4 +1,4 @@
-import { isRecord } from "../common/prisma-json.js";
+import { isRecord } from "../json/is-record.js";
 import type { LogMetadata } from "./types.js";
 
 export function serializeMetadata(metadata: LogMetadata): LogMetadata {

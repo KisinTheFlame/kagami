@@ -1,7 +1,7 @@
 import type { AppStateStore, JsonValue } from "@kagami/agent-runtime";
-import { normalizeInputJsonValue } from "@kagami/server-core/common/prisma-json";
-import type { Database } from "@kagami/server-core/db/client";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { normalizeInputJsonValue } from "@kagami/persistence/common/prisma-json";
+import type { Database } from "@kagami/persistence/db/client";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 
 const logger = new AppLogger({ source: "agent.app-state-store" });
 

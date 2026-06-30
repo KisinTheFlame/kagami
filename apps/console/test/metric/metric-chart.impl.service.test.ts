@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MetricChartItem } from "../../src/metric/domain/metric.js";
 import { DefaultMetricChartService } from "../../src/metric/application/metric-chart.impl.service.js";
 import type { MetricChartDao } from "../../src/metric/infra/metric-chart.dao.js";
-import type { MetricDao } from "@kagami/server-core/dao/metric.dao";
+import type { MetricDao } from "@kagami/persistence/dao/metric.dao";
 
 describe("DefaultMetricChartService", () => {
   it("should list chart definitions", async () => {

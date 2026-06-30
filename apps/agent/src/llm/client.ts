@@ -5,12 +5,12 @@ import {
   type LlmProviderOption,
   type LlmRequestUserContentPart,
 } from "@kagami/shared/schemas/llm-chat";
-import type { LlmUsageId } from "@kagami/server-core/common/contracts/llm";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import type { Config } from "@kagami/server-core/config/config.loader";
+import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import type { Config } from "@kagami/kernel/config/config.loader";
 import type { MetricService } from "../metric/application/metric.service.js";
-import type { LlmChatCallDao } from "@kagami/server-core/dao/llm-chat-call.dao";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import type { LlmChatCallDao } from "@kagami/persistence/dao/llm-chat-call.dao";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import {
   getLlmProviderFailureContext,
   type LlmProvider,

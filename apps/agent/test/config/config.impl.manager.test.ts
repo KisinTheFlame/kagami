@@ -2,9 +2,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DefaultConfigManager } from "@kagami/server-core/config/config.impl.manager";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
+import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 
 const tempDirs: string[] = [];
 

@@ -2,7 +2,7 @@ import {
   type NapcatQqMessageListQuery,
   type NapcatQqMessageListResponse,
 } from "@kagami/shared/schemas/napcat-group-message";
-import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
+import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
 import { mapNapcatQqMessageList } from "../mappers/napcat-group-message.mapper.js";
 import type { NapcatQqMessageQueryService } from "./napcat-group-message-query.service.js";
 

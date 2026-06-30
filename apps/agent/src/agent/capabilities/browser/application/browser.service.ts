@@ -4,7 +4,7 @@ import {
   type LaunchPersistentContextOptions,
 } from "cloakbrowser";
 import type { BrowserContext, Page } from "playwright-core";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BrowserError } from "../domain/errors.js";
 import type { BrowserCredentialDao } from "./browser-credential.dao.js";
 

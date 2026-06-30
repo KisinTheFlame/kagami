@@ -10,16 +10,16 @@ import {
   type ToolComponent,
 } from "@kagami/agent-runtime";
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
-import type { Config } from "@kagami/server-core/config/config.loader";
-import type { Database } from "@kagami/server-core/db/client";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import type { Config } from "@kagami/kernel/config/config.loader";
+import type { Database } from "@kagami/persistence/db/client";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { LlmClient } from "../llm/client.js";
 import type { EmbeddingClient } from "../llm/embedding/client.js";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
-import type { ConfigManager } from "@kagami/server-core/config/config.manager";
-import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
+import type { ConfigManager } from "@kagami/kernel/config/config.manager";
+import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
 import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";

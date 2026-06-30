@@ -1,4 +1,4 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { createPkcePair } from "./pkce.js";
 import type {
   OAuthCallbackInput,

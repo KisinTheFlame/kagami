@@ -1,5 +1,5 @@
 {
-  "name": "@kagami/server-core",
+  "name": "@kagami/persistence",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,13 +19,12 @@
     "db:generate": "bash ../../scripts/prisma.sh generate"
   },
   "dependencies": {
+    "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/shared": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.6.0",
     "better-sqlite3": "^12.11.1",
-    "fastify": "^5.6.2",
-    "handlebars": "^4.7.8",
     "prisma": "^7.6.0",
     "zod": "^3.24.4"
   },
