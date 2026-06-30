@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 /*
- * The Painted Ledger / 晒褪了色的蒙德里安
- * 颜料盘以 HSL 通道三元组存放，沿用 hsl(var(--x)) + 透明度修饰符的写法。
- * 颜色全部为颜料调出来的晒暗色，绝无数字纯色；色块内永不渐变。
+ * The Painted Ledger / 蒙德里安（鲜艳大胆版）
+ * 蒙德里安骨架（2px 黑硬线 / 0 圆角）+ 饱和原色。色彩是结构，不是配给：
+ * 语义色以填实色块 / 状态格 / 大数字承载，铺到 chrome 上墙。
+ * 颜料盘以 HSL 通道三元组存放，沿用 hsl(var(--x)) + 透明度修饰符；色块内永不渐变。
  * 详见仓库根 DESIGN.md。
  */
 @layer base {
   :root {
-    /* 中性：石膏暖白底 + 生赭弱字 + 骨黑墨 */
+    /* 中性：石膏暖白底 + 生赭弱字 + 骨黑墨（中性留给底，色彩留给数据） */
     --background: 40 39.1% 91%;
     --foreground: 30 16.7% 9.4%;
     --card: 40 54.5% 95.7%;
@@ -25,35 +26,36 @@
     --muted-foreground: 35 12.2% 38.4%;
     --accent: 36.8 49.2% 87.6%;
     --accent-foreground: 30 16.7% 9.4%;
-    --destructive: 6.3 60.4% 43.5%;
+    --destructive: 5.1 79.8% 46.7%;
     --destructive-foreground: 40 39.1% 91%;
     --border: 36 31.5% 78.2%;
     --input: 36 31.5% 78.2%;
-    --ring: 216 52.9% 33.3%;
+    --ring: 224.6 79.6% 38.4%;
     --radius: 0rem;
 
-    /* 语义颜料色：一块色 = 一种含义 */
-    --signal: 6.3 60.4% 43.5%; /* 朱砂红 · 错误 · 主动事件 · Agent 发言 */
+    /* 语义原色：一块色 = 一种含义，饱和上墙 */
+    --signal: 5.1 79.8% 46.7%; /* 正红 · 错误 · 主动事件 · Agent 发言 */
     --signal-foreground: 40 39.1% 91%;
-    --llm: 216 52.9% 33.3%; /* 群青 · LLM · 推理 · context */
+    --llm: 224.6 79.6% 38.4%; /* 正蓝 · LLM · 推理 · context */
     --llm-foreground: 40 39.1% 91%;
-    --scheduler: 41.1 68.1% 50.8%; /* 赭黄 · scheduler · 等待 · pending */
+    --scheduler: 47.6 100% 48.4%; /* 正黄 · scheduler · 等待 · pending */
     --scheduler-foreground: 30 16.7% 9.4%;
-    --story: 112.8 13.7% 35.9%; /* 绿土 · Story · 记忆 · recall（晒暗以达 WCAG AA） */
+    --story: 139.4 50.5% 37.3%; /* 正绿 · Story · 记忆 · recall */
     --story-foreground: 40 39.1% 91%;
-    --cost: 0 37.8% 47.3%; /* 茜草玫红 · 高 token 成本 · 风险 */
+    --cost: 348.2 71.7% 41.6%; /* 玫红 · 高 token 成本 · 风险 */
     --cost-foreground: 40 39.1% 91%;
 
-    /* 侧栏：一条暖近黑的画布边竖栏 */
+    /* 侧栏：暖近黑画布边竖栏 + 正黄选中块 */
     --sidebar: 30 16.7% 9.4%;
-    --sidebar-foreground: 38.8 30.4% 78%;
-    --sidebar-active: 40 39.1% 91%;
+    --sidebar-foreground: 37.7 24.5% 72%;
+    --sidebar-brand: 40 40.9% 91.4%;
+    --sidebar-active: 47.6 100% 48.4%;
     --sidebar-active-foreground: 30 16.7% 9.4%;
     --sidebar-border: 30 16.7% 9.4%;
   }
 
   .dark {
-    /* 守夜 · 夜间画室 · 明暗对照（非简单反相） */
+    /* 守夜 · 夜间画室：原色在黑底上被点亮 */
     --background: 33.3 27.3% 6.5%;
     --foreground: 41.5 40.6% 87.5%;
     --card: 35 23.1% 10.2%;
@@ -68,27 +70,28 @@
     --muted-foreground: 34 11.8% 49.8%;
     --accent: 33.3 27.3% 12.9%;
     --accent-foreground: 41.5 40.6% 87.5%;
-    --destructive: 8 59.8% 53.1%;
+    --destructive: 6.1 80.2% 54.5%;
     --destructive-foreground: 41.5 40.6% 87.5%;
     --border: 32.7 24.4% 17.6%;
     --input: 32.7 24.4% 17.6%;
-    --ring: 216.2 45.7% 54.5%;
+    --ring: 225.3 66.5% 54.3%;
 
-    --signal: 8 59.8% 53.1%;
-    --signal-foreground: 33.3 27.3% 6.5%;
-    --llm: 216.2 45.7% 54.5%;
-    --llm-foreground: 33.3 27.3% 6.5%;
-    --scheduler: 42.3 75.7% 59.6%;
+    --signal: 6.1 80.2% 54.5%;
+    --signal-foreground: 41.5 40.6% 87.5%;
+    --llm: 225.3 66.5% 54.3%;
+    --llm-foreground: 41.5 40.6% 87.5%;
+    --scheduler: 46.2 96.5% 55.1%;
     --scheduler-foreground: 33.3 27.3% 6.5%;
-    --story: 106.2 17% 55.1%;
-    --story-foreground: 33.3 27.3% 6.5%;
-    --cost: 4.1 48.6% 58.8%;
-    --cost-foreground: 33.3 27.3% 6.5%;
+    --story: 140 45.5% 45.3%;
+    --story-foreground: 41.5 40.6% 87.5%;
+    --cost: 345.2 64.2% 52.9%;
+    --cost-foreground: 41.5 40.6% 87.5%;
 
     --sidebar: 35 23.1% 10.2%;
-    --sidebar-foreground: 37.5 18.2% 65.5%;
-    --sidebar-active: 33.3 27.3% 12.9%;
-    --sidebar-active-foreground: 41.5 40.6% 87.5%;
+    --sidebar-foreground: 37.1 16.3% 59.2%;
+    --sidebar-brand: 41.5 40.6% 87.5%;
+    --sidebar-active: 46.2 96.5% 55.1%;
+    --sidebar-active-foreground: 33.3 27.3% 6.5%;
     --sidebar-border: 32.7 24.4% 17.6%;
   }
 }
@@ -101,7 +104,6 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
-    /* 颜料底色带一点纸感的暖，禁止子像素发蓝 */
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
