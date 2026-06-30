@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+## [0.3.2.2] - 2026-07-01
+
+### Changed
+
+- agent/browser: 把浏览器从 agent 进程内拆成独立 PM2 进程 `kagami-browser`（新包 `@kagami/browser`），让 `pnpm app:deploy agent` 重启 agent 时活的 Chromium / 登录会话不再被杀（见 [#173](https://github.com/KisinTheFlame/kagami/issues/173)）。新进程是 server-core-based 的 Fastify 服务，仅绑 `127.0.0.1`（API 暴露 `type secret_handle` / `eval` / `screenshot`，绝不对外网卡），把原 `BrowserService` / 错误体系 / 凭据 DAO 从 `apps/agent` 整体移入；agent 侧新增 `HttpBrowserClient` 逐一镜像 `BrowserService` 方法签名，8 个浏览器工具只把取数来源从进程内 service 换成 HTTP client，**tool_result 字节保持与拆分前逐字一致**（KV 缓存契约，由 golden 测试守住）。凭据：`type(secret_handle)` 在浏览器进程内直读 SQLite `browser_credential` 注入 fill 层，明文永不过 HTTP、永不回 agent。并发：所有动作经进程内 `SerialExecutor` 串行执行，保住 `observeEpoch` / pageStack / locator 不变量（不再依赖"调用方单线程"假设）。健壮性：client 用 `AbortSignal.timeout` + 把 `ECONNREFUSED` / 超时 / 非 JSON 响应统一映射成 `BROWSER_NOT_READY`；进程关停加 deadline 兜底；`waitFor` 死等毫秒数加上限防串行队列被永久占住。配置：顶层 `services` 块新增 `browser`（`127.0.0.1:20007`，同步 `config.loader` / `config.yaml.example`）；`server.apps.browser` 行为配置改由浏览器进程消费。部署：`ecosystem.config.cjs` 新增 `kagami-browser`（PM2 `cwd` 固定仓库根，让 `userDataDir` 落仓库根 `data/browser/`），`scripts/deploy.sh` 单服务分支加 `browser`、迁移暂停库进程列表纳入 `kagami-browser`；`app:deploy agent` 不再触及浏览器进程。无 DB schema 变更。**部署前置（部署机 gitignored `config.yaml`）：加 `services.browser` 块；一次性迁移 `mv apps/agent/data/browser data/browser` 把现存登录 profile 搬到仓库根，否则登录态不会跨重启续上。**
+
+## [0.3.2.1] - 2026-07-01
+
+### Changed
+
+- web: 内置登录页把 **Claude Code** tab 排到 Codex 前面，并将所有默认入口（侧栏「内置登录」链接、`/auth` 重定向、非法 provider 兜底、页内重定向）统一指向 `/auth/claude-code`，使默认打开的就是 Claude Code tab。纯前端表现层改动，不涉及后端、API 或 Agent 上下文。
+
 ## [0.3.2.0] - 2026-06-30
 
 ### Changed

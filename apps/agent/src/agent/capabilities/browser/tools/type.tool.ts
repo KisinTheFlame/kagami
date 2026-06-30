@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import { BrowserError } from "../domain/errors.js";
-import type { BrowserService } from "../application/browser.service.js";
+import type { BrowserClient } from "../../../../browser/browser-client.js";
 
 export const BROWSER_TYPE_TOOL_NAME = "browser_type";
 
@@ -38,17 +38,17 @@ export class BrowserTypeTool extends BrowserToolComponent<typeof Schema> {
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
-  private readonly getBrowserService: () => BrowserService;
+  private readonly getBrowserClient: () => BrowserClient;
 
-  public constructor({ getBrowserService }: { getBrowserService: () => BrowserService }) {
+  public constructor({ getBrowserClient }: { getBrowserClient: () => BrowserClient }) {
     super();
-    this.getBrowserService = getBrowserService;
+    this.getBrowserClient = getBrowserClient;
   }
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<string> {
     const submit = input.submit ?? false;
     if (input.secret_handle) {
-      const result = await this.getBrowserService().type(
+      const result = await this.getBrowserClient().type(
         input.ref,
         { secret: { handle: input.secret_handle, field: input.secret_field ?? "secret" } },
         submit,
@@ -56,7 +56,7 @@ export class BrowserTypeTool extends BrowserToolComponent<typeof Schema> {
       return JSON.stringify({ ok: true, url: result.url, filled: "secret" });
     }
     if (input.text !== undefined) {
-      const result = await this.getBrowserService().type(input.ref, { text: input.text }, submit);
+      const result = await this.getBrowserClient().type(input.ref, { text: input.text }, submit);
       return JSON.stringify({ ok: true, url: result.url });
     }
     throw new BrowserError("BROWSER_ERROR", "text 和 secret_handle 必须提供一个", {

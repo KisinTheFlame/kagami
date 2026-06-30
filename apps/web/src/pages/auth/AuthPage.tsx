@@ -89,7 +89,7 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
   },
 };
 
-const providerOrder: AuthProvider[] = ["codex", "claude-code"];
+const providerOrder: AuthProvider[] = ["claude-code", "codex"];
 
 export function AuthPage() {
   const { provider } = useParams<{ provider?: string }>();
@@ -97,7 +97,7 @@ export function AuthPage() {
   const queryClient = useQueryClient();
   const [trendRange, setTrendRange] = useState<AuthUsageTrendRange>("24h");
   const providerValue = provider ?? "";
-  const providerKey: AuthProvider = isAuthProvider(providerValue) ? providerValue : "codex";
+  const providerKey: AuthProvider = isAuthProvider(providerValue) ? providerValue : "claude-code";
   const providerConfig = providerConfigs[providerKey];
   const shouldRedirect = provider !== providerKey;
   const result = searchParams.get("result");
@@ -183,7 +183,7 @@ export function AuthPage() {
   const warningMessage = getStatusWarningMessage(statusData);
 
   if (shouldRedirect) {
-    return <Navigate to="/auth/codex" replace />;
+    return <Navigate to="/auth/claude-code" replace />;
   }
 
   return (

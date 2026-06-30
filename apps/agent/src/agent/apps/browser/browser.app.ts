@@ -1,7 +1,4 @@
-import { z } from "zod";
-import type { App, AppStartupContext, JsonValue } from "@kagami/agent-runtime";
-import { BrowserService } from "../../capabilities/browser/application/browser.service.js";
-import type { BrowserCredentialDao } from "../../capabilities/browser/application/browser-credential.dao.js";
+import type { App } from "@kagami/agent-runtime";
 import { BrowserNavigateTool } from "../../capabilities/browser/tools/navigate.tool.js";
 import { BrowserObserveTool } from "../../capabilities/browser/tools/observe.tool.js";
 import { BrowserClickTool } from "../../capabilities/browser/tools/click.tool.js";
@@ -12,35 +9,15 @@ import { BrowserScreenshotTool } from "../../capabilities/browser/tools/screensh
 import { BrowserEvalTool } from "../../capabilities/browser/tools/eval.tool.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../oss/oss-client.js";
+import type { BrowserClient } from "../../../browser/browser-client.js";
 
 export const BROWSER_APP_ID = "browser";
 
-/**
- * BrowserApp 的配置。只 4 个环境相关字段（headless / userDataDir / proxy / licenseKey）；
- * humanize / viewport / timeout / 截图尺寸等行为参数是 BrowserService 里的代码常量，
- * 不进 config（config-yaml-is-for-ops-not-code）。
- */
-const BrowserConfigSchema = z
-  .object({
-    headless: z.boolean().default(false),
-    userDataDir: z.string().min(1).default("data/browser/default"),
-    proxy: z.string().min(1).optional(),
-    licenseKey: z.string().min(1).optional(),
-  })
-  .default({});
-
-type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
-
 type BrowserAppDeps = {
-  credentialDao: BrowserCredentialDao;
+  /** 浏览器动作客户端：打到独立的 kagami-browser 进程（issue #173）。 */
+  browserClient: BrowserClient;
   /** 截图叠加落 OSS 用；缺省（OSS 关闭）时截图仍入上下文，只是没有 resid。 */
   ossClient?: OssClient;
-};
-
-type BrowserPersistedState = {
-  version: 1;
-  lastUrl: string | null;
-  lastTitle: string | null;
 };
 
 const BROWSER_AFFORDANCE = [
@@ -59,21 +36,22 @@ const BROWSER_AFFORDANCE = [
 ].join("\n");
 
 /**
- * 浏览器 App：把 capabilities/browser 的 BrowserService + 8 个工具包成 Kagami 桌面上
- * 的一个能力单元。结构照抄 TerminalApp。
+ * 浏览器 App：把浏览器的 8 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 TerminalApp。
+ *
+ * 拆进程后（issue #173）：本 App 不再持有 BrowserService / 不再 launch 或杀浏览器，
+ * 只持有一个打到独立 kagami-browser 进程的 HttpBrowserClient。浏览器进程有自己的 PM2
+ * 生命周期，agent 重启不影响它——这是「重启不杀浏览器」的根。
  *
  * - 工具：browser_navigate / observe / click / type / press / wait_for / screenshot / eval。
- * - 自管 BrowserService：onStartup 实例化并 prewarm()（只下二进制不开窗）；首次操作
- *   lazy-launch 持久 profile context。工具经闭包从 App 拿 service。
- * - 持久化：exportState/restoreState 存「上次在哪个 url/标题」（不自动 navigate，回灌
- *   字符串让 Kagami 自己决定）。登录态靠 userDataDir 持久 context 自动续上。
+ * - 无生命周期钩子：不 onStartup 建 service、不 onShutdown 杀浏览器；live 状态（当前页 /
+ *   epoch / 登录态）由浏览器进程独占，本进程不持久化（exportState/restoreState 省略）。
+ * - help() 经 client 的 GET /location 实时问「上次在哪」；浏览器进程未就绪时不炸（降级）。
  *
- * 设计依据：仓库根 CLAUDE.md + office-hours / eng-review 设计文档。
+ * 设计依据：仓库根 CLAUDE.md + issue #173。
  */
-export class BrowserApp implements App<BrowserConfig> {
+export class BrowserApp implements App {
   public readonly id = BROWSER_APP_ID;
   public readonly displayName = "浏览器";
-  public readonly configSchema = BrowserConfigSchema;
   public readonly tools: readonly [
     BrowserNavigateTool,
     BrowserObserveTool,
@@ -85,27 +63,20 @@ export class BrowserApp implements App<BrowserConfig> {
     BrowserEvalTool,
   ];
 
-  private readonly credentialDao: BrowserCredentialDao;
-  private browserService: BrowserService | null = null;
-  private pendingRestore: BrowserPersistedState | null = null;
+  private readonly browserClient: BrowserClient;
 
-  public constructor({ credentialDao, ossClient }: BrowserAppDeps) {
-    this.credentialDao = credentialDao;
-    const getBrowserService = (): BrowserService => {
-      if (!this.browserService) {
-        throw new Error("BrowserApp 尚未完成 onStartup，BrowserService 未就绪");
-      }
-      return this.browserService;
-    };
+  public constructor({ browserClient, ossClient }: BrowserAppDeps) {
+    this.browserClient = browserClient;
+    const getBrowserClient = (): BrowserClient => this.browserClient;
     this.tools = [
-      new BrowserNavigateTool({ getBrowserService }),
-      new BrowserObserveTool({ getBrowserService }),
-      new BrowserClickTool({ getBrowserService }),
-      new BrowserTypeTool({ getBrowserService }),
-      new BrowserPressTool({ getBrowserService }),
-      new BrowserWaitForTool({ getBrowserService }),
-      new BrowserScreenshotTool({ getBrowserService, ossClient }),
-      new BrowserEvalTool({ getBrowserService }),
+      new BrowserNavigateTool({ getBrowserClient }),
+      new BrowserObserveTool({ getBrowserClient }),
+      new BrowserClickTool({ getBrowserClient }),
+      new BrowserTypeTool({ getBrowserClient }),
+      new BrowserPressTool({ getBrowserClient }),
+      new BrowserWaitForTool({ getBrowserClient }),
+      new BrowserScreenshotTool({ getBrowserClient, ossClient }),
+      new BrowserEvalTool({ getBrowserClient }),
     ];
   }
 
@@ -114,7 +85,7 @@ export class BrowserApp implements App<BrowserConfig> {
   }
 
   public async help(): Promise<string> {
-    const location = this.browserService?.getLastLocation();
+    const location = await this.safeLocation();
     const where =
       location?.lastUrl != null
         ? `上次你在：${location.lastTitle ?? ""}（${location.lastUrl}）`
@@ -137,62 +108,20 @@ export class BrowserApp implements App<BrowserConfig> {
     ].join("\n");
   }
 
-  public async onStartup(ctx: AppStartupContext<BrowserConfig>): Promise<void> {
-    const config = ctx.config;
-    this.browserService = new BrowserService({
-      config: {
-        headless: config.headless,
-        userDataDir: config.userDataDir,
-        proxy: config.proxy,
-        licenseKey: config.licenseKey,
-      },
-      credentialDao: this.credentialDao,
-    });
-    if (this.pendingRestore) {
-      this.browserService.restoreState({
-        lastUrl: this.pendingRestore.lastUrl,
-        lastTitle: this.pendingRestore.lastTitle,
-      });
-      this.pendingRestore = null;
-    }
-    await this.browserService.prewarm();
-  }
-
-  public async onShutdown(): Promise<void> {
-    if (this.browserService) {
-      await this.browserService.shutdown();
-    }
-  }
-
   /** 进入浏览器：只给静态提示屏，不自动开窗/拉页（无网络 I/O，永不因启动失败而进不去）。 */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
     return [{ type: "append_message", content: BROWSER_AFFORDANCE }];
   }
 
-  public exportState(): JsonValue {
-    const location = this.browserService?.exportState() ?? { lastUrl: null, lastTitle: null };
-    const state: BrowserPersistedState = {
-      version: 1,
-      lastUrl: location.lastUrl,
-      lastTitle: location.lastTitle,
-    };
-    return state;
-  }
-
-  public restoreState(state: JsonValue): void {
-    if (
-      typeof state !== "object" ||
-      state === null ||
-      Array.isArray(state) ||
-      (state as { version?: unknown }).version !== 1
-    ) {
-      return;
+  /** 取浏览器进程的当前位置；进程未就绪/不可达时返 null，让 help 降级而非报错。 */
+  private async safeLocation(): Promise<{
+    lastUrl: string | null;
+    lastTitle: string | null;
+  } | null> {
+    try {
+      return await this.browserClient.getLocation();
+    } catch {
+      return null;
     }
-    const typed = state as unknown as BrowserPersistedState;
-    this.pendingRestore = {
-      version: 1,
-      lastUrl: typeof typed.lastUrl === "string" ? typed.lastUrl : null,
-      lastTitle: typeof typed.lastTitle === "string" ? typed.lastTitle : null,
-    };
   }
 }

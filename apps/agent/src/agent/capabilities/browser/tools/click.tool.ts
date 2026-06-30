@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
-import type { BrowserService } from "../application/browser.service.js";
+import type { BrowserClient } from "../../../../browser/browser-client.js";
 
 export const BROWSER_CLICK_TOOL_NAME = "browser_click";
 
@@ -23,15 +23,15 @@ export class BrowserClickTool extends BrowserToolComponent<typeof Schema> {
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
-  private readonly getBrowserService: () => BrowserService;
+  private readonly getBrowserClient: () => BrowserClient;
 
-  public constructor({ getBrowserService }: { getBrowserService: () => BrowserService }) {
+  public constructor({ getBrowserClient }: { getBrowserClient: () => BrowserClient }) {
     super();
-    this.getBrowserService = getBrowserService;
+    this.getBrowserClient = getBrowserClient;
   }
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<string> {
-    const result = await this.getBrowserService().click(input.target);
+    const result = await this.getBrowserClient().click(input.target);
     return JSON.stringify({ ok: true, url: result.url });
   }
 }

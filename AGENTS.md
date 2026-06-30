@@ -76,13 +76,14 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含九个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含十个工作空间包：
 
 - `apps/agent`：Fastify 后端服务（`@kagami/agent`）
 - `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/gateway`：前门网关进程（`@kagami/gateway`，独立进程、零 `@kagami/*` 依赖；托管 `apps/web/dist` 静态资源 + `/api/*` 反向代理分流到 console/agent）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
+- `apps/browser`：独立浏览器进程（`@kagami/browser`，server-core-based Fastify、仅绑 127.0.0.1；持有 CloakBrowser 与凭据注入，agent 经 HTTP 客户端驱动。拆成独立进程让 agent 重启不杀浏览器）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
 - `packages/llm`：前后端 / 内核共用的 LLM 消息与工具类型契约（`@kagami/llm`）
 - `packages/server-core`：后端共享基础设施内核（Prisma 客户端与 DAO、db、logger、config、common 契约与错误，`@kagami/server-core`）
@@ -123,7 +124,7 @@ pnpm lint:fix # ESLint 自动修复
 pnpm format # Prettier 格式检查
 pnpm format:write # Prettier 自动格式化
 pnpm app:deploy # 无参=全量：build -> prisma migrate deploy -> PM2 reload/startOrReload(全部) -> pm2 save
-pnpm app:deploy <agent|console|web|oss> # 单服务：只重建并重载该服务，不跑迁移、不动其它进程
+pnpm app:deploy <agent|console|gateway|oss|browser> # 单服务：只重建并重载该服务，不跑迁移、不动其它进程
 ```
 
 ### 单包命令
@@ -201,7 +202,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.llm.codexAuth`、`server.llm.claudeCodeAuth`
   - `server.llm.providers.deepseek`、`server.llm.providers.openai`、`server.llm.providers.openaiCodex`、`server.llm.providers.claudeCode`
   - `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
-  - 顶层 `services`（与 `server` 平级）：各服务监听端口与地址的唯一事实来源，`services.{agent,console,gateway,oss}.{host,port}`，所有进程读它寻址（见 issue #162）
+  - 顶层 `services`（与 `server` 平级）：各服务监听端口与地址的唯一事实来源，`services.{agent,console,gateway,oss,browser}.{host,port}`，所有进程读它寻址（见 issue #162）；`services.browser` 仅 localhost（见 issue #173）
   - `server.oss.enabled`（自建对象存储启用开关；地址来自 `services.oss`，整段省略=禁用、优雅降级）
   - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
   - `server.tavily.apiKey`
@@ -366,8 +367,9 @@ Agent 相关补充约定：
 - 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（端口取 `config.yaml` 的 `services.console.port`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
 - 网关（`kagami-gateway`）：单进程运行 `apps/gateway/dist/index.js`（TS，零 `@kagami/*` 依赖），默认监听 `20004`，托管 `apps/web/dist` 静态资源并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。监听端口与上游地址全部自读 `config.yaml` 的 `services` 块。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口取 `config.yaml` 的 `services.oss.port`。
+- 浏览器（`kagami-browser`）：单进程运行 `apps/browser/dist/index.js`，默认监听 `20007`（仅 localhost，端口取 `config.yaml` 的 `services.browser.port`）。持有 CloakBrowser 与凭据注入；PM2 `cwd` 固定仓库根，让 `userDataDir`（`data/browser/default`）落在仓库根 `data/` 下，登录态跨 agent 重启留存。独立生命周期是「agent 重启不杀浏览器」的根——`app:deploy agent` 不触及它（见 issue #173）。
 - `pnpm app:deploy` 会执行构建、Prisma 迁移、PM2 reload/startOrReload，以及 `pm2 save`。
-- `pnpm app:deploy <agent|console|gateway|oss>`（带服务名）只重建并重载该服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——尤其重载 `console` / `gateway` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍走无参 `pnpm app:deploy`。（`web` 作为 `gateway` 的已弃用别名仍可用。）
+- `pnpm app:deploy <agent|console|gateway|oss|browser>`（带服务名）只重建并重载该服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——尤其重载 `console` / `gateway` / `browser` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存上下文），符合 KV 缓存优先原则。涉及 DB schema 变更仍走无参 `pnpm app:deploy`。（`web` 作为 `gateway` 的已弃用别名仍可用。）
 - 数据库为进程内 SQLite 文件（`data/sqlite/kagami.db`），宿主机不再需要运行 PostgreSQL；Napcat 仍作为外部依赖运行，`config.yaml` 中通常使用 `localhost` 地址访问。
 - 部署机需要能编译/安装原生模块（`better-sqlite3`、`hnswlib-node`）；这些依赖的构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行。
 
