@@ -1,8 +1,6 @@
-import type * as Prisma from "../generated/prisma/internal/prismaNamespace.js";
+import { isRecord } from "@kagami/kernel/json/is-record";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import type * as Prisma from "../generated/prisma/internal/prismaNamespace.js";
 
 export function toJsonRecord(value: unknown): Record<string, unknown> {
   if (isRecord(value)) {

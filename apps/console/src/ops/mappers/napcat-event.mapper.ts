@@ -2,7 +2,7 @@ import {
   type NapcatEventItem,
   type NapcatEventListResponse,
 } from "@kagami/shared/schemas/napcat-event";
-import type { NapcatEventItem as NapcatEventDaoItem } from "@kagami/server-core/dao/napcat-event.dao";
+import type { NapcatEventItem as NapcatEventDaoItem } from "@kagami/persistence/dao/napcat-event.dao";
 
 type MapNapcatEventListInput = {
   page: number;

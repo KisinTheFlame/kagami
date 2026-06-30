@@ -11,10 +11,12 @@
       "@kagami/agent-runtime": ["./../../packages/agent-runtime/src/index.ts"],
       "@kagami/agent-runtime/*": ["./../../packages/agent-runtime/src/*"],
       "@kagami/llm": ["./../../packages/llm/src/index.ts"],
-      "@kagami/server-core/prisma": [
-        "./../../packages/server-core/src/generated/prisma/internal/prismaNamespace.ts"
+      "@kagami/persistence/prisma": [
+        "./../../packages/persistence/src/generated/prisma/internal/prismaNamespace.ts"
       ],
-      "@kagami/server-core/*": ["./../../packages/server-core/src/*"],
+      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
+      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
+      "@kagami/http/*": ["./../../packages/http/src/*"],
       "@kagami/shared/*": ["./../../packages/shared/src/*"]
     }
   },

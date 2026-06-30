@@ -7,7 +7,7 @@ import type {
   LogDao,
   QueryAppLogListFilterInput,
   QueryAppLogListPageInput,
-} from "../log.dao.js";
+} from "@kagami/kernel/logger/dao/log.dao";
 
 type PrismaLogDaoDeps = {
   database: Database;

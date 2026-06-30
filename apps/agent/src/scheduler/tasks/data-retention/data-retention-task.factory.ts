@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 import type { MetricService } from "../../../metric/application/metric.service.js";
 import type { ScheduledTask, TaskRunMetadata } from "../../domain/scheduled-task.js";
 import {

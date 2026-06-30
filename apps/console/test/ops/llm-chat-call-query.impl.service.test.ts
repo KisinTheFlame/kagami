@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LlmChatCallDao, LlmChatCallItem } from "@kagami/server-core/dao/llm-chat-call.dao";
+import type { LlmChatCallDao, LlmChatCallItem } from "@kagami/persistence/dao/llm-chat-call.dao";
 import { DefaultLlmChatCallQueryService } from "../../src/ops/application/llm-chat-call-query.impl.service.js";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 function makeDao(overrides: Partial<LlmChatCallDao>): LlmChatCallDao {
   return {

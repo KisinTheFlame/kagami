@@ -13,8 +13,8 @@ import type {
   LlmToolCall,
 } from "../types.js";
 import { imageContentToBase64 } from "@kagami/llm";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
-import type { Config } from "@kagami/server-core/config/config.loader";
+import { BizError } from "@kagami/kernel/errors/biz-error";
+import type { Config } from "@kagami/kernel/config/config.loader";
 import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
 
 const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";

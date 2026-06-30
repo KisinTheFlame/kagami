@@ -21,7 +21,7 @@ import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../llm/types.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
 import {

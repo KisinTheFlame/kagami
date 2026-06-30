@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { parse } from "node-html-parser";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 const ITHOME_RSS_URL = "https://www.ithome.com/rss/";
 const DEFAULT_USER_AGENT =

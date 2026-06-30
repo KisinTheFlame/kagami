@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { MetricTags } from "../domain/metric.js";
-import type { MetricDao } from "@kagami/server-core/dao/metric.dao";
+import type { MetricDao } from "@kagami/persistence/dao/metric.dao";
 import type { MetricService, RecordMetricInput } from "./metric.service.js";
 
 type DefaultMetricServiceDeps = {

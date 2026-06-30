@@ -12,7 +12,7 @@ import { NOOP_METRIC_SERVICE } from "../../../runtime/tool-call-metric.js";
 import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
 import { createUserMessage } from "../../../runtime/context/context-message-factory.js";
 import type { LlmClient } from "../../../../llm/client.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
 import {
