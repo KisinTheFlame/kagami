@@ -6,6 +6,7 @@ services:
   console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
   gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
   oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
+  browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
@@ -158,10 +159,10 @@ server:
       searchHitsLimit: 15            # search_hn 返回命中数
       userActivityLimit: 10          # open_hn_user 近期发言条数
     browser:
-      # 浏览器 App（CloakBrowser 有头驱动，登录 + 交互式逛网站）。整段可省略，全部字段都有默认值。
+      # 浏览器行为配置。拆进程后（issue #173）由独立的 kagami-browser 进程消费；整段可省略，全部字段都有默认值。
       # 只有这 4 个字段是环境相关的；humanize / viewport / 超时 / 截图尺寸等是代码常量，不在此暴露。
       headless: false                       # 有头/无头。本机带显示用 false 肉眼盯；无显示服务器需 true + Xvfb
-      userDataDir: data/browser/default      # 持久 profile 目录（登录态跨重启）。相对路径相对进程 cwd
+      userDataDir: data/browser/default      # 持久 profile 目录（登录态跨重启）。相对进程 cwd；kagami-browser 的 PM2 cwd 为仓库根 → 落仓库根 data/browser/
       # proxy: http://user:pass@host:port    # 可选代理
       # licenseKey: ""                        # 可选 CloakBrowser Pro license（也可用 CLOAKBROWSER_LICENSE_KEY 环境变量）
       # 凭据不在这里：网站账号密码存 SQLite 的 browser_credential 表（Kagami 运行期可自管），

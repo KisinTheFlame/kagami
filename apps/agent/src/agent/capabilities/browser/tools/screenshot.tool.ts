@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/server-core/logger/logger";
 import { BrowserToolComponent } from "./browser-tool-component.js";
-import type { BrowserService } from "../application/browser.service.js";
+import type { BrowserClient } from "../../../../browser/browser-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../oss/oss-client.js";
 
@@ -32,23 +32,23 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
-  private readonly getBrowserService: () => BrowserService;
+  private readonly getBrowserClient: () => BrowserClient;
   private readonly ossClient: OssClient | undefined;
 
   public constructor({
-    getBrowserService,
+    getBrowserClient,
     ossClient,
   }: {
-    getBrowserService: () => BrowserService;
+    getBrowserClient: () => BrowserClient;
     ossClient?: OssClient;
   }) {
     super();
-    this.getBrowserService = getBrowserService;
+    this.getBrowserClient = getBrowserClient;
     this.ossClient = ossClient;
   }
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<ToolExecutionResult> {
-    const shot = await this.getBrowserService().screenshot();
+    const shot = await this.getBrowserClient().screenshot();
     // 叠加落 OSS：失败不影响截图入上下文（降级，resid 置空）。
     const resid = await this.tryPutToOss(shot.image, shot.mimeType);
     const reasonAttr = input.reason ? ` reason="${input.reason}"` : "";

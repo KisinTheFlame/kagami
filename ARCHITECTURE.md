@@ -4,7 +4,7 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 当前由 8 个包组成，依赖单向（apps → packages）：
+pnpm workspace 当前由 10 个包组成，依赖单向（apps → packages）：
 
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
@@ -12,18 +12,20 @@ apps/agent  ──→ packages/agent-runtime ──→ packages/llm
 apps/console ──→ packages/server-core ──→ packages/shared
 apps/web     ──→ packages/shared
 apps/oss     （独立进程，零 @kagami 依赖）
+apps/browser ──→ packages/server-core ──→ packages/shared  （独立进程，持有 CloakBrowser）
 ```
 
-| 包                      | 角色                                                                                                                                                                   |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                        |
-| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 server-core 共享 DAO 直读 SQLite |
-| `@kagami/server-core`   | 前后端进程共享的后端基础设施：Prisma client / 共享 DAO / config / logger / 后端 common                                                                                 |
-| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                 |
-| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                                                                                     |
-| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                     |
-| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                                                                                              |
-| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                        |
+| 包                      | 角色                                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / story / auth / scheduler / LLM playground / QQ 发送）                                         |
+| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 server-core 共享 DAO 直读 SQLite  |
+| `@kagami/server-core`   | 前后端进程共享的后端基础设施：Prisma client / 共享 DAO / config / logger / 后端 common                                                                                  |
+| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                  |
+| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                                                                                      |
+| `@kagami/browser`       | 独立浏览器进程（server-core-based Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173） |
+| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                      |
+| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等）                                                                                               |
+| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                         |
 
 ## 后端模块 DAG
 
@@ -88,7 +90,7 @@ apps/agent/src/agent/
 │   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
-│   ├── browser/        CloakBrowser 有头驱动，登录 / 点击 / 填表 / 读真实网站（能力本体）
+│   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
 │   ├── terminal/       终端能力本体
 │   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
@@ -192,7 +194,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管四个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）。两个后端进程并发读写同一 SQLite 库靠库文件级 WAL。
+- PM2（`ecosystem.config.cjs`）托管五个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）。后端进程并发读写同一 SQLite 库靠库文件级 WAL。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
 - 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。

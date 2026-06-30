@@ -206,6 +206,7 @@ const ServicesSchema = z
     console: ServiceEndpointSchema,
     gateway: ServiceEndpointSchema,
     oss: ServiceEndpointSchema,
+    browser: ServiceEndpointSchema,
   })
   .strict();
 

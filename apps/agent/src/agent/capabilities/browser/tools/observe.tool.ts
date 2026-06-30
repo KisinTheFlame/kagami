@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
-import type { BrowserService } from "../application/browser.service.js";
+import type { BrowserClient } from "../../../../browser/browser-client.js";
 
 export const BROWSER_OBSERVE_TOOL_NAME = "browser_observe";
 
@@ -17,15 +17,15 @@ export class BrowserObserveTool extends BrowserToolComponent<typeof Schema> {
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
-  private readonly getBrowserService: () => BrowserService;
+  private readonly getBrowserClient: () => BrowserClient;
 
-  public constructor({ getBrowserService }: { getBrowserService: () => BrowserService }) {
+  public constructor({ getBrowserClient }: { getBrowserClient: () => BrowserClient }) {
     super();
-    this.getBrowserService = getBrowserService;
+    this.getBrowserClient = getBrowserClient;
   }
 
   protected async executeTyped(): Promise<string> {
-    const result = await this.getBrowserService().observe();
+    const result = await this.getBrowserClient().observe();
     return [
       `<browser_screen epoch="${result.epoch}" url="${result.url}" title="${result.title}">`,
       result.snapshot,
