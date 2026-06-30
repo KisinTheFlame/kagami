@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { TERMINAL_ERROR, type TerminalErrorCode } from "../domain/errors.js";
 import type { TerminalStateDao } from "./terminal-state.dao.js";
 import type { TerminalOutputDao } from "./terminal-output.dao.js";

@@ -13,7 +13,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@kagami/server-core": "workspace:*",
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/persistence": "workspace:*",
     "@kagami/shared": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "fastify": "^5.6.2",

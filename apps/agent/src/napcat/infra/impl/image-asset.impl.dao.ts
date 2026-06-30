@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 import type { ImageAssetDao, ImageAssetRecord, UpsertImageAssetItem } from "../image-asset.dao.js";
 
 type PrismaImageAssetDaoDeps = {
@@ -27,12 +27,10 @@ export class PrismaImageAssetDao implements ImageAssetDao {
         fileId: item.fileId,
         resid: item.resid,
         description: item.description,
-        mime: item.mime,
       },
       update: {
         resid: item.resid,
         description: item.description,
-        mime: item.mime,
       },
     });
   }

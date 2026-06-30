@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isRecord } from "@kagami/server-core/common/prisma-json";
+import { isRecord } from "@kagami/kernel/json/is-record";
 import {
   type NapcatSendAtSegment,
   type NapcatSendFaceSegment,

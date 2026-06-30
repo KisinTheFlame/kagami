@@ -1,4 +1,4 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { OssClient } from "../../../../oss/oss-client.js";
 
 /** 一份按 resId 解出的资源：原图字节 + MIME + 字节数 + 是否图片。 */

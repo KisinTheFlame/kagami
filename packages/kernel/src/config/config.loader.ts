@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { LLM_PROVIDER_IDS, type LlmProviderId } from "@kagami/llm";
 import { parse } from "yaml";
 import { z } from "zod";
-import { BizError } from "../common/errors/biz-error.js";
-import type { LlmUsageId } from "../common/contracts/llm.js";
+import { BizError } from "../errors/biz-error.js";
+import type { LlmUsageId } from "../contracts/llm.js";
 
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;

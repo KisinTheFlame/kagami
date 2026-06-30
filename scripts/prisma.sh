@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Prisma schema / migrations / 生成的 client 都归属共享包 @kagami/server-core。
-CORE_DIR="$ROOT_DIR/packages/server-core"
+# Prisma schema / migrations / 生成的 client 都归属持久化包 @kagami/persistence。
+CORE_DIR="$ROOT_DIR/packages/persistence"
 
 if [ "$#" -eq 0 ]; then
   echo "Usage: scripts/prisma.sh <prisma args...>"

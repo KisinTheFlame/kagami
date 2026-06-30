@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { initLoggerRuntime } from "@kagami/server-core/logger/runtime";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { StdoutLogSink } from "@kagami/server-core/logger/sinks/stdout-sink";
-import { closeDb, type Database } from "@kagami/server-core/db/client";
+import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
+import { closeDb, type Database } from "@kagami/persistence/db/client";
 import { buildConsoleRuntime } from "./app/console-runtime.js";
 
 // console 是只读查询进程：日志只走 stdout（不写 app_log，保持对 DB 只读），

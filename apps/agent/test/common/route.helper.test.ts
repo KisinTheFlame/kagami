@@ -1,10 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 
 describe("route helpers", () => {
   let app = Fastify({ logger: false });

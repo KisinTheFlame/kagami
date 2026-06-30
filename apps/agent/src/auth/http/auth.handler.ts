@@ -14,10 +14,7 @@ import { type AuthProvider } from "@kagami/shared/schemas/auth";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AuthUsageTrendQueryService } from "../application/auth-usage-trend-query.service.js";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 import { toInternalAuthProvider } from "../domain/auth-provider.js";
 import type { OAuthAuthService } from "../application/oauth-auth.service.js";
 

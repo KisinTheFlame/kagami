@@ -4,10 +4,7 @@ import {
   MainAgentContextCompactionResultSchema,
   MainAgentContextSnapshotSchema,
 } from "@kagami/shared/schemas/main-agent-context";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 import type { MainAgentContextQueryService } from "../application/main-agent-context-query.service.js";
 
 type MainAgentContextHandlerDeps = {

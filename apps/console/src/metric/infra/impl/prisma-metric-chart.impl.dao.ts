@@ -1,6 +1,6 @@
-import type * as Prisma from "@kagami/server-core/prisma";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import type { Database } from "@kagami/server-core/db/client";
+import type * as Prisma from "@kagami/persistence/prisma";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import type { Database } from "@kagami/persistence/db/client";
 import type { MetricChartDao } from "../metric-chart.dao.js";
 import {
   METRIC_CHART_AGGREGATORS,

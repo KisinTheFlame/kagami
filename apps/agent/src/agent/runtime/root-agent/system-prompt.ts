@@ -1,4 +1,4 @@
-import { renderServerStaticTemplate } from "@kagami/server-core/common/runtime/read-static-text";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 
 export function createAgentSystemPrompt({
   botQQ,

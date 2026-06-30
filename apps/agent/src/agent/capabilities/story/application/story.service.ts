@@ -1,4 +1,4 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { StoryRecord } from "../domain/story.js";
 import type { StoryDao } from "../infra/story.dao.js";
 import { formatStoryMarkdown, parseStoryMarkdown } from "../domain/story-markdown.js";

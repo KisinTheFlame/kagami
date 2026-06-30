@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { EmbeddingProvider } from "../provider.js";
 import type { EmbeddingRequest, EmbeddingResponse } from "../types.js";
 
