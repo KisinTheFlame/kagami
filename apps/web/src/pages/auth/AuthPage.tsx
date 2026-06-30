@@ -191,7 +191,7 @@ export function AuthPage() {
       className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-auto p-3 md:p-6 ${providerConfig.backgroundClassName}`}
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-        <section className="rounded-none border border-border bg-card p-6 backdrop-blur">
+        <section className="rounded-none border border-border bg-card p-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="space-y-3">
