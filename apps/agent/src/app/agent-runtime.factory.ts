@@ -96,6 +96,7 @@ import type { OssClient } from "../oss/oss-client.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
+import { AmapApp } from "../agent/apps/amap/amap.app.js";
 import type { QqApp } from "../agent/apps/qq/qq.app.js";
 import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
@@ -279,6 +280,7 @@ export async function buildAgentRuntime({
   appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
+  appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
