@@ -334,6 +334,11 @@ export async function buildAgentRuntime({
   const helpTool = new HelpTool({
     appManager,
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
+    // 导航语义（怎么进入 App）是 Kagami 的，不属于通用内核：文案在这里注入。
+    notInAppHint:
+      "你不在任何 App 里。先用 switch 进入一个 App，再调用 help 查看那个 App 能做什么；想知道有哪些 App 用 list_apps。",
+    appNotFoundHint: (appId: string) =>
+      `当前所在 App "${appId}" 已找不到。可能被卸载或重启过，用 list_apps 看看现在有哪些 App。`,
   });
   // 主 Agent 的 invoke 子工具所有者：全部 App 工具（含 QQ 的 send_message）由
   // AppManager 把握所有权与 gate。状态树时代的 owner 已退役。
