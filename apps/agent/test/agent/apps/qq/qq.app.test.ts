@@ -76,6 +76,8 @@ function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void)
     napcatGateway: fakeGateway(),
     notificationCenter: center,
     botQQ: "10001",
+    creatorName: "测试创造者",
+    creatorQQ: "20002",
     listenGroupIds: ["1"],
     recentMessageLimit: 5,
     sendMessageTool: dummySendTool,
@@ -84,6 +86,25 @@ function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void)
 }
 
 describe("QqApp", () => {
+  it("discloses QQ scene, chat behavior and its own QQ number via help", async () => {
+    const app = createApp(new FakeScheduler(), vi.fn());
+    const help = await app.help();
+
+    // 平台知识 + 消息格式下沉到这里
+    expect(help).toContain("## QQ 和 QQ 群");
+    expect(help).toContain("<qq_message>");
+    // 群聊行为整块从主 system prompt 迁到 QQ App
+    expect(help).toContain("<reply_decision>");
+    expect(help).toContain("<anti_ai_tone>");
+    // 工具清单仍在
+    expect(help).toContain("open_conversation(id)");
+    // 小镜自己的 QQ 号从 identity 迁到这里
+    expect(help).toContain("10001");
+    // 创造者的 QQ 号也在 QQ 语境里能看到
+    expect(help).toContain("测试创造者");
+    expect(help).toContain("20002");
+  });
+
   it("loads group display names on startup", async () => {
     const app = createApp(new FakeScheduler(), vi.fn());
     await app.onStartup();
@@ -104,6 +125,8 @@ describe("QqApp", () => {
         scheduler: new FakeScheduler(),
       }),
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
@@ -187,6 +210,8 @@ describe("QqApp", () => {
       napcatGateway: fakeGateway(),
       notificationCenter: center,
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
@@ -266,6 +291,8 @@ describe("QqApp", () => {
       napcatGateway: fakeGateway(),
       notificationCenter: center,
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
@@ -324,6 +351,8 @@ describe("QqApp", () => {
         scheduler: new FakeScheduler(),
       }),
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
       sendMessageTool: dummySendTool,
@@ -392,6 +421,8 @@ describe("QqApp", () => {
         scheduler: new FakeScheduler(),
       }),
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
@@ -478,6 +509,8 @@ describe("QqApp", () => {
         scheduler: new FakeScheduler(),
       }),
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,
@@ -507,6 +540,8 @@ describe("QqApp", () => {
         scheduler: new FakeScheduler(),
       }),
       botQQ: "10001",
+      creatorName: "测试创造者",
+      creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
       sendMessageTool: dummySendTool,

@@ -27,6 +27,7 @@ import {
   isConversationId,
 } from "../../capabilities/messaging/conversation-id.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
 import { ListConversationsTool } from "./tools/list-conversations.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";
@@ -61,6 +62,9 @@ type QqAppDeps = {
   napcatGateway: NapcatGatewayService;
   notificationCenter: NotificationCenter;
   botQQ: string;
+  /** 创造者名字与 QQ 号：进 QQ 后在 help 里披露，方便小镜在群/私聊里认出创造者。 */
+  creatorName: string;
+  creatorQQ: string;
   listenGroupIds: string[];
   recentMessageLimit: number;
   /** 已构造好的 send_message 工具（带 AI 味门控等依赖），由 factory 注入。 */
@@ -93,6 +97,8 @@ export class QqApp implements App {
   private readonly napcatGateway: NapcatGatewayService;
   private readonly notificationCenter: NotificationCenter;
   private readonly botQQ: string;
+  private readonly creatorName: string;
+  private readonly creatorQQ: string;
   private readonly recentMessageLimit: number;
   private readonly conversations = new Map<ConversationId, Conversation>();
   private currentConversationId: ConversationId | null = null;
@@ -106,6 +112,8 @@ export class QqApp implements App {
     napcatGateway,
     notificationCenter,
     botQQ,
+    creatorName,
+    creatorQQ,
     listenGroupIds,
     recentMessageLimit,
     sendMessageTool,
@@ -114,6 +122,8 @@ export class QqApp implements App {
     this.napcatGateway = napcatGateway;
     this.notificationCenter = notificationCenter;
     this.botQQ = botQQ;
+    this.creatorName = creatorName;
+    this.creatorQQ = creatorQQ;
     this.recentMessageLimit = recentMessageLimit;
     for (const groupId of listenGroupIds) {
       const conversation = Conversation.group(groupId, recentMessageLimit);
@@ -134,19 +144,13 @@ export class QqApp implements App {
   }
 
   public async help(): Promise<string> {
-    return [
-      "你在 QQ App 里。这里是你的 QQ 会话列表（群 + 私聊）。",
-      "",
-      "可调用工具：",
-      "  - list_conversations(): 列出当前已知的会话（群 + 私聊）含未读数，并标出你现在停在哪个会话。纯读，不改变焦点。",
-      "  - open_conversation(id): 打开/切换到某个会话，看最近消息并停在那；之后 send_message 发给它。任意时刻都能直接切换到别的会话，不用先回列表。",
-      "  - send_message(message): 发到当前打开的会话。先 open_conversation 才能发。想发 QQ 内置表情就在文本里写 `[表情: 名字]`（和你收到的格式一样，如 `[表情: 比心]`），会自动转成表情发出；名字不认得就原样当文字发。",
-      "  - send_resource(resid, caption?, reply_to?): 按 resid 把一张已存图片发到当前会话。resid 形如 res-N（取自消息里 [resid: res-N] 占位符或截图返回）。先 open_conversation 才能发；目前只支持图片。",
-      "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
-      "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
-      "",
-      "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
-    ].join("\n");
+    // QQ 是众多 App 之一：什么是群聊、消息格式、以及在群聊里怎么发言，都收在 QQ App 自己的
+    // help 里按需披露（enter qq + help 时才进上下文尾部），不再写进主 Agent 的稳定前缀。
+    return renderServerStaticTemplate(import.meta.url, "prompts/qq-app-help.hbs", {
+      botQQ: this.botQQ,
+      creatorName: this.creatorName,
+      creatorQQ: this.creatorQQ,
+    });
   }
 
   public async onStartup(): Promise<void> {
