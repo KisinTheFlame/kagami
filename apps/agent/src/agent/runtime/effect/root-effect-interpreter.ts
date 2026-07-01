@@ -17,7 +17,7 @@ import type {
   WaitForEventEffect,
 } from "./root-agent-effect.js";
 
-type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp">;
+type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp" | "markAppEntered">;
 
 function isAppendMessageEffect(effect: Effect): effect is AppendMessageEffect {
   return effect.type === "append_message";
@@ -95,7 +95,12 @@ class AppendMessageHandler implements EffectHandler<never> {
   }
 }
 
-/** 把 root agent 的 currentApp 切到 appId。即时副作用。 */
+/**
+ * 把 root agent 的 currentApp 切到 appId，并标记该 App 本桶已进入。即时副作用。
+ *
+ * markAppEntered 落在这里（而非 SwitchTool）是为了保持工具无副作用：SwitchTool 只
+ * 读 hasEnteredApp 决定要不要吐 help，真正的状态变更统一走 effect 解释期。
+ */
 class SwitchAppHandler implements EffectHandler<never> {
   private readonly session: InterpreterSession;
 
@@ -112,6 +117,7 @@ class SwitchAppHandler implements EffectHandler<never> {
       throw new Error(`SwitchAppHandler received non-switch_app effect: ${effect.type}`);
     }
     this.session.setCurrentApp(effect.appId);
+    this.session.markAppEntered(effect.appId);
     return {};
   }
 }

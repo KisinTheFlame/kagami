@@ -40,6 +40,13 @@
 - **Context:** "进上下文散文收口到 static/ 模板"第一批只收了 prose（factory 手拼壳 + 通知 draft），**显式排除了两类也会进上下文的文本**，留待以后：①工具 description（如 `send-message.tool.ts:27`）——它是稳定前缀的一部分、绑 param schema、属渐进式披露的垂直切片，收进中央会打破 App 自持工具文档的内聚；②工具 result 里的 error/status note（如 `send-message.tool.ts:90-172`）——进易变尾部非前缀、与控制流交织、是给小镜看的内部状态字。这两类分散在几十个 `.tool.ts` 里，改一处语气仍要满仓库找。
 - **Notes:** 以后若真要动，先想清楚代价：description 搬中央 = 破坏垂直切片 + 每加工具改中央；error note 搬常量层 = 每工具多一层 `MESSAGES.X` 间接引用、可读性下降。当前判断是收益 < 代价，故本轮不收。参照第一批的原则：TS 只算 view-model、文案走模板；但 description 与前缀/schema 强绑，未必适用同一机制，需单独设计。
 
+### App 首次进入自动吐 help 后，entered-set 是否需要持久化进 snapshot
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** #223 让每个 App 在一桶上下文里首次进入时自动追加一次 `<app_help>`，“已进入过哪些 App” 的 entered-set 目前是纯内存态（不进 snapshot，与 `currentApp` 生命周期一致，方案 A）。副作用：进程重启 / 发版后，在已有持久化上下文之上，首进各 App 会各重吐一次 help，多次 deploy 会逐桶累积。#223 落地时选了“接受这一有界重复”——最简、与 `currentApp` 一致，且压缩本来就会重注入、量级相当。长期更干净的做法是把 entered-set 一并存进 root-agent snapshot（方案 B），消除重启重复；但这给“纯内存焦点态”开了持久化口子、和 `currentApp` 不一致，复杂度换边际收益，故暂缓。
+- **Notes:** 触发点：codex review #223 方案时提出。相关文件 `apps/agent/src/agent/runtime/root-agent/session/root-agent-session.ts`（`enteredApps` + `markRestored`）、snapshot 持久化在同模块 `persistence/`。真要做时先评估：entered-set 进 snapshot 是否连带要求 `currentApp` 也持久化，否则焦点态半持久化会语义割裂。
+
 ---
 
 ## scheduler
