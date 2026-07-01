@@ -15,7 +15,7 @@ const DEFAULT_AGENT_STORY_ENABLED = true;
 const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
 const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
-const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
+const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.6;
 // 资源读取/发送的字节上限：read_resource 入上下文 / send_resource 发图共用。
 // 4 MiB 贴合 QQ 图片实际体量，也避免把巨型资源灌进上下文或 napcat WS。
 const DEFAULT_AGENT_RESOURCE_MAX_BYTES = 4 * 1024 * 1024;
@@ -209,6 +209,7 @@ const ServicesSchema = z
     gateway: ServiceEndpointSchema,
     oss: ServiceEndpointSchema,
     browser: ServiceEndpointSchema,
+    llm: ServiceEndpointSchema,
     metric: ServiceEndpointSchema,
   })
   .strict();

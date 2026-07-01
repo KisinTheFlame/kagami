@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthUsageSnapshotDao } from "@kagami/persistence/dao/auth-usage-snapshot.dao";
-import { DefaultAuthUsageTrendQueryService } from "../../src/auth/application/auth-usage-trend-query.impl.service.js";
+import { DefaultAuthUsageTrendQueryService } from "../src/application/auth-usage-trend-query.impl.service.js";
 
 describe("DefaultAuthUsageTrendQueryService", () => {
   it("should return empty series when account id is missing", async () => {

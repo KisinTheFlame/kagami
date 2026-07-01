@@ -43,7 +43,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
@@ -166,7 +167,8 @@ startupContextRecentMessageCount: 0
         gateway: { host: "localhost", port: 20004 },
         oss: { host: "127.0.0.1", port: 20005 },
         browser: { host: "127.0.0.1", port: 20007 },
-        metric: { host: "127.0.0.1", port: 20009 },
+        llm: { host: "127.0.0.1", port: 20009 },
+        metric: { host: "127.0.0.1", port: 20010 },
       },
       server: {
         databaseUrl: "file::memory:",
@@ -395,7 +397,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -712,7 +715,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -794,7 +798,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -879,7 +884,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -960,7 +966,8 @@ services:
   gateway: { host: localhost, port: 20004 }
   oss: { host: 127.0.0.1, port: 20005 }
   browser: { host: 127.0.0.1, port: 20007 }
-  metric: { host: 127.0.0.1, port: 20009 }
+  llm: { host: 127.0.0.1, port: 20009 }
+  metric: { host: 127.0.0.1, port: 20010 }
 server:
   databaseUrl: "file::memory:"
   agent:

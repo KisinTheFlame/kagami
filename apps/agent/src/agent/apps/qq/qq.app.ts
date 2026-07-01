@@ -155,7 +155,7 @@ export class QqApp implements App {
 
   public async help(): Promise<string> {
     // QQ 是众多 App 之一：什么是群聊、消息格式、以及在群聊里怎么发言，都收在 QQ App 自己的
-    // help 里按需披露（enter qq + help 时才进上下文尾部），不再写进主 Agent 的稳定前缀。
+    // help 里按需披露（switch qq + help 时才进上下文尾部），不再写进主 Agent 的稳定前缀。
     return renderServerStaticTemplate(import.meta.url, "prompts/qq-app-help.hbs", {
       botQQ: this.botQQ,
       creatorName: this.creatorName,
@@ -457,7 +457,7 @@ export class QqApp implements App {
     const lines = ["<qq_conversation_list>", "你的 QQ 会话："];
     for (const conversation of this.conversations.values()) {
       const unread = conversation.getUnreadCount();
-      const unreadText = unread > 0 ? `（未读 ${unread}）` : "";
+      const unreadText = unread > 0 ? `（未读 ${unread > 99 ? "99+" : unread}）` : "";
       const currentMark = conversation.id === this.currentConversationId ? "  ← 当前会话" : "";
       lines.push(
         `- ${conversation.getDisplayName()}${unreadText} [id: ${conversation.id}]${currentMark}`,

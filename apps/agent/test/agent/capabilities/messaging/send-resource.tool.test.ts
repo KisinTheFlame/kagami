@@ -67,7 +67,7 @@ describe("SendResourceTool", () => {
     expect(sendImage).not.toHaveBeenCalled();
   });
 
-  it("sends an image as base64://, mapping caption→summary and reply_to→reply", async () => {
+  it("sends an image as base64://, mapping reply_to→reply", async () => {
     const { tool, sendImage } = build({
       chatTarget: GROUP_TARGET,
       resolve: vi.fn().mockResolvedValue({
@@ -78,12 +78,11 @@ describe("SendResourceTool", () => {
         isImage: true,
       }),
     });
-    const result = await tool.execute({ resid: "res-7", caption: "看这个", reply_to: 42 }, {});
+    const result = await tool.execute({ resid: "res-7", reply_to: 42 }, {});
 
     expect(sendImage).toHaveBeenCalledWith({
       target: GROUP_TARGET,
       fileRef: `base64://${Buffer.from("imgbytes").toString("base64")}`,
-      summary: "看这个",
       replyToMessageId: 42,
     });
     expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-7", messageId: 555 });

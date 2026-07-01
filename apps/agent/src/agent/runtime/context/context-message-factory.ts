@@ -53,8 +53,8 @@ export function createWakeReminderMessage(now: Date): UserMessage {
 }
 
 /**
- * 桌面（Portal）reminder：手机 OS 模型下桌面只列出可进入的 App，没有别的子状态。
- * 进入某个 App 用 enter；App 之间直接切用 switch；从 App 回桌面用 back_to_portal。
+ * 桌面（Portal）reminder：手机 OS 模型下桌面只是初始状态，离开后不可返回。
+ * 进入 / 切换 App 一律用 switch；想知道有哪些 App 用 list_apps。
  */
 export function createPortalReminderMessage(input: {
   apps: Array<{ id: string; displayName: string }>;

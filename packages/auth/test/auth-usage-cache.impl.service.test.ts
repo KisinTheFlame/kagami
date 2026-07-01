@@ -12,10 +12,10 @@ import {
   EMPTY_CODEX_USAGE_LIMITS,
   fetchClaudeCodeUsageLimitsFromApi,
   fetchCodexUsageLimitsViaAppServer,
-} from "../../src/auth/application/auth-usage-cache.impl.service.js";
-import type { ClaudeCodeAuthService } from "../../src/auth/application/claude-code-auth.service.js";
-import type { CodexAuthService } from "../../src/auth/application/codex-auth.service.js";
-import { initTestLogger } from "../helpers/logger.js";
+} from "../src/application/auth-usage-cache.impl.service.js";
+import type { ClaudeCodeAuthService } from "../src/application/claude-code-auth.service.js";
+import type { CodexAuthService } from "../src/application/codex-auth.service.js";
+import { initTestLogger } from "./helpers/logger.js";
 
 const tempDirs: string[] = [];
 

@@ -18,7 +18,6 @@ export interface AgentMessageService {
   sendImage(input: {
     target: NapcatChatTarget;
     fileRef: string;
-    summary?: string;
     replyToMessageId?: number;
   }): Promise<{ messageId: number }>;
 }

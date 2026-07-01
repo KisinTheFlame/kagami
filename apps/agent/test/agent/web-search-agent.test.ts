@@ -21,7 +21,7 @@ import type { LlmChatResponsePayload } from "@kagami/llm-client";
 /**
  * 构造一个聚焦于 WebSearchTaskAgent invoke 调度 + 终止判定的最小测试装配。
  *
- * 真实工厂里 taskTools 是 8 个顶层工具（7 个 OutOfScopeTool wrapper + 1 个
+ * 真实工厂里 taskTools 是 10 个顶层工具（9 个 OutOfScopeTool wrapper + 1 个
  * webSearchInvokeTool），这里只放 invokeTool 一个就够了——本测试只关心 invoke
  * 这一支的语义，OutOfScope wrapper 是另一类测试的话题。
  */

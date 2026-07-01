@@ -36,7 +36,7 @@ describe("AmapApp", () => {
     for (const name of EXPECTED_TOOLS) {
       expect(help).toContain(name);
     }
-    expect(help).toContain("back_to_portal");
+    expect(help).toContain("switch");
 
     const noKeyHelp = await startedApp("").help();
     expect(noKeyHelp).toContain("没配置 key");

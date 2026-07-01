@@ -10,7 +10,7 @@
 export const REMINDER_TICK_MS = 60_000;
 
 /**
- * 待办回顾的 cron 表达式：每天两次（09:00 与 21:00）的 App 级统一提醒。
+ * 待办回顾的 cron 表达式：每天四次（06:00、12:00、18:00 与 24:00）的 App 级统一提醒。
  *
  * 这条是 todo App 自己的整体提醒，与每条 todo 的 remindAt 到点提醒（reminder-tick）相互独立。
  * 除汇总未完成项外，还会顺带提示小镜去 todo App 按自己打算做的事添新待办（见 TodoDigestDraft）。
@@ -18,7 +18,7 @@ export const REMINDER_TICK_MS = 60_000;
  * 时区：cron 解析依赖进程本地时区。部署机需设 `TZ=Asia/Shanghai`，否则 UTC 机器上
  * 小镜会在本地凌晨唠叨。（若调度层将来支持显式 TZ，应在那里指定，把这条注释收紧。）
  */
-export const DAILY_DIGEST_CRON = "0 9,21 * * *";
+export const DAILY_DIGEST_CRON = "0 0,6,12,18 * * *";
 
 /** active（pending）待办上限，防爆。 */
 export const MAX_ACTIVE_TODOS = 200;

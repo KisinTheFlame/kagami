@@ -123,7 +123,16 @@ try {
   runtime.taskScheduler.start();
   isServerStarted = true;
 
-  const providers = await runtime.listAvailableAgentProviders();
+  // provider 列表现在经 HTTP 问 kagami-llm 服务，纯启动诊断用途。best-effort：服务此刻若还没起
+  // （fresh deploy 时 PM2 可能先拉 agent），不能因此拖垮 agent 启动——真正的 LLM 调用在事件循环里
+  // 发生、且走带退避的 LLM retry。这里失败只降级成空列表 + 一条 warn。
+  const providers = await runtime.listAvailableAgentProviders().catch((error: unknown) => {
+    logger.warn("Failed to list available providers at startup (llm service not ready?)", {
+      event: "server.list_providers_failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  });
 
   logger.info("Server started", {
     event: "server.started",

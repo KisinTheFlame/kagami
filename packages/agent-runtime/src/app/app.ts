@@ -40,7 +40,7 @@ export interface AppStateStore {
  * config 是 undefined。
  */
 export interface App<TConfig = void> {
-  /** 唯一短串识别符，用作 Registry key 与外部 enter 目标 id。 */
+  /** 唯一短串识别符，用作 Registry key 与外部 switch 目标 id。 */
   readonly id: AppId;
 
   /** 给 Kagami 看的人类可读短名，例如 "计算器"。在 Portal 列出 App 时使用。 */
@@ -97,14 +97,12 @@ export interface App<TConfig = void> {
    * 一个 `append_message` Effect，把 App 进入时要展示的"屏幕"内容追加到上下文
    * 尾部。
    *
-   * 由 EnterTool 在 switch_app Effect 之后展开调用：EnterTool 会先产
-   * switch_app Effect 切焦点、再调本钩子拿 Effect[] 拼进自己的 effects 列表。
-   *
-   * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
+   * 由导航工具（SwitchTool）在 switch_app Effect 之后展开调用：先产 switch_app
+   * Effect 切焦点、再调本钩子拿 Effect[] 拼进自己的 effects 列表。
    */
   onFocus?(): Promise<readonly Effect[]>;
 
-  /** 离开本 App 时调用（焦点切到桌面或其他 App）。 */
+  /** 离开本 App 时调用（焦点切到另一个 App）。 */
   onBlur?(): Promise<readonly Effect[]>;
 
   /**
@@ -203,7 +201,7 @@ export class AppManager {
     if (currentApp !== owner.id) {
       return {
         ok: false,
-        reason: `工具 "${toolName}" 属于 "${owner.id}" App，需先 enter("${owner.id}") 才能调用。`,
+        reason: `工具 "${toolName}" 属于 "${owner.id}" App，需先 switch("${owner.id}") 才能调用。`,
       };
     }
     if (!owner.canInvoke(toolName)) {

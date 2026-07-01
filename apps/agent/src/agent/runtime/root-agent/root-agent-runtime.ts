@@ -401,7 +401,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
 
       // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。Operation 自己产
       // replace_leading_messages Effect，host 只把它交给 Interpreter。
-      // Interpreter 是 Agent 状态变更的唯一入口（参见 docs/effect-model.md）。
+      // Interpreter 是 Agent 状态变更的唯一入口。
       await this.interpreter.apply(attempt.effects);
       return true;
     }

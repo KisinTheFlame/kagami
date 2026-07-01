@@ -124,8 +124,6 @@ export abstract class BaseTaskAgent<
    * Interpreter 把它翻译成 `TaskAgentControl.stop`，kernel 透传到
    * `roundResult.control`，本方法读出后退出循环并用 `control.content` 作为
    * `buildResult` 的入参。
-   *
-   * 设计依据：[docs/effect-model.md](docs/effect-model.md) 场景 2 / 阶段 2。
    */
   public async invoke(input: TInput): Promise<TOutput> {
     const invocation = await this.createInvocation(input);

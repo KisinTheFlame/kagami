@@ -20,7 +20,7 @@ describe("HnApp", () => {
     for (const name of EXPECTED_TOOL_NAMES) {
       expect(help).toContain(name);
     }
-    expect(help).toContain("back_to_portal");
+    expect(help).toContain("switch");
   });
 
   it("onFocus returns a static screen with NO network call (can't fail on enter)", async () => {
