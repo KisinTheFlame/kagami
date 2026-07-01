@@ -114,6 +114,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: ""
   bot:

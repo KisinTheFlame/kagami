@@ -310,7 +310,11 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async getContextSnapshot(): Promise<AgentContextSnapshot> {
-    return await this.context.getSnapshot();
+    // 走 mutationExecutor 串行化：commitRoundResult 的 persistRoundState 在同一执行器里分两次
+    // await 追加 assistant turn 与对应 tool_result，中间存在 await 间隙。若在此间隙直接读 items，
+    // 会读到「assistant tool_call 无 tool_result」的不平衡视图（provider 多半 400）。串行化保证
+    // 只在某个 persist 完整结束后才取快照，拿到 tool_call/result 平衡的消息数组。
+    return await this.mutationExecutor.submit(async () => await this.context.getSnapshot());
   }
 
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
@@ -682,6 +686,15 @@ export class RootLoopAgent extends BaseLoopAgent<
 
   public async getRecentContextSummary(): Promise<AgentContextDashboardSummary> {
     return await this.host.getRecentContextSummary();
+  }
+
+  /**
+   * 完整主上下文快照（system + messages）。给需要 fork 主上下文的一次性子任务用
+   * （如 todo digest 的「建议待办」发现）。经 mutationExecutor 串行化取快照，避免读到主轮次
+   * persist 中途「assistant tool_call 无 tool_result」的不平衡视图（详见 host.getContextSnapshot）。
+   */
+  public async getContextSnapshot(): Promise<AgentContextSnapshot> {
+    return await this.host.getContextSnapshot();
   }
 
   protected override async initializeHostIfNeeded(): Promise<void> {

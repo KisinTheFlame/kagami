@@ -75,6 +75,10 @@ ${indent(napcatBlock, 4)}
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -177,6 +181,34 @@ startupContextRecentMessageCount: 0
         reason: "CONFIG_READ_FAILED",
       },
     } satisfies Partial<BizError>);
+  });
+
+  it("should reject config missing the required todoSuggestionAgent usage (fail loud)", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`).replace(
+        `      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+`,
+        "",
+      ),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "BizError",
+      message: "配置值不合法",
+      meta: {
+        key: expect.stringContaining("todoSuggestionAgent"),
+        reason: "CONFIG_INVALID",
+      },
+    });
   });
 
   it("should reject invalid config values", async () => {
@@ -392,6 +424,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      todoSuggestionAgent:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -708,6 +744,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -782,6 +822,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      todoSuggestionAgent:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -865,6 +909,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -940,6 +988,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      todoSuggestionAgent:
         attempts:
           - provider: openai
             model: gpt-4o-mini
