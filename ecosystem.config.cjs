@@ -49,6 +49,19 @@ module.exports = {
       },
     },
     {
+      // metric 领域进程：独立 PM2 生命周期，一手包办 metric 摄取（agent HTTP 上报）+ metric-chart
+      // 查询。监听端口自读 config.yaml 的 services.metric（默认 20009，仅 localhost）。
+      name: "kagami-metric",
+      cwd: path.join(__dirname, "apps/metric"),
+      script: "dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
       // 浏览器进程：独立 PM2 生命周期，agent 重启不杀它（issue #173）。cwd 固定为仓库根，
       // 让 userDataDir(data/browser/default) 落在仓库根 data/ 下，登录态跨 agent 重启留存。
       name: "kagami-browser",

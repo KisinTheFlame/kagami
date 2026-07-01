@@ -7,7 +7,6 @@ import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
 import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
-import { PrismaMetricDao } from "@kagami/persistence/dao/impl/prisma-metric.impl.dao";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { AppLogger } from "@kagami/kernel/logger/logger";
@@ -17,13 +16,10 @@ import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
 import { NapcatQqMessageHandler } from "../ops/http/napcat-group-message.handler.js";
-import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
-import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
-import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "console-bootstrap" });
@@ -68,13 +64,6 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
     napcatQqMessageDao,
   });
 
-  const metricDao = new PrismaMetricDao({ database });
-  const metricChartDao = new PrismaMetricChartDao({ database });
-  const metricChartService = new DefaultMetricChartService({
-    metricDao,
-    metricChartDao,
-  });
-
   const app = createConsoleApp({
     handlers: [
       new HealthHandler(),
@@ -82,7 +71,6 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatQqMessageHandler({ napcatQqMessageQueryService }),
-      new MetricChartHandler({ metricChartService }),
     ],
   });
 

@@ -14,16 +14,18 @@ const port = config.port;
 const apiTarget = config.agentTarget;
 const consoleTarget = config.consoleTarget;
 const llmTarget = config.llmTarget;
+const metricTarget = config.metricTarget;
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
   "/llm-chat-call",
   "/napcat-event",
   "/napcat-group-message",
-  "/metric-chart",
 ];
 // 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
 const LLM_PATH_PREFIXES = ["/auth"];
+// metric-chart 查询走独立的 metric 进程（@kagami/metric）；摄取端点 /metric/* 不经网关（agent 直连）。
+const METRIC_PATH_PREFIXES = ["/metric-chart"];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 // 上游响应超时：等待上游返回响应头的上限。命中即回 504，避免上游卡死 / 半开时前端连接
 // 永久悬挂、socket 句柄泄漏。只约束"拿到响应头"这一段——响应头一到就清除，故不会打断
@@ -130,17 +132,21 @@ process.on("unhandledRejection", reason => {
   process.exit(1);
 });
 
+function matchesAnyPrefix(upstreamPath: string, prefixes: string[]): boolean {
+  return prefixes.some(prefix => upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`));
+}
+
 function selectUpstreamTarget(upstreamPath: string): URL {
-  for (const prefix of CONSOLE_PATH_PREFIXES) {
-    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
-      return consoleTarget;
-    }
+  if (matchesAnyPrefix(upstreamPath, METRIC_PATH_PREFIXES)) {
+    return metricTarget;
   }
 
-  for (const prefix of LLM_PATH_PREFIXES) {
-    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
-      return llmTarget;
-    }
+  if (matchesAnyPrefix(upstreamPath, LLM_PATH_PREFIXES)) {
+    return llmTarget;
+  }
+
+  if (matchesAnyPrefix(upstreamPath, CONSOLE_PATH_PREFIXES)) {
+    return consoleTarget;
   }
 
   return apiTarget;
