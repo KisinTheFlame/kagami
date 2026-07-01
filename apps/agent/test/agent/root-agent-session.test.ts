@@ -112,7 +112,8 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(session.getCurrentApp()).toBeUndefined();
     session.setCurrentApp("qq");
     expect(session.getCurrentApp()).toBe("qq");
-    session.clearCurrentApp();
+    // Portal 离开后不可返回；只有 reset() 能把 currentApp 归位到初始状态。
+    session.reset();
     expect(session.getCurrentApp()).toBeUndefined();
   });
 });

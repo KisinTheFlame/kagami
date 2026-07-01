@@ -56,7 +56,7 @@ export class CalcApp implements App<CalcConfig> {
       '  1. calculate(a=2, op="*", b=3) → 6',
       '  2. calculate(a=1, op="+", b=6) → 7',
       "",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 

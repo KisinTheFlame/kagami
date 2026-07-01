@@ -31,7 +31,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
-`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`enter` / `back-to-portal` / `switch` / `wait` / `invoke` / `search_web` / `search_memory` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
+`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `list_apps` / `wait` / `invoke` / `search_web` / `search_memory` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
 
 如果不通过 InvokeTool，每加一个工具都要在 LLM 的 tools 参数里多一个 entry，这是稳定前缀的一部分，意味着每加一个新工具都会让所有进行中的会话从零换入。InvokeTool 把"加新东西就触发一次前缀失效"的代价从"每加一个工具一次"压缩到"几乎不会发生"。
 
@@ -40,7 +40,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 - **早期方案**：把全部子工具的文档塞进 InvokeTool 自己的 description 里。前缀里有完整子工具索引，但加新子工具会改 InvokeTool description 一次（仍然比加顶层工具便宜）。
 - **渐进式披露**（App 框架的目标）：前缀里几乎不写子工具信息，Kagami 通过 `enter(<appId>)` + `help` 两个动作在运行时按需探索能做什么。每个 App 的工具只在 Kagami 真正"进入"该 App 时通过 help 询问才会被披露。前缀对 App 数量完全不敏感。
 
-写新 capability 或 App 时记住：**任何想暴露给 Agent 的能力，第一反应都应该是"做成 InvokeTool 的子工具"，而不是"加一个顶层工具"**。新增顶层工具需要明确的设计理由：它必须是结构性的元能力（像 enter / help 这种调度 / 导航工具），而不是某个具体业务能力。
+写新 capability 或 App 时记住：**任何想暴露给 Agent 的能力，第一反应都应该是"做成 InvokeTool 的子工具"，而不是"加一个顶层工具"**。新增顶层工具需要明确的设计理由：它必须是结构性的元能力（像 switch / help 这种调度 / 导航工具），而不是某个具体业务能力。
 
 ### 现有实现里的三个范例
 
@@ -313,7 +313,7 @@ Agent 相关补充约定：
 - `apps/agent/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
   - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
-  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`amap`、`calc`、`clock`、`browser`、`terminal`、`todo`
+  - `apps/`：手机 OS 的 App（Portal 下可 switch 进入的地点），当前包括 `qq`、`ithome`、`hn`、`amap`、`calc`、`clock`、`browser`、`terminal`、`todo`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。

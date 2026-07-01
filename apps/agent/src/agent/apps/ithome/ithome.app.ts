@@ -47,13 +47,13 @@ export class IthomeApp implements App {
       "可调用工具：",
       "  - open_ithome_article(articleId): 在当前文章列表里挑一篇打开全文。",
       "",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 
   /**
    * 进入 App 时拉取文章列表，把渲染好的 markdown 作为 append_message Effect
-   * 返出。EnterTool 会在 switch_app 之后展开这个返回值，喂给 Interpreter。
+   * 返出。SwitchTool 会在 switch_app 之后展开这个返回值，喂给 Interpreter。
    */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
     const result = await this.ithomeService.enterFeed();

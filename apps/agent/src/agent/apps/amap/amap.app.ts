@@ -18,7 +18,7 @@ const PositiveInt = z.number().int().positive();
 
 /**
  * AmapApp 配置 schema。`apiKey` 默认空串 → 无 key 时优雅降级（canInvoke 全 false，
- * App 仍可 enter，工具不可调），仿 OSS 整段省略即禁用。其余字段全带默认值，
+ * App 仍可 switch 进入，工具不可调），仿 OSS 整段省略即禁用。其余字段全带默认值，
  * 由 AppManager.startupAll 按 `server.apps.amap` 切片解析——不经 config.loader。
  */
 const AmapConfigSchema = z
@@ -57,7 +57,7 @@ const AMAP_AFFORDANCE = [
   "  - plan_transit(origin, destination, city1, city2)：公交换乘（city 用 citycode）。",
   "  - weather(adcode, kind?)：天气实况 / 预报（adcode 从 geocode 拿）。",
   "  - static_map(location?, markers?, paths?)：生成地图图片，原图直接进你的上下文。",
-  "坐标一律 GCJ-02 '经度,纬度'（经度在前）。调 back_to_portal 退出本 App 回到桌面。",
+  "坐标一律 GCJ-02 '经度,纬度'（经度在前）。要去别的 App，用 switch(id=...) 切过去。",
   "</amap_portal>",
 ].join("\n");
 
@@ -65,7 +65,7 @@ const AMAP_NOT_CONFIGURED = [
   "<amap_portal>",
   "你进了高德地图，但它还没配置 key，暂时不能用。",
   "（让创造者在 config.yaml 的 server.apps.amap.apiKey 填上高德 Web 服务 key。）",
-  "调 back_to_portal 退出回桌面。",
+  "要去别的 App，用 switch(id=...) 切过去。",
   "</amap_portal>",
 ].join("\n");
 
@@ -75,7 +75,7 @@ const AMAP_NOT_CONFIGURED = [
  * - 工具：geocode / regeocode / search_poi / search_around / plan_route / plan_transit /
  *   weather / static_map（全是 InvokeTool 子工具，顶层 tools 列表零新增）。
  * - 自管 AmapClient：onStartup 按 config 实例化，工具通过闭包从 App 拿。
- * - key 缺省优雅降级：canInvoke 返回 apiKey 是否非空；无 key 时 App 仍注册、仍可 enter，
+ * - key 缺省优雅降级：canInvoke 返回 apiKey 是否非空；无 key 时 App 仍注册、仍可 switch 进入，
  *   help/onFocus 明示不可用，工具不可调（仿 OSS 整段省略即禁用）。
  * - onFocus 不做任何网络 I/O：只返回静态提示屏，永不因 API 失败而进不去。
  *
@@ -128,7 +128,7 @@ export class AmapApp implements App<AmapConfig> {
     ];
   }
 
-  /** key 缺省时全工具不可调（优雅降级），App 仍可 enter。 */
+  /** key 缺省时全工具不可调（优雅降级），App 仍可 switch 进入。 */
   public canInvoke(): boolean {
     return this.config.apiKey.length > 0;
   }

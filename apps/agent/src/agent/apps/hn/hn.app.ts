@@ -51,7 +51,7 @@ const HN_AFFORDANCE = [
   "  - search_hn(query, sort?, tags?)：搜你关心的话题。",
   "  - open_hn_thread(id)：钻进某个帖子读讨论。",
   "  - open_hn_user(username)：看看某个人是谁。",
-  "调 back_to_portal 退出本 App 回到桌面。",
+  "要去别的 App，用 switch(id=...) 切过去。",
   "</hn_portal>",
 ].join("\n");
 
@@ -107,7 +107,7 @@ export class HnApp implements App<HnConfig> {
       "  - open_hn_thread(id): 钻进某个帖子读正文和热门评论。",
       "  - open_hn_user(username): 读某个用户的主页和近期发言。",
       "",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 
