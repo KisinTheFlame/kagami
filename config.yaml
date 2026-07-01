@@ -1,3 +1,7 @@
+# 非隐私配置：纳入版本控制，直接改这个文件即可（不再提供 config.yaml.example）。
+# 隐私配置（密钥 + PII：apiKey / bot QQ / napcat 群号 / 浏览器凭据）在 gitignored 的
+# config.secret.yaml —— 从 config.secret.yaml.example 复制后填写；启动时深合并进本文件。
+
 # 服务拓扑：单机各进程的监听端口与地址的唯一事实来源（见 issue #162）。
 # 每个进程从这里读自己的端口和依赖服务的地址；改端口只改这里一处，全网生效。
 # host 是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——各进程一律绑 0.0.0.0。
@@ -49,9 +53,8 @@ server:
     wsUrl: ws://localhost:6099
     reconnectMs: 3000
     requestTimeoutMs: 10000
-    listenGroupIds:
-      - "123456"
     startupContextRecentMessageCount: 40
+    # listenGroupIds（监听的 QQ 群号）是 PII，放 config.secret.yaml
   llm:
     timeoutMs: 45000
     authUsageRefreshIntervalMs: 600000
@@ -72,12 +75,12 @@ server:
       refreshCheckIntervalMs: 300000
     providers:
       deepseek:
-        apiKey: ""
+        # apiKey 是密钥，放 config.secret.yaml
         baseUrl: https://api.deepseek.com
         models:
           - deepseek-chat
       openai:
-        apiKey: ""
+        # apiKey 是密钥，放 config.secret.yaml
         baseUrl: https://api.openai.com/v1
         models:
           - gpt-4o-mini
@@ -114,13 +117,7 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: ""
-  bot:
-    qq: "10001"
-    creator:
-      name: "创造者"
-      qq: "10000"
+  # tavily.apiKey、bot.qq / bot.creator 是密钥 / PII，放 config.secret.yaml
   # 自建对象存储（@kagami/oss）启用开关。地址不在这里——统一来自顶层 services.oss。
   # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）；
   # 写出该块即启用，enabled: false 可显式关闭。
@@ -135,35 +132,34 @@ server:
     terminal:
       # 终端 App。小镜的"家"默认在 ~/kagami/（由 os.homedir() 解析）。
       # initialCwd: ~/kagami         # 可选；不填则使用 os.homedir() + "/kagami"
-      commandTimeoutMs: 60000        # 单条命令超时，超时后进程组被强杀，partial 输出仍保留
-      previewBytes: 2048             # 工具返回的 stdout/stderr preview 上限，每条独立
-      maxOutputBytes: 1048576        # 单条命令完整捕获上限（1 MB），超过后停止接收
-      maxCommandLength: 4096         # command 参数字符长度上限
-      readOutputMaxSize: 4096        # read_bash_output 单次返回字节上限
-      shell: /bin/sh                 # 执行 bash command 时使用的 shell
+      commandTimeoutMs: 60000 # 单条命令超时，超时后进程组被强杀，partial 输出仍保留
+      previewBytes: 2048 # 工具返回的 stdout/stderr preview 上限，每条独立
+      maxOutputBytes: 1048576 # 单条命令完整捕获上限（1 MB），超过后停止接收
+      maxCommandLength: 4096 # command 参数字符长度上限
+      readOutputMaxSize: 4096 # read_bash_output 单次返回字节上限
+      shell: /bin/sh # 执行 bash command 时使用的 shell
     hn:
       # Hacker News App（只读：逛 / 读讨论 / 搜 / 看用户）。两个 API 都零鉴权公开。
       # 整段可省略，全部字段都有默认值。
-      userAgent: "Mozilla/5.0 ... Kagami/1.0"  # 请求 HN 用的 User-Agent
-      fetchTimeoutMs: 10000          # 单次 HTTP 超时
-      fetchMaxAttempts: 3            # 含首次的最大尝试次数（只对 429/408/5xx/网络错误重试）
-      fetchBackoffBaseMs: 500        # 指数退避基数
-      fetchBackoffMaxMs: 8000        # 退避上限
-      glanceDefaultLimit: 15         # glance_hn 默认看几条
-      glanceLimitCap: 30             # glance_hn 上限（超过被截断）
-      glanceConcurrency: 6           # glance_hn 拉 item 的并发上限
-      commentTopLimit: 20            # open_hn_thread 展开的主楼评论数
-      commentReplyLimit: 3           # 每条主楼展开的第一层回复数
-      perCommentMaxChars: 600        # 单条评论 / 片段最大字符
-      responseMaxChars: 8000         # open_hn_thread 评论总字符预算，超出截断
-      searchHitsLimit: 15            # search_hn 返回命中数
-      userActivityLimit: 10          # open_hn_user 近期发言条数
+      userAgent: "Mozilla/5.0 ... Kagami/1.0" # 请求 HN 用的 User-Agent
+      fetchTimeoutMs: 10000 # 单次 HTTP 超时
+      fetchMaxAttempts: 3 # 含首次的最大尝试次数（只对 429/408/5xx/网络错误重试）
+      fetchBackoffBaseMs: 500 # 指数退避基数
+      fetchBackoffMaxMs: 8000 # 退避上限
+      glanceDefaultLimit: 15 # glance_hn 默认看几条
+      glanceLimitCap: 30 # glance_hn 上限（超过被截断）
+      glanceConcurrency: 6 # glance_hn 拉 item 的并发上限
+      commentTopLimit: 20 # open_hn_thread 展开的主楼评论数
+      commentReplyLimit: 3 # 每条主楼展开的第一层回复数
+      perCommentMaxChars: 600 # 单条评论 / 片段最大字符
+      responseMaxChars: 8000 # open_hn_thread 评论总字符预算，超出截断
+      searchHitsLimit: 15 # search_hn 返回命中数
+      userActivityLimit: 10 # open_hn_user 近期发言条数
     browser:
       # 浏览器行为配置。拆进程后（issue #173）由独立的 kagami-browser 进程消费；整段可省略，全部字段都有默认值。
       # 只有这 4 个字段是环境相关的；humanize / viewport / 超时 / 截图尺寸等是代码常量，不在此暴露。
-      headless: false                       # 有头/无头。本机带显示用 false 肉眼盯；无显示服务器需 true + Xvfb
-      userDataDir: data/browser/default      # 持久 profile 目录（登录态跨重启）。相对进程 cwd；kagami-browser 的 PM2 cwd 为仓库根 → 落仓库根 data/browser/
-      # proxy: http://user:pass@host:port    # 可选代理
-      # licenseKey: ""                        # 可选 CloakBrowser Pro license（也可用 CLOAKBROWSER_LICENSE_KEY 环境变量）
-      # 凭据不在这里：网站账号密码存 SQLite 的 browser_credential 表（Kagami 运行期可自管），
+      headless: false # 有头/无头。本机带显示用 false 肉眼盯；无显示服务器需 true + Xvfb
+      userDataDir: data/browser/default # 持久 profile 目录（登录态跨重启）。相对进程 cwd；kagami-browser 的 PM2 cwd 为仓库根 → 落仓库根 data/browser/
+      # proxy / licenseKey 是凭据，放 config.secret.yaml（server.apps.browser.proxy / licenseKey）
+      # 网站账号密码不在配置里：存 SQLite 的 browser_credential 表（Kagami 运行期可自管），
       # type(secret_handle) 时按 handle 取、明文只在 fill 层停留、永不进上下文。

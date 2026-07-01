@@ -2,16 +2,34 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { ConfigError } from "@kagami/config/errors";
 import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 
 const tempDirs: string[] = [];
 
-async function writeConfigFile(content: string): Promise<string> {
+async function makeConfigDir(): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "kagami-config-"));
   tempDirs.push(dir);
+  return dir;
+}
 
+/**
+ * 写出 config.yaml + 一个兄弟 config.secret.yaml。这些用例把（可放隐私的）值内联在
+ * config.yaml 里测 loader 的解析/校验，secret 文件默认为空对象 `{}`——deepMerge(base, {})
+ * = base，故合并对既有断言透明。secretContent 可覆盖以测合并/白名单。
+ */
+async function writeConfigFile(content: string, secretContent = "{}\n"): Promise<string> {
+  const dir = await makeConfigDir();
+  const configPath = path.join(dir, "config.yaml");
+  await writeFile(configPath, content, "utf8");
+  await writeFile(path.join(dir, "config.secret.yaml"), secretContent, "utf8");
+  return configPath;
+}
+
+/** 只写 config.yaml、故意不写 config.secret.yaml，用于测缺文件响亮失败。 */
+async function writeConfigFileWithoutSecret(content: string): Promise<string> {
+  const dir = await makeConfigDir();
   const configPath = path.join(dir, "config.yaml");
   await writeFile(configPath, content, "utf8");
   return configPath;
@@ -170,13 +188,13 @@ startupContextRecentMessageCount: 0
     const configPath = path.join(os.tmpdir(), `missing-${Date.now()}.yml`);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "读取配置文件失败",
       meta: {
         key: configPath,
         reason: "CONFIG_READ_FAILED",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject invalid config values", async () => {
@@ -194,13 +212,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "services.agent.port",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject missing creator config", async () => {
@@ -227,13 +245,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.bot.creator",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject missing creator name", async () => {
@@ -248,13 +266,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.bot.creator.name",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject missing creator qq", async () => {
@@ -269,13 +287,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.bot.creator.qq",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject blank listen group id", async () => {
@@ -290,13 +308,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.napcat.listenGroupIds.0",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject legacy listenGroupId config", async () => {
@@ -310,13 +328,13 @@ listenGroupId: "123456"
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.napcat.listenGroupId",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should default startup context recent message count to 40", async () => {
@@ -546,13 +564,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.agent.story.memory.embedding.baseUrl",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject TEI Embedding Gemma config without model", async () => {
@@ -569,13 +587,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.agent.story.memory.embedding.model",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should reject TEI Embedding Gemma config without output dimensionality", async () => {
@@ -592,13 +610,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.agent.story.memory.embedding.outputDimensionality",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should allow overriding claude code auth refresh check interval ms", async () => {
@@ -638,13 +656,13 @@ listenGroupIds:
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.llm.providers.claudeCode.keepAliveReplayIntervalMinutes",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should allow overriding context compaction total token threshold", async () => {
@@ -795,13 +813,13 @@ server:
 `);
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.agent.contextCompactionThreshold",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
   });
 
   it("should allow overriding llm retry backoff ms", async () => {
@@ -988,12 +1006,79 @@ startupContextRecentMessageCount: -1
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "BizError",
+      name: "ConfigError",
       message: "配置值不合法",
       meta: {
         key: "server.napcat.startupContextRecentMessageCount",
         reason: "CONFIG_INVALID",
       },
-    } satisfies Partial<BizError>);
+    } satisfies Partial<ConfigError>);
+  });
+
+  it("should fail fast when config.secret.yaml is missing", async () => {
+    const configPath = await writeConfigFileWithoutSecret(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`),
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigError",
+      meta: {
+        reason: "CONFIG_SECRET_NOT_FOUND",
+      },
+    } satisfies Partial<ConfigError>);
+  });
+
+  it("should reject a non-privacy key in config.secret.yaml", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`),
+      `services:
+  agent:
+    port: 9999
+`,
+    );
+
+    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
+      name: "ConfigError",
+      meta: {
+        key: "services.agent.port",
+        reason: "CONFIG_SECRET_FORBIDDEN_KEY",
+      },
+    } satisfies Partial<ConfigError>);
+  });
+
+  it("should let config.secret.yaml override the base config for whitelisted keys", async () => {
+    const configPath = await writeConfigFile(
+      buildConfigYaml(`
+wsUrl: wss://example.com/napcat
+reconnectMs: 3000
+requestTimeoutMs: 10000
+listenGroupIds:
+  - "123456"
+`),
+      `server:
+  tavily:
+    apiKey: from-secret
+  napcat:
+    listenGroupIds:
+      - "999888"
+`,
+    );
+
+    const config = await loadStaticConfig({ configPath });
+
+    expect(config.server.tavily.apiKey).toBe("from-secret");
+    expect(config.server.napcat.listenGroupIds).toEqual(["999888"]);
   });
 });
