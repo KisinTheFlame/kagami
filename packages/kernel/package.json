@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kagami/config": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/shared": "workspace:*",
     "handlebars": "^4.7.8",

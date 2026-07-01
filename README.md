@@ -85,9 +85,9 @@ Notes:
 
 ## Configuration
 
-- Provide a real `config.yaml` at the repository root.
-- See [config.yaml.example](./config.yaml.example) for the field structure.
-- The service reads and validates `config.yaml` once at startup; changes require a restart to take effect.
+- `config.yaml` (non-private, version-controlled) already lives at the repository root — edit it directly.
+- Copy [config.secret.yaml.example](./config.secret.yaml.example) to `config.secret.yaml` (git-ignored) and fill in secrets (API keys, bot QQ, group IDs). The two files are deep-merged at startup.
+- The service reads and validates the merged config once at startup; changes require a restart to take effect.
 
 ## Database Migrations
 

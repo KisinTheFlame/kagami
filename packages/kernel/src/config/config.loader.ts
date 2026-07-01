@@ -1,11 +1,8 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ConfigError } from "@kagami/config/errors";
+import { loadMergedRawConfig } from "@kagami/config/source";
 import { LLM_PROVIDER_IDS, type LlmProviderId } from "@kagami/llm";
-import { parse } from "yaml";
 import { z } from "zod";
-import { BizError } from "../errors/biz-error.js";
 import type { LlmUsageId } from "../contracts/llm.js";
 
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
@@ -458,42 +455,36 @@ type LoadStaticConfigOptions = {
   configPath?: string;
 };
 
+/**
+ * 允许出现在 `config.secret.yaml` 里的隐私路径前缀白名单——「哪些字段算隐私」是项目
+ * 领域知识，故定义在 kernel 这一层，作为参数下传给领域无关的 `@kagami/config`。
+ * secret 文件里出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）会被拒绝，
+ * 从而保证 gateway / oss / read-config 也在读的非隐私拓扑永远不被 secret 改动。
+ */
+const CONFIG_SECRET_WHITELIST = [
+  "server.llm.providers.deepseek.apiKey",
+  "server.llm.providers.openai.apiKey",
+  "server.tavily.apiKey",
+  "server.agent.story.memory.embedding.apiKey",
+  "server.apps.browser.proxy",
+  "server.apps.browser.licenseKey",
+  "server.bot.qq",
+  "server.bot.creator",
+  "server.napcat.listenGroupIds",
+];
+
 export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): Promise<Config> {
-  const configPath = options.configPath ?? resolveConfigPath();
+  const { configPath, raw } = await loadMergedRawConfig({
+    configPath: options.configPath,
+    anchorUrl: import.meta.url,
+    secret: { required: true, allowedPaths: CONFIG_SECRET_WHITELIST },
+  });
 
-  let fileContent: string;
-  try {
-    fileContent = await readFile(configPath, "utf8");
-  } catch (error) {
-    throw new BizError({
-      message: "读取配置文件失败",
-      meta: {
-        key: configPath,
-        reason: "CONFIG_READ_FAILED",
-      },
-      cause: error,
-    });
-  }
-
-  let parsedYaml: unknown;
-  try {
-    parsedYaml = parse(fileContent);
-  } catch (error) {
-    throw new BizError({
-      message: "配置文件不是合法的 YAML",
-      meta: {
-        key: configPath,
-        reason: "CONFIG_INVALID",
-      },
-      cause: error,
-    });
-  }
-
-  const parsedConfig = ConfigSchema.safeParse(parsedYaml);
+  const parsedConfig = ConfigSchema.safeParse(raw);
   if (!parsedConfig.success) {
     const issue = parsedConfig.error.issues[0];
     const key = issue?.path.length ? issue.path.join(".") : configPath;
-    throw new BizError({
+    throw new ConfigError({
       message: "配置值不合法",
       meta: {
         key,
@@ -589,56 +580,4 @@ function normalizeUsageAttempt(
     model: value.model,
     times: value.times,
   };
-}
-
-function resolveConfigPath(): string {
-  const candidates = [
-    path.resolve(process.cwd(), "config.yaml"),
-    path.resolve(process.cwd(), "../../config.yaml"),
-    fileURLToPath(new URL("../../../../config.yaml", import.meta.url)),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  const worktreeSearchRoots = [
-    process.cwd(),
-    fileURLToPath(new URL("../../../..", import.meta.url)),
-  ];
-  for (const root of worktreeSearchRoots) {
-    const mainRoot = findGitWorktreeMainRoot(root);
-    if (mainRoot) {
-      const candidate = path.join(mainRoot, "config.yaml");
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  throw new BizError({
-    message: "未找到 config.yaml",
-    meta: {
-      key: "config.yaml",
-      reason: "CONFIG_NOT_FOUND",
-    },
-  });
-}
-
-function findGitWorktreeMainRoot(repoRoot: string): string | null {
-  const dotGit = path.join(repoRoot, ".git");
-  if (!existsSync(dotGit) || !statSync(dotGit).isFile()) return null;
-
-  const content = readFileSync(dotGit, "utf8");
-  const match = content.match(/^gitdir:\s*(.+)$/m);
-  if (!match) return null;
-
-  const gitDir = path.resolve(repoRoot, match[1].trim());
-  const commondirFile = path.join(gitDir, "commondir");
-  if (!existsSync(commondirFile)) return null;
-
-  const commondirContent = readFileSync(commondirFile, "utf8").trim();
-  return path.dirname(path.resolve(gitDir, commondirContent));
 }
