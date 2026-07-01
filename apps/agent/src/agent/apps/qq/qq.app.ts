@@ -67,6 +67,10 @@ type QqAppDeps = {
   sendMessageTool: ToolComponent;
   /** 已构造好的 send_resource 工具（按 resid 发图），由 factory 注入。 */
   sendResourceTool: ToolComponent;
+  /** 群文件三件套（list / download / upload），由 factory 注入（依赖网关 + OSS + fileMaxBytes）。 */
+  listGroupFilesTool: ToolComponent;
+  downloadGroupFileTool: ToolComponent;
+  uploadGroupFileTool: ToolComponent;
 };
 
 /**
@@ -110,6 +114,9 @@ export class QqApp implements App {
     recentMessageLimit,
     sendMessageTool,
     sendResourceTool,
+    listGroupFilesTool,
+    downloadGroupFileTool,
+    uploadGroupFileTool,
   }: QqAppDeps) {
     this.napcatGateway = napcatGateway;
     this.notificationCenter = notificationCenter;
@@ -126,6 +133,9 @@ export class QqApp implements App {
       new ListConversationsTool({ getApp: () => this }),
       new ViewForwardTool({ getApp: () => this }),
       new ListFacesTool(),
+      listGroupFilesTool,
+      downloadGroupFileTool,
+      uploadGroupFileTool,
     ];
   }
 
@@ -144,6 +154,9 @@ export class QqApp implements App {
       "  - send_resource(resid, caption?, reply_to?): 按 resid 把一张已存图片发到当前会话。resid 形如 res-N（取自消息里 [resid: res-N] 占位符或截图返回）。先 open_conversation 才能发；目前只支持图片。",
       "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
       "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
+      "  - list_group_files(folder_id?): 列当前群的文件和文件夹（folder_id 进子文件夹）。返回每个文件的 file_id / 名字 / 大小。仅群会话可用。",
+      "  - download_group_file(file_id): 把群文件下载进 OSS 拿到 res-N（file_id 取自 list_group_files）。之后可 read_resource 看、或 download_resource 落地成本地文件。仅群会话可用。",
+      "  - upload_group_file(resid, name, folder_id?): 把一个 OSS 资源（res-N）作为文件上传到当前群，name 是群里显示的文件名。resid 可来自 download_group_file / upload_resource / 截图。仅群会话可用。",
       "",
       "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
     ].join("\n");
