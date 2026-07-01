@@ -3,16 +3,24 @@
 本项目所有重要变更记录在此文件。
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
-本仓库启用 4 位版本号 `MAJOR.MINOR.PATCH.MICRO`，事实来源为仓库根目录 `VERSION` 文件，`package.json` 的 `version` 字段与之保持同步。Kagami 自部署、不对外分发，版本号仅用于标记部署节点与变更归档，不承载语义化版本对外兼容承诺。新条目按提交时间倒序追加在 `## [Unreleased]` 下，发布时归档到对应版本分节（`## [x.y.z.w] - YYYY-MM-DD`）。每个 PR 必须 bump `VERSION`（CI 强制校验 PR 版本号高于 master）。
+Kagami 自部署、不对外分发，历史条目里的 `x.y.z.w` 版本号仅用于标记过往变更归档。VERSION 文件与 CI 版本闸已移除，不再强制每个 PR bump 版本号；新条目按提交时间倒序追加在 `## [Unreleased]` 下即可。
 
 ## [Unreleased]
-
-## [0.3.6.1] - 2026-07-01
 
 ### Changed
 
 - agent: **把所有会进上下文的散文文本收口到 `apps/agent/static/` 模板树**。此前散落在 `context-message-factory.ts`（portal reminder、`<notification>` / `<story_recall>` / `<async_tool_result>` 的手拼标签壳）与各通知 draft（todo reminder/digest、ithome、QQ chat）里的内联文案，全部迁到 `.hbs` 模板，经 `renderServerStaticTemplate` 渲染；TS 侧只算 view-model（计数、数组、布尔 flag、预格式化的日期）。新增 8 个模板：`static/context/{portal-reminder,notification,story-recall,async-tool-result}.hbs` 与 `static/context/notifications/{todo-reminder,todo-digest,ithome,qq-chat}.hbs`。渲染输出逐字节不变（既有渲染点测试一字未改仍全绿），KV 前缀零漂移。
 - AGENTS.md: "具体红线"新增硬约定——**进上下文的散文一律走模板，禁止在 TS 内联字面量**；以后调小镜语气只改 `static/` 一棵树、不碰代码。工具 description 与 result error note 本轮显式不收（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部与控制流交织，见 `TODOS.md`）。
+
+## [0.3.6.1] - 2026-07-01
+
+### Added
+
+- feat(resource): 新增 `download_resource` / `upload_resource` 两个全局工具，搭起 OSS 资源与本地文件之间的桥（[#188](https://github.com/KisinTheFlame/kagami/issues/188) 之 PR1）。`download_resource(resid, filename, dir?)` 把一个 OSS 资源落地成本地文件（文件名由 Agent 指定，不沿用内容寻址名），`upload_resource(path)` 把本地文件存进 OSS 拿到新 `res-N`（对外 key 自增，内容相同在 OSS 内部按 sha256 共享 blob + refcount）。落盘/读盘锚定 `server.agent.resource.fileRoot`（默认 `~/kagami`，与 terminal `initialCwd` 默认值重合，落好后 terminal 直接 `ls` 可见），字节走独立的 `server.agent.resource.fileMaxBytes`（默认 32 MiB，区别于 4 MiB 上下文 cap）。安全边界：`fs.realpath` 最深已存在祖先校验挡 `../` / 绝对路径 / root 内 symlink 逃逸（`PATH_ESCAPE`）；下载目标已存在拒绝覆盖（`FILE_EXISTS`）+ `.part → rename` 原子落地；上传超限 `FILE_TOO_LARGE`；OSS 关闭时在触碰磁盘前失败（`RESOURCE_OSS_DISABLED`），绝不空读盘。
+
+### Changed
+
+- chore(agent-runtime): 主 Agent LLM 可见顶层工具从 9 增至 11（新增 `download_resource` / `upload_resource`），`webSearchAgentToolCatalog` 同步以 `OutOfScopeTool` 包裹这两个新工具，保持网页搜索子 Agent 与主 Agent 顶层工具集字节相等——**KV 缓存前缀隔离不破**。此为稳定前缀的一次性集中变更。
 
 ## [0.3.6.0] - 2026-07-01
 

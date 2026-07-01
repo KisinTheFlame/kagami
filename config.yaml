@@ -45,6 +45,8 @@ server:
       maxTaskDurationMs: 600000 # 异步工具任务的 manager 级安全超时；超过则以超时结果回流（底层可能仍在跑）
     resource:
       maxBytes: 4194304 # read_resource 入上下文 / send_resource 发图的字节上限（4 MiB）
+      fileRoot: ~/kagami # download_resource/upload_resource/群文件 落盘/读盘沙箱根（默认与 terminal initialCwd 重合）
+      fileMaxBytes: 33554432 # 文件桥字节上限（32 MiB，独立于 4 MiB 上下文 cap）
   ithome:
     pollIntervalMs: 300000
     recentArticleLimit: 8
