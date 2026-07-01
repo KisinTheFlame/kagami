@@ -1,6 +1,6 @@
 # TODOs
 
-待办事项清单。按模块 / 主题分组，组内按优先级 P0 → P3 排序。完成的项移到底部 `## Completed`。
+待办事项清单。按模块 / 主题分组，组内按优先级 P0 → P3 排序。完成的项直接删除。
 
 **优先级语义**：
 
@@ -64,21 +64,6 @@
 
 ---
 
-## Completed
-
-<!-- 完成后的条目按完成日期倒序，附 PR 链接。例：
-### 拆分 LLM 调用历史列表/详情接口
-
-- **Priority:** P1
-- **Completed:** 2026-05-23, [#72](https://github.com/KisinTheFlame/kagami/pull/72)
--->
-
-### 接入高德 Web API
-
-- **Priority:** P2
-- **Completed:** v0.3.6.0 (2026-07-01), [#182](https://github.com/KisinTheFlame/kagami/issues/182)
-- **Notes:** 做成可 `enter` 的高德地图 App（`server.apps.amap`，8 个 InvokeTool 子工具，含静态地图出图）。
-
 ## oss
 
 ### OSS 上传/下载流式化 + 并发/内存上限
@@ -135,13 +120,6 @@
 
 ## browser（Browser App 设计衍生，2026-06-27 /plan-eng-review）
 
-### 运行时"工具异步调用、稍后回结果"原语
-
-- **Priority:** P1
-- **Status:** open
-- **Context:** Browser App 的浏览器动作会阻塞单线程主循环（humanize + 慢站，单动作可达数秒），延迟 Kagami 对 QQ 等事件的响应。v1 用有界阻塞 + 收紧 `actionTimeoutMs` 顶着，但根因是运行时缺"tool 返 `pending`、完成后再唤醒主循环"的能力。这是横切能力：terminal 长命令、web-search 也都受益，浏览器只是第一个撞上它的地方。
-- **Notes:** 与 wait/event 循环、Effect 模型对接；做成后 Browser/terminal 长动作改异步。设计文档见 `~/.gstack/projects/KisinTheFlame-kagami/kisin-claude/exciting-driscoll-d160ec-design-20260627-164048.md`（T2 节）。
-
 ### Browser App fast-follow 工具
 
 - **Priority:** P2
@@ -162,6 +140,8 @@
 - **Status:** open
 - **Context:** v1 交互观察直进主上下文。若长会话被语义树+截图撑爆压缩频繁：重读走隔离子 Agent 只回摘要（B），或整任务委派 Browser TaskAgent 只回结果（C）。`read_page`/observe 已留干净函数接缝。多身份/多 profile（终态自有网络身份）也归此批。
 - **Notes:** 详见设计文档 Approaches B/C。
+
+---
 
 ## Web 设计走查（2026-06-30 /design-review）延后项
 
@@ -185,13 +165,6 @@
 - **Status:** open
 - **Context:** llm-history / app-log / napcat-event / story 等页面用 `<tr onClick>` 做行选择，无 `role`/`tabIndex`/`onKeyDown`/focus-visible，键盘用户不可达（Codex 指出，4 处）。属交互行为改动，超出本轮 CSS-first 范围。
 - **Notes:** 给行加 `role="button" tabIndex=0`，回车/空格触发，补 focus-visible ring；或抽成可复用的可点击行组件。
-
-### 触控目标 44px（移动端）
-
-- **Priority:** P3
-- **Status:** done（2026-06-30 /design-review F10，commit 9da64b8）
-- **Context:** 导航项 / `Button size="sm"` / Codex-Claude 切换标签 / select 原 36–40px。已用 `max-md:` / `md:min-h-0` 仅在移动断点抬到 ≥44px，桌面密度零改动；390px 实测无 <44px 交互目标。
-- **Notes:** 桌面（≥md）保持原 36/40px 密度。
 
 ### 抽共享 Input 基元
 
