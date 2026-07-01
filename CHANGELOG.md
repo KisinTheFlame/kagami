@@ -7,7 +7,14 @@
 
 ## [Unreleased]
 
-## [0.3.5.1] - 2026-07-01
+## [0.3.5.2] - 2026-07-01
+
+### Fixed
+
+- napcat/messaging: 修复**按 UTF-16 长度截断劈开 emoji 代理对**导致主 Agent 整条会话被打挂的事故。QQ 引用回复预览（`group-message-processor` 的 `messagePreview`）等处用 `str.slice(0, N)` 截断，若第 N 个码元正好落在一个 emoji 的代理对中间，就会留下半个高代理项（lone surrogate）。这条脏字符进入主 Agent 的持久上下文后，**每一轮 root-agent LLM 请求体都是非法 JSON**，Anthropic 上游以 `400 invalid_request_error: no low surrogate in string` 拒绝，root agent 陷入无限重试、彻底不能思考（进程存活但功能性死亡）。
+  - 新增码点安全工具 `@kagami/shared/utils` 的 `stripLoneSurrogates`（剥除落单代理项）与 `truncateWithEllipsis`（按 Unicode **码点**而非 UTF-16 码元截断，`Array.from` 拆分，绝不切开代理对，且先剥除已有落单代理项）。
+  - 全部 4 处按长度截断改用 `truncateWithEllipsis`：QQ 引用预览（确诊元凶）、合并转发单节点、聊天通知 draft、图片描述——它们的产物都会进主上下文，任一处劈开代理对都足以打挂会话。
+  - 事故现场处置（不在本 PR）：从 `root_agent_runtime_snapshot` 剥除那一个落单 `U+D83C` 并重启，保住全部历史。
 
 ### Changed
 
