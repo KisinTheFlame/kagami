@@ -1,4 +1,4 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 /**
  * 高德 Web 服务 API 的 HTTP 取数助手。结构照抄 hn 的 `hn-fetch.ts`，但多两件高德特有的事：

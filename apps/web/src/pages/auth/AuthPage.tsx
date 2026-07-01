@@ -69,8 +69,8 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     successMessage: "Codex 登录已完成。",
     errorMessage: "Codex 登录失败。",
     trendColors: {
-      fiveHour: "#5F7C5E",
-      sevenDay: "#284C82",
+      fiveHour: "#2F8F4E",
+      sevenDay: "#143CB0",
     },
   },
   "claude-code": {
@@ -83,8 +83,8 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     successMessage: "Claude Code 登录已完成。",
     errorMessage: "Claude Code 登录失败。",
     trendColors: {
-      fiveHour: "#D7A12C",
-      sevenDay: "#284C82",
+      fiveHour: "#D62818",
+      sevenDay: "#143CB0",
     },
   },
 };
@@ -234,8 +234,8 @@ export function AuthPage() {
           <section
             className={`rounded-none border px-4 py-3 text-sm ${
               result === "success"
-                ? "border-story/40 bg-story/10 text-story"
-                : "border-scheduler/50 bg-scheduler/15 text-foreground"
+                ? "border-foreground bg-story text-story-foreground"
+                : "border-foreground bg-scheduler text-scheduler-foreground"
             }`}
           >
             {result === "success"
@@ -269,7 +269,7 @@ export function AuthPage() {
             ) : (
               <>
                 {warningMessage ? (
-                  <p className="mt-6 rounded-none border border-scheduler/50 bg-scheduler/15 px-4 py-3 text-sm text-foreground">
+                  <p className="mt-6 rounded-none border-2 border-foreground bg-scheduler px-4 py-3 text-sm text-scheduler-foreground">
                     {warningMessage}
                   </p>
                 ) : null}
@@ -637,40 +637,22 @@ function UsageLimitCard({
   secondaryText: string;
 }) {
   const normalizedPercent = usedPercent === null ? null : clampPercent(usedPercent);
-  const remainingPercent =
-    normalizedPercent === null ? null : clampPercent(100 - normalizedPercent);
   const displayPrimaryText =
     primaryText ??
     (normalizedPercent === null
       ? "暂无百分比信息"
       : `剩余 ${formatRemainingPercent(normalizedPercent)}`);
 
+  // 额度卡 = 大色块上墙：按用量绿(<50)→黄(50-80)→玫红(≥80)填实，大字 + 白/黑字
   return (
-    <article className="rounded-none border border-border bg-muted p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-            {displayPrimaryText}
-          </p>
-        </div>
-        <span
-          className={`inline-flex rounded-none px-2.5 py-1 text-xs font-medium ${getUsageToneClass(normalizedPercent)}`}
-        >
-          {normalizedPercent === null ? "未知" : `已用 ${formatPercent(normalizedPercent)}`}
-        </span>
+    <article className={`flex flex-col rounded-none p-5 ${getUsageToneClass(normalizedPercent)}`}>
+      <div className="font-mono text-xs font-semibold uppercase tracking-wider opacity-80">
+        {title}
       </div>
-
-      <div className="mt-4 h-2 overflow-hidden rounded-none bg-secondary">
-        <div
-          className={`h-full rounded-none transition-[width] ${getUsageBarClass(normalizedPercent)}`}
-          style={{
-            width: `${remainingPercent ?? 0}%`,
-          }}
-        />
-      </div>
-
-      <p className="mt-3 text-sm leading-6 text-muted-foreground">{secondaryText}</p>
+      <p className="mt-3 font-mono text-4xl font-bold leading-none tabular-nums">
+        {displayPrimaryText}
+      </p>
+      <p className="mt-3 text-sm leading-6 opacity-85">{secondaryText}</p>
     </article>
   );
 }
@@ -689,9 +671,9 @@ function buildAuthEndpoint(
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {
   const toneClass =
     tone === "success"
-      ? "border-story/40 bg-story/10 text-story"
+      ? "border-foreground bg-story text-story-foreground"
       : tone === "warning"
-        ? "border-scheduler/50 bg-scheduler/15 text-foreground"
+        ? "border-foreground bg-scheduler text-scheduler-foreground"
         : "border-border bg-muted text-muted-foreground";
 
   return (
@@ -848,36 +830,20 @@ function getUsageGridClassName(itemCount: number): string {
   return "grid gap-4 md:grid-cols-2";
 }
 
-function getUsageBarClass(usedPercent: number | null): string {
-  if (usedPercent === null) {
-    return "bg-muted-foreground/40";
-  }
-
-  if (usedPercent >= 80) {
-    return "bg-destructive/100";
-  }
-
-  if (usedPercent >= 50) {
-    return "bg-scheduler/150";
-  }
-
-  return "bg-story/100";
-}
-
 function getUsageToneClass(usedPercent: number | null): string {
   if (usedPercent === null) {
-    return "bg-secondary text-muted-foreground";
+    return "border-2 border-foreground bg-secondary text-foreground";
   }
 
   if (usedPercent >= 80) {
-    return "bg-destructive/15 text-destructive";
+    return "border-2 border-foreground bg-cost text-cost-foreground";
   }
 
   if (usedPercent >= 50) {
-    return "bg-scheduler/20 text-foreground";
+    return "border-2 border-foreground bg-scheduler text-scheduler-foreground";
   }
 
-  return "bg-story/15 text-story";
+  return "border-2 border-foreground bg-story text-story-foreground";
 }
 
 function buildTrendChartData(data: AuthUsageTrendData): TrendChartRow[] {

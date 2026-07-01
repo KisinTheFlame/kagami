@@ -1,4 +1,4 @@
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 /**
  * 校验并归一化一个高德坐标串 `"经度,纬度"`（GCJ-02，经度在前）。

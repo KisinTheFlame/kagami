@@ -1,5 +1,5 @@
 import { type AppLogItem, type AppLogListResponse } from "@kagami/shared/schemas/app-log";
-import type { AppLogItem as AppLogDaoItem } from "@kagami/server-core/logger/dao/log.dao";
+import type { AppLogItem as AppLogDaoItem } from "@kagami/kernel/logger/dao/log.dao";
 
 type MapAppLogListInput = {
   page: number;

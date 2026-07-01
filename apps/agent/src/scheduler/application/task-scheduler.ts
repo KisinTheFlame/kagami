@@ -1,5 +1,5 @@
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { serializeError } from "@kagami/server-core/logger/serializer";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { serializeError } from "@kagami/kernel/logger/serializer";
 import type { ScheduleSpec, ScheduledTask, TaskRun, TaskStatus } from "../domain/scheduled-task.js";
 import { TaskRunHistory } from "../domain/task-run-history.js";
 import { CronDriver } from "../infra/cron-driver.js";

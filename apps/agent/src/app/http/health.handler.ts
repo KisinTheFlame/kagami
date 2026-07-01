@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { HealthQuerySchema, HealthResponseSchema } from "@kagami/shared/schemas/health";
 import { createHealthResponse } from "@kagami/shared/utils";
-import { registerQueryRoute } from "@kagami/server-core/common/http/route.helper";
+import { registerQueryRoute } from "@kagami/http/route";
 
 export class HealthHandler {
   public readonly prefix = "";

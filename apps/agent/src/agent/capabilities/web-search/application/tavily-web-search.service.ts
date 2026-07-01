@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { WebSearchInput, WebSearchResult, WebSearchService } from "./web-search.service.js";
 
 const DEFAULT_BASE_URL = "https://api.tavily.com";

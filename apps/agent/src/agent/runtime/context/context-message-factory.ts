@@ -1,7 +1,7 @@
 import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { LlmContentPart, LlmMessage } from "../../../llm/types.js";
-import { renderServerStaticTemplate } from "@kagami/server-core/common/runtime/read-static-text";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 
 const BEIJING_TIME_ZONE = "Asia/Shanghai";
 

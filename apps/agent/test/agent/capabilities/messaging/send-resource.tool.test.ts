@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { SendResourceTool } from "../../../../src/agent/capabilities/messaging/tools/send-resource.tool.js";
 import type { ResourceService } from "../../../../src/agent/capabilities/resource/application/resource.service.js";
 import type { AgentMessageService } from "../../../../src/agent/capabilities/messaging/application/agent-message.service.js";

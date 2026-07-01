@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { normalizeLngLat } from "../../../../src/agent/apps/amap/client/amap-coord.js";
 
 describe("normalizeLngLat", () => {

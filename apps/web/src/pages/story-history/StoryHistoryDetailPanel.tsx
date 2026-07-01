@@ -27,7 +27,7 @@ export function StoryHistoryDetailPanel({ item }: { item: StoryItem | null }) {
             {item.people.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {item.people.map(person => (
-                  <Badge key={`${item.id}-${person}`} variant="secondary">
+                  <Badge key={`${item.id}-${person}`} variant="story">
                     {person}
                   </Badge>
                 ))}

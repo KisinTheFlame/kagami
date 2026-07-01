@@ -183,7 +183,7 @@ export function StoryHistoryPage() {
                         {item.matchedKinds.length > 0 ? (
                           <div className="flex flex-wrap gap-1.5">
                             {formatStoryMatchedKinds(item.matchedKinds).map(kind => (
-                              <Badge key={`${item.id}-${kind}`} variant="secondary">
+                              <Badge key={`${item.id}-${kind}`} variant="story">
                                 {kind}
                               </Badge>
                             ))}
@@ -266,7 +266,7 @@ function StoryMobileCard({
         {hasQuery && item.matchedKinds.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {formatStoryMatchedKinds(item.matchedKinds).map(kind => (
-              <Badge key={`${item.id}-${kind}`} variant="secondary">
+              <Badge key={`${item.id}-${kind}`} variant="story">
                 {kind}
               </Badge>
             ))}

@@ -1,4 +1,4 @@
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import {
   ActionResponseSchema,
   PostTypeEventSchema,

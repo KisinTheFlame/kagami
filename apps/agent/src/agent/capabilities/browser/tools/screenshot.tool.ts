@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import type { BrowserClient } from "../../../../browser/browser-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";

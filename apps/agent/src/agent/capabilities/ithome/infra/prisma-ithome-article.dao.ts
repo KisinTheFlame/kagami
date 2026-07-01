@@ -1,12 +1,12 @@
-import type { Database } from "@kagami/server-core/db/client";
-import type * as Prisma from "@kagami/server-core/prisma";
+import type { Database } from "@kagami/persistence/db/client";
+import type * as Prisma from "@kagami/persistence/prisma";
 import type {
   IthomeArticleDao,
   IthomeArticleListItem,
   IthomeArticleRecord,
   IthomeArticleContentStatus,
 } from "../application/ithome-article.dao.js";
-import { toInputJsonObject, toJsonRecord } from "@kagami/server-core/common/prisma-json";
+import { toInputJsonObject, toJsonRecord } from "@kagami/persistence/common/prisma-json";
 
 export class PrismaIthomeArticleDao implements IthomeArticleDao {
   private readonly database: Database;

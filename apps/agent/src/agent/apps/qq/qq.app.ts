@@ -25,7 +25,7 @@ import {
   createPrivateConversationId,
   isConversationId,
 } from "../../capabilities/messaging/conversation-id.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import { OpenConversationTool } from "./tools/open-conversation.tool.js";
 import { ListConversationsTool } from "./tools/list-conversations.tool.js";
 import { ViewForwardTool } from "./tools/view-forward.tool.js";

@@ -1,5 +1,5 @@
 import type { LlmClient } from "../../../../llm/client.js";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { createVisionSystemPrompt } from "./system-prompt.js";
 
 type VisionAgentDeps = {

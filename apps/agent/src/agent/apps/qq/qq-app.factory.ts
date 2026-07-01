@@ -1,5 +1,5 @@
-import type { ConfigManager } from "@kagami/server-core/config/config.manager";
-import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
+import type { ConfigManager } from "@kagami/kernel/config/config.manager";
+import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
 import { DefaultNapcatGatewayService } from "../../../napcat/application/napcat-gateway.impl.service.js";
 import type { NapcatAgentEvent } from "../../../napcat/application/napcat-gateway.service.js";
 import type { NapcatGatewayPersistenceWriter } from "../../../napcat/application/napcat-gateway/event-persistence-writer.js";

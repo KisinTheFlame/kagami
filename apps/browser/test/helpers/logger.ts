@@ -1,5 +1,5 @@
-import { initLoggerRuntime } from "@kagami/server-core/logger/runtime";
-import type { LogEvent, LogSink } from "@kagami/server-core/logger/types";
+import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
+import type { LogEvent, LogSink } from "@kagami/kernel/logger/types";
 
 const sink: LogSink = {
   write: () => {},

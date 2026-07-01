@@ -7,10 +7,7 @@ import {
 } from "@kagami/shared/schemas/llm-chat";
 import { z } from "zod";
 import type { LlmPlaygroundService } from "../application/llm-playground.service.js";
-import {
-  registerCommandRoute,
-  registerQueryRoute,
-} from "@kagami/server-core/common/http/route.helper";
+import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 
 type LlmHandlerDeps = {
   llmPlaygroundService: LlmPlaygroundService;

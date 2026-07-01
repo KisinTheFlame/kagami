@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 import type { EmbeddingCacheDao, EmbeddingCacheKey, EmbeddingCacheRecord } from "./cache.dao.js";
 
 export class PrismaEmbeddingCacheDao implements EmbeddingCacheDao {

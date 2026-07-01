@@ -13,8 +13,10 @@
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@kagami/agent-runtime": "workspace:*",
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
-    "@kagami/server-core": "workspace:*",
+    "@kagami/persistence": "workspace:*",
     "@kagami/shared": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "croner": "^10.0.1",
