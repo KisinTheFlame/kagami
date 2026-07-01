@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage, Tool } from "../../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage, Tool } from "@kagami/llm-client";
 import { createTodoSuggestionInstructionMessage } from "../../../runtime/context/context-message-factory.js";
 
 const logger = new AppLogger({ source: "todo.suggestion-service" });

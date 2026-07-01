@@ -15,8 +15,8 @@ import {
   InvokeTool,
   INVOKE_TOOL_NAME,
 } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
-import type { LlmClient } from "../../src/llm/client.js";
-import type { LlmChatResponsePayload } from "../../src/llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmChatResponsePayload } from "@kagami/llm-client";
 
 /**
  * 构造一个聚焦于 WebSearchTaskAgent invoke 调度 + 终止判定的最小测试装配。

@@ -1,4 +1,4 @@
-import type { LlmContentPart, LlmMessage } from "../../../llm/types.js";
+import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import type { ContextItem } from "./agent-context.js";
 import type { Event } from "../event/event.js";
 import { createMessagesFromEvent } from "./context-message-factory.js";

@@ -1,20 +1,15 @@
+import type { OpenAiCodexAuth, OpenAiCodexAuthProvider } from "@kagami/llm-client";
 import type { CodexAuthService } from "../../auth/application/codex-auth.service.js";
-
-export type OpenAiCodexAuth = {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  accountId?: string;
-  email?: string;
-  lastRefresh: string;
-  expiresAt: number;
-};
 
 type OpenAiCodexAuthStoreDeps = {
   codexAuthService: CodexAuthService;
 };
 
-export class OpenAiCodexAuthStore {
+/**
+ * 把 agent 的 `CodexAuthService`（OAuth 全套）适配成 `@kagami/llm-client` 的只读凭据端口。
+ * app 装配层胶水：provider 只吃 `OpenAiCodexAuthProvider` 接口，登录/刷新实现留在 agent。
+ */
+export class OpenAiCodexAuthStore implements OpenAiCodexAuthProvider {
   private readonly codexAuthService: CodexAuthService;
 
   public constructor({ codexAuthService }: OpenAiCodexAuthStoreDeps) {

@@ -1,4 +1,4 @@
-import type { EmbeddingClient } from "../../../../llm/embedding/client.js";
+import type { EmbeddingClient } from "@kagami/llm-client/embedding";
 import type { StoryRecord } from "../domain/story.js";
 import { normalizeEmbedding } from "../domain/story.js";
 import type { StoryMemoryDocumentDao } from "../infra/story-memory-document.dao.js";

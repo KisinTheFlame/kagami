@@ -3,7 +3,7 @@ import type { ChatCompletion } from "openai/resources/chat/completions";
 import {
   toLlmChatResponsePayload,
   toOpenAiChatRequest,
-} from "../../src/llm/mappers/openai-chat-mapper.js";
+} from "../src/mappers/openai-chat-mapper.js";
 import { z } from "zod";
 
 describe("toOpenAiChatRequest", () => {

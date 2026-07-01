@@ -1,6 +1,6 @@
 import type { AppId, AppManager } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../context/agent-context.js";
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import {
   createAsyncToolResultMessage,
   createNotificationMessage,

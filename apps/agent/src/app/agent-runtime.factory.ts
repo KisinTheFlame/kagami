@@ -13,8 +13,8 @@ import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/ta
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { LlmClient } from "../llm/client.js";
-import type { EmbeddingClient } from "../llm/embedding/client.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { EmbeddingClient } from "@kagami/llm-client/embedding";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";

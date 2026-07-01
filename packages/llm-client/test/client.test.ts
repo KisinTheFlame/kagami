@@ -1,17 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import type { Config } from "@kagami/kernel/config/config.loader";
-import type { LlmChatCallDao } from "@kagami/persistence/dao/llm-chat-call.dao";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { createLlmClient, type LlmClient } from "../../src/llm/client.js";
-import type { MetricService } from "../../src/metric/application/metric.service.js";
+
+// llm-client 对 @kagami/persistence 零依赖，测试也不例外：这里只按 recordSuccess/recordError
+// 的调用面定义一个本地 mock DAO 类型，避免把 persistence 拖进本包的测试图。
+type LlmChatCallDaoMock = {
+  countByQuery: Mock;
+  listPage: Mock;
+  findById: Mock;
+  recordSuccess: Mock;
+  recordError: Mock;
+};
+import { createLlmClient, type LlmChatCallObservation, type LlmClient } from "../src/client.js";
 import {
   attachLlmProviderFailureContext,
   type LlmProvider,
   type LlmProviderChatResult,
-} from "../../src/llm/provider.js";
+} from "../src/provider.js";
 import type { LlmProviderId } from "@kagami/llm";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
-import type { LlmChatResponsePayload } from "../../src/llm/types.js";
+import type { LlmChatResponsePayload } from "../src/types.js";
 
 type LlmProviderConfig = {
   apiKey?: string;
@@ -27,7 +35,7 @@ type OpenAiCodexConfig = Config["server"]["llm"]["providers"]["openaiCodex"] & {
 
 type LlmUsageConfig = Config["server"]["llm"]["usages"]["agent"];
 
-function createLlmChatCallDaoMock(): LlmChatCallDao {
+function createLlmChatCallDaoMock(): LlmChatCallDaoMock {
   return {
     countByQuery: vi.fn().mockResolvedValue(0),
     listPage: vi.fn().mockResolvedValue([]),
@@ -37,20 +45,44 @@ function createLlmChatCallDaoMock(): LlmChatCallDao {
   };
 }
 
-function createMetricServiceMock(): MetricService {
-  return {
-    record: vi.fn().mockResolvedValue(undefined),
-  };
-}
+// 落库改为「client 发 observation、装配层订阅落库」后，测试用这个转发器把 observation
+// 直接喂给 mock DAO —— 它与 agent server-runtime 里的订阅 handler 逻辑一致，因此既保留了
+// 原有对 recordSuccess/recordError 的断言，又顺带验证 observation 字段足以完整重放落库。
+function recordObservationToDao(
+  dao: LlmChatCallDaoMock,
+): (observation: LlmChatCallObservation) => void {
+  return observation => {
+    if (observation.status === "success") {
+      void dao.recordSuccess({
+        provider: observation.provider,
+        model: observation.model,
+        extension: observation.extension,
+        requestId: observation.requestId,
+        seq: observation.seq,
+        latencyMs: observation.latencyMs,
+        request: observation.request,
+        response: observation.response,
+        nativeRequestPayload: observation.nativeRequestPayload,
+        nativeResponsePayload: observation.nativeResponsePayload,
+      });
+      return;
+    }
 
-function getMetricRecords(
-  metricService: MetricService,
-  metricName: string,
-): Record<string, unknown>[] {
-  return vi
-    .mocked(metricService.record)
-    .mock.calls.map(call => call[0])
-    .filter(record => record.metricName === metricName);
+    void dao.recordError({
+      provider: observation.provider,
+      model: observation.model,
+      extension: observation.extension,
+      requestId: observation.requestId,
+      seq: observation.seq,
+      latencyMs: observation.latencyMs,
+      request: observation.request,
+      ...(observation.response ? { response: observation.response } : {}),
+      nativeRequestPayload: observation.nativeRequestPayload,
+      nativeResponsePayload: observation.nativeResponsePayload,
+      nativeError: observation.nativeError,
+      error: observation.error,
+    });
+  };
 }
 
 function createUsageConfig(
@@ -145,25 +177,21 @@ function createProviderConfigs(): Record<LlmProviderId, LlmProviderConfig | Open
 }
 
 function createClient(params?: {
-  llmChatCallDao?: LlmChatCallDao;
-  metricService?: MetricService;
+  llmChatCallDao?: LlmChatCallDaoMock;
   providers?: Partial<Record<LlmProviderId, LlmProvider>>;
   providerConfigs?: Record<LlmProviderId, LlmProviderConfig | OpenAiCodexConfig>;
   usages?: Record<LlmUsageId, LlmUsageConfig>;
-}): { client: LlmClient; llmChatCallDao: LlmChatCallDao; metricService: MetricService } {
+}): { client: LlmClient; llmChatCallDao: LlmChatCallDaoMock } {
   const llmChatCallDao = params?.llmChatCallDao ?? createLlmChatCallDaoMock();
-  const metricService = params?.metricService ?? createMetricServiceMock();
 
   return {
     client: createLlmClient({
-      llmChatCallDao,
-      metricService,
       providers: params?.providers ?? {},
       providerConfigs: params?.providerConfigs ?? createProviderConfigs(),
       usages: params?.usages ?? createUsageConfig(),
+      recordObservation: recordObservationToDao(llmChatCallDao),
     }),
     llmChatCallDao,
-    metricService,
   };
 }
 
@@ -258,7 +286,7 @@ describe("createLlmClient", () => {
         .fn()
         .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
     };
-    const { client, llmChatCallDao, metricService } = createClient({
+    const { client, llmChatCallDao } = createClient({
       providers: {
         openai: provider,
       },
@@ -279,7 +307,6 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
     expect(llmChatCallDao.recordError).not.toHaveBeenCalled();
-    expect(metricService.record).not.toHaveBeenCalled();
   });
 
   it("should persist native request and response payloads on success", async () => {
@@ -471,7 +498,6 @@ describe("createLlmClient", () => {
 
   it("should retry next usage attempt, reuse requestId, and increment seq", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
-    const metricService = createMetricServiceMock();
     const openaiProvider: LlmProvider = {
       id: "openai",
       chat: vi.fn().mockRejectedValue(new Error("openai failed")),
@@ -494,7 +520,6 @@ describe("createLlmClient", () => {
     };
     const { client } = createClient({
       llmChatCallDao,
-      metricService,
       providers: {
         openai: openaiProvider,
         deepseek: deepseekProvider,
@@ -547,51 +572,6 @@ describe("createLlmClient", () => {
     });
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(1);
     expect(llmChatCallDao.recordSuccess).toHaveBeenCalledTimes(1);
-    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
-      {
-        metricName: "llm.chat.attempt",
-        value: 1,
-        tags: {
-          usage: "agent",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "failed",
-        },
-      },
-      {
-        metricName: "llm.chat.attempt",
-        value: 1,
-        tags: {
-          usage: "agent",
-          provider: "deepseek",
-          model: "deepseek-chat",
-          status: "success",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
-      {
-        metricName: "llm.chat.latency_ms",
-        value: expect.any(Number),
-        tags: {
-          usage: "agent",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "failed",
-        },
-      },
-      {
-        metricName: "llm.chat.latency_ms",
-        value: expect.any(Number),
-        tags: {
-          usage: "agent",
-          provider: "deepseek",
-          model: "deepseek-chat",
-          status: "success",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
 
     const errorRequestId = vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].requestId;
     const successRequestId = vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].requestId;
@@ -615,105 +595,6 @@ describe("createLlmClient", () => {
       id: "native-deepseek-chat",
       model: "deepseek-chat",
     });
-  });
-
-  it("should record llm chat attempt metric on successful chat", async () => {
-    const provider: LlmProvider = {
-      id: "openai",
-      chat: vi.fn().mockResolvedValue(
-        createProviderChatResult(
-          createChatResponse({
-            provider: "openai",
-            usage: {
-              totalTokens: 123,
-            },
-          }),
-        ),
-      ),
-    };
-    const metricService = createMetricServiceMock();
-    const { client } = createClient({
-      metricService,
-      providers: {
-        openai: provider,
-      },
-    });
-
-    await client.chat(
-      {
-        messages: [{ role: "user", content: "ping" }],
-        tools: [],
-        toolChoice: "none",
-      },
-      {
-        usage: "vision",
-      },
-    );
-
-    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
-      {
-        metricName: "llm.chat.attempt",
-        value: 1,
-        tags: {
-          usage: "vision",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "success",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
-      {
-        metricName: "llm.chat.latency_ms",
-        value: expect.any(Number),
-        tags: {
-          usage: "vision",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "success",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([
-      {
-        metricName: "llm.chat.total_tokens",
-        value: 123,
-        tags: {
-          usage: "vision",
-          provider: "openai",
-          model: "gpt-4o-mini",
-        },
-      },
-    ]);
-  });
-
-  it("should skip token metric when totalTokens is missing", async () => {
-    const provider: LlmProvider = {
-      id: "openai",
-      chat: vi
-        .fn()
-        .mockResolvedValue(createProviderChatResult(createChatResponse({ provider: "openai" }))),
-    };
-    const metricService = createMetricServiceMock();
-    const { client } = createClient({
-      metricService,
-      providers: {
-        openai: provider,
-      },
-    });
-
-    await client.chat(
-      {
-        messages: [{ role: "user", content: "ping" }],
-        tools: [],
-        toolChoice: "none",
-      },
-      {
-        usage: "vision",
-      },
-    );
-
-    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
   });
 
   it("should continue after an unavailable usage attempt", async () => {
@@ -789,12 +670,10 @@ describe("createLlmClient", () => {
 
   it("should throw the last error when all usage attempts fail", async () => {
     const llmChatCallDao = createLlmChatCallDaoMock();
-    const metricService = createMetricServiceMock();
     const firstError = new Error("openai failed");
     const lastError = new Error("deepseek failed");
     const { client } = createClient({
       llmChatCallDao,
-      metricService,
       providers: {
         openai: {
           id: "openai",
@@ -838,51 +717,6 @@ describe("createLlmClient", () => {
 
     expect(llmChatCallDao.recordError).toHaveBeenCalledTimes(2);
     expect(llmChatCallDao.recordSuccess).not.toHaveBeenCalled();
-    expect(getMetricRecords(metricService, "llm.chat.attempt")).toEqual([
-      {
-        metricName: "llm.chat.attempt",
-        value: 1,
-        tags: {
-          usage: "agent",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "failed",
-        },
-      },
-      {
-        metricName: "llm.chat.attempt",
-        value: 1,
-        tags: {
-          usage: "agent",
-          provider: "deepseek",
-          model: "deepseek-chat",
-          status: "failed",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.latency_ms")).toEqual([
-      {
-        metricName: "llm.chat.latency_ms",
-        value: expect.any(Number),
-        tags: {
-          usage: "agent",
-          provider: "openai",
-          model: "gpt-4o-mini",
-          status: "failed",
-        },
-      },
-      {
-        metricName: "llm.chat.latency_ms",
-        value: expect.any(Number),
-        tags: {
-          usage: "agent",
-          provider: "deepseek",
-          model: "deepseek-chat",
-          status: "failed",
-        },
-      },
-    ]);
-    expect(getMetricRecords(metricService, "llm.chat.total_tokens")).toEqual([]);
   });
 
   it("should reject usage attempts when the configured model is not in provider models", async () => {

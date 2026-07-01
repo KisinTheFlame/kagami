@@ -5,7 +5,7 @@ import type {
   LlmMessage,
   LlmTextContentPart,
   LlmToolCall,
-} from "../../../../llm/types.js";
+} from "@kagami/llm-client";
 
 const DateValueSchema = z.coerce.date();
 const JsonRecordSchema = z.record(z.string(), z.unknown());

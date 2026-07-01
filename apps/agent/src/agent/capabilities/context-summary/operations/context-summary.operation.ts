@@ -1,5 +1,5 @@
-import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage, Tool } from "../../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage, Tool } from "@kagami/llm-client";
 import {
   REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
   type Operation,
