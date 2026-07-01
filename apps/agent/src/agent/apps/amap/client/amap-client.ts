@@ -35,14 +35,14 @@ const V5 = "https://restapi.amap.com/v5";
 export type AmapDriveMode = "driving" | "walking" | "bicycling";
 
 /**
- * 高德在不同接口 / 字段间混用 string 与 number（如 step_distance：驾车回字符串 "396"、
- * 骑行回数字 215）。统一接受两者并归一成 string|null，避免解析层因个别字段类型不稳而整体
- * 失败（那会被 assertParsed 当成接口异常抛出）。渲染层只吃 string，故这里收口。
+ * 高德字段类型极不稳：同一字段可能回字符串（`"396"`）、数字（`215`），**空值还会回空数组
+ * `[]`**（如 geocode 查省市级地名时 `district` / `city` 回 `[]`）。这里对任意输入一律收口：
+ * string 原样、number 转字符串、其余（`[]` / `{}` / null / undefined / bool）一律归 null。
+ * 绝不因个别字段类型不稳而整体解析失败（那会被 assertParsed 当成接口异常抛给用户）。
  */
 const Str = z
-  .union([z.string(), z.number()])
-  .nullish()
-  .transform(v => (v == null ? null : String(v)));
+  .unknown()
+  .transform(v => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null));
 
 // === geocode ===
 const GeocodeItemSchema = z.object({
