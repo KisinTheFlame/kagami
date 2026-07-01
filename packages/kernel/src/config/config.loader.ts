@@ -22,6 +22,11 @@ const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
 // 资源读取/发送的字节上限：read_resource 入上下文 / send_resource 发图共用。
 // 4 MiB 贴合 QQ 图片实际体量，也避免把巨型资源灌进上下文或 napcat WS。
 const DEFAULT_AGENT_RESOURCE_MAX_BYTES = 4 * 1024 * 1024;
+// 文件桥（download_resource / upload_resource / 群文件）落盘 / 读盘 / 传输的沙箱根与字节上限。
+// fileRoot 默认 ~/kagami，与 terminal initialCwd 默认值重合，落盘后 terminal ls 天然可见。
+// fileMaxBytes 32 MiB 独立于上下文 cap（4 MiB）——文件不进上下文，可更大，但压在 OSS 50MB 请求上限下。
+const DEFAULT_AGENT_RESOURCE_FILE_ROOT = "~/kagami";
+const DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES = 32 * 1024 * 1024;
 const DEFAULT_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -292,6 +297,8 @@ const ConfigSchema = z.object({
           resource: z
             .object({
               maxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_MAX_BYTES),
+              fileRoot: NonEmptyStringSchema.default(DEFAULT_AGENT_RESOURCE_FILE_ROOT),
+              fileMaxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES),
             })
             .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),

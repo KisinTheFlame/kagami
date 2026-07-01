@@ -140,6 +140,8 @@ export function createConfigManager(): ConfigManager {
         },
         resource: {
           maxBytes: 4 * 1024 * 1024,
+          fileRoot: "~/kagami",
+          fileMaxBytes: 32 * 1024 * 1024,
         },
       },
       ithome: {
