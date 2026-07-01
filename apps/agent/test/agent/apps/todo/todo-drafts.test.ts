@@ -42,4 +42,40 @@ describe("TodoDigestDraft", () => {
     const draft = new TodoDigestDraft({ totalCount: 0, items: [] });
     expect(draft.render()).toBe(`待办都清空了，没有未完成的事。${NUDGE}`);
   });
+
+  it("有建议：前两段后换行追加第三段", () => {
+    const draft = new TodoDigestDraft({
+      totalCount: 2,
+      items: [{ title: "a" }, { title: "b" }],
+      suggestions: ["写周报", "回复闻震"],
+    });
+    expect(draft.render()).toBe(
+      `还有 2 件没做：《a》《b》。${NUDGE}\n这些事你或许可以做：《写周报》《回复闻震》`,
+    );
+  });
+
+  it("无建议（默认空数组）：只两段，无第三段", () => {
+    const draft = new TodoDigestDraft({
+      totalCount: 1,
+      items: [{ title: "a" }],
+      suggestions: [],
+    });
+    expect(draft.render()).toBe(`还有 1 件没做：《a》。${NUDGE}`);
+  });
+
+  it("空待办 + 有建议：兜底文案后仍追加第三段", () => {
+    const draft = new TodoDigestDraft({
+      totalCount: 0,
+      items: [],
+      suggestions: ["整理下周计划"],
+    });
+    expect(draft.render()).toBe(
+      `待办都清空了，没有未完成的事。${NUDGE}\n这些事你或许可以做：《整理下周计划》`,
+    );
+  });
+
+  it("空待办 + 无建议：只兜底文案", () => {
+    const draft = new TodoDigestDraft({ totalCount: 0, items: [], suggestions: [] });
+    expect(draft.render()).toBe(`待办都清空了，没有未完成的事。${NUDGE}`);
+  });
 });

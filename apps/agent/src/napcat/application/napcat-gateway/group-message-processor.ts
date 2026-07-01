@@ -25,6 +25,7 @@ import {
   type NapcatReceiveMessageSegment,
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
+import { truncateWithEllipsis } from "@kagami/shared/utils";
 import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
 import type {
   NapcatImageAnalysisResult,
@@ -533,7 +534,9 @@ export class NapcatGroupMessageProcessor {
           }
 
           const rawMessage = toNullableString(message.payload?.raw_message as string) ?? "";
-          const preview = rawMessage.length > 50 ? rawMessage.slice(0, 50) + "…" : rawMessage;
+          // 按码点截断（truncateWithEllipsis 内部先剥除落单代理项）：绝不从 emoji 代理对中间
+          // 切开留下半个字符——否则这条引用预览进上下文后会让每轮 LLM 请求体非法 JSON、整条会话打挂。
+          const preview = truncateWithEllipsis(rawMessage, 50);
 
           return withReplyHydration(segment, {
             senderNickname: nickname,

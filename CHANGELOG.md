@@ -7,6 +7,44 @@
 
 ## [Unreleased]
 
+## [0.3.5.2] - 2026-07-01
+
+### Fixed
+
+- napcat/messaging: 修复**按 UTF-16 长度截断劈开 emoji 代理对**导致主 Agent 整条会话被打挂的事故。QQ 引用回复预览（`group-message-processor` 的 `messagePreview`）等处用 `str.slice(0, N)` 截断，若第 N 个码元正好落在一个 emoji 的代理对中间，就会留下半个高代理项（lone surrogate）。这条脏字符进入主 Agent 的持久上下文后，**每一轮 root-agent LLM 请求体都是非法 JSON**，Anthropic 上游以 `400 invalid_request_error: no low surrogate in string` 拒绝，root agent 陷入无限重试、彻底不能思考（进程存活但功能性死亡）。
+  - 新增码点安全工具 `@kagami/shared/utils` 的 `stripLoneSurrogates`（剥除落单代理项）与 `truncateWithEllipsis`（按 Unicode **码点**而非 UTF-16 码元截断，`Array.from` 拆分，绝不切开代理对，且先剥除已有落单代理项）。
+  - 全部 4 处按长度截断改用 `truncateWithEllipsis`：QQ 引用预览（确诊元凶）、合并转发单节点、聊天通知 draft、图片描述——它们的产物都会进主上下文，任一处劈开代理对都足以打挂会话。
+  - 事故现场处置（不在本 PR）：从 `root_agent_runtime_snapshot` 剥除那一个落单 `U+D83C` 并重启，保住全部历史。
+
+### Changed
+
+- config: 把 committed `config.yaml` 从「示例默认值」更新为**部署机的真实非隐私配置**（story 关闭、真实模型路由如 claude-opus-4-6/haiku、真实超时与通知窗口、真实 provider models 等），使受控 `config.yaml` 与实际部署零漂移——此前 committed 版本是从 example 派生的模板，与线上实际值差异很大。
+- config: `server.napcat.wsUrl` 加入 `CONFIG_SECRET_WHITELIST`。napcat WS 地址内嵌 `access_token` 属凭据，而本仓库公开，故整条 `wsUrl` 移入 gitignored 的 `config.secret.yaml`（committed `config.yaml` 不再含 `napcat.wsUrl`，由 secret 深合并提供）；`config.secret.yaml.example` 补上占位条目。
+- config: 移除死配置 `server.llm.providers.mimo`——`mimo` 不是 `LLM_PROVIDER_IDS` 的合法 provider（会被 schema 静默丢弃）、也无 usage 引用，是遗留的无用块（且带着一个真实 key）。
+
+### Added
+
+- todo: 每日两次的 digest 通知在「未完成汇总 + 通用 nudge」之外新增**第三段「建议待办」**（见 [#183](https://github.com/KisinTheFlame/kagami/issues/183)）。每次回顾时从主 Agent 上下文 fork 一份、跑**一次性单次 LLM 发现**（`TodoSuggestionService.propose`，仿 context-summary，无工具循环），据当前未完成清单去重后直接给出**最多 5 条具体、可执行的候选待办**；小镜读了自行决定是否 enter todo App 用 add-todo 添加（纯文本，不落库、无新状态机）。
+  - **KV 缓存前缀零影响**：`TodoSuggestionService` 不持有 `AgentContext` 句柄、只收克隆的 `messages`，类型上就无法改主上下文；建议只经 `<notification>` 追加到上下文尾部，不触 system prompt / 历史 / 顶层工具集。fork 子调用用独立 `propose_todos` 工具，属隔离 throwaway。
+  - **快照读串行化**：`RootLoopAgent` 新增 `getContextSnapshot()`，经 `mutationExecutor` 串行化取快照，避免与主轮次 `persistRoundState` 中途「assistant tool_call 无 tool_result」的不平衡视图竞态。
+  - **三重降级**：fork 任何失败（无 provider / 超时 / 无 toolCall / 解析失败 / 空）一律返回 `[]`，digest 照发只含原两段，绝不抛错、不丢 digest。
+  - **配置**：新增独立必填 usage `todoSuggestionAgent`（`config.yaml` 已含，模型可独立选）。
+
+## [0.3.4.0] - 2026-07-01
+
+### Added
+
+- config: 新增领域无关的叶子包 `@kagami/config`（deps 仅 `yaml`，零 `@kagami/*` / 零 zod），把「怎么定位并读一个配置文件」这层通用机制收敛成单一事实来源（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。此前 repo-root / git-worktree 锚点逻辑在 kernel loader、gateway、oss、`scripts/read-config.mjs` **四处各自重复**；现在四个 reader 全部复用 `@kagami/config` 的 `resolveConfigPath`。包内含：`resolveConfigPath`（depth-agnostic 向上定位 + worktree 回退）、`deepMerge`、`assertSecretWhitelist`（按路径前缀的隐私白名单）、`loadMergedRawConfig`、自有 `ConfigError`（与 `BizError` 同形但不反向依赖 kernel）。领域 schema（`ConfigSchema` / `Config` / `loadStaticConfig`）与「哪些路径算隐私」的白名单内容仍留在 kernel，作为参数下传——config 包不认识任何领域字段。`loadStaticConfig` 签名与返回类型逐字不变，agent/console/browser 消费方零改动。
+
+### Changed
+
+- config: 把 `config.yaml` 按「隐私 vs 非隐私」拆成两份（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。非隐私配置（服务拓扑 / 阈值 / baseUrl / models 等）留在 `config.yaml` 并**纳入版本控制**（不再 gitignore、不再提供 `config.yaml.example`）；隐私配置（各 `apiKey` / `bot.qq` / `bot.creator` / `napcat.listenGroupIds` / 浏览器 `proxy`·`licenseKey`）落到 gitignored 的 `config.secret.yaml`，改提供 `config.secret.yaml.example` 模板。启动时 `@kagami/config` 定位并**深合并**两文件（冲突 secret 优先、数组整体替换），再交 `ConfigSchema` 校验，**零 schema 字段改动**。
+  - **Secret 白名单**：`config.secret.yaml` 只允许出现 `CONFIG_SECRET_WHITELIST`（`packages/kernel/src/config/config.loader.ts`）内的隐私路径前缀；出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）启动即抛 `CONFIG_SECRET_FORBIDDEN_KEY`——这保证 secret 永不能改动 gateway/oss/read-config 也在读的非隐私拓扑，各进程共享字段永远一致。
+  - **缺文件响亮失败**：缺 `config.secret.yaml` 时抛 `CONFIG_SECRET_NOT_FOUND` 并在报错里给出 `cp config.secret.yaml.example …` 提示。
+  - **原型污染防护**：`deepMerge` 丢弃 `__proto__` / `constructor` / `prototype` 键并用 `hasOwnProperty` 判定；`assertSecretWhitelist` 按点分段拒绝这些段（防「`<白名单前缀>.__proto__.x` 借前缀匹配穿透」），双层兜底。
+  - **对 KV 缓存前缀零影响**：不触 system prompt / 工具集 / 工具描述 / 消息序列化，纯配置装载层。
+  - **部署前置（部署机一次性，无 DB 变更）**：部署机现有 gitignored `config.yaml` 转为受版本控制后，`git pull` 会因「未跟踪文件将被覆盖」拒绝——需先备份现有 `config.yaml`、抽出隐私叶子写入新建 `config.secret.yaml`、再让位受控版本，然后 `pnpm app:deploy`。
+
 ## [0.3.3.0] - 2026-07-01
 
 ### Changed

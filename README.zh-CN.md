@@ -84,9 +84,9 @@ pnpm --filter @kagami/shared <script>
 
 ## 配置方式
 
-- 在仓库根目录提供真实的 `config.yaml`。
-- 字段结构参考 [config.yaml.example](./config.yaml.example)。
-- 服务启动时会一次性读取并校验 `config.yaml`；修改配置后需要重启服务生效。
+- `config.yaml`（非隐私，纳入版本控制）已在仓库根目录，直接编辑即可。
+- 把 [config.secret.yaml.example](./config.secret.yaml.example) 复制为 `config.secret.yaml`（已 gitignore）并填入密钥 / PII（API key、机器人 QQ、群号）。两份文件在启动时深合并。
+- 服务启动时会一次性读取并校验合并后的配置；修改配置后需要重启服务生效。
 
 ## 数据库迁移
 

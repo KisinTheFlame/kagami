@@ -100,8 +100,8 @@ workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `a
 - 数据库相关命令统一读取仓库根目录 `config.yaml` 中的 `server.databaseUrl`。
 - 修改配置 schema 时，必须同步更新：
   - `packages/kernel/src/config/config.loader.ts`
-  - `config.yaml`
-  - `config.yaml.example`
+  - `config.yaml`（非隐私，纳入版本控制）
+  - `config.secret.yaml.example`（隐私模板；新增隐私字段还要同步 `config.loader.ts` 里的 `CONFIG_SECRET_WHITELIST`）
 - 提交前至少执行：
 
 ```sh
@@ -190,8 +190,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 ### 配置文件
 
-- 后端启动时通过 `packages/kernel/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
-- `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
+- 配置拆成两份：`config.yaml`（非隐私，纳入版本控制，直接改）+ `config.secret.yaml`（隐私：密钥/PII，gitignore，从 `config.secret.yaml.example` 复制填写）。启动时由 `@kagami/config` 定位并深合并两者，再交 `packages/kernel/src/config/config.loader.ts` 的 `ConfigSchema` 校验。
+- `config.secret.yaml` 只允许出现 `config.loader.ts` 里 `CONFIG_SECRET_WHITELIST` 白名单内的隐私路径（apiKey / bot / napcat.listenGroupIds / 浏览器凭据）；越界键（如 `services.*`）启动报错。
+- 配置读取（repo-root 定位 + 两文件合并）统一由零依赖叶子包 `@kagami/config` 承载；kernel / gateway / oss / `scripts/read-config.mjs` 都复用它。gateway / oss 只读非隐私的 `services.*`，不需要 `config.secret.yaml`。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
   - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationLeadingWindowMs`、`notificationBatchWindowMs`

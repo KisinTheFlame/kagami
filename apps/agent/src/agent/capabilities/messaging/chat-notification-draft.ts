@@ -1,3 +1,4 @@
+import { truncateWithEllipsis } from "@kagami/shared/utils";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { NapcatReceiveMessageSegment } from "../../../napcat/application/napcat-gateway/shared.js";
 
@@ -56,6 +57,6 @@ function formatCount(count: number): string {
 }
 
 function truncate(text: string, max: number): string {
-  const trimmed = text.trim();
-  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}…`;
+  // 按码点截断（内部先剥除落单代理项），绝不劈开 emoji 代理对。
+  return truncateWithEllipsis(text.trim(), max);
 }
