@@ -1,3 +1,4 @@
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 
 export const TODO_NOTIFICATION_GROUP = "待办";
@@ -25,6 +26,8 @@ export class TodoReminderDraft implements NotificationDraft {
   }
 
   public render(): string {
-    return `《${this.title}》到点了`;
+    return renderServerStaticTemplate(import.meta.url, "context/notifications/todo-reminder.hbs", {
+      title: this.title,
+    });
   }
 }

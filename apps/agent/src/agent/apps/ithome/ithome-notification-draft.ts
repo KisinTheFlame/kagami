@@ -1,3 +1,4 @@
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import { ITHOME_APP_ID } from "./ithome.app.js";
 
@@ -29,6 +30,9 @@ export class IthomeNotificationDraft implements NotificationDraft {
   }
 
   public render(): string {
-    return `${this.count}篇新文，最新《${this.latestTitle}》`;
+    return renderServerStaticTemplate(import.meta.url, "context/notifications/ithome.hbs", {
+      count: this.count,
+      latestTitle: this.latestTitle,
+    });
   }
 }

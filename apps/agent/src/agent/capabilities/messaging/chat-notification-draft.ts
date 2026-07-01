@@ -1,7 +1,7 @@
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { NapcatReceiveMessageSegment } from "../../../napcat/application/napcat-gateway/shared.js";
 
-const MENTION_TAG = "[有人 @ 你]";
 const MAX_DISPLAY_COUNT = 99;
 
 /**
@@ -23,6 +23,8 @@ const MAX_DISPLAY_COUNT = 99;
  *
  * 因此折叠约定是**最新快照覆盖**：`merge(prev)` 直接取 `this`（最新快照已带全量未读计数，
  * prev 是过期快照）。sourceId = 会话 id（每会话一个源）。
+ *
+ * 渲染文案在 `static/context/notifications/qq-chat.hbs`；这里只算 view-model。
  */
 export class ChatNotificationDraft implements NotificationDraft {
   public readonly group = "QQ";
@@ -40,10 +42,14 @@ export class ChatNotificationDraft implements NotificationDraft {
   }
 
   public render(): string {
-    const countTag = this.unreadCount > 1 ? `[${formatCount(this.unreadCount)} 条消息]` : "";
-    const mentionTag = this.mentioned ? MENTION_TAG : "";
-    const tags = `${countTag}${mentionTag}`;
-    return `${this.displayName}: ${tags || "有新消息"}`;
+    const hasCount = this.unreadCount > 1;
+    return renderServerStaticTemplate(import.meta.url, "context/notifications/qq-chat.hbs", {
+      displayName: this.displayName,
+      hasTags: hasCount || this.mentioned,
+      hasCount,
+      countLabel: formatCount(this.unreadCount),
+      mentioned: this.mentioned,
+    });
   }
 }
 
