@@ -15,6 +15,12 @@ const MAX_IMAGE_DESCRIPTION_LENGTH = 180;
  */
 const MAX_IMAGE_DOWNLOAD_BYTES = 32 * 1024 * 1024;
 
+/**
+ * 单张图片下载超时（15s）。有 32 MiB 字节上限但无超时，一个 hang 住的 CDN / 过期 URL 会
+ * 长期占住 in-flight 下载。超时抛 AbortError，被 download() 的 catch 兜成优雅降级（返回 null）。
+ */
+const IMAGE_DOWNLOAD_TIMEOUT_MS = 15_000;
+
 type FetchLike = typeof fetch;
 
 /** 图片分析结果：vision 文字描述（失败为空串）+ OSS 存档 key（resid，未存档为 null）。 */
@@ -120,7 +126,9 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
 
   private async download(imageUrl: string): Promise<{ content: Buffer; mimeType: string } | null> {
     try {
-      const response = await this.fetchImpl(imageUrl);
+      const response = await this.fetchImpl(imageUrl, {
+        signal: AbortSignal.timeout(IMAGE_DOWNLOAD_TIMEOUT_MS),
+      });
       if (!response.ok) {
         logger.warn("Failed to download NapCat image for vision analysis", {
           event: "napcat.gateway.image_download_failed",
