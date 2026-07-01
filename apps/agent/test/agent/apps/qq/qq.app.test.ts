@@ -97,7 +97,7 @@ describe("QqApp", () => {
     expect(help).toContain("## QQ 和 QQ 群");
     expect(help).toContain("<qq_message>");
     // 群聊行为整块从主 system prompt 迁到 QQ App
-    expect(help).toContain("<reply_decision>");
+    expect(help).toContain("<attention_and_reply>");
     expect(help).toContain("<anti_ai_tone>");
     // 工具清单仍在
     expect(help).toContain("open_conversation(id)");
