@@ -457,7 +457,7 @@ export class QqApp implements App {
     const lines = ["<qq_conversation_list>", "你的 QQ 会话："];
     for (const conversation of this.conversations.values()) {
       const unread = conversation.getUnreadCount();
-      const unreadText = unread > 0 ? `（未读 ${unread}）` : "";
+      const unreadText = unread > 0 ? `（未读 ${unread > 99 ? "99+" : unread}）` : "";
       const currentMark = conversation.id === this.currentConversationId ? "  ← 当前会话" : "";
       lines.push(
         `- ${conversation.getDisplayName()}${unreadText} [id: ${conversation.id}]${currentMark}`,
