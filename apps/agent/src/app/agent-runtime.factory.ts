@@ -88,14 +88,24 @@ import {
   SEARCH_MEMORY_TOOL_NAME,
 } from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { ResourceService } from "../agent/capabilities/resource/application/resource.service.js";
+import { ResourceFileService } from "../agent/capabilities/resource/application/resource-file.service.js";
 import {
   ReadResourceTool,
   READ_RESOURCE_TOOL_NAME,
 } from "../agent/capabilities/resource/tools/read-resource.tool.js";
+import {
+  DownloadResourceTool,
+  DOWNLOAD_RESOURCE_TOOL_NAME,
+} from "../agent/capabilities/resource/tools/download-resource.tool.js";
+import {
+  UploadResourceTool,
+  UPLOAD_RESOURCE_TOOL_NAME,
+} from "../agent/capabilities/resource/tools/upload-resource.tool.js";
 import type { OssClient } from "../oss/oss-client.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
+import { AmapApp } from "../agent/apps/amap/amap.app.js";
 import type { QqApp } from "../agent/apps/qq/qq.app.js";
 import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
@@ -246,6 +256,13 @@ export async function buildAgentRuntime({
     ossClient,
     maxBytes: config.server.agent.resource.maxBytes,
   });
+  // 资源本地文件桥：download_resource / upload_resource 全局工具共用。落盘/读盘锚定
+  // fileRoot 沙箱，字节走 fileMaxBytes（独立于上下文 cap）。OSS 关时调用层报错。
+  const resourceFileService = new ResourceFileService({
+    ossClient,
+    fileRoot: config.server.agent.resource.fileRoot,
+    fileMaxBytes: config.server.agent.resource.fileMaxBytes,
+  });
 
   // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
   // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
@@ -281,6 +298,7 @@ export async function buildAgentRuntime({
   appManager.register(new TodoApp({ todoService }));
   appManager.register(new ClockApp());
   appManager.register(new HnApp());
+  appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
@@ -351,6 +369,8 @@ export async function buildAgentRuntime({
     topK: config.server.agent.story.memory.retrieval.topK,
   });
   const readResourceTool = new ReadResourceTool({ resourceService });
+  const downloadResourceTool = new DownloadResourceTool({ resourceFileService });
+  const uploadResourceTool = new UploadResourceTool({ resourceFileService });
   const summaryTool = new SummaryTool();
   const toolCatalog = new ToolCatalog([
     enterTool,
@@ -361,6 +381,8 @@ export async function buildAgentRuntime({
     searchWebTool,
     searchMemoryTool,
     readResourceTool,
+    downloadResourceTool,
+    uploadResourceTool,
     summaryTool,
     helpTool,
   ]);
@@ -373,6 +395,8 @@ export async function buildAgentRuntime({
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
     READ_RESOURCE_TOOL_NAME,
+    DOWNLOAD_RESOURCE_TOOL_NAME,
+    UPLOAD_RESOURCE_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
 
@@ -415,6 +439,14 @@ export async function buildAgentRuntime({
       reason: "在网页搜索子任务中不可调用 read_resource。",
     }),
     new OutOfScopeTool({
+      inner: downloadResourceTool,
+      reason: "在网页搜索子任务中不可调用 download_resource。",
+    }),
+    new OutOfScopeTool({
+      inner: uploadResourceTool,
+      reason: "在网页搜索子任务中不可调用 upload_resource。",
+    }),
+    new OutOfScopeTool({
       inner: helpTool,
       reason: "在网页搜索子任务中不可调用 help。",
     }),
@@ -428,6 +460,8 @@ export async function buildAgentRuntime({
     SEARCH_WEB_TOOL_NAME,
     SEARCH_MEMORY_TOOL_NAME,
     READ_RESOURCE_TOOL_NAME,
+    DOWNLOAD_RESOURCE_TOOL_NAME,
+    UPLOAD_RESOURCE_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
 
