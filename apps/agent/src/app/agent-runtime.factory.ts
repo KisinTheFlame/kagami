@@ -274,6 +274,8 @@ export async function buildAgentRuntime({
     qqMessageDao: napcat.qqMessageDao,
     notificationCenter,
     botQQ: config.server.bot.qq,
+    creatorName: config.server.bot.creator.name,
+    creatorQQ: config.server.bot.creator.qq,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     aiTone: {
@@ -305,9 +307,7 @@ export async function buildAgentRuntime({
 
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
-      botQQ: config.server.bot.qq,
       creatorName: config.server.bot.creator.name,
-      creatorQQ: config.server.bot.creator.qq,
     });
   };
   // Story Agent（后台故事写作 loop）可通过 config.server.agent.story.enabled 整体关停。

@@ -4,33 +4,26 @@ import { createVisionSystemPrompt } from "../../src/agent/capabilities/vision/ap
 import { createAgentSystemPrompt } from "../../src/agent/runtime/root-agent/system-prompt.js";
 
 describe("createAgentSystemPrompt", () => {
-  it("should describe qq message and system tags in the prompt", () => {
-    const prompt = createAgentSystemPrompt({
-      botQQ: "123456789",
-      creatorName: "测试创造者",
-      creatorQQ: "987654321",
-    });
+  it("should describe generic system tags but leak no QQ specifics", () => {
+    const prompt = createAgentSystemPrompt({ creatorName: "测试创造者" });
 
     expect(prompt).toContain("<input_format>");
-    expect(prompt).toContain("<qq_message>");
     expect(prompt).toContain("<system_reminder>");
     expect(prompt).toContain("<system_instruction>");
     expect(prompt).toContain("<conversation_summary>");
     expect(prompt).toContain("可能按分段小标题组织");
     expect(prompt).toContain("优先关注其中的状态、待处理和不确定性");
-    expect(prompt).toContain("123456789");
     expect(prompt).toContain("测试创造者");
-    expect(prompt).toContain("987654321");
+
+    // QQ 只是一个 App：平台知识、群聊行为都下沉到 QQ App 的 help，不再进主 system prompt。
+    expect(prompt).not.toContain("<qq_message>");
+    expect(prompt).not.toContain("QQ 群");
   });
 
   it("should not enumerate invoke subtools in the prompt", () => {
     // 这条不变量保住主 Agent 顶层 tools 数组的 KV cache 稳定性——加 / 删 / 改子工具
     // 不会让 system prompt 漂移。子工具说明走 invoke 错误返回回带。
-    const prompt = createAgentSystemPrompt({
-      botQQ: "123456789",
-      creatorName: "测试创造者",
-      creatorQQ: "987654321",
-    });
+    const prompt = createAgentSystemPrompt({ creatorName: "测试创造者" });
 
     expect(prompt).not.toContain("<invoke_tools>");
     expect(prompt).not.toContain("send_message");

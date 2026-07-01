@@ -34,9 +34,7 @@ export class DefaultAgentContext implements AgentContext {
       systemPromptFactory ??
       systemPrompt ??
       createAgentSystemPrompt({
-        botQQ: "unknown",
         creatorName: "unknown",
-        creatorQQ: "unknown",
       });
     this.systemPrompt = this.defaultSystemPrompt;
   }

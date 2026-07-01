@@ -26,6 +26,8 @@ type BuildQqAppInput = {
   qqMessageDao: NapcatQqMessageDao;
   notificationCenter: NotificationCenter;
   botQQ: string;
+  creatorName: string;
+  creatorQQ: string;
   listenGroupIds: string[];
   recentMessageLimit: number;
   aiTone: { enabled: boolean; blockThreshold: number };
@@ -61,6 +63,8 @@ export async function buildQqApp({
   qqMessageDao,
   notificationCenter,
   botQQ,
+  creatorName,
+  creatorQQ,
   listenGroupIds,
   recentMessageLimit,
   aiTone,
@@ -118,6 +122,8 @@ export async function buildQqApp({
     napcatGateway,
     notificationCenter,
     botQQ,
+    creatorName,
+    creatorQQ,
     listenGroupIds,
     recentMessageLimit,
     sendMessageTool,

@@ -1,3 +1,4 @@
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import { TODO_NOTIFICATION_GROUP } from "./todo-reminder-draft.js";
 
@@ -37,27 +38,15 @@ export class TodoDigestDraft implements NotificationDraft {
   }
 
   public render(): string {
-    const nudge = "顺便想想接下来打算做什么，去 todo App 按自己的计划添几条新待办吧。";
-    const head =
-      this.totalCount === 0
-        ? `待办都清空了，没有未完成的事。${nudge}`
-        : `还有 ${this.totalCount} 件没做：${this.renderUnfinished()}。${nudge}`;
-    return `${head}${this.renderSuggestions()}`;
-  }
-
-  private renderUnfinished(): string {
-    const listed = this.titles.map(title => `《${title}》`).join("");
     const hidden = this.totalCount - this.titles.length;
-    const tail = hidden > 0 ? `…（其余 ${hidden} 件）` : "";
-    return `${listed}${tail}`;
-  }
-
-  /** 第三段：有建议才渲染，换行起一段；为空返回空串（整段省略）。 */
-  private renderSuggestions(): string {
-    if (this.suggestions.length === 0) {
-      return "";
-    }
-    const listed = this.suggestions.map(suggestion => `《${suggestion}》`).join("");
-    return `\n这些事你或许可以做：${listed}`;
+    return renderServerStaticTemplate(import.meta.url, "context/notifications/todo-digest.hbs", {
+      isEmpty: this.totalCount === 0,
+      totalCount: this.totalCount,
+      titles: this.titles,
+      hasHidden: hidden > 0,
+      hidden,
+      hasSuggestions: this.suggestions.length > 0,
+      suggestions: this.suggestions,
+    });
   }
 }
