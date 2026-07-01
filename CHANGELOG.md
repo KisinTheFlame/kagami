@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+## [0.3.6.1] - 2026-07-01
+
+### Changed
+
+- agent: **把所有会进上下文的散文文本收口到 `apps/agent/static/` 模板树**。此前散落在 `context-message-factory.ts`（portal reminder、`<notification>` / `<story_recall>` / `<async_tool_result>` 的手拼标签壳）与各通知 draft（todo reminder/digest、ithome、QQ chat）里的内联文案，全部迁到 `.hbs` 模板，经 `renderServerStaticTemplate` 渲染；TS 侧只算 view-model（计数、数组、布尔 flag、预格式化的日期）。新增 8 个模板：`static/context/{portal-reminder,notification,story-recall,async-tool-result}.hbs` 与 `static/context/notifications/{todo-reminder,todo-digest,ithome,qq-chat}.hbs`。渲染输出逐字节不变（既有渲染点测试一字未改仍全绿），KV 前缀零漂移。
+- AGENTS.md: "具体红线"新增硬约定——**进上下文的散文一律走模板，禁止在 TS 内联字面量**；以后调小镜语气只改 `static/` 一棵树、不碰代码。工具 description 与 result error note 本轮显式不收（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部与控制流交织，见 `TODOS.md`）。
+
 ## [0.3.6.0] - 2026-07-01
 
 ### Added
