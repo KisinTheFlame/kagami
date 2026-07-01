@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [0.3.6.1] - 2026-07-01
+
+### Added
+
+- feat(resource): 新增 `download_resource` / `upload_resource` 两个全局工具，搭起 OSS 资源与本地文件之间的桥（[#188](https://github.com/KisinTheFlame/kagami/issues/188) 之 PR1）。`download_resource(resid, filename, dir?)` 把一个 OSS 资源落地成本地文件（文件名由 Agent 指定，不沿用内容寻址名），`upload_resource(path)` 把本地文件存进 OSS 拿到新 `res-N`（对外 key 自增，内容相同在 OSS 内部按 sha256 共享 blob + refcount）。落盘/读盘锚定 `server.agent.resource.fileRoot`（默认 `~/kagami`，与 terminal `initialCwd` 默认值重合，落好后 terminal 直接 `ls` 可见），字节走独立的 `server.agent.resource.fileMaxBytes`（默认 32 MiB，区别于 4 MiB 上下文 cap）。安全边界：`fs.realpath` 最深已存在祖先校验挡 `../` / 绝对路径 / root 内 symlink 逃逸（`PATH_ESCAPE`）；下载目标已存在拒绝覆盖（`FILE_EXISTS`）+ `.part → rename` 原子落地；上传超限 `FILE_TOO_LARGE`；OSS 关闭时在触碰磁盘前失败（`RESOURCE_OSS_DISABLED`），绝不空读盘。
+
+### Changed
+
+- chore(agent-runtime): 主 Agent LLM 可见顶层工具从 9 增至 11（新增 `download_resource` / `upload_resource`），`webSearchAgentToolCatalog` 同步以 `OutOfScopeTool` 包裹这两个新工具，保持网页搜索子 Agent 与主 Agent 顶层工具集字节相等——**KV 缓存前缀隔离不破**。此为稳定前缀的一次性集中变更。
+
 ## [0.3.6.0] - 2026-07-01
 
 ### Added
