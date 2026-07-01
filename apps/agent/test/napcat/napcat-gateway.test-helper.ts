@@ -213,6 +213,9 @@ export function createConfigManager(): ConfigManager {
           webSearchAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
+          todoSuggestionAgent: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
         },
       },
       tavily: {

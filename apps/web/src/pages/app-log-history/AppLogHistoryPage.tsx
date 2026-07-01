@@ -347,13 +347,13 @@ function parseLevel(value: string | null): AppLogLevel | undefined {
   return APP_LOG_LEVELS.includes(value as AppLogLevel) ? (value as AppLogLevel) : undefined;
 }
 
-function toBadgeVariant(level: AppLogLevel): "default" | "secondary" | "destructive" | "outline" {
+function toBadgeVariant(level: AppLogLevel): "default" | "signal" | "scheduler" | "outline" {
   if (level === "error" || level === "fatal") {
-    return "destructive";
+    return "signal"; // 红
   }
 
   if (level === "warn") {
-    return "secondary";
+    return "scheduler"; // 黄
   }
 
   if (level === "debug") {

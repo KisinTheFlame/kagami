@@ -1,17 +1,21 @@
-import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolveConfigPath } from "@kagami/config/source";
 import { parse } from "yaml";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// 定位逻辑收敛到 @kagami/config（4 个 config reader 的单一事实来源）。只读 config.yaml
+// 里的非隐私值（如 server.databaseUrl），不读 config.secret.yaml，故用 resolveConfigPath
+// 直接解析基文件。
+// 构建顺序：本脚本 import 已构建的 @kagami/config，因此跑 db:* 前需先 `pnpm build`
+// （@kagami/config 是 yaml-only 叶子，pnpm -r build 拓扑序最先构建；app:deploy 已是 build→migrate）。
+
 const key = process.argv[2];
 
 if (!key) {
   throw new Error("Usage: node scripts/read-config.mjs <dot.path>");
 }
 
-const configPath = await resolveConfigPath(rootDir);
+const configPath = resolveConfigPath(import.meta.url);
 const fileContent = await readFile(configPath, "utf8");
 const config = parse(fileContent);
 const value = key.split(".").reduce((current, segment) => current?.[segment], config);
@@ -32,35 +36,4 @@ function resolveFileUrl(rawValue, baseDir) {
   if (filePath === ":memory:" || filePath.length === 0) return rawValue;
   const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
   return `file:${absolute}`;
-}
-
-async function resolveConfigPath(repoRoot) {
-  const direct = path.join(repoRoot, "config.yaml");
-  if (existsSync(direct)) return direct;
-
-  const mainRoot = await findGitWorktreeMainRoot(repoRoot);
-  if (mainRoot) {
-    const candidate = path.join(mainRoot, "config.yaml");
-    if (existsSync(candidate)) return candidate;
-  }
-
-  throw new Error(
-    `未找到 config.yaml（已查找：${direct}${mainRoot ? `、${path.join(mainRoot, "config.yaml")}` : ""}）`,
-  );
-}
-
-async function findGitWorktreeMainRoot(repoRoot) {
-  const dotGit = path.join(repoRoot, ".git");
-  if (!existsSync(dotGit) || !statSync(dotGit).isFile()) return null;
-
-  const content = await readFile(dotGit, "utf8");
-  const match = content.match(/^gitdir:\s*(.+)$/m);
-  if (!match) return null;
-
-  const gitDir = path.resolve(repoRoot, match[1].trim());
-  const commondirFile = path.join(gitDir, "commondir");
-  if (!existsSync(commondirFile)) return null;
-
-  const commondirContent = (await readFile(commondirFile, "utf8")).trim();
-  return path.dirname(path.resolve(gitDir, commondirContent));
 }

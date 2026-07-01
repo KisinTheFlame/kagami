@@ -3,7 +3,7 @@ node_modules
 .env
 .env.*
 !.env.example
-config.yaml
+config.secret.yaml
 data
 dist
 build
