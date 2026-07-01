@@ -10,6 +10,8 @@ export interface GatewayConfig {
   agentTarget: URL;
   /** console 上游基址（原 CONSOLE_TARGET），由 services.console.host/port 拼出。 */
   consoleTarget: URL;
+  /** kagami-llm 上游基址（LLM 网关 + OAuth 凭据中心），由 services.llm.host/port 拼出。 */
+  llmTarget: URL;
   /** 静态资源目录：仓库根下的 apps/web/dist。 */
   distDir: string;
 }
@@ -24,6 +26,7 @@ interface RawConfig {
     agent?: RawServiceEndpoint;
     console?: RawServiceEndpoint;
     gateway?: RawServiceEndpoint;
+    llm?: RawServiceEndpoint;
   };
 }
 
@@ -52,6 +55,7 @@ export function loadGatewayConfig(): GatewayConfig {
     port: gateway.port,
     agentTarget: resolveEndpoint(services?.agent, "agent"),
     consoleTarget: resolveEndpoint(services?.console, "console"),
+    llmTarget: resolveEndpoint(services?.llm, "llm"),
     distDir: path.join(repoRoot, "apps/web/dist"),
   };
 }

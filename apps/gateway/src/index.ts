@@ -12,6 +12,7 @@ const indexPath = path.join(distDir, "index.html");
 const port = config.port;
 const apiTarget = config.agentTarget;
 const consoleTarget = config.consoleTarget;
+const llmTarget = config.llmTarget;
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
@@ -20,6 +21,8 @@ const CONSOLE_PATH_PREFIXES = [
   "/napcat-group-message",
   "/metric-chart",
 ];
+// 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
+const LLM_PATH_PREFIXES = ["/auth"];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
 const MIME_TYPES: Record<string, string> = {
@@ -71,6 +74,12 @@ function selectUpstreamTarget(upstreamPath: string): URL {
   for (const prefix of CONSOLE_PATH_PREFIXES) {
     if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
       return consoleTarget;
+    }
+  }
+
+  for (const prefix of LLM_PATH_PREFIXES) {
+    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
+      return llmTarget;
     }
   }
 
