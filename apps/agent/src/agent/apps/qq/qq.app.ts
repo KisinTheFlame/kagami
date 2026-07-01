@@ -155,7 +155,7 @@ export class QqApp implements App {
 
   public async help(): Promise<string> {
     // QQ 是众多 App 之一：什么是群聊、消息格式、以及在群聊里怎么发言，都收在 QQ App 自己的
-    // help 里按需披露（enter qq + help 时才进上下文尾部），不再写进主 Agent 的稳定前缀。
+    // help 里按需披露（switch qq + help 时才进上下文尾部），不再写进主 Agent 的稳定前缀。
     return renderServerStaticTemplate(import.meta.url, "prompts/qq-app-help.hbs", {
       botQQ: this.botQQ,
       creatorName: this.creatorName,

@@ -95,7 +95,7 @@ export class TerminalApp implements App<TerminalConfig> {
       "  - bash(command): 执行一条完整 shell 命令。单条 `cd <dir>` 会被拦截并更新工作目录；不支持交互式命令。",
       "  - read_bash_output(output_id, stream?, offset?, size?): 分页读取上一条 bash 的完整 stdout/stderr。",
       "",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 

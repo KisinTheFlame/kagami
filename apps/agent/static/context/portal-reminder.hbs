@@ -1,7 +1,7 @@
 <system_reminder>
-你现在在桌面（Portal）。
+你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。
 {{#if hasApps}}
-可以进入以下 App（用 enter）：
+用 switch(id=...) 进入下面某个 App；之后想知道有哪些 App 用 list_apps：
 {{#each apps}}
 - {{id}}：{{displayName}}
 {{/each}}

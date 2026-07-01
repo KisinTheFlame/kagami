@@ -34,11 +34,6 @@ describe("switch tool", () => {
         setCurrentApp: () => {
           throw new Error("SwitchTool must not call setCurrentApp directly; goes through effects");
         },
-        clearCurrentApp: () => {
-          throw new Error(
-            "SwitchTool must not call clearCurrentApp directly; goes through effects",
-          );
-        },
       },
     } as Parameters<typeof tool.execute>[1]);
 
@@ -55,17 +50,32 @@ describe("switch tool", () => {
     });
   });
 
-  it("should reject when currently on Portal (no source App)", async () => {
+  it("should enter the target App from Portal with no source (no onBlur)", async () => {
     const appManager = new AppManager();
-    appManager.register(createFakeApp("hn"));
+    appManager.register(
+      createFakeApp("hn", { onFocusEffects: [{ type: "append_message", content: "hi hn" }] }),
+    );
     const tool = new SwitchTool({ appManager });
 
     const result = await tool.execute({ id: "hn" }, {
-      rootAgentSession: { getCurrentApp: () => undefined },
+      rootAgentSession: {
+        getCurrentApp: () => undefined,
+        setCurrentApp: () => {
+          throw new Error("SwitchTool must not call setCurrentApp directly; goes through effects");
+        },
+      },
     } as Parameters<typeof tool.execute>[1]);
 
-    expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "NOT_IN_APP" });
-    expect(result.effects).toBeUndefined();
+    // 从 Portal 进入：没有源 App，故不跑 onBlur，只有 switch_app + 目标 onFocus。
+    expect(result.effects).toEqual([
+      { type: "switch_app", appId: "hn" },
+      { type: "append_message", content: "hi hn" },
+    ]);
+    expect(JSON.parse(result.content)).toMatchObject({
+      ok: true,
+      fromApp: null,
+      toApp: "hn",
+    });
   });
 
   it("should reject an unknown target App id", async () => {

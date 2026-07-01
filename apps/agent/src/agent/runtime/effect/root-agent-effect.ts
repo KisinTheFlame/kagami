@@ -20,12 +20,15 @@ export type AppendMessageEffect = Effect & {
 };
 
 /**
- * 把 root agent 的 currentApp 切到 appId（null 表示回到桌面）。
- * 由 EnterTool / BackToPortalTool 产出。
+ * 把 root agent 的 currentApp 切到 appId。由 SwitchTool 产出。
+ *
+ * 手机 OS 模型下 Portal（桌面）只是初始状态、离开后不可返回，因此不存在"切回桌面"
+ * 的 Effect——appId 永远是一个具体的 App id。回到 Portal 只发生在 reset() 重启，
+ * 由 session 直接把 currentApp 置空，不走这个 Effect。
  */
 export type SwitchAppEffect = Effect & {
   readonly type: "switch_app";
-  readonly appId: AppId | null;
+  readonly appId: AppId;
 };
 
 /**

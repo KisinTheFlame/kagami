@@ -213,7 +213,7 @@ describe("invoke tool", () => {
 
     const result = await tool.execute({ tool: "calculate", a: 6, op: "*", b: 7 }, {
       rootAgentSession: {
-        // Kagami 已经 enter 进了 calc App
+        // Kagami 已经 switch 进了 calc App
         getCurrentApp: () => "calc",
       },
     } as Parameters<typeof tool.execute>[1]);
