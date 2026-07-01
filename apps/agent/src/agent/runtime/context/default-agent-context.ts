@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import { createAgentSystemPrompt } from "../root-agent/system-prompt.js";
 import type {
   AgentContext,
@@ -34,9 +34,7 @@ export class DefaultAgentContext implements AgentContext {
       systemPromptFactory ??
       systemPrompt ??
       createAgentSystemPrompt({
-        botQQ: "unknown",
         creatorName: "unknown",
-        creatorQQ: "unknown",
       });
     this.systemPrompt = this.defaultSystemPrompt;
   }
@@ -257,7 +255,7 @@ function summarizeMessage(message: LlmMessage, previewLength: number): AgentCont
 }
 
 function renderUserMessagePreview(
-  content: string | import("../../../llm/types.js").LlmContentPart[],
+  content: string | import("@kagami/llm-client").LlmContentPart[],
 ): string {
   if (typeof content === "string") {
     return content;

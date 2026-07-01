@@ -13,8 +13,8 @@ import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/ta
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { LlmClient } from "../llm/client.js";
-import type { EmbeddingClient } from "../llm/embedding/client.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { EmbeddingClient } from "@kagami/llm-client/embedding";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -273,6 +273,8 @@ export async function buildAgentRuntime({
     qqMessageDao: napcat.qqMessageDao,
     notificationCenter,
     botQQ: config.server.bot.qq,
+    creatorName: config.server.bot.creator.name,
+    creatorQQ: config.server.bot.creator.qq,
     listenGroupIds: config.server.napcat.listenGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     aiTone: {
@@ -280,6 +282,8 @@ export async function buildAgentRuntime({
       blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
     },
     resourceService,
+    ossClient,
+    fileMaxBytes: config.server.agent.resource.fileMaxBytes,
   });
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
@@ -302,9 +306,7 @@ export async function buildAgentRuntime({
 
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
-      botQQ: config.server.bot.qq,
       creatorName: config.server.bot.creator.name,
-      creatorQQ: config.server.bot.creator.qq,
     });
   };
   // Story Agent（后台故事写作 loop）可通过 config.server.agent.story.enabled 整体关停。

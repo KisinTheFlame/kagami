@@ -1,0 +1,2 @@
+{{#if isEmpty}}待办都清空了，没有未完成的事。{{else}}还有 {{totalCount}} 件没做：{{#each titles}}《{{this}}》{{/each}}{{#if hasHidden}}…（其余 {{hidden}} 件）{{/if}}。{{/if}}顺便想想接下来打算做什么，去 todo App 按自己的计划添几条新待办吧。{{#if hasSuggestions}}
+这些事你或许可以做：{{#each suggestions}}《{{this}}》{{/each}}{{/if}}

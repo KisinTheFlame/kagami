@@ -19,8 +19,8 @@ import type {
 import { createWakeReminderMessage } from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
-import type { LlmClient } from "../../../llm/client.js";
-import type { LlmMessage, Tool } from "../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage, Tool } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";

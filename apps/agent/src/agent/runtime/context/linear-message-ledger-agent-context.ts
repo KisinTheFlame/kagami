@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import type {
   AgentContext,
   AgentContextDashboardSummary,

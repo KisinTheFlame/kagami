@@ -10,7 +10,10 @@
     "paths": {
       "@kagami/agent-runtime": ["./../../packages/agent-runtime/src/index.ts"],
       "@kagami/agent-runtime/*": ["./../../packages/agent-runtime/src/*"],
+      "@kagami/auth": ["./../../packages/auth/src/index.ts"],
       "@kagami/llm": ["./../../packages/llm/src/index.ts"],
+      "@kagami/llm-client": ["./../../packages/llm-client/src/index.ts"],
+      "@kagami/llm-client/embedding": ["./../../packages/llm-client/src/embedding/index.ts"],
       "@kagami/persistence/prisma": [
         "./../../packages/persistence/src/generated/prisma/internal/prismaNamespace.ts"
       ],

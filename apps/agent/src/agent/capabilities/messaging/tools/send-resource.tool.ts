@@ -9,7 +9,6 @@ export const SEND_RESOURCE_TOOL_NAME = "send_resource";
 
 const SendResourceArgumentsSchema = z.object({
   resid: z.string().trim().min(1),
-  caption: z.string().trim().min(1).optional(),
   reply_to: z.number().int().positive().optional(),
 });
 
@@ -24,13 +23,12 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
   public readonly name = SEND_RESOURCE_TOOL_NAME;
   public readonly description =
     "按 resid 把一张已存图片资源发到当前打开的 QQ 会话。resid 形如 res-N（取自消息里的 " +
-    "[resid: res-N] 占位符或截图返回）。可带 caption 作图片说明、reply_to 引用某条消息。" +
+    "[resid: res-N] 占位符或截图返回）。可带 reply_to 引用某条消息。" +
     "先 open_conversation 才能发；目前只支持图片资源。";
   public readonly parameters = {
     type: "object",
     properties: {
       resid: { type: "string", description: "要发送的图片资源 id，形如 res-N（含 res- 前缀）。" },
-      caption: { type: "string", description: "可选。图片说明文字（QQ 图片 summary）。" },
       reply_to: {
         type: "number",
         description: '可选。要引用回复的目标消息 id，取自 <qq_message id="...">。',
@@ -100,7 +98,6 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
     const result = await this.agentMessageService.sendImage({
       target: chatTarget,
       fileRef,
-      summary: input.caption,
       replyToMessageId: input.reply_to,
     });
 

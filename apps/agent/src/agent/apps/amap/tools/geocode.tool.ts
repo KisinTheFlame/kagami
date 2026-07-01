@@ -8,7 +8,11 @@ export const GEOCODE_TOOL_NAME = "geocode";
 
 const Schema = z.object({
   address: z.string().min(1),
-  city: z.string().optional(),
+  // city 可能是 adcode/citycode，模型易当数字传——收下数字并转字符串。
+  city: z
+    .union([z.string().min(1), z.number()])
+    .transform(v => String(v))
+    .optional(),
 });
 
 type Deps = { getClient: () => AmapClient; getMaxChars: () => number };

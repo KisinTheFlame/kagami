@@ -10,7 +10,11 @@ const Schema = z
   .object({
     keywords: z.string().max(80).optional(),
     types: z.string().optional(),
-    region: z.string().optional(),
+    // region 可能是 adcode/citycode，模型易当数字传——收下数字并转字符串。
+    region: z
+      .union([z.string().min(1), z.number()])
+      .transform(v => String(v))
+      .optional(),
     city_limit: z.boolean().optional(),
     page_size: z.number().int().positive().optional(),
     page_num: z.number().int().positive().optional(),

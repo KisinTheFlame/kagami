@@ -1,6 +1,5 @@
+import type { AuthUsageCacheManager, OAuthAuthRefreshScheduler } from "@kagami/auth";
 import type { ScheduledTask } from "../../scheduler/domain/scheduled-task.js";
-import type { AuthUsageCacheManager } from "./auth-usage-cache.impl.service.js";
-import type { OAuthAuthRefreshScheduler } from "./oauth-auth-refresh.scheduler.js";
 
 type BuildAuthScheduledTasksDeps = {
   codexAuthRefreshScheduler: OAuthAuthRefreshScheduler;

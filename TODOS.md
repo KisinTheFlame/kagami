@@ -1,6 +1,6 @@
 # TODOs
 
-待办事项清单。按模块 / 主题分组，组内按优先级 P0 → P3 排序。完成的项移到底部 `## Completed`。
+待办事项清单。按模块 / 主题分组，组内按优先级 P0 → P3 排序。完成的项直接删除。
 
 **优先级语义**：
 
@@ -33,6 +33,13 @@
 - **Context:** 代码里直接使用 `setTimeout` 这类依赖外部时间（或其他外部条件）的写法散落在业务逻辑中，导致核心逻辑难以单测、行为不确定、时序耦合。目标是把核心业务逻辑写成一个**无外部依赖（或纯依赖注入）的状态机**：把时间、随机、IO 等外部因素从核心逻辑里剥离，通过输入事件 / 注入的时钟驱动状态转移，副作用以"指令"形式回传给外层执行。最典型的参照实现是 etcd 的 raft —— 核心状态机纯函数化、`tick` 驱动、外部只负责把网络/磁盘/时钟喂进来并执行它产出的动作。
 - **Notes:** 先盘点现有 `setTimeout` / `Date.now()` / 直接读时钟的调用点（事件队列、wait 工具、通知批窗、调度器、重连退避等），评估哪些属于"核心逻辑"应当被状态机化，哪些是外层适配可以保留。改造时注意不要破坏 KV 缓存前缀稳定性原则。
 
+### 工具 description / result 文案的收口（进上下文文本收口的第二批）
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** "进上下文散文收口到 static/ 模板"第一批只收了 prose（factory 手拼壳 + 通知 draft），**显式排除了两类也会进上下文的文本**，留待以后：①工具 description（如 `send-message.tool.ts:27`）——它是稳定前缀的一部分、绑 param schema、属渐进式披露的垂直切片，收进中央会打破 App 自持工具文档的内聚；②工具 result 里的 error/status note（如 `send-message.tool.ts:90-172`）——进易变尾部非前缀、与控制流交织、是给小镜看的内部状态字。这两类分散在几十个 `.tool.ts` 里，改一处语气仍要满仓库找。
+- **Notes:** 以后若真要动，先想清楚代价：description 搬中央 = 破坏垂直切片 + 每加工具改中央；error note 搬常量层 = 每工具多一层 `MESSAGES.X` 间接引用、可读性下降。当前判断是收益 < 代价，故本轮不收。参照第一批的原则：TS 只算 view-model、文案走模板；但 description 与前缀/schema 强绑，未必适用同一机制，需单独设计。
+
 ---
 
 ## scheduler
@@ -56,21 +63,6 @@
 - **Notes:** 对路的修法是**上报 NapCat**（NTQQ 重建合并转发时丢本账号自己的消息）。本地不要做脆弱的兜底拼接：缺失节点完全空白，转发段只给 `{id}` 不带条数摘要，我们既拿不到小镜消息的 message_id / 时间戳，也没有"少了几条"的信号，无法可靠还原，靠时间戳穿插猜测极易张冠李戴。相关 live 验证：forward `7656887019929762382` 实测返回 2 / 实际 4。
 
 ---
-
-## Completed
-
-<!-- 完成后的条目按完成日期倒序，附 PR 链接。例：
-### 拆分 LLM 调用历史列表/详情接口
-
-- **Priority:** P1
-- **Completed:** 2026-05-23, [#72](https://github.com/KisinTheFlame/kagami/pull/72)
--->
-
-### 接入高德 Web API
-
-- **Priority:** P2
-- **Completed:** v0.3.6.0 (2026-07-01), [#182](https://github.com/KisinTheFlame/kagami/issues/182)
-- **Notes:** 做成可 `enter` 的高德地图 App（`server.apps.amap`，8 个 InvokeTool 子工具，含静态地图出图）。
 
 ## oss
 
@@ -128,13 +120,6 @@
 
 ## browser（Browser App 设计衍生，2026-06-27 /plan-eng-review）
 
-### 运行时"工具异步调用、稍后回结果"原语
-
-- **Priority:** P1
-- **Status:** open
-- **Context:** Browser App 的浏览器动作会阻塞单线程主循环（humanize + 慢站，单动作可达数秒），延迟 Kagami 对 QQ 等事件的响应。v1 用有界阻塞 + 收紧 `actionTimeoutMs` 顶着，但根因是运行时缺"tool 返 `pending`、完成后再唤醒主循环"的能力。这是横切能力：terminal 长命令、web-search 也都受益，浏览器只是第一个撞上它的地方。
-- **Notes:** 与 wait/event 循环、Effect 模型对接；做成后 Browser/terminal 长动作改异步。设计文档见 `~/.gstack/projects/KisinTheFlame-kagami/kisin-claude/exciting-driscoll-d160ec-design-20260627-164048.md`（T2 节）。
-
 ### Browser App fast-follow 工具
 
 - **Priority:** P2
@@ -155,6 +140,8 @@
 - **Status:** open
 - **Context:** v1 交互观察直进主上下文。若长会话被语义树+截图撑爆压缩频繁：重读走隔离子 Agent 只回摘要（B），或整任务委派 Browser TaskAgent 只回结果（C）。`read_page`/observe 已留干净函数接缝。多身份/多 profile（终态自有网络身份）也归此批。
 - **Notes:** 详见设计文档 Approaches B/C。
+
+---
 
 ## Web 设计走查（2026-06-30 /design-review）延后项
 
@@ -178,13 +165,6 @@
 - **Status:** open
 - **Context:** llm-history / app-log / napcat-event / story 等页面用 `<tr onClick>` 做行选择，无 `role`/`tabIndex`/`onKeyDown`/focus-visible，键盘用户不可达（Codex 指出，4 处）。属交互行为改动，超出本轮 CSS-first 范围。
 - **Notes:** 给行加 `role="button" tabIndex=0`，回车/空格触发，补 focus-visible ring；或抽成可复用的可点击行组件。
-
-### 触控目标 44px（移动端）
-
-- **Priority:** P3
-- **Status:** done（2026-06-30 /design-review F10，commit 9da64b8）
-- **Context:** 导航项 / `Button size="sm"` / Codex-Claude 切换标签 / select 原 36–40px。已用 `max-md:` / `md:min-h-0` 仅在移动断点抬到 ≥44px，桌面密度零改动；390px 实测无 <44px 交互目标。
-- **Notes:** 桌面（≥md）保持原 36/40px 密度。
 
 ### 抽共享 Input 基元
 

@@ -7,7 +7,8 @@ import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.
 export const WEATHER_TOOL_NAME = "weather";
 
 const Schema = z.object({
-  adcode: z.string().min(1),
+  // 模型常把 adcode（如 110000）当数字传，zod 会拒成 "Expected string received number"——收下数字并转字符串。
+  adcode: z.union([z.string().min(1), z.number()]).transform(v => String(v)),
   kind: z.enum(["base", "all"]).optional(),
 });
 

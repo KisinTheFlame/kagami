@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import type { StoryContent } from "./story-markdown.js";
 
 export const STORY_RUNTIME_KEY = "story-agent";

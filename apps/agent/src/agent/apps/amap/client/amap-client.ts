@@ -481,7 +481,11 @@ function buildMarkers(markers?: StaticMapMarker[]): string | null {
   return groups.length > 0 ? groups.join("|") : null;
 }
 
-/** 把结构化 paths 拼成高德线协议串；样式 `weight,color:loc;loc`，最多 4 条折线、每条 ≤100 点。 */
+/**
+ * 把结构化 paths 拼成高德线协议串，最多 4 条折线、每条 ≤100 点。样式必须是 **5 字段**
+ * `weight,color,transparency,fillcolor,fillTransparency`——只给 `weight,color`（2 字段）高德会
+ * 直接回 UNKNOWN_ERROR(20003)。我们只画折线不填充多边形，故 transparency=1、fill 两项留空。
+ */
 function buildPaths(paths?: StaticMapPath[]): string | null {
   if (!paths || paths.length === 0) {
     return null;
@@ -492,7 +496,8 @@ function buildPaths(paths?: StaticMapPath[]): string | null {
     const color = safeColor(p.color, "0x0000FF");
     const locs = p.points.slice(0, PATH_MAX_POINTS).map(pt => normalizeLngLat(pt, "path.points"));
     if (locs.length > 0) {
-      groups.push(`${weight},${color}:${locs.join(";")}`);
+      // weight,color,transparency(1 不透明),fillcolor(空),fillTransparency(空):loc;loc
+      groups.push(`${weight},${color},1,,:${locs.join(";")}`);
     }
   }
   return groups.length > 0 ? groups.join("|") : null;

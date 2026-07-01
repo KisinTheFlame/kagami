@@ -16,21 +16,19 @@ import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
-import { createLlmClient } from "../llm/client.js";
-import { createEmbeddingClient } from "../llm/embedding/client.js";
-import { PrismaEmbeddingCacheDao } from "../llm/embedding/prisma-embedding-cache.dao.js";
-import type { LlmProvider } from "../llm/provider.js";
-import { createDeepSeekProvider } from "../llm/providers/deepseek-provider.js";
-import { ClaudeCodeAuthStore } from "../llm/providers/claude-code-auth.js";
-import { createClaudeCodeProvider } from "../llm/providers/claude-code-provider.js";
-import { OpenAiCodexAuthStore } from "../llm/providers/openai-codex-auth.js";
-import { createOpenAiCodexProvider } from "../llm/providers/openai-codex-provider.js";
-import { createOpenAiProvider } from "../llm/providers/openai-provider.js";
+import { createLlmClient } from "@kagami/llm-client";
+import { createEmbeddingClient } from "@kagami/llm-client/embedding";
+import { PrismaEmbeddingCacheDao } from "../llm/prisma-embedding-cache.dao.js";
+import type { LlmChatCallObservation, LlmProvider } from "@kagami/llm-client";
+import { createDeepSeekProvider } from "@kagami/llm-client";
+import { createClaudeCodeProvider } from "@kagami/llm-client";
+import { createOpenAiCodexProvider } from "@kagami/llm-client";
+import { createOpenAiProvider } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
 import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
-import { createAuthModule } from "../auth/index.js";
+import { createAuthModule } from "@kagami/auth";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
@@ -127,12 +125,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const todoDao = new PrismaTodoDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
 
-  const claudeCodeAuthStore = new ClaudeCodeAuthStore({
-    claudeCodeAuthService: authModule.authServices["claude-code"],
-  });
-  const codexAuthStore = new OpenAiCodexAuthStore({
-    codexAuthService: authModule.authServices.codex,
-  });
+  // auth service（OAuthAuthService）的 getAuth/hasCredentials 与 token 形态与 llm-client 的
+  // ClaudeCodeAuthProvider/OpenAiCodexAuthProvider 端口逐字段一致，故直接作为 authStore 注入
+  // provider 工厂，无需适配器（结构化满足接口，在此调用点由编译器校验）。
+  const claudeCodeAuthStore = authModule.authServices["claude-code"];
+  const codexAuthStore = authModule.authServices.codex;
   const llmTimeoutMs = config.server.llm.timeoutMs;
   const deepseekConfig = {
     ...config.server.llm.providers.deepseek,
@@ -173,9 +170,41 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       authStore: claudeCodeAuthStore,
     }),
   };
+  // 落库归位到装配层：llm-client 只发 observation 事件，这里订阅后写入 llm_chat_call。
+  // 返回 DAO 的 Promise，让 client 内部 emitObservation 统一 catch（写库失败不影响 LLM 结果）。
+  const recordLlmChatObservation = (observation: LlmChatCallObservation): Promise<void> => {
+    if (observation.status === "success") {
+      return llmChatCallDao.recordSuccess({
+        provider: observation.provider,
+        model: observation.model,
+        extension: observation.extension,
+        requestId: observation.requestId,
+        seq: observation.seq,
+        latencyMs: observation.latencyMs,
+        request: observation.request,
+        response: observation.response,
+        nativeRequestPayload: observation.nativeRequestPayload,
+        nativeResponsePayload: observation.nativeResponsePayload,
+      });
+    }
+
+    return llmChatCallDao.recordError({
+      provider: observation.provider,
+      model: observation.model,
+      extension: observation.extension,
+      requestId: observation.requestId,
+      seq: observation.seq,
+      latencyMs: observation.latencyMs,
+      request: observation.request,
+      ...(observation.response ? { response: observation.response } : {}),
+      nativeRequestPayload: observation.nativeRequestPayload,
+      nativeResponsePayload: observation.nativeResponsePayload,
+      nativeError: observation.nativeError,
+      error: observation.error,
+    });
+  };
+
   const llmClient = createLlmClient({
-    llmChatCallDao,
-    metricService,
     providers: llmProviders,
     providerConfigs: {
       deepseek: deepseekConfig,
@@ -184,6 +213,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       "claude-code": claudeCodeConfig,
     },
     usages: config.server.llm.usages,
+    recordObservation: recordLlmChatObservation,
   });
 
   const embeddingClient = createEmbeddingClient({

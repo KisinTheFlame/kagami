@@ -1,0 +1,38 @@
+{
+  "name": "@kagami/llm-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./embedding": {
+      "types": "./dist/embedding/index.d.ts",
+      "default": "./dist/embedding/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter \"@kagami/llm-client^...\" build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@google/genai": "^1.44.0",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/llm": "workspace:*",
+    "@kagami/shared": "workspace:*",
+    "openai": "^6.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "zod": "^3.24.4"
+  }
+}

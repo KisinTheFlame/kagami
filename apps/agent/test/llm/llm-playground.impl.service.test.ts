@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DefaultLlmPlaygroundService } from "../../src/llm/application/llm-playground.impl.service.js";
-import type { LlmClient } from "../../src/llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 
 describe("DefaultLlmPlaygroundService", () => {
   it("should return available providers from llm client", async () => {

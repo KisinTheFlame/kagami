@@ -5,6 +5,7 @@ import {
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
   createStoryContextSummaryReminderMessage,
+  createStoryRecallMessage,
   createWakeReminderMessage,
   createWebSearchInstructionMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
@@ -25,6 +26,44 @@ describe("context-message-factory", () => {
       role: "user",
       content:
         "<notification>\nIT之家：2篇新文，最新《某标题》\n产品群：[有人@你] 在吗\n</notification>",
+    });
+  });
+
+  it("should wrap a single recalled story in the story_recall tag", () => {
+    expect(
+      createStoryRecallMessage([
+        { id: "s1", markdown: "## 那天\n和闻震聊了部署方案", createdAt: new Date(2026, 0, 15) },
+      ]),
+    ).toEqual({
+      role: "user",
+      content: [
+        "<story_recall>",
+        "你想起了一件发生在 2026-01-15 的事情：",
+        "",
+        "## 那天\n和闻震聊了部署方案",
+        "</story_recall>",
+      ].join("\n"),
+    });
+  });
+
+  it("should stack multiple recalled stories under one story_recall tag", () => {
+    expect(
+      createStoryRecallMessage([
+        { id: "s1", markdown: "MD1", createdAt: new Date(2026, 0, 15) },
+        { id: "s2", markdown: "MD2", createdAt: new Date(2026, 1, 20) },
+      ]),
+    ).toEqual({
+      role: "user",
+      content: [
+        "<story_recall>",
+        "你想起了一件发生在 2026-01-15 的事情：",
+        "",
+        "MD1",
+        "你想起了一件发生在 2026-02-20 的事情：",
+        "",
+        "MD2",
+        "</story_recall>",
+      ].join("\n"),
     });
   });
 
