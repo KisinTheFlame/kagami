@@ -7,6 +7,21 @@
 
 ## [Unreleased]
 
+## [0.3.4.0] - 2026-07-01
+
+### Added
+
+- config: 新增领域无关的叶子包 `@kagami/config`（deps 仅 `yaml`，零 `@kagami/*` / 零 zod），把「怎么定位并读一个配置文件」这层通用机制收敛成单一事实来源（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。此前 repo-root / git-worktree 锚点逻辑在 kernel loader、gateway、oss、`scripts/read-config.mjs` **四处各自重复**；现在四个 reader 全部复用 `@kagami/config` 的 `resolveConfigPath`。包内含：`resolveConfigPath`（depth-agnostic 向上定位 + worktree 回退）、`deepMerge`、`assertSecretWhitelist`（按路径前缀的隐私白名单）、`loadMergedRawConfig`、自有 `ConfigError`（与 `BizError` 同形但不反向依赖 kernel）。领域 schema（`ConfigSchema` / `Config` / `loadStaticConfig`）与「哪些路径算隐私」的白名单内容仍留在 kernel，作为参数下传——config 包不认识任何领域字段。`loadStaticConfig` 签名与返回类型逐字不变，agent/console/browser 消费方零改动。
+
+### Changed
+
+- config: 把 `config.yaml` 按「隐私 vs 非隐私」拆成两份（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。非隐私配置（服务拓扑 / 阈值 / baseUrl / models 等）留在 `config.yaml` 并**纳入版本控制**（不再 gitignore、不再提供 `config.yaml.example`）；隐私配置（各 `apiKey` / `bot.qq` / `bot.creator` / `napcat.listenGroupIds` / 浏览器 `proxy`·`licenseKey`）落到 gitignored 的 `config.secret.yaml`，改提供 `config.secret.yaml.example` 模板。启动时 `@kagami/config` 定位并**深合并**两文件（冲突 secret 优先、数组整体替换），再交 `ConfigSchema` 校验，**零 schema 字段改动**。
+  - **Secret 白名单**：`config.secret.yaml` 只允许出现 `CONFIG_SECRET_WHITELIST`（`packages/kernel/src/config/config.loader.ts`）内的隐私路径前缀；出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）启动即抛 `CONFIG_SECRET_FORBIDDEN_KEY`——这保证 secret 永不能改动 gateway/oss/read-config 也在读的非隐私拓扑，各进程共享字段永远一致。
+  - **缺文件响亮失败**：缺 `config.secret.yaml` 时抛 `CONFIG_SECRET_NOT_FOUND` 并在报错里给出 `cp config.secret.yaml.example …` 提示。
+  - **原型污染防护**：`deepMerge` 丢弃 `__proto__` / `constructor` / `prototype` 键并用 `hasOwnProperty` 判定；`assertSecretWhitelist` 按点分段拒绝这些段（防「`<白名单前缀>.__proto__.x` 借前缀匹配穿透」），双层兜底。
+  - **对 KV 缓存前缀零影响**：不触 system prompt / 工具集 / 工具描述 / 消息序列化，纯配置装载层。
+  - **部署前置（部署机一次性，无 DB 变更）**：部署机现有 gitignored `config.yaml` 转为受版本控制后，`git pull` 会因「未跟踪文件将被覆盖」拒绝——需先备份现有 `config.yaml`、抽出隐私叶子写入新建 `config.secret.yaml`、再让位受控版本，然后 `pnpm app:deploy`。
+
 ## [0.3.3.0] - 2026-07-01
 
 ### Changed
