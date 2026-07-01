@@ -59,20 +59,12 @@ export function createWakeReminderMessage(now: Date): UserMessage {
 export function createPortalReminderMessage(input: {
   apps: Array<{ id: string; displayName: string }>;
 }): UserMessage {
-  const lines = ["<system_reminder>", "你现在在桌面（Portal）。"];
-
-  if (input.apps.length > 0) {
-    lines.push("可以进入以下 App（用 enter）：");
-    for (const app of input.apps) {
-      lines.push(`- ${app.id}：${app.displayName}`);
-    }
-  } else {
-    lines.push("当前没有可进入的 App。");
-  }
-
-  lines.push("</system_reminder>");
-
-  return createUserMessage(lines.join("\n"));
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/portal-reminder.hbs", {
+      apps: input.apps,
+      hasApps: input.apps.length > 0,
+    }),
+  );
 }
 
 export function createConversationSummaryMessage(summary: string): UserMessage {
@@ -100,18 +92,22 @@ export function createStoryContextSummaryReminderMessage(): UserMessage {
  * `<notification>` 标签里追加到上下文尾部。`lines` 已由各源 Draft 渲染好。
  */
 export function createNotificationMessage(lines: string[]): UserMessage {
-  return createUserMessage(["<notification>", ...lines, "</notification>"].join("\n"));
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/notification.hbs", { lines }),
+  );
 }
 
 export function createStoryRecallMessage(
   stories: Array<{ id: string; markdown: string; createdAt: Date }>,
 ): UserMessage {
-  const parts = stories.map(story => {
-    const date = formatStoryRecallDate(story.createdAt);
-    return [`你想起了一件发生在 ${date} 的事情：`, "", story.markdown].join("\n");
-  });
-
-  return createUserMessage(["<story_recall>", ...parts, "</story_recall>"].join("\n"));
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/story-recall.hbs", {
+      stories: stories.map(story => ({
+        date: formatStoryRecallDate(story.createdAt),
+        markdown: story.markdown,
+      })),
+    }),
+  );
 }
 
 /**
@@ -121,14 +117,19 @@ export function createStoryRecallMessage(
  */
 export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): UserMessage {
   const { taskId, toolName, outcome } = completion;
-  const head = `<async_tool_result task_id="${taskId}" tool="${toolName}"`;
-  if (outcome.status === "success") {
-    return createUserMessage(`${head}>\n${outcome.content}\n</async_tool_result>`);
-  }
-  if (outcome.status === "error") {
-    return createUserMessage(`${head} status="error">\n${outcome.message}\n</async_tool_result>`);
-  }
-  return createUserMessage(`${head} status="timeout">\n任务超时未完成\n</async_tool_result>`);
+  const view =
+    outcome.status === "success"
+      ? { status: "", isTimeout: false, body: outcome.content }
+      : outcome.status === "error"
+        ? { status: "error", isTimeout: false, body: outcome.message }
+        : { status: "timeout", isTimeout: true, body: "" };
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/async-tool-result.hbs", {
+      taskId,
+      toolName,
+      ...view,
+    }),
+  );
 }
 
 function formatStoryRecallDate(date: Date): string {

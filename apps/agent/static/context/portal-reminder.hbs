@@ -1,0 +1,11 @@
+<system_reminder>
+你现在在桌面（Portal）。
+{{#if hasApps}}
+可以进入以下 App（用 enter）：
+{{#each apps}}
+- {{id}}：{{displayName}}
+{{/each}}
+{{else}}
+当前没有可进入的 App。
+{{/if}}
+</system_reminder>

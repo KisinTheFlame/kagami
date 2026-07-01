@@ -1,8 +1,8 @@
 import { truncateWithEllipsis } from "@kagami/shared/utils";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { NapcatReceiveMessageSegment } from "../../../napcat/application/napcat-gateway/shared.js";
 
-const MENTION_TAG = "[有人 @ 你]";
 const MAX_PREVIEW_CHARS = 40;
 const MAX_DISPLAY_COUNT = 99;
 
@@ -38,9 +38,13 @@ export class ChatNotificationDraft implements NotificationDraft {
   }
 
   public render(): string {
-    const countTag = this.unreadCount > 1 ? `[${formatCount(this.unreadCount)} 条消息]` : "";
-    const mentionTag = this.mentioned ? MENTION_TAG : "";
-    return `${this.displayName}: ${countTag}${mentionTag}${truncate(this.latestText, MAX_PREVIEW_CHARS)}`;
+    return renderServerStaticTemplate(import.meta.url, "context/notifications/qq-chat.hbs", {
+      displayName: this.displayName,
+      hasCount: this.unreadCount > 1,
+      countLabel: formatCount(this.unreadCount),
+      mentioned: this.mentioned,
+      text: truncate(this.latestText, MAX_PREVIEW_CHARS),
+    });
   }
 }
 
