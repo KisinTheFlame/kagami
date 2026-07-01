@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import type { Event } from "../event/event.js";
 import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
 

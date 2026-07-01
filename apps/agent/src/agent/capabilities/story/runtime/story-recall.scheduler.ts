@@ -1,8 +1,8 @@
 import type { Queue } from "@kagami/agent-runtime";
 import type { AgentContext } from "../../../runtime/context/agent-context.js";
 import type { Event, StoryRecallStoryPayload } from "../../../runtime/event/event.js";
-import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage, Tool } from "../../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage, Tool } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { StoryRecallService } from "../application/story-recall.service.js";
 

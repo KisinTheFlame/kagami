@@ -10,7 +10,7 @@ import type {
 } from "../../../runtime/context/agent-context.js";
 import { DefaultAgentContext } from "../../../runtime/context/default-agent-context.js";
 import { createContextCompactionPlan } from "../../../runtime/context/context-compaction.js";
-import type { LlmMessage, Tool } from "../../../../llm/types.js";
+import type { LlmMessage, Tool } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { DEFAULT_LLM_RETRY_BACKOFF_MS, isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";

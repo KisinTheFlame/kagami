@@ -16,7 +16,7 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import { isRecord } from "@kagami/kernel/json/is-record";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { ClaudeCodeAuthStore } from "./claude-code-auth.js";
+import type { ClaudeCodeAuthProvider } from "./claude-code-auth.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_BETA = [
@@ -103,7 +103,7 @@ type ClaudeMessageResponse = {
 
 export function createClaudeCodeProvider(input: {
   config: LlmProviderConfig;
-  authStore: ClaudeCodeAuthStore;
+  authStore: ClaudeCodeAuthProvider;
 }): LlmProvider {
   let replayTimeout: NodeJS.Timeout | null = null;
   let lastSuccessfulRequestBody: ClaudeMessageRequestBody | null = null;
@@ -212,7 +212,7 @@ export function createClaudeCodeProvider(input: {
 
 async function sendClaudeCodeRequest(params: {
   config: LlmProviderConfig;
-  authStore: ClaudeCodeAuthStore;
+  authStore: ClaudeCodeAuthProvider;
   requestBody: ClaudeMessageRequestBody;
 }): Promise<LlmProviderChatResult> {
   const initialAuth = await params.authStore.getAuth();
@@ -251,7 +251,7 @@ async function sendClaudeCodeRequest(params: {
 
 async function fetchClaudeCodeResponse(params: {
   config: LlmProviderConfig;
-  auth: Awaited<ReturnType<ClaudeCodeAuthStore["getAuth"]>>;
+  auth: Awaited<ReturnType<ClaudeCodeAuthProvider["getAuth"]>>;
   requestBody: ClaudeMessageRequestBody;
 }): Promise<{
   status: number;

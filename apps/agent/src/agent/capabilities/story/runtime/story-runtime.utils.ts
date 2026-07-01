@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import { renderLlmMessagePlainText } from "../../../runtime/context/context-item.utils.js";
 
 export const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;

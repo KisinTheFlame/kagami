@@ -1,7 +1,7 @@
 import { createWebSearchInstructionMessage } from "../../../runtime/context/context-message-factory.js";
 import { BaseTaskAgent, type TaskAgentInvoker, type ToolExecutor } from "@kagami/agent-runtime";
-import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage } from "@kagami/llm-client";
 
 export type WebSearchTaskInput = {
   question: string;

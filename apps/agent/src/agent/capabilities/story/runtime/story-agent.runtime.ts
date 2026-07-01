@@ -11,7 +11,7 @@ import type { StoryAgentEvent } from "./story-event.js";
 import { NOOP_METRIC_SERVICE } from "../../../runtime/tool-call-metric.js";
 import type { AgentContext, AgentContextSnapshot } from "../../../runtime/context/agent-context.js";
 import { createUserMessage } from "../../../runtime/context/context-message-factory.js";
-import type { LlmClient } from "../../../../llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../../metric/application/metric.service.js";
 import type { ContextSummaryOperation } from "../../context-summary/operations/context-summary.operation.js";
@@ -28,7 +28,7 @@ import { StoryContextCompactionExtension } from "./extensions/context-compaction
 import { StorySnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { StoryToolCallMetricKernelExtension } from "./extensions/telemetry.kernel-extension.js";
 import type { StoryAgentRuntimeSnapshotRepository } from "./persistence/story-agent-runtime-snapshot.repository.js";
-import type { Tool } from "../../../../llm/types.js";
+import type { Tool } from "@kagami/llm-client";
 import { createSleep, renderStoryBatchMessage } from "./story-runtime.utils.js";
 import {
   createStoryBatchToolDefinitions,
