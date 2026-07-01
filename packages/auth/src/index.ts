@@ -195,3 +195,7 @@ export async function createAuthModule({
     callbackServers: [codexCallbackServer, claudeCodeCallbackServer],
   };
 }
+
+// auth-scheduled-tasks（留在 agent 装配层，因它咬 agent 的 scheduler 领域类型）需要这两个
+// 类型来声明 buildAuthScheduledTasks 的入参，故从包顶层导出。
+export { AuthUsageCacheManager, OAuthAuthRefreshScheduler };
