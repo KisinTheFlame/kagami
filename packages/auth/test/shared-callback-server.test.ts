@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SharedOAuthCallbackServer } from "../../src/auth/shared/callback-server.js";
-import type { OAuthCallbackHandler } from "../../src/auth/shared/types.js";
+import { SharedOAuthCallbackServer } from "../src/shared/callback-server.js";
+import type { OAuthCallbackHandler } from "../src/shared/types.js";
 
 type RequestLike = {
   method?: string;
