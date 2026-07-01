@@ -281,6 +281,8 @@ export async function buildAgentRuntime({
       blockThreshold: config.server.agent.messaging.aiTone.blockThreshold,
     },
     resourceService,
+    ossClient,
+    fileMaxBytes: config.server.agent.resource.fileMaxBytes,
   });
 
   // App 框架：先建 AppManager 并注册 Apps，再按各 App 的 configSchema 校验
