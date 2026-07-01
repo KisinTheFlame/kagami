@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 SERVICE="${1:-}"
 
-# ── 单服务模式：pnpm app:deploy <agent|console|gateway|oss> ────────────────────
+# ── 单服务模式：pnpm app:deploy <agent|console|gateway|oss|browser|metric> ─────
 # 只重建并重载指定服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——
 # 尤其重载 console / gateway 不会打断 kagami-agent 的热状态（KV 缓存前缀、HNSW 索引、活内存
 # 上下文），符合「KV 缓存命中率优先」原则。涉及 DB schema 变更请用无参 `pnpm app:deploy`
@@ -19,8 +19,9 @@ if [ -n "$SERVICE" ]; then
     gateway | web) PKG="@kagami/gateway"; PM2_NAME="kagami-gateway" ;;
     oss) PKG="@kagami/oss"; PM2_NAME="kagami-oss" ;;
     browser) PKG="@kagami/browser"; PM2_NAME="kagami-browser" ;;
+    metric) PKG="@kagami/metric"; PM2_NAME="kagami-metric" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser|metric>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1
@@ -54,13 +55,14 @@ if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
   echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
-  # kagami-browser 也开同一 SQLite（读 browser_credential + configureSqlite），一并暂停腾出独占锁。
-  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser >/dev/null 2>&1 || true
+  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console / browser（读 browser_credential
+  # + configureSqlite）/ metric（写 metric 表 + configureSqlite）。
+  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-metric >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
   else
     echo "[app:deploy]   迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser >/dev/null 2>&1 || true
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-metric >/dev/null 2>&1 || true
     exit 1
   fi
 fi

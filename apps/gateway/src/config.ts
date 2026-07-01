@@ -10,6 +10,8 @@ export interface GatewayConfig {
   agentTarget: URL;
   /** console 上游基址（原 CONSOLE_TARGET），由 services.console.host/port 拼出。 */
   consoleTarget: URL;
+  /** metric 上游基址，由 services.metric.host/port 拼出（metric-chart 查询走它）。 */
+  metricTarget: URL;
   /** 静态资源目录：仓库根下的 apps/web/dist。 */
   distDir: string;
 }
@@ -24,6 +26,7 @@ interface RawConfig {
     agent?: RawServiceEndpoint;
     console?: RawServiceEndpoint;
     gateway?: RawServiceEndpoint;
+    metric?: RawServiceEndpoint;
   };
 }
 
@@ -52,6 +55,7 @@ export function loadGatewayConfig(): GatewayConfig {
     port: gateway.port,
     agentTarget: resolveEndpoint(services?.agent, "agent"),
     consoleTarget: resolveEndpoint(services?.console, "console"),
+    metricTarget: resolveEndpoint(services?.metric, "metric"),
     distDir: path.join(repoRoot, "apps/web/dist"),
   };
 }
