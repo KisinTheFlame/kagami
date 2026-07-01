@@ -3,9 +3,37 @@
 本项目所有重要变更记录在此文件。
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
-本仓库启用 4 位版本号 `MAJOR.MINOR.PATCH.MICRO`，事实来源为仓库根目录 `VERSION` 文件，`package.json` 的 `version` 字段与之保持同步。Kagami 自部署、不对外分发，版本号仅用于标记部署节点与变更归档，不承载语义化版本对外兼容承诺。新条目按提交时间倒序追加在 `## [Unreleased]` 下，发布时归档到对应版本分节（`## [x.y.z.w] - YYYY-MM-DD`）。每个 PR 必须 bump `VERSION`（CI 强制校验 PR 版本号高于 master）。
+Kagami 自部署、不对外分发，历史条目里的 `x.y.z.w` 版本号仅用于标记过往变更归档。VERSION 文件与 CI 版本闸已移除，不再强制每个 PR bump 版本号；新条目按提交时间倒序追加在 `## [Unreleased]` 下即可。
 
 ## [Unreleased]
+
+## [0.3.6.1] - 2026-07-01
+
+### Added
+
+- feat(resource): 新增 `download_resource` / `upload_resource` 两个全局工具，搭起 OSS 资源与本地文件之间的桥（[#188](https://github.com/KisinTheFlame/kagami/issues/188) 之 PR1）。`download_resource(resid, filename, dir?)` 把一个 OSS 资源落地成本地文件（文件名由 Agent 指定，不沿用内容寻址名），`upload_resource(path)` 把本地文件存进 OSS 拿到新 `res-N`（对外 key 自增，内容相同在 OSS 内部按 sha256 共享 blob + refcount）。落盘/读盘锚定 `server.agent.resource.fileRoot`（默认 `~/kagami`，与 terminal `initialCwd` 默认值重合，落好后 terminal 直接 `ls` 可见），字节走独立的 `server.agent.resource.fileMaxBytes`（默认 32 MiB，区别于 4 MiB 上下文 cap）。安全边界：`fs.realpath` 最深已存在祖先校验挡 `../` / 绝对路径 / root 内 symlink 逃逸（`PATH_ESCAPE`）；下载目标已存在拒绝覆盖（`FILE_EXISTS`）+ `.part → rename` 原子落地；上传超限 `FILE_TOO_LARGE`；OSS 关闭时在触碰磁盘前失败（`RESOURCE_OSS_DISABLED`），绝不空读盘。
+
+### Changed
+
+- chore(agent-runtime): 主 Agent LLM 可见顶层工具从 9 增至 11（新增 `download_resource` / `upload_resource`），`webSearchAgentToolCatalog` 同步以 `OutOfScopeTool` 包裹这两个新工具，保持网页搜索子 Agent 与主 Agent 顶层工具集字节相等——**KV 缓存前缀隔离不破**。此为稳定前缀的一次性集中变更。
+
+## [0.3.6.0] - 2026-07-01
+
+### Added
+
+- agent/apps: 新增**高德地图 App**（`server.apps.amap`），把高德 Web 服务 API 包成小镜手机 OS 上一个可 `enter` 的地点（issue #182）。8 个 InvokeTool 子工具，顶层 tools 列表零新增：`geocode` / `regeocode`（地名↔坐标）、`search_poi` / `search_around`（POI 关键字 / 周边）、`plan_route`（驾车 / 步行 / 骑行）、`plan_transit`（公交换乘）、`weather`（实况 / 预报）、`static_map`（静态地图 PNG 原图直进多模态上下文 + 落 OSS 拿 resid，仿 browser 截图）。坐标全程 GCJ-02；重内容走 `append_message` 尾部、`tool_result` 只回简短状态；apiKey 缺省时 `canInvoke=false` 优雅降级（仿 OSS 整段省略即禁用）。API 参数经 live 实测 + 双模型评审校正（v5 分页 `page_size`/`page_num`、路径 `show_fields=cost,navi`、bicycling 顶层 `duration`、transit `city1`/`city2` citycode、静态地图 content-type 特判、错误码分类重试、key 脱敏、`< > &` 转义防上下文注入）。
+
+### Removed
+
+- config: 移除 `CONFIG_SECRET_WHITELIST` 隐私路径白名单机制。此前 `config.secret.yaml` 只能覆盖白名单内的凭据路径，越界（如 `services.*`）会启动报错——单人项目里这层护栏价值低。现在 secret 可覆盖任意字段；**隐私拆分本体（committed `config.yaml` + gitignored `config.secret.yaml` 深合并）保留不变**，凭据仍只放本地 secret（仓库公开）；原型污染仍由 `@kagami/config` 深合并的 `DANGEROUS_KEYS` 兜底丢弃。高德 apiKey 随之走 `config.secret.yaml` 的 `server.apps.amap.apiKey`。
+
+## [0.3.5.3] - 2026-07-01
+
+### Changed
+
+- messaging/qq: QQ 通知从「摘要 + 正文」精简为**纯信号**，去掉最新消息正文预览，让通知重新变回"诱饵"而非"信息流"。此前通知行把最新一条消息的发送者与正文（40 字）直接摊进主上下文，小镜不进群（`open_conversation`）也能被动跟上群里在说什么——而读通知不清未读、不算参与，于是它理性地选择不进群：该知道的通知里都说了，进去成本更高。改后通知只保留"有事发生、值得进去"的信号，想看具体内容必须 `open_conversation`。
+  - `ChatNotificationDraft.render()` 只出两类标签：未读计数 `[N 条消息]`（>1 时，超 99 显 `99+`，逻辑不变）与 `[有人 @ 你]`；两者都没有（只 1 条且没 @）时兜底显示 `有新消息`。不再渲染消息正文。
+  - 构造函数去掉 `latestText` 参数，`QqApp.ingestMessage` 不再计算/传入消息预览（删除只服务于此的 `renderMessagePreview`）。未读计数、@ 判定等内部状态与清零逻辑均未改动，只是不再泄漏进通知行。
 
 ## [0.3.5.2] - 2026-07-01
 

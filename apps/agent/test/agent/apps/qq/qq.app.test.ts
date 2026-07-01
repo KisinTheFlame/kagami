@@ -127,8 +127,8 @@ describe("QqApp", () => {
     scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
     expect(onFlush).toHaveBeenCalledTimes(1);
-    // 群通知行带发送者：`{群名}: {发送者}：{内容}`。
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友：在吗"]);
+    // 通知只报信号，不带正文：单条且未 @ 时兜底显示"有新消息"。
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 有新消息"]);
   });
 
   it("keeps the unread count climbing across windows, resetting only on open", async () => {
@@ -137,20 +137,20 @@ describe("QqApp", () => {
     const app = createApp(scheduler, onFlush);
     await app.onStartup();
 
-    // 空闲第一条→开前沿短窗，窗结束 flush，count 1（无条数标签）。
+    // 空闲第一条→开前沿短窗，窗结束 flush，count 1（无条数标签，兜底"有新消息"）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("1") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友：1"]);
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 有新消息"]);
 
     // 再来一条→窗内攒着，窗结束 flush，count 2。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("2") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[1][0]).toEqual(["QQ:", "产品群: [2 条消息]群友：2"]);
+    expect(onFlush.mock.calls[1][0]).toEqual(["QQ:", "产品群: [2 条消息]"]);
 
     // 又一条→没有 open，计数继续涨到 3，而不是按窗口重新计数。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("3") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[2][0]).toEqual(["QQ:", "产品群: [3 条消息]群友：3"]);
+    expect(onFlush.mock.calls[2][0]).toEqual(["QQ:", "产品群: [3 条消息]"]);
 
     // 小镜终于来看→未读清零；窗口排空回到空闲。
     await app.openConversation("qq_group:1");
@@ -159,7 +159,7 @@ describe("QqApp", () => {
     // 之后的新消息从 count 1 重新开始（又走前沿短窗）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("4") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 群友：4"]);
+    expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 有新消息"]);
   });
 
   it("marks [有人@你] when the bot is mentioned", async () => {
@@ -374,7 +374,7 @@ describe("QqApp", () => {
     });
     scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 有新消息"]);
     // 会话被建出来，能打开
     expect((await app.openConversation("qq_private:888")).ok).toBe(true);
     expect(app.getCurrentChatTarget()).toEqual({ chatType: "private", userId: "888" });

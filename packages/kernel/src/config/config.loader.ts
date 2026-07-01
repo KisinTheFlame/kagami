@@ -19,6 +19,11 @@ const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.8;
 // 资源读取/发送的字节上限：read_resource 入上下文 / send_resource 发图共用。
 // 4 MiB 贴合 QQ 图片实际体量，也避免把巨型资源灌进上下文或 napcat WS。
 const DEFAULT_AGENT_RESOURCE_MAX_BYTES = 4 * 1024 * 1024;
+// 文件桥（download_resource / upload_resource / 群文件）落盘 / 读盘 / 传输的沙箱根与字节上限。
+// fileRoot 默认 ~/kagami，与 terminal initialCwd 默认值重合，落盘后 terminal ls 天然可见。
+// fileMaxBytes 32 MiB 独立于上下文 cap（4 MiB）——文件不进上下文，可更大，但压在 OSS 50MB 请求上限下。
+const DEFAULT_AGENT_RESOURCE_FILE_ROOT = "~/kagami";
+const DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES = 32 * 1024 * 1024;
 const DEFAULT_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -289,6 +294,8 @@ const ConfigSchema = z.object({
           resource: z
             .object({
               maxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_MAX_BYTES),
+              fileRoot: NonEmptyStringSchema.default(DEFAULT_AGENT_RESOURCE_FILE_ROOT),
+              fileMaxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES),
             })
             .default({}),
           __legacyContextCompactionThreshold__: z.unknown().optional(),
@@ -456,31 +463,13 @@ type LoadStaticConfigOptions = {
   configPath?: string;
 };
 
-/**
- * 允许出现在 `config.secret.yaml` 里的隐私路径前缀白名单——「哪些字段算隐私」是项目
- * 领域知识，故定义在 kernel 这一层，作为参数下传给领域无关的 `@kagami/config`。
- * secret 文件里出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）会被拒绝，
- * 从而保证 gateway / oss / read-config 也在读的非隐私拓扑永远不被 secret 改动。
- */
-const CONFIG_SECRET_WHITELIST = [
-  "server.llm.providers.deepseek.apiKey",
-  "server.llm.providers.openai.apiKey",
-  "server.tavily.apiKey",
-  "server.agent.story.memory.embedding.apiKey",
-  "server.apps.browser.proxy",
-  "server.apps.browser.licenseKey",
-  "server.bot.qq",
-  "server.bot.creator",
-  "server.napcat.listenGroupIds",
-  // wsUrl 内嵌 napcat access_token，属凭据；仓库公开，故整条进 config.secret.yaml。
-  "server.napcat.wsUrl",
-];
-
 export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): Promise<Config> {
   const { configPath, raw } = await loadMergedRawConfig({
     configPath: options.configPath,
     anchorUrl: import.meta.url,
-    secret: { required: true, allowedPaths: CONFIG_SECRET_WHITELIST },
+    // secret（config.secret.yaml）可覆盖任意字段——单人项目，不再维护隐私路径白名单。
+    // 凭据仍只放 gitignored 的 config.secret.yaml；原型污染由 @kagami/config 的深合并兜底。
+    secret: { required: true },
   });
 
   const parsedConfig = ConfigSchema.safeParse(raw);

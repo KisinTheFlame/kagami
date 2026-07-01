@@ -1086,7 +1086,8 @@ listenGroupIds:
     } satisfies Partial<ConfigError>);
   });
 
-  it("should reject a non-privacy key in config.secret.yaml", async () => {
+  it("lets config.secret.yaml override any key (privacy whitelist removed)", async () => {
+    // 白名单护栏已移除：secret 现在可覆盖任意字段（含 services.* 这类拓扑），不再被拒绝。
     const configPath = await writeConfigFile(
       buildConfigYaml(`
 wsUrl: wss://example.com/napcat
@@ -1101,16 +1102,11 @@ listenGroupIds:
 `,
     );
 
-    await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
-      name: "ConfigError",
-      meta: {
-        key: "services.agent.port",
-        reason: "CONFIG_SECRET_FORBIDDEN_KEY",
-      },
-    } satisfies Partial<ConfigError>);
+    const config = await loadStaticConfig({ configPath });
+    expect(config.services.agent.port).toBe(9999);
   });
 
-  it("should let config.secret.yaml override the base config for whitelisted keys", async () => {
+  it("should let config.secret.yaml override the base config", async () => {
     const configPath = await writeConfigFile(
       buildConfigYaml(`
 wsUrl: wss://example.com/napcat
