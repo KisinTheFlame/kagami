@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { AppLogListQuerySchema, AppLogListResponseSchema } from "@kagami/shared/schemas/app-log";
 import type { AppLogQueryService } from "../application/app-log-query.service.js";
-import { registerQueryRoute } from "@kagami/server-core/common/http/route.helper";
+import { registerQueryRoute } from "@kagami/http/route";
 
 type AppLogHandlerDeps = {
   appLogQueryService: AppLogQueryService;

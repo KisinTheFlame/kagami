@@ -163,6 +163,20 @@
 
 ## Web 设计走查（2026-06-30 /design-review）延后项
 
+### landing 统计大色块需后端聚合数据
+
+- **Priority:** P2
+- **Status:** open
+- **Context:** 「鲜艳蒙德里安」方向要把 `main-agent-context` landing 做成二维大色块 dashboard（Story 总数 / LLM token / 主动发言数 / 高成本 / scheduler pending / context tokens 等填实色块）。但当前 `main-agent-context` 接口只返回 `recentItems`，没有这些聚合统计。要真实呈现需**改后端 + shared schema** 加聚合字段，属跨前后端的新功能。前端这轮只在数据已就绪处上大色块（Auth 额度），landing 暂留 feed + 轮询状态，不硬编假数。
+- **Notes:** 设计样张见 `/private/tmp/kagami-v3-light.html`（二维构图 + 大色块）。后端补聚合后，landing 按该构图实现。
+
+### 填实状态色块铺到剩余数据页
+
+- **Priority:** P3
+- **Status:** in-progress（2026-07-01 /design-review DR-4 已做大部分）
+- **Context:** 已改填实语义变体：app-log 级别、scheduler 状态、llm-history 状态、story matchedKinds/人物、playground StateHint。**剩余**：NapCat 事件 / QQ 消息行**没有**类型徽章（要新增 event=signal/message=llm 的填实行标，属 additive）；llm-history 详情的 message role badge 仍 `secondary`（role→语义映射偏主观，待定）。
+- **Notes:** 后端没起时无法逐页视觉验证，本轮按 enum 映射 + build/类型校验为准；跑通后端后再目检。napcat 行标是新增控件，单独评估。
+
 ### 历史表格行键盘可达（a11y）
 
 - **Priority:** P2

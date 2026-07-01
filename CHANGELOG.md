@@ -7,6 +7,52 @@
 
 ## [Unreleased]
 
+## [0.3.4.0] - 2026-07-01
+
+### Added
+
+- config: 新增领域无关的叶子包 `@kagami/config`（deps 仅 `yaml`，零 `@kagami/*` / 零 zod），把「怎么定位并读一个配置文件」这层通用机制收敛成单一事实来源（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。此前 repo-root / git-worktree 锚点逻辑在 kernel loader、gateway、oss、`scripts/read-config.mjs` **四处各自重复**；现在四个 reader 全部复用 `@kagami/config` 的 `resolveConfigPath`。包内含：`resolveConfigPath`（depth-agnostic 向上定位 + worktree 回退）、`deepMerge`、`assertSecretWhitelist`（按路径前缀的隐私白名单）、`loadMergedRawConfig`、自有 `ConfigError`（与 `BizError` 同形但不反向依赖 kernel）。领域 schema（`ConfigSchema` / `Config` / `loadStaticConfig`）与「哪些路径算隐私」的白名单内容仍留在 kernel，作为参数下传——config 包不认识任何领域字段。`loadStaticConfig` 签名与返回类型逐字不变，agent/console/browser 消费方零改动。
+
+### Changed
+
+- config: 把 `config.yaml` 按「隐私 vs 非隐私」拆成两份（见 [#180](https://github.com/KisinTheFlame/kagami/issues/180)）。非隐私配置（服务拓扑 / 阈值 / baseUrl / models 等）留在 `config.yaml` 并**纳入版本控制**（不再 gitignore、不再提供 `config.yaml.example`）；隐私配置（各 `apiKey` / `bot.qq` / `bot.creator` / `napcat.listenGroupIds` / 浏览器 `proxy`·`licenseKey`）落到 gitignored 的 `config.secret.yaml`，改提供 `config.secret.yaml.example` 模板。启动时 `@kagami/config` 定位并**深合并**两文件（冲突 secret 优先、数组整体替换），再交 `ConfigSchema` 校验，**零 schema 字段改动**。
+  - **Secret 白名单**：`config.secret.yaml` 只允许出现 `CONFIG_SECRET_WHITELIST`（`packages/kernel/src/config/config.loader.ts`）内的隐私路径前缀；出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）启动即抛 `CONFIG_SECRET_FORBIDDEN_KEY`——这保证 secret 永不能改动 gateway/oss/read-config 也在读的非隐私拓扑，各进程共享字段永远一致。
+  - **缺文件响亮失败**：缺 `config.secret.yaml` 时抛 `CONFIG_SECRET_NOT_FOUND` 并在报错里给出 `cp config.secret.yaml.example …` 提示。
+  - **原型污染防护**：`deepMerge` 丢弃 `__proto__` / `constructor` / `prototype` 键并用 `hasOwnProperty` 判定；`assertSecretWhitelist` 按点分段拒绝这些段（防「`<白名单前缀>.__proto__.x` 借前缀匹配穿透」），双层兜底。
+  - **对 KV 缓存前缀零影响**：不触 system prompt / 工具集 / 工具描述 / 消息序列化，纯配置装载层。
+  - **部署前置（部署机一次性，无 DB 变更）**：部署机现有 gitignored `config.yaml` 转为受版本控制后，`git pull` 会因「未跟踪文件将被覆盖」拒绝——需先备份现有 `config.yaml`、抽出隐私叶子写入新建 `config.secret.yaml`、再让位受控版本，然后 `pnpm app:deploy`。
+
+## [0.3.3.0] - 2026-07-01
+
+### Changed
+
+- web: 前端配色方向从「晒褪 / 配给」转为 **「鲜艳大胆 + 二维大色块」**（仍是蒙德里安骨架：2px 黑硬线 / 0 圆角 / 衬线标题 / 等宽数据）。用户反馈旧版太灰、色彩做没了，遂把语义色换成蒙德里安**饱和原色**（红 `#D62818` / 蓝 `#143CB0` / 黄 `#F7C400` / 绿 `#2F8F4E` / 玫红 `#B61E3C`，浅深两套），颜色从「配给」改为「结构」——以填实色块 / 状态格 / 大数字上墙。
+  - `Badge` 新增 `signal/llm/scheduler/story/cost` 填实语义变体（2px 黑描边、不渐变、不 hover 淡化）；侧栏选中改正黄色块、字标用新增的 `--sidebar-brand` token。
+  - 主 Agent 上下文页：feed 事件=红 / 消息=蓝填实标签、轮询状态=黄；AuthPage 登录状态 / 警告 / 额度改填实，**额度卡做成填实大色块**（按用量绿→黄→玫红，大号 mono 数字 + 白/黑字，去掉冗余进度条与 tone pill）。
+  - `DESIGN.md` 美术方向 / 色彩 / 布局 / 决策日志同步改向（饱和原色 + 填实大色块 + **二维横竖构图**，不再是从上往下的等宽卡片流）。
+  - 经三档 HTML 样例对比后用户选「档 3」；纯前端表现层，不涉及后端 / API / 数据流，对 KV 缓存前缀无影响。landing 的统计大色块簇需后端补聚合数据（已记 TODOS），本轮只在数据已就绪处上色块。
+- web(design-review): 经 `/design-review`（Codex + opus 子 Agent 双路）走查并修复鲜艳版 4 类问题：①填实色块文字达 WCAG AA（浅色把红/绿晒深至白字 4.5:1，暗色改「亮原色 + 黑字」）；②补回填实徽章丢失的 2px 黑描边（`border-foreground` 漏了 `border` 宽度类）；③Auth 趋势 / Metric 系列图表色换饱和原色；④把填实语义 `Badge` 变体铺到 app-log 级别 / scheduler 状态 / llm-history / Story / Playground（此前只在 main-agent-context 落地）。
+
+## [0.3.2.4] - 2026-07-01
+
+### Changed
+
+- refactor(oss): 把自建对象存储 `@kagami/oss` 摆正为「typed content-addressed object store」，并把图片 mime 收敛到单一事实来源（见 [#176](https://github.com/KisinTheFlame/kagami/issues/176)）。动机：OSS 当初想做成「纯字节、格式无关」却带了 `mime` 列，定位与实现打架——但带 content-type 的对象存储正是 S3/MinIO 的标准模型，做错的只是「只认字节」的自我叙述。落地：①`object-store` / `oss-client` 文档诚实化，去掉「只认字节」自相矛盾表述，明确 content-type 是对象一等元数据、内容寻址去重是内部实现细节；②新增 agent 侧 byte-sniff 探测器 `apps/agent/src/oss/detect-mime.ts`（magic bytes 识别 PNG/JPEG/GIF/WebP/BMP/AVIF/HEIC，认不出回落 `image/*` header 否则 `application/octet-stream`；泛 HEIF brand `mif1`/`msf1` 刻意不归一以免误标）；③QQ 入站图改为「先读字节再 `detectMime`」，退役 URL 扩展名猜测分支。**不触碰 system prompt / 工具集 / 工具描述 / resid 格式，对 KV 缓存前缀零影响。**
+
+### Fixed
+
+- fix(napcat): 修复 QQ 入站图片在 `content-type` header 缺失/错误且 URL 无扩展名时、即便字节是合法图片也被静默丢弃的 bug（旧逻辑在读 body 前靠 header/URL 扩展名推断 mime，推不出即 `return null`）。现按真实字节 magic 探测，严格减少误丢；同时给图片下载加 32 MiB size cap（content-length 早拒 + 实际字节兜底），防坏 URL / 过期 CDN / 大 HTML 响应打满带宽或 OOM。
+
+### Removed
+
+- chore(persistence): 删除只写不读的死列 `image_asset.mime`（`findByFileId` 从不 select 它、`ImageAssetRecord` 也无此字段），mime 的权威来源统一为 OSS 对象的 content-type。附带迁移 `20260701040000_drop_image_asset_mime`（SQLite RedefineTables 重建表 + 保留唯一索引，已在有数据的库副本验证行幸存）。该迁移同时修正了 master 既有的 schema↔迁移 drift（schema 已无 mime 但 `add_image_asset` 迁移仍 CREATE 了该列、缺一条 drop）。
+
+## [0.3.2.3] - 2026-07-01
+
+### Changed
+
+- refactor: 把后端共享包 `@kagami/server-core` 按「是否绑原生模块 / 是否绑 fastify」两条接缝拆分为三个职责单一的小包（见 [#174](https://github.com/KisinTheFlame/kagami/issues/174)）：`@kagami/kernel`（纯净基础设施——config / logger / common 契约与错误 / `isRecord` 等纯工具，**无 fastify / 无 Prisma / 无 better-sqlite3**）、`@kagami/http`（仅 `route.helper`，依赖 fastify + zod，**零 `@kagami/*` 依赖**的叶子包）、`@kagami/persistence`（Prisma client + generated client + 所有业务 DAO + Prisma JSON helper，依赖 `@kagami/kernel`）。动机：项目即将出现**不碰 DB / 不提供 HTTP 接口**的轻量服务，单包结构会强迫它们拖入整条 Prisma + `better-sqlite3` 原生模块或 fastify；拆分后这类服务可在零原生模块 / 零 fastify 的依赖闭包下复用 kernel。落地细节：`prisma-json` 中与 Prisma 无关的纯 `isRecord` 抽到 `@kagami/kernel/json/is-record`，Prisma 专用 JSON helper 留在 persistence；全仓 80+ 处 import 子路径迁移；`scripts/prisma.sh` 的 `CORE_DIR`、apps/agent + apps/console + apps/browser 的 tsconfig 源码别名与 package.json 依赖、`.gitignore` 的 generated 路径同步更新；`packages/server-core` 整体删除（合并 master 的 `apps/browser` 独立进程后，其对 server-core 的引用一并迁移到 kernel/http/persistence）。**纯移动重构**：不改任何 DAO / config / logger 内部逻辑、不改 Prisma schema、运行时行为零变化（不触碰 system prompt / 工具描述 / 消息序列化格式，对 KV 缓存前缀无影响）。
+
 ## [0.3.2.2] - 2026-07-01
 
 ### Changed

@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 import { createPrismaOAuthDao } from "../shared/dao.js";
 import type { OAuthDao, OAuthSessionRecord, OAuthStateRecord } from "../shared/types.js";
 import type { InternalAuthProvider } from "../domain/auth-provider.js";

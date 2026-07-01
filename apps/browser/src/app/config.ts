@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { loadStaticConfig } from "@kagami/server-core/config/config.loader";
+import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 
 /**
  * 浏览器行为配置。只有这 4 个字段是环境相关的（headless / userDataDir / proxy /

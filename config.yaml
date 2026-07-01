@@ -1,0 +1,169 @@
+# 非隐私配置：纳入版本控制，直接改这个文件即可（不再提供 config.yaml.example）。
+# 隐私配置（密钥 + PII：apiKey / bot QQ / napcat 群号 / 浏览器凭据）在 gitignored 的
+# config.secret.yaml —— 从 config.secret.yaml.example 复制后填写；启动时深合并进本文件。
+
+# 服务拓扑：单机各进程的监听端口与地址的唯一事实来源（见 issue #162）。
+# 每个进程从这里读自己的端口和依赖服务的地址；改端口只改这里一处，全网生效。
+# host 是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——各进程一律绑 0.0.0.0。
+services:
+  agent: { host: localhost, port: 20003 } # kagami-agent
+  console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
+  gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
+  oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
+  browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
+
+server:
+  databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
+  agent:
+    contextCompactionTotalTokenThreshold: 150000
+    llmRetryBackoffMs: 30000
+    waitToolMaxWaitMs: 600000
+    notificationLeadingWindowMs: 10000 # 空闲来第一条通知时先开这么长的前沿短窗聚合首批，窗结束才 flush（不再前沿立即发）
+    notificationBatchWindowMs: 30000
+    story:
+      enabled: true # 是否启用 Story Agent（后台故事写作 loop）；置 false 则不运行后台 loop，也不消费 ledger 事件
+      batchSize: 24
+      idleFlushMs: 120000
+      memory:
+        embedding:
+          provider: tei-embedding-gemma
+          baseUrl: http://127.0.0.1:20008
+          model: google/embeddinggemma-300m
+          outputDimensionality: 768
+        vectorIndexPath: ./data/vector/story-memory.hnsw # HNSW 向量索引文件（派生缓存，缺失时从 SQLite 重建）
+        retrieval:
+          topK: 3
+      recall:
+        enabled: true # 是否开启 Story Recall Agent（后台自动召回历史故事并注入上下文）
+        topK: 2
+        scoreThreshold: 0.65
+    messaging:
+      aiTone:
+        enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
+        blockThreshold: 0.8 # P(AI) >= 该值则拦下不发，等 confirm_last 二次确认
+    asyncTask:
+      maxTaskDurationMs: 600000 # 异步工具任务的 manager 级安全超时；超过则以超时结果回流（底层可能仍在跑）
+    resource:
+      maxBytes: 4194304 # read_resource 入上下文 / send_resource 发图的字节上限（4 MiB）
+  ithome:
+    pollIntervalMs: 300000
+    recentArticleLimit: 8
+    articleMaxChars: 8000
+  napcat:
+    wsUrl: ws://localhost:6099
+    reconnectMs: 3000
+    requestTimeoutMs: 10000
+    startupContextRecentMessageCount: 40
+    # listenGroupIds（监听的 QQ 群号）是 PII，放 config.secret.yaml
+  llm:
+    timeoutMs: 45000
+    authUsageRefreshIntervalMs: 600000
+    codexAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /auth/callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 60000
+      refreshCheckIntervalMs: 60000
+      binaryPath: codex
+    claudeCodeAuth:
+      enabled: true
+      publicBaseUrl: http://localhost:20004
+      oauthRedirectPath: /callback
+      oauthStateTtlMs: 600000
+      refreshLeewayMs: 7200000
+      refreshCheckIntervalMs: 300000
+    providers:
+      deepseek:
+        # apiKey 是密钥，放 config.secret.yaml
+        baseUrl: https://api.deepseek.com
+        models:
+          - deepseek-chat
+      openai:
+        # apiKey 是密钥，放 config.secret.yaml
+        baseUrl: https://api.openai.com/v1
+        models:
+          - gpt-4o-mini
+      openaiCodex:
+        baseUrl: https://chatgpt.com/backend-api/codex/responses
+        models:
+          - gpt-5.3-codex
+      claudeCode:
+        baseUrl: https://api.anthropic.com
+        models:
+          - claude-sonnet-4-6
+        keepAliveReplayIntervalMinutes: 30
+    usages:
+      agent:
+        attempts:
+          - provider: claude-code
+            model: claude-sonnet-4-6
+          - provider: openai-codex
+            model: gpt-5.4
+            times: 2
+      storyAgent:
+        attempts:
+          - provider: claude-code
+            model: claude-haiku-4-5
+      contextSummarizer:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      vision:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      webSearchAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+  # tavily.apiKey、bot.qq / bot.creator 是密钥 / PII，放 config.secret.yaml
+  # 自建对象存储（@kagami/oss）启用开关。地址不在这里——统一来自顶层 services.oss。
+  # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）；
+  # 写出该块即启用，enabled: false 可显式关闭。
+  oss:
+    enabled: true
+  # 每个 App 的配置切片。key 是 App.id，结构由各 App 自己的 configSchema 校验。
+  # 没列出来的 App 走 schema 默认值；schema 不接受的字段会在启动时报错。
+  apps:
+    calc:
+      # 计算结果保留的小数位数（0–20）。省略 / null 表示不做四舍五入。
+      precision: 6
+    terminal:
+      # 终端 App。小镜的"家"默认在 ~/kagami/（由 os.homedir() 解析）。
+      # initialCwd: ~/kagami         # 可选；不填则使用 os.homedir() + "/kagami"
+      commandTimeoutMs: 60000 # 单条命令超时，超时后进程组被强杀，partial 输出仍保留
+      previewBytes: 2048 # 工具返回的 stdout/stderr preview 上限，每条独立
+      maxOutputBytes: 1048576 # 单条命令完整捕获上限（1 MB），超过后停止接收
+      maxCommandLength: 4096 # command 参数字符长度上限
+      readOutputMaxSize: 4096 # read_bash_output 单次返回字节上限
+      shell: /bin/sh # 执行 bash command 时使用的 shell
+    hn:
+      # Hacker News App（只读：逛 / 读讨论 / 搜 / 看用户）。两个 API 都零鉴权公开。
+      # 整段可省略，全部字段都有默认值。
+      userAgent: "Mozilla/5.0 ... Kagami/1.0" # 请求 HN 用的 User-Agent
+      fetchTimeoutMs: 10000 # 单次 HTTP 超时
+      fetchMaxAttempts: 3 # 含首次的最大尝试次数（只对 429/408/5xx/网络错误重试）
+      fetchBackoffBaseMs: 500 # 指数退避基数
+      fetchBackoffMaxMs: 8000 # 退避上限
+      glanceDefaultLimit: 15 # glance_hn 默认看几条
+      glanceLimitCap: 30 # glance_hn 上限（超过被截断）
+      glanceConcurrency: 6 # glance_hn 拉 item 的并发上限
+      commentTopLimit: 20 # open_hn_thread 展开的主楼评论数
+      commentReplyLimit: 3 # 每条主楼展开的第一层回复数
+      perCommentMaxChars: 600 # 单条评论 / 片段最大字符
+      responseMaxChars: 8000 # open_hn_thread 评论总字符预算，超出截断
+      searchHitsLimit: 15 # search_hn 返回命中数
+      userActivityLimit: 10 # open_hn_user 近期发言条数
+    browser:
+      # 浏览器行为配置。拆进程后（issue #173）由独立的 kagami-browser 进程消费；整段可省略，全部字段都有默认值。
+      # 只有这 4 个字段是环境相关的；humanize / viewport / 超时 / 截图尺寸等是代码常量，不在此暴露。
+      headless: false # 有头/无头。本机带显示用 false 肉眼盯；无显示服务器需 true + Xvfb
+      userDataDir: data/browser/default # 持久 profile 目录（登录态跨重启）。相对进程 cwd；kagami-browser 的 PM2 cwd 为仓库根 → 落仓库根 data/browser/
+      # proxy / licenseKey 是凭据，放 config.secret.yaml（server.apps.browser.proxy / licenseKey）
+      # 网站账号密码不在配置里：存 SQLite 的 browser_credential 表（Kagami 运行期可自管），
+      # type(secret_handle) 时按 handle 取、明文只在 fill 层停留、永不进上下文。

@@ -1,6 +1,6 @@
 import { NoopEffectInterpreter, ReActKernel, ToolCatalog } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import {
   LoopLlmRetryExtension,
   type RetryBackoffPolicy,

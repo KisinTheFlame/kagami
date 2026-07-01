@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hnFetchJson, type HnFetchOptions } from "../../../src/agent/apps/hn/client/hn-fetch.js";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 
 const FAST_OPTIONS: HnFetchOptions = {
   userAgent: "test-agent",

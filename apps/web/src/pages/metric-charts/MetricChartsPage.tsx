@@ -102,13 +102,13 @@ const defaultBucketByPreset: Record<MetricChartRangePreset, MetricChartBucket> =
   "2d": "1h",
 };
 
-// The Painted Ledger 颜料系列色：语义颜料 + 去饱和的文艺复兴/印象派扩展，无数字纯色
+// 鲜艳蒙德里安系列色：前 4 个饱和原色，后续去饱和扩展供多系列回落
 const seriesColors = [
-  "#284C82", // 群青
-  "#B23A2C", // 朱砂
-  "#5F7C5E", // 绿土
-  "#D7A12C", // 赭黄
-  "#A64B4B", // 茜草
+  "#143CB0", // 正蓝
+  "#D62818", // 正红
+  "#2F8F4E", // 正绿
+  "#B61E3C", // 玫红
+  "#C9892E", // 深赭黄（线图可读，避开高亮黄）
   "#3F6B68", // 暗绿松石
   "#6B5D82", // 灰紫
   "#8A5A38", // 赭石棕

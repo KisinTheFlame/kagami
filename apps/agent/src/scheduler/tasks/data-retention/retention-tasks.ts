@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 
 /**
  * `findMany` / `deleteMany` subset of a Prisma delegate that this factory needs.

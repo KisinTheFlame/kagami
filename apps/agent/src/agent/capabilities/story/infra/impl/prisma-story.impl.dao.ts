@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/server-core/db/client";
+import type { Database } from "@kagami/persistence/db/client";
 import type { StoryRecord } from "../../domain/story.js";
 import { parseStoryMarkdown } from "../../domain/story-markdown.js";
 import type { StoryDao } from "../story.dao.js";

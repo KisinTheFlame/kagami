@@ -33,7 +33,7 @@ export function MainAgentContextPage() {
         <h1 className="text-2xl font-semibold tracking-tight">主 Agent 最近上下文</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Badge
-            variant={query.isError ? "destructive" : "secondary"}
+            variant={query.isError ? "destructive" : "scheduler"}
             className="min-w-[5.5rem] justify-center"
           >
             {query.isError ? "刷新失败" : "轮询中"}
@@ -84,7 +84,9 @@ function ContextItemCard({ item }: { item: MainAgentContextItem }) {
   return (
     <div className="rounded-none border bg-card p-3">
       <div className="flex items-center gap-2">
-        <Badge variant="outline">{item.kind === "event" ? "事件" : "消息"}</Badge>
+        <Badge variant={item.kind === "event" ? "signal" : "llm"}>
+          {item.kind === "event" ? "事件" : "消息"}
+        </Badge>
         <span className="truncate text-sm font-medium">{item.label}</span>
         {item.truncated ? (
           <span className="shrink-0 text-xs text-muted-foreground">已截断</span>

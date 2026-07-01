@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { BizError } from "@kagami/server-core/common/errors/biz-error";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,11 +16,11 @@ import {
 import type {
   AuthUsageSnapshotDao,
   InsertAuthUsageSnapshotInput,
-} from "@kagami/server-core/dao/auth-usage-snapshot.dao";
+} from "@kagami/persistence/dao/auth-usage-snapshot.dao";
 import type { ClaudeCodeProviderAuth } from "../claude-code/types.js";
 import type { CodexProviderAuth } from "../codex/types.js";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { serializeError } from "@kagami/server-core/logger/serializer";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { serializeError } from "@kagami/kernel/logger/serializer";
 import type { ClaudeCodeAuthService } from "./claude-code-auth.service.js";
 import type { CodexAuthService } from "./codex-auth.service.js";
 

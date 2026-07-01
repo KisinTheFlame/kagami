@@ -1,11 +1,11 @@
 import { vi } from "vitest";
 import { type AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
-import type { ConfigManager } from "@kagami/server-core/config/config.manager";
-import type { Config } from "@kagami/server-core/config/config.loader";
-import type { NapcatEventDao } from "@kagami/server-core/dao/napcat-event.dao";
-import type { NapcatQqMessageDao } from "@kagami/server-core/dao/napcat-group-message.dao";
-import { initLoggerRuntime } from "@kagami/server-core/logger/runtime";
-import type { LogEvent, LogSink } from "@kagami/server-core/logger/types";
+import type { ConfigManager } from "@kagami/kernel/config/config.manager";
+import type { Config } from "@kagami/kernel/config/config.loader";
+import type { NapcatEventDao } from "@kagami/persistence/dao/napcat-event.dao";
+import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
+import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
+import type { LogEvent, LogSink } from "@kagami/kernel/logger/types";
 
 export class FakeWebSocket {
   public readyState = 0;

@@ -12,6 +12,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@kagami/config": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "yaml": "^2.8.2"
   },

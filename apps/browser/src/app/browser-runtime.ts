@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { configureSqlite, createDbClient, type Database } from "@kagami/server-core/db/client";
-import { AppLogger } from "@kagami/server-core/logger/logger";
-import { withTraceContext } from "@kagami/server-core/logger/runtime";
+import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { withTraceContext } from "@kagami/kernel/logger/runtime";
 import { BrowserService } from "../application/browser.service.js";
 import { SerialExecutor } from "../application/serial-executor.js";
 import { BrowserError } from "../domain/errors.js";
@@ -28,7 +28,7 @@ export type BrowserRuntime = {
 
 /**
  * 浏览器进程（kagami-browser）运行时装配。独立 PM2 进程，自管 CloakBrowser 生命周期，
- * agent 重启不影响它（issue #173）。经 @kagami/server-core 直读同一 SQLite 的
+ * agent 重启不影响它（issue #173）。经 @kagami/persistence 直读同一 SQLite 的
  * browser_credential 表注入凭据——明文只在本进程内停留，永不过 HTTP、永不回 agent。
  */
 export async function buildBrowserRuntime(): Promise<BrowserRuntime> {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AppLogger } from "@kagami/server-core/logger/logger";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { LlmClient } from "../../../../llm/client.js";
 import type { LlmMessage, Tool } from "../../../../llm/types.js";
 import { createTodoSuggestionInstructionMessage } from "../../../runtime/context/context-message-factory.js";

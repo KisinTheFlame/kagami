@@ -6,7 +6,6 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { useSchedulerTasks, useTriggerSchedulerTask } from "./useSchedulerTasks";
 
 export function SchedulerTasksPage() {
@@ -82,7 +81,7 @@ function SchedulerTaskCard({
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="outline">{formatSchedule(task.schedule)}</Badge>
-          <Badge variant={task.isRunning ? "default" : "outline"}>
+          <Badge variant={task.isRunning ? "story" : "outline"}>
             {task.isRunning ? "运行中" : "空闲"}
           </Badge>
           <Badge variant="outline" className="font-mono tabular-nums">
@@ -95,11 +94,13 @@ function SchedulerTaskCard({
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">最近：</span>
               <Badge
-                variant="outline"
-                className={cn(
-                  latest.status === "error" && "border-destructive/40 text-destructive",
-                  latest.status === "skipped_overlap" && "border-scheduler/50 text-foreground",
-                )}
+                variant={
+                  latest.status === "error"
+                    ? "signal"
+                    : latest.status === "skipped_overlap"
+                      ? "scheduler"
+                      : "story"
+                }
               >
                 {formatRunStatus(latest.status)}
               </Badge>

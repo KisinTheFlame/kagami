@@ -76,17 +76,19 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 项目定位
 
-Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含十个工作空间包：
+Kagami 是一个基于 pnpm workspace 的全栈 TypeScript Monorepo，当前包含十二个工作空间包：
 
 - `apps/agent`：Fastify 后端服务（`@kagami/agent`）
-- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 server-core 共享 DAO 直读 SQLite）
+- `apps/console`：管理台后端独立进程（`@kagami/console`，服务前端纯 DB 查询，经 @kagami/persistence 共享 DAO 直读 SQLite）
 - `apps/web`：React 前端管理台（`@kagami/web`）
 - `apps/gateway`：前门网关进程（`@kagami/gateway`，独立进程、零 `@kagami/*` 依赖；托管 `apps/web/dist` 静态资源 + `/api/*` 反向代理分流到 console/agent）
 - `apps/oss`：自建对象存储服务（`@kagami/oss`，独立进程、零 `@kagami/*` 依赖）
 - `apps/browser`：独立浏览器进程（`@kagami/browser`，server-core-based Fastify、仅绑 127.0.0.1；持有 CloakBrowser 与凭据注入，agent 经 HTTP 客户端驱动。拆成独立进程让 agent 重启不杀浏览器）
 - `packages/agent-runtime`：通用 Agent / App 框架内核（`@kagami/agent-runtime`）
 - `packages/llm`：前后端 / 内核共用的 LLM 消息与工具类型契约（`@kagami/llm`）
-- `packages/server-core`：后端共享基础设施内核（Prisma 客户端与 DAO、db、logger、config、common 契约与错误，`@kagami/server-core`）
+- `packages/kernel`：后端纯净基础设施内核（config、logger、common 契约与错误、`isRecord` 等纯工具，`@kagami/kernel`，无 fastify / 无 Prisma / 无 better-sqlite3，可被不碰 DB / 不提供 HTTP 的服务复用）
+- `packages/http`：HTTP 路由辅助（`route.helper`，`@kagami/http`，仅依赖 fastify + zod，零 `@kagami/*` 依赖；不提供 HTTP 接口的服务无需引入）
+- `packages/persistence`：持久化基础设施（Prisma 客户端与 generated client、db、所有业务 DAO、Prisma JSON helper，`@kagami/persistence`，依赖 `@kagami/kernel` + Prisma + better-sqlite3）
 - `packages/shared`：前后端共享的 Schema 与工具（`@kagami/shared`）
 
 workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `apps/*` 与 `packages/*`。
@@ -97,9 +99,9 @@ workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `a
 - 除非任务明确要求，否则默认在仓库根目录执行命令。
 - 数据库相关命令统一读取仓库根目录 `config.yaml` 中的 `server.databaseUrl`。
 - 修改配置 schema 时，必须同步更新：
-  - `packages/server-core/src/config/config.loader.ts`
-  - `config.yaml`
-  - `config.yaml.example`
+  - `packages/kernel/src/config/config.loader.ts`
+  - `config.yaml`（非隐私，纳入版本控制）
+  - `config.secret.yaml.example`（隐私模板；新增隐私字段还要同步 `config.loader.ts` 里的 `CONFIG_SECRET_WHITELIST`）
 - 提交前至少执行：
 
 ```sh
@@ -176,9 +178,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 数据库变更流程：
 
-1. 修改 `packages/server-core/prisma/schema.prisma`。
+1. 修改 `packages/persistence/prisma/schema.prisma`。
 2. 在仓库根目录执行 `pnpm db:migrate:dev -- --name <migration_name>`。
-3. 提交 schema 变更和 `packages/server-core/prisma/migrations/*`。
+3. 提交 schema 变更和 `packages/persistence/prisma/migrations/*`。
 4. 在目标环境执行 `pnpm db:migrate:deploy`，或通过 `pnpm app:deploy` 一并完成。
 
 已有数据库接入 Prisma Migrate（基线）：
@@ -188,8 +190,9 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 
 ### 配置文件
 
-- 后端启动时通过 `packages/server-core/src/config/config.loader.ts` 读取并校验仓库根目录 `config.yaml`。
-- `config.yaml.example` 是示例配置；调整配置结构时要同步维护它。
+- 配置拆成两份：`config.yaml`（非隐私，纳入版本控制，直接改）+ `config.secret.yaml`（隐私：密钥/PII，gitignore，从 `config.secret.yaml.example` 复制填写）。启动时由 `@kagami/config` 定位并深合并两者，再交 `packages/kernel/src/config/config.loader.ts` 的 `ConfigSchema` 校验。
+- `config.secret.yaml` 只允许出现 `config.loader.ts` 里 `CONFIG_SECRET_WHITELIST` 白名单内的隐私路径（apiKey / bot / napcat.listenGroupIds / 浏览器凭据）；越界键（如 `services.*`）启动报错。
+- 配置读取（repo-root 定位 + 两文件合并）统一由零依赖叶子包 `@kagami/config` 承载；kernel / gateway / oss / `scripts/read-config.mjs` 都复用它。gateway / oss 只读非隐私的 `services.*`，不需要 `config.secret.yaml`。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
   - `server.agent.contextCompactionTotalTokenThreshold`、`llmRetryBackoffMs`、`waitToolMaxWaitMs`、`notificationLeadingWindowMs`、`notificationBatchWindowMs`
@@ -364,7 +367,7 @@ Agent 相关补充约定：
 
 - PM2 配置文件位于仓库根目录 `ecosystem.config.cjs`。
 - 后端（`kagami-agent`）：单进程 `fork` 模式运行 `apps/agent/dist/index.js`，默认监听 `20003`。承载 Agent 生活运行时与依赖其活内存的接口（实时上下文、story、auth、scheduler、LLM playground、QQ 主动发送）。
-- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（端口取 `config.yaml` 的 `services.console.port`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/server-core` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
+- 管理台后端（`kagami-console`）：单进程运行 `apps/console/dist/index.js`，默认监听 `20006`（端口取 `config.yaml` 的 `services.console.port`）。服务前端的纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / metric-chart），经 `@kagami/persistence` 的共享 DAO 直读同一个 SQLite 库；与 `kagami-agent` 并发读写靠库文件级 WAL（两进程启动均 `configureSqlite`）。
 - 网关（`kagami-gateway`）：单进程运行 `apps/gateway/dist/index.js`（TS，零 `@kagami/*` 依赖），默认监听 `20004`，托管 `apps/web/dist` 静态资源并按前缀把 `/api/*` 分流到 `kagami-console` 或 `kagami-agent`。监听端口与上游地址全部自读 `config.yaml` 的 `services` 块。
 - 对象存储（`kagami-oss`）：单进程运行 `apps/oss`，默认监听 `20005`（仅 localhost），端口取 `config.yaml` 的 `services.oss.port`。
 - 浏览器（`kagami-browser`）：单进程运行 `apps/browser/dist/index.js`，默认监听 `20007`（仅 localhost，端口取 `config.yaml` 的 `services.browser.port`）。持有 CloakBrowser 与凭据注入；PM2 `cwd` 固定仓库根，让 `userDataDir`（`data/browser/default`）落在仓库根 `data/` 下，登录态跨 agent 重启留存。独立生命周期是「agent 重启不杀浏览器」的根——`app:deploy agent` 不触及它（见 issue #173）。
