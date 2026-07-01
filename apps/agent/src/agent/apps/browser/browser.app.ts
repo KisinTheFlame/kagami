@@ -31,7 +31,7 @@ const BROWSER_AFFORDANCE = [
   "  - browser_press(key) / browser_wait_for(selector|ms)：按键 / 等页面稳定。",
   "  - browser_screenshot()：截图原图直接进你上下文（observe 够用就别频繁截）。",
   "  - browser_eval(script)：在页面跑任意 JS 的逃生舷，谨慎用。",
-  "登录态跨重启留存。调 back_to_portal 退出回桌面。",
+  "登录态跨重启留存。要去别的 App，用 switch(id=...) 切过去。",
   "</browser_portal>",
 ].join("\n");
 
@@ -104,7 +104,7 @@ export class BrowserApp implements App {
       "  - browser_eval(script): 在页面跑任意 JS 的全权逃生舷，谨慎用。",
       "",
       "ref 仅最近一次 observe 的 epoch 有效，页面变了要重新 observe。登录态跨重启留存。",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 

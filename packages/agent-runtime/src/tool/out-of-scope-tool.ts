@@ -12,7 +12,7 @@ import type {
  *
  * 用途：在两个 agent 之间共享一份 LLM 工具定义以维持 prompt cache 前缀字节
  * 相等，但其中一个 agent 不应该真正执行某些工具时（典型场景：task agent 克隆
- * 主 Agent 的顶层工具集，但 enter / back / wait 这些会改主 Agent session 的
+ * 主 Agent 的顶层工具集，但 switch / list_apps / wait 这些会改主 Agent session 的
  * 工具必须被隔离），用 OutOfScopeTool 套住。
  *
  * 对外暴露的 name / description / parameters / llmTool 与 inner 完全一致——
@@ -31,7 +31,7 @@ export class OutOfScopeTool implements ToolComponent {
     reason,
   }: {
     inner: ToolComponent;
-    /** 软拒绝时回带给 LLM 的具体原因。形如 "在网页搜索子任务里不能调用 enter"。 */
+    /** 软拒绝时回带给 LLM 的具体原因。形如 "在网页搜索子任务里不能调用 switch"。 */
     reason: string;
   }) {
     this.name = inner.name;

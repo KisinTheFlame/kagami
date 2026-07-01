@@ -83,7 +83,7 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should render portal reminder listing enterable apps", () => {
+  it("should render portal reminder listing switchable apps", () => {
     expect(
       createPortalReminderMessage({
         apps: [
@@ -95,8 +95,8 @@ describe("context-message-factory", () => {
       role: "user",
       content: [
         "<system_reminder>",
-        "你现在在桌面（Portal）。",
-        "可以进入以下 App（用 enter）：",
+        "你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。",
+        "用 switch(id=...) 进入下面某个 App；之后想知道有哪些 App 用 list_apps：",
         "- qq：QQ",
         "- calc：计算器",
         "</system_reminder>",
@@ -109,7 +109,7 @@ describe("context-message-factory", () => {
       role: "user",
       content: [
         "<system_reminder>",
-        "你现在在桌面（Portal）。",
+        "你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。",
         "当前没有可进入的 App。",
         "</system_reminder>",
       ].join("\n"),

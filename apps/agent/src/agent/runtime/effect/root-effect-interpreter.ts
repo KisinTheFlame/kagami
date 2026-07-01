@@ -17,7 +17,7 @@ import type {
   WaitForEventEffect,
 } from "./root-agent-effect.js";
 
-type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp" | "clearCurrentApp">;
+type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp">;
 
 function isAppendMessageEffect(effect: Effect): effect is AppendMessageEffect {
   return effect.type === "append_message";
@@ -97,7 +97,7 @@ class AppendMessageHandler implements EffectHandler<never> {
   }
 }
 
-/** 把 root agent 的 currentApp 切到 appId（null 表示回到桌面）。即时副作用。 */
+/** 把 root agent 的 currentApp 切到 appId。即时副作用。 */
 class SwitchAppHandler implements EffectHandler<never> {
   private readonly session: InterpreterSession;
 
@@ -113,12 +113,7 @@ class SwitchAppHandler implements EffectHandler<never> {
     if (!isSwitchAppEffect(effect)) {
       throw new Error(`SwitchAppHandler received non-switch_app effect: ${effect.type}`);
     }
-    const switchApp = effect;
-    if (switchApp.appId === null) {
-      this.session.clearCurrentApp();
-    } else {
-      this.session.setCurrentApp(switchApp.appId);
-    }
+    this.session.setCurrentApp(effect.appId);
     return {};
   }
 }

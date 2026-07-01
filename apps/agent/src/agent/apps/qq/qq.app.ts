@@ -145,7 +145,7 @@ export class QqApp implements App {
       "  - list_faces(): 列出所有可发送的 QQ 内置表情名字。不确定有哪些表情、名字怎么写时调它查。",
       "  - view_forward(forward_id): 展开查看合并转发。消息里看到 [forward_id: fwd-xxx] 就是一条合并转发（聊天记录），把 fwd-xxx 原样作为字符串复制进来（含 fwd- 前缀，别当数字）；默认显示前 50 条，更长用 offset 翻页。",
       "",
-      "新消息会以通知形式提醒你（不在这个 App 里也会）。调 back_to_portal 退出 QQ 回桌面。",
+      "新消息会以通知形式提醒你（不在这个 App 里也会）。要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 

@@ -29,7 +29,7 @@ export class ClockApp implements App {
       "你在时钟 App 里。当前可调用工具：",
       "  - view_time(): 查看当前北京时间（精确到秒）。",
       "",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 }

@@ -69,7 +69,7 @@ export class TodoApp implements App {
       "  - remove_todo(id): 删除（soft delete）。",
       "",
       "设了 remindAt 的待办到点会通过通知提醒你；设了 repeatEvery 会按周期反复提醒。",
-      "调 back_to_portal 退出本 App 回到桌面。",
+      "要去别的 App，用 switch(id=...) 切过去。",
     ].join("\n");
   }
 

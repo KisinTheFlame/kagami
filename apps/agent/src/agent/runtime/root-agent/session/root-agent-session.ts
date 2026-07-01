@@ -29,7 +29,6 @@ export type RootAgentPostToolEffects = {
 export type RootAgentSessionController = {
   getCurrentApp(): AppId | undefined;
   setCurrentApp(appId: AppId): void;
-  clearCurrentApp(): void;
   reset(): void;
   markRestored(): void;
   initializeContext(): Promise<void>;
@@ -50,7 +49,10 @@ export class RootAgentSession implements RootAgentSessionController {
   private readonly pendingIncomingMessages: LlmMessage[] = [];
   private readonly pendingPostToolMessages: LlmMessage[] = [];
   private initialized = false;
-  /** 当前已 enter 的 App id。仅内存持有；不进 snapshot；reset 回 undefined（即 Portal）。 */
+  /**
+   * 当前所在 App id。仅内存持有；不进 snapshot。undefined = Portal（桌面），只在初始
+   * 状态出现；一旦 switch 进某个 App 就不再为空（除 reset 重启回到初始）。
+   */
   private currentApp: AppId | undefined = undefined;
 
   public constructor({ context, appManager }: RootAgentSessionDeps) {
@@ -64,10 +66,6 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public setCurrentApp(appId: AppId): void {
     this.currentApp = appId;
-  }
-
-  public clearCurrentApp(): void {
-    this.currentApp = undefined;
   }
 
   public reset(): void {
