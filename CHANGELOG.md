@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [0.3.5.0] - 2026-07-01
+
+### Added
+
+- todo: 每日两次的 digest 通知在「未完成汇总 + 通用 nudge」之外新增**第三段「建议待办」**（见 [#183](https://github.com/KisinTheFlame/kagami/issues/183)）。每次回顾时从主 Agent 上下文 fork 一份、跑**一次性单次 LLM 发现**（`TodoSuggestionService.propose`，仿 context-summary，无工具循环），据当前未完成清单去重后直接给出**最多 5 条具体、可执行的候选待办**；小镜读了自行决定是否 enter todo App 用 add-todo 添加（纯文本，不落库、无新状态机）。
+  - **KV 缓存前缀零影响**：`TodoSuggestionService` 不持有 `AgentContext` 句柄、只收克隆的 `messages`，类型上就无法改主上下文；建议只经 `<notification>` 追加到上下文尾部，不触 system prompt / 历史 / 顶层工具集。fork 子调用用独立 `propose_todos` 工具，属隔离 throwaway。
+  - **快照读串行化**：`RootLoopAgent` 新增 `getContextSnapshot()`，经 `mutationExecutor` 串行化取快照，避免与主轮次 `persistRoundState` 中途「assistant tool_call 无 tool_result」的不平衡视图竞态。
+  - **三重降级**：fork 任何失败（无 provider / 超时 / 无 toolCall / 解析失败 / 空）一律返回 `[]`，digest 照发只含原两段，绝不抛错、不丢 digest。
+  - **配置**：新增独立必填 usage `todoSuggestionAgent`（`config.yaml` 已含，模型可独立选）。
+
 ## [0.3.4.0] - 2026-07-01
 
 ### Added

@@ -393,6 +393,7 @@ const ConfigSchema = z.object({
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
           webSearchAgent: LlmUsageConfigSchema,
+          todoSuggestionAgent: LlmUsageConfigSchema,
         })
         .strict(),
     }),
@@ -561,6 +562,7 @@ function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageI
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
     webSearchAgent: normalizeUsageConfig(input.usages.webSearchAgent),
+    todoSuggestionAgent: normalizeUsageConfig(input.usages.todoSuggestionAgent),
   };
 }
 

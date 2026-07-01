@@ -146,6 +146,21 @@ export function createWebSearchInstructionMessage(question: string): UserMessage
   );
 }
 
+/**
+ * todo「发现待办」子任务的指令消息：追加到 fork 出的主上下文尾部，让子调用回顾生活上下文、
+ * 结合当前未完成清单去重后，用 propose_todos 提交最多 5 条具体候选待办。
+ */
+export function createTodoSuggestionInstructionMessage(
+  openTodos: { title: string }[],
+): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/todo-suggestion-instruction.hbs", {
+      openTodos: openTodos.map(todo => todo.title),
+      hasOpenTodos: openTodos.length > 0,
+    }),
+  );
+}
+
 export function createMessagesFromEvent(_event: Event): UserMessage[] {
   // 目前没有任何事件类型需要渲染成上下文消息：notification / story_recall 由 session
   // 直接装配成 <notification> / <story_recall> 消息追加（不是 event 类 ContextItem），

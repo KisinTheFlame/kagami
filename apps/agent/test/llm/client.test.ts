@@ -102,6 +102,15 @@ function createUsageConfig(
         },
       ],
     },
+    todoSuggestionAgent: {
+      attempts: [
+        {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          times: 1,
+        },
+      ],
+    },
     ...(overrides ?? {}),
   };
 }
