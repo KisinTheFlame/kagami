@@ -40,6 +40,29 @@ describe("AmapClient URL building", () => {
     expect(calls[0]).toContain("city=");
   });
 
+  it("parses geocode items whose empty fields come back as [] (Amap convention)", async () => {
+    // 查省市级地名时高德把空字符串字段回成 []（如 district / city）——Str 必须容忍，不能整体解析失败。
+    const { mock } = recordingFetch({
+      geocodes: [
+        {
+          formatted_address: "北京市",
+          province: "北京市",
+          city: [],
+          district: [],
+          adcode: "110000",
+          citycode: "010",
+          location: "116.407526,39.90403",
+          level: "省",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", mock);
+    const items = await buildClient().geocode({ address: "北京市" });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ adcode: "110000", district: null, city: null });
+    expect(items[0].location).toBe("116.407526,39.90403");
+  });
+
   it("search_poi uses page_size/page_num (NOT page) and v5 place/text", async () => {
     const { calls, mock } = recordingFetch({ pois: [], count: "0" });
     vi.stubGlobal("fetch", mock);
