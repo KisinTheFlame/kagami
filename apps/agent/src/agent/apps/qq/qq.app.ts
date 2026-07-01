@@ -1,4 +1,5 @@
 import type { App, JsonValue } from "@kagami/agent-runtime";
+import { truncateWithEllipsis } from "@kagami/shared/utils";
 import { renderGroupMessagePlainText, renderPrivateMessagePlainText } from "./qq-message-render.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
@@ -526,9 +527,8 @@ function renderForward(forwardId: string, page: NapcatForwardMessagePage): strin
 
 function renderForwardNodeBody(rawMessage: string): string {
   const text = rawMessage.trim() || "（空消息）";
-  return text.length > FORWARD_NODE_MAX_CHARS
-    ? `${text.slice(0, FORWARD_NODE_MAX_CHARS)}…（已截断）`
-    : text;
+  // 按码点截断，绝不劈开 emoji 代理对（留下的半个字符会让上下文请求体非法 JSON）。
+  return truncateWithEllipsis(text, FORWARD_NODE_MAX_CHARS, "…（已截断）");
 }
 
 /** 把 JsonValue 收窄成普通对象（非数组、非 null）；否则返回 null。restoreState 防御用。 */

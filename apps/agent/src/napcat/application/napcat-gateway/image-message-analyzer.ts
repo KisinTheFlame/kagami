@@ -1,4 +1,5 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { truncateWithEllipsis } from "@kagami/shared/utils";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import { detectMime } from "../../../oss/detect-mime.js";
 import type { OssClient } from "../../../oss/oss-client.js";
@@ -240,11 +241,8 @@ function sanitizeVisionDescription(description: string): string {
     .trim()
     .replace(/[；，。、\s]+$/u, "");
 
-  if (flattened.length <= MAX_IMAGE_DESCRIPTION_LENGTH) {
-    return flattened;
-  }
-
-  return `${flattened.slice(0, MAX_IMAGE_DESCRIPTION_LENGTH - 1).trimEnd()}…`;
+  // 按码点截断，绝不劈开 emoji 代理对（图片描述会进主上下文，半个字符同样会打挂请求）。
+  return truncateWithEllipsis(flattened, MAX_IMAGE_DESCRIPTION_LENGTH);
 }
 
 function inferFilenameFromUrl(url: string): string | undefined {
