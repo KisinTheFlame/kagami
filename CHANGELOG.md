@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [0.3.6.2] - 2026-07-01
+
+### Fixed
+
+- agent/apps/amap: 修复 `geocode`（及 POI / 天气 / 路径等所有接口）在查省市级地名时报「响应结构无法解析」的问题。高德对**空字符串字段返回空数组 `[]`**（如 `geocode("北京市")` 的 `district`、`geocode("浙江省")` 的 `city`），而宽松解析用的 `Str` 只接受 string / number，遇 `[]` 整条解析失败被 `assertParsed` 当成接口异常抛给小镜。改 `Str` 为对任意输入收口：string 原样、number 转字符串、其余（`[]` / `{}` / null / bool）一律归 `null`，一处修让所有接口对高德字段类型不稳免疫。
+
 ## [0.3.6.1] - 2026-07-01
 
 ### Added
