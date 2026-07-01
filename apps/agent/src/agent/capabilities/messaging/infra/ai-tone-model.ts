@@ -7,7 +7,7 @@ import { readServerStaticText } from "@kagami/kernel/runtime/read-static-text";
  * 加载——避免 ~700KB 字面量进 TS 编译 / lint，不再需要整文件类型检查豁免。
  *
  * 来源：https://github.com/Hei-AI/AIRadar（model.json，源 commit
- * c202ef2845fa439a5e8bfa9bf48fcb0b59be3c81）。vendored 快照，更新需手动重拉 JSON 并重跑
+ * 744a436827bc66ea3ab3afae5099a73bdf2f1498）。vendored 快照，更新需手动重拉 JSON 并重跑
  * parity 单测（ai-tone-scorer.test.ts）。致谢原作者 Hei-AI。
  */
 export interface AiToneModelData {

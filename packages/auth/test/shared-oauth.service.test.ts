@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SharedOAuthServiceCore } from "../../src/auth/shared/service.js";
+import { SharedOAuthServiceCore } from "../src/shared/service.js";
 import type {
   OAuthDao,
   OAuthProviderAuth,
@@ -8,7 +8,7 @@ import type {
   OAuthSessionRecord,
   OAuthStateRecord,
   OAuthTokenResponse,
-} from "../../src/auth/shared/types.js";
+} from "../src/shared/types.js";
 
 type TestSessionRecord = OAuthSessionRecord<"test-provider">;
 

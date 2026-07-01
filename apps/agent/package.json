@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@kagami/agent-runtime": "workspace:*",
+    "@kagami/auth": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",

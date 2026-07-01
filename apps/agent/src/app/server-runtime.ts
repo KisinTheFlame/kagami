@@ -21,16 +21,14 @@ import { createEmbeddingClient } from "@kagami/llm-client/embedding";
 import { PrismaEmbeddingCacheDao } from "../llm/prisma-embedding-cache.dao.js";
 import type { LlmChatCallObservation, LlmProvider } from "@kagami/llm-client";
 import { createDeepSeekProvider } from "@kagami/llm-client";
-import { ClaudeCodeAuthStore } from "../llm/providers/claude-code-auth.js";
 import { createClaudeCodeProvider } from "@kagami/llm-client";
-import { OpenAiCodexAuthStore } from "../llm/providers/openai-codex-auth.js";
 import { createOpenAiCodexProvider } from "@kagami/llm-client";
 import { createOpenAiProvider } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
 import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
-import { createAuthModule } from "../auth/index.js";
+import { createAuthModule } from "@kagami/auth";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
@@ -127,12 +125,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const todoDao = new PrismaTodoDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
 
-  const claudeCodeAuthStore = new ClaudeCodeAuthStore({
-    claudeCodeAuthService: authModule.authServices["claude-code"],
-  });
-  const codexAuthStore = new OpenAiCodexAuthStore({
-    codexAuthService: authModule.authServices.codex,
-  });
+  // auth service（OAuthAuthService）的 getAuth/hasCredentials 与 token 形态与 llm-client 的
+  // ClaudeCodeAuthProvider/OpenAiCodexAuthProvider 端口逐字段一致，故直接作为 authStore 注入
+  // provider 工厂，无需适配器（结构化满足接口，在此调用点由编译器校验）。
+  const claudeCodeAuthStore = authModule.authServices["claude-code"];
+  const codexAuthStore = authModule.authServices.codex;
   const llmTimeoutMs = config.server.llm.timeoutMs;
   const deepseekConfig = {
     ...config.server.llm.providers.deepseek,

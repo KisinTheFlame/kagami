@@ -30,7 +30,6 @@ export class DefaultAgentMessageService implements AgentMessageService {
   public async sendImage(input: {
     target: NapcatChatTarget;
     fileRef: string;
-    summary?: string;
     replyToMessageId?: number;
   }): Promise<{ messageId: number }> {
     return await this.napcatGatewayService.sendImage(input);
