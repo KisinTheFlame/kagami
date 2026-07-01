@@ -61,5 +61,19 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // LLM 网关 + OAuth 凭据中心：独立 PM2 生命周期，agent 重启不打断它与登录态。持有全部
+      // provider + OAuth callback server（绑 1455/54545），未来多个 Agent 进程共享它。cwd 固定
+      // 仓库根，让任何相对数据路径（DB / secret store）落在仓库根 data/ 下。
+      name: "kagami-llm",
+      cwd: __dirname,
+      script: "apps/llm/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };

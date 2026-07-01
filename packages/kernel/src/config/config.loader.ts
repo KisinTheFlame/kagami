@@ -209,6 +209,7 @@ const ServicesSchema = z
     gateway: ServiceEndpointSchema,
     oss: ServiceEndpointSchema,
     browser: ServiceEndpointSchema,
+    llm: ServiceEndpointSchema,
   })
   .strict();
 

@@ -5,7 +5,6 @@ import { InMemoryQueue } from "@kagami/agent-runtime";
 import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
-import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaImageAssetDao } from "../napcat/infra/impl/image-asset.impl.dao.js";
 import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
@@ -16,24 +15,17 @@ import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.
 import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
-import { createLlmClient } from "@kagami/llm-client";
-import { createEmbeddingClient } from "@kagami/llm-client/embedding";
-import { PrismaEmbeddingCacheDao } from "../llm/prisma-embedding-cache.dao.js";
-import type { LlmChatCallObservation, LlmProvider } from "@kagami/llm-client";
-import { createDeepSeekProvider } from "@kagami/llm-client";
-import { createClaudeCodeProvider } from "@kagami/llm-client";
-import { createOpenAiCodexProvider } from "@kagami/llm-client";
-import { createOpenAiProvider } from "@kagami/llm-client";
+import { HttpLlmClient } from "../llm/http-llm-client.js";
+import { HttpEmbeddingClient } from "../llm/http-embedding-client.js";
+import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
 import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
-import { createAuthModule } from "@kagami/auth";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import type { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
-import { buildAuthScheduledTasks } from "../auth/application/auth-scheduled-tasks.js";
 import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
 import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
@@ -86,10 +78,12 @@ export type ServerRuntime = {
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
   hasTavilyApiKey: boolean;
+  /**
+   * LLM provider 生命周期已随 kagami-llm 服务外移；agent 进程不再持有 provider，这里恒为 no-op。
+   * 保留字段以免动 index/server-shutdown 的关停编排（它们对空/no-op 天然无害）。
+   */
   closeLlmProviders: () => Promise<void>;
-  listAvailableAgentProviders: () => Promise<
-    Awaited<ReturnType<ReturnType<typeof createLlmClient>["listAvailableProviders"]>>
-  >;
+  listAvailableAgentProviders: () => Promise<LlmProviderOption[]>;
 };
 
 export async function buildServerRuntime(): Promise<ServerRuntime> {
@@ -112,114 +106,20 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
 
-  const authModule = await createAuthModule({
-    database,
-    configManager,
-  });
-  const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
   const imageAssetDao = new PrismaImageAssetDao({ database });
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const todoDao = new PrismaTodoDao({ database });
-  const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
 
-  // auth service（OAuthAuthService）的 getAuth/hasCredentials 与 token 形态与 llm-client 的
-  // ClaudeCodeAuthProvider/OpenAiCodexAuthProvider 端口逐字段一致，故直接作为 authStore 注入
-  // provider 工厂，无需适配器（结构化满足接口，在此调用点由编译器校验）。
-  const claudeCodeAuthStore = authModule.authServices["claude-code"];
-  const codexAuthStore = authModule.authServices.codex;
-  const llmTimeoutMs = config.server.llm.timeoutMs;
-  const deepseekConfig = {
-    ...config.server.llm.providers.deepseek,
-    timeoutMs: llmTimeoutMs,
-  };
-  const openAiConfig = {
-    ...config.server.llm.providers.openai,
-    timeoutMs: llmTimeoutMs,
-  };
-  const openAiCodexConfig = {
-    ...config.server.llm.providers.openaiCodex,
-    timeoutMs: llmTimeoutMs,
-  };
-  const claudeCodeConfig = {
-    apiKey: undefined,
-    ...config.server.llm.providers.claudeCode,
-    timeoutMs: llmTimeoutMs,
-  };
-  const llmProviders = {
-    deepseek: deepseekConfig.apiKey
-      ? createDeepSeekProvider({
-          ...deepseekConfig,
-          apiKey: deepseekConfig.apiKey,
-        })
-      : undefined,
-    openai: openAiConfig.apiKey
-      ? createOpenAiProvider({
-          ...openAiConfig,
-          apiKey: openAiConfig.apiKey,
-        })
-      : undefined,
-    "openai-codex": createOpenAiCodexProvider({
-      config: openAiCodexConfig,
-      authStore: codexAuthStore,
-    }),
-    "claude-code": createClaudeCodeProvider({
-      config: claudeCodeConfig,
-      authStore: claudeCodeAuthStore,
-    }),
-  };
-  // 落库归位到装配层：llm-client 只发 observation 事件，这里订阅后写入 llm_chat_call。
-  // 返回 DAO 的 Promise，让 client 内部 emitObservation 统一 catch（写库失败不影响 LLM 结果）。
-  const recordLlmChatObservation = (observation: LlmChatCallObservation): Promise<void> => {
-    if (observation.status === "success") {
-      return llmChatCallDao.recordSuccess({
-        provider: observation.provider,
-        model: observation.model,
-        extension: observation.extension,
-        requestId: observation.requestId,
-        seq: observation.seq,
-        latencyMs: observation.latencyMs,
-        request: observation.request,
-        response: observation.response,
-        nativeRequestPayload: observation.nativeRequestPayload,
-        nativeResponsePayload: observation.nativeResponsePayload,
-      });
-    }
-
-    return llmChatCallDao.recordError({
-      provider: observation.provider,
-      model: observation.model,
-      extension: observation.extension,
-      requestId: observation.requestId,
-      seq: observation.seq,
-      latencyMs: observation.latencyMs,
-      request: observation.request,
-      ...(observation.response ? { response: observation.response } : {}),
-      nativeRequestPayload: observation.nativeRequestPayload,
-      nativeResponsePayload: observation.nativeResponsePayload,
-      nativeError: observation.nativeError,
-      error: observation.error,
-    });
-  };
-
-  const llmClient = createLlmClient({
-    providers: llmProviders,
-    providerConfigs: {
-      deepseek: deepseekConfig,
-      openai: openAiConfig,
-      "openai-codex": openAiCodexConfig,
-      "claude-code": claudeCodeConfig,
-    },
-    usages: config.server.llm.usages,
-    recordObservation: recordLlmChatObservation,
-  });
-
-  const embeddingClient = createEmbeddingClient({
-    config: config.server.agent.story.memory.embedding,
-    cacheDao: embeddingCacheDao,
-  });
+  // LLM provider + OAuth 凭据中心已外移到独立 kagami-llm 进程（issue：多 Agent 共享网关）。
+  // agent 经 HttpLlmClient/HttpEmbeddingClient 直连它（地址从顶层 services.llm 派生），
+  // 实现现有 LlmClient/EmbeddingClient 接口——下游 root-agent/story/vision/... 零改动。
+  // llm_chat_call 落库、embedding_cache 读写、auth callback/刷新全在服务侧，agent 不再碰。
+  const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
+  const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
+  const embeddingClient = new HttpEmbeddingClient({ baseUrl: llmServiceBaseUrl });
   const visionAgent = new VisionAgent({
     llmClient,
   });
@@ -325,19 +225,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     suggestTodos,
   });
 
+  // auth 刷新 + usage 刷新已随 kagami-llm 服务外移（在服务进程用自己的 timer 驱动）；
+  // agent 的 TaskScheduler 只剩 ithome / todo / data-retention 任务。
   const taskScheduler = new TaskScheduler();
-  const [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler] =
-    authModule.authRefreshSchedulers;
-  if (!codexAuthRefreshScheduler || !claudeCodeAuthRefreshScheduler) {
-    throw new Error("auth module did not provide both OAuth refresh schedulers");
-  }
-  for (const task of buildAuthScheduledTasks({
-    codexAuthRefreshScheduler,
-    claudeCodeAuthRefreshScheduler,
-    authUsageCacheManager: authModule.authUsageCacheManager,
-  })) {
-    taskScheduler.register(task);
-  }
   for (const task of buildIthomeScheduledTasks({ ithomePoller })) {
     taskScheduler.register(task);
   }
@@ -351,7 +241,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
-      authModule.authHandler,
       new LlmHandler({ llmPlaygroundService: agentRuntime.llmPlaygroundService }),
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
@@ -370,7 +259,8 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     database,
     shutdownApps: agentRuntime.shutdownApps,
     taskScheduler,
-    callbackServers: authModule.callbackServers,
+    // OAuth callback server 随 kagami-llm 服务外移；agent 不再持有，关停编排对空数组无害。
+    callbackServers: [],
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     storyAgentRuntime: agentRuntime.storyAgentRuntime,
     storyAgentEnabled: agentRuntime.storyAgentEnabled,
@@ -379,33 +269,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     hasTavilyApiKey: agentRuntime.hasTavilyApiKey,
-    closeLlmProviders: async () => {
-      await closeLlmProviders(llmProviders);
-    },
+    // provider 生命周期在 kagami-llm 服务侧；agent 无本地 provider 可关，no-op。
+    closeLlmProviders: async () => {},
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },
   };
-}
-
-async function closeLlmProviders(
-  providers: Partial<Record<string, LlmProvider | undefined>>,
-): Promise<void> {
-  const results = await Promise.allSettled(
-    Object.values(providers).map(async provider => {
-      if (!provider?.close) {
-        return;
-      }
-
-      await provider.close();
-    }),
-  );
-
-  for (const result of results) {
-    if (result.status === "rejected") {
-      logger.warn("LLM provider close failed", { reason: result.reason });
-    }
-  }
 }
 
 function createServerApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {

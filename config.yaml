@@ -11,6 +11,7 @@ services:
   gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
   oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
   browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
+  llm: { host: 127.0.0.1, port: 20009 } # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
