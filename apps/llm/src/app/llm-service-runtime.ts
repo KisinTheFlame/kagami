@@ -164,7 +164,16 @@ export function createLlmServiceApp({
 }: {
   handlers: AppRouteHandler[];
 }): FastifyInstance {
-  const app = Fastify({ logger: false, disableRequestLogging: true });
+  // /internal/chat 承载完整 LLM 请求：system + 整段历史 + base64 图片（单张资源可达 4 MiB，
+  // 见 server.resource.maxBytes；context 阈值 60w token）。Fastify 默认 1 MB bodyLimit 远不够——
+  // in-process 时没有这道限制，拆 HTTP 后必须放开，否则大请求被 413「Request body is too large」
+  // 挡在 handler 之前、LLM 调用直接失败。给 100 MB 富余上限（localhost 内部 RPC，ceiling 非分配）。
+  const LLM_SERVICE_BODY_LIMIT_BYTES = 100 * 1024 * 1024;
+  const app = Fastify({
+    logger: false,
+    disableRequestLogging: true,
+    bodyLimit: LLM_SERVICE_BODY_LIMIT_BYTES,
+  });
 
   app.addHook("onRequest", (_request, reply, done) => {
     const traceId = randomUUID();
