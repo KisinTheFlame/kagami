@@ -1,9 +1,9 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
+import { pipeline } from "node:stream/promises";
+import { PayloadTooLargeError } from "../store/object-store.js";
 import type { ObjectStore } from "../store/object-store.js";
 
 const OBJECT_PATH = /^\/objects\/([^/]+)$/;
-
-class BodyTooLargeError extends Error {}
 
 export function createOssServer(store: ObjectStore, maxBodyBytes: number): Server {
   return createServer((req, res) => {
@@ -66,20 +66,23 @@ async function handlePost(
   store: ObjectStore,
   maxBodyBytes: number,
 ): Promise<void> {
-  let bytes: Buffer;
+  const mime = parseMime(req.headers["content-type"]);
   try {
-    bytes = await readBody(req, maxBodyBytes);
+    // 请求体直接作为流交给 store，边流边算 sha256 落临时文件，不整块驻留内存。
+    const { key } = await store.put(req, mime, { maxBytes: maxBodyBytes });
+    res.writeHead(201, { "content-type": "application/json" });
+    res.end(JSON.stringify({ key }));
   } catch (error) {
-    if (error instanceof BodyTooLargeError) {
-      res.writeHead(413).end();
+    if (error instanceof PayloadTooLargeError) {
+      // store 超限时刻意不销毁 req；这里先把 413 写回再收尾，客户端能看到 413 而非 ECONNRESET。
+      if (!res.headersSent) {
+        res.writeHead(413, { connection: "close" });
+      }
+      res.end();
       return;
     }
     throw error;
   }
-  const mime = parseMime(req.headers["content-type"]);
-  const { key } = await store.put(bytes, mime);
-  res.writeHead(201, { "content-type": "application/json" });
-  res.end(JSON.stringify({ key }));
 }
 
 async function handleGet(res: ServerResponse, store: ObjectStore, key: string): Promise<void> {
@@ -87,7 +90,7 @@ async function handleGet(res: ServerResponse, store: ObjectStore, key: string): 
   try {
     result = await store.get(key);
   } catch (error) {
-    // key 有映射但物理文件读失败 → 500（区分"没存过"的 404）。
+    // key 有映射但物理文件打开失败 → 500（区分"没存过"的 404）。
     console.error(`[oss] get failed for ${key}`, error);
     res.writeHead(500).end();
     return;
@@ -104,7 +107,14 @@ async function handleGet(res: ServerResponse, store: ObjectStore, key: string): 
     "x-content-type-options": "nosniff",
     "content-disposition": "attachment",
   });
-  res.end(result.bytes);
+  try {
+    // pipeline 会在 res 关闭 / 出错时 destroy result.stream（autoClose 关 fd），杜绝 fd 泄漏。
+    await pipeline(result.stream, res);
+  } catch (error) {
+    // header 已发，无法改状态码；销毁 socket 断开，让流被 destroy（fd 关闭）。
+    console.error(`[oss] get stream failed for ${key}`, error);
+    res.destroy();
+  }
 }
 
 async function handleHead(res: ServerResponse, store: ObjectStore, key: string): Promise<void> {
@@ -126,21 +136,6 @@ async function handleHead(res: ServerResponse, store: ObjectStore, key: string):
 async function handleDelete(res: ServerResponse, store: ObjectStore, key: string): Promise<void> {
   const removed = await store.delete(key);
   res.writeHead(removed ? 204 : 404).end();
-}
-
-async function readBody(req: IncomingMessage, maxBodyBytes: number): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    const buf = chunk as Buffer;
-    total += buf.length;
-    if (total > maxBodyBytes) {
-      req.destroy();
-      throw new BodyTooLargeError();
-    }
-    chunks.push(buf);
-  }
-  return Buffer.concat(chunks);
 }
 
 function parseMime(contentType: string | undefined): string {
