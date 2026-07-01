@@ -11,6 +11,25 @@ import type { RootAgentSessionController } from "../session/root-agent-session.j
 
 export const SWITCH_TOOL_NAME = "switch";
 
+/** 自动吐出的 App 能力说明所用的结构标识伪标签（结构标识非语气文案，留 TS 常量）。 */
+export const APP_HELP_TAG = "app_help";
+
+/**
+ * 把一段 help 文本包进 `<app_help app="...">` 结构标签。app id 取自注册常量（可信），但
+ * help 正文**不完全可信**——部分 App 的 help 内嵌外部内容（如 browser help 带网页标题/URL），
+ * 恶意标题可含伪闭合标签冲破结构边界。故中和正文里的字面闭合标签，保住 `<app_help>` 的结构完整。
+ */
+function renderAppHelp(appId: string, help: string): string {
+  const safeHelp = help.replaceAll(`</${APP_HELP_TAG}>`, `<\\/${APP_HELP_TAG}>`);
+  return `<${APP_HELP_TAG} app="${appId}">\n${safeHelp}\n</${APP_HELP_TAG}>`;
+}
+
+/** switch 成功后的状态提示。首进且已自带 help 时不再提示手动 help；否则保留提示。 */
+function buildSwitchMessage(fromApp: string | null, toApp: string, helpEmitted: boolean): string {
+  const base = fromApp ? `已从 ${fromApp} 切换到 ${toApp} App。` : `已进入 ${toApp} App。`;
+  return helpEmitted ? `${base}下面是它的能力说明。` : `${base}调用 help 查看可用工具。`;
+}
+
 const SwitchArgumentsSchema = z.object({
   id: z.string().trim().min(1),
 });
@@ -96,15 +115,31 @@ export class SwitchTool extends ZodToolComponent<typeof SwitchArgumentsSchema> {
       { type: "switch_app", appId: targetApp.id },
       ...(onFocusEffects as readonly RootAgentEffect[]),
     ];
-    const message = currentApp
-      ? `已从 ${currentApp} 切换到 ${targetApp.id} App。调用 help 查看可用工具。`
-      : `已进入 ${targetApp.id} App。调用 help 查看可用工具。`;
+
+    // 首次进入（本桶上下文）自动把 App 的 help 追加到尾部，省掉小镜再花一整轮去调 help 工具。
+    // help 只读 hasEnteredApp 决策；真正的 markAppEntered 由 switch_app effect 在解释期落，保持
+    // 工具无副作用（与既有 setCurrentApp 同语义）。部分 App 的 help 有 I/O（如 browser 走 GET
+    // /location）、且正文可能内嵌外部内容，故：help 抛错绝不连累 switch——降级为不追加 app_help、
+    // 退回「自己调 help」提示；正文里的伪闭合标签由 renderAppHelp 中和。首进标记照常（即便本次
+    // help 失败），避免下一轮又试又失败刷屏；失败模式良性——小镜可手动调 help 兜底。
+    let helpEmitted = false;
+    if (!rootAgentSession.hasEnteredApp(targetApp.id)) {
+      try {
+        const help = await targetApp.help();
+        effects.push({ type: "append_message", content: renderAppHelp(targetApp.id, help) });
+        helpEmitted = true;
+      } catch {
+        // help 生成失败：保持切换成功，仅退回手动 help 提示。
+      }
+    }
+
+    const fromApp = currentApp ?? null;
     return {
       content: JSON.stringify({
         ok: true,
-        fromApp: currentApp ?? null,
+        fromApp,
         toApp: targetApp.id,
-        message,
+        message: buildSwitchMessage(fromApp, targetApp.id, helpEmitted),
       }),
       effects,
     };

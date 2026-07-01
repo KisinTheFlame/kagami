@@ -81,6 +81,7 @@ import { StoryRecallService } from "../agent/capabilities/story/application/stor
 import { StoryService } from "../agent/capabilities/story/application/story.service.js";
 import { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
 import { StoryRecallExtension } from "../agent/capabilities/story/runtime/story-recall.extension.js";
+import { AppEntryResetExtension } from "../agent/runtime/root-agent/extensions/app-entry-reset.extension.js";
 import { StoryRecallScheduler } from "../agent/capabilities/story/runtime/story-recall.scheduler.js";
 import {
   SearchMemoryTool,
@@ -530,7 +531,10 @@ export async function buildAgentRuntime({
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    loopExtensions: storyRecallExtensions,
+    loopExtensions: [
+      ...storyRecallExtensions,
+      new AppEntryResetExtension({ session: rootAgentSession }),
+    ],
     summaryTools: [
       ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
