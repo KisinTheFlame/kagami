@@ -463,31 +463,13 @@ type LoadStaticConfigOptions = {
   configPath?: string;
 };
 
-/**
- * 允许出现在 `config.secret.yaml` 里的隐私路径前缀白名单——「哪些字段算隐私」是项目
- * 领域知识，故定义在 kernel 这一层，作为参数下传给领域无关的 `@kagami/config`。
- * secret 文件里出现白名单外的键（尤其 `services.*` / `server.databaseUrl`）会被拒绝，
- * 从而保证 gateway / oss / read-config 也在读的非隐私拓扑永远不被 secret 改动。
- */
-const CONFIG_SECRET_WHITELIST = [
-  "server.llm.providers.deepseek.apiKey",
-  "server.llm.providers.openai.apiKey",
-  "server.tavily.apiKey",
-  "server.agent.story.memory.embedding.apiKey",
-  "server.apps.browser.proxy",
-  "server.apps.browser.licenseKey",
-  "server.bot.qq",
-  "server.bot.creator",
-  "server.napcat.listenGroupIds",
-  // wsUrl 内嵌 napcat access_token，属凭据；仓库公开，故整条进 config.secret.yaml。
-  "server.napcat.wsUrl",
-];
-
 export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): Promise<Config> {
   const { configPath, raw } = await loadMergedRawConfig({
     configPath: options.configPath,
     anchorUrl: import.meta.url,
-    secret: { required: true, allowedPaths: CONFIG_SECRET_WHITELIST },
+    // secret（config.secret.yaml）可覆盖任意字段——单人项目，不再维护隐私路径白名单。
+    // 凭据仍只放 gitignored 的 config.secret.yaml；原型污染由 @kagami/config 的深合并兜底。
+    secret: { required: true },
   });
 
   const parsedConfig = ConfigSchema.safeParse(raw);

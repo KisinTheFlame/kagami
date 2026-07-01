@@ -169,6 +169,24 @@ server:
       responseMaxChars: 8000 # open_hn_thread 评论总字符预算，超出截断
       searchHitsLimit: 15 # search_hn 返回命中数
       userActivityLimit: 10 # open_hn_user 近期发言条数
+    amap:
+      # 高德地图 App（接入高德 Web 服务 API：geocode / POI / 路径 / 天气 / 静态地图）。
+      # apiKey 是凭据，不放这里——填到 config.secret.yaml 的 server.apps.amap.apiKey；
+      # 留空（不配 secret）= 优雅降级：App 仍可 enter，但所有工具不可调（canInvoke=false）。
+      # 以下都是非隐私调参，整段可省略、全部有默认值。
+      fetchTimeoutMs: 10000 # 单次 HTTP 超时
+      fetchMaxAttempts: 3 # 含首次的最大尝试次数（只对 429/5xx/网络错误 + 限频/QPS/服务忙 infocode 重试）
+      fetchBackoffBaseMs: 500 # 指数退避基数
+      fetchBackoffMaxMs: 8000 # 退避上限
+      poiPageSize: 10 # POI 每页条数（映射高德 page_size）
+      poiPageSizeCap: 25 # page_size 上限（高德硬上限 25）
+      aroundDefaultRadiusMeters: 1000 # 周边搜索默认半径(米)，App 默认（≠ 高德 API 默认 5000）
+      aroundRadiusCapMeters: 50000 # 周边搜索半径上限(米)
+      routeMaxSteps: 30 # 路线分步最多渲染几步，超出截断
+      transitMaxPlans: 3 # 公交换乘最多返回几个方案
+      responseMaxChars: 8000 # 单次结果进上下文的字符预算，超出截断
+      staticMapDefaultSize: "600*400" # 静态地图默认尺寸 '宽*高'，单边 ≤1024
+      staticMapScale: 2 # 静态地图清晰度倍数（1 普通 / 2 高清）
     browser:
       # 浏览器行为配置。拆进程后（issue #173）由独立的 kagami-browser 进程消费；整段可省略，全部字段都有默认值。
       # 只有这 4 个字段是环境相关的；humanize / viewport / 超时 / 截图尺寸等是代码常量，不在此暴露。

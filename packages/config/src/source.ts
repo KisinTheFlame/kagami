@@ -117,27 +117,12 @@ export function deepMerge(base: unknown, override: unknown): unknown {
   return result;
 }
 
-function collectLeafPaths(value: unknown, prefix: string, out: string[]): void {
-  if (isPlainObject(value)) {
-    for (const [key, child] of Object.entries(value)) {
-      collectLeafPaths(child, prefix ? `${prefix}.${key}` : key, out);
-    }
-    return;
-  }
-  if (prefix) out.push(prefix);
-}
-
 /**
- * 校验 `secret` 的每个叶子（点分路径）都落在 `allowedPaths` 白名单前缀内。
- * 越界即抛 `ConfigError(CONFIG_SECRET_FORBIDDEN_KEY)`——这道闸保证隐私文件永远不能
- * 改动 `services.*` / `server.databaseUrl` 等非隐私拓扑，使 loader 与只读 config.yaml
- * 的轻量 reader（gateway / oss / read-config）读到的共享字段永远一致。
+ * 校验 `config.secret.yaml` 根节点是对象（否则深合并无意义）。此前这里还有一道「隐私路径
+ * 白名单」把 secret 能覆盖的字段限死在凭据上——单人项目里那是低价值的官僚护栏，已移除。
+ * secret 现在可覆盖任意字段；原型污染仍由 `deepMerge` 的 `DANGEROUS_KEYS` 兜底丢弃。
  */
-export function assertSecretWhitelist(
-  secret: unknown,
-  allowedPaths: string[],
-  secretConfigPath: string,
-): void {
+export function assertSecretShape(secret: unknown, secretConfigPath: string): void {
   if (secret === null || secret === undefined) return;
   if (!isPlainObject(secret)) {
     throw new ConfigError({
@@ -145,33 +130,11 @@ export function assertSecretWhitelist(
       meta: { key: secretConfigPath, reason: "CONFIG_SECRET_INVALID" },
     });
   }
-
-  const leaves: string[] = [];
-  collectLeafPaths(secret, "", leaves);
-  for (const leaf of leaves) {
-    // 原型污染防护：任何一段是 __proto__ / constructor / prototype 都拒绝——否则嵌在
-    // 白名单前缀下的 `<allowed>.__proto__.x` 会通过前缀匹配（deepMerge 另有一层丢弃兜底）。
-    if (leaf.split(".").some(segment => DANGEROUS_KEYS.has(segment))) {
-      throw new ConfigError({
-        message: `config.secret.yaml 含危险键：${leaf}`,
-        meta: { key: leaf, reason: "CONFIG_SECRET_FORBIDDEN_KEY" },
-      });
-    }
-    const allowed = allowedPaths.some(prefix => leaf === prefix || leaf.startsWith(`${prefix}.`));
-    if (!allowed) {
-      throw new ConfigError({
-        message: `config.secret.yaml 含不允许的键：${leaf}（只能放隐私字段）`,
-        meta: { key: leaf, reason: "CONFIG_SECRET_FORBIDDEN_KEY" },
-      });
-    }
-  }
 }
 
 export type SecretMergeOptions = {
   /** 缺失 config.secret.yaml 时：true 抛 CONFIG_SECRET_NOT_FOUND；false 视为空合并。 */
   required: boolean;
-  /** 允许出现在 config.secret.yaml 里的隐私路径前缀白名单。 */
-  allowedPaths: string[];
 };
 
 export type LoadMergedRawConfigOptions = {
@@ -237,6 +200,6 @@ export async function loadMergedRawConfig(
   }
 
   const secret = await readYamlFile(secretConfigPath, "CONFIG_SECRET_INVALID");
-  assertSecretWhitelist(secret, options.secret.allowedPaths, secretConfigPath);
+  assertSecretShape(secret, secretConfigPath);
   return { configPath, raw: deepMerge(base ?? {}, secret ?? {}) };
 }
