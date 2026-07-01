@@ -15,7 +15,7 @@ import type {
 import { imageContentToBase64 } from "@kagami/llm";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
-import { OpenAiCodexAuthStore } from "./openai-codex-auth.js";
+import type { OpenAiCodexAuthProvider } from "./openai-codex-auth.js";
 
 const DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
 
@@ -54,7 +54,7 @@ type CodexResponseCompletedEvent = {
 
 export function createOpenAiCodexProvider(input: {
   config: OpenAiCodexConfig;
-  authStore: OpenAiCodexAuthStore;
+  authStore: OpenAiCodexAuthProvider;
 }): LlmProvider {
   return {
     id: "openai-codex",
@@ -92,7 +92,7 @@ export function createOpenAiCodexProvider(input: {
 
 async function sendCodexRequest(params: {
   config: OpenAiCodexConfig;
-  authStore: OpenAiCodexAuthStore;
+  authStore: OpenAiCodexAuthProvider;
   request: LlmChatRequest;
 }): Promise<LlmProviderChatResult> {
   const initialAuth = await params.authStore.getAuth();
@@ -148,7 +148,7 @@ async function sendCodexRequest(params: {
 
 async function fetchCodexResponse(params: {
   config: OpenAiCodexConfig;
-  auth: Awaited<ReturnType<OpenAiCodexAuthStore["getAuth"]>>;
+  auth: Awaited<ReturnType<OpenAiCodexAuthProvider["getAuth"]>>;
   requestBody: Record<string, unknown>;
 }): Promise<{
   status: number;

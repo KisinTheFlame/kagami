@@ -1,7 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getLlmProviderFailureContext } from "../../src/llm/provider.js";
-import { OpenAiCodexAuthStore } from "../../src/llm/providers/openai-codex-auth.js";
-import { createOpenAiCodexProvider } from "../../src/llm/providers/openai-codex-provider.js";
+import { getLlmProviderFailureContext } from "../src/provider.js";
+import type {
+  OpenAiCodexAuth,
+  OpenAiCodexAuthProvider,
+} from "../src/providers/openai-codex-auth.js";
+import { createOpenAiCodexProvider } from "../src/providers/openai-codex-provider.js";
+
+// 测试内桩：真正的 OpenAiCodexAuthStore 适配器已移到 agent 装配层，只对 provider 暴露
+// OpenAiCodexAuthProvider 接口。此处复刻其形态，`& Record<string, unknown>` 放行 mock 多余方法。
+class OpenAiCodexAuthStore implements OpenAiCodexAuthProvider {
+  private readonly service: OpenAiCodexAuthProvider;
+
+  public constructor(deps: {
+    codexAuthService: OpenAiCodexAuthProvider & Record<string, unknown>;
+  }) {
+    this.service = deps.codexAuthService;
+  }
+
+  public hasCredentials(): Promise<boolean> {
+    return this.service.hasCredentials();
+  }
+
+  public getAuth(options?: { forceRefresh?: boolean }): Promise<OpenAiCodexAuth> {
+    return this.service.getAuth(options);
+  }
+}
 
 function buildSseResponse(data: unknown, status = 200): Response {
   const payload = `event: response.completed\ndata: ${JSON.stringify(data)}\n\n`;

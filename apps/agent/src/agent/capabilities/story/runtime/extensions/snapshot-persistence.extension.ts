@@ -1,5 +1,5 @@
 import type { LoopAgentExtension } from "@kagami/agent-runtime";
-import type { LlmClient } from "../../../../../llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import type { StoryBatchPreparer } from "../story-batch-preparer.js";
 import type { StoryContextLifecycle } from "../story-context-lifecycle.js";
 

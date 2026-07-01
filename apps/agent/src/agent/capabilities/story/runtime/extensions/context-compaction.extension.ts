@@ -1,5 +1,5 @@
 import type { LoopAgentExtension, ReActRoundResult } from "@kagami/agent-runtime";
-import type { LlmClient } from "../../../../../llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import type { StoryContextLifecycle } from "../story-context-lifecycle.js";
 
 type StoryCompletion = Awaited<ReturnType<LlmClient["chat"]>>;

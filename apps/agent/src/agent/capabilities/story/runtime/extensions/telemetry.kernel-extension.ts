@@ -3,7 +3,7 @@ import type {
   ReActKernelRunRoundInput,
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import type { LlmClient } from "../../../../../llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import type { MetricService } from "../../../../../metric/application/metric.service.js";
 import { recordToolCallMetric } from "../../../../runtime/tool-call-metric.js";
 

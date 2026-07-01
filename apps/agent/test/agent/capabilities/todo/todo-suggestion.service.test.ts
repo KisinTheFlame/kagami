@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LlmClient } from "../../../../src/llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import {
   PROPOSE_TODOS_TOOL_NAME,
   TodoSuggestionService,

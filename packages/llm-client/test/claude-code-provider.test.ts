@@ -1,7 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getLlmProviderFailureContext } from "../../src/llm/provider.js";
-import { ClaudeCodeAuthStore } from "../../src/llm/providers/claude-code-auth.js";
-import { createClaudeCodeProvider } from "../../src/llm/providers/claude-code-provider.js";
+import { getLlmProviderFailureContext } from "../src/provider.js";
+import type { ClaudeCodeAuth, ClaudeCodeAuthProvider } from "../src/providers/claude-code-auth.js";
+import { createClaudeCodeProvider } from "../src/providers/claude-code-provider.js";
+
+// 测试内桩：真正的 ClaudeCodeAuthStore 适配器已随 llm-client/auth 边界移到 agent 装配层，
+// 它只对 provider 暴露 ClaudeCodeAuthProvider 接口。此处复刻其「包住一个 auth service」的形态，
+// 参数用 `& Record<string, unknown>` 放行 mock 上多出来的服务方法（绕过对象字面量多余属性检查）。
+class ClaudeCodeAuthStore implements ClaudeCodeAuthProvider {
+  private readonly service: ClaudeCodeAuthProvider;
+
+  public constructor(deps: {
+    claudeCodeAuthService: ClaudeCodeAuthProvider & Record<string, unknown>;
+  }) {
+    this.service = deps.claudeCodeAuthService;
+  }
+
+  public hasCredentials(): Promise<boolean> {
+    return this.service.hasCredentials();
+  }
+
+  public getAuth(options?: { forceRefresh?: boolean }): Promise<ClaudeCodeAuth> {
+    return this.service.getAuth(options);
+  }
+}
 
 afterEach(async () => {
   vi.useRealTimers();

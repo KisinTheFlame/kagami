@@ -1,4 +1,4 @@
-import type { LlmClient } from "../../../../llm/client.js";
+import type { LlmClient } from "@kagami/llm-client";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { createVisionSystemPrompt } from "./system-prompt.js";
 

@@ -3,7 +3,7 @@ import type {
   ReActKernelRunRoundInput,
   ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 import type { RootAgentCompletion, RootAgentToolExecutionData } from "../root-agent-runtime.js";
 import type { RootAgentExtensionHost } from "./extension-host.js";
 

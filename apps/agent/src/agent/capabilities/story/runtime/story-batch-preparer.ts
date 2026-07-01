@@ -1,5 +1,5 @@
-import type { LlmClient } from "../../../../llm/client.js";
-import type { LlmMessage } from "../../../../llm/types.js";
+import type { LlmClient } from "@kagami/llm-client";
+import type { LlmMessage } from "@kagami/llm-client";
 import type { LinearMessageLedgerRecord } from "../domain/story.js";
 import { FINISH_STORY_BATCH_TOOL_NAME } from "../task-agent/tools/finish-story-batch.tool.js";
 import type { LinearMessageLedgerDao } from "../infra/linear-message-ledger.dao.js";

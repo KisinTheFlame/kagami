@@ -4,7 +4,7 @@ import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
-import type { LlmMessage } from "../../src/llm/types.js";
+import type { LlmMessage } from "@kagami/llm-client";
 
 describe("DefaultAgentContext", () => {
   it("should append plain messages into the context", async () => {

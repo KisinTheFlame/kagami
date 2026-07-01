@@ -5,7 +5,7 @@ import {
   LoopLlmRetryExtension,
   type RetryBackoffPolicy,
 } from "../../src/agent/runtime/llm-retry.js";
-import type { LlmChatResponsePayload, LlmMessage } from "../../src/llm/types.js";
+import type { LlmChatResponsePayload, LlmMessage } from "@kagami/llm-client";
 
 describe("LoopLlmRetryExtension", () => {
   it("increments retry attempts and resets backoff after a successful model call", async () => {
