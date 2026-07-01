@@ -472,6 +472,8 @@ const CONFIG_SECRET_WHITELIST = [
   "server.bot.qq",
   "server.bot.creator",
   "server.napcat.listenGroupIds",
+  // wsUrl 内嵌 napcat access_token，属凭据；仓库公开，故整条进 config.secret.yaml。
+  "server.napcat.wsUrl",
 ];
 
 export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): Promise<Config> {

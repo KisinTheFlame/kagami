@@ -7,7 +7,13 @@
 
 ## [Unreleased]
 
-## [0.3.5.0] - 2026-07-01
+## [0.3.5.1] - 2026-07-01
+
+### Changed
+
+- config: 把 committed `config.yaml` 从「示例默认值」更新为**部署机的真实非隐私配置**（story 关闭、真实模型路由如 claude-opus-4-6/haiku、真实超时与通知窗口、真实 provider models 等），使受控 `config.yaml` 与实际部署零漂移——此前 committed 版本是从 example 派生的模板，与线上实际值差异很大。
+- config: `server.napcat.wsUrl` 加入 `CONFIG_SECRET_WHITELIST`。napcat WS 地址内嵌 `access_token` 属凭据，而本仓库公开，故整条 `wsUrl` 移入 gitignored 的 `config.secret.yaml`（committed `config.yaml` 不再含 `napcat.wsUrl`，由 secret 深合并提供）；`config.secret.yaml.example` 补上占位条目。
+- config: 移除死配置 `server.llm.providers.mimo`——`mimo` 不是 `LLM_PROVIDER_IDS` 的合法 provider（会被 schema 静默丢弃）、也无 usage 引用，是遗留的无用块（且带着一个真实 key）。
 
 ### Added
 
