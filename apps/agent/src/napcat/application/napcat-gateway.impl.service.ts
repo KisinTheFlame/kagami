@@ -22,6 +22,7 @@ import type {
   NapcatFriendInfo,
   NapcatGetGroupInfoInput,
   NapcatGetGroupInfoResult,
+  NapcatGroupFileListing,
   NapcatGroupMessageData,
   NapcatGatewayService,
   NapcatPersistableQqMessage,
@@ -97,6 +98,39 @@ const ForwardSegmentWithContentSchema = z.object({
       content: z.array(z.record(z.string(), z.unknown())).optional(),
     })
     .passthrough(),
+});
+const GroupFileListingResponseSchema = z.object({
+  files: z
+    .array(
+      z
+        .object({
+          file_id: NonEmptyStringSchema,
+          file_name: z.string(),
+          // 不同 napcat 版本字段名不一（file_size / size），两者都收，映射时兜底。
+          file_size: NonNegativeIntSchema.optional(),
+          size: NonNegativeIntSchema.optional(),
+          upload_time: NonNegativeIntSchema.optional(),
+          uploader_name: z.string().optional(),
+        })
+        .passthrough(),
+    )
+    .optional()
+    .default([]),
+  folders: z
+    .array(
+      z
+        .object({
+          folder_id: NonEmptyStringSchema,
+          folder_name: z.string(),
+          total_file_count: NonNegativeIntSchema.optional(),
+        })
+        .passthrough(),
+    )
+    .optional()
+    .default([]),
+});
+const GroupFileUrlResponseSchema = z.object({
+  url: NonEmptyStringSchema,
 });
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
@@ -561,6 +595,127 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     }
 
     return { nodes, total, offset: pageOffset };
+  }
+
+  public async listGroupFiles({
+    groupId,
+    folderId,
+    fileCount,
+  }: {
+    groupId: string;
+    folderId?: string;
+    fileCount?: number;
+  }): Promise<NapcatGroupFileListing> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
+    if (!groupIdResult.success) {
+      throw new BizError({
+        message: "groupId 必须是非空字符串",
+        meta: { reason: "INVALID_GROUP_ID" },
+      });
+    }
+
+    // folderId 省略 → 根目录；带上 → 该文件夹。两个 action 返回结构相同。
+    const action = folderId ? "get_group_files_by_folder" : "get_group_root_files";
+    const params: Record<string, unknown> = { group_id: groupIdResult.data };
+    if (fileCount !== undefined) {
+      params.file_count = fileCount;
+    }
+    if (folderId !== undefined) {
+      params.folder_id = folderId;
+    }
+
+    const data = await this.transport.request(action, params);
+    const parsed = GroupFileListingResponseSchema.safeParse(data ?? {});
+    if (!parsed.success) {
+      throw new BizError({
+        message: "NapCat 返回的群文件列表结构无效",
+        meta: { reason: "INVALID_GROUP_FILE_LISTING_RESPONSE" },
+      });
+    }
+
+    return {
+      files: parsed.data.files.map(file => ({
+        fileId: file.file_id,
+        fileName: file.file_name,
+        size: file.file_size ?? file.size ?? 0,
+        uploadTime: file.upload_time ?? null,
+        uploaderName: file.uploader_name ?? "",
+      })),
+      folders: parsed.data.folders.map(folder => ({
+        folderId: folder.folder_id,
+        folderName: folder.folder_name,
+        fileCount: folder.total_file_count ?? 0,
+      })),
+    };
+  }
+
+  public async getGroupFileUrl({
+    groupId,
+    fileId,
+  }: {
+    groupId: string;
+    fileId: string;
+  }): Promise<{ url: string }> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
+    const fileIdResult = NonEmptyStringSchema.safeParse(fileId);
+    if (!groupIdResult.success || !fileIdResult.success) {
+      throw new BizError({
+        message: "groupId / fileId 必须是非空字符串",
+        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
+      });
+    }
+
+    const data = await this.transport.request("get_group_file_url", {
+      group_id: groupIdResult.data,
+      file_id: fileIdResult.data,
+    });
+    const parsed = GroupFileUrlResponseSchema.safeParse(data ?? {});
+    if (!parsed.success) {
+      throw new BizError({
+        message: "NapCat 返回的群文件 URL 结构无效",
+        meta: { reason: "INVALID_GROUP_FILE_URL_RESPONSE" },
+      });
+    }
+    return { url: parsed.data.url };
+  }
+
+  public async uploadGroupFile({
+    groupId,
+    fileRef,
+    name,
+    folderId,
+  }: {
+    groupId: string;
+    fileRef: string;
+    name: string;
+    folderId?: string;
+  }): Promise<void> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
+    const nameResult = NonEmptyStringSchema.safeParse(name);
+    if (!groupIdResult.success || !nameResult.success) {
+      throw new BizError({
+        message: "groupId / name 必须是非空字符串",
+        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
+      });
+    }
+    if (fileRef.length === 0) {
+      throw new BizError({
+        message: "fileRef 不能为空",
+        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
+      });
+    }
+
+    // fileRef 走 base64:// 自包含形态；**不记录 fileRef**（base64 串会爆日志）。
+    const params: Record<string, unknown> = {
+      group_id: groupIdResult.data,
+      file: fileRef,
+      name: nameResult.data,
+    };
+    if (folderId !== undefined) {
+      params.folder_id = folderId;
+    }
+    // 返回 null；transport.request 已在 retcode!=0 时抛 BizError，失败自动冒泡。
+    await this.transport.request("upload_group_file", params);
   }
 
   private async loadForwardRawNodes(forwardId: string): Promise<Record<string, unknown>[]> {

@@ -71,6 +71,10 @@ type QqAppDeps = {
   sendMessageTool: ToolComponent;
   /** 已构造好的 send_resource 工具（按 resid 发图），由 factory 注入。 */
   sendResourceTool: ToolComponent;
+  /** 群文件三件套（list / download / upload），由 factory 注入（依赖网关 + OSS + fileMaxBytes）。 */
+  listGroupFilesTool: ToolComponent;
+  downloadGroupFileTool: ToolComponent;
+  uploadGroupFileTool: ToolComponent;
 };
 
 /**
@@ -118,6 +122,9 @@ export class QqApp implements App {
     recentMessageLimit,
     sendMessageTool,
     sendResourceTool,
+    listGroupFilesTool,
+    downloadGroupFileTool,
+    uploadGroupFileTool,
   }: QqAppDeps) {
     this.napcatGateway = napcatGateway;
     this.notificationCenter = notificationCenter;
@@ -136,6 +143,9 @@ export class QqApp implements App {
       new ListConversationsTool({ getApp: () => this }),
       new ViewForwardTool({ getApp: () => this }),
       new ListFacesTool(),
+      listGroupFilesTool,
+      downloadGroupFileTool,
+      uploadGroupFileTool,
     ];
   }
 

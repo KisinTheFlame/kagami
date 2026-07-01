@@ -133,6 +133,28 @@ export type NapcatForwardMessagePage = {
   offset: number;
 };
 
+/** 群文件系统里的一个文件。 */
+export type NapcatGroupFileEntry = {
+  fileId: string;
+  fileName: string;
+  size: number;
+  uploadTime: number | null;
+  uploaderName: string;
+};
+
+/** 群文件系统里的一个文件夹。 */
+export type NapcatGroupFolderEntry = {
+  folderId: string;
+  folderName: string;
+  fileCount: number;
+};
+
+/** 群文件某一层（根或某文件夹）的列表：子文件 + 子文件夹。 */
+export type NapcatGroupFileListing = {
+  files: NapcatGroupFileEntry[];
+  folders: NapcatGroupFolderEntry[];
+};
+
 export interface NapcatGatewayService {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -159,4 +181,25 @@ export interface NapcatGatewayService {
     offset: number;
     limit: number;
   }): Promise<NapcatForwardMessagePage>;
+  /**
+   * 列群文件某一层：folderId 省略取根目录（get_group_root_files），带上则取该文件夹
+   * （get_group_files_by_folder）。fileCount 是向 napcat 请求的数量上限（默认由调用方给）。
+   */
+  listGroupFiles(input: {
+    groupId: string;
+    folderId?: string;
+    fileCount?: number;
+  }): Promise<NapcatGroupFileListing>;
+  /** 拿一个群文件的下载 URL（get_group_file_url，返回腾讯 CDN 直链，agent 侧可直接拉取）。 */
+  getGroupFileUrl(input: { groupId: string; fileId: string }): Promise<{ url: string }>;
+  /**
+   * 上传一个文件到群（upload_group_file）。fileRef 走 napcat 通用 file resolver，用
+   * `base64://` 形态自包含（不依赖 napcat 访问 agent 的 OSS）。**不要记录 fileRef**——base64 会爆日志。
+   */
+  uploadGroupFile(input: {
+    groupId: string;
+    fileRef: string;
+    name: string;
+    folderId?: string;
+  }): Promise<void>;
 }
