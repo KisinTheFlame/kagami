@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [0.3.6.0] - 2026-07-01
+
+### Added
+
+- agent/apps: 新增**高德地图 App**（`server.apps.amap`），把高德 Web 服务 API 包成小镜手机 OS 上一个可 `enter` 的地点（issue #182）。8 个 InvokeTool 子工具，顶层 tools 列表零新增：`geocode` / `regeocode`（地名↔坐标）、`search_poi` / `search_around`（POI 关键字 / 周边）、`plan_route`（驾车 / 步行 / 骑行）、`plan_transit`（公交换乘）、`weather`（实况 / 预报）、`static_map`（静态地图 PNG 原图直进多模态上下文 + 落 OSS 拿 resid，仿 browser 截图）。坐标全程 GCJ-02；重内容走 `append_message` 尾部、`tool_result` 只回简短状态；apiKey 缺省时 `canInvoke=false` 优雅降级（仿 OSS 整段省略即禁用）。API 参数经 live 实测 + 双模型评审校正（v5 分页 `page_size`/`page_num`、路径 `show_fields=cost,navi`、bicycling 顶层 `duration`、transit `city1`/`city2` citycode、静态地图 content-type 特判、错误码分类重试、key 脱敏、`< > &` 转义防上下文注入）。
+
+### Removed
+
+- config: 移除 `CONFIG_SECRET_WHITELIST` 隐私路径白名单机制。此前 `config.secret.yaml` 只能覆盖白名单内的凭据路径，越界（如 `services.*`）会启动报错——单人项目里这层护栏价值低。现在 secret 可覆盖任意字段；**隐私拆分本体（committed `config.yaml` + gitignored `config.secret.yaml` 深合并）保留不变**，凭据仍只放本地 secret（仓库公开）；原型污染仍由 `@kagami/config` 深合并的 `DANGEROUS_KEYS` 兜底丢弃。高德 apiKey 随之走 `config.secret.yaml` 的 `server.apps.amap.apiKey`。
+
 ## [0.3.5.3] - 2026-07-01
 
 ### Changed

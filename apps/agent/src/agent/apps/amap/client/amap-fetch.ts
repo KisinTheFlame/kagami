@@ -32,20 +32,50 @@ export class AmapError extends BizError {
   public readonly info: string;
 
   public constructor(input: { infocode: string; info: string; url: string }) {
+    // info 是高德状态文本，理论上不含 URL；但防御性地脱敏，万一错误页把含 key 的 URL 回显进
+    // info，也不会经 message/meta 泄漏进 tool_result。
+    const info = redactUrl(input.info);
     super({
-      message: `高德接口错误 [${input.infocode}] ${input.info}`,
-      meta: { reason: "AMAP_API_ERROR", infocode: input.infocode, info: input.info },
+      message: `高德接口错误 [${input.infocode}] ${info}`,
+      meta: { reason: "AMAP_API_ERROR", infocode: input.infocode, info },
     });
     this.infocode = input.infocode;
-    this.info = input.info;
+    this.info = info;
   }
 }
 
 type InfoClass = "ok" | "retryable" | "quota" | "fatal";
 
 /**
- * 按高德返回的 `info` 文本（+ infocode 兜底）给错误分类。用文本关键字而非穷举 infocode，
- * 对高德新增 / 调整错误码更稳。参考高德错误码表的 info 命名。
+ * 高德限频 / 并发超限 / 服务瞬时忙的 infocode（可退避重试）。用 infocode 集合兜底，因为高德
+ * 的 `info` 文本可能是中文（如"并发量已达到上限"）或缺失，只靠 ASCII 关键字会把可重试的
+ * 限流误判成 fatal、白白丢掉重试机会。参考高德错误码表。
+ */
+const RETRYABLE_INFOCODES = new Set([
+  "10004", // ACCESS_TOO_FREQUENT（访问过于频繁）
+  "10014", // 服务响应繁忙 / QPS 超限
+  "10015", // 服务器繁忙
+  "10019", // CUQPS_HAS_EXCEEDED_THE_LIMIT
+  "10020",
+  "10021",
+  "10022",
+  "10029", // 各类并发/单位时间配额超限
+]);
+
+/** 高德把数字字段偶尔回成 JSON number；统一强转成字符串，避免 typeof 判定把成功当失败。 */
+function coerceStr(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return "";
+}
+
+/**
+ * 按 infocode（+ `info` 文本兜底）给错误分类。限流类优先用 infocode 集合判定；引擎数据错误
+ * （ENGINE_RESPONSE_DATA_ERROR 等）是确定性错误，不重试。
  */
 function classifyInfo(info: string, infocode: string): InfoClass {
   if (infocode === "10000") {
@@ -56,12 +86,11 @@ function classifyInfo(info: string, infocode: string): InfoClass {
     return "quota";
   }
   if (
+    RETRYABLE_INFOCODES.has(infocode) ||
     t.includes("TOO_FREQUENT") ||
     t.includes("QPS") ||
     t.includes("BUSY") ||
-    t.includes("TIMEOUT") ||
-    t.includes("SERVICE_RESPONSE") ||
-    t.includes("ENGINE_RESPONSE")
+    t.includes("TIMEOUT")
   ) {
     return "retryable";
   }
@@ -106,8 +135,7 @@ export async function amapFetchJson(url: string, options: AmapFetchOptions): Pro
 
     if (!response.ok) {
       if (RETRYABLE_STATUS.has(response.status) && attempt < maxAttempts) {
-        const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
-        await sleep(retryAfterMs ?? computeBackoffMs(attempt, backoffBaseMs, backoffMaxMs));
+        await sleep(resolveWaitMs(response, attempt, backoffBaseMs, backoffMaxMs));
         continue;
       }
       throw new BizError({
@@ -133,7 +161,7 @@ export async function amapFetchJson(url: string, options: AmapFetchOptions): Pro
     }
 
     const envelope = (body ?? {}) as AmapJsonEnvelope;
-    const infocode = typeof envelope.infocode === "string" ? envelope.infocode : "";
+    const infocode = coerceStr(envelope.infocode);
     const info = typeof envelope.info === "string" ? envelope.info : "";
     const klass = classifyInfo(info, infocode);
 
@@ -186,7 +214,7 @@ export async function amapFetchImage(url: string, options: AmapFetchOptions): Pr
 
     if (!response.ok) {
       if (RETRYABLE_STATUS.has(response.status) && attempt < maxAttempts) {
-        await sleep(computeBackoffMs(attempt, backoffBaseMs, backoffMaxMs));
+        await sleep(resolveWaitMs(response, attempt, backoffBaseMs, backoffMaxMs));
         continue;
       }
       throw new BizError({
@@ -196,25 +224,31 @@ export async function amapFetchImage(url: string, options: AmapFetchOptions): Pr
     }
 
     const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.startsWith("image/")) {
+    const subtype = contentType.split(";")[0].trim();
+    if (subtype.startsWith("image/") && subtype.length > "image/".length) {
       const bytes = Buffer.from(await response.arrayBuffer());
-      return { bytes, mimeType: contentType.split(";")[0].trim() || "image/png" };
+      return { bytes, mimeType: subtype };
     }
 
     // 非图片：高德把错误塞在 JSON / 文本里。解析出 infocode/info 抛 AmapError。
+    // 非 JSON 兜底文本可能回显含 key 的请求 URL，先脱敏再进 info，绝不让 key 泄漏进上下文。
     const text = await response.text();
     let infocode = "";
-    let info = text.slice(0, 200);
+    let info = redactUrl(text.slice(0, 200));
     try {
       const parsed = JSON.parse(text) as AmapJsonEnvelope;
-      if (typeof parsed.infocode === "string") {
-        infocode = parsed.infocode;
-      }
+      infocode = coerceStr(parsed.infocode);
       if (typeof parsed.info === "string") {
         info = parsed.info;
       }
     } catch {
-      // 非 JSON，info 保留文本前缀。
+      // 非 JSON，info 保留脱敏后的文本前缀。
+    }
+    // 限流 / 繁忙类错误退避重试（与 JSON 路径一致），其余直接抛。
+    if (classifyInfo(info, infocode) === "retryable" && attempt < maxAttempts) {
+      lastError = new AmapError({ infocode, info, url });
+      await sleep(computeBackoffMs(attempt, backoffBaseMs, backoffMaxMs));
+      continue;
     }
     throw new AmapError({ infocode, info, url });
   }
@@ -224,6 +258,19 @@ export async function amapFetchImage(url: string, options: AmapFetchOptions): Pr
     meta: { reason: "AMAP_STATICMAP_EXHAUSTED", url: redactUrl(url) },
     cause: lastError,
   });
+}
+
+/**
+ * 决定这次重试前睡多久：优先尊重服务端 `Retry-After`，但**夹到 `backoffMaxMs`**——否则一个
+ * `Retry-After: 86400` 会让工具在主循环里睡一天，卡死整个 Agent（无覆盖物时的致命阻塞）。
+ * 没有 Retry-After 时退回指数退避 + 抖动。
+ */
+function resolveWaitMs(response: Response, attempt: number, baseMs: number, maxMs: number): number {
+  const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
+  if (retryAfterMs !== undefined) {
+    return Math.min(retryAfterMs, maxMs);
+  }
+  return computeBackoffMs(attempt, baseMs, maxMs);
 }
 
 function computeBackoffMs(attempt: number, baseMs: number, maxMs: number): number {

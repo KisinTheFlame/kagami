@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import { renderPoiList } from "../amap-screen.js";
+import { escapeAttr, renderPoiList } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
@@ -70,7 +70,7 @@ export class SearchPoiTool extends ZodToolComponent<typeof Schema> {
       pageSize: input.page_size,
       pageNum: input.page_num,
     });
-    const attrs = input.keywords ? ` keywords="${input.keywords.replace(/"/g, "'")}"` : "";
+    const attrs = input.keywords ? ` keywords="${escapeAttr(input.keywords)}"` : "";
     const content = renderPoiList("amap_poi", result, attrs, this.getMaxChars());
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
     return { content: JSON.stringify({ ok: true, count: result.pois.length }), effects };

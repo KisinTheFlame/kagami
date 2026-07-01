@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { AmapClient, StaticMapMarker, StaticMapPath } from "../client/amap-client.js";
+import { escapeAttr } from "../amap-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../oss/oss-client.js";
 
@@ -20,25 +21,32 @@ const SizeSchema = z
     { message: "size 单边需在 1-1024" },
   );
 
+// points 上限：客户端最终只取 marker 前 10 点 / path 前 100 点，这里在校验层就封顶，
+// 避免超大数组在 Zod 遍历阶段吃 CPU/内存。
 const MarkerSchema = z.object({
   label: z.string().optional(),
   color: z.string().optional(),
   size: z.enum(["small", "mid", "large"]).optional(),
-  points: z.array(z.string().min(1)).min(1),
+  points: z.array(z.string().min(1)).min(1).max(10),
 });
 const PathSchema = z.object({
   weight: z.number().int().positive().optional(),
   color: z.string().optional(),
-  points: z.array(z.string().min(1)).min(1),
+  points: z.array(z.string().min(1)).min(1).max(100),
 });
 
-const Schema = z.object({
-  location: z.string().min(1).optional(),
-  zoom: z.number().int().min(1).max(17).optional(),
-  size: SizeSchema.optional(),
-  markers: z.array(MarkerSchema).max(10).optional(),
-  paths: z.array(PathSchema).max(4).optional(),
-});
+const Schema = z
+  .object({
+    location: z.string().min(1).optional(),
+    zoom: z.number().int().min(1).max(17).optional(),
+    size: SizeSchema.optional(),
+    markers: z.array(MarkerSchema).max(10).optional(),
+    paths: z.array(PathSchema).max(4).optional(),
+  })
+  // 无覆盖物时高德要求 location 居中，否则只带 key/size 的请求必然参数错误。
+  .refine(v => Boolean(v.location) || (v.markers?.length ?? 0) > 0 || (v.paths?.length ?? 0) > 0, {
+    message: "没有 markers/paths 时必须给 location（用于地图居中）",
+  });
 
 type Deps = {
   getClient: () => AmapClient;
@@ -72,7 +80,10 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
         items: {
           type: "object",
           properties: {
-            label: { type: "string", description: "标注字符，仅单个 0-9 / A-Z / 单个汉字。" },
+            label: {
+              type: "string",
+              description: "标注字符，仅单个 0-9 或大写 A-Z（其他会被忽略）。",
+            },
             color: { type: "string", description: "颜色，如 '0xFF0000'。" },
             size: { type: "string", enum: ["small", "mid", "large"], description: "标注大小。" },
             points: {
@@ -129,7 +140,7 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
       paths: input.paths as StaticMapPath[] | undefined,
     });
     const resid = await this.tryPutToOss(image.bytes, image.mimeType);
-    const residAttr = resid ? ` resid="${resid}"` : "";
+    const residAttr = resid ? ` resid="${escapeAttr(resid)}"` : "";
     const appendEffect: RootAgentEffect = {
       type: "append_message",
       content: `<amap_static_map${residAttr} />`,

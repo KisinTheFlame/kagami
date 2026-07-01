@@ -3,8 +3,10 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 /**
  * 校验并归一化一个高德坐标串 `"经度,纬度"`（GCJ-02，经度在前）。
  *
- * 高德要求经纬度最多 6 位小数；这里做范围校验（防 `lat,lng` 反序）并把小数截到 6 位。
- * 非法输入抛 BizError（基类会 catch 成结构化错误进 tool_result）。
+ * 高德要求经纬度最多 6 位小数；这里做范围校验并把小数截到 6 位。范围校验能挡住纬度 >90 的
+ * 明显反序（如把 `lat,lng` 写反且真实经度 >90），但两个分量都 ≤90 时无法判定是否反序——这是
+ * 坐标本身的歧义，非本函数能消除，只作尽力而为的一道闸。非法输入抛 BizError（基类会 catch
+ * 成结构化错误进 tool_result）。
  */
 export function normalizeLngLat(value: string, field = "location"): string {
   const trimmed = (value ?? "").trim();

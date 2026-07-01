@@ -94,6 +94,63 @@ describe("AmapClient URL building", () => {
     expect(calls[0]).toContain("extensions=all");
   });
 
+  it("throws (not silent-empty) when the response shape can't be parsed", async () => {
+    // infocode 10000 but geocodes is a string, not an array → schema parse fails.
+    const { mock } = recordingFetch({ geocodes: "oops" });
+    vi.stubGlobal("fetch", mock);
+    await expect(buildClient().geocode({ address: "x" })).rejects.toMatchObject({
+      meta: { reason: "AMAP_PARSE_FAILED" },
+    });
+  });
+
+  it("reads bicycling duration from the top-level path.duration (no cost object)", async () => {
+    const { mock } = recordingFetch({
+      // bicycling returns step_distance as a NUMBER (not string) — must still parse.
+      route: {
+        paths: [
+          {
+            distance: "3794",
+            duration: "1315",
+            steps: [{ instruction: "骑行", step_distance: 215 }],
+          },
+        ],
+      },
+    });
+    vi.stubGlobal("fetch", mock);
+    const paths = await buildClient().planRoute({
+      origin: "116.39,39.90",
+      destination: "116.47,39.87",
+      mode: "bicycling",
+    });
+    expect(paths[0]).toMatchObject({ distanceMeters: "3794", durationSeconds: "1315" });
+  });
+
+  it("static_map uppercases marker label, drops CJK/multichar, rejects bad color", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        calls.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: {
+            get: (k: string) => (k.toLowerCase() === "content-type" ? "image/png" : null),
+          },
+          arrayBuffer: async () => new ArrayBuffer(2),
+        } as unknown as Response);
+      }),
+    );
+    await buildClient().staticMap({
+      size: "400*300",
+      scale: 2,
+      markers: [{ label: "a", color: "0xAB:CD", points: ["116.39,39.90"] }],
+    });
+    const decoded = decodeURIComponent(calls[0]);
+    // lowercase 'a' → 'A'; bad color 0xAB:CD → default 0xFF0000.
+    expect(decoded).toContain("mid,0xFF0000,A:116.39,39.9");
+  });
+
   it("parses a driving path into distance/duration/steps", async () => {
     const { mock } = recordingFetch({
       route: {

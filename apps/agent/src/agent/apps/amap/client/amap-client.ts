@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BizError } from "@kagami/kernel/errors/biz-error";
 import {
   amapFetchImage,
   amapFetchJson,
@@ -7,17 +8,41 @@ import {
 } from "./amap-fetch.js";
 import { normalizeLngLat } from "./amap-coord.js";
 
+/**
+ * 断言 safeParse 成功，否则抛。**解析失败即抛**，不静默降级成空结果——否则高德改字段 /
+ * 套餐降级 / 返回异常结构时，工具会把「解析失败」误报成「没找到 / 没规划出」（静默数据损坏）。
+ * 抛出后基类会 catch 成结构化 tool_result，让 Agent 知道是接口异常而非真的空。
+ *
+ * 用断言函数（asserts）而非返回值：调用方持有的是具体 schema，narrow 后 `parsed.data`
+ * 保持精确类型，避免泛型 helper 把返回值退化成 any。
+ */
+function assertParsed<T>(
+  parsed: z.SafeParseReturnType<unknown, T>,
+  endpoint: string,
+): asserts parsed is z.SafeParseSuccess<T> {
+  if (!parsed.success) {
+    throw new BizError({
+      message: `高德 ${endpoint} 响应结构无法解析（可能是接口变更或异常返回）`,
+      meta: { reason: "AMAP_PARSE_FAILED", endpoint },
+    });
+  }
+}
+
 /** 高德 Web 服务 API 基址。 */
 const V3 = "https://restapi.amap.com/v3";
 const V5 = "https://restapi.amap.com/v5";
 
 export type AmapDriveMode = "driving" | "walking" | "bicycling";
 
-/** 高德有时把数字字段返回成字符串；统一用宽松字符串解析，渲染层再决定怎么显示。 */
+/**
+ * 高德在不同接口 / 字段间混用 string 与 number（如 step_distance：驾车回字符串 "396"、
+ * 骑行回数字 215）。统一接受两者并归一成 string|null，避免解析层因个别字段类型不稳而整体
+ * 失败（那会被 assertParsed 当成接口异常抛出）。渲染层只吃 string，故这里收口。
+ */
 const Str = z
-  .string()
+  .union([z.string(), z.number()])
   .nullish()
-  .transform(v => v ?? null);
+  .transform(v => (v == null ? null : String(v)));
 
 // === geocode ===
 const GeocodeItemSchema = z.object({
@@ -81,7 +106,9 @@ export type AmapPoiResult = { count: string | null; pois: AmapPoi[] };
 const RouteStepSchema = z.object({ instruction: Str, step_distance: Str });
 const RoutePathSchema = z.object({
   distance: Str,
+  // driving/walking 的耗时在 cost.duration；bicycling 不返回 cost，耗时在 path 顶层 duration。
   cost: z.object({ duration: Str }).nullish(),
+  duration: Str,
   steps: z.array(RouteStepSchema).nullish(),
 });
 const RouteResponseSchema = z.object({
@@ -218,14 +245,16 @@ export class AmapClient {
     }
     const raw = await amapFetchJson(`${V3}/geocode/geo?${params}`, this.fetchOptions);
     const parsed = GeocodeResponseSchema.safeParse(raw);
-    return parsed.success ? (parsed.data.geocodes ?? []) : [];
+    assertParsed(parsed, "geocode");
+    return parsed.data.geocodes ?? [];
   }
 
   public async regeocode(input: { location: string }): Promise<AmapRegeocode> {
     const params = this.baseParams({ location: normalizeLngLat(input.location) });
     const raw = await amapFetchJson(`${V3}/geocode/regeo?${params}`, this.fetchOptions);
     const parsed = RegeocodeResponseSchema.safeParse(raw);
-    const r = parsed.success ? parsed.data.regeocode : null;
+    assertParsed(parsed, "regeocode");
+    const r = parsed.data.regeocode ?? null;
     const c = r?.addressComponent ?? null;
     return {
       formattedAddress: r?.formatted_address ?? null,
@@ -299,10 +328,12 @@ export class AmapClient {
     });
     const raw = await amapFetchJson(`${V5}/direction/${input.mode}?${params}`, this.fetchOptions);
     const parsed = RouteResponseSchema.safeParse(raw);
-    const paths = parsed.success ? (parsed.data.route?.paths ?? []) : [];
+    assertParsed(parsed, `direction/${input.mode}`);
+    const paths = parsed.data.route?.paths ?? [];
     return paths.map(p => ({
       distanceMeters: p.distance,
-      durationSeconds: p.cost?.duration ?? null,
+      // driving/walking 在 cost.duration；bicycling 无 cost，耗时在顶层 duration。
+      durationSeconds: p.cost?.duration ?? p.duration ?? null,
       steps: (p.steps ?? []).map(s => s.instruction).filter((x): x is string => Boolean(x)),
     }));
   }
@@ -325,7 +356,8 @@ export class AmapClient {
       this.fetchOptions,
     );
     const parsed = TransitResponseSchema.safeParse(raw);
-    const transits = parsed.success ? (parsed.data.route?.transits ?? []) : [];
+    assertParsed(parsed, "direction/transit");
+    const transits = parsed.data.route?.transits ?? [];
     return transits.map(t => ({
       durationSeconds: t.cost?.duration ?? null,
       distanceMeters: t.distance,
@@ -344,10 +376,11 @@ export class AmapClient {
     });
     const raw = await amapFetchJson(`${V3}/weather/weatherInfo?${params}`, this.fetchOptions);
     const parsed = WeatherResponseSchema.safeParse(raw);
+    assertParsed(parsed, "weather");
     return {
       kind: input.kind,
-      lives: parsed.success ? (parsed.data.lives ?? []) : [],
-      forecasts: parsed.success ? (parsed.data.forecasts ?? []) : [],
+      lives: parsed.data.lives ?? [],
+      forecasts: parsed.data.forecasts ?? [],
     };
   }
 
@@ -376,10 +409,8 @@ export class AmapClient {
 
   private parsePoi(raw: unknown): AmapPoiResult {
     const parsed = PoiResponseSchema.safeParse(raw);
-    return {
-      count: parsed.success ? parsed.data.count : null,
-      pois: parsed.success ? (parsed.data.pois ?? []) : [],
-    };
+    assertParsed(parsed, "place");
+    return { count: parsed.data.count, pois: parsed.data.pois ?? [] };
   }
 
   private clampPageSize(pageSize?: number): number {
@@ -408,9 +439,19 @@ function describeSegment(seg: z.infer<typeof TransitSegmentSchema>): string | nu
   return null;
 }
 
-const MARKER_LABEL_RE = /^(?:[0-9A-Z]|[一-龥])$/;
+// 高德静态地图 label 只接受单个 0-9 / A-Z（大写）。传汉字 / 小写 / 多字符会让整张图
+// 报参数错误，所以入口就 uppercase 后收窄到这个集合，非法则丢弃 label（标注点仍画）。
+const MARKER_LABEL_RE = /^[0-9A-Z]$/;
+const COLOR_RE = /^0x[0-9a-fA-F]{6}$/;
+const MARKER_MAX_POINTS = 10; // 高德静态地图标注点总数上限
+const PATH_MAX_POINTS = 100; // 单条折线点数上限，防超长 URL
 
-/** 把结构化 markers 拼成高德线协议串；样式 `size,color,label:loc;loc`，最多 10 个标注点。 */
+/** 校验高德颜色（`0xRRGGBB`）；非法回退到给定默认，避免颜色里的 : ; | , 污染线协议串。 */
+function safeColor(color: string | undefined, fallback: string): string {
+  return color && COLOR_RE.test(color) ? color : fallback;
+}
+
+/** 把结构化 markers 拼成高德线协议串；样式 `size,color,label:loc;loc`，标注点总数 ≤10。 */
 function buildMarkers(markers?: StaticMapMarker[]): string | null {
   if (!markers || markers.length === 0) {
     return null;
@@ -419,11 +460,12 @@ function buildMarkers(markers?: StaticMapMarker[]): string | null {
   let pointCount = 0;
   for (const m of markers) {
     const size = m.size ?? "mid";
-    const color = m.color ?? "0xFF0000";
-    const label = m.label && MARKER_LABEL_RE.test(m.label) ? m.label : "";
+    const color = safeColor(m.color, "0xFF0000");
+    const upper = m.label?.toUpperCase() ?? "";
+    const label = MARKER_LABEL_RE.test(upper) ? upper : "";
     const locs: string[] = [];
     for (const p of m.points) {
-      if (pointCount >= 10) {
+      if (pointCount >= MARKER_MAX_POINTS) {
         break;
       }
       locs.push(normalizeLngLat(p, "marker.points"));
@@ -432,14 +474,14 @@ function buildMarkers(markers?: StaticMapMarker[]): string | null {
     if (locs.length > 0) {
       groups.push(`${size},${color},${label}:${locs.join(";")}`);
     }
-    if (pointCount >= 10) {
+    if (pointCount >= MARKER_MAX_POINTS) {
       break;
     }
   }
   return groups.length > 0 ? groups.join("|") : null;
 }
 
-/** 把结构化 paths 拼成高德线协议串；样式 `weight,color:loc;loc`，最多 4 条折线。 */
+/** 把结构化 paths 拼成高德线协议串；样式 `weight,color:loc;loc`，最多 4 条折线、每条 ≤100 点。 */
 function buildPaths(paths?: StaticMapPath[]): string | null {
   if (!paths || paths.length === 0) {
     return null;
@@ -447,8 +489,8 @@ function buildPaths(paths?: StaticMapPath[]): string | null {
   const groups: string[] = [];
   for (const p of paths.slice(0, 4)) {
     const weight = p.weight && p.weight > 0 ? p.weight : 5;
-    const color = p.color ?? "0x0000FF";
-    const locs = p.points.map(pt => normalizeLngLat(pt, "path.points"));
+    const color = safeColor(p.color, "0x0000FF");
+    const locs = p.points.slice(0, PATH_MAX_POINTS).map(pt => normalizeLngLat(pt, "path.points"));
     if (locs.length > 0) {
       groups.push(`${weight},${color}:${locs.join(";")}`);
     }

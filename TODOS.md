@@ -66,16 +66,11 @@
 - **Completed:** 2026-05-23, [#72](https://github.com/KisinTheFlame/kagami/pull/72)
 -->
 
-## tools
-
 ### 接入高德 Web API
 
 - **Priority:** P2
-- **Status:** open
-- **Context:** 小伊和楠楠已经由悄得乐/龙哥接入了高德 Web API（POI 搜索、附近餐厅等），小镜目前没有地图类工具。闻震在竞技场说"该让黑叔叔给你和 Nova 上强度了"，可以参考小伊的接入方式给小镜也加一个高德 key。
-- **Notes:** 小伊用的是高德 Web API，key 由悄得乐注册。闻震需要注册自己的 key 或复用已有 key。
-
----
+- **Completed:** v0.3.6.0 (2026-07-01), [#182](https://github.com/KisinTheFlame/kagami/issues/182)
+- **Notes:** 做成可 `enter` 的高德地图 App（`server.apps.amap`，8 个 InvokeTool 子工具，含静态地图出图）。
 
 ## oss
 

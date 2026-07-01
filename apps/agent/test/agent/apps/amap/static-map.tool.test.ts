@@ -61,6 +61,11 @@ describe("StaticMapTool", () => {
     expect((result.effects?.[0] as AppendMessageEffect).image).toBeDefined();
   });
 
+  it("rejects an empty call (no location, no markers, no paths)", async () => {
+    const result = await buildTool(undefined).execute({}, {});
+    expect(JSON.parse(result.content)).toMatchObject({ ok: false, error: "INVALID_ARGUMENTS" });
+  });
+
   it("rejects an oversized size (validation)", async () => {
     const result = await buildTool(undefined).execute(
       { location: "116.39,39.90", size: "2000*2000" },

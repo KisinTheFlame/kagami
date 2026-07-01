@@ -77,6 +77,21 @@ describe("amapFetchJson", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("treats a numeric infocode 10000 as success (not fatal)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ infocode: 10000, ok: true })));
+    await expect(amapFetchJson("https://x?key=K", FAST)).resolves.toMatchObject({ ok: true });
+  });
+
+  it("retries a throttle infocode even when info is Chinese/empty (infocode-set fallback)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ infocode: "10004", info: "并发量已达到上限" }))
+      .mockResolvedValueOnce(jsonResponse({ infocode: "10000", ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(amapFetchJson("https://x?key=K", FAST)).resolves.toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("short-circuits on quota infocode (no retry)", async () => {
     const fetchMock = vi
       .fn()
@@ -106,6 +121,18 @@ describe("amapFetchImage", () => {
     const result = await amapFetchImage("https://x?key=K", FAST);
     expect(result.mimeType).toBe("image/png");
     expect(result.bytes.toString()).toBe("PNGDATA");
+  });
+
+  it("retries a throttle error page (infocode) then returns the image", async () => {
+    const bytes = Buffer.from("PNGDATA");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errorPageResponse({ infocode: "10004", info: "ACCESS_TOO_FREQUENT" }))
+      .mockResolvedValueOnce(imageResponse(bytes));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await amapFetchImage("https://x?key=K", FAST);
+    expect(result.bytes.toString()).toBe("PNGDATA");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("throws AmapError (not an image) when content-type is JSON error page", async () => {
