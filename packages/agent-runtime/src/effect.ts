@@ -9,8 +9,6 @@ import type { LlmMessage } from "@kagami/llm";
  *
  * 工具 / App 钩子 / 事件 handler / LoopAgent extension 都产 Effect[]。
  * Agent 端用自己的 `EffectInterpreter` 解释执行。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
 export interface Effect {
   readonly type: string;
@@ -32,8 +30,6 @@ export interface Effect {
  * **Effect 自描述原则**：每种 Effect 自带完整语义负载（比如 `terminate` 自带
  * `content: string`）。Interpreter 不依赖外部 "tool 上下文" 参数——这样 host
  * 直接调和 kernel 间接调走完全相同的 `apply` 方法。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
 export interface EffectInterpreter<TControl = never> {
   apply(effects: readonly Effect[]): Promise<EffectInterpreterResult<TControl>>;
@@ -75,7 +71,6 @@ export class NoopEffectInterpreter implements EffectInterpreter<never> {
 // 公共 Effect + 公共 handler 收在 agent-runtime；Agent 专属 Effect + 专属 handler
 // 留在各 Agent 自己的包里。
 //
-// 设计依据：[docs/effect-model.md](docs/effect-model.md)。
 // ============================================================================
 
 export type EffectHandlerResult<TControl = never> = {

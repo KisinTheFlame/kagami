@@ -19,7 +19,6 @@ export type ToolExecutionResult = {
   /**
    * 可选。结构化副作用描述，由 Agent 的 EffectInterpreter 按数组顺序解释。
    * Effect 是开放接口；具体类型由调用方 Agent 解释。
-   * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
    */
   effects?: readonly Effect[];
 };

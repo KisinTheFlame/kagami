@@ -8,17 +8,20 @@ const HelpArgumentsSchema = z.object({}).strict();
 
 export type HelpToolDeps = {
   appManager: AppManager;
-  /**
-   * 由 host（通常是 RootAgentSession）提供，返回 Kagami 当前进入的 App id。
-   * 未进入任何 App 时返回 undefined。
-   */
+  /** 由 host 提供，返回当前进入的 App id；未进入任何 App 时返回 undefined。 */
   getCurrentApp(): AppId | undefined;
+  /**
+   * 不在任何 App 里时返回的提示文案。「怎么进入一个 App」是 host 的导航语义（工具名
+   * 因 host 而异），内核不认识，故整段文案由 host 注入。
+   */
+  notInAppHint: string;
+  /** 当前 App 已找不到（被卸载 / 重启）时返回的提示文案，参数是丢失的 appId。由 host 提供。 */
+  appNotFoundHint(appId: AppId): string;
 };
 
 /**
- * 顶层工具。无参数。返回当前所在 App 的能力说明。
- *
- * 当 Kagami 不在任何 App 里时，返回提示 "先 switch 进一个 App"。
+ * 顶层工具。无参数。返回当前所在 App 的能力说明；不在任何 App 里、或当前 App 已
+ * 找不到时，返回由 host 注入的提示文案（内核不写死具体导航工具名）。
  */
 export class HelpTool extends ZodToolComponent<typeof HelpArgumentsSchema> {
   public readonly name = HELP_TOOL_NAME;
@@ -41,11 +44,11 @@ export class HelpTool extends ZodToolComponent<typeof HelpArgumentsSchema> {
   protected async executeTyped(): Promise<string> {
     const currentAppId = this.deps.getCurrentApp();
     if (!currentAppId) {
-      return "你不在任何 App 里。先用 switch 进入一个 App，再调用 help 查看那个 App 能做什么；想知道有哪些 App 用 list_apps。";
+      return this.deps.notInAppHint;
     }
     const app = this.deps.appManager.getApp(currentAppId);
     if (!app) {
-      return `当前所在 App "${currentAppId}" 已找不到。可能被卸载或重启过，用 list_apps 看看现在有哪些 App。`;
+      return this.deps.appNotFoundHint(currentAppId);
     }
     return await app.help();
   }

@@ -99,8 +99,6 @@ export interface App<TConfig = void> {
    *
    * 由导航工具（SwitchTool）在 switch_app Effect 之后展开调用：先产 switch_app
    * Effect 切焦点、再调本钩子拿 Effect[] 拼进自己的 effects 列表。
-   *
-   * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
    */
   onFocus?(): Promise<readonly Effect[]>;
 

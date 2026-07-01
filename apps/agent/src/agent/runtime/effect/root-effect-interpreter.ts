@@ -51,8 +51,6 @@ type WakeEvent = Extract<Event, { type: "wake" }>;
  * - **延迟追加**：append_message 不直接 context.appendMessages，而是把消息放进
  *   handler 结果的 appendedMessages，由 ReActKernel 的原子 commit 流程统一追加，
  *   保证一轮内消息顺序一致。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
 export function createRootEffectInterpreter({
   session,

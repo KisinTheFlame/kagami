@@ -12,8 +12,6 @@ const WaitArgumentsSchema = z.object({});
  *
  * 产 `wait_for_event` Effect 让 Interpreter 接管挂起语义。工具自己不阻塞、
  * 不持事件队列。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 6。
  */
 export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
   public readonly name = WAIT_TOOL_NAME;

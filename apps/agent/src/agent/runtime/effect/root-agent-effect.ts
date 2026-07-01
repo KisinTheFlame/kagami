@@ -37,8 +37,6 @@ export type SwitchAppEffect = Effect & {
  * 由后续 LoopAgent 主循环正常 take 事件消费——本 Effect 不负责事件路由。
  *
  * 由 WaitTool 产出。是 Agent 状态机里"运行中 → 阻塞 → 运行中"切换的描述。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md) 阶段 6。
  */
 export type WaitForEventEffect = Effect & {
   readonly type: "wait_for_event";
@@ -55,8 +53,6 @@ export type WaitForEventEffect = Effect & {
  * 2. 在 createRootEffectInterpreter 里加对应 handler（公共能力优先复用 agent-runtime
  *    的公共 handler，专属能力写 RootAgent 自己的 handler）。
  * 3. 产出方（工具 / 钩子 / extension）在拼 Effect 时用新的字面量。
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md)。
  */
 export type RootAgentEffect =
   | AppendMessageEffect

@@ -21,8 +21,6 @@ type IthomeAppDeps = {
  *   渲染追加到上下文尾部
  * - 不带 configSchema：ithome 的轮询配置（pollIntervalMs / recentArticleLimit /
  *   articleMaxChars）属于 ithome capability（poller 用），不归 App 配置
- *
- * 设计依据：[docs/effect-model.md](docs/effect-model.md) 场景 1。
  */
 export class IthomeApp implements App {
   public readonly id = ITHOME_APP_ID;
