@@ -208,5 +208,4 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`e
 - [README.md](./README.md) — 项目理念与使用入口
 - [AGENTS.md](./AGENTS.md) — 面向 LLM agent 的协作指引（KV 缓存优先、capability 设计原则、代码规范、命令清单）
 - [docs/effect-model.md](./docs/effect-model.md) — Effect 模型设计
-- [CHANGELOG.md](./CHANGELOG.md) — 变更记录
 - [TODOS.md](./TODOS.md) — 待办清单
