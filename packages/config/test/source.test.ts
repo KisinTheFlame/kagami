@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ConfigError } from "../src/errors.js";
 import {
-  assertSecretWhitelist,
+  assertSecretShape,
   deepMerge,
   loadMergedRawConfig,
   resolveSecretConfigPath,
@@ -57,74 +57,29 @@ describe("deepMerge", () => {
   });
 });
 
-describe("assertSecretWhitelist", () => {
-  const allowed = ["server.tavily.apiKey", "server.bot.creator", "server.napcat.listenGroupIds"];
-
-  it("passes when every secret leaf is within an allowed prefix", () => {
+describe("assertSecretShape", () => {
+  it("accepts a plain-object secret (any paths allowed — no whitelist)", () => {
     expect(() =>
-      assertSecretWhitelist(
-        {
-          server: {
-            tavily: { apiKey: "x" },
-            bot: { creator: { name: "n", qq: "1" } },
-            napcat: { listenGroupIds: ["1"] },
-          },
-        },
-        allowed,
+      assertSecretShape(
+        { services: { agent: { port: 9999 } }, server: { tavily: { apiKey: "x" } } },
         "config.secret.yaml",
       ),
     ).not.toThrow();
   });
 
-  it("passes for an empty secret object", () => {
-    expect(() => assertSecretWhitelist({}, allowed, "config.secret.yaml")).not.toThrow();
-  });
-
-  it("throws CONFIG_SECRET_FORBIDDEN_KEY for a key outside the whitelist", () => {
-    try {
-      assertSecretWhitelist({ services: { agent: { port: 9999 } } }, allowed, "config.secret.yaml");
-      throw new Error("should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(ConfigError);
-      expect((error as ConfigError).meta).toMatchObject({
-        key: "services.agent.port",
-        reason: "CONFIG_SECRET_FORBIDDEN_KEY",
-      });
-    }
+  it("accepts null / undefined / empty secret", () => {
+    expect(() => assertSecretShape(null, "config.secret.yaml")).not.toThrow();
+    expect(() => assertSecretShape(undefined, "config.secret.yaml")).not.toThrow();
+    expect(() => assertSecretShape({}, "config.secret.yaml")).not.toThrow();
   });
 
   it("throws CONFIG_SECRET_INVALID when the root is not an object", () => {
     try {
-      assertSecretWhitelist("nope", allowed, "config.secret.yaml");
+      assertSecretShape("nope", "config.secret.yaml");
       throw new Error("should have thrown");
     } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
       expect((error as ConfigError).meta).toMatchObject({ reason: "CONFIG_SECRET_INVALID" });
-    }
-  });
-
-  it("rejects a nested __proto__ leaf even under an allowed prefix", () => {
-    // server.bot.creator is whitelisted; server.bot.creator.__proto__.polluted would
-    // otherwise slip past the prefix check — the segment guard must catch it.
-    const evil = JSON.parse(
-      '{"server":{"bot":{"creator":{"__proto__":{"polluted":"y"}}}}}',
-    ) as unknown;
-    try {
-      assertSecretWhitelist(evil, allowed, "config.secret.yaml");
-      throw new Error("should have thrown");
-    } catch (error) {
-      expect((error as ConfigError).meta).toMatchObject({ reason: "CONFIG_SECRET_FORBIDDEN_KEY" });
-    }
-  });
-
-  it("enforces the dot boundary: a prefix-lookalike key is rejected", () => {
-    expect(() =>
-      assertSecretWhitelist({ server: { bot: { qq: "1" } } }, ["server.bot.qq"], "s"),
-    ).not.toThrow();
-    try {
-      assertSecretWhitelist({ server: { bot: { qqExtra: "1" } } }, ["server.bot.qq"], "s");
-      throw new Error("should have thrown");
-    } catch (error) {
-      expect((error as ConfigError).meta).toMatchObject({ reason: "CONFIG_SECRET_FORBIDDEN_KEY" });
     }
   });
 });
@@ -146,7 +101,7 @@ describe("loadMergedRawConfig", () => {
 
     const { raw } = await loadMergedRawConfig({
       configPath,
-      secret: { required: true, allowedPaths: ["server.tavily.apiKey"] },
+      secret: { required: true },
     });
 
     expect(raw).toEqual({ server: { tavily: { apiKey: "secret" }, keep: "base-only" } });
@@ -156,7 +111,7 @@ describe("loadMergedRawConfig", () => {
     const configPath = await writeFiles({ "config.yaml": "server: {}\n" });
 
     await expect(
-      loadMergedRawConfig({ configPath, secret: { required: true, allowedPaths: [] } }),
+      loadMergedRawConfig({ configPath, secret: { required: true } }),
     ).rejects.toMatchObject({ meta: { reason: "CONFIG_SECRET_NOT_FOUND" } });
   });
 
@@ -176,23 +131,19 @@ describe("loadMergedRawConfig", () => {
 
     const { raw } = await loadMergedRawConfig({
       configPath,
-      secret: { required: true, allowedPaths: ["server.tavily.apiKey"] },
+      secret: { required: true },
     });
 
     expect(raw).toEqual({ server: { port: 1 } });
   });
 
-  it("rejects a forbidden key in the secret file", async () => {
+  it("merges any key from the secret file (privacy whitelist removed)", async () => {
     const configPath = await writeFiles({
       "config.yaml": "server: {}\n",
       "config.secret.yaml": "services:\n  agent:\n    port: 9999\n",
     });
 
-    await expect(
-      loadMergedRawConfig({
-        configPath,
-        secret: { required: true, allowedPaths: ["server.tavily.apiKey"] },
-      }),
-    ).rejects.toMatchObject({ meta: { reason: "CONFIG_SECRET_FORBIDDEN_KEY" } });
+    const { raw } = await loadMergedRawConfig({ configPath, secret: { required: true } });
+    expect(raw).toEqual({ server: {}, services: { agent: { port: 9999 } } });
   });
 });

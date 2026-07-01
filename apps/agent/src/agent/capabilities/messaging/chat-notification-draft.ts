@@ -1,18 +1,21 @@
-import { truncateWithEllipsis } from "@kagami/shared/utils";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { NapcatReceiveMessageSegment } from "../../../napcat/application/napcat-gateway/shared.js";
 
-const MAX_PREVIEW_CHARS = 40;
 const MAX_DISPLAY_COUNT = 99;
 
 /**
  * 一个 QQ 会话的后台通知 draft（手机 OS 模型）。
  *
- * 在通知里归到 "QQ" 段下，每会话一行：
- *   `{会话名}: {条数标签}{@标签}{最近一条内容}`
+ * 通知是**诱饵不是内容**：它只告诉小镜"这个会话有事、值得进去看看"，绝不把消息正文
+ * 预先摊开——否则小镜不进群也能被动跟上，反而没了进群参与的动机。想知道具体说了啥，
+ * 一律 `open_conversation`。
+ *
+ * 归到 "QQ" 段下，每会话一行：
+ *   `{会话名}: {条数标签}{@标签}`
  * - 条数标签：未读条数 > 1 时显示 `[N 条消息]`（N 超 99 显 `99+`）。
  * - @标签：未读里有人 @ 过小镜时显示 `[有人 @ 你]`。
+ * - 两个标签都没有（只 1 条且没 @）时兜底显示 `有新消息`。
  *
  * **计数与 @ 都不在这里累积**：每条新消息进来时，QQ App 都用会话当前的权威未读状态
  * （`Conversation.getUnreadCount()` / `hasUnreadMention()`）现造一个新 draft。这两者只在
@@ -20,6 +23,8 @@ const MAX_DISPLAY_COUNT = 99;
  *
  * 因此折叠约定是**最新快照覆盖**：`merge(prev)` 直接取 `this`（最新快照已带全量未读计数，
  * prev 是过期快照）。sourceId = 会话 id（每会话一个源）。
+ *
+ * 渲染文案在 `static/context/notifications/qq-chat.hbs`；这里只算 view-model。
  */
 export class ChatNotificationDraft implements NotificationDraft {
   public readonly group = "QQ";
@@ -27,7 +32,6 @@ export class ChatNotificationDraft implements NotificationDraft {
   public constructor(
     public readonly sourceId: string,
     public readonly displayName: string,
-    private readonly latestText: string,
     private readonly mentioned: boolean,
     private readonly unreadCount: number,
   ) {}
@@ -38,12 +42,13 @@ export class ChatNotificationDraft implements NotificationDraft {
   }
 
   public render(): string {
+    const hasCount = this.unreadCount > 1;
     return renderServerStaticTemplate(import.meta.url, "context/notifications/qq-chat.hbs", {
       displayName: this.displayName,
-      hasCount: this.unreadCount > 1,
+      hasTags: hasCount || this.mentioned,
+      hasCount,
       countLabel: formatCount(this.unreadCount),
       mentioned: this.mentioned,
-      text: truncate(this.latestText, MAX_PREVIEW_CHARS),
     });
   }
 }
@@ -58,9 +63,4 @@ export function detectBotMentioned(
 
 function formatCount(count: number): string {
   return count <= MAX_DISPLAY_COUNT ? String(count) : `${MAX_DISPLAY_COUNT}+`;
-}
-
-function truncate(text: string, max: number): string {
-  // 按码点截断（内部先剥除落单代理项），绝不劈开 emoji 代理对。
-  return truncateWithEllipsis(text.trim(), max);
 }

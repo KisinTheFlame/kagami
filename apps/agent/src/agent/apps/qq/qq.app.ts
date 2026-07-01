@@ -356,12 +356,12 @@ export class QqApp implements App {
     mentioned: boolean,
   ): void {
     conversation.pushUnread(message, mentioned);
-    // 通知用会话当前的权威未读状态现造 draft：计数 / @ 标记跨窗口累积，open 才清零。
+    // 通知只报信号（未读条数 / 有人@），不带消息正文：用会话当前的权威未读状态现造 draft，
+    // 计数与 @ 跨窗口累积，open 才清零。想看具体内容一律 open_conversation。
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
         conversation.getShortName(),
-        renderMessagePreview(message),
         conversation.hasUnreadMention(),
         conversation.getUnreadCount(),
       ),
@@ -489,15 +489,6 @@ function renderMessagePlainText(message: ConversationMessage): string {
   return isGroupMessage(message)
     ? renderGroupMessagePlainText(message)
     : renderPrivateMessagePlainText(message);
-}
-
-/**
- * 通知行里的"最近一条内容"。群消息带上发送者（群里不知谁说的没意义）；私聊不带——
- * 会话名本身就是对方。会话名由通知行前缀给出，这里只补发送者。
- */
-function renderMessagePreview(message: ConversationMessage): string {
-  const text = message.rawMessage?.trim() || "（非文本消息）";
-  return isGroupMessage(message) ? `${message.nickname}：${text}` : text;
 }
 
 /** 把一页合并转发渲染成 <qq_forward> 文本，含分页提示。 */

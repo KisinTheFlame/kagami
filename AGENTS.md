@@ -102,7 +102,7 @@ workspace 定义位于仓库根目录 `pnpm-workspace.yaml`，当前仅包含 `a
 - 修改配置 schema 时，必须同步更新：
   - `packages/kernel/src/config/config.loader.ts`
   - `config.yaml`（非隐私，纳入版本控制）
-  - `config.secret.yaml.example`（隐私模板；新增隐私字段还要同步 `config.loader.ts` 里的 `CONFIG_SECRET_WHITELIST`）
+  - `config.secret.yaml.example`（隐私模板；新增隐私字段在这里补占位）
 - 提交前至少执行：
 
 ```sh
@@ -192,7 +192,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 ### 配置文件
 
 - 配置拆成两份：`config.yaml`（非隐私，纳入版本控制，直接改）+ `config.secret.yaml`（隐私：密钥/PII，gitignore，从 `config.secret.yaml.example` 复制填写）。启动时由 `@kagami/config` 定位并深合并两者，再交 `packages/kernel/src/config/config.loader.ts` 的 `ConfigSchema` 校验。
-- `config.secret.yaml` 只允许出现 `config.loader.ts` 里 `CONFIG_SECRET_WHITELIST` 白名单内的隐私路径（apiKey / bot / napcat.listenGroupIds / 浏览器凭据）；越界键（如 `services.*`）启动报错。
+- `config.secret.yaml` 可覆盖任意字段（无隐私路径白名单）；**约定上**只往里放凭据 / PII（apiKey / bot / napcat.listenGroupIds / 浏览器凭据 / 高德 key 等），拓扑（`services.*`、`server.databaseUrl`）仍留在 `config.yaml`。原型污染由 `@kagami/config` 深合并的 `DANGEROUS_KEYS` 兜底丢弃。
 - 配置读取（repo-root 定位 + 两文件合并）统一由零依赖叶子包 `@kagami/config` 承载；kernel / gateway / oss / `scripts/read-config.mjs` 都复用它。gateway / oss 只读非隐私的 `services.*`，不需要 `config.secret.yaml`。
 - 关键配置分区包括：
   - `server.databaseUrl`（SQLite `file:` 路径）、`server.port`
@@ -208,7 +208,7 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
   - `server.llm.usages.agent`、`storyAgent`、`contextSummarizer`、`vision`、`webSearchAgent`
   - 顶层 `services`（与 `server` 平级）：各服务监听端口与地址的唯一事实来源，`services.{agent,console,gateway,oss,browser}.{host,port}`，所有进程读它寻址（见 issue #162）；`services.browser` 仅 localhost（见 issue #173）
   - `server.oss.enabled`（自建对象存储启用开关；地址来自 `services.oss`，整段省略=禁用、优雅降级）
-  - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`）
+  - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`、`amap.*`；`amap.apiKey` 为凭据，走 `config.secret.yaml`）
   - `server.tavily.apiKey`
   - `server.bot.qq`、`server.bot.creator`
 
@@ -311,7 +311,7 @@ Agent 相关补充约定：
 - `apps/agent/src/agent` 当前按 `runtime / capabilities / apps` 分层组织：
   - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、NotificationCenter、事件队列、上下文渲染、App 状态持久化
   - `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
-  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`terminal`、`todo`
+  - `apps/`：手机 OS 的 App（Portal 下可 enter 的地点），当前包括 `qq`、`ithome`、`hn`、`amap`、`calc`、`clock`、`browser`、`terminal`、`todo`
 - 新增 capability 应当符合"给 Agent 的生活添一种新的存在方式"的视角；群聊相关逻辑只属于 `messaging`，不要让它的概念扩散到 runtime 或其他 capability。
 - `context-summary` 归类为 `Operation`，不是 `TaskAgent`。
 - `web-search` 是标准 `TaskAgent` 能力；其对主 Agent 暴露的是 tool，私有工具跟随 task-agent 放在能力目录内。
