@@ -18,17 +18,23 @@ All architecture, modules, and capabilities described below should be understood
 
 ## Repository Positioning
 
-Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing twelve workspace packages:
+Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, currently containing seventeen workspace packages:
 
 - `apps/agent`: Fastify backend service (`@kagami/agent`)
 - `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/persistence` shared DAOs against the same SQLite database)
 - `apps/web`: React frontend admin console (`@kagami/web`)
+- `apps/gateway`: front-door gateway process (`@kagami/gateway`, standalone with zero `@kagami/*` dependencies; serves the `apps/web/dist` static assets and reverse-proxies `/api/*` to console/agent, `/auth/*` to llm, `/metric-chart` to metric)
+- `apps/llm`: LLM gateway + OAuth credential-center process (`@kagami/llm-service`, localhost only; owns all providers + the OAuth callback server + refresh timers, writes `llm_chat_call` / `embedding_cache`; the agent connects over HTTP)
+- `apps/metric`: standalone metric-domain process (`@kagami/metric`, owns both metric ingestion `POST /metric/record` — the agent reports over HTTP — and the metric-chart query endpoints; reads/writes the same SQLite via `@kagami/persistence` shared DAOs, localhost only)
 - `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone process with zero `@kagami/*` dependencies)
 - `apps/browser`: standalone browser process (`@kagami/browser`, server-core-based Fastify, localhost-only; owns CloakBrowser and credential injection, driven by the agent over HTTP so an agent restart no longer kills the browser)
 - `packages/agent-runtime`: generic Agent / App framework kernel (`@kagami/agent-runtime`)
 - `packages/llm`: LLM message and tool type contracts shared across frontend / backend / kernel (`@kagami/llm`)
+- `packages/llm-client`: LLM chat client + provider + embedding client runtime (`@kagami/llm-client`, sits above kernel and alongside persistence with no dependency on it; emits only `LlmChatCallObservation` events so persistence/Prisma stay out of it)
+- `packages/auth`: full OAuth credential management (`@kagami/auth`, PKCE login / callback server / refresh scheduler / secret store / quota snapshots / auth handlers); assembled into the `kagami-llm` process
 - `packages/kernel`: pure backend infrastructure kernel (`@kagami/kernel`, config, logger, common contracts and errors, pure utils like `isRecord`; no fastify / Prisma / better-sqlite3, reusable by services that touch neither the DB nor HTTP)
 - `packages/http`: HTTP route helper (`@kagami/http`, `route.helper`, depends only on fastify + zod; not needed by services that expose no HTTP)
+- `packages/config`: zero-dependency leaf for config loading (`@kagami/config`, repo-root discovery + deep-merge of `config.yaml` / `config.secret.yaml`; reused by kernel / gateway / oss)
 - `packages/persistence`: persistence infrastructure (`@kagami/persistence`, Prisma client and generated client, db, all business DAOs, Prisma JSON helpers; depends on `@kagami/kernel` + Prisma + better-sqlite3)
 - `packages/shared`: schemas and utilities shared between frontend and backend (`@kagami/shared`)
 
@@ -121,7 +127,7 @@ Main modules:
 - `auth/`: OAuth, callback service, secret store, usage cache, usage trend, unified auth HTTP endpoints
 - `llm/`: providers, chat client, embedding, playground, related DAOs
 - `napcat/`: NapCat protocol adapter (gateway transport, inbound normalization, image analysis, persistence) — the gateway instance is owned by the QQ App, just one of the Agent's event sources
-- `metric/`: runtime metrics and visualization data endpoints
+- `metric/`: HTTP reporting client for metric points (`HttpMetricService`, fire-and-forget POST to the standalone `apps/metric` at `/metric/record`); ingestion and metric-chart queries now live in `@kagami/metric`
 - `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
 - `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
 - `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction, story memory
@@ -196,9 +202,12 @@ Notes:
 
 ## Deployment
 
-- The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages three processes.
+- The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages seven processes.
 - The backend service `kagami-agent` runs `apps/agent/dist/index.js` and listens on `20003` by default.
+- The admin-console backend `kagami-console` runs `apps/console/dist/index.js` and listens on `20006` by default.
 - The gateway service `kagami-gateway` runs `apps/gateway/dist/index.js` and listens on `20004` by default.
+- The LLM service `kagami-llm` runs `apps/llm/dist/index.js` and listens on `20009` by default (localhost only); it owns the providers + OAuth callback server + refresh timers, and the gateway routes `/auth/*` to it.
+- The metric service `kagami-metric` runs `apps/metric/dist/index.js` and listens on `20010` by default (localhost only); it owns metric ingestion (`POST /metric/record`, the agent reports fire-and-forget over HTTP) plus the metric-chart query endpoints, which the gateway routes to it.
 - The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
 - The browser service `kagami-browser` runs `apps/browser/dist/index.js` and listens on `20007` by default (localhost only); it owns CloakBrowser so an agent restart does not kill the browser. `app:deploy agent` does not touch it (see issue #173).
 - The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.

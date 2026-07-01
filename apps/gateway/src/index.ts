@@ -13,16 +13,18 @@ const port = config.port;
 const apiTarget = config.agentTarget;
 const consoleTarget = config.consoleTarget;
 const llmTarget = config.llmTarget;
+const metricTarget = config.metricTarget;
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
   "/llm-chat-call",
   "/napcat-event",
   "/napcat-group-message",
-  "/metric-chart",
 ];
 // 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
 const LLM_PATH_PREFIXES = ["/auth"];
+// metric-chart 查询走独立的 metric 进程（@kagami/metric）；摄取端点 /metric/* 不经网关（agent 直连）。
+const METRIC_PATH_PREFIXES = ["/metric-chart"];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
 const MIME_TYPES: Record<string, string> = {
@@ -70,17 +72,21 @@ server.listen(port, "0.0.0.0", () => {
   process.stdout.write(`[kagami-gateway] listening on http://0.0.0.0:${port}\n`);
 });
 
+function matchesAnyPrefix(upstreamPath: string, prefixes: string[]): boolean {
+  return prefixes.some(prefix => upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`));
+}
+
 function selectUpstreamTarget(upstreamPath: string): URL {
-  for (const prefix of CONSOLE_PATH_PREFIXES) {
-    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
-      return consoleTarget;
-    }
+  if (matchesAnyPrefix(upstreamPath, METRIC_PATH_PREFIXES)) {
+    return metricTarget;
   }
 
-  for (const prefix of LLM_PATH_PREFIXES) {
-    if (upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`)) {
-      return llmTarget;
-    }
+  if (matchesAnyPrefix(upstreamPath, LLM_PATH_PREFIXES)) {
+    return llmTarget;
+  }
+
+  if (matchesAnyPrefix(upstreamPath, CONSOLE_PATH_PREFIXES)) {
+    return consoleTarget;
   }
 
   return apiTarget;

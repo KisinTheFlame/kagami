@@ -210,6 +210,7 @@ const ServicesSchema = z
     oss: ServiceEndpointSchema,
     browser: ServiceEndpointSchema,
     llm: ServiceEndpointSchema,
+    metric: ServiceEndpointSchema,
   })
   .strict();
 

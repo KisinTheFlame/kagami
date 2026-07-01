@@ -129,7 +129,7 @@ pnpm format       # Prettier 检查（format:write 自动格式化）
 pnpm --filter @kagami/agent <script>   # 单包命令，如 test / test:watch / db:*
 
 pnpm app:deploy                        # 全量部署：build → prisma migrate deploy → PM2 reload(全部) → pm2 save
-pnpm app:deploy <agent|console|gateway|oss|browser|llm>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
+pnpm app:deploy <agent|console|gateway|oss|browser|llm|metric>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
 ```
 
 - 仓库当前**没有**统一的根 `pnpm dev`。前后端联调需按实际分别启动，不要假设有一键 dev。
@@ -163,8 +163,8 @@ pnpm app:deploy <agent|console|gateway|oss|browser|llm>  # 单服务：只重建
 进程拓扑与端口见 [ARCHITECTURE.md](./ARCHITECTURE.md)「部署」。操作层面：
 
 - `pnpm app:deploy`（无参）= 全量：build → Prisma 迁移 → PM2 reload/startOrReload → `pm2 save`。**涉及 DB schema 变更必须走这个**（会跑 `prisma migrate deploy`）。
-- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `browser` / `llm` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。（`web` 是 `gateway` 的已弃用别名。）
-- `kagami-browser` 与 `kagami-llm` 是独立进程，`app:deploy agent` 不触及它们，让「agent 重启不杀浏览器 / 不打断 LLM 服务与登录态」。
+- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `browser` / `llm` / `metric` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。（`web` 是 `gateway` 的已弃用别名。）
+- `kagami-browser` / `kagami-llm` / `kagami-metric` 是独立进程，`app:deploy agent` 不触及它们，让「agent 重启不杀浏览器 / 不打断 LLM 服务与登录态 / 不丢 metric 通道」。metric 摄取是 fire-and-forget，服务挂掉只丢点、不影响 agent。
 
 ## 部署红线（用户硬约束）
 
