@@ -174,6 +174,32 @@ describe("AmapClient URL building", () => {
     expect(decoded).toContain("mid,0xFF0000,A:116.39,39.9");
   });
 
+  it("static_map builds paths with the 5-field style (weight,color,transparency,fill,fillT)", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        calls.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: {
+            get: (k: string) => (k.toLowerCase() === "content-type" ? "image/png" : null),
+          },
+          arrayBuffer: async () => new ArrayBuffer(2),
+        } as unknown as Response);
+      }),
+    );
+    await buildClient().staticMap({
+      size: "600*400",
+      scale: 2,
+      paths: [{ weight: 8, color: "0x0000FF", points: ["116.39,39.90", "116.47,39.87"] }],
+    });
+    const decoded = decodeURIComponent(calls[0]);
+    // 只给 2 字段(weight,color)高德会回 UNKNOWN_ERROR；必须 5 字段。
+    expect(decoded).toContain("paths=8,0x0000FF,1,,:116.39,39.9;116.47,39.87");
+  });
+
   it("parses a driving path into distance/duration/steps", async () => {
     const { mock } = recordingFetch({
       route: {
