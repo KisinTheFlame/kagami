@@ -12,6 +12,10 @@ import { SendMessageTool } from "../../capabilities/messaging/tools/send-message
 import { SendResourceTool } from "../../capabilities/messaging/tools/send-resource.tool.js";
 import type { ResourceService } from "../../capabilities/resource/application/resource.service.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
+import type { OssClient } from "../../../oss/oss-client.js";
+import { ListGroupFilesTool } from "./tools/list-group-files.tool.js";
+import { DownloadGroupFileTool } from "./tools/download-group-file.tool.js";
+import { UploadGroupFileTool } from "./tools/upload-group-file.tool.js";
 import { QqApp } from "./qq.app.js";
 
 type BuildQqAppInput = {
@@ -27,6 +31,10 @@ type BuildQqAppInput = {
   aiTone: { enabled: boolean; blockThreshold: number };
   /** 资源读取（send_resource 按 resid 取图字节）。OSS 关闭时调用层报错。 */
   resourceService: ResourceService;
+  /** 群文件下载/上传要的 OSS client（putObject / 按大 cap getObject）。OSS 关闭则群文件降级报错。 */
+  ossClient?: OssClient;
+  /** 群文件下载/上传的字节上限（server.agent.resource.fileMaxBytes，独立于 4 MiB 上下文 cap）。 */
+  fileMaxBytes: number;
 };
 
 export type QqAppBundle = {
@@ -57,6 +65,8 @@ export async function buildQqApp({
   recentMessageLimit,
   aiTone,
   resourceService,
+  ossClient,
+  fileMaxBytes,
 }: BuildQqAppInput): Promise<QqAppBundle> {
   const inbound: { handle: (event: NapcatAgentEvent) => void } = {
     handle: () => {},
@@ -89,6 +99,21 @@ export async function buildQqApp({
     agentMessageService: outboundService,
     getChatTarget: () => qqAppRef.current?.getCurrentChatTarget(),
   });
+  // 群文件三件套：直接持网关 + OSS + fileMaxBytes，getChatTarget 走同一个 forward-ref。
+  const getChatTarget = () => qqAppRef.current?.getCurrentChatTarget();
+  const listGroupFilesTool = new ListGroupFilesTool({ getChatTarget, napcatGateway });
+  const downloadGroupFileTool = new DownloadGroupFileTool({
+    getChatTarget,
+    napcatGateway,
+    ossClient,
+    fileMaxBytes,
+  });
+  const uploadGroupFileTool = new UploadGroupFileTool({
+    getChatTarget,
+    napcatGateway,
+    ossClient,
+    fileMaxBytes,
+  });
   const qqApp = new QqApp({
     napcatGateway,
     notificationCenter,
@@ -97,6 +122,9 @@ export async function buildQqApp({
     recentMessageLimit,
     sendMessageTool,
     sendResourceTool,
+    listGroupFilesTool,
+    downloadGroupFileTool,
+    uploadGroupFileTool,
   });
   qqAppRef.current = qqApp;
   inbound.handle = event => qqApp.handleNapcatEvent(event);
