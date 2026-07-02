@@ -3,12 +3,14 @@ import {
   SpireCombatViewSchema,
   SpireEnemyViewSchema,
   SpireIntentSchema,
+  SpireRelicViewSchema,
   SpireScreenSchema,
 } from "@kagami/spire-api/contract";
 import type { EnemyState, GameState } from "../engine/types.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
+import { getRelicDef } from "../engine/relics/relics.js";
 import { currentOptions } from "../engine/run/run.js";
 
 // === 结构化屏幕视图（ScreenView）===
@@ -22,6 +24,7 @@ import { currentOptions } from "../engine/run/run.js";
 export type IntentView = z.infer<typeof SpireIntentSchema>;
 export type EnemyView = z.infer<typeof SpireEnemyViewSchema>;
 export type CombatView = z.infer<typeof SpireCombatViewSchema>;
+export type RelicView = z.infer<typeof SpireRelicViewSchema>;
 export type ScreenView = z.infer<typeof SpireScreenSchema>;
 
 export function toScreenView(state: GameState, opts: { suppressLog?: boolean }): ScreenView {
@@ -30,6 +33,10 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
     screen: state.screen,
     player: { hp: state.hp, maxHp: state.maxHp, gold: state.gold },
     deckCount: state.deck.length,
+    relics: state.relics.map(relic => {
+      const def = getRelicDef(relic.id);
+      return { name: def.name, description: def.description };
+    }),
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,

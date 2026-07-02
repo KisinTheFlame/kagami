@@ -127,6 +127,8 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       }
   > = [];
   let model: string | undefined;
+  let sawMessageStart = false;
+  let sawMessageStop = false;
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
   let cacheReadInputTokens: number | undefined;
@@ -158,7 +160,13 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
       continue;
     }
 
+    if (parsed.type === "message_stop") {
+      sawMessageStop = true;
+      continue;
+    }
+
     if (parsed.type === "message_start") {
+      sawMessageStart = true;
       const message = isRecord(parsed.message) ? parsed.message : null;
       if (message && typeof message.model === "string") {
         model = message.model;
@@ -277,7 +285,11 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
     return [block.block];
   });
 
-  if (content.length === 0) {
+  // toolChoice auto 下模型可以合法地"什么都不说"：流正常走完（message_start →
+  // end_turn → message_stop）但一个 content block 都没有。这是空轮而非坏响应，
+  // 映射成空 content 的 assistant 消息（下游 root 按纯文本轮语义挂起）。只有
+  // 流没有完整走完（缺 start/stop）时，零 block 才视为无法解析。
+  if (content.length === 0 && !(sawMessageStart && sawMessageStop)) {
     return null;
   }
 

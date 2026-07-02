@@ -11,12 +11,13 @@ import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
   addPower,
-  applyFrailToBlock,
   computeAttackDamage,
+  computeBlockGain,
   decayDebuffs,
   getPower,
   removePower,
 } from "../powers/powers.js";
+import { getRelicDef } from "../relics/relics.js";
 
 // === 战斗状态机 ===
 //
@@ -32,6 +33,8 @@ const LOUSE_CURL_UP_MIN = 3;
 const LOUSE_CURL_UP_MAX = 7;
 const LOUSE_BITE_MIN = 5;
 const LOUSE_BITE_MAX = 7;
+const LAGAVULIN_METALLICIZE = 8;
+const LAGAVULIN_WAKE_TURN = 3; // 睡满两回合、第 3 回合自然醒（combat.turn 从 1 起）。
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
@@ -52,6 +55,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     const def = getEnemyDef(defId);
     const powers: PowerInstance[] = [];
     let rolledDamage = 0;
+    let block = 0;
+    let asleep = false;
     if (defId === "louse") {
       // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
       const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
@@ -59,19 +64,30 @@ export function startCombat(state: GameState, encounterId: string): void {
       // 咬击基础伤害出生时掷一次、整场固定（5~7）。
       rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
     }
+    if (defId === "lagavulin") {
+      // 拉加维林开局沉睡：金属化 8（每回合结束回 8 格挡）+ 立即 8 格挡；受伤或睡满自然醒。
+      asleep = true;
+      block = LAGAVULIN_METALLICIZE;
+      powers.push({ id: "metallicize", amount: LAGAVULIN_METALLICIZE });
+    }
+    if (defId === "sentry") {
+      // 哨卫开局各带 1 层神器（抵消你首个减益）。
+      powers.push({ id: "artifact", amount: 1 });
+    }
     const hp = nextRange(state.rng, def.hpMin, def.hpMax);
     return {
       defId,
       name: def.name,
       hp,
       maxHp: hp,
-      block: 0,
+      block,
       powers,
       moveHistory: [],
       rotationIndex: 0,
       currentMove: "",
       curlUpConsumed: false,
       rolledDamage,
+      asleep,
       modeShiftAccum: 0,
       modeShiftThreshold: def.modeShiftThreshold ?? null,
       stance: def.stanceMoves ? "offensive" : null,
@@ -102,7 +118,16 @@ export function startCombat(state: GameState, encounterId: string): void {
   for (let i = 0; i < combat.enemies.length; i += 1) {
     selectNextMove(state, i);
   }
+  // 战斗开始遗物（船锚格挡 / 金刚杵力量 / 弹珠袋易伤 / 提灯能量 / 血瓶回血…）。
+  triggerRelics(state, "onCombatStart");
   drawCards(state, STARTING_HAND_SIZE);
+}
+
+/** 遍历持有遗物、触发指定时点的钩子（原地改 state）。 */
+function triggerRelics(state: GameState, event: "onCombatStart" | "onCombatEnd"): void {
+  for (const relic of state.relics) {
+    getRelicDef(relic.id).hooks[event]?.(state);
+  }
 }
 
 // —— 抽牌 ——
@@ -218,8 +243,8 @@ function applyEffect(
       break;
     }
     case "gain_block": {
-      // 脆弱使获得的格挡打七五折（按「获得方」自己的 powers 判定）。
-      const gained = applyFrailToBlock(effect.amount, powers);
+      // 获得的格挡按「获得方」的敏捷/脆弱修正。
+      const gained = computeBlockGain(effect.amount, powers);
       if (actor.side === "player") {
         combat.playerBlock += gained;
       } else {
@@ -276,7 +301,7 @@ function applyPowerEffect(
   if (on === "all_enemies") {
     for (const enemy of combat.enemies) {
       if (enemy.hp > 0) {
-        addPower(enemy.powers, power, amount);
+        applyPowerToEnemy(enemy, power, amount);
       }
     }
     return;
@@ -284,11 +309,22 @@ function applyPowerEffect(
   // on === "target"
   if (actor.side === "player") {
     if (targetEnemyIndex !== null) {
-      addPower(combat.enemies[targetEnemyIndex]!.powers, power, amount);
+      applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
     addPower(combat.playerPowers, power, amount);
   }
+}
+
+const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set(["vulnerable", "weak", "frail"]);
+
+/** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
+function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount: number): void {
+  if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(enemy.powers, "artifact") > 0) {
+    addPower(enemy.powers, "artifact", -1);
+    return;
+  }
+  addPower(enemy.powers, power, amount);
 }
 
 function addCards(
@@ -348,6 +384,11 @@ function dealDamageToEnemy(
   const afterBlock = Math.max(0, dmg - enemy.block);
   enemy.block = Math.max(0, enemy.block - dmg);
   enemy.hp = Math.max(0, enemy.hp - afterBlock);
+  // 拉加维林：睡眠中受到穿透格挡的伤害立即苏醒，去掉金属化。
+  if (enemy.asleep && afterBlock > 0 && enemy.hp > 0) {
+    enemy.asleep = false;
+    removePower(enemy.powers, "metallicize");
+  }
   if (
     enemy.stance === "offensive" &&
     enemy.modeShiftThreshold !== null &&
@@ -429,6 +470,15 @@ export function playCard(
   combat.energy -= cost;
   combat.hand.splice(handIndex, 1);
   applyEffects(state, effectsOf(def, instance.upgraded), { side: "player" }, resolvedTarget);
+  // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
+  if (def.type === "skill") {
+    for (const enemy of combat.enemies) {
+      const enrage = getPower(enemy.powers, "enrage");
+      if (enemy.hp > 0 && enrage > 0) {
+        addPower(enemy.powers, "strength", enrage);
+      }
+    }
+  }
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
   } else if (def.exhausts) {
@@ -454,8 +504,14 @@ export function endTurn(state: GameState): void {
   if (!combat || state.screen !== "combat") {
     return;
   }
-  // 玩家回合结束：手牌进弃牌堆，玩家 debuff 衰减。
-  combat.discardPile.push(...combat.hand);
+  // 玩家回合结束：虚无牌被消耗，其余手牌进弃牌堆；玩家 debuff 衰减。
+  for (const instance of combat.hand) {
+    if (getCardDef(instance.defId).ethereal) {
+      combat.exhaustPile.push(instance);
+    } else {
+      combat.discardPile.push(instance);
+    }
+  }
   combat.hand = [];
   decayDebuffs(combat.playerPowers);
 
@@ -477,6 +533,11 @@ export function endTurn(state: GameState): void {
       state.screen = "gameover";
       state.log.push("你倒下了。");
       return;
+    }
+    // 金属化：自己回合结束获得格挡（拉加维林睡眠期每回合回 8）。
+    const metallicize = getPower(enemy.powers, "metallicize");
+    if (metallicize > 0) {
+      enemy.block += metallicize;
     }
     decayDebuffs(enemy.powers);
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
@@ -501,11 +562,45 @@ function triggerOnTurnStart(enemy: EnemyState): void {
 // —— 敌人意图选择 ——
 
 function selectNextMove(state: GameState, enemyIndex: number): void {
-  const enemy = state.combat!.enemies[enemyIndex]!;
+  const combat = state.combat!;
+  const enemy = combat.enemies[enemyIndex]!;
   if (enemy.hp <= 0) {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 哨卫：错位开局（两侧先射钉、中间先光束）+ 光束↔射钉 严格交替。
+  if (enemy.defId === "sentry") {
+    if (enemy.moveHistory.length === 0) {
+      enemy.currentMove = enemyIndex % 2 === 0 ? "bolt" : "beam";
+    } else {
+      enemy.currentMove =
+        enemy.moveHistory[enemy.moveHistory.length - 1] === "beam" ? "bolt" : "beam";
+    }
+    return;
+  }
+
+  // 拉加维林：睡眠 → 苏醒 → 重击/重击/吸取灵魂 循环。
+  if (enemy.defId === "lagavulin") {
+    if (enemy.asleep) {
+      // 睡满（第 3 回合）自然苏醒；否则继续睡。
+      if (combat.turn >= LAGAVULIN_WAKE_TURN) {
+        enemy.asleep = false;
+        removePower(enemy.powers, "metallicize");
+        enemy.currentMove = "lag_attack";
+      } else {
+        enemy.currentMove = "sleep";
+      }
+      return;
+    }
+    const history = enemy.moveHistory;
+    const lastTwoAttack =
+      history.length >= 2 &&
+      history[history.length - 1] === "lag_attack" &&
+      history[history.length - 2] === "lag_attack";
+    enemy.currentMove = lastTwoAttack ? "siphon_soul" : "lag_attack";
+    return;
+  }
 
   // Boss：按姿态循环出招。
   if (def.stanceMoves) {
@@ -566,6 +661,8 @@ function resolveCombatIfEnded(state: GameState): void {
     return;
   }
   state.log.push("战斗胜利！");
+  // 战斗结束遗物（燃烧之血回血…）在清 combat 前触发。
+  triggerRelics(state, "onCombatEnd");
   // 战斗内牌堆（含临时状态牌）随战斗消失，master deck 不受影响。
   state.combat = null;
   if (combat.isBoss) {

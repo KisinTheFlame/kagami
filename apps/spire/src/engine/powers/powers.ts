@@ -27,10 +27,10 @@ function pruneEmpty(powers: PowerInstance[], id: PowerId): void {
     return;
   }
   const amount = powers[index]!.amount;
-  // 力量可为负并保留；易伤/虚弱/脆弱降到 0 即移除。
+  // 力量 / 敏捷可为负并保留；易伤/虚弱/脆弱降到 0 即移除。
   if ((id === "vulnerable" || id === "weak" || id === "frail") && amount <= 0) {
     powers.splice(index, 1);
-  } else if (amount === 0 && id !== "strength") {
+  } else if (amount === 0 && id !== "strength" && id !== "dexterity") {
     powers.splice(index, 1);
   }
 }
@@ -56,12 +56,19 @@ export function decayDebuffs(powers: PowerInstance[]): void {
   }
 }
 
-/** 脆弱下获得的格挡打七五折（向下取整）。作用于「获得格挡的一方」的 powers。 */
-export function applyFrailToBlock(amount: number, gainerPowers: readonly PowerInstance[]): number {
-  if (getPower(gainerPowers, "frail") > 0) {
-    return Math.floor(amount * 0.75);
+/**
+ * 计算实际获得的格挡：基础 + 敏捷 → ×脆弱0.75 → 向下取整、不低于 0。
+ * 作用于「获得格挡的一方」的 powers（敏捷可负）。
+ */
+export function computeBlockGain(amount: number, gainerPowers: readonly PowerInstance[]): number {
+  let value = amount + getPower(gainerPowers, "dexterity");
+  if (value < 0) {
+    value = 0;
   }
-  return amount;
+  if (getPower(gainerPowers, "frail") > 0) {
+    value = Math.floor(value * 0.75);
+  }
+  return value;
 }
 
 /**

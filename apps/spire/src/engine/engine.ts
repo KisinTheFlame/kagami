@@ -1,5 +1,6 @@
 import type { CardInstance, CharacterId, GameState } from "./types.js";
 import { IRONCLAD_STARTER_DECK } from "./cards/cards.js";
+import { IRONCLAD_STARTER_RELIC } from "./relics/relics.js";
 import { seedRng } from "./rng.js";
 import { endTurn, playCard } from "./combat/combat.js";
 import { applyChoose, buildMap, generateReward } from "./run/run.js";
@@ -42,11 +43,13 @@ export function newRun(input: {
     maxHp: IRONCLAD_MAX_HP,
     gold: 0,
     deck,
+    relics: [{ id: IRONCLAD_STARTER_RELIC, counter: 0 }],
     map: { nodes: {}, rows: 0, startNodeIds: [], bossNodeId: "" },
     currentNodeId: null,
     combat: null,
     reward: null,
     combatsEntered: 0,
+    pendingRelicReward: false,
     rng,
     nextUid,
     log: [],

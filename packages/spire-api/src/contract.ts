@@ -61,6 +61,11 @@ export const SpireCombatViewSchema = z.object({
   }),
 });
 
+export const SpireRelicViewSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+});
+
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
   screen: z.enum(["map", "combat", "reward", "rest", "gameover", "victory"]),
@@ -70,6 +75,7 @@ export const SpireScreenSchema = z.object({
     gold: z.number().int(),
   }),
   deckCount: z.number().int(),
+  relics: z.array(SpireRelicViewSchema),
   combat: SpireCombatViewSchema.nullable(),
   options: z.array(z.string()),
   log: z.array(z.string()),

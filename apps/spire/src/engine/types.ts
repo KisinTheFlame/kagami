@@ -11,13 +11,17 @@ export type CardType = "attack" | "skill" | "power" | "status";
 
 /** 状态效果标识。切片集合：被动修正器 + 时机触发机制（见 powers/）。 */
 export type PowerId =
-  | "strength" // 力量：攻击伤害 +N（被动）
+  | "strength" // 力量：攻击伤害 +N（被动，可负、持续）
+  | "dexterity" // 敏捷：获得的格挡 +N（被动，可负、持续）
   | "vulnerable" // 易伤：受到攻击伤害 ×1.5（回合末 -1）
   | "weak" // 虚弱：造成攻击伤害 ×0.75（回合末 -1）
   | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
+  | "metallicize" // 金属化：每当自己回合结束，获得 N 点格挡（拉加维林睡眠期）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
+  | "enrage" // 激怒：玩家每打出一张技能牌，此敌人获得 = 层数的力量（地精头目）
+  | "artifact" // 神器：抵消下一个施加到自己身上的减益（每抵消一个消耗一层）
   | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
@@ -48,6 +52,8 @@ export type CardDef = {
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
   exhausts: boolean;
+  /** 虚无：回合结束时若仍在手牌中，则被消耗（而非进弃牌堆）。 */
+  ethereal?: boolean;
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
@@ -108,6 +114,8 @@ export type EnemyState = {
   curlUpConsumed: boolean;
   /** 出生时掷定、整场固定的攻击基础值（红虱咬击 5~7）。0 表示该敌人不用此机制。 */
   rolledDamage: number;
+  /** 是否沉睡（拉加维林开局睡眠；受伤或睡满自然醒时置 false）。 */
+  asleep: boolean;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */
   modeShiftAccum: number;
   modeShiftThreshold: number | null;
@@ -134,6 +142,9 @@ export type RewardState = {
   /** 三选一（或跳过）的卡奖励，存 defId + 是否升级。 */
   cardChoices: { defId: string; upgraded: boolean }[];
 };
+
+/** 持有的遗物实例。counter 供计数型遗物用（如「每出 N 张攻击牌」），默认 0。 */
+export type RelicState = { id: string; counter: number };
 
 export type MapNodeType = "combat" | "elite" | "event" | "rest" | "shop" | "treasure" | "boss";
 
@@ -172,6 +183,8 @@ export type GameState = {
   gold: number;
   /** 大牌组（master deck）。 */
   deck: CardInstance[];
+  /** 持有的遗物（按获得顺序）。 */
+  relics: RelicState[];
   map: MapGraph;
   /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
   currentNodeId: string | null;
@@ -179,6 +192,8 @@ export type GameState = {
   reward: RewardState | null;
   /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
   combatsEntered: number;
+  /** 本场战斗胜利后是否发一个遗物（精英战为 true；下次 generateReward 消费后清零）。 */
+  pendingRelicReward: boolean;
   rng: RngState;
   /** 递增的牌实例 uid 分配器。 */
   nextUid: number;

@@ -11,6 +11,7 @@ import {
   SpireIntentSchema,
   SpirePowerSchema,
   SpireReferenceSchema,
+  SpireRelicViewSchema,
   SpireScreenSchema,
 } from "@kagami/spire-api/contract";
 import { SpireError } from "../agent/capabilities/spire/domain/errors.js";
@@ -30,6 +31,7 @@ export type SpireIntent = z.infer<typeof SpireIntentSchema>;
 export type SpireEnemyView = z.infer<typeof SpireEnemyViewSchema>;
 export type SpireHandCardView = z.infer<typeof SpireHandCardViewSchema>;
 export type SpireCombatView = z.infer<typeof SpireCombatViewSchema>;
+export type SpireRelicView = z.infer<typeof SpireRelicViewSchema>;
 export type SpireScreen = z.infer<typeof SpireScreenSchema>;
 export type SpireAction = z.infer<typeof SpireActionSchema>;
 export type SpireCardRef = z.infer<typeof SpireCardRefSchema>;
