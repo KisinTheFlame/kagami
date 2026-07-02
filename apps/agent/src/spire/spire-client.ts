@@ -47,7 +47,7 @@ export type SpireCombatView = {
 
 export type SpireScreen = {
   version: number;
-  screen: "combat" | "reward" | "rest" | "gameover" | "victory";
+  screen: "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
   player: { hp: number; maxHp: number; gold: number };
   deckCount: number;
   combat: SpireCombatView | null;

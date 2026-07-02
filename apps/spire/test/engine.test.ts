@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newRun, applyAction } from "../src/engine/engine.js";
+import { startCombat } from "../src/engine/combat/combat.js";
 import { computeAttackDamage } from "../src/engine/powers/powers.js";
 import { seedRng, nextUint32Sequence, shuffleInPlace } from "./helpers/rng-probe.js";
 import { simulateRun } from "../src/sim/simulate.js";
@@ -7,21 +8,25 @@ import { GreedyPolicy } from "../src/sim/policy.js";
 import type { GameState } from "../src/engine/types.js";
 
 describe("newRun", () => {
-  it("铁甲战士开局：80 血、10 张起始牌、进入战斗", () => {
+  it("铁甲战士开局：80 血、10 张起始牌、落在地图选路屏", () => {
     const state = newRun({ runId: "t", seed: 123 });
     expect(state.hp).toBe(80);
     expect(state.maxHp).toBe(80);
     expect(state.deck).toHaveLength(10);
-    expect(state.screen).toBe("combat");
-    expect(state.combat).not.toBeNull();
-    expect(state.combat!.hand).toHaveLength(5);
+    expect(state.screen).toBe("map");
+    expect(state.combat).toBeNull();
+    expect(state.currentNodeId).toBeNull();
+    expect(state.map.startNodeIds.length).toBeGreaterThan(0);
   });
 
-  it("地图固定形状：3 普通战斗 → 篝火 → 守卫者", () => {
+  it("分支地图：底层入口全是战斗、有 Boss 节点", () => {
     const state = newRun({ runId: "t", seed: 1 });
-    const types = state.map.nodes.map(node => node.type);
-    expect(types).toEqual(["combat", "combat", "combat", "rest", "boss"]);
-    expect(state.map.nodes[4]!.encounterId).toBe("guardian");
+    expect(state.map.rows).toBe(15);
+    for (const id of state.map.startNodeIds) {
+      expect(state.map.nodes[id]!.type).toBe("combat");
+      expect(state.map.nodes[id]!.row).toBe(0);
+    }
+    expect(state.map.nodes[state.map.bossNodeId]!.type).toBe("boss");
   });
 });
 
@@ -70,6 +75,7 @@ describe("伤害结算顺序", () => {
 describe("战斗基本流程", () => {
   it("打出打击对唯一敌人造成伤害并消耗能量", () => {
     const state = newRun({ runId: "t", seed: 5 });
+    startCombat(state, "cultist"); // 分支地图下 newRun 落在选路屏，测试直接起一场战斗
     const combat = state.combat!;
     const strikeIndex = combat.hand.findIndex(card => card.defId === "strike");
     expect(strikeIndex).toBeGreaterThanOrEqual(0);
@@ -85,6 +91,7 @@ describe("战斗基本流程", () => {
 
   it("能量不足拒绝出牌、不改状态、不涨 version", () => {
     const state = newRun({ runId: "t", seed: 5 });
+    startCombat(state, "cultist");
     state.version = 1;
     state.combat!.energy = 0;
     const bashIndex = state.combat!.hand.findIndex(card => card.defId === "bash");

@@ -1,5 +1,12 @@
 <spire_screen>
-{{#if isCombat}}
+{{#if isMap}}
+你在尖塔地图上。生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
+选择接下来往哪走：
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 选择去向。
+{{else if isCombat}}
 第 {{combat.turn}} 回合　能量 {{combat.energy}}/{{combat.maxEnergy}}
 你：生命 {{hp}}/{{maxHp}}{{#if combat.hasBlock}}　格挡 {{combat.block}}{{/if}}{{#if combat.hasPowers}}　状态：{{#each combat.powers}}{{label}}{{amount}} {{/each}}{{/if}}
 ————敌人————
