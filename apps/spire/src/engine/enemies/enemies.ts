@@ -319,6 +319,30 @@ const ENEMY_LIST: EnemyDef[] = [
     intentRule: { scripted: [], weighted: [] },
   },
 
+  // —— 精英：哨卫（3 个一组，神器 + 错位光束/射钉）——
+  {
+    id: "sentry",
+    name: "哨卫",
+    hpMin: 38,
+    hpMax: 42,
+    moves: [
+      {
+        id: "beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+      {
+        id: "bolt",
+        name: "射钉",
+        effects: [{ kind: "add_card", cardId: "dazed", pile: "discard", count: 2 }],
+        intent: "debuff",
+      },
+    ],
+    // 出招由 combat.ts 的 sentry 专属分支处理（错位开局 + 严格交替），intentRule 留空。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
   // —— 切片 Boss：守卫者（模式切换 = 引擎能力验证点，issue #234 C10）——
   {
     id: "the_guardian",
@@ -423,6 +447,7 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   },
   gremlin_nob: { id: "gremlin_nob", enemies: ["gremlin_nob"], isBoss: false },
   lagavulin: { id: "lagavulin", enemies: ["lagavulin"], isBoss: false },
+  three_sentries: { id: "three_sentries", enemies: ["sentry", "sentry", "sentry"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
 };
 
@@ -486,6 +511,7 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
 const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "gremlin_nob", weight: 1 },
   { id: "lagavulin", weight: 1 },
+  { id: "three_sentries", weight: 1 },
 ];
 
 /** 精英节点：从精英池挑一个 encounter id。 */

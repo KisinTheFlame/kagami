@@ -70,6 +70,10 @@ export function startCombat(state: GameState, encounterId: string): void {
       block = LAGAVULIN_METALLICIZE;
       powers.push({ id: "metallicize", amount: LAGAVULIN_METALLICIZE });
     }
+    if (defId === "sentry") {
+      // 哨卫开局各带 1 层神器（抵消你首个减益）。
+      powers.push({ id: "artifact", amount: 1 });
+    }
     const hp = nextRange(state.rng, def.hpMin, def.hpMax);
     return {
       defId,
@@ -297,7 +301,7 @@ function applyPowerEffect(
   if (on === "all_enemies") {
     for (const enemy of combat.enemies) {
       if (enemy.hp > 0) {
-        addPower(enemy.powers, power, amount);
+        applyPowerToEnemy(enemy, power, amount);
       }
     }
     return;
@@ -305,11 +309,22 @@ function applyPowerEffect(
   // on === "target"
   if (actor.side === "player") {
     if (targetEnemyIndex !== null) {
-      addPower(combat.enemies[targetEnemyIndex]!.powers, power, amount);
+      applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
     addPower(combat.playerPowers, power, amount);
   }
+}
+
+const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set(["vulnerable", "weak", "frail"]);
+
+/** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
+function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount: number): void {
+  if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(enemy.powers, "artifact") > 0) {
+    addPower(enemy.powers, "artifact", -1);
+    return;
+  }
+  addPower(enemy.powers, power, amount);
 }
 
 function addCards(
@@ -489,8 +504,14 @@ export function endTurn(state: GameState): void {
   if (!combat || state.screen !== "combat") {
     return;
   }
-  // 玩家回合结束：手牌进弃牌堆，玩家 debuff 衰减。
-  combat.discardPile.push(...combat.hand);
+  // 玩家回合结束：虚无牌被消耗，其余手牌进弃牌堆；玩家 debuff 衰减。
+  for (const instance of combat.hand) {
+    if (getCardDef(instance.defId).ethereal) {
+      combat.exhaustPile.push(instance);
+    } else {
+      combat.discardPile.push(instance);
+    }
+  }
   combat.hand = [];
   decayDebuffs(combat.playerPowers);
 
@@ -547,6 +568,17 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 哨卫：错位开局（两侧先射钉、中间先光束）+ 光束↔射钉 严格交替。
+  if (enemy.defId === "sentry") {
+    if (enemy.moveHistory.length === 0) {
+      enemy.currentMove = enemyIndex % 2 === 0 ? "bolt" : "beam";
+    } else {
+      enemy.currentMove =
+        enemy.moveHistory[enemy.moveHistory.length - 1] === "beam" ? "bolt" : "beam";
+    }
+    return;
+  }
 
   // 拉加维林：睡眠 → 苏醒 → 重击/重击/吸取灵魂 循环。
   if (enemy.defId === "lagavulin") {

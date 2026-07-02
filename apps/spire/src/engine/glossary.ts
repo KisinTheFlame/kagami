@@ -64,6 +64,24 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
       "敌人专属：你每攻击它一次，就受到 N 点无视格挡的反弹伤害（直接掉血）。守卫者防御姿态期间持有。",
   },
   {
+    term: "神器",
+    aliases: ["artifact"],
+    definition:
+      "敌人专属：抵消下一个施加到它身上的减益（易伤/虚弱/脆弱等），每抵消一个消耗一层。哨卫开局各带 1 层。",
+  },
+  {
+    term: "虚无",
+    aliases: ["ethereal"],
+    definition:
+      "带此关键字的牌若在回合结束时仍留在手牌中，会被消耗（移出本场战斗），而非进入弃牌堆。",
+  },
+  {
+    term: "眩晕",
+    aliases: ["dazed"],
+    definition:
+      "无法打出的状态牌，带虚无。占用手牌，回合结束时若还在手里就被消耗。哨卫的射钉会塞给你。",
+  },
+  {
     term: "格挡",
     aliases: ["block"],
     definition: "抵挡伤害的护盾。受击时先扣格挡、扣完再扣生命。每当你的回合开始时清零。",
