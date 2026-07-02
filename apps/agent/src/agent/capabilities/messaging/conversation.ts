@@ -146,8 +146,18 @@ export class Conversation {
     return this.entered;
   }
 
+  /**
+   * 缓冲里最新的一条**真实未读**（跳过回声）：通知预览用——预览渲染的是「别人最新说了
+   * 什么」，小镜自己的回声不算。缓冲空（如 restoreUnread 恢复的裸计数）时返回 null。
+   */
   public getLatestUnread(): ConversationMessage | null {
-    return this.unread.at(-1)?.message ?? null;
+    for (let i = this.unread.length - 1; i >= 0; i--) {
+      const entry = this.unread[i];
+      if (entry.countsAsUnread) {
+        return entry.message;
+      }
+    }
+    return null;
   }
 
   public setGroupInfo(groupInfo: NapcatGetGroupInfoResult): void {

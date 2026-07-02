@@ -201,14 +201,16 @@ describe("Conversation", () => {
       expect(group.hasUnreadMention()).toBe(false);
     });
 
-    it("pushEcho 入缓冲但不计未读、不动 @", () => {
+    it("pushEcho 入缓冲但不计未读、不动 @、不当最新未读", () => {
       const group = Conversation.group("1", 5);
       group.pushEcho(groupMsg("我自己说的", 21));
       expect(group.getUnreadCount()).toBe(0);
       expect(group.hasUnreadMention()).toBe(false);
-      expect(group.getLatestUnread()?.rawMessage).toBe("我自己说的");
+      // 回声不是「别人最新说的」：通知预览不能把小镜自己的发言当最新消息。
+      expect(group.getLatestUnread()).toBeNull();
       // 回声随全量消费一起被带出展示。
       group.pushUnread(groupMsg("别人说的", 22), false);
+      expect(group.getLatestUnread()?.rawMessage).toBe("别人说的");
       const tail = group.consumeUnreadTail();
       expect(tail.map(m => m.rawMessage)).toEqual(["我自己说的", "别人说的"]);
     });

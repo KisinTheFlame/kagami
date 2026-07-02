@@ -1,16 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChatNotificationPreview,
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../src/agent/capabilities/messaging/chat-notification-draft.js";
+import type { ConversationMessage } from "../../src/agent/capabilities/messaging/conversation.js";
 import type { NapcatReceiveMessageSegment } from "../../src/napcat/application/napcat-gateway/shared.js";
+
+function groupMessage(text: string, nickname = "群友"): ConversationMessage {
+  return {
+    groupId: "1",
+    userId: "654321",
+    nickname,
+    rawMessage: text,
+    messageSegments: [{ type: "text", data: { text } } as NapcatReceiveMessageSegment],
+    messageId: 1,
+    time: 1,
+  };
+}
 
 describe("ChatNotificationDraft", () => {
   it("belongs to the QQ group", () => {
     expect(new ChatNotificationDraft("qq_group:1", "产品群", false, 1).group).toBe("QQ");
   });
 
-  it("falls back to 有新消息 for a single non-@ message (no body preview)", () => {
+  it("falls back to 有新消息 without tags and without preview", () => {
     expect(new ChatNotificationDraft("qq_group:1", "产品群", false, 1).render()).toBe(
       "产品群: 有新消息",
     );
@@ -35,11 +49,78 @@ describe("ChatNotificationDraft", () => {
     );
   });
 
+  it("renders the latest-message preview with sender for group chats", () => {
+    const draft = new ChatNotificationDraft("qq_group:1", "产品群", false, 3, {
+      senderName: "群友",
+      text: "今晚开黑吗",
+    });
+    expect(draft.render()).toBe("产品群: [3 条消息] 群友: 今晚开黑吗");
+  });
+
+  it("renders the preview without sender for private chats", () => {
+    const draft = new ChatNotificationDraft("qq_private:654321", "老王", false, 1, {
+      senderName: null,
+      text: "在吗",
+    });
+    expect(draft.render()).toBe("老王: 在吗");
+  });
+
+  it("keeps tags and preview together, tags first", () => {
+    const draft = new ChatNotificationDraft("qq_group:1", "产品群", true, 5, {
+      senderName: "群友",
+      text: "小镜快来",
+    });
+    expect(draft.render()).toBe("产品群: [5 条消息][有人 @ 你] 群友: 小镜快来");
+  });
+
   it("merge(prev) takes the latest snapshot (count is authoritative, not accumulated)", () => {
-    // 未读计数 / @ 标记的权威来源是 Conversation，新 draft 已带全量快照；过期 prev 被丢弃。
+    // 未读计数 / @ 标记 / 预览的权威来源是 Conversation，新 draft 已带全量快照；过期 prev 被丢弃。
     const older = new ChatNotificationDraft("qq_group:1", "群", true, 1); // 旧快照：@ 过、count 1
     const newer = new ChatNotificationDraft("qq_group:1", "群", false, 5); // 新快照：count 5、未 @
     expect(newer.merge(older).render()).toBe("群: [5 条消息]");
+  });
+});
+
+describe("buildChatNotificationPreview", () => {
+  it("uses the sender nickname for group messages and none for private ones", () => {
+    expect(buildChatNotificationPreview(groupMessage("在吗"), "group")).toEqual({
+      senderName: "群友",
+      text: "在吗",
+    });
+    expect(buildChatNotificationPreview(groupMessage("在吗"), "private")).toEqual({
+      senderName: null,
+      text: "在吗",
+    });
+  });
+
+  it("falls back to userId when the group nickname is blank", () => {
+    expect(buildChatNotificationPreview(groupMessage("在吗", "  "), "group")).toEqual({
+      senderName: "654321",
+      text: "在吗",
+    });
+  });
+
+  it("collapses whitespace and truncates long bodies", () => {
+    const preview = buildChatNotificationPreview(groupMessage("第一行\n  第二行"), "group");
+    expect(preview?.text).toBe("第一行 第二行");
+
+    const long = buildChatNotificationPreview(groupMessage("啊".repeat(60)), "group");
+    expect(long?.text).toBe("啊".repeat(50) + "…");
+  });
+
+  it("renders non-text segments as placeholders", () => {
+    const message: ConversationMessage = {
+      ...groupMessage(""),
+      messageSegments: [
+        { type: "image", data: { summary: "" } } as unknown as NapcatReceiveMessageSegment,
+      ],
+    };
+    expect(buildChatNotificationPreview(message, "group")?.text).toBe("[图片]");
+  });
+
+  it("returns null when the body renders empty", () => {
+    const message: ConversationMessage = { ...groupMessage("   "), messageSegments: [] };
+    expect(buildChatNotificationPreview(message, "group")).toBeNull();
   });
 });
 
