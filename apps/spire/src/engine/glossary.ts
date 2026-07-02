@@ -43,6 +43,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：第一次被攻击时获得一次性格挡（能挡住那一击的一部分），随后蜷缩消失。",
   },
   {
+    term: "激怒",
+    aliases: ["enrage"],
+    definition: "敌人专属：你每打出一张技能牌，它就获得等于层数的力量。地精头目开局自带。",
+  },
+  {
     term: "反甲",
     aliases: ["sharp hide", "sharphide", "thorns"],
     definition:

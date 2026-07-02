@@ -23,6 +23,7 @@ const POWER_LABELS: Record<string, string> = {
   ritual: "仪式",
   curl_up: "蜷缩",
   sharp_hide: "反甲",
+  enrage: "激怒",
   mode_shift: "模式",
 };
 

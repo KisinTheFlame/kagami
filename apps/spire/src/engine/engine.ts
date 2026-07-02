@@ -49,6 +49,7 @@ export function newRun(input: {
     combat: null,
     reward: null,
     combatsEntered: 0,
+    pendingRelicReward: false,
     rng,
     nextUid,
     log: [],

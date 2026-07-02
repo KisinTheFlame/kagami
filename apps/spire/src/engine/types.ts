@@ -18,6 +18,7 @@ export type PowerId =
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
+  | "enrage" // 激怒：玩家每打出一张技能牌，此敌人获得 = 层数的力量（地精头目）
   | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
@@ -184,6 +185,8 @@ export type GameState = {
   reward: RewardState | null;
   /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
   combatsEntered: number;
+  /** 本场战斗胜利后是否发一个遗物（精英战为 true；下次 generateReward 消费后清零）。 */
+  pendingRelicReward: boolean;
   rng: RngState;
   /** 递增的牌实例 uid 分配器。 */
   nextUid: number;

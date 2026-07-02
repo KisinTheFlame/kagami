@@ -247,6 +247,45 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
+  {
+    id: "gremlin_nob",
+    name: "地精头目",
+    hpMin: 82,
+    hpMax: 86,
+    moves: [
+      {
+        id: "bellow",
+        name: "咆哮",
+        effects: [{ kind: "apply_power", power: "enrage", amount: 2, on: "self" }],
+        intent: "buff",
+      },
+      {
+        id: "rush",
+        name: "猛冲",
+        effects: [{ kind: "deal_damage", amount: 14 }],
+        intent: "attack",
+      },
+      {
+        id: "skull_bash",
+        name: "碎颅击",
+        effects: [
+          { kind: "deal_damage", amount: 6 },
+          { kind: "apply_power", power: "vulnerable", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    // asc0：首招必咆哮(上激怒2)；之后 roll<33 或连两次猛冲→碎颅击，否则猛冲（猛冲最多连2）。
+    intentRule: {
+      scripted: ["bellow"],
+      weighted: [
+        { move: "rush", weight: 67, maxInARow: 2 },
+        { move: "skull_bash", weight: 33, maxInARow: 99 },
+      ],
+    },
+  },
+
   // —— 切片 Boss：守卫者（模式切换 = 引擎能力验证点，issue #234 C10）——
   {
     id: "the_guardian",
@@ -349,6 +388,7 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     enemies: ["spike_slime_s", "spike_slime_s", "spike_slime_s", "acid_slime_s", "acid_slime_s"],
     isBoss: false,
   },
+  gremlin_nob: { id: "gremlin_nob", enemies: ["gremlin_nob"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
 };
 
@@ -405,4 +445,13 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
     return nextFloat(rng) < 0.5 ? "small_slimes_a" : "small_slimes_b";
   }
   return picked;
+}
+
+// Act1 精英池（等权重，不重复限制由 StS 的洗牌保证；此处简化为等权随机）。
+// 拉加维林 / 哨卫在 M3b-2 加入。
+const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [{ id: "gremlin_nob", weight: 1 }];
+
+/** 精英节点：从精英池挑一个 encounter id。 */
+export function pickEliteEncounter(rng: RngState): string {
+  return weightedPick(rng, ELITE_ENCOUNTER_POOL);
 }

@@ -1,6 +1,6 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
-import { pickNormalEncounter } from "../enemies/enemies.js";
+import { pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
@@ -16,8 +16,8 @@ const REWARD_CARD_COUNT = 3;
 const TREASURE_GOLD_MIN = 25;
 const TREASURE_GOLD_MAX = 35;
 
-/** 本里程碑启用的地图节点类型（精英/事件/商店随内容里程碑加入）。 */
-const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "rest", "treasure"];
+/** 本里程碑启用的地图节点类型（事件/商店随内容里程碑加入）。 */
+const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "elite", "rest", "treasure"];
 
 const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   combat: "战斗",
@@ -39,12 +39,17 @@ export function buildMap(state: GameState): void {
 function resolveNode(state: GameState, node: MapNode): void {
   state.currentNodeId = node.id;
   switch (node.type) {
-    case "combat":
-    case "elite": {
+    case "combat": {
       // 前若干场抽 weak 池、其余抽 strong 池（复刻 StS Act1 战斗节奏）。
       const encounterId = pickNormalEncounter(state.rng, state.combatsEntered);
       state.combatsEntered += 1;
       startCombat(state, encounterId);
+      return;
+    }
+    case "elite": {
+      // 精英战：独立精英池；胜利后必发 1 个遗物。
+      startCombat(state, pickEliteEncounter(state.rng));
+      state.pendingRelicReward = true;
       return;
     }
     case "boss": {
@@ -92,8 +97,12 @@ export function backToMap(state: GameState): void {
   state.screen = "map";
 }
 
-/** 非 Boss 战斗胜利后生成三选一卡奖励。 */
+/** 非 Boss 战斗胜利后生成奖励：精英战先发一个遗物，再给三选一卡奖励。 */
 export function generateReward(state: GameState): void {
+  if (state.pendingRelicReward) {
+    grantRandomRelic(state);
+    state.pendingRelicReward = false;
+  }
   const pool = [...REWARD_CARD_POOL];
   const choices: { defId: string; upgraded: boolean }[] = [];
   for (let i = 0; i < REWARD_CARD_COUNT && pool.length > 0; i += 1) {
