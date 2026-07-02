@@ -16,7 +16,8 @@
   "scripts": {
     "build": "pnpm db:generate && tsc -p tsconfig.build.json",
     "typecheck": "pnpm db:generate && tsc --noEmit",
-    "db:generate": "bash ../../scripts/prisma.sh generate"
+    "db:generate": "bash ../../scripts/prisma.sh generate",
+    "test": "vitest run"
   },
   "dependencies": {
     "@kagami/kernel": "workspace:*",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

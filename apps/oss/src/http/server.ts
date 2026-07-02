@@ -1,95 +1,84 @@
-import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
+import type { ServerResponse } from "node:http";
 import { pipeline } from "node:stream/promises";
+import Fastify, { type FastifyInstance } from "fastify";
+import {
+  registerBinaryEnvelopeRoute,
+  registerBinaryRawRoute,
+  useRawBodyPassthrough,
+} from "@kagami/http/contract";
+import { ossApiContract } from "@kagami/oss-api/contract";
 import { PayloadTooLargeError } from "../store/object-store.js";
 import type { ObjectStore } from "../store/object-store.js";
 
-const OBJECT_PATH = /^\/objects\/([^/]+)$/;
-
-export function createOssServer(store: ObjectStore, maxBodyBytes: number): Server {
-  return createServer((req, res) => {
-    void handleRequest(req, res, store, maxBodyBytes);
+/**
+ * OSS 的 Fastify 应用。路由全量走 @kagami/oss-api 契约（issue #230）：putObject 是二进制信封路由
+ * （上行原始字节流透传、下行 `{ key }` 信封两端共享 schema），get/head/delete 是 raw 路由——
+ * `reply.hijack()` 后在裸 ServerResponse 上原样保留迁移前的流式管道 / fd 生命周期 / 安全头逻辑
+ * （下方三个 handle* 函数从裸 node:http 实现逐行搬运，行为由 test/server.test.ts 的传输层基线钉死）。
+ */
+export function buildOssApp(store: ObjectStore, maxBodyBytes: number): FastifyInstance {
+  const app = Fastify({
+    // GET /objects/:key 之外显式配了 HEAD 路由，关掉 Fastify 自动 HEAD 以免撞路由。
+    exposeHeadRoutes: false,
+    // content-length 声明超限的上传直接 413 早拒；chunked / 谎报长度的由 store.put 按实际字节兜底。
+    bodyLimit: maxBodyBytes,
+    // close() 时强制断开 keep-alive 空闲连接：与旧裸 node:http 版"close + 10s 超时兜底"同一语义，
+    // 否则复用连接的客户端（undici 池）会让优雅关停一直等到超时。
+    forceCloseConnections: true,
   });
-}
+  // 上行 body 一律原始流透传（含 application/json——对 OSS 它也只是不透明字节）。
+  useRawBodyPassthrough(app);
 
-async function handleRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-  store: ObjectStore,
-  maxBodyBytes: number,
-): Promise<void> {
-  try {
-    const pathname = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+  // 缺失 / 空 content-type 的上传按 application/octet-stream 收（与旧实现一致）：不归一化的话
+  // Fastify 会把空 content-type 走错误路径拒掉，而对 OSS 它只是"未声明类型的字节"。
+  app.addHook("onRequest", (request, _reply, done) => {
+    const contentType = request.headers["content-type"];
+    if (contentType === undefined || contentType === "") {
+      request.headers["content-type"] = "application/octet-stream";
+    }
+    done();
+  });
 
-    if (req.method === "GET" && pathname === "/health") {
-      res.writeHead(200, { "content-type": "text/plain" });
-      res.end("ok");
+  app.setErrorHandler((error, _request, reply) => {
+    // store 超限时刻意不销毁 req；先把 413 写回再收尾，客户端能看到 413 而非 ECONNRESET。
+    // bodyLimit 的早拒（FST_ERR_CTP_BODY_TOO_LARGE，statusCode 413）归并同一出口。
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (error instanceof PayloadTooLargeError || statusCode === 413) {
+      if (!reply.sent) {
+        void reply.code(413).header("connection", "close").send();
+      }
       return;
     }
-
-    if (pathname === "/objects" && req.method === "POST") {
-      await handlePost(req, res, store, maxBodyBytes);
-      return;
-    }
-
-    const match = OBJECT_PATH.exec(pathname);
-    if (match) {
-      let key: string;
-      try {
-        key = decodeURIComponent(match[1]);
-      } catch {
-        // 畸形百分号编码是客户端错误，回 400 而非兜底 500。
-        res.writeHead(400).end();
-        return;
-      }
-      switch (req.method) {
-        case "GET":
-          await handleGet(res, store, key);
-          return;
-        case "HEAD":
-          await handleHead(res, store, key);
-          return;
-        case "DELETE":
-          await handleDelete(res, store, key);
-          return;
-        default:
-          res.writeHead(405).end();
-          return;
-      }
-    }
-
-    res.writeHead(404).end();
-  } catch (error) {
     console.error("[oss] request failed", error);
-    if (!res.headersSent) {
-      res.writeHead(500);
+    if (!reply.sent) {
+      void reply.code(500).send();
     }
-    res.end();
-  }
-}
+  });
 
-async function handlePost(
-  req: IncomingMessage,
-  res: ServerResponse,
-  store: ObjectStore,
-  maxBodyBytes: number,
-): Promise<void> {
-  const mime = parseMime(req.headers["content-type"]);
-  try {
-    // 请求体直接作为流交给 store，边流边算 sha256 落临时文件，不整块驻留内存。
-    const { key } = await store.put(req, mime, { maxBytes: maxBodyBytes });
-    res.writeHead(201, { "content-type": "application/json" });
-    res.end(JSON.stringify({ key }));
-  } catch (error) {
-    if (error instanceof PayloadTooLargeError) {
-      // store 超限时刻意不销毁 req；这里先把 413 写回再收尾，客户端能看到 413 而非 ECONNRESET。
-      if (!res.headersSent) {
-        res.writeHead(413, { connection: "close" });
-      }
-      res.end();
-      return;
+  app.get("/health", (_request, reply) => reply.type("text/plain").send("ok"));
+
+  registerBinaryEnvelopeRoute(app, ossApiContract.putObject, async ({ body, request }) => {
+    if (!body) {
+      throw new Error("[oss] putObject 缺少上行字节流（bytesIn 路由不应至此）");
     }
-    throw error;
-  }
+    const mime = parseMime(request.headers["content-type"]);
+    // 请求体直接作为流交给 store，边流边算 sha256 落临时文件，不整块驻留内存。
+    return await store.put(body, mime, { maxBytes: maxBodyBytes });
+  });
+
+  registerBinaryRawRoute(app, ossApiContract.getObject, async ({ params, raw }) => {
+    await handleGet(raw, store, params.key);
+  });
+
+  registerBinaryRawRoute(app, ossApiContract.headObject, async ({ params, raw }) => {
+    await handleHead(raw, store, params.key);
+  });
+
+  registerBinaryRawRoute(app, ossApiContract.deleteObject, async ({ params, raw }) => {
+    await handleDelete(raw, store, params.key);
+  });
+
+  return app;
 }
 
 async function handleGet(res: ServerResponse, store: ObjectStore, key: string): Promise<void> {

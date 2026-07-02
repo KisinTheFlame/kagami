@@ -1,4 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { ViewTimeTool } from "./tools/view-time.tool.js";
 
 export const CLOCK_APP_ID = "clock";
@@ -25,11 +26,6 @@ export class ClockApp implements App {
   }
 
   public async help(): Promise<string> {
-    return [
-      "你在时钟 App 里。当前可调用工具：",
-      "  - view_time(): 查看当前北京时间（精确到秒）。",
-      "",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/clock-app-help.hbs");
   }
 }

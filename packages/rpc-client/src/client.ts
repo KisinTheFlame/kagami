@@ -196,3 +196,18 @@ const decodeBizErrorWire: ErrorDecoder = (_status, body) => {
   }
   return undefined;
 };
+
+/**
+ * 把契约里的 `:param` 路径插值成实际 URL 路径段（encodeURIComponent）。binary 路由的门面用它
+ * 从契约取路径（如 `/objects/:key` + `{key:"res-1"}` → `/objects/res-1`），保证 client 与服务端
+ * 路由共享同一份 path 字符串。缺参数直接抛错（编程错误，不进业务错误通道）。
+ */
+export function interpolatePath(path: string, params: Record<string, string>): string {
+  return path.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) => {
+    const value = params[name];
+    if (value === undefined) {
+      throw new Error(`路径参数缺失：${name}（path: ${path}）`);
+    }
+    return encodeURIComponent(value);
+  });
+}

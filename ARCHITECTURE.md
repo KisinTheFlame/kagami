@@ -4,7 +4,7 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 当前由 21 个包组成（9 个 apps + 12 个 packages），依赖单向（apps → packages）：
+pnpm workspace 当前由 22 个包组成（9 个 apps + 13 个 packages），依赖单向（apps → packages）：
 
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
@@ -15,7 +15,7 @@ apps/console ──→ packages/persistence ──→ packages/kernel ──→ 
 apps/llm     ──→ packages/llm-client + packages/auth ──→ packages/kernel / persistence  （独立进程，LLM + OAuth 网关）
 apps/metric  ──→ packages/persistence / kernel / http / shared  （独立进程，metric 摄取 + 图表查询）
 apps/web     ──→ packages/shared
-apps/oss     （独立进程，零 @kagami 依赖）
+apps/oss     （独立进程，Fastify + @kagami/oss-api 契约）
 apps/browser ──→ packages/persistence / kernel / http  （独立进程，持有 CloakBrowser）
 apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔式卡牌游戏引擎；不碰 persistence，存档走 JSON）
 ```
@@ -30,7 +30,7 @@ apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔
 | `@kagami/llm-service`   | LLM 网关 + OAuth 凭据中心进程（`apps/llm`，仅 localhost）：持有全部 provider + OAuth callback server + 刷新 timer，落 `llm_chat_call` / `embedding_cache`；agent 经 HTTP 直连                       |
 | `@kagami/metric`        | metric 领域独立进程（Fastify，仅 localhost）：一手包办 metric 摄取（`POST /metric/record`，agent HTTP 上报）+ metric-chart 查询，经 @kagami/persistence 共享 DAO 直读 SQLite                        |
 | `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                                              |
-| `@kagami/oss`           | 自建对象存储服务（独立进程，`node:http` + 裸 better-sqlite3，零 `@kagami/*` 依赖）                                                                                                                  |
+| `@kagami/oss`           | 自建对象存储服务（独立进程，Fastify + 裸 better-sqlite3；路由走 `@kagami/oss-api` 契约，get/head/delete 为 raw 路由保流式管道 / fd / 安全头语义）                                                   |
 | `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173）               |
 | `@kagami/spire-service` | 杀塔式卡牌游戏引擎独立进程（`apps/spire`，Fastify，仅 localhost）：纯游戏引擎 + JSON 存档 + 自动对战模拟器，不碰共享 SQLite；agent 经 `HttpSpireClient` 驱动，拆进程让 agent 重启不打断对局（#234） |
 | `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                                                  |
@@ -42,6 +42,7 @@ apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔
 | `@kagami/rpc-client`    | 契约驱动的 typed HTTP client 工厂（`createClient(contract)`）：消费端从生产者契约派生类型 + 对响应 `output.parse`；kernel 依赖（重建 BizError）隔离在此，让 `@kagami/http` 保持零 kernel            |
 | `@kagami/llm-api`       | kagami-llm 进程对 agent 暴露的 RPC 契约包（per-producer `xxx-api`，issue #230）；覆盖 providers/chat/chat-direct/embed（后三条信封级），服务端与 agent client 共享同一份 schema                     |
 | `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                             |
+| `@kagami/oss-api`       | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                              |
 | `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                                       |
 | `@kagami/config`        | 零依赖叶子包：repo-root 定位 + `config.yaml` / `config.secret.yaml` 两文件深合并，被 kernel / gateway / oss / 脚本复用                                                                              |
 | `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                                                     |
@@ -208,7 +209,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 | 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query` |
 | Agent / 指标    | `/main-agent-context/recent`、`/main-agent-context/compact`、`/metric-chart/*`、`/scheduler/*`                       |
 
-> `apps/oss` 另起独立 HTTP 服务（`POST /objects` 上传、`GET` / `HEAD` / `DELETE /objects/:key`，另有 `GET /health`），仅 localhost 监听，不经 Fastify。
+> `apps/oss` 另起独立 HTTP 服务（`POST /objects` 上传、`GET` / `HEAD` / `DELETE /objects/:key`，另有 `GET /health`），仅 localhost 监听，Fastify + `@kagami/oss-api` 契约（putObject 信封路由 / 其余 raw 路由，上行字节流透传不缓冲）。
 
 ## 部署
 

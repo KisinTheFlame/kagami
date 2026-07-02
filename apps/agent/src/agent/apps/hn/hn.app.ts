@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { App, AppStartupContext } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { HnReader } from "./hn-reader.js";
 import { DefaultHnFirebaseClient } from "./client/firebase.js";
 import { DefaultHnAlgoliaClient } from "./client/algolia.js";
@@ -42,18 +43,6 @@ const HnConfigSchema = z
   .default({});
 
 type HnConfig = z.infer<typeof HnConfigSchema>;
-
-const HN_AFFORDANCE = [
-  "<hn_portal>",
-  "你进了 Hacker News。这里没有未读提醒——想看才看。",
-  "可调用工具：",
-  "  - glance_hn(feed?, limit?)：瞄一眼榜单（top/new/best/ask/show/job）。",
-  "  - search_hn(query, sort?, tags?)：搜你关心的话题。",
-  "  - open_hn_thread(id)：钻进某个帖子读讨论。",
-  "  - open_hn_user(username)：看看某个人是谁。",
-  "要去别的 App，用 switch(id=...) 切过去。",
-  "</hn_portal>",
-].join("\n");
 
 /**
  * Hacker News App。把 HN 的两个只读 API 包装成 Kagami 桌面上的一个能力单元。
@@ -98,17 +87,7 @@ export class HnApp implements App<HnConfig> {
   }
 
   public async help(): Promise<string> {
-    return [
-      "你在 Hacker News App 里。",
-      "",
-      "可调用工具：",
-      "  - glance_hn(feed?, limit?): 瞄一眼榜单的 front page（top/new/best/ask/show/job，默认 top）。",
-      "  - search_hn(query, sort?, tags?): 全文搜 HN（sort: relevance/date；tags: story/comment/ask_hn/show_hn）。",
-      "  - open_hn_thread(id): 钻进某个帖子读正文和热门评论。",
-      "  - open_hn_user(username): 读某个用户的主页和近期发言。",
-      "",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/hn-app-help.hbs");
   }
 
   public async onStartup(ctx: AppStartupContext<HnConfig>): Promise<void> {
@@ -137,8 +116,9 @@ export class HnApp implements App<HnConfig> {
     });
   }
 
-  /** 进入 HN：只给静态提示屏，不自动拉榜（无网络 I/O，永不失败）。 */
+  /** 进入 HN：只给静态提示屏，不自动拉榜（本地模板渲染，无网络 I/O）。 */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
-    return [{ type: "append_message", content: HN_AFFORDANCE }];
+    const content = renderServerStaticTemplate(import.meta.url, "prompts/hn-app-portal.hbs");
+    return [{ type: "append_message", content }];
   }
 }

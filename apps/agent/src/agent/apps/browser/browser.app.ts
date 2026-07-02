@@ -1,4 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { BrowserNavigateTool } from "../../capabilities/browser/tools/navigate.tool.js";
 import { BrowserObserveTool } from "../../capabilities/browser/tools/observe.tool.js";
 import { BrowserClickTool } from "../../capabilities/browser/tools/click.tool.js";
@@ -19,21 +20,6 @@ type BrowserAppDeps = {
   /** 截图叠加落 OSS 用；缺省（OSS 关闭）时截图仍入上下文，只是没有 resid。 */
   ossClient?: OssClient;
 };
-
-const BROWSER_AFFORDANCE = [
-  "<browser_portal>",
-  "你进了浏览器。这里是你上网的身体——能像人一样登录、点、填、读真实网站。",
-  "可调用工具：",
-  "  - browser_navigate(url)：打开网址。",
-  "  - browser_observe()：读当前页语义树（带可点元素 ref + box，含 iframe）。要操作先 observe。",
-  "  - browser_click(target)：点元素（ref 形如 7:e3，或一段可见文本）。",
-  "  - browser_type(ref, text|secret_handle, submit?)：填输入框；密码走 secret_handle（你看不到明文）。",
-  "  - browser_press(key) / browser_wait_for(selector|ms)：按键 / 等页面稳定。",
-  "  - browser_screenshot()：截图原图直接进你上下文（observe 够用就别频繁截）。",
-  "  - browser_eval(script)：在页面跑任意 JS 的逃生舷，谨慎用。",
-  "登录态跨重启留存。要去别的 App，用 switch(id=...) 切过去。",
-  "</browser_portal>",
-].join("\n");
 
 /**
  * 浏览器 App：把浏览器的 8 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 TerminalApp。
@@ -86,31 +72,17 @@ export class BrowserApp implements App {
 
   public async help(): Promise<string> {
     const location = await this.safeLocation();
-    const where =
-      location?.lastUrl != null
-        ? `上次你在：${location.lastTitle ?? ""}（${location.lastUrl}）`
-        : "还没打开过页面。";
-    return [
-      `你在浏览器 App 里。${where}`,
-      "",
-      "可调用工具：",
-      "  - browser_navigate(url): 打开网址。",
-      "  - browser_observe(): 读当前页语义树（含可点元素 ref + box + iframe）。操作前先 observe。",
-      "  - browser_click(target): 点元素（ref 形如 7:e3，或一段可见文本）。",
-      "  - browser_type(ref, text|secret_handle, secret_field?, submit?): 填输入框；密码走 secret_handle。",
-      "  - browser_press(key): 按键（Enter/Tab/Escape/Control+A 等）。",
-      "  - browser_wait_for(selector|ms): 等元素出现 / 死等若干毫秒。",
-      "  - browser_screenshot(reason?): 截图原图进上下文（observe 够用就别频繁截）。",
-      "  - browser_eval(script): 在页面跑任意 JS 的全权逃生舷，谨慎用。",
-      "",
-      "ref 仅最近一次 observe 的 epoch 有效，页面变了要重新 observe。登录态跨重启留存。",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/browser-app-help.hbs", {
+      hasLocation: location?.lastUrl != null,
+      lastTitle: location?.lastTitle ?? "",
+      lastUrl: location?.lastUrl ?? "",
+    });
   }
 
-  /** 进入浏览器：只给静态提示屏，不自动开窗/拉页（无网络 I/O，永不因启动失败而进不去）。 */
+  /** 进入浏览器：只给静态提示屏，不自动开窗/拉页（本地模板渲染，永不因启动失败而进不去）。 */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
-    return [{ type: "append_message", content: BROWSER_AFFORDANCE }];
+    const content = renderServerStaticTemplate(import.meta.url, "prompts/browser-app-portal.hbs");
+    return [{ type: "append_message", content }];
   }
 
   /** 取浏览器进程的当前位置；进程未就绪/不可达时返 null，让 help 降级而非报错。 */
