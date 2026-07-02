@@ -390,11 +390,7 @@ export function AuthPage() {
               <p className="mt-6 text-sm text-destructive">{usageTrendQuery.error.message}</p>
             ) : usageTrendQuery.data ? (
               <div className="mt-6">
-                <UsageTrendPanel
-                  data={usageTrendQuery.data}
-                  providerConfig={providerConfig}
-                  providerKey={providerKey}
-                />
+                <UsageTrendPanel data={usageTrendQuery.data} providerKey={providerKey} />
               </div>
             ) : (
               <p className="mt-6 text-sm text-muted-foreground">
@@ -472,11 +468,9 @@ function ClaudeUsageLimitsPanel({ limits }: { limits: ClaudeCodeUsageLimits }) {
 
 function UsageTrendPanel({
   data,
-  providerConfig,
   providerKey,
 }: {
   data: AuthUsageTrendData;
-  providerConfig: AuthProviderConfig;
   providerKey: AuthProvider;
 }) {
   const chartData = useMemo(() => buildTrendChartData(data), [data]);
