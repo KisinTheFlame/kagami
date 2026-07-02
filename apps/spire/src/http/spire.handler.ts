@@ -4,6 +4,7 @@ import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 import type { GameAction } from "../engine/engine.js";
 import type { SpireService } from "../application/spire.service.js";
 import { toScreenView } from "../application/state-view.js";
+import { lookupReference } from "../application/reference.js";
 
 // === 尖塔 HTTP 路由 ===
 //
@@ -32,6 +33,7 @@ const ActionBodySchema = z.object({
 });
 
 const StateQuerySchema = z.object({});
+const ReferenceQuerySchema = z.object({ q: z.string().optional() });
 const ResponseSchema = z.unknown();
 
 export class SpireHandler {
@@ -81,6 +83,15 @@ export class SpireHandler {
         // GET /state 的 log 恒为空（KV 字节确定性，issue #234 C3）。
         return state ? toScreenView(state, { suppressLog: true }) : null;
       },
+    });
+
+    // 卡牌 / 术语参考查询：纯静态数据，不依赖对局状态。
+    registerQueryRoute({
+      app,
+      path: "/reference",
+      querySchema: ReferenceQuerySchema,
+      responseSchema: ResponseSchema,
+      execute: ({ query }) => lookupReference(query.q ?? ""),
     });
   }
 }

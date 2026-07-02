@@ -211,6 +211,9 @@ const CARD_LIST: CardDef[] = [
   },
 ];
 
+/** 全部卡定义（lookup / 参考查询用）。 */
+export const ALL_CARDS: readonly CardDef[] = CARD_LIST;
+
 const CARD_MAP: ReadonlyMap<string, CardDef> = new Map(CARD_LIST.map(card => [card.id, card]));
 
 export function getCardDef(id: string): CardDef {

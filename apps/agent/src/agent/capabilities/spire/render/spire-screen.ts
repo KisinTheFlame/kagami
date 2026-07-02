@@ -3,6 +3,7 @@ import type {
   SpireEnemyView,
   SpireHandCardView,
   SpirePower,
+  SpireReference,
   SpireScreen,
 } from "../../../../spire/spire-client.js";
 
@@ -89,8 +90,6 @@ export function renderSpireScreen(screen: SpireScreen): string {
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),
     hasOptions: screen.options.length > 0,
-    logLines: screen.log,
-    hasLog: screen.log.length > 0,
   });
 }
 
@@ -107,4 +106,34 @@ export function renderSpireNoRun(): string {
 /** 进入尖塔 App 的静态提示屏（onFocus / help 用，无网络 I/O）。 */
 export function renderSpirePortal(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-portal.hbs", {});
+}
+
+const CARD_TYPE_LABELS: Record<string, string> = {
+  attack: "攻击",
+  skill: "技能",
+  power: "能力",
+  status: "状态牌",
+};
+
+/** lookup 结果 → 文字（卡牌信息 + 术语定义）。框架文案在 .hbs，游戏数据插值。 */
+export function renderSpireReference(ref: SpireReference): string {
+  return renderServerStaticTemplate(import.meta.url, "context/spire-reference.hbs", {
+    query: ref.query,
+    hasQuery: ref.query.trim().length > 0,
+    hasResults: ref.cards.length > 0 || ref.terms.length > 0,
+    hasCards: ref.cards.length > 0,
+    hasTerms: ref.terms.length > 0,
+    cards: ref.cards.map(card => ({
+      name: card.name,
+      typeLabel: CARD_TYPE_LABELS[card.type] ?? card.type,
+      playable: card.cost !== null,
+      cost: card.cost ?? 0,
+      upgradedCost: card.upgradedCost ?? 0,
+      costChanges: card.cost !== card.upgradedCost,
+      targeted: card.targeted,
+      description: card.description,
+      upgradedDescription: card.upgradedDescription,
+    })),
+    terms: ref.terms,
+  });
 }

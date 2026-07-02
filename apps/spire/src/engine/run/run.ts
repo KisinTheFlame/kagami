@@ -1,5 +1,5 @@
 import type { GameState, MapNode } from "../types.js";
-import { REWARD_CARD_POOL, getCardDef } from "../cards/cards.js";
+import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
 import { NORMAL_ENCOUNTER_POOL } from "../enemies/enemies.js";
 import { nextInt } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
@@ -56,7 +56,10 @@ export function currentOptions(state: GameState): string[] {
   if (state.screen === "reward" && state.reward) {
     const cards = state.reward.cardChoices.map(choice => {
       const def = getCardDef(choice.defId);
-      return `获得「${def.name}」${choice.upgraded ? "+" : ""}`;
+      const cost = costOf(def, choice.upgraded);
+      const desc = choice.upgraded ? def.upgradedDescription : def.description;
+      // 选项带牌信息：名 (+升级) 费用 · 效果，方便挑牌时判断（用户反馈）。
+      return `${def.name}${choice.upgraded ? "+" : ""} 费${cost ?? "-"} · ${desc}`;
     });
     return [...cards, "跳过（不拿卡）"];
   }
