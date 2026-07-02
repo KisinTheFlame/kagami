@@ -10,6 +10,7 @@ import {
   type ToolComponent,
 } from "@kagami/agent-runtime";
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
 import type { LlmClient } from "@kagami/llm-client";
@@ -127,6 +128,8 @@ export type AgentRuntimeBundle = {
   shutdownApps: () => Promise<void>;
 };
 
+const logger = new AppLogger({ source: "agent.runtime-factory" });
+
 export async function buildAgentRuntime({
   config,
   database,
@@ -222,6 +225,19 @@ export async function buildAgentRuntime({
   // 时存档各 App 自己的状态（如 QQ 未读红点），走 app_state 通用表。
   const appManager = new AppManager({
     stateStore: new PrismaAppStateStore({ database }),
+    onStateError: ({ appId, phase, error }) => {
+      // 状态恢复/存档失败虽不阻断启停，但绝不静默：跨重启状态（如 QQ 未读红点）无声丢失
+      // 会让运维完全无从察觉，故落结构化日志。
+      logger.errorWithCause(
+        `App "${appId}" 状态${phase === "restore" ? "恢复" : "存档"}失败`,
+        error,
+        {
+          event: "agent.app_state.persist_failed",
+          appId,
+          phase,
+        },
+      );
+    },
   });
   appManager.register(new CalcApp());
   appManager.register(new TerminalApp({ terminalStateDao, terminalOutputDao }));

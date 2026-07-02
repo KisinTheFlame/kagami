@@ -27,6 +27,17 @@ export interface AppStateStore {
 }
 
 /**
+ * App 状态存取失败时的上报载荷。框架本身是零依赖通用内核，不认识具体日志设施；
+ * 状态 load/save 失败是"可降级但不该静默"的事件，故交由宿主注入的回调去记日志/告警。
+ */
+export interface AppStateErrorInfo {
+  appId: AppId;
+  /** restore = 启动时恢复失败；persist = 关停时存档失败。 */
+  phase: "restore" | "persist";
+  error: unknown;
+}
+
+/**
  * App 是 Kagami "手机" 上的一个能力单元。每个 App 自带一组 invoke 子工具、
  * 可选的生命周期钩子，以及一个能力说明（help）。
  *
@@ -139,9 +150,18 @@ export class AppManager {
   private readonly toolOwners = new Map<string, App<unknown>>();
   /** App 状态持久化端口；缺省（无宿主注入）时持久化整体是 no-op。 */
   private readonly stateStore: AppStateStore | null;
+  private readonly onStateError: ((info: AppStateErrorInfo) => void) | null;
 
-  public constructor({ stateStore }: { stateStore?: AppStateStore } = {}) {
+  public constructor({
+    stateStore,
+    onStateError,
+  }: {
+    stateStore?: AppStateStore;
+    /** 状态 load/save 失败上报。省略则失败仅被吞掉（不推荐，宿主应接日志）。 */
+    onStateError?: (info: AppStateErrorInfo) => void;
+  } = {}) {
     this.stateStore = stateStore ?? null;
+    this.onStateError = onStateError ?? null;
   }
 
   /** 注册一个 App。同 id 重复注册会抛错。 */
@@ -263,8 +283,9 @@ export class AppManager {
       if (state !== null) {
         app.restoreState(state);
       }
-    } catch {
-      // 恢复失败不应阻断启动；App 以空状态继续。
+    } catch (error) {
+      // 恢复失败不阻断启动（App 以空状态继续），但绝不静默：上报给宿主记日志/告警。
+      this.onStateError?.({ appId: app.id, phase: "restore", error });
     }
   }
 
@@ -275,8 +296,9 @@ export class AppManager {
     }
     try {
       await this.stateStore.save(app.id, app.exportState());
-    } catch {
-      // 存档失败不应阻断关停。
+    } catch (error) {
+      // 存档失败不阻断关停，但上报给宿主，避免跨重启状态（如 QQ 未读红点）无声丢失。
+      this.onStateError?.({ appId: app.id, phase: "persist", error });
     }
   }
 }
