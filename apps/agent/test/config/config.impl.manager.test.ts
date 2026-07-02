@@ -45,6 +45,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
@@ -397,6 +398,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
   agent: {}
@@ -713,6 +715,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -794,6 +797,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -878,6 +882,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -958,6 +963,7 @@ services:
   browser: { host: 127.0.0.1, port: 20007 }
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
+  spire: { host: 127.0.0.1, port: 20011 }
 server:
   databaseUrl: "file::memory:"
   agent:

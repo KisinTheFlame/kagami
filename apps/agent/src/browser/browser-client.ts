@@ -1,43 +1,45 @@
+import type { z } from "zod";
+import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import { browserApiContract, type TypeValueSchema } from "@kagami/browser-api/contract";
 import {
   BrowserError,
   type BrowserErrorCode,
   type BrowserErrorContext,
 } from "../agent/capabilities/browser/domain/errors.js";
 
-/** observe 结果：与浏览器进程 BrowserService.observe 同构。 */
-export type ObserveResult = {
-  epoch: number;
-  url: string;
-  title: string;
-  snapshot: string;
-};
+/** observe 结果：直接取契约 output（门面 == 契约，改契约此处与工具一起编译报错）。 */
+export type ObserveResult = z.infer<typeof browserApiContract.observe.output>;
 
-/** 截图结果：与浏览器进程 BrowserService.screenshot 同构（image 已从 base64 还原为 Buffer）。 */
-export type ScreenshotResult = {
-  image: Buffer;
-  mimeType: string;
-  width: number;
-  height: number;
-  url: string;
-};
+type ScreenshotWire = z.infer<typeof browserApiContract.screenshot.output>;
 
-type TypeValue = { text: string } | { secret: { handle: string; field: "username" | "secret" } };
+/** 截图结果：契约 wire 形状去掉 imageBase64、换成解码后的 Buffer（wire 与门面的唯一变换点）。 */
+export type ScreenshotResult = Omit<ScreenshotWire, "imageBase64"> & { image: Buffer };
+
+type TypeValue = z.infer<typeof TypeValueSchema>;
 
 /**
- * 浏览器客户端：方法签名**逐一镜像** BrowserService 公有方法，让 8 个工具拆分后只把
- * `getBrowserService()` 换成 `getBrowserClient()`、入参/结果格式化逻辑一字不动——
- * tool_result 字节因此与拆分前完全一致（KV 缓存契约，issue #173）。
+ * 浏览器客户端门面：方法签名**逐一镜像** BrowserService 公有方法，8 个工具从返回对象的具名字段
+ * 重新 JSON.stringify——tool_result 字节因此与进程拆分前完全一致（KV 缓存契约，issue #173，由
+ * apps/agent/test/browser/browser-client-wire.test.ts 的字节基线钉死）。
+ *
+ * wire 层走 @kagami/browser-api 契约驱动的 createClient（issue #230）：请求/响应形状与服务端
+ * handler 共享同一份 Zod schema，改契约两端同时编译报错。门面只保留两处变换：screenshot 的
+ * base64 → Buffer、eval 的 { result } 信封拆包。
  */
 export interface BrowserClient {
-  navigate(url: string): Promise<{ url: string; title: string }>;
+  navigate(url: string): Promise<z.infer<typeof browserApiContract.navigate.output>>;
   observe(): Promise<ObserveResult>;
-  click(target: string): Promise<{ url: string }>;
-  type(target: string, value: TypeValue, submit: boolean): Promise<{ url: string }>;
+  click(target: string): Promise<z.infer<typeof browserApiContract.click.output>>;
+  type(
+    target: string,
+    value: TypeValue,
+    submit: boolean,
+  ): Promise<z.infer<typeof browserApiContract.type.output>>;
   press(key: string): Promise<void>;
   waitFor(input: { selector?: string; ms?: number }): Promise<void>;
   screenshot(): Promise<ScreenshotResult>;
   evaluate(script: string): Promise<string>;
-  getLocation(): Promise<{ lastUrl: string | null; lastTitle: string | null }>;
+  getLocation(): Promise<z.infer<typeof browserApiContract.location.output>>;
 }
 
 type FetchLike = typeof fetch;
@@ -47,135 +49,87 @@ type HttpBrowserClientDeps = {
   fetch?: FetchLike;
 };
 
-// —— 客户端超时（代码常量，不进 config）——
-// 比浏览器进程内部的 NAVIGATION_TIMEOUT_MS(30s) / ACTION_TIMEOUT_MS(10s) 各留出裕量，
-// 让服务端自己的超时先触发、回出规整的 BrowserError；只有进程真挂/半开时客户端才中止。
-const NAVIGATION_CLIENT_TIMEOUT_MS = 40_000;
-const ACTION_CLIENT_TIMEOUT_MS = 20_000;
-
 type WireError = { code?: string; message?: string; context?: BrowserErrorContext };
 
 /**
  * 把浏览器动作经 HTTP 打到独立的 kagami-browser 进程。
  *
- * - 非 2xx：响应体 `{ code, message, context }` 原样重建成 BrowserError 再抛，交工具基类
- *   经现有 serializeBrowserError 产出同样字节。
- * - 连接拒绝 / 超时 / 无效响应：统一映射成 BrowserError("BROWSER_NOT_READY")，保证
- *   tool_result 永远是规整的失败结构（不抛普通 Error、不挂死主循环）。
+ * - 非 2xx：响应体 `{ code, message, context }` 原样重建成 BrowserError 再抛（decodeError），交
+ *   工具基类经现有 serializeBrowserError 产出同样字节。
+ * - 连接拒绝 / 超时 / 无效响应：统一映射成 BrowserError("BROWSER_NOT_READY")（mapFallbackError），
+ *   保证 tool_result 永远是规整的失败结构（不抛普通 Error、不挂死主循环）。
  */
 export class HttpBrowserClient implements BrowserClient {
-  private readonly baseUrl: string;
-  private readonly fetchImpl: FetchLike;
+  private readonly api: JsonClient<typeof browserApiContract>;
 
   public constructor({ baseUrl, fetch: fetchImpl }: HttpBrowserClientDeps) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = fetchImpl ?? fetch;
-  }
-
-  public async navigate(url: string): Promise<{ url: string; title: string }> {
-    return (await this.post("/navigate", { url }, NAVIGATION_CLIENT_TIMEOUT_MS)) as {
-      url: string;
-      title: string;
-    };
-  }
-
-  public async observe(): Promise<ObserveResult> {
-    return (await this.post("/observe", {}, ACTION_CLIENT_TIMEOUT_MS)) as ObserveResult;
-  }
-
-  public async click(target: string): Promise<{ url: string }> {
-    return (await this.post("/click", { target }, ACTION_CLIENT_TIMEOUT_MS)) as { url: string };
-  }
-
-  public async type(target: string, value: TypeValue, submit: boolean): Promise<{ url: string }> {
-    return (await this.post("/type", { target, value, submit }, ACTION_CLIENT_TIMEOUT_MS)) as {
-      url: string;
-    };
-  }
-
-  public async press(key: string): Promise<void> {
-    await this.post("/press", { key }, ACTION_CLIENT_TIMEOUT_MS);
-  }
-
-  public async waitFor(input: { selector?: string; ms?: number }): Promise<void> {
-    await this.post("/wait-for", input, ACTION_CLIENT_TIMEOUT_MS);
-  }
-
-  public async screenshot(): Promise<ScreenshotResult> {
-    const raw = (await this.post("/screenshot", {}, ACTION_CLIENT_TIMEOUT_MS)) as {
-      imageBase64: string;
-      mimeType: string;
-      width: number;
-      height: number;
-      url: string;
-    };
-    return {
-      image: Buffer.from(raw.imageBase64, "base64"),
-      mimeType: raw.mimeType,
-      width: raw.width,
-      height: raw.height,
-      url: raw.url,
-    };
-  }
-
-  public async evaluate(script: string): Promise<string> {
-    const raw = (await this.post("/eval", { script }, ACTION_CLIENT_TIMEOUT_MS)) as {
-      result: string;
-    };
-    return raw.result;
-  }
-
-  public async getLocation(): Promise<{ lastUrl: string | null; lastTitle: string | null }> {
-    return (await this.get("/location", ACTION_CLIENT_TIMEOUT_MS)) as {
-      lastUrl: string | null;
-      lastTitle: string | null;
-    };
-  }
-
-  private async post(path: string, body: unknown, timeoutMs: number): Promise<unknown> {
-    return this.request(path, timeoutMs, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+    this.api = createClient(browserApiContract, {
+      baseUrl: baseUrl.replace(/\/+$/, ""),
+      ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+      decodeError: (_status, body) => {
+        const wire = body as WireError | null;
+        if (wire && typeof wire.code === "string") {
+          return new BrowserError(
+            wire.code as BrowserErrorCode,
+            wire.message ?? "",
+            wire.context ?? {},
+          );
+        }
+        return undefined;
+      },
+      mapFallbackError: info => {
+        switch (info.reason) {
+          case "unreachable":
+            return new BrowserError(
+              "BROWSER_NOT_READY",
+              `浏览器服务不可达（未启动 / 半开 / 超时）：${
+                info.cause instanceof Error ? info.cause.message : String(info.cause)
+              }`,
+            );
+          case "bad_status":
+            return new BrowserError("BROWSER_NOT_READY", `浏览器服务返回 HTTP ${info.status}`);
+          case "invalid_response_body":
+            return new BrowserError("BROWSER_NOT_READY", "浏览器服务返回了无法解析的响应体");
+        }
+      },
     });
   }
 
-  private async get(path: string, timeoutMs: number): Promise<unknown> {
-    return this.request(path, timeoutMs, { method: "GET" });
+  public async navigate(url: string): Promise<{ url: string; title: string }> {
+    return await this.api.navigate({ url });
   }
 
-  private async request(path: string, timeoutMs: number, init: RequestInit): Promise<unknown> {
-    let response: Response;
-    try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-        ...init,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      throw new BrowserError(
-        "BROWSER_NOT_READY",
-        `浏览器服务不可达（未启动 / 半开 / 超时）：${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+  public async observe(): Promise<ObserveResult> {
+    return await this.api.observe({});
+  }
 
-    if (!response.ok) {
-      const wire = (await response.json().catch(() => null)) as WireError | null;
-      if (wire && typeof wire.code === "string") {
-        throw new BrowserError(
-          wire.code as BrowserErrorCode,
-          wire.message ?? "",
-          wire.context ?? {},
-        );
-      }
-      throw new BrowserError("BROWSER_NOT_READY", `浏览器服务返回 HTTP ${response.status}`);
-    }
+  public async click(target: string): Promise<{ url: string }> {
+    return await this.api.click({ target });
+  }
 
-    // 2xx 但 body 半截/非 JSON（进程半开、被代理截断）：归一成 BROWSER_NOT_READY，
-    // 而不是让 SyntaxError 漏成 BROWSER_ERROR（兑现"不可达统一映射"承诺）。
-    try {
-      return await response.json();
-    } catch {
-      throw new BrowserError("BROWSER_NOT_READY", "浏览器服务返回了无法解析的响应体");
-    }
+  public async type(target: string, value: TypeValue, submit: boolean): Promise<{ url: string }> {
+    return await this.api.type({ target, value, submit });
+  }
+
+  public async press(key: string): Promise<void> {
+    await this.api.press({ key });
+  }
+
+  public async waitFor(input: { selector?: string; ms?: number }): Promise<void> {
+    await this.api.waitFor(input);
+  }
+
+  public async screenshot(): Promise<ScreenshotResult> {
+    const { imageBase64, ...rest } = await this.api.screenshot({});
+    return { ...rest, image: Buffer.from(imageBase64, "base64") };
+  }
+
+  public async evaluate(script: string): Promise<string> {
+    const { result } = await this.api.eval({ script });
+    return result;
+  }
+
+  public async getLocation(): Promise<{ lastUrl: string | null; lastTitle: string | null }> {
+    return await this.api.location({});
   }
 }

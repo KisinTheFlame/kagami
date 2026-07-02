@@ -20,6 +20,8 @@
       "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
       "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
+      "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
+      "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
       "@kagami/shared/*": ["./../../packages/shared/src/*"]
     }

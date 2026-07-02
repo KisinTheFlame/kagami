@@ -4,7 +4,7 @@ import {
   type LoopAgentExtension,
   ReActKernel,
   type ReActKernelRunRoundInput,
-  type ReActRoundResult,
+  type ReActCommittedRoundResult,
   type ReplaceLeadingMessagesEffect,
   SerialExecutor,
   type ToolExecutor,
@@ -268,7 +268,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async commitRoundResult(
-    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
+    result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
     tools: ToolExecutor,
   ): Promise<void> {
     const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
@@ -740,7 +740,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   protected override async commitRoundResult(
-    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
+    result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
   ): Promise<void> {
     await this.host.commitRoundResult(result, this.tools);
   }

@@ -88,5 +88,18 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // 尖塔卡牌游戏引擎：独立 PM2 生命周期，agent 重启不打断进行中的对局。cwd 固定仓库根，
+      // 让存档 data/spire/ 落在仓库根 data/ 下，对局跨 agent / 本进程重启留存。
+      name: "kagami-spire",
+      cwd: __dirname,
+      script: "apps/spire/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };

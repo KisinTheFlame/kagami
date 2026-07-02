@@ -102,12 +102,13 @@ const defaultBucketByPreset: Record<MetricChartRangePreset, MetricChartBucket> =
   "2d": "1h",
 };
 
-// 鲜艳蒙德里安系列色：前 4 个饱和原色，后续去饱和扩展供多系列回落
+// 鲜艳蒙德里安系列色：前 4 个饱和原色走设计 token（跟随 DESIGN.md 演进 + 暗色自适应），
+// 后 4 个去饱和扩展色仅供 ≥5 系列时回落（DESIGN.md「图表扩展序列色」，无语义、不上墙）。
 const seriesColors = [
-  "#143CB0", // 正蓝
-  "#D62818", // 正红
-  "#2F8F4E", // 正绿
-  "#B61E3C", // 玫红
+  "hsl(var(--llm))", // 正蓝
+  "hsl(var(--signal))", // 正红
+  "hsl(var(--story))", // 正绿
+  "hsl(var(--cost))", // 玫红
   "#C9892E", // 深赭黄（线图可读，避开高亮黄）
   "#3F6B68", // 暗绿松石
   "#6B5D82", // 灰紫

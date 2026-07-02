@@ -73,13 +73,31 @@ function toSerializableLlmNativeValue(value: unknown): unknown {
   try {
     const serialized = JSON.stringify(value, (_key: string, currentValue: unknown) => {
       if (currentValue instanceof Error) {
-        const withStatus = currentValue as Error & { status?: unknown; code?: unknown };
+        const withExtra = currentValue as Error & {
+          status?: unknown;
+          code?: unknown;
+          errno?: unknown;
+          syscall?: unknown;
+          address?: unknown;
+          port?: unknown;
+          hostname?: unknown;
+          errors?: unknown;
+        };
         return {
           name: currentValue.name,
           message: currentValue.message,
           stack: currentValue.stack,
-          status: typeof withStatus.status === "number" ? withStatus.status : undefined,
-          code: typeof withStatus.code === "string" ? withStatus.code : undefined,
+          status: typeof withExtra.status === "number" ? withExtra.status : undefined,
+          code: typeof withExtra.code === "string" ? withExtra.code : undefined,
+          errno: typeof withExtra.errno === "number" ? withExtra.errno : undefined,
+          syscall: typeof withExtra.syscall === "string" ? withExtra.syscall : undefined,
+          address: typeof withExtra.address === "string" ? withExtra.address : undefined,
+          port: typeof withExtra.port === "number" ? withExtra.port : undefined,
+          hostname: typeof withExtra.hostname === "string" ? withExtra.hostname : undefined,
+          // `cause` 与 `errors` 是嵌套的 Error（如 undici 的 `fetch failed` 把 ECONNREFUSED
+          // 放在 cause 里，AggregateError 把子错误放在 errors 里）。原样透传，replacer 会递归展开。
+          cause: currentValue.cause ?? undefined,
+          errors: Array.isArray(withExtra.errors) ? withExtra.errors : undefined,
         };
       }
 

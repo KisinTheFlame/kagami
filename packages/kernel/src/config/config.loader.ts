@@ -199,6 +199,7 @@ const ServicesSchema = z
     browser: ServiceEndpointSchema,
     llm: ServiceEndpointSchema,
     metric: ServiceEndpointSchema,
+    spire: ServiceEndpointSchema,
   })
   .strict();
 

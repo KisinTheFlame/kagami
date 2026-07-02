@@ -1,4 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { TODO_LIST_RENDER_LIMIT } from "../../capabilities/todo/application/todo.constants.js";
 import type { TodoService } from "../../capabilities/todo/application/todo.service.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
@@ -57,20 +58,7 @@ export class TodoApp implements App {
   }
 
   public async help(): Promise<string> {
-    return [
-      "你在待办 App 里。这是你自己的待办本，想怎么用都行。",
-      "",
-      "可调用工具：",
-      "  - add_todo(title, note, remindAt, repeatEvery?): 记一条。note、remindAt 必填；remindAt/repeatEvery 收相对时长（30m/1d）或 ISO。",
-      "  - list_todos(filter?): 列出待办（pending 默认 / all / done）。",
-      "  - complete_todo(id): 标记完成。",
-      "  - snooze_todo(id, until? | forMinutes?): 稍后再提醒。",
-      "  - update_todo(id, ...): 改未完成项的字段。",
-      "  - remove_todo(id): 删除（soft delete）。",
-      "",
-      "设了 remindAt 的待办到点会通过通知提醒你；设了 repeatEvery 会按周期反复提醒。",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/todo-app-help.hbs");
   }
 
   /** 进入 App 时列一次 pending 清单，作为 append_message Effect 追加到上下文尾部。 */

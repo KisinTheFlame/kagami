@@ -1,5 +1,3 @@
-import { BizError } from "@kagami/kernel/errors/biz-error";
-import { bizErrorFromWire, isBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
 import { createClient, type JsonClient } from "@kagami/rpc-client/client";
 import { llmApiContract } from "@kagami/llm-api/contract";
 import type {
@@ -13,42 +11,35 @@ import type {
 } from "@kagami/llm-client";
 import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
 
-// isRetryableLlmFailure 精确匹配这个 message 决定退避重试；createClient 的兜底错误必须沿用它。
+// isRetryableLlmFailure 精确匹配这个 message 决定退避重试；createClient 的兜底错误（不可达/超时/
+// 非 2xx 无富信封/响应体无效）必须沿用它。富错误信封 { error: BizErrorWire } 由 createClient 默认
+// decodeError 重建成等价 BizError，保住 retry 语义与"未知工具走 tool_result"路径。
 const LLM_UNREACHABLE_MESSAGE = "LLM 上游服务调用失败";
 
-type FetchLike = typeof fetch;
+// createClient 的默认超时（服务真挂/半开兜底）。chat/chat-direct 各自的 600s、providers 的 30s
+// 都由 llmApiContract 的 timeoutMs 逐路由覆盖，此默认只在契约未指定时兜底。
+const DEFAULT_CLIENT_TIMEOUT_MS = 30_000;
 
-// 客户端超时是「服务真挂/半开」的兜底，不是每次 chat 的时限。服务端每个 provider attempt 有自己的
-// timeoutMs、且可能多 attempt 串行（usageConfig.attempts），总耗时可达 attempts × timeoutMs。这里给
-// 一个远高于任何现实多-attempt 总时长的上限（10 分钟），确保**服务端 provider 超时永远先触发**、
-// 回出规整 BizError，避免 client 先 abort 却让服务端 in-flight 上游请求继续跑（重复调用 + 成本放大）。
-const CHAT_CLIENT_TIMEOUT_MS = 600_000;
-const QUERY_CLIENT_TIMEOUT_MS = 30_000;
+type FetchLike = typeof fetch;
 
 /**
  * 把 LLM 调用经 HTTP 打到独立的 kagami-llm 进程。实现 @kagami/llm-client 的 LlmClient 接口，
  * 因此 agent-runtime.factory 及所有下游消费者只把构造点从 createLlmClient 换成 new
  * HttpLlmClient，其余零改动。
  *
- * - 非 2xx 且带富错误信封 `{ error: BizErrorWire }`：重建等价 BizError 抛出（含 message/meta/
- *   statusCode）——保住 isRetryableLlmFailure 的 retry 语义与"未知工具走 tool_result"路径。
- * - 服务不可达 / 超时 / 无效响应：统一映射成 BizError("LLM 上游服务调用失败")——它既是
- *   isRetryableLlmFailure 的重试消息之一，语义上也正是"上游 LLM 服务调用失败"，让 agent 退避重试。
+ * 三条路由（chat / chat-direct / providers）全走 @kagami/llm-api 契约驱动的 createClient：wire 序列化、
+ * 超时、错误通道（BizError 富信封重建 + 不可达归一为 LLM_UNREACHABLE_MESSAGE）统一在 rpc-client。
+ * chat/chat-direct 是信封级（契约 output `z.unknown()`，复杂 union 不逐字段校验），故对返回值按 LlmClient
+ * 接口类型断言；providers 是全类型化路由，返回类型由契约 output 反推、与服务端 handler 同源。
  */
 export class HttpLlmClient implements LlmClient {
-  private readonly baseUrl: string;
-  private readonly fetchImpl: FetchLike;
-  // providers 走契约驱动的 client（@kagami/llm-api）：门面 == 契约，改契约 output 则此处与
-  // 服务端 handler 同时编译报错。chat / chat-direct 仍走下方手写 post（复杂 union，信封级留后续）。
   private readonly api: JsonClient<typeof llmApiContract>;
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = fetchImpl ?? fetch;
     this.api = createClient(llmApiContract, {
-      baseUrl: this.baseUrl,
-      fetch: this.fetchImpl,
-      timeoutMs: QUERY_CLIENT_TIMEOUT_MS,
+      baseUrl: baseUrl.replace(/\/+$/, ""),
+      ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+      timeoutMs: DEFAULT_CLIENT_TIMEOUT_MS,
       unreachableMessage: LLM_UNREACHABLE_MESSAGE,
     });
   }
@@ -57,80 +48,28 @@ export class HttpLlmClient implements LlmClient {
     request: LlmChatRequest,
     options: LlmChatOptions,
   ): Promise<LlmChatResponsePayload> {
-    return (await this.post(
-      "/internal/chat",
-      {
-        request,
-        usage: options.usage,
-        ...(options.recordCall === undefined ? {} : { recordCall: options.recordCall }),
-      },
-      CHAT_CLIENT_TIMEOUT_MS,
-    )) as LlmChatResponsePayload;
+    return (await this.api.chat({
+      request,
+      usage: options.usage,
+      ...(options.recordCall === undefined ? {} : { recordCall: options.recordCall }),
+    })) as LlmChatResponsePayload;
   }
 
   public async chatDirect(
     request: LlmChatRequest,
     options: LlmChatDirectOptions,
   ): Promise<LlmChatDirectResult> {
-    return (await this.post(
-      "/internal/chat-direct",
-      {
-        request,
-        providerId: options.providerId,
-        model: options.model,
-        ...(options.recordCall === undefined ? {} : { recordCall: options.recordCall }),
-      },
-      CHAT_CLIENT_TIMEOUT_MS,
-    )) as LlmChatDirectResult;
+    return (await this.api.chatDirect({
+      request,
+      providerId: options.providerId,
+      model: options.model,
+      ...(options.recordCall === undefined ? {} : { recordCall: options.recordCall }),
+    })) as LlmChatDirectResult;
   }
 
   public async listAvailableProviders(
     options: LlmListAvailableProvidersOptions,
   ): Promise<LlmProviderOption[]> {
     return this.api.listProviders({ usage: options.usage });
-  }
-
-  private async post(path: string, body: unknown, timeoutMs: number): Promise<unknown> {
-    return this.request(path, timeoutMs, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }
-
-  private async request(path: string, timeoutMs: number, init: RequestInit): Promise<unknown> {
-    let response: Response;
-    try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-        ...init,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      throw new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: { reason: "unreachable" },
-        cause: error,
-      });
-    }
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
-      if (payload && isBizErrorWire(payload.error)) {
-        throw bizErrorFromWire(payload.error);
-      }
-      throw new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: { reason: "bad_status", status: response.status },
-      });
-    }
-
-    try {
-      return await response.json();
-    } catch {
-      throw new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: { reason: "invalid_response_body" },
-      });
-    }
   }
 }

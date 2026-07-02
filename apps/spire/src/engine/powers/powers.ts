@@ -1,0 +1,77 @@
+import type { PowerId, PowerInstance } from "../types.js";
+
+// === 状态效果（power）纯helper ===
+//
+// 两类机制（issue #234 C5）：
+//   - 被动修正器（strength/vulnerable/weak）：只改伤害结算，无钩子。
+//   - 时机触发（ritual on_turn_start / curl_up on_attacked）：由 combat 在对应触发点调用。
+
+export function getPower(powers: readonly PowerInstance[], id: PowerId): number {
+  return powers.find(power => power.id === id)?.amount ?? 0;
+}
+
+/** 叠加一层 power（可负，用于衰减）；归零或转负的 vulnerable/weak 会被清除。 */
+export function addPower(powers: PowerInstance[], id: PowerId, delta: number): void {
+  const existing = powers.find(power => power.id === id);
+  if (existing) {
+    existing.amount += delta;
+  } else if (delta !== 0) {
+    powers.push({ id, amount: delta });
+  }
+  pruneEmpty(powers, id);
+}
+
+function pruneEmpty(powers: PowerInstance[], id: PowerId): void {
+  const index = powers.findIndex(power => power.id === id);
+  if (index < 0) {
+    return;
+  }
+  const amount = powers[index]!.amount;
+  // 力量可为负并保留；易伤/虚弱降到 0 即移除。
+  if ((id === "vulnerable" || id === "weak") && amount <= 0) {
+    powers.splice(index, 1);
+  } else if (amount === 0 && id !== "strength") {
+    powers.splice(index, 1);
+  }
+}
+
+/** 直接移除某个 power（不衰减，一次清空）。用于守卫者离开防御姿态时清反甲。 */
+export function removePower(powers: PowerInstance[], id: PowerId): void {
+  const index = powers.findIndex(power => power.id === id);
+  if (index >= 0) {
+    powers.splice(index, 1);
+  }
+}
+
+/** 回合末衰减：易伤 / 虚弱各 -1。 */
+export function decayDebuffs(powers: PowerInstance[]): void {
+  if (getPower(powers, "vulnerable") > 0) {
+    addPower(powers, "vulnerable", -1);
+  }
+  if (getPower(powers, "weak") > 0) {
+    addPower(powers, "weak", -1);
+  }
+}
+
+/**
+ * 攻击伤害结算（顺序必须忠实，issue #234）：
+ *   基础 + 力量 → ×虚弱(攻击方 0.75) → ×易伤(目标 1.5) → 向下取整。
+ * 只作用于「攻击型」伤害；lose_hp 等无视此函数直接扣血。
+ */
+export function computeAttackDamage(
+  base: number,
+  attackerPowers: readonly PowerInstance[],
+  defenderPowers: readonly PowerInstance[],
+): number {
+  let amount = base + getPower(attackerPowers, "strength");
+  if (amount < 0) {
+    amount = 0;
+  }
+  if (getPower(attackerPowers, "weak") > 0) {
+    amount = Math.floor(amount * 0.75);
+  }
+  if (getPower(defenderPowers, "vulnerable") > 0) {
+    amount = Math.floor(amount * 1.5);
+  }
+  return amount;
+}

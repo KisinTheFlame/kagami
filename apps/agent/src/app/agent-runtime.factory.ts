@@ -13,7 +13,7 @@ import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/ta
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
-import type { LlmClient } from "@kagami/llm-client";
+import type { LlmClient, Tool } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -61,6 +61,8 @@ import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import type { BrowserClient } from "../browser/browser-client.js";
+import { SpireApp } from "../agent/apps/spire/spire.app.js";
+import type { SpireClient } from "../spire/spire-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -114,6 +116,8 @@ type BuildAgentRuntimeInput = {
   ossClient?: OssClient;
   /** 浏览器动作客户端：打到独立的 kagami-browser 进程（issue #173）。 */
   browserClient: BrowserClient;
+  /** 尖塔游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */
+  spireClient: SpireClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -121,6 +125,12 @@ export type AgentRuntimeBundle = {
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
   hasTavilyApiKey: boolean;
+  /**
+   * 主 Agent 的顶层工具定义（react-kernel 每轮实际发送的那一份）。fork 主上下文的旁路
+   * 调用（如 todo「发现待办」子调用）复用它作 tools，保证 tools 字段与主 Agent 字节相等，
+   * 命中 KV 缓存的 tools / system 层前缀（子工具经 invoke 提交，不新增顶层工具）。
+   */
+  rootAgentToolDefinitions: Tool[];
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
   /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
@@ -143,6 +153,7 @@ export async function buildAgentRuntime({
   eventQueue,
   ossClient,
   browserClient,
+  spireClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -256,6 +267,7 @@ export async function buildAgentRuntime({
   appManager.register(new HnApp());
   appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
+  appManager.register(new SpireApp({ spireClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 
@@ -459,6 +471,7 @@ export async function buildAgentRuntime({
     mainAgentContextQueryService,
     llmPlaygroundService,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
+    rootAgentToolDefinitions: rootAgentTools.definitions(),
     qqApp,
     qqOutboundService,
     shutdownApps: () => appManager.shutdownAll(),
