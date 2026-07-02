@@ -52,11 +52,17 @@ type AuthProviderConfig = {
   backgroundClassName: string;
   successMessage: string;
   errorMessage: string;
-  trendColors: {
-    fiveHour: string;
-    sevenDay: string;
-  };
 };
+
+/**
+ * 用量趋势两条线按语义涂色，跨 provider 统一（DESIGN.md「一块色 = 一种含义」）：
+ * 5 小时窗 = 短期配额消耗 → 玫红 --cost（高 token 成本）；7 天窗 = 长期基线 → 正蓝 --llm。
+ * 此前按 provider 各配一套（claude-code 红 / codex 绿），把语义原色当成了品牌色。
+ */
+const TREND_COLORS = {
+  fiveHour: "hsl(var(--cost))",
+  sevenDay: "hsl(var(--llm))",
+} as const;
 
 const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
   codex: {
@@ -68,10 +74,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     backgroundClassName: "bg-background",
     successMessage: "Codex 登录已完成。",
     errorMessage: "Codex 登录失败。",
-    trendColors: {
-      fiveHour: "hsl(var(--story))",
-      sevenDay: "hsl(var(--llm))",
-    },
   },
   "claude-code": {
     key: "claude-code",
@@ -82,10 +84,6 @@ const providerConfigs: Record<AuthProvider, AuthProviderConfig> = {
     backgroundClassName: "bg-background",
     successMessage: "Claude Code 登录已完成。",
     errorMessage: "Claude Code 登录失败。",
-    trendColors: {
-      fiveHour: "hsl(var(--signal))",
-      sevenDay: "hsl(var(--llm))",
-    },
   },
 };
 
@@ -488,14 +486,14 @@ function UsageTrendPanel({
       ({
         five_hour: {
           label: "5 小时",
-          color: providerConfig.trendColors.fiveHour,
+          color: TREND_COLORS.fiveHour,
         },
         seven_day: {
           label: "7 天",
-          color: providerConfig.trendColors.sevenDay,
+          color: TREND_COLORS.sevenDay,
         },
       }) satisfies ChartConfig,
-    [providerConfig.trendColors.fiveHour, providerConfig.trendColors.sevenDay],
+    [],
   );
 
   if (!hasPoints) {
