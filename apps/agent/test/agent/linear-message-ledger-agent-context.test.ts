@@ -14,6 +14,7 @@ describe("LinearMessageLedgerAgentContext", () => {
         listAfterSeq: vi.fn(),
         countAfterSeq: vi.fn(),
         findLatest: vi.fn(),
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });
@@ -76,6 +77,7 @@ describe("LinearMessageLedgerAgentContext", () => {
         listAfterSeq: vi.fn(),
         countAfterSeq: vi.fn(),
         findLatest: vi.fn(),
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });
