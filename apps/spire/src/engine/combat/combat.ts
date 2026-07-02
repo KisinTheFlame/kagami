@@ -61,50 +61,54 @@ function actorPowers(state: GameState, actor: ActorRef): PowerInstance[] {
 
 // —— 开局 ——
 
+/** 造一个敌人实例。hpOverride 用于分裂出的敌人（HP = 分裂瞬间当前值）。 */
+function createEnemyState(state: GameState, defId: string, hpOverride?: number): EnemyState {
+  const def = getEnemyDef(defId);
+  const powers: PowerInstance[] = [];
+  let rolledDamage = 0;
+  let block = 0;
+  let asleep = false;
+  if (defId === "louse") {
+    // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
+    const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
+    powers.push({ id: "curl_up", amount: curl });
+    // 咬击基础伤害出生时掷一次、整场固定（5~7）。
+    rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
+  }
+  if (defId === "lagavulin") {
+    // 拉加维林开局沉睡：金属化 8（每回合结束回 8 格挡）+ 立即 8 格挡；受伤或睡满自然醒。
+    asleep = true;
+    block = LAGAVULIN_METALLICIZE;
+    powers.push({ id: "metallicize", amount: LAGAVULIN_METALLICIZE });
+  }
+  if (defId === "sentry") {
+    // 哨卫开局各带 1 层神器（抵消你首个减益）。
+    powers.push({ id: "artifact", amount: 1 });
+  }
+  const hp = hpOverride ?? nextRange(state.rng, def.hpMin, def.hpMax);
+  return {
+    defId,
+    name: def.name,
+    hp,
+    maxHp: hp,
+    block,
+    powers,
+    moveHistory: [],
+    rotationIndex: 0,
+    currentMove: "",
+    curlUpConsumed: false,
+    rolledDamage,
+    asleep,
+    hasSplit: false,
+    modeShiftAccum: 0,
+    modeShiftThreshold: def.modeShiftThreshold ?? null,
+    stance: def.stanceMoves ? "offensive" : null,
+  } satisfies EnemyState;
+}
+
 export function startCombat(state: GameState, encounterId: string): void {
   const encounter = getEncounterDef(encounterId);
-  const enemies: EnemyState[] = encounter.enemies.map(defId => {
-    const def = getEnemyDef(defId);
-    const powers: PowerInstance[] = [];
-    let rolledDamage = 0;
-    let block = 0;
-    let asleep = false;
-    if (defId === "louse") {
-      // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
-      const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
-      powers.push({ id: "curl_up", amount: curl });
-      // 咬击基础伤害出生时掷一次、整场固定（5~7）。
-      rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
-    }
-    if (defId === "lagavulin") {
-      // 拉加维林开局沉睡：金属化 8（每回合结束回 8 格挡）+ 立即 8 格挡；受伤或睡满自然醒。
-      asleep = true;
-      block = LAGAVULIN_METALLICIZE;
-      powers.push({ id: "metallicize", amount: LAGAVULIN_METALLICIZE });
-    }
-    if (defId === "sentry") {
-      // 哨卫开局各带 1 层神器（抵消你首个减益）。
-      powers.push({ id: "artifact", amount: 1 });
-    }
-    const hp = nextRange(state.rng, def.hpMin, def.hpMax);
-    return {
-      defId,
-      name: def.name,
-      hp,
-      maxHp: hp,
-      block,
-      powers,
-      moveHistory: [],
-      rotationIndex: 0,
-      currentMove: "",
-      curlUpConsumed: false,
-      rolledDamage,
-      asleep,
-      modeShiftAccum: 0,
-      modeShiftThreshold: def.modeShiftThreshold ?? null,
-      stance: def.stanceMoves ? "offensive" : null,
-    } satisfies EnemyState;
-  });
+  const enemies: EnemyState[] = encounter.enemies.map(defId => createEnemyState(state, defId));
 
   const drawPile: CardInstance[] = state.deck.map(card => ({ ...card }));
   shuffleInPlace(state.rng, drawPile);
@@ -413,6 +417,12 @@ function dealDamageToEnemy(
     enemy.asleep = false;
     removePower(enemy.powers, "metallicize");
   }
+  // 半血分裂：降到 ≤maxHp/2 且未分裂过 → 下一动作强制变分裂。
+  const def = getEnemyDef(enemy.defId);
+  if (def.splitInto && !enemy.hasSplit && enemy.hp > 0 && enemy.hp <= Math.floor(enemy.maxHp / 2)) {
+    enemy.hasSplit = true;
+    enemy.currentMove = "split";
+  }
   if (
     enemy.stance === "offensive" &&
     enemy.modeShiftThreshold !== null &&
@@ -529,6 +539,27 @@ export function playCard(
   return { ok: true };
 }
 
+/** 分裂：index 处的敌人消失，用分裂体替换（各自 HP = 分裂瞬间当前值），并 telegraph 它们。 */
+function performSplit(state: GameState, index: number): void {
+  const combat = state.combat!;
+  const splitter = combat.enemies[index]!;
+  const def = getEnemyDef(splitter.defId);
+  const hp = splitter.hp;
+  const spawnIds = def.splitInto ?? [];
+  const spawns = spawnIds.map(id => createEnemyState(state, id, hp));
+  if (spawns.length === 0) {
+    return;
+  }
+  combat.enemies[index] = spawns[0]!;
+  selectNextMove(state, index);
+  for (let k = 1; k < spawns.length; k += 1) {
+    const newIndex = combat.enemies.length;
+    combat.enemies.push(spawns[k]!);
+    selectNextMove(state, newIndex);
+  }
+  state.log.push(`${def.name}分裂了！`);
+}
+
 // —— 结束回合 / 敌人行动 ——
 
 export function endTurn(state: GameState): void {
@@ -557,10 +588,16 @@ export function endTurn(state: GameState): void {
   combat.hand = [];
   decayDebuffs(combat.playerPowers);
 
-  // 敌人回合。
-  for (let i = 0; i < combat.enemies.length; i += 1) {
+  // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
+  const enemyCount = combat.enemies.length;
+  for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
     if (enemy.hp <= 0) {
+      continue;
+    }
+    // 半血分裂：本体消失，原位与末位各生成一个分裂体（HP = 当前值），本回合不行动。
+    if (enemy.currentMove === "split") {
+      performSplit(state, i);
       continue;
     }
     enemy.block = 0; // 敌人回合开始清格挡。
@@ -610,6 +647,19 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 史莱姆王：黏液喷射 → 蓄力 → 猛砸 固定 3 段循环（半血分裂另由 split 覆盖）。
+  if (enemy.defId === "slime_boss") {
+    const cycle = ["goop_spray", "preparing", "slam"] as const;
+    if (enemy.moveHistory.length === 0) {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = cycle[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
+    enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
 
   // 六火之灵：激活(锁分割伤害) → 分割(6连击) → 固定 7 段仪轨循环。
   if (enemy.defId === "hexaghost") {
