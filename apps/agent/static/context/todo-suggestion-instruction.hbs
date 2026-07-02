@@ -16,5 +16,5 @@
 （当前没有未完成待办。）
 {{/if}}
 
-用 `propose_todos` 工具提交你的候选待办（`suggestions` 为标题字符串数组；没有就提交空数组）。不要输出自由文本，只通过这个工具提交。
+通过 `invoke` 工具提交你的候选待办：`tool` 传 `"propose_todos"`，并附一个 `suggestions` 字段（标题字符串数组；没有就传空数组 `[]`）。即调用 `invoke(tool="propose_todos", suggestions=[...])`。不要输出自由文本，也不要调用其它任何工具，只用这一次 invoke 提交。
 </system_instruction>
