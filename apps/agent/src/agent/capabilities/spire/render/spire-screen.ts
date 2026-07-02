@@ -26,6 +26,7 @@ const POWER_LABELS: Record<string, string> = {
   curl_up: "蜷缩",
   sharp_hide: "反甲",
   enrage: "激怒",
+  artifact: "神器",
   mode_shift: "模式",
 };
 

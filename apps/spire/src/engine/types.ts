@@ -21,6 +21,7 @@ export type PowerId =
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
   | "enrage" // 激怒：玩家每打出一张技能牌，此敌人获得 = 层数的力量（地精头目）
+  | "artifact" // 神器：抵消下一个施加到自己身上的减益（每抵消一个消耗一层）
   | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
@@ -51,6 +52,8 @@ export type CardDef = {
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
   exhausts: boolean;
+  /** 虚无：回合结束时若仍在手牌中，则被消耗（而非进弃牌堆）。 */
+  ethereal?: boolean;
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
