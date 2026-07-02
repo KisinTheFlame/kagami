@@ -36,17 +36,17 @@ type WakeEvent = Extract<Event, { type: "wake" }>;
 
 /**
  * RootAgent 的 EffectInterpreter：主 Agent 所有"对状态的变更"（上下文追加、
- * currentApp 切换、focused state 切换、阻塞等待、上下文重建）都通过它 apply。
+ * currentApp 切换、阻塞等待、上下文重建）都通过它 apply。
  *
  * 由一组 handler 组成。复用粒度是 handler：
  * - `ReplaceLeadingMessagesHandler`（公共，来自 agent-runtime）：处理
  *   replace_leading_messages，直接调 context.replaceLeadingMessages。任何做上下文
  *   压缩的 Agent（当前是 RootAgent）都能复用它。
- * - RootAgent 专属 handler：append_message / switch_app / switch_state /
- *   wait_for_event——这些副作用语义只属于主 Agent。
+ * - RootAgent 专属 handler：append_message / switch_app / wait_for_event——这些
+ *   副作用语义只属于主 Agent。
  *
  * 即时 vs 延迟的不对称（KV 缓存友好）：
- * - **即时副作用**：switch_app / switch_state / replace_messages / wait_for_event
+ * - **即时副作用**：switch_app / replace_leading_messages / wait_for_event
  *   直接改 session / context / 阻塞 await，不返消息。
  * - **延迟追加**：append_message 不直接 context.appendMessages，而是把消息放进
  *   handler 结果的 appendedMessages，由 ReActKernel 的原子 commit 流程统一追加，

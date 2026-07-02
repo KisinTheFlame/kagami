@@ -9,8 +9,6 @@ export type WebSearchTaskInput = {
   contextMessages: LlmMessage[];
 };
 
-export type WebSearchAgentInput = WebSearchTaskInput;
-
 /**
  * 网页搜索 task agent。
  *

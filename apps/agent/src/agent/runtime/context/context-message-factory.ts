@@ -2,8 +2,7 @@ import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
+import { BEIJING_TIME_ZONE } from "@kagami/shared/utils";
 
 type UserMessage = Extract<LlmMessage, { role: "user" }>;
 

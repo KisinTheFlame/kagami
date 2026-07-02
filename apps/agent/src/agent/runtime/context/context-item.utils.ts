@@ -1,4 +1,4 @@
-import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
+import type { LlmMessage } from "@kagami/llm-client";
 import type { ContextItem } from "./agent-context.js";
 import type { Event } from "../event/event.js";
 import { createMessagesFromEvent } from "./context-message-factory.js";
@@ -25,32 +25,6 @@ export function renderContextItemToMessages(item: ContextItem): LlmMessage[] {
   return createMessagesFromEvent(item.event);
 }
 
-export function renderLlmMessagePlainText(message: LlmMessage): string {
-  switch (message.role) {
-    case "user":
-      return renderUserMessageContent(message.content);
-    case "assistant":
-      return message.content.trim().length > 0
-        ? message.content
-        : `工具调用：${message.toolCalls.map(toolCall => toolCall.name).join(", ")}`;
-    case "tool":
-      return message.content;
-  }
-}
-
-export function serializeContextItem(item: ContextItem): Record<string, unknown> {
-  return normalizeStructuredValue(item) as Record<string, unknown>;
-}
-
-export function deserializeContextItem(value: unknown): ContextItem {
-  const revived = reviveStructuredValue(value);
-  if (!isContextItem(revived)) {
-    throw new Error("Invalid ledger context item payload");
-  }
-
-  return revived;
-}
-
 export function serializeLlmMessage(message: LlmMessage): Record<string, unknown> {
   return normalizeStructuredValue(message) as Record<string, unknown>;
 }
@@ -62,22 +36,6 @@ export function deserializeLlmMessage(value: unknown): LlmMessage {
   }
 
   return revived;
-}
-
-function renderUserMessageContent(content: string | LlmContentPart[]): string {
-  if (typeof content === "string") {
-    return content;
-  }
-
-  return content
-    .map(part => {
-      if (part.type === "text") {
-        return part.text;
-      }
-
-      return `[图片${part.filename ? `:${part.filename}` : ""}]`;
-    })
-    .join("\n");
 }
 
 function normalizeStructuredValue(value: unknown): unknown {
@@ -129,22 +87,6 @@ function isSerializedBuffer(value: unknown): value is { type: "Buffer"; data: nu
     Array.isArray(value.data) &&
     value.data.every(item => typeof item === "number")
   );
-}
-
-function isContextItem(value: unknown): value is ContextItem {
-  if (typeof value !== "object" || value === null || !("kind" in value)) {
-    return false;
-  }
-
-  if (value.kind === "llm_message") {
-    return "message" in value;
-  }
-
-  if (value.kind === "event") {
-    return "event" in value;
-  }
-
-  return false;
 }
 
 function isLlmMessage(value: unknown): value is LlmMessage {

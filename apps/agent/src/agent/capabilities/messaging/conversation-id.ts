@@ -16,14 +16,6 @@ export function createPrivateConversationId(userId: string): ConversationId {
   return `${PRIVATE_PREFIX}${userId}`;
 }
 
-export function parseGroupIdFromConversationId(id: string): string | null {
-  return id.startsWith(GROUP_PREFIX) ? id.slice(GROUP_PREFIX.length) : null;
-}
-
-export function parsePrivateUserIdFromConversationId(id: string): string | null {
-  return id.startsWith(PRIVATE_PREFIX) ? id.slice(PRIVATE_PREFIX.length) : null;
-}
-
 /** 宽松校验：id 是否符合 `qq_group:` / `qq_private:` 字面格式。 */
 export function isConversationId(id: string): id is ConversationId {
   return id.startsWith(GROUP_PREFIX) || id.startsWith(PRIVATE_PREFIX);
