@@ -216,10 +216,16 @@ export abstract class BaseLoopAgent<
         }
       }
     } catch (error) {
+      // 错误处理器自身也可能抛错。绝不静默丢掉这些"次生错误"——收集起来，
+      // 原错仍作为主因，最终一并抛出，避免"处理器坏了"这种严重情况无声消失。
+      const handlerErrors: unknown[] = [];
       try {
         await this.onUnhandledError(error);
-      } catch {
-        void error;
+      } catch (handlerError) {
+        // 默认 onUnhandledError 实现会把原错重新抛回——identity 过滤，只收真正的次生错误。
+        if (handlerError !== error) {
+          handlerErrors.push(handlerError);
+        }
       }
       try {
         const context = this.createLoopExtensionContext();
@@ -229,8 +235,16 @@ export abstract class BaseLoopAgent<
             error,
           });
         }
-      } catch {
-        void error;
+      } catch (handlerError) {
+        if (handlerError !== error) {
+          handlerErrors.push(handlerError);
+        }
+      }
+      if (handlerErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...handlerErrors],
+          "Agent 主循环崩溃，且错误处理器自身也抛出了异常",
+        );
       }
       throw error;
     }
