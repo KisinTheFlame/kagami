@@ -11,7 +11,7 @@ const Schema = z.object({ option_index: z.number().int().min(0) });
 export class SpireChooseTool extends SpireToolComponent<typeof Schema> {
   public readonly name = SPIRE_CHOOSE_TOOL_NAME;
   public readonly description =
-    "在卡奖励 / 篝火等选择界面选一项。option_index 是屏幕上列出的选项编号（从 0 起）。返回选择后的战况。";
+    "在地图选路 / 卡奖励 / 篝火等选择界面选一项。option_index 是屏幕上列出的选项编号（从 0 起）。返回选择后的最新状态。";
   public readonly parameters = {
     type: "object",
     properties: {

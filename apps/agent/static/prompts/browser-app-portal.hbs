@@ -1,12 +1,3 @@
 <browser_portal>
 你进了浏览器。这里是你上网的身体——能像人一样登录、点、填、读真实网站。
-可调用工具：
-  - browser_navigate(url)：打开网址。
-  - browser_observe()：读当前页语义树（带可点元素 ref + box，含 iframe）。要操作先 observe。
-  - browser_click(target)：点元素（ref 形如 7:e3，或一段可见文本）。
-  - browser_type(ref, text|secret_handle, submit?)：填输入框；密码走 secret_handle（你看不到明文）。
-  - browser_press(key) / browser_wait_for(selector|ms)：按键 / 等页面稳定。
-  - browser_screenshot()：截图原图直接进你上下文（observe 够用就别频繁截）。
-  - browser_eval(script)：在页面跑任意 JS 的逃生舷，谨慎用。
-登录态跨重启留存。要去别的 App，用 switch(id=...) 切过去。
 </browser_portal>

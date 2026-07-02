@@ -145,7 +145,7 @@ export const REPLACE_LEADING_MESSAGES_EFFECT_TYPE = "replace_leading_messages";
  * 为什么是"前缀替换"而非"整列重建"：compact 的本质就是"把最旧的一段压成摘要、
  * 保留最近一段"——旧的永远在前缀。`count` = 被摘要的前缀长度，`replacement` =
  * `[summaryMessage]`。保留段不用显式携带（它就是 count 之后的部分），所以产 Effect
- * 的一方（如 ContextSummaryOperation）不需要知道"保留哪些"，职责更纯。全量压缩 =
+ * 的一方（如 RootAgentHost.attemptSummarize）不需要知道"保留哪些"，职责更纯。全量压缩 =
  * count 取全部 message 数。
  */
 export interface ReplaceLeadingMessagesEffect extends Effect {

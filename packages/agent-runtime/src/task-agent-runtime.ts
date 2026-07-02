@@ -86,6 +86,21 @@ export class TaskEffectInterpreter
   }
 }
 
+/**
+ * TaskAgent 跑满 maxRounds 仍未收到 terminate 信号时抛出。toolChoice auto 下模型
+ * 可能持续纯文本轮不调终止工具，这是防死循环的兜底；调用方按各自语义降级
+ * （web-search 以错误结果回流、summary 不压缩、todo 返回空建议）。
+ */
+export class TaskAgentMaxRoundsExceededError extends Error {
+  public readonly maxRounds: number;
+
+  public constructor(maxRounds: number) {
+    super(`TaskAgent exceeded max rounds (${String(maxRounds)}) without a terminate signal`);
+    this.name = "TaskAgentMaxRoundsExceededError";
+    this.maxRounds = maxRounds;
+  }
+}
+
 export abstract class BaseTaskAgent<
   TInput,
   TOutput,
@@ -93,12 +108,14 @@ export abstract class BaseTaskAgent<
 > implements TaskAgent<TInput, TOutput> {
   private readonly kernel: ReActKernel<TUsage, TaskAgentCompletion, unknown, TaskAgentControl>;
   private readonly taskTools: ToolExecutor;
+  private readonly maxRounds: number;
 
   public constructor({
     kernel,
     model,
     interpreter,
     taskTools,
+    maxRounds,
   }: {
     kernel?: ReActKernel<TUsage, TaskAgentCompletion, unknown, TaskAgentControl>;
     model?: TaskAgentModel<TUsage>;
@@ -109,7 +126,13 @@ export abstract class BaseTaskAgent<
      */
     interpreter?: EffectInterpreter<TaskAgentControl>;
     taskTools: ToolExecutor;
+    /** 轮数上限，每次 kernel.runRound 计 1 轮（含零工具调用的纯文本轮）。 */
+    maxRounds: number;
   }) {
+    if (!Number.isInteger(maxRounds) || maxRounds <= 0) {
+      throw new Error("BaseTaskAgent requires a positive integer maxRounds");
+    }
+
     this.kernel =
       kernel ??
       new ReActKernel({
@@ -117,19 +140,21 @@ export abstract class BaseTaskAgent<
         interpreter: interpreter ?? new TaskEffectInterpreter(),
       });
     this.taskTools = taskTools;
+    this.maxRounds = maxRounds;
   }
 
   /**
    * 一直跑直到某次工具调用返回的 `effects` 数组里包含 `TerminateEffect`。
    * Interpreter 把它翻译成 `TaskAgentControl.stop`，kernel 透传到
    * `roundResult.control`，本方法读出后退出循环并用 `control.content` 作为
-   * `buildResult` 的入参。
+   * `buildResult` 的入参。跑满 maxRounds 仍无 terminate 则抛
+   * `TaskAgentMaxRoundsExceededError`。
    */
   public async invoke(input: TInput): Promise<TOutput> {
     const invocation = await this.createInvocation(input);
     const messages = [...invocation.messages];
 
-    while (true) {
+    for (let round = 0; round < this.maxRounds; round += 1) {
       const roundResult = await this.kernel.runRound({
         state: {
           systemPrompt: invocation.systemPrompt,
@@ -151,6 +176,8 @@ export abstract class BaseTaskAgent<
         });
       }
     }
+
+    throw new TaskAgentMaxRoundsExceededError(this.maxRounds);
   }
 
   protected abstract createInvocation(input: TInput): Promise<TaskAgentInvocationState<TUsage>>;

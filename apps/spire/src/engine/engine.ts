@@ -2,7 +2,7 @@ import type { CardInstance, CharacterId, GameState } from "./types.js";
 import { IRONCLAD_STARTER_DECK } from "./cards/cards.js";
 import { seedRng } from "./rng.js";
 import { endTurn, playCard } from "./combat/combat.js";
-import { applyChoose, buildMap, enterNode, generateReward } from "./run/run.js";
+import { applyChoose, buildMap, generateReward } from "./run/run.js";
 
 // === 引擎顶层：新建对局 + 动作分发 ===
 //
@@ -37,20 +37,21 @@ export function newRun(input: {
     seed: input.seed,
     character,
     ascension: input.ascension ?? 0,
-    screen: "combat",
+    screen: "map",
     hp: IRONCLAD_MAX_HP,
     maxHp: IRONCLAD_MAX_HP,
     gold: 0,
     deck,
-    map: { nodes: [], index: 0 },
+    map: { nodes: {}, rows: 0, startNodeIds: [], bossNodeId: "" },
+    currentNodeId: null,
     combat: null,
     reward: null,
+    combatsEntered: 0,
     rng,
     nextUid,
     log: [],
   };
   buildMap(state);
-  enterNode(state);
   return state;
 }
 
@@ -77,7 +78,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return { ok: true };
     }
     case "choose": {
-      if (state.screen !== "reward" && state.screen !== "rest") {
+      if (state.screen !== "reward" && state.screen !== "rest" && state.screen !== "map") {
         return { ok: false, reason: "当前屏幕没有可选项。" };
       }
       return applyChoose(state, action.optionIndex);

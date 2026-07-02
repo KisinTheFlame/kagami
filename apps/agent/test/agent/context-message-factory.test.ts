@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createConversationSummaryMessage,
+  createForegroundInputMessage,
   createNotificationMessage,
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
@@ -24,6 +25,18 @@ describe("context-message-factory", () => {
       role: "user",
       content:
         "<notification>\nIT之家：2篇新文，最新《某标题》\n产品群：[有人@你] 在吗\n</notification>",
+    });
+  });
+
+  it("should pass foreground input text through as-is (App 已自带伪标签，不套第二层)", () => {
+    expect(
+      createForegroundInputMessage(
+        '<qq_conversation_new_messages name="产品群">\n群友 (1): 在吗\n</qq_conversation_new_messages>',
+      ),
+    ).toEqual({
+      role: "user",
+      content:
+        '<qq_conversation_new_messages name="产品群">\n群友 (1): 在吗\n</qq_conversation_new_messages>',
     });
   });
 
@@ -59,7 +72,8 @@ describe("context-message-factory", () => {
         "`## 还可以继续展开的点` 保留 1 到 3 个最自然能继续的点，可包含极短原话或极短线索摘录。",
         "忽略寒暄、纯重复内容、已经失效的瞬时界面信息和明显无关细节。",
         "不要写成冷冰冰的流程单，也不要写成长篇流水账。",
-        "不要直接输出自由文本回复，必须调用 `summary` 工具；`summary` 参数应是简洁但信息完整的中文字符串。",
+        '不要直接输出自由文本回复，必须调用 `invoke(tool="finalize_summary", summary=...)` 提交摘要并结束本次子任务；`summary` 参数应是简洁但信息完整的中文字符串。',
+        "本轮 switch / list_apps / wait / search_web / help 等其他顶层工具均不可用，调用会被拒绝。",
         "</system_reminder>",
       ].join("\n"),
     });

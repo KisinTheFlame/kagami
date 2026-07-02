@@ -39,7 +39,8 @@ export function simulateRun(seed: number, makePolicy: () => Policy): RunOutcome 
     seed,
     result,
     finalScreen: state.screen,
-    nodeReached: state.map.index,
+    // 爬到的最高层（分支地图下用当前节点的 row 表示进度；未进入任何节点则 0）。
+    nodeReached: state.currentNodeId ? (state.map.nodes[state.currentNodeId]?.row ?? 0) : 0,
     finalHp: state.hp,
     steps,
     version: state.version,

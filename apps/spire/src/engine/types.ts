@@ -14,6 +14,7 @@ export type PowerId =
   | "strength" // 力量：攻击伤害 +N（被动）
   | "vulnerable" // 易伤：受到攻击伤害 ×1.5（回合末 -1）
   | "weak" // 虚弱：造成攻击伤害 ×0.75（回合末 -1）
+  | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
@@ -21,9 +22,12 @@ export type PowerId =
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
-  | { kind: "deal_damage"; amount: number }
+  // strengthMultiplier：力量按该倍率计入伤害（重刃 ×3/×5）；省略即 ×1（普通攻击）。
+  | { kind: "deal_damage"; amount: number; strengthMultiplier?: number }
   | { kind: "deal_damage_all"; amount: number }
   | { kind: "deal_damage_multi"; amount: number; times: number }
+  // 每次命中随机挑一个存活敌人（剑刃回旋镖：3 点 ×3，逐次随机目标）。
+  | { kind: "deal_damage_random"; amount: number; times: number }
   | { kind: "deal_damage_equal_to_block" }
   // 敌人用：伤害取自本敌人出生时掷定的固定值（红虱咬击：整场用同一个 5~7 基础值）。
   | { kind: "deal_damage_rolled" }
@@ -131,17 +135,26 @@ export type RewardState = {
   cardChoices: { defId: string; upgraded: boolean }[];
 };
 
-export type NodeType = "combat" | "elite" | "rest" | "boss";
+export type MapNodeType = "combat" | "elite" | "event" | "rest" | "shop" | "treasure" | "boss";
 
-export type MapNode = { type: NodeType; encounterId: string };
-
-export type MapState = {
-  nodes: MapNode[];
-  /** 当前所在节点下标。 */
-  index: number;
+/** 分支地图节点（DAG）。next 是上一层可达节点 id；Boss 节点 next 为空。 */
+export type MapNode = {
+  id: string;
+  row: number;
+  col: number;
+  type: MapNodeType;
+  next: string[];
 };
 
-export type Screen = "combat" | "reward" | "rest" | "gameover" | "victory";
+export type MapGraph = {
+  nodes: Record<string, MapNode>;
+  rows: number;
+  /** 底层入口节点 id（首次选路从这里挑）。 */
+  startNodeIds: string[];
+  bossNodeId: string;
+};
+
+export type Screen = "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
 
 /** RNG 内部状态：必须完整可序列化并从存档精确复原（issue #234 C11）。 */
 export type RngState = { s0: number; s1: number; s2: number; s3: number };
@@ -159,9 +172,13 @@ export type GameState = {
   gold: number;
   /** 大牌组（master deck）。 */
   deck: CardInstance[];
-  map: MapState;
+  map: MapGraph;
+  /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
+  currentNodeId: string | null;
   combat: CombatState | null;
   reward: RewardState | null;
+  /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
+  combatsEntered: number;
   rng: RngState;
   /** 递增的牌实例 uid 分配器。 */
   nextUid: number;

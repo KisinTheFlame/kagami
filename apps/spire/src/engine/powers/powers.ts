@@ -27,8 +27,8 @@ function pruneEmpty(powers: PowerInstance[], id: PowerId): void {
     return;
   }
   const amount = powers[index]!.amount;
-  // 力量可为负并保留；易伤/虚弱降到 0 即移除。
-  if ((id === "vulnerable" || id === "weak") && amount <= 0) {
+  // 力量可为负并保留；易伤/虚弱/脆弱降到 0 即移除。
+  if ((id === "vulnerable" || id === "weak" || id === "frail") && amount <= 0) {
     powers.splice(index, 1);
   } else if (amount === 0 && id !== "strength") {
     powers.splice(index, 1);
@@ -43,7 +43,7 @@ export function removePower(powers: PowerInstance[], id: PowerId): void {
   }
 }
 
-/** 回合末衰减：易伤 / 虚弱各 -1。 */
+/** 回合末衰减：易伤 / 虚弱 / 脆弱各 -1。 */
 export function decayDebuffs(powers: PowerInstance[]): void {
   if (getPower(powers, "vulnerable") > 0) {
     addPower(powers, "vulnerable", -1);
@@ -51,6 +51,17 @@ export function decayDebuffs(powers: PowerInstance[]): void {
   if (getPower(powers, "weak") > 0) {
     addPower(powers, "weak", -1);
   }
+  if (getPower(powers, "frail") > 0) {
+    addPower(powers, "frail", -1);
+  }
+}
+
+/** 脆弱下获得的格挡打七五折（向下取整）。作用于「获得格挡的一方」的 powers。 */
+export function applyFrailToBlock(amount: number, gainerPowers: readonly PowerInstance[]): number {
+  if (getPower(gainerPowers, "frail") > 0) {
+    return Math.floor(amount * 0.75);
+  }
+  return amount;
 }
 
 /**
@@ -62,8 +73,9 @@ export function computeAttackDamage(
   base: number,
   attackerPowers: readonly PowerInstance[],
   defenderPowers: readonly PowerInstance[],
+  strengthMultiplier = 1,
 ): number {
-  let amount = base + getPower(attackerPowers, "strength");
+  let amount = base + getPower(attackerPowers, "strength") * strengthMultiplier;
   if (amount < 0) {
     amount = 0;
   }

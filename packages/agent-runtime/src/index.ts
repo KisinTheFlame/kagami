@@ -28,7 +28,6 @@ import {
 } from "./effect.js";
 import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
-import type { Operation } from "./operation.js";
 import {
   AppManager,
   type App,
@@ -58,6 +57,7 @@ import {
 } from "./react-kernel.js";
 import {
   BaseTaskAgent,
+  TaskAgentMaxRoundsExceededError,
   TaskEffectInterpreter,
   TerminateHandler,
   TERMINATE_EFFECT_TYPE,
@@ -86,6 +86,7 @@ import {
   type ToolKind,
 } from "./tool/tool-component.js";
 import { OutOfScopeTool } from "./tool/out-of-scope-tool.js";
+import { createUnguardedSubtoolOwner } from "./tool/unguarded-subtool-owner.js";
 import type { InvokeSubtoolOwner, SubtoolGuardResult } from "./tool/subtool-owner.js";
 
 export {
@@ -95,6 +96,7 @@ export {
   BaseLoopAgent,
   BaseTaskAgent,
   createAppSubtoolOwner,
+  createUnguardedSubtoolOwner,
   formatAsyncTaskSubmitted,
   HandlerEffectInterpreter,
   HELP_TOOL_NAME,
@@ -106,6 +108,7 @@ export {
   REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
   ReplaceLeadingMessagesHandler,
   SerialExecutor,
+  TaskAgentMaxRoundsExceededError,
   TaskEffectInterpreter,
   TerminateHandler,
   TERMINATE_EFFECT_TYPE,
@@ -142,7 +145,6 @@ export {
   type TerminateEffect,
   type AssistantLikeMessage,
   type JsonSchema,
-  type Operation,
   type ReActKernelExtension,
   type ReActKernelModelErrorDecision,
   type ReActKernelRunRoundInput,
