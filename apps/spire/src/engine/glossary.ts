@@ -28,6 +28,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "造成的攻击伤害降低 25%（×0.75，向下取整）。每回合结束 -1 层。",
   },
   {
+    term: "脆弱",
+    aliases: ["frail"],
+    definition: "获得的格挡降低 25%（×0.75，向下取整）。每回合结束 -1 层。",
+  },
+  {
     term: "仪式",
     aliases: ["ritual"],
     definition: "敌人专属：每当它的回合开始，获得等量的力量。",
