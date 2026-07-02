@@ -1,6 +1,7 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { PkcePair } from "../shared/pkce.js";
+import { safeParseJson } from "../shared/safe-parse-json.js";
 import type { CodexTokenResponse } from "./types.js";
 
 const CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize";
@@ -161,14 +162,6 @@ function parseJwtClaims(token: string): JwtClaims | null {
   try {
     const payload = Buffer.from(parts[1], "base64url").toString("utf8");
     return JSON.parse(payload) as JwtClaims;
-  } catch {
-    return null;
-  }
-}
-
-function safeParseJson<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T;
   } catch {
     return null;
   }
