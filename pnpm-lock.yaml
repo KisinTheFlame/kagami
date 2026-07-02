@@ -50,6 +50,9 @@ importers:
       '@kagami/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
+      '@kagami/browser-api':
+        specifier: workspace:*
+        version: link:../../packages/browser-api
       '@kagami/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -120,6 +123,9 @@ importers:
 
   apps/browser:
     dependencies:
+      '@kagami/browser-api':
+        specifier: workspace:*
+        version: link:../../packages/browser-api
       '@kagami/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -460,6 +466,22 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/browser-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/config:
     dependencies:

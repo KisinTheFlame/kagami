@@ -4,7 +4,7 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 当前由 20 个包组成（9 个 apps + 11 个 packages），依赖单向（apps → packages）：
+pnpm workspace 当前由 21 个包组成（9 个 apps + 12 个 packages），依赖单向（apps → packages）：
 
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
@@ -40,7 +40,8 @@ apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔
 | `@kagami/kernel`        | 后端纯净基础设施：config / logger / 后端 common 契约与错误 / `isRecord` 等纯工具（无 fastify / 无 Prisma / 无 better-sqlite3）                                                                      |
 | `@kagami/http`          | HTTP 路由辅助（`route.helper` + `contract`：服务间调用的单一事实源 `RouteContract` / `registerJsonRoute`，仅 fastify + zod，零 `@kagami/*` 依赖）                                                   |
 | `@kagami/rpc-client`    | 契约驱动的 typed HTTP client 工厂（`createClient(contract)`）：消费端从生产者契约派生类型 + 对响应 `output.parse`；kernel 依赖（重建 BizError）隔离在此，让 `@kagami/http` 保持零 kernel            |
-| `@kagami/llm-api`       | kagami-llm 进程对 agent 暴露的 RPC 契约包（per-producer `xxx-api`，issue #230）；现覆盖 `/internal/providers`，服务端与 agent client 共享同一份 schema                                              |
+| `@kagami/llm-api`       | kagami-llm 进程对 agent 暴露的 RPC 契约包（per-producer `xxx-api`，issue #230）；覆盖 providers/chat/chat-direct/embed（后三条信封级），服务端与 agent client 共享同一份 schema                     |
+| `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                             |
 | `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                                       |
 | `@kagami/config`        | 零依赖叶子包：repo-root 定位 + `config.yaml` / `config.secret.yaml` 两文件深合并，被 kernel / gateway / oss / 脚本复用                                                                              |
 | `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                                                     |
