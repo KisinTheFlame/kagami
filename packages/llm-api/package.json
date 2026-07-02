@@ -1,5 +1,5 @@
 {
-  "name": "@kagami/http",
+  "name": "@kagami/llm-api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,17 +11,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "fastify": "^5.6.2",
+    "@kagami/http": "workspace:*",
+    "@kagami/shared": "workspace:*",
     "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "typescript": "^5.9.3"
   }
 }

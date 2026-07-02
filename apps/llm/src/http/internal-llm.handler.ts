@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { registerJsonRoute } from "@kagami/http/contract";
+import { llmApiContract } from "@kagami/llm-api/contract";
 import type { LlmProviderId } from "@kagami/llm";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
 import type { LlmClient, LlmChatRequest } from "@kagami/llm-client";
@@ -22,9 +24,6 @@ const ChatDirectBody = z.object({
 });
 const EmbedBody = z.object({
   request: z.unknown(),
-});
-const ProvidersQuery = z.object({
-  usage: z.string().min(1),
 });
 
 export class InternalLlmHandler {
@@ -60,9 +59,10 @@ export class InternalLlmHandler {
       });
     });
 
-    app.get("/internal/providers", async request => {
-      const query = ProvidersQuery.parse(request.query);
-      return await this.llmClient.listAvailableProviders({ usage: query.usage as LlmUsageId });
+    // providers 路由走契约（@kagami/llm-api）：input/output 由 llmApiContract.listProviders 反推，
+    // 与 agent 侧 createClient 共享同一份 schema —— 改契约 output，此 execute 返回类型与 agent 调用点同时红。
+    registerJsonRoute(app, llmApiContract.listProviders, async ({ input }) => {
+      return await this.llmClient.listAvailableProviders({ usage: input.usage as LlmUsageId });
     });
 
     app.post("/internal/embed", async request => {
