@@ -2,6 +2,7 @@ import type { EnemyState, GameState, PowerInstance } from "../engine/types.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
+import { getRelicDef } from "../engine/relics/relics.js";
 import { currentOptions } from "../engine/run/run.js";
 
 // === 结构化屏幕视图（ScreenView）===
@@ -45,11 +46,14 @@ export type CombatView = {
   piles: { draw: number; discard: number; exhaust: number };
 };
 
+export type RelicView = { name: string; description: string };
+
 export type ScreenView = {
   version: number;
   screen: GameState["screen"];
   player: { hp: number; maxHp: number; gold: number };
   deckCount: number;
+  relics: RelicView[];
   combat: CombatView | null;
   options: string[];
   log: string[];
@@ -61,6 +65,10 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
     screen: state.screen,
     player: { hp: state.hp, maxHp: state.maxHp, gold: state.gold },
     deckCount: state.deck.length,
+    relics: state.relics.map(relic => {
+      const def = getRelicDef(relic.id);
+      return { name: def.name, description: def.description };
+    }),
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,

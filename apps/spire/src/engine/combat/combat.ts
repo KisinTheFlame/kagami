@@ -17,6 +17,7 @@ import {
   getPower,
   removePower,
 } from "../powers/powers.js";
+import { getRelicDef } from "../relics/relics.js";
 
 // === 战斗状态机 ===
 //
@@ -102,7 +103,16 @@ export function startCombat(state: GameState, encounterId: string): void {
   for (let i = 0; i < combat.enemies.length; i += 1) {
     selectNextMove(state, i);
   }
+  // 战斗开始遗物（船锚格挡 / 金刚杵力量 / 弹珠袋易伤 / 提灯能量 / 血瓶回血…）。
+  triggerRelics(state, "onCombatStart");
   drawCards(state, STARTING_HAND_SIZE);
+}
+
+/** 遍历持有遗物、触发指定时点的钩子（原地改 state）。 */
+function triggerRelics(state: GameState, event: "onCombatStart" | "onCombatEnd"): void {
+  for (const relic of state.relics) {
+    getRelicDef(relic.id).hooks[event]?.(state);
+  }
 }
 
 // —— 抽牌 ——
@@ -566,6 +576,8 @@ function resolveCombatIfEnded(state: GameState): void {
     return;
   }
   state.log.push("战斗胜利！");
+  // 战斗结束遗物（燃烧之血回血…）在清 combat 前触发。
+  triggerRelics(state, "onCombatEnd");
   // 战斗内牌堆（含临时状态牌）随战斗消失，master deck 不受影响。
   state.combat = null;
   if (combat.isBoss) {
