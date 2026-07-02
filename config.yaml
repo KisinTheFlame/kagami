@@ -22,23 +22,6 @@ server:
     waitToolMaxWaitMs: 600000
     notificationLeadingWindowMs: 1000 # 空闲来第一条通知时先开这么长的前沿短窗聚合首批，窗结束才 flush（不再前沿立即发）
     notificationBatchWindowMs: 5000
-    story:
-      enabled: false # 是否启用 Story Agent（后台故事写作 loop）；置 false 则不运行后台 loop，也不消费 ledger 事件
-      batchSize: 40
-      idleFlushMs: 600000
-      memory:
-        embedding:
-          provider: tei-embedding-gemma
-          baseUrl: http://127.0.0.1:20008
-          model: google/embeddinggemma-300m
-          outputDimensionality: 768
-        vectorIndexPath: ./data/vector/story-memory.hnsw # HNSW 向量索引文件（派生缓存，缺失时从 SQLite 重建）
-        retrieval:
-          topK: 3
-      recall:
-        enabled: false # 是否开启 Story Recall Agent（后台自动召回历史故事并注入上下文）
-        topK: 2
-        scoreThreshold: 0.25
     messaging:
       aiTone:
         enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
@@ -61,6 +44,12 @@ server:
   llm:
     timeoutMs: 300000
     authUsageRefreshIntervalMs: 600000
+    # 文本向量化：LLM 网关（apps/llm）持有 embedding client，agent 经 HTTP 调用。通用能力配置，与上层能力解耦。
+    embedding:
+      provider: tei-embedding-gemma
+      baseUrl: http://127.0.0.1:20008
+      model: google/embeddinggemma-300m
+      outputDimensionality: 768
     codexAuth:
       enabled: true
       publicBaseUrl: http://localhost:20004
@@ -102,11 +91,6 @@ server:
         keepAliveReplayIntervalMinutes: 30
     usages:
       agent:
-        attempts:
-          - provider: claude-code
-            model: claude-opus-4-6
-            times: 3
-      storyAgent:
         attempts:
           - provider: claude-code
             model: claude-opus-4-6

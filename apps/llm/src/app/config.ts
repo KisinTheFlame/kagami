@@ -12,8 +12,8 @@ export type LlmServiceConfig = {
 
 /**
  * kagami-llm 进程配置。端口取 `services.llm.port`；LLM provider / usages / embedding 与
- * OAuth 配置直接复用 `server.llm` / `server.agent.story.memory.embedding` —— 这些原本就是
- * LLM/凭据的配置，只是消费方从 agent 进程变成本服务进程。
+ * OAuth 配置直接复用 `server.llm` —— 这些原本就是 LLM/凭据的配置，只是消费方从 agent
+ * 进程变成本服务进程。
  */
 export async function loadLlmServiceConfig(): Promise<LlmServiceConfig> {
   const config = await loadStaticConfig();

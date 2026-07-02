@@ -40,8 +40,8 @@ type WakeEvent = Extract<Event, { type: "wake" }>;
  *
  * 由一组 handler 组成。复用粒度是 handler：
  * - `ReplaceLeadingMessagesHandler`（公共，来自 agent-runtime）：处理
- *   replace_leading_messages，直接调 context.replaceLeadingMessages。RootAgent 和
- *   StoryAgent compact 都复用它。
+ *   replace_leading_messages，直接调 context.replaceLeadingMessages。任何做上下文
+ *   压缩的 Agent（当前是 RootAgent）都能复用它。
  * - RootAgent 专属 handler：append_message / switch_app / switch_state /
  *   wait_for_event——这些副作用语义只属于主 Agent。
  *

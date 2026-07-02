@@ -132,7 +132,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   });
 
   const embeddingClient: EmbeddingClient = createEmbeddingClient({
-    config: config.server.agent.story.memory.embedding,
+    config: config.server.llm.embedding,
     cacheDao: embeddingCacheDao,
   });
 

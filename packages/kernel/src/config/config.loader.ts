@@ -11,9 +11,6 @@ const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
 const DEFAULT_AGENT_NOTIFICATION_LEADING_WINDOW_MS = 10_000;
 const DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS = 30_000;
-const DEFAULT_AGENT_STORY_ENABLED = true;
-const DEFAULT_AGENT_STORY_BATCH_SIZE = 24;
-const DEFAULT_AGENT_STORY_IDLE_FLUSH_MS = 2 * 60 * 1000;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD = 0.6;
 // 资源读取/发送的字节上限：read_resource 入上下文 / send_resource 发图共用。
@@ -49,11 +46,6 @@ const DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS = 300_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
-const DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K = 3;
-const DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH = "./data/vector/story-memory.hnsw";
-const DEFAULT_STORY_RECALL_TOP_K = 2;
-const DEFAULT_STORY_RECALL_SCORE_THRESHOLD = 0.65;
-const DEFAULT_STORY_RECALL_ENABLED = true;
 const DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS = 10 * 60 * 1000;
 
 const UrlSchema = z.string().url();
@@ -62,7 +54,6 @@ const UrlSchema = z.string().url();
  * 因此只校验非空字符串；绝对路径解析在 {@link loadStaticConfig} 中完成。
  */
 const DatabaseUrlSchema = z.string().trim().min(1);
-const FilePathSchema = z.string().trim().min(1);
 const NonEmptyStringSchema = z.string().trim().min(1);
 const OptionalNonEmptyStringSchema = z
   .string()
@@ -102,7 +93,7 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
 const StringLikeArraySchema = z.array(StringLikeSchema).min(1);
 const LlmProviderSchema = z.enum(LLM_PROVIDER_IDS);
-const GoogleStoryMemoryEmbeddingConfigSchema = z.object({
+const GoogleEmbeddingConfigSchema = z.object({
   provider: z.literal("google"),
   apiKey: NonEmptyStringSchema,
   baseUrl: UrlSchema.default(DEFAULT_GEMINI_EMBEDDING_BASE_URL),
@@ -115,7 +106,7 @@ const TeiEmbeddingGemmaConfigSchema = z.object({
   model: NonEmptyStringSchema,
   outputDimensionality: PositiveIntSchema,
 });
-const StoryMemoryEmbeddingConfigSchema = z.preprocess(
+const EmbeddingConfigSchema = z.preprocess(
   value => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return value;
@@ -131,10 +122,7 @@ const StoryMemoryEmbeddingConfigSchema = z.preprocess(
       provider: "google",
     };
   },
-  z.discriminatedUnion("provider", [
-    GoogleStoryMemoryEmbeddingConfigSchema,
-    TeiEmbeddingGemmaConfigSchema,
-  ]),
+  z.discriminatedUnion("provider", [GoogleEmbeddingConfigSchema, TeiEmbeddingGemmaConfigSchema]),
 );
 const LlmUsageAttemptConfigSchema = z.object({
   provider: LlmProviderSchema,
@@ -247,31 +235,6 @@ const ConfigSchema = z.object({
           notificationBatchWindowMs: PositiveIntSchema.default(
             DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS,
           ),
-          story: z.object({
-            enabled: z.boolean().default(DEFAULT_AGENT_STORY_ENABLED),
-            batchSize: PositiveIntSchema.default(DEFAULT_AGENT_STORY_BATCH_SIZE),
-            idleFlushMs: PositiveIntSchema.default(DEFAULT_AGENT_STORY_IDLE_FLUSH_MS),
-            memory: z.object({
-              embedding: StoryMemoryEmbeddingConfigSchema,
-              vectorIndexPath: FilePathSchema.default(DEFAULT_STORY_MEMORY_VECTOR_INDEX_PATH),
-              retrieval: z
-                .object({
-                  topK: PositiveIntSchema.default(DEFAULT_STORY_MEMORY_RETRIEVAL_TOP_K),
-                })
-                .default({}),
-            }),
-            recall: z
-              .object({
-                enabled: z.boolean().default(DEFAULT_STORY_RECALL_ENABLED),
-                topK: PositiveIntSchema.default(DEFAULT_STORY_RECALL_TOP_K),
-                scoreThreshold: z
-                  .number()
-                  .min(0)
-                  .max(1)
-                  .default(DEFAULT_STORY_RECALL_SCORE_THRESHOLD),
-              })
-              .default({}),
-          }),
           messaging: z
             .object({
               aiTone: z
@@ -318,7 +281,6 @@ const ConfigSchema = z.object({
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
           notificationLeadingWindowMs: value.notificationLeadingWindowMs,
           notificationBatchWindowMs: value.notificationBatchWindowMs,
-          story: value.story,
           messaging: value.messaging,
           asyncTask: value.asyncTask,
           resource: value.resource,
@@ -335,6 +297,9 @@ const ConfigSchema = z.object({
     llm: z.object({
       timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
       authUsageRefreshIntervalMs: PositiveIntSchema.default(DEFAULT_AUTH_USAGE_REFRESH_INTERVAL_MS),
+      // 文本向量化配置：LLM 网关（apps/llm）持有 embedding client，agent 经 HTTP 调用。
+      // 与任何具体上层能力（记忆等）解耦，是网关的通用能力配置。
+      embedding: EmbeddingConfigSchema,
       codexAuth: z
         .object({
           enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),
@@ -398,7 +363,6 @@ const ConfigSchema = z.object({
       usages: z
         .object({
           agent: LlmUsageConfigSchema,
-          storyAgent: LlmUsageConfigSchema.optional(),
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
           webSearchAgent: LlmUsageConfigSchema,
@@ -490,7 +454,6 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
 
   const configDir = path.dirname(configPath);
   const data = parsedConfig.data;
-  const memory = data.server.agent.story.memory;
   // OAuth 回调 origin 默认派生自 services.gateway 端口，host 固定 localhost（不取
   // services.gateway.host：reachable host ≠ 浏览器可访问的 public origin）；可被显式覆盖。
   const defaultPublicBaseUrl = `http://localhost:${data.services.gateway.port}`;
@@ -500,16 +463,6 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
     server: {
       ...data.server,
       databaseUrl: resolveSqliteFileUrl(configDir, data.server.databaseUrl),
-      agent: {
-        ...data.server.agent,
-        story: {
-          ...data.server.agent.story,
-          memory: {
-            ...memory,
-            vectorIndexPath: resolveAbsolutePath(configDir, memory.vectorIndexPath),
-          },
-        },
-      },
       llm: {
         ...data.server.llm,
         usages: normalizeLlmUsages(data.server.llm),
@@ -551,7 +504,6 @@ function resolveSqliteFileUrl(baseDir: string, value: string): string {
 function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
   return {
     agent: normalizeUsageConfig(input.usages.agent),
-    storyAgent: normalizeUsageConfig(input.usages.storyAgent ?? input.usages.agent),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
     webSearchAgent: normalizeUsageConfig(input.usages.webSearchAgent),

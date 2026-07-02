@@ -12,9 +12,7 @@ import {
 import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
-import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { LlmClient } from "@kagami/llm-client";
-import type { EmbeddingClient } from "@kagami/llm-client/embedding";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -24,16 +22,11 @@ import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napca
 import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
-import type { StoryQueryService } from "../ops/application/story-query.service.js";
-import type { StoryReindexService } from "../ops/application/story-reindex.service.js";
 import type { MainAgentContextQueryService } from "../ops/application/main-agent-context-query.service.js";
-import { DefaultStoryQueryService } from "../ops/application/story-query.impl.service.js";
-import { DefaultStoryReindexService } from "../ops/application/story-reindex.impl.service.js";
 import { DefaultMainAgentContextQueryService } from "../ops/application/main-agent-context-query.impl.service.js";
 import { DefaultAgentContext } from "../agent/runtime/context/default-agent-context.js";
 import { LinearMessageLedgerAgentContext } from "../agent/runtime/context/linear-message-ledger-agent-context.js";
 import type { Event } from "../agent/runtime/event/event.js";
-import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-agent/persistence/prisma-root-agent-runtime-snapshot.repository.js";
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
@@ -46,10 +39,7 @@ import {
 } from "../agent/runtime/root-agent/tools/list-apps.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import {
-  createRootContextSummaryReminderMessage,
-  createStoryContextSummaryReminderMessage,
-} from "../agent/runtime/context/context-message-factory.js";
+import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -71,22 +61,8 @@ import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import type { BrowserClient } from "../browser/browser-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
-import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/story/infra/impl/prisma-linear-message-ledger.impl.dao.js";
-import { PrismaStoryDao } from "../agent/capabilities/story/infra/impl/prisma-story.impl.dao.js";
-import { PrismaStoryMemoryDocumentDao } from "../agent/capabilities/story/infra/impl/prisma-story-memory-document.impl.dao.js";
-import { HnswVectorIndex } from "../agent/capabilities/story/infra/hnsw-vector-index.js";
-import { PrismaStoryAgentRuntimeSnapshotRepository } from "../agent/capabilities/story/runtime/persistence/prisma-story-agent-runtime-snapshot.repository.js";
-import { StoryMemoryIndexService } from "../agent/capabilities/story/application/story-memory-index.service.js";
-import { StoryRecallService } from "../agent/capabilities/story/application/story-recall.service.js";
-import { StoryService } from "../agent/capabilities/story/application/story.service.js";
-import { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
-import { StoryRecallExtension } from "../agent/capabilities/story/runtime/story-recall.extension.js";
+import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
 import { AppEntryResetExtension } from "../agent/runtime/root-agent/extensions/app-entry-reset.extension.js";
-import { StoryRecallScheduler } from "../agent/capabilities/story/runtime/story-recall.scheduler.js";
-import {
-  SearchMemoryTool,
-  SEARCH_MEMORY_TOOL_NAME,
-} from "../agent/capabilities/story/tools/search-memory.tool.js";
 import { ResourceService } from "../agent/capabilities/resource/application/resource.service.js";
 import { ResourceFileService } from "../agent/capabilities/resource/application/resource-file.service.js";
 import {
@@ -111,8 +87,6 @@ import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
 import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
-const logger = new AppLogger({ source: "agent.runtime-factory" });
-
 /**
  * napcat 网关的协作者（组合根构造后注入）。网关本身在 buildQqApp 内构造、归 QQ App 持有；
  * 这些是跨切面基础设施：持久化写入器 + 图片分析 + 消息 DAO（DAO 同时被 ops 查询侧读）。
@@ -128,14 +102,12 @@ type BuildAgentRuntimeInput = {
   config: Config;
   database: Database;
   llmClient: LlmClient;
-  embeddingClient: EmbeddingClient;
   metricService: MetricService;
   napcat: NapcatGatewayDeps;
   ithomeService: IthomeService;
   todoService: TodoService;
   notificationCenter: NotificationCenter;
   eventQueue: Queue<Event>;
-  storyEventQueue: Queue<StoryAgentEvent>;
   /** 自建对象存储客户端；缺省（server.oss 未配）时资源读取/发送/截图落 OSS 优雅降级。 */
   ossClient?: OssClient;
   /** 浏览器动作客户端：打到独立的 kagami-browser 进程（issue #173）。 */
@@ -144,11 +116,6 @@ type BuildAgentRuntimeInput = {
 
 export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
-  storyAgentRuntime: StoryLoopAgent;
-  /** Story Agent 后台 loop 是否启用；false 时不 initialize/run、不消费 ledger 事件。 */
-  storyAgentEnabled: boolean;
-  storyQueryService: StoryQueryService;
-  storyReindexService: StoryReindexService;
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
   hasTavilyApiKey: boolean;
@@ -164,57 +131,19 @@ export async function buildAgentRuntime({
   config,
   database,
   llmClient,
-  embeddingClient,
   metricService,
   napcat,
   ithomeService,
   todoService,
   notificationCenter,
   eventQueue,
-  storyEventQueue,
   ossClient,
   browserClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
   });
-  const storyAgentRuntimeSnapshotRepository = new PrismaStoryAgentRuntimeSnapshotRepository({
-    database,
-  });
   const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
-  const storyDao = new PrismaStoryDao({ database });
-  const storyVectorIndex = await buildStoryVectorIndex({ config, database });
-  const storyMemoryDocumentDao = new PrismaStoryMemoryDocumentDao({
-    database,
-    vectorIndex: storyVectorIndex,
-  });
-  const storyMemoryIndexService = new StoryMemoryIndexService({
-    storyMemoryDocumentDao,
-    embeddingClient,
-    outputDimensionality: config.server.agent.story.memory.embedding.outputDimensionality,
-  });
-  const storyService = new StoryService({
-    storyDao,
-    storyMemoryIndexService,
-  });
-  const storyRecallService = new StoryRecallService({
-    storyMemoryDocumentDao,
-    storyDao,
-    embeddingClient,
-    embeddingModel: config.server.agent.story.memory.embedding.model,
-    outputDimensionality: config.server.agent.story.memory.embedding.outputDimensionality,
-  });
-  const storyQueryService = new DefaultStoryQueryService({
-    storyDao,
-    storyRecallService,
-  });
-  const storyReindexService = new DefaultStoryReindexService({
-    storyDao,
-    storyMemoryDocumentDao,
-    storyMemoryIndexService,
-    embeddingModel: config.server.agent.story.memory.embedding.model,
-    outputDimensionality: config.server.agent.story.memory.embedding.outputDimensionality,
-  });
 
   const webSearchService = new TavilyWebSearchService({
     apiKey: config.server.tavily.apiKey,
@@ -231,7 +160,7 @@ export async function buildAgentRuntime({
   });
 
   // WebSearchTaskAgent 的 taskTools 需要等到主 Agent rootAgentTools 装配完才能
-  // 拼出来（要拿 switch / list_apps / wait / search_web / search_memory / help 等
+  // 拼出来（要拿 switch / list_apps / wait / search_web / help 等
   // 主 Agent 顶层工具实例，包成 OutOfScopeTool）。这里先打一个延迟引用，等下
   // 面真实 webSearchTaskAgent 构造好再回填。SearchWebTool 调用时通过这个 ref
   // 转发——执行时 webSearchTaskAgent 必然已经就位。
@@ -310,23 +239,14 @@ export async function buildAgentRuntime({
       creatorName: config.server.bot.creator.name,
     });
   };
-  // Story Agent（后台故事写作 loop）可通过 config.server.agent.story.enabled 整体关停。
-  // 关停时：不运行后台 loop，且不再向 storyEventQueue 入队（否则 ledger_appended 事件
-  // 会在无人消费下无界堆积）。这与主 Agent 前缀完全无关——search_memory 顶层工具照旧
-  // 注册、tools 列表字节不变，KV 缓存与稳定前缀不受任何影响。
-  const storyAgentEnabled = config.server.agent.story.enabled;
+  // root agent 每条进上下文的消息追加到 ledger（physical table `ledger`），只写不读，
+  // 作为将来记忆系统的原始素材来源。
   const context = new LinearMessageLedgerAgentContext({
     inner: new DefaultAgentContext({
       systemPromptFactory: agentSystemPromptFactory,
     }),
     linearMessageLedgerDao,
     runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
-    onLedgerAppended: count => {
-      if (!storyAgentEnabled) {
-        return;
-      }
-      storyEventQueue.enqueue({ type: "ledger_appended", count });
-    },
   });
   const rootAgentSession = new RootAgentSession({
     context,
@@ -370,10 +290,6 @@ export async function buildAgentRuntime({
     webSearchTaskAgent: webSearchTaskAgentInvoker,
     asyncTaskManager,
   });
-  const searchMemoryTool = new SearchMemoryTool({
-    storyRecallService,
-    topK: config.server.agent.story.memory.retrieval.topK,
-  });
   const readResourceTool = new ReadResourceTool({ resourceService });
   const downloadResourceTool = new DownloadResourceTool({ resourceFileService });
   const uploadResourceTool = new UploadResourceTool({ resourceFileService });
@@ -384,7 +300,6 @@ export async function buildAgentRuntime({
     waitTool,
     mainInvokeTool,
     searchWebTool,
-    searchMemoryTool,
     readResourceTool,
     downloadResourceTool,
     uploadResourceTool,
@@ -397,18 +312,17 @@ export async function buildAgentRuntime({
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
-    SEARCH_MEMORY_TOOL_NAME,
     READ_RESOURCE_TOOL_NAME,
     DOWNLOAD_RESOURCE_TOOL_NAME,
     UPLOAD_RESOURCE_TOOL_NAME,
     HELP_TOOL_NAME,
   ]);
 
-  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 10 个工具的
+  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 9 个工具的
   // name / description / parameters / llmTool），但执行语义完全隔离——
   //  - invoke 换成 webSearchInvokeTool（owner = webSearchSubtoolOwner，只识别
   //    search_web_raw / finalize_web_search）
-  //  - 其余 9 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
+  //  - 其余 8 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
   //    不会真的改主 Agent 的 session / 触发嵌套搜索
   // 这是 prompt cache 字节相等 + 行为隔离的关键搭配。
   const webSearchAgentToolCatalog = new ToolCatalog([
@@ -429,10 +343,6 @@ export async function buildAgentRuntime({
     new OutOfScopeTool({
       inner: searchWebTool,
       reason: "网页搜索子任务内禁止再次调用 search_web，否则会无限嵌套。",
-    }),
-    new OutOfScopeTool({
-      inner: searchMemoryTool,
-      reason: "在网页搜索子任务中不可调用 search_memory。",
     }),
     new OutOfScopeTool({
       inner: readResourceTool,
@@ -457,7 +367,6 @@ export async function buildAgentRuntime({
     WAIT_TOOL_NAME,
     INVOKE_TOOL_NAME,
     SEARCH_WEB_TOOL_NAME,
-    SEARCH_MEMORY_TOOL_NAME,
     READ_RESOURCE_TOOL_NAME,
     DOWNLOAD_RESOURCE_TOOL_NAME,
     UPLOAD_RESOURCE_TOOL_NAME,
@@ -475,51 +384,6 @@ export async function buildAgentRuntime({
     summaryToolExecutor,
     reminderMessageFactory: createRootContextSummaryReminderMessage,
   });
-  const storyContextSummaryOperation = new ContextSummaryOperation({
-    llmClient,
-    summaryToolExecutor,
-    reminderMessageFactory: createStoryContextSummaryReminderMessage,
-  });
-  const storyAgentRuntime = new StoryLoopAgent({
-    llmClient,
-    linearMessageLedgerDao,
-    snapshotRepository: storyAgentRuntimeSnapshotRepository,
-    storyService,
-    contextSummaryOperation: storyContextSummaryOperation,
-    summaryTools: summaryToolExecutor.definitions(),
-    contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
-    batchSize: config.server.agent.story.batchSize,
-    idleFlushMs: config.server.agent.story.idleFlushMs,
-    metricService,
-    llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    sourceRuntimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
-    eventQueue: storyEventQueue,
-  });
-  if (!storyAgentEnabled) {
-    logger.info("Story agent disabled by config", {
-      event: "agent.story.disabled",
-    });
-  }
-  // Story Recall Agent（后台自动召回）可通过配置整体关停。关停时只是不注册这个
-  // loop extension —— search_memory 工具仍然保留在顶层工具集里，主 Agent 暴露给
-  // LLM 的 tools 列表字节不变，稳定前缀与 KV 缓存完全不受影响。
-  const storyRecallExtensions: StoryRecallExtension[] = [];
-  if (config.server.agent.story.recall.enabled) {
-    const storyRecallScheduler = new StoryRecallScheduler({
-      llmClient,
-      storyRecallService,
-      agentContext: context,
-      eventQueue,
-      availableTools: rootAgentTools.definitions(),
-      topK: config.server.agent.story.recall.topK,
-      scoreThreshold: config.server.agent.story.recall.scoreThreshold,
-    });
-    storyRecallExtensions.push(new StoryRecallExtension({ scheduler: storyRecallScheduler }));
-  } else {
-    logger.info("Story recall agent disabled by config", {
-      event: "agent.story_recall.disabled",
-    });
-  }
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,
     context,
@@ -531,10 +395,7 @@ export async function buildAgentRuntime({
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    loopExtensions: [
-      ...storyRecallExtensions,
-      new AppEntryResetExtension({ session: rootAgentSession }),
-    ],
+    loopExtensions: [new AppEntryResetExtension({ session: rootAgentSession })],
     summaryTools: [
       ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
@@ -557,7 +418,6 @@ export async function buildAgentRuntime({
         WAIT_TOOL_NAME,
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,
-        SEARCH_MEMORY_TOOL_NAME,
         READ_RESOURCE_TOOL_NAME,
         HELP_TOOL_NAME,
         SUMMARY_TOOL_NAME,
@@ -570,10 +430,6 @@ export async function buildAgentRuntime({
 
   return {
     rootAgentRuntime,
-    storyAgentRuntime,
-    storyAgentEnabled,
-    storyQueryService,
-    storyReindexService,
     mainAgentContextQueryService,
     llmPlaygroundService,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
@@ -581,46 +437,4 @@ export async function buildAgentRuntime({
     qqOutboundService,
     shutdownApps: () => appManager.shutdownAll(),
   };
-}
-
-/**
- * 创建 Story 向量索引并完成启动补水：从 SQLite 读出全部归一化向量，重建进程内 HNSW。
- * SQLite 是事实来源，索引文件只是派生快照，因此每次启动都重建，不依赖磁盘上的旧索引。
- */
-async function buildStoryVectorIndex({
-  config,
-  database,
-}: {
-  config: Config;
-  database: Database;
-}): Promise<HnswVectorIndex> {
-  const vectorIndex = new HnswVectorIndex({
-    dimensions: config.server.agent.story.memory.embedding.outputDimensionality,
-    indexFilePath: config.server.agent.story.memory.vectorIndexPath,
-  });
-
-  const rows = await database.storyMemoryDocument.findMany({
-    where: { embedding: { not: null } },
-    select: { id: true, embedding: true },
-  });
-
-  const points = rows
-    .map(row => ({ label: row.id, vector: parseEmbedding(row.embedding) }))
-    .filter(point => point.vector.length > 0);
-  vectorIndex.rebuildFrom(points);
-
-  return vectorIndex;
-}
-
-function parseEmbedding(value: string | null): number[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(item => Number(item)) : [];
-  } catch {
-    return [];
-  }
 }

@@ -51,16 +51,10 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(notification?.content).toContain("产品群：[有人@你] 在吗");
   });
 
-  it("triggers a round on story_recall but not on wake", async () => {
+  it("does not trigger a round on wake", async () => {
     const context = createContext();
     const session = new RootAgentSession({ context, appManager: new AppManager() });
     await session.initializeContext();
-
-    const story = await session.consumeIncomingEvent({
-      type: "story_recall_completed",
-      data: { stories: [{ id: "s1", markdown: "回忆", createdAt: new Date(0) }] },
-    });
-    expect(story).toEqual({ shouldTriggerRound: true });
 
     const wake = await session.consumeIncomingEvent({ type: "wake" });
     expect(wake).toEqual({ shouldTriggerRound: false });

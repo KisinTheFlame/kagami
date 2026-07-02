@@ -1,6 +1,6 @@
 import * as Prisma from "@kagami/persistence/prisma";
 import type { Database } from "@kagami/persistence/db/client";
-import type { LinearMessageLedgerInsert, LinearMessageLedgerRecord } from "../../domain/story.js";
+import type { LinearMessageLedgerInsert, LinearMessageLedgerRecord } from "../../domain/ledger.js";
 import type { LinearMessageLedgerDao } from "../linear-message-ledger.dao.js";
 import {
   deserializeLlmMessage,
@@ -102,32 +102,16 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
   }
 }
 
-type RawLinearMessageLedgerRow = {
-  seq: number;
-  runtimeKey: string;
-  message: Prisma.JsonValue;
-  createdAt: Date;
-};
-
-function mapRawLinearMessageLedgerRow(row: RawLinearMessageLedgerRow): LinearMessageLedgerRecord {
-  return {
-    seq: row.seq,
-    runtimeKey: row.runtimeKey,
-    message: deserializeLlmMessage(row.message),
-    createdAt: row.createdAt,
-  };
-}
-
 function mapLinearMessageLedgerRow(row: {
   id: number;
   runtimeKey: string;
   message: Prisma.JsonValue;
   createdAt: Date;
 }): LinearMessageLedgerRecord {
-  return mapRawLinearMessageLedgerRow({
+  return {
     seq: row.id,
     runtimeKey: row.runtimeKey,
-    message: row.message,
+    message: deserializeLlmMessage(row.message),
     createdAt: row.createdAt,
-  });
+  };
 }

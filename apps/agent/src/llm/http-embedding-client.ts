@@ -11,9 +11,9 @@ type FetchLike = typeof fetch;
 const EMBED_CLIENT_TIMEOUT_MS = 60_000;
 
 /**
- * 把 embedding 调用经 HTTP 打到独立的 kagami-llm 进程。实现 EmbeddingClient 接口，story 的
- * memory-index / recall 只把构造点换成 new HttpEmbeddingClient，其余零改动。embedding_cache
- * 读写全在服务侧；story 的 HNSW 索引仍在 agent。错误按 BizError 富信封重建 / 不可达归一。
+ * 把 embedding 调用经 HTTP 打到独立的 kagami-llm 进程。实现 EmbeddingClient 接口，供 agent 侧
+ * 任何需要文本向量化的能力复用（构造点 new HttpEmbeddingClient 即可）。embedding_cache 读写全在
+ * 服务侧。错误按 BizError 富信封重建 / 不可达归一。当前无消费者，保留待将来记忆系统接线。
  */
 export class HttpEmbeddingClient implements EmbeddingClient {
   private readonly baseUrl: string;

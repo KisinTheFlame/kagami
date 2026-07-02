@@ -8,7 +8,7 @@ import { createTeiEmbeddingGemmaProvider } from "./providers/tei-embedding-gemma
 import type { EmbeddingProvider } from "./provider.js";
 import type { EmbeddingRequest, EmbeddingResponse } from "./types.js";
 
-type StoryMemoryEmbeddingConfig = Config["server"]["agent"]["story"]["memory"]["embedding"];
+type EmbeddingConfig = Config["server"]["llm"]["embedding"];
 const logger = new AppLogger({ source: "llm.embedding-client" });
 
 export interface EmbeddingClient {
@@ -16,7 +16,7 @@ export interface EmbeddingClient {
 }
 
 type CreateEmbeddingClientOptions = {
-  config: StoryMemoryEmbeddingConfig;
+  config: EmbeddingConfig;
   cacheDao?: EmbeddingCacheDao;
   provider?: EmbeddingProvider;
 };
@@ -88,10 +88,7 @@ export function createEmbeddingClient(options: CreateEmbeddingClientOptions): Em
   };
 }
 
-function resolveEmbeddingRequest(input: {
-  request: EmbeddingRequest;
-  config: StoryMemoryEmbeddingConfig;
-}): {
+function resolveEmbeddingRequest(input: { request: EmbeddingRequest; config: EmbeddingConfig }): {
   model: string;
   outputDimensionality: number;
 } {
@@ -122,7 +119,7 @@ function resolveEmbeddingRequest(input: {
   };
 }
 
-function createEmbeddingProvider(config: StoryMemoryEmbeddingConfig): EmbeddingProvider {
+function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvider {
   if (config.provider === "tei-embedding-gemma") {
     return createTeiEmbeddingGemmaProvider({
       baseUrl: config.baseUrl,

@@ -1,6 +1,5 @@
 import {
   Activity,
-  Brain,
   Bot,
   CalendarClock,
   FileText,
@@ -36,7 +35,6 @@ export const navItems: readonly NavItem[] = [
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "QQ 消息", icon: MessagesSquare },
-  { to: "/story-history", label: "Story 记忆", icon: Brain },
 ];
 
 export function getPageTitle(pathname: string): string {

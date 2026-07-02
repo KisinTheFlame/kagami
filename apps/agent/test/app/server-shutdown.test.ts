@@ -30,7 +30,7 @@ function createAgentRuntimeStub(order: string[], label: string): AgentRuntimeCon
 }
 
 describe("shutdownServerResources", () => {
-  it("按预期顺序关闭资源，并先停 root agent 再停 story agent", async () => {
+  it("按预期顺序关闭资源", async () => {
     const order: string[] = [];
     const logger = createLoggerStub();
     const app = {
@@ -52,7 +52,6 @@ describe("shutdownServerResources", () => {
       }),
     };
     const rootAgentRuntime = createAgentRuntimeStub(order, "rootAgentRuntime.stop");
-    const storyAgentRuntime = createAgentRuntimeStub(order, "storyAgentRuntime.stop");
     const closeLlmProviders = vi.fn(async () => {
       order.push("closeLlmProviders");
     });
@@ -76,7 +75,6 @@ describe("shutdownServerResources", () => {
       taskScheduler: taskScheduler as never,
       callbackServers: [callbackServer],
       rootAgentRuntime,
-      storyAgentRuntime,
       closeLlmProviders,
       logger,
       closeLoggerRuntime,
@@ -92,7 +90,6 @@ describe("shutdownServerResources", () => {
       "taskScheduler.stop",
       "callbackServer.stop",
       "rootAgentRuntime.stop",
-      "storyAgentRuntime.stop",
       "closeLlmProviders",
       "closeLoggerRuntime",
       "closeDb",
@@ -102,9 +99,6 @@ describe("shutdownServerResources", () => {
 
   it("root agent 为空时仍能安全完成关停", async () => {
     const logger = createLoggerStub();
-    const storyAgentRuntime = {
-      stop: vi.fn(async () => {}),
-    };
     const closeLoggerRuntime = vi.fn(async () => {});
     const closeDatabase = vi.fn(async () => {});
     const exit = vi.fn();
@@ -119,7 +113,6 @@ describe("shutdownServerResources", () => {
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime: null,
-      storyAgentRuntime,
       closeLlmProviders: null,
       logger,
       closeLoggerRuntime,
@@ -129,7 +122,7 @@ describe("shutdownServerResources", () => {
       clearShutdownTimeout: () => {},
     });
 
-    expect(storyAgentRuntime.stop).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(0);
   });
 
@@ -150,7 +143,6 @@ describe("shutdownServerResources", () => {
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime,
-      storyAgentRuntime: null,
       closeLlmProviders: null,
       logger,
       closeLoggerRuntime: async () => {},
@@ -172,9 +164,6 @@ describe("shutdownServerResources", () => {
         throw rootStopError;
       }),
     };
-    const storyAgentRuntime = {
-      stop: vi.fn(async () => {}),
-    };
     const closeLlmProviders = vi.fn(async () => {});
     const closeLoggerRuntime = vi.fn(async () => {});
     const closeDatabase = vi.fn(async () => {});
@@ -190,7 +179,6 @@ describe("shutdownServerResources", () => {
       taskScheduler: null,
       callbackServers: [],
       rootAgentRuntime,
-      storyAgentRuntime,
       closeLlmProviders,
       logger,
       closeLoggerRuntime,
@@ -201,7 +189,6 @@ describe("shutdownServerResources", () => {
     });
 
     expect(rootAgentRuntime.stop).toHaveBeenCalledTimes(1);
-    expect(storyAgentRuntime.stop).not.toHaveBeenCalled();
     expect(closeLlmProviders).not.toHaveBeenCalled();
     expect(closeLoggerRuntime).not.toHaveBeenCalled();
     expect(closeDatabase).not.toHaveBeenCalled();

@@ -16,16 +16,13 @@ import { HealthHandler } from "./http/health.handler.js";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { HttpLlmClient } from "../llm/http-llm-client.js";
-import { HttpEmbeddingClient } from "../llm/http-embedding-client.js";
 import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
 import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import type { Event } from "../agent/runtime/event/event.js";
-import type { StoryAgentEvent } from "../agent/capabilities/story/runtime/story-event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
-import type { StoryLoopAgent } from "../agent/capabilities/story/runtime/story-agent.runtime.js";
 import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
 import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
@@ -49,7 +46,6 @@ import { buildTodoScheduledTasks } from "../agent/capabilities/todo/application/
 import { TodoReminderDraft } from "../agent/apps/todo/todo-reminder-draft.js";
 import { TodoDigestDraft } from "../agent/apps/todo/todo-digest-draft.js";
 import { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
-import { StoryHandler } from "../ops/http/story.handler.js";
 import type { MetricService } from "../metric/application/metric.service.js";
 import { HttpMetricService } from "../metric/application/metric.impl.service.js";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
@@ -69,9 +65,6 @@ export type ServerRuntime = {
   taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
-  storyAgentRuntime: StoryLoopAgent;
-  /** Story Agent 后台 loop 是否启用；false 时 index 不会 initialize/run 它。 */
-  storyAgentEnabled: boolean;
   metricService: MetricService;
   port: number;
   listenGroupIds: string[];
@@ -115,12 +108,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const todoDao = new PrismaTodoDao({ database });
 
   // LLM provider + OAuth 凭据中心已外移到独立 kagami-llm 进程（issue：多 Agent 共享网关）。
-  // agent 经 HttpLlmClient/HttpEmbeddingClient 直连它（地址从顶层 services.llm 派生），
-  // 实现现有 LlmClient/EmbeddingClient 接口——下游 root-agent/story/vision/... 零改动。
-  // llm_chat_call 落库、embedding_cache 读写、auth callback/刷新全在服务侧，agent 不再碰。
+  // agent 经 HttpLlmClient 直连它（地址从顶层 services.llm 派生），实现现有 LlmClient
+  // 接口——下游 root-agent/vision/... 零改动。llm_chat_call 落库、auth callback/刷新全在
+  // 服务侧，agent 不再碰。embedding 能力也在服务侧（HttpEmbeddingClient 保留待将来复用）。
   const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
   const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
-  const embeddingClient = new HttpEmbeddingClient({ baseUrl: llmServiceBaseUrl });
   const visionAgent = new VisionAgent({
     llmClient,
   });
@@ -147,7 +139,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     napcatQqMessageDao,
   });
   const eventQueue = new InMemoryQueue<Event>();
-  const storyEventQueue = new InMemoryQueue<StoryAgentEvent>();
   // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
   // 聚合后把一条 notification 事件塞进事件队列——既投递内容也唤醒 Agent。
   const notificationCenter = new NotificationCenter({
@@ -179,7 +170,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     config,
     database,
     llmClient,
-    embeddingClient,
     metricService,
     napcat: {
       configManager,
@@ -191,7 +181,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     todoService,
     notificationCenter,
     eventQueue,
-    storyEventQueue,
     ossClient,
     browserClient,
   });
@@ -246,10 +235,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new StoryHandler({
-        storyQueryService: agentRuntime.storyQueryService,
-        storyReindexService: agentRuntime.storyReindexService,
-      }),
       new NapcatHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
       new SchedulerHandler({ taskScheduler }),
     ],
@@ -263,8 +248,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     // OAuth callback server 随 kagami-llm 服务外移；agent 不再持有，关停编排对空数组无害。
     callbackServers: [],
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
-    storyAgentRuntime: agentRuntime.storyAgentRuntime,
-    storyAgentEnabled: agentRuntime.storyAgentEnabled,
     metricService,
     port: config.services.agent.port,
     listenGroupIds: config.server.napcat.listenGroupIds,

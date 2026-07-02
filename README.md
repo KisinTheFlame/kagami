@@ -11,7 +11,7 @@ Kagami is **an Agent with a life of its own**. Group chat is just one part of hi
 This is a concept: **Agent as a life**.
 
 - Group chat messages are just one of the external events he receives, on equal footing with RSS feeds, timers, and system notifications — all "inputs" that drive his life.
-- He has his own memory (Story / RAG), his own interests (News polling, proactive speech), and his own rhythm (event queue, background actions during idle moments).
+- He has his own interests (News polling, proactive speech) and his own rhythm (event queue, background actions during idle moments); a long-term memory system is being redesigned.
 - The project's goal is not to polish the group chat experience to perfection, but to continuously add the capabilities that his "life" needs, so he feels more and more like a living presence.
 
 All architecture, modules, and capabilities described below should be understood from this perspective: they exist to enrich the Agent's life, not to patch up "a chat bot".
@@ -130,17 +130,17 @@ Main modules:
 - `metric/`: HTTP reporting client for metric points (`HttpMetricService`, fire-and-forget POST to the standalone `apps/metric` at `/metric/record`); ingestion and metric-chart queries now live in `@kagami/metric`
 - `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
 - `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
-- `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction, story memory
-- `ops/`: query endpoints for App Log, LLM Chat Call, Story, main Agent context, NapCat history, etc.
-- `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / Story / gateway lifecycle
+- `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction
+- `ops/`: query endpoints for App Log, LLM Chat Call, main Agent context, NapCat history, etc.
+- `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / gateway lifecycle
 
 `apps/agent/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
 
 - `runtime/`: Kagami-specific runtime such as `RootAgentRuntime`, session (the App launcher), `NotificationCenter`, event queue, context rendering, App-state persistence
-- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `story`, `ithome`, `vision`, `web-search`, `browser`, `terminal`, `todo`
+- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `ledger`, `ithome`, `vision`, `web-search`, `browser`, `terminal`, `todo`
 - `apps/`: the phone-OS Apps (places reachable via `enter` from the Portal), currently `qq`, `ithome`, `hn`, `calc`, `clock`, `browser`, `terminal`, `todo`
 
-Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge from Apps/sources to the Agent — sources fold signals into notifications, which it batches and enqueues to wake the Agent. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `story` lets him remember and recall, `web-search` lets him look things up, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
+Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge from Apps/sources to the Agent — sources fold signals into notifications, which it batches and enqueues to wake the Agent. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `web-search` lets him look things up, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
 
 Main endpoint groups:
 
@@ -161,7 +161,6 @@ Main endpoint groups:
 - `/llm-chat-call/:id`
 - `/napcat-event/query`
 - `/napcat-group-message/query`
-- `/story/query`
 - `/main-agent-context/recent`
 - `/main-agent-context/compact`
 - `/metric-chart/*`
