@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { App, AppStartupContext } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { CalculateTool } from "./tools/calculate.tool.js";
 
 export const CALC_APP_ID = "calc";
@@ -43,21 +44,10 @@ export class CalcApp implements App<CalcConfig> {
   }
 
   public async help(): Promise<string> {
-    const precisionLine =
-      this.config.precision === undefined
-        ? "结果不做小数位截断（按 JS 浮点直接返回）。"
-        : `结果保留 ${this.config.precision} 位小数。`;
-    return [
-      "你在 calc App 里。当前可调用工具：",
-      "  - calculate(a, op, b): 对两个有限实数做一次二元四则运算。op 取值: +, -, *, /",
-      `  ${precisionLine}`,
-      "",
-      "需要复合运算（例如 1 + 2 * 3）时，按运算优先级分多次调用：",
-      '  1. calculate(a=2, op="*", b=3) → 6',
-      '  2. calculate(a=1, op="+", b=6) → 7',
-      "",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/calc-app-help.hbs", {
+      hasPrecision: this.config.precision !== undefined,
+      precision: this.config.precision,
+    });
   }
 
   public async onStartup(ctx: AppStartupContext<CalcConfig>): Promise<void> {

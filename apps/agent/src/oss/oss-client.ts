@@ -1,5 +1,6 @@
-import { z } from "zod";
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { interpolatePath } from "@kagami/rpc-client/client";
+import { ossApiContract } from "@kagami/oss-api/contract";
 
 /**
  * 自建对象存储（@kagami/oss）的最小 HTTP client：把「bytes + content-type」PUT 进去，拿对外
@@ -34,16 +35,15 @@ type HttpOssClientDeps = {
   fetch?: FetchLike;
 };
 
-const PutObjectResponseSchema = z.object({
-  key: z.string().min(1),
-});
+// putObject 响应信封的单一事实源在 @kagami/oss-api；此处只引用，杜绝本地重定义漂移。
+const PutObjectResponseSchema = ossApiContract.putObject.output;
 
 export class HttpOssClient implements OssClient {
-  private readonly objectsUrl: string;
+  private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
 
   public constructor({ baseUrl, fetch: fetchImpl }: HttpOssClientDeps) {
-    this.objectsUrl = `${baseUrl.replace(/\/+$/, "")}/objects`;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.fetchImpl = fetchImpl ?? fetch;
   }
 
@@ -54,7 +54,7 @@ export class HttpOssClient implements OssClient {
     bytes: Buffer;
     mimeType: string;
   }): Promise<string> {
-    const response = await this.fetchImpl(this.objectsUrl, {
+    const response = await this.fetchImpl(`${this.baseUrl}${ossApiContract.putObject.path}`, {
       method: "POST",
       headers: { "content-type": mimeType },
       // Buffer 是 Uint8Array 子类，但 fetch 的 BodyInit 类型不直接收 Buffer，转成 Uint8Array。
@@ -122,6 +122,7 @@ export class HttpOssClient implements OssClient {
   }
 
   private objectUrl(resId: string): string {
-    return `${this.objectsUrl}/${encodeURIComponent(resId)}`;
+    // 路径与服务端路由共享契约字符串（/objects/:key），插值即 encodeURIComponent。
+    return `${this.baseUrl}${interpolatePath(ossApiContract.getObject.path, { key: resId })}`;
   }
 }

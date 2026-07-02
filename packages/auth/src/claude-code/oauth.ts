@@ -1,6 +1,7 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { PkcePair } from "../shared/pkce.js";
+import { safeParseJson } from "../shared/safe-parse-json.js";
 import type { ClaudeCodeTokenResponse } from "./types.js";
 
 const CLAUDE_CODE_AUTH_URL = "https://claude.ai/oauth/authorize";
@@ -156,12 +157,4 @@ function parseCodeAndState(code: string): { code: string; state: string } {
     code: parsedCode,
     state: parsedState,
   };
-}
-
-function safeParseJson<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
 }

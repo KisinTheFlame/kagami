@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { App, AppStartupContext } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import {
   resolveTerminalInitialCwd,
   TerminalService,
@@ -87,16 +88,9 @@ export class TerminalApp implements App<TerminalConfig> {
   }
 
   public async help(): Promise<string> {
-    const cwd = this.terminalService?.getCwd() ?? "(未初始化)";
-    return [
-      `你在终端 App 里。当前工作目录：${cwd}`,
-      "",
-      "可调用工具：",
-      "  - bash(command): 执行一条完整 shell 命令。单条 `cd <dir>` 会被拦截并更新工作目录；不支持交互式命令。",
-      "  - read_bash_output(output_id, stream?, offset?, size?): 分页读取上一条 bash 的完整 stdout/stderr。",
-      "",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/terminal-app-help.hbs", {
+      cwd: this.terminalService?.getCwd() ?? "(未初始化)",
+    });
   }
 
   public async onStartup(ctx: AppStartupContext<TerminalConfig>): Promise<void> {
