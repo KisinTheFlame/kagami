@@ -21,9 +21,12 @@ export type PowerId =
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
-  | { kind: "deal_damage"; amount: number }
+  // strengthMultiplier：力量按该倍率计入伤害（重刃 ×3/×5）；省略即 ×1（普通攻击）。
+  | { kind: "deal_damage"; amount: number; strengthMultiplier?: number }
   | { kind: "deal_damage_all"; amount: number }
   | { kind: "deal_damage_multi"; amount: number; times: number }
+  // 每次命中随机挑一个存活敌人（剑刃回旋镖：3 点 ×3，逐次随机目标）。
+  | { kind: "deal_damage_random"; amount: number; times: number }
   | { kind: "deal_damage_equal_to_block" }
   // 敌人用：伤害取自本敌人出生时掷定的固定值（红虱咬击：整场用同一个 5~7 基础值）。
   | { kind: "deal_damage_rolled" }

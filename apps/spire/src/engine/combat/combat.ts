@@ -152,10 +152,32 @@ function applyEffect(
     case "deal_damage": {
       if (actor.side === "player") {
         if (targetEnemyIndex !== null) {
-          dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          dealDamageToEnemy(
+            state,
+            targetEnemyIndex,
+            effect.amount,
+            powers,
+            effect.strengthMultiplier,
+          );
         }
       } else {
         dealDamageToPlayer(state, effect.amount, powers);
+      }
+      break;
+    }
+    case "deal_damage_random": {
+      // 玩家专用：逐次挑一个存活敌人随机命中（剑刃回旋镖）。每击独立选目标。
+      if (actor.side === "player") {
+        for (let hit = 0; hit < effect.times; hit += 1) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length === 0) {
+            break;
+          }
+          const pick = living[nextInt(state.rng, living.length)]!.index;
+          dealDamageToEnemy(state, pick, effect.amount, powers);
+        }
       }
       break;
     }
@@ -282,7 +304,9 @@ function addCards(
         combat.hand.push(instance);
       }
     } else if (pile === "draw") {
-      combat.drawPile.push(instance);
+      // 洗入抽牌堆的随机位置（狂野劈砍的伤口：不保证下一张就抽到）。
+      const at = nextInt(state.rng, combat.drawPile.length + 1);
+      combat.drawPile.splice(at, 0, instance);
     } else {
       combat.discardPile.push(instance);
     }
@@ -296,6 +320,7 @@ function dealDamageToEnemy(
   enemyIndex: number,
   base: number,
   attackerPowers: readonly PowerInstance[],
+  strengthMultiplier = 1,
 ): void {
   const enemy = state.combat!.enemies[enemyIndex]!;
   if (enemy.hp <= 0) {
@@ -312,7 +337,7 @@ function dealDamageToEnemy(
   if (sharpHide > 0) {
     state.hp = Math.max(0, state.hp - sharpHide);
   }
-  const dmg = computeAttackDamage(base, attackerPowers, enemy.powers);
+  const dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
     enemy.modeShiftAccum += dmg;
@@ -401,7 +426,9 @@ export function playCard(
   combat.energy -= cost;
   combat.hand.splice(handIndex, 1);
   applyEffects(state, effectsOf(def, instance.upgraded), { side: "player" }, resolvedTarget);
-  if (def.exhausts) {
+  if (def.type === "power") {
+    // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
+  } else if (def.exhausts) {
     combat.exhaustPile.push(instance);
   } else {
     combat.discardPile.push(instance);
