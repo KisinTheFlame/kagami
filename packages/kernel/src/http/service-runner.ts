@@ -15,6 +15,12 @@ export type ServiceHandle = {
    */
   bindHost: string;
   port: number;
+  /**
+   * `app.close()` **之前**执行的步骤：停掉会在排空窗口内继续产生新工作的后台源
+   * （如 llm 的 auth 刷新 timer——排空可长至 10s，期间 timer 若还在跑，其 fire-and-forget
+   * DB 写会与后续 closeDb 竞态）。
+   */
+  beforeClose?: Array<() => void | Promise<void>>;
   /** `app.close()` 排空后按序执行的清理步骤（关 DB / 停 timer / flush 存档…）。 */
   cleanup?: Array<() => void | Promise<void>>;
   /** listen 成功后执行的后台动作（如 browser 预热）。 */
@@ -70,6 +76,9 @@ export function runService({ name, source, build }: RunServiceOptions): void {
     void (async () => {
       try {
         if (handle) {
+          for (const step of handle.beforeClose ?? []) {
+            await step();
+          }
           await handle.app.close();
           for (const step of handle.cleanup ?? []) {
             await step();
@@ -107,8 +116,10 @@ export function runService({ name, source, build }: RunServiceOptions): void {
       logger.errorWithCause("Service failed to start", error, {
         event: `${name}.start.failed`,
       });
+      // 置位关停闸：启动失败清理期间若来信号，shutdown 直接短路，避免同一批清理步骤并发跑两遍。
+      isShuttingDown = true;
       // 启动失败也尽力清理已建资源（DB 连接等），单步失败不阻断后续步骤。
-      for (const step of handle?.cleanup ?? []) {
+      for (const step of [...(handle?.beforeClose ?? []), ...(handle?.cleanup ?? [])]) {
         await Promise.resolve()
           .then(step)
           .catch(() => undefined);

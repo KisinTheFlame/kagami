@@ -36,7 +36,7 @@ export class SpireHandler {
       return { ok: true as const, screen: toScreenView(outcome.state, {}) };
     });
 
-    registerJsonRoute(app, spireApiContract.state, ({ input: _input }) => {
+    registerJsonRoute(app, spireApiContract.state, () => {
       const state = this.service.getState();
       // GET /state 的 log 恒为空（KV 字节确定性，issue #234 C3）。
       return state ? toScreenView(state, { suppressLog: true }) : null;
