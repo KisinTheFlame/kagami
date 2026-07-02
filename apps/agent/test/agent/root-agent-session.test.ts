@@ -110,4 +110,33 @@ describe("RootAgentSession (App 启动器)", () => {
     session.reset();
     expect(session.getCurrentApp()).toBeUndefined();
   });
+
+  it("tracks entered apps and clears them on clearEnteredApps", () => {
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
+    });
+    expect(session.hasEnteredApp("qq")).toBe(false);
+    session.markAppEntered("qq");
+    expect(session.hasEnteredApp("qq")).toBe(true);
+    expect(session.hasEnteredApp("calc")).toBe(false);
+    // 压缩边界：clearEnteredApps 让压缩后首进重新吐 help。
+    session.clearEnteredApps();
+    expect(session.hasEnteredApp("qq")).toBe(false);
+  });
+
+  it("clears entered apps on reset and markRestored", () => {
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
+    });
+
+    session.markAppEntered("qq");
+    session.reset();
+    expect(session.hasEnteredApp("qq")).toBe(false);
+
+    session.markAppEntered("hn");
+    session.markRestored();
+    expect(session.hasEnteredApp("hn")).toBe(false);
+  });
 });

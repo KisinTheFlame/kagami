@@ -33,7 +33,14 @@ async function handleRequest(
 
     const match = OBJECT_PATH.exec(pathname);
     if (match) {
-      const key = decodeURIComponent(match[1]);
+      let key: string;
+      try {
+        key = decodeURIComponent(match[1]);
+      } catch {
+        // 畸形百分号编码是客户端错误，回 400 而非兜底 500。
+        res.writeHead(400).end();
+        return;
+      }
       switch (req.method) {
         case "GET":
           await handleGet(res, store, key);

@@ -28,6 +28,12 @@ export type RootAgentPostToolEffects = {
 export type RootAgentSessionController = {
   getCurrentApp(): AppId | undefined;
   setCurrentApp(appId: AppId): void;
+  /** 本桶上下文里是否进入过该 App（决定 switch 时要不要自动吐 help）。 */
+  hasEnteredApp(appId: AppId): boolean;
+  /** 标记该 App 本桶已进入。由 switch_app effect 在解释期调用，保持工具无副作用。 */
+  markAppEntered(appId: AppId): void;
+  /** 清空「已进入 App」集合。上下文压缩时调用，让压缩后首进重新吐 help。 */
+  clearEnteredApps(): void;
   reset(): void;
   markRestored(): void;
   initializeContext(): Promise<void>;
@@ -53,6 +59,12 @@ export class RootAgentSession implements RootAgentSessionController {
    * 状态出现；一旦 switch 进某个 App 就不再为空（除 reset 重启回到初始）。
    */
   private currentApp: AppId | undefined = undefined;
+  /**
+   * 本桶上下文里已进入过的 App 集合。仅内存持有；不进 snapshot，生命周期与 currentApp
+   * 一致（reset / markRestored 清空）。压缩时由 AppEntryResetExtension 清空，让压缩后首进
+   * 重新吐 help。重启后为空——首进各 App 至多重复注入一次 help（有界，见 issue #223）。
+   */
+  private readonly enteredApps = new Set<AppId>();
 
   public constructor({ context, appManager }: RootAgentSessionDeps) {
     this.context = context;
@@ -67,11 +79,24 @@ export class RootAgentSession implements RootAgentSessionController {
     this.currentApp = appId;
   }
 
+  public hasEnteredApp(appId: AppId): boolean {
+    return this.enteredApps.has(appId);
+  }
+
+  public markAppEntered(appId: AppId): void {
+    this.enteredApps.add(appId);
+  }
+
+  public clearEnteredApps(): void {
+    this.enteredApps.clear();
+  }
+
   public reset(): void {
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = false;
     this.currentApp = undefined;
+    this.enteredApps.clear();
   }
 
   /**
@@ -84,6 +109,7 @@ export class RootAgentSession implements RootAgentSessionController {
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = true;
     this.currentApp = undefined;
+    this.enteredApps.clear();
   }
 
   public async initializeContext(): Promise<void> {

@@ -47,8 +47,7 @@ import { TodoReminderDraft } from "../agent/apps/todo/todo-reminder-draft.js";
 import { TodoDigestDraft } from "../agent/apps/todo/todo-digest-draft.js";
 import { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 import type { MetricService } from "../metric/application/metric.service.js";
-import { DefaultMetricService } from "../metric/application/metric.impl.service.js";
-import { PrismaMetricDao } from "@kagami/persistence/dao/impl/prisma-metric.impl.dao";
+import { HttpMetricService } from "../metric/application/metric.impl.service.js";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -93,8 +92,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   await configureSqlite(database);
 
   const logDao = new PrismaLogDao({ database });
-  const metricDao = new PrismaMetricDao({ database });
-  const metricService = new DefaultMetricService({ metricDao });
+  // metric 打点改走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
+  const metricService = new HttpMetricService({
+    baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
+  });
   initLoggerRuntime({
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });

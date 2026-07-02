@@ -1,100 +1,63 @@
-import { z } from "zod";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { MetricTags } from "../domain/metric.js";
-import type { MetricDao } from "@kagami/persistence/dao/metric.dao";
+import type { RecordMetricRequest } from "@kagami/shared/schemas/metric";
 import type { MetricService, RecordMetricInput } from "./metric.service.js";
 
-type DefaultMetricServiceDeps = {
-  metricDao: MetricDao;
+type FetchLike = typeof fetch;
+
+type HttpMetricServiceDeps = {
+  baseUrl: string;
+  fetch?: FetchLike;
 };
 
 const logger = new AppLogger({ source: "metric.service" });
 
-const RecordMetricInputSchema = z.object({
-  metricName: z.string().trim().min(1),
-  value: z.number().finite(),
-  tags: z.record(z.string(), z.string()).optional(),
-  occurredAt: z.date().optional(),
-});
+/**
+ * 独立 metric 服务（`@kagami/metric`）的最小 HTTP 上报客户端：把一条打点 POST 进
+ * `/metric/record`。语义是 fire-and-forget——校验权威在服务端，client 只序列化 + 发送，
+ * 对一切失败（网络异常 / 非 2xx / 400）记日志后咽下、**绝不抛**，绝不阻塞 Agent 主流程。
+ */
+export class HttpMetricService implements MetricService {
+  private readonly recordUrl: string;
+  private readonly fetchImpl: FetchLike;
 
-export class DefaultMetricService implements MetricService {
-  private readonly metricDao: MetricDao;
-
-  public constructor({ metricDao }: DefaultMetricServiceDeps) {
-    this.metricDao = metricDao;
+  public constructor({ baseUrl, fetch: fetchImpl }: HttpMetricServiceDeps) {
+    this.recordUrl = `${baseUrl.replace(/\/+$/, "")}/metric/record`;
+    this.fetchImpl = fetchImpl ?? fetch;
   }
 
   public async record(input: RecordMetricInput): Promise<void> {
-    const normalized = parseRecordMetricInput(input);
-
     try {
-      await this.metricDao.insert(normalized);
+      // body 构造放进 try：occurredAt 若是 Invalid Date，`toISOString()` 会抛 RangeError，
+      // 必须一并被咽下——否则 async record() 返回 rejected promise，而调用方全是 void
+      // fire-and-forget，会变成 unhandledRejection 拉挂 agent 进程。
+      const body: RecordMetricRequest = {
+        metricName: input.metricName,
+        value: input.value,
+        tags: input.tags,
+        occurredAt: input.occurredAt?.toISOString(),
+      };
+
+      const response = await this.fetchImpl(this.recordUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        // metric 进程黑洞化（接受 TCP 但不响应）时，无 timeout 会让 pending promise / socket
+        // 随 tool-call 频率堆积；2s 超时后归入下面的 catch。
+        signal: AbortSignal.timeout(2000),
+      });
+
+      if (!response.ok) {
+        logger.warn("Metric record endpoint returned non-2xx", {
+          event: "metric.record.http_failed",
+          status: response.status,
+          metricName: input.metricName,
+        });
+      }
     } catch (error) {
-      logger.errorWithCause("Failed to persist metric record", error, {
-        event: "metric.record.persist_failed",
-        metricName: normalized.metricName,
-        value: normalized.value,
-        tags: normalized.tags,
-        occurredAt: normalized.occurredAt?.toISOString(),
+      logger.errorWithCause("Failed to report metric over HTTP", error, {
+        event: "metric.record.http_error",
+        metricName: input.metricName,
       });
     }
   }
-}
-
-function parseRecordMetricInput(input: RecordMetricInput): {
-  metricName: string;
-  value: number;
-  tags: MetricTags;
-  occurredAt?: Date;
-} {
-  const parsed = RecordMetricInputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new BizError({
-      message: "Metric 打点参数不合法",
-      meta: {
-        reason: "METRIC_RECORD_INVALID",
-        issues: parsed.error.issues,
-      },
-      statusCode: 400,
-    });
-  }
-
-  return {
-    metricName: parsed.data.metricName,
-    value: parsed.data.value,
-    tags: normalizeTags(parsed.data.tags),
-    occurredAt: parsed.data.occurredAt,
-  };
-}
-
-function normalizeTags(input: MetricTags | undefined): MetricTags {
-  if (!input) {
-    return {};
-  }
-
-  const normalized: MetricTags = {};
-
-  for (const [rawKey, value] of Object.entries(input)) {
-    const key = rawKey.trim();
-    if (key.length === 0) {
-      throw new BizError({
-        message: "Metric 打点参数不合法",
-        meta: {
-          reason: "METRIC_RECORD_INVALID",
-          issues: [
-            {
-              path: ["tags"],
-              message: "Metric tag key 不能为空白字符串",
-            },
-          ],
-        },
-        statusCode: 400,
-      });
-    }
-
-    normalized[key] = value;
-  }
-
-  return normalized;
 }

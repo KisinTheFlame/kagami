@@ -12,6 +12,7 @@ services:
   oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
   browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
   llm: { host: 127.0.0.1, port: 20009 } # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
+  metric: { host: 127.0.0.1, port: 20010 } # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径

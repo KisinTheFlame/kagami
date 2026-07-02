@@ -62,6 +62,7 @@ import type { BrowserClient } from "../browser/browser-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
+import { AppEntryResetExtension } from "../agent/runtime/root-agent/extensions/app-entry-reset.extension.js";
 import { ResourceService } from "../agent/capabilities/resource/application/resource.service.js";
 import { ResourceFileService } from "../agent/capabilities/resource/application/resource-file.service.js";
 import {
@@ -394,7 +395,7 @@ export async function buildAgentRuntime({
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
-    loopExtensions: [],
+    loopExtensions: [new AppEntryResetExtension({ session: rootAgentSession })],
     summaryTools: [
       ...rootAgentTools.definitions(),
       ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),

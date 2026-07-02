@@ -43,7 +43,9 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
       analyzer.analyzeImageSegment(createImageSegment("https://example.com/screen.png")),
     ).resolves.toEqual({ description: "屏幕截图里有一个登录表单", resid: null });
 
-    expect(fetchMock).toHaveBeenCalledWith("https://example.com/screen.png");
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/screen.png", {
+      signal: expect.any(AbortSignal),
+    });
     expect(visionAgent.analyzeImage).toHaveBeenCalledWith(
       expect.objectContaining({
         content: Buffer.from("image"),
