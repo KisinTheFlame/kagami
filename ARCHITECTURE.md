@@ -148,21 +148,21 @@ apps/web/src/
 
 ### 输入：生活输入 → NotificationCenter → 事件队列
 
-Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，各 App / 源把信号折叠成通知，由被动的 `NotificationCenter` 聚合后投入共享事件队列：
+Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，后台 / 非焦点信号折叠成通知（「横幅」），由被动的 `NotificationCenter` 聚合后投入共享事件队列；前台当前会话的实时输入走 `foreground_input` 直达（「屏幕」）：
 
 ```
-NapCat 群/私聊 ─→ QQ App.handleNapcatEvent ─┐
-IThome RSS 轮询 ─→ IThome poller            ─┼─→ NotificationCenter ─→ notification 事件
-                                            │     （前沿触发 + 节流窗口）        │
-                                            ┘                                    ↓
-async_tool_result / wake 等内部事件 ─────────────────────────→ 共享事件队列 ─→ RootAgentRuntime ─→ ReAct 循环
+NapCat 群/私聊 ─→ QQ App.handleNapcatEvent ─┬─（后台/非当前会话）→ NotificationCenter ─→ notification 事件
+IThome RSS 轮询 ─→ IThome poller  ──────────┘   （前沿触发 + 节流窗口）                        │
+                                                                                              ↓
+QQ 前台当前会话新消息 ─→ 敲门 foreground_input 事件（不带内容，drain 时向当前 App 现拉）→ 共享事件队列 ─→ RootAgentRuntime ─→ ReAct 循环
+async_tool_result / wake 等内部事件 ────────────────────────────────────────────────────→ ↑
 ```
 
 关键点：
 
-- **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 把消息累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
-- **NotificationCenter 是 App→Agent 的唯一桥**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。
-- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `wake` 等已归一的事件，不承载原始协议消息。
+- **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 按「屏幕 vs 横幅」分流：前台且属当前会话的消息入缓冲并敲门（实时路径），其余累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
+- **NotificationCenter 是后台 / 非焦点信号到 Agent 的唯一桥（横幅）**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。前台当前会话经 `foreground_input` 直达上下文尾部（屏幕），不经 center；焦点漂移（退后台 / 切会话 / reset）时未投递的未读退化回通知路径，绝不静默丢。
+- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `foreground_input` / `wake` 等已归一的事件，不承载原始协议消息。`foreground_input` 是不带内容的敲门：内容在 drain 时由 session 向当前前台 App（实现 `ForegroundInputSource` 的）现拉，永不 stale。
 
 ### App 与状态
 
