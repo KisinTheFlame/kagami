@@ -65,6 +65,7 @@ function handView(card: SpireHandCardView): Record<string, unknown> {
 export function renderSpireScreen(screen: SpireScreen): string {
   const combat = screen.combat;
   return renderServerStaticTemplate(import.meta.url, "context/spire-screen.hbs", {
+    isMap: screen.screen === "map",
     isCombat: screen.screen === "combat",
     isReward: screen.screen === "reward",
     isRest: screen.screen === "rest",
@@ -72,6 +73,7 @@ export function renderSpireScreen(screen: SpireScreen): string {
     isVictory: screen.screen === "victory",
     hp: screen.player.hp,
     maxHp: screen.player.maxHp,
+    gold: screen.player.gold,
     deckCount: screen.deckCount,
     combat: combat
       ? {
