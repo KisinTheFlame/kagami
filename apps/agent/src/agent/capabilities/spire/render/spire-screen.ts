@@ -29,6 +29,7 @@ const POWER_LABELS: Record<string, string> = {
   artifact: "神器",
   angry: "狂怒",
   spore_cloud: "孢子云",
+  demon_form: "恶魔形态",
   mode_shift: "模式",
 };
 
