@@ -59,9 +59,9 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 写新 capability 或 App 时记住：**任何想暴露给 Agent 的能力，第一反应都应该是"做成 InvokeTool 的子工具"，而不是"加一个顶层工具"**。新增顶层工具需要明确的设计理由：它必须是结构性的元能力（像 switch / help 这种调度 / 导航工具），而不是某个具体业务能力。
 
-### 现有实现里的三个范例
+### 现有实现里的四个范例
 
-写新 capability 前，先读这三处代码，它们是 KV 缓存友好的参考实现：
+写新 capability 前，先读这四处代码，它们是 KV 缓存友好的参考实现：
 
 **1. Web Search —— 子 Agent 隔离，避免污染主上下文**
 
@@ -80,6 +80,12 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 `RootAgentRuntime.compactContextIfNeeded` 在 token 超阈值时触发压缩：计算保留边界（最近 10% 消息，扩展到 tool-call 边界），对前半部分生成摘要，然后用 `replaceMessages([summaryMessage, ...messagesToKeep])` **一次性**重建整条消息列表。这一次重建会彻底失效旧的 KV cache，但换来的是一个更短、更稳定的新前缀，后续多轮共享。压缩后通过 `notifyContextCompacted()` 通知所有扩展重置自身临时状态，让它们配合新前缀继续工作。
 
 **教训**：`replaceMessages` 是一次"受控的昂贵操作"。除了上下文压缩这种明确场景，不要再引入第二种会调用它的路径。任何新功能想"改写一下历史"，都应该先问：能不能改成 append？
+
+**4. Foreground Input —— 不带内容的敲门，drain 时现拉，仍走尾部追加**
+
+QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-agent/foreground-input.ts` 的敲门路径：App 把消息缓冲在自己内存里，只 enqueue 一个**不带内容**的 `foreground_input` 事件；session drain 时向当前前台 App（实现 `ForegroundInputSource` 的）现拉渲染好的文本，作为一条 user message **追加到尾部**。内容 drain 时才现取所以永不 stale；焦点已切走时拉空 no-op，未投递的未读退化回通知路径，绝不静默丢。
+
+**教训**：实时性再高的输入也不需要绕过尾部追加。把「唤醒」和「内容」拆开——事件只当敲门铃，内容在注入时刻向源现拉——既保住稳定前缀，又避免把会过期的数据写死进事件队列。
 
 ### 具体红线
 

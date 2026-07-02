@@ -1,12 +1,24 @@
 import type { AppId, AppManager } from "@kagami/agent-runtime";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { AgentContext } from "../../context/agent-context.js";
 import type { LlmMessage } from "@kagami/llm-client";
 import {
   createAsyncToolResultMessage,
+  createForegroundInputMessage,
   createNotificationMessage,
   createPortalReminderMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
+import {
+  FOREGROUND_METRIC_DRAIN_EMPTY,
+  FOREGROUND_METRIC_INJECT,
+  isForegroundInputSource,
+  type ForegroundInput,
+} from "../foreground-input.js";
+import { NOOP_METRIC_SERVICE } from "../../tool-call-metric.js";
+import type { MetricService } from "../../../../metric/application/metric.service.js";
+
+const logger = new AppLogger({ source: "agent.root-session" });
 
 /**
  * 手机 OS 模型下，session 退化为「App 启动器 + 顶层事件路由」：聊天已经 App 化
@@ -40,12 +52,20 @@ export type RootAgentSessionController = {
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
+  /**
+   * reset 前的失焦广播：调当前 App 的 onBlur（其退化副作用如 center 补推独立于上下文
+   * 存活），丢弃返回的 effects——上下文即将整体重建，无处 append。catch 一切错误只记
+   * log：reset 是管理台救命操作，绝不因 App bug 阻断。
+   */
+  blurCurrentApp(): Promise<void>;
 };
 
 type RootAgentSessionDeps = {
   context: AgentContext;
-  /** Portal 渲染时枚举已注册 Apps 喂给 reminder 消息。 */
+  /** Portal 渲染时枚举已注册 Apps 喂给 reminder 消息；也是 foreground_input drain 的 App 查找入口。 */
   appManager?: AppManager;
+  /** 前台输入观测计数（inject / drain_empty）。缺省 NOOP。 */
+  metricService?: MetricService;
 };
 
 export class RootAgentSession implements RootAgentSessionController {
@@ -66,9 +86,12 @@ export class RootAgentSession implements RootAgentSessionController {
    */
   private readonly enteredApps = new Set<AppId>();
 
-  public constructor({ context, appManager }: RootAgentSessionDeps) {
+  private readonly metricService: MetricService;
+
+  public constructor({ context, appManager, metricService }: RootAgentSessionDeps) {
     this.context = context;
     this.appManager = appManager ?? null;
+    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
   }
 
   public getCurrentApp(): AppId | undefined {
@@ -140,9 +163,75 @@ export class RootAgentSession implements RootAgentSessionController {
       return { shouldTriggerRound: true };
     }
 
+    if (event.type === "foreground_input") {
+      // 前台输入敲门：事件不带内容，向当前前台 App 现拉。拉空（stale 敲门 / 焦点漂移 /
+      // 前序事件已消费）即 no-op——多次敲门幂等。
+      const input = await this.drainForegroundInput();
+      if (input === null) {
+        return { shouldTriggerRound: false };
+      }
+      this.pendingIncomingMessages.push(createForegroundInputMessage(input.text));
+      return { shouldTriggerRound: true };
+    }
+
     // wake：纯唤醒标记，session 不做事。napcat 消息 / friend_list 不再走 session
     // （由 QqApp 直接接收），万一到这里也忽略。
     return { shouldTriggerRound: false };
+  }
+
+  public async blurCurrentApp(): Promise<void> {
+    const appId = this.currentApp;
+    const app = appId ? this.appManager?.getApp(appId) : undefined;
+    if (!app?.onBlur) {
+      return;
+    }
+    try {
+      await app.onBlur();
+    } catch (error) {
+      // 吞错只记 log：reset 不能被 App 的 onBlur bug 阻断。App 侧约定 onBlur 第一行
+      // 同步翻焦点标志，因此即使退化补推抛错，焦点也已归位。
+      logger.errorWithCause(`App "${appId}" onBlur 在 reset 失焦广播中抛错，已忽略`, error, {
+        event: "agent.root_session.blur_on_reset_failed",
+        appId,
+      });
+    }
+  }
+
+  /**
+   * 向当前前台 App 拉取待注入的前台输入。三重防御：App 不存在 / 未实现该能力 → null；
+   * App 自查失焦 → null；App drain 抛错 → 记 log 后视同拉空（App 侧「先渲染后消费」
+   * 保证此时输入仍在其缓冲中，不丢）。绝不让 App bug 打崩主循环。
+   */
+  private async drainForegroundInput(): Promise<ForegroundInput | null> {
+    const appId = this.currentApp;
+    const app = appId ? this.appManager?.getApp(appId) : undefined;
+    if (!app || !isForegroundInputSource(app)) {
+      this.recordForegroundMetric(FOREGROUND_METRIC_DRAIN_EMPTY, 1);
+      return null;
+    }
+    try {
+      const input = await app.drainForegroundInput();
+      if (input === null || input.text.length === 0) {
+        this.recordForegroundMetric(FOREGROUND_METRIC_DRAIN_EMPTY, 1);
+        return null;
+      }
+      this.recordForegroundMetric(FOREGROUND_METRIC_INJECT, input.itemCount);
+      return input;
+    } catch (error) {
+      logger.errorWithCause(`App "${appId}" drainForegroundInput 抛错，视同拉空`, error, {
+        event: "agent.root_session.foreground_drain_failed",
+        appId,
+      });
+      this.recordForegroundMetric(FOREGROUND_METRIC_DRAIN_EMPTY, 1);
+      return null;
+    }
+  }
+
+  private recordForegroundMetric(metricName: string, value: number): void {
+    // fire-and-forget：metric 摄取失败只丢点，不影响主循环。
+    void this.metricService
+      .record({ metricName, value, tags: { runtime: "agent" } })
+      .catch(() => undefined);
   }
 
   public async flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }> {

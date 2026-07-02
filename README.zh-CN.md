@@ -136,10 +136,10 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 `apps/agent/src/agent` 当前按 `runtime/`、`capabilities/`、`apps/` 组织：
 
 - `runtime/`：Kagami 定制运行时，如 `RootAgentRuntime`、session（App 启动器）、`NotificationCenter`、事件队列、上下文渲染、App 状态持久化
-- `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`story`、`ithome`、`vision`、`web-search`、`browser`、`terminal`、`todo`
-- `apps/`：手机 OS 的 App（Portal 下可 `enter` 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`terminal`、`todo`
+- `capabilities/`：按能力聚合的实现，当前包括 `messaging`、`context-summary`、`ledger`、`ithome`、`vision`、`web-search`、`browser`、`resource`、`spire`、`terminal`、`todo`
+- `apps/`：手机 OS 的 App（Portal 下可 `enter` 的地点），当前包括 `qq`、`ithome`、`hn`、`calc`、`clock`、`browser`、`amap`、`spire`、`terminal`、`todo`
 
-Kagami 被建模成一台手机 OS：各类生活输入（QQ 消息、RSS、定时任务）在架构上平级。被动的 `NotificationCenter` 是各 App / 源到 Agent 的唯一桥——各源把信号折叠成通知，由它窗口聚合后 enqueue 唤醒 Agent。每个 capability / App 都是"Agent 生活里多出来的一种存在方式"：`ithome` 让他读新闻、`story` 让他记事与回忆、`web-search` 让他上网查资料、`vision` 让他看图、`hn` 给他一个只读的 Hacker News、`browser` 给他一具上真实网络的身体、`todo` 给他一个中立的待办本。未来新增能力都应该沿着"给 Agent 加一种生活方式"的思路设计，而不是"给聊天机器人加一个功能开关"。
+Kagami 被建模成一台手机 OS：各类生活输入（QQ 消息、RSS、定时任务）在架构上平级。被动的 `NotificationCenter` 是**后台 / 非焦点**信号到 Agent 的唯一桥（横幅）——各源把信号折叠成通知，由它窗口聚合后 enqueue 唤醒 Agent；他正盯着的前台会话则像手机屏幕，新消息经 `foreground_input` 直接刷进上下文，不必等横幅。每个 capability / App 都是"Agent 生活里多出来的一种存在方式"：`ithome` 让他读新闻、`web-search` 让他上网查资料、`vision` 让他看图、`hn` 给他一个只读的 Hacker News、`browser` 给他一具上真实网络的身体、`todo` 给他一个中立的待办本。未来新增能力都应该沿着"给 Agent 加一种生活方式"的思路设计，而不是"给聊天机器人加一个功能开关"。
 
 当前主要接口分组包括：
 

@@ -4,6 +4,10 @@ import { renderGroupMessagePlainText, renderPrivateMessagePlainText } from "./qq
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
 import type {
+  ForegroundInput,
+  ForegroundInputSource,
+} from "../../runtime/root-agent/foreground-input.js";
+import type {
   NapcatAgentEvent,
   NapcatChatTarget,
   NapcatForwardMessagePage,
@@ -61,6 +65,12 @@ const FORWARD_NODE_MAX_CHARS = 1000;
 type QqAppDeps = {
   napcatGateway: NapcatGatewayService;
   notificationCenter: NotificationCenter;
+  /**
+   * 前台输入敲门端口：当前会话在前台收到新消息时调用，enqueue 一个不带内容的
+   * foreground_input 事件唤醒主循环（内容在 drain 时经 drainForegroundInput 现拉）。
+   * 由 factory 组装闭包注入（含 knock 计数），与 notificationCenter 注入同模式。
+   */
+  notifyForegroundInput: () => void;
   botQQ: string;
   /** 创造者名字与 QQ 号：进 QQ 后在 help 里披露，方便小镜在群/私聊里认出创造者。 */
   creatorName: string;
@@ -90,16 +100,20 @@ type QqAppDeps = {
  * 暴露发送目标，退出 QQ 后返回 undefined，避免 chatTarget 泄漏到 QQ 之外。focused 不持久化，
  * 重启后为 false。
  *
- * 所有进来的消息都走 center 成通知（含当前会话，不做实时 append）；current 只决定
- * send 目标 + onFocus 渲染谁。读会话内容靠 open_conversation / onFocus 补档。
+ * 消息分流（手机 OS 的「屏幕 vs 横幅」）：QQ 在前台且消息属于当前会话时走前台实时
+ * 路径——入缓冲 + 敲门（foreground_input 事件），drain 时经 drainForegroundInput 把增量
+ * 直接刷进上下文尾部，不经 center；其余（别的会话 / QQ 在后台）照旧走 center 成通知
+ * （只报信号不报正文）。小镜自己的回声（botQQ）只入缓冲不敲门不推 center。退化收口在
+ * onBlur / 切会话：未投递的未读补推 center draft，绝不静默丢。
  */
-export class QqApp implements App {
+export class QqApp implements App, ForegroundInputSource {
   public readonly id = QQ_APP_ID;
   public readonly displayName = "QQ";
   public readonly tools: readonly ToolComponent[];
 
   private readonly napcatGateway: NapcatGatewayService;
   private readonly notificationCenter: NotificationCenter;
+  private readonly notifyForegroundInput: () => void;
   private readonly botQQ: string;
   private readonly creatorName: string;
   private readonly creatorQQ: string;
@@ -115,6 +129,7 @@ export class QqApp implements App {
   public constructor({
     napcatGateway,
     notificationCenter,
+    notifyForegroundInput,
     botQQ,
     creatorName,
     creatorQQ,
@@ -128,6 +143,7 @@ export class QqApp implements App {
   }: QqAppDeps) {
     this.napcatGateway = napcatGateway;
     this.notificationCenter = notificationCenter;
+    this.notifyForegroundInput = notifyForegroundInput;
     this.botQQ = botQQ;
     this.creatorName = creatorName;
     this.creatorQQ = creatorQQ;
@@ -190,7 +206,6 @@ export class QqApp implements App {
    * 保留，所以不在这里清空。整体仍是单条 append_message，KV 友好。
    */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
-    this.focused = true;
     const current = this.currentConversationId
       ? (this.conversations.get(this.currentConversationId) ?? null)
       : null;
@@ -202,12 +217,22 @@ export class QqApp implements App {
     if (replay) {
       sections.push(replay);
     }
+    // focused 在成功路径末尾才翻 true（与 onBlur 的「第一行翻 false」方向相反，安全默认
+    // 不同）：若 onFocus 半途抛错、switch 工具失败、session.currentApp 未切换，focused
+    // 必须仍是 false——否则前台分流会把消息引向一个永远 drain 不到的敲门，静默滞留。
+    this.focused = true;
     return [{ type: "append_message", content: sections.join("\n") }];
   }
 
-  /** 退到后台：保留当前会话焦点（回来续上），仅退出前台——getCurrentChatTarget 随即对外停摆。 */
+  /**
+   * 退到后台：保留当前会话焦点（回来续上），仅退出前台——getCurrentChatTarget 随即对外
+   * 停摆。前台实时路径的退化出口之一：当前会话还有未投递的未读（敲了门但没等到 drain）
+   * 时补推 center draft，回归通知路径，绝不静默丢。也是 reset 失焦广播（blurCurrentApp）
+   * 的复用点——**第一行必须同步翻 focused**，即使补推抛错焦点也已归位。
+   */
   public async onBlur(): Promise<readonly RootAgentEffect[]> {
     this.focused = false;
+    this.pushDegradedDraftForCurrent();
     return [];
   }
 
@@ -312,7 +337,23 @@ export class QqApp implements App {
     if (!conversation) {
       return { ok: false, error: "CONVERSATION_NOT_FOUND" };
     }
-    return { ok: true, content: await this.enterConversation(conversation) };
+    // 切会话退化：先捕获旧 current 的**对象引用**，enterConversation 成功后再对它扫尾
+    // 补推。成功后才推，覆盖两个坑：① enterConversation 的 fetch await 期间旧会话仍是
+    // 「前台当前」，新消息走实时路径不进 center——切换完成后它们只剩这次扫尾能接住；
+    // ② fetch 抛错时切换未发生、旧会话仍是前台，提前推的 draft 会变成与实况矛盾的
+    // 陈旧假通知。显式引用不依赖 currentConversationId，无补错源问题。
+    const previous =
+      this.currentConversationId && this.currentConversationId !== conversation.id
+        ? this.conversations.get(this.currentConversationId)
+        : undefined;
+    const content = await this.enterConversation(conversation);
+    // 自愈 focused：open 成功即在前台（工具只在 QQ 为当前 App 时可达），修复偶发的
+    // focused 与 session.currentApp 脱同步。自愈**只属于 openConversation 工具路径**，
+    // 不放进共享的 enterConversation——否则 onFocus 的「成功路径末尾才翻 focused」
+    // 不变式会被半途的自愈打穿（红队 P2）。
+    this.focused = true;
+    this.pushDegradedDraftFor(previous);
+    return { ok: true, content };
   }
 
   /** list_conversations 工具调用：纯读会话列表，不改当前焦点（不动 currentConversationId / focused）。 */
@@ -328,15 +369,39 @@ export class QqApp implements App {
   private async enterConversation(conversation: Conversation, emptyHint?: string): Promise<string> {
     const hadEntered = conversation.hasEntered();
     const unreadBefore = conversation.getUnreadCount();
-    const recent = hadEntered
-      ? conversation.consumeUnreadTail()
-      : await this.fetchRecent(conversation);
-    if (!hadEntered) {
-      conversation.clearUnread();
+    let recent: ConversationMessage[];
+    if (hadEntered) {
+      recent = conversation.consumeUnreadTail();
+    } else {
+      // fetch 窗口纪律（快照式）：await 期间到达的新消息不能被无脑清未读吞掉。
+      // ① 同步快照现有缓冲（持对象引用）；② await 拉历史——抛错时未读原封不动（消费只
+      //    发生在成功路径）；③ 成功后按**引用**剔除快照条目（被历史覆盖；按位置剔会在
+      //    缓冲位移时误伤新消息）+ 按 messageId 剔除历史已含的新消息（null 保守保留）；
+      // ④ 对账：溢出缓冲 / restoreUnread 恢复的裸计数已被历史覆盖，按缓冲重算计数与 @，
+      //    否则残留幻影红点、每次 blur 反复推假通知。缓冲剩余 = fetch 没看到的新消息。
+      const snapshot = conversation.takeUnreadSnapshot();
+      recent = await this.fetchRecent(conversation);
+      if (recent.length === 0 && snapshot.length > 0) {
+        // 「快照必被历史覆盖」的前提在 fetch 成功但为空时不成立（新群 / 无历史权限
+        // 返回空数组是合法响应）：此时剔除快照 = 三处同时吞掉从未展示的内容。退化为
+        // 直接展示缓冲（等同 hadEntered 路径），不丢。历史短于缓冲的部分覆盖场景与
+        // 旧 clearUnread 行为 parity，接受。
+        recent = conversation.consumeUnreadTail();
+      } else {
+        conversation.dropUnreadInstances(snapshot);
+        conversation.dropUnreadIn(collectMessageIds(recent));
+        conversation.reconcileUnreadWithBuffer();
+      }
     }
     conversation.markEntered();
     this.currentConversationId = conversation.id;
     this.notificationCenter.clearForSource(conversation.id);
+    // 首次进入的 fetch 窗口内可能漏下增量（当时它还不是当前会话，没走敲门路径；其
+    // pending draft 又刚被 clearForSource 清掉）。此刻会话已是当前且在前台——敲一下门，
+    // 让下一轮 drain 把它们实时刷出来，不丢也不静默。
+    if (!hadEntered && conversation.getUnreadCount() > 0) {
+      this.notifyForegroundInput();
+    }
 
     // 仅"进过的会话取未读尾"这条路有意义：未读计数不封顶、内容缓冲封顶，差额即被清掉但未展示的更早未读。
     // 首次进入拉的是历史而非未读，不提示。
@@ -364,14 +429,95 @@ export class QqApp implements App {
     }
   }
 
+  /**
+   * 入站消息分流（屏幕 vs 横幅）：
+   * - 前台 + 当前会话：入缓冲 + 敲门（实时路径，不推 center）；小镜自己的回声只入缓冲
+   *   （不计未读、不敲门、不推 center——回声防御，防「自己发言→自己被唤醒」的自持振荡，
+   *   见 2026-05-30 空转事故同款拓扑）。
+   * - 其余：照旧走 center。通知只报信号（未读条数 / 有人@），不带消息正文：用会话当前的
+   *   权威未读状态现造 draft，计数与 @ 跨窗口累积，open 才清零。想看内容一律
+   *   open_conversation。
+   */
   private ingestMessage(
     conversation: Conversation,
     message: ConversationMessage,
     mentioned: boolean,
   ): void {
+    // 回声防御在分流最外层：小镜自己的消息无论前后台一律只入缓冲（可见），绝不计未读、
+    // 不敲门、不推 center——延迟回声（发完就切走 / blur 后才回）若走通知路径，就是
+    // 「自己发言→自己被唤醒」的自持振荡拓扑（2026-05-30 事故同款）。
+    if (message.userId === this.botQQ) {
+      conversation.pushEcho(message);
+      return;
+    }
+    const isForegroundCurrent = this.focused && conversation.id === this.currentConversationId;
+    if (isForegroundCurrent) {
+      conversation.pushUnread(message, mentioned);
+      this.notifyForegroundInput();
+      return;
+    }
     conversation.pushUnread(message, mentioned);
-    // 通知只报信号（未读条数 / 有人@），不带消息正文：用会话当前的权威未读状态现造 draft，
-    // 计数与 @ 跨窗口累积，open 才清零。想看具体内容一律 open_conversation。
+    this.pushDraftFor(conversation);
+  }
+
+  /**
+   * 前台输入 drain（ForegroundInputSource 实现）。纯内存短路径：只读缓冲 + 模板渲染，
+   * 无任何网关 I/O。先渲染后消费：渲染抛错时未读原封不动（session 侧 catch 兜底，输入
+   * 不丢）。焦点自查（focused + 有当前会话）与「session 只问当前 App」构成双重校验。
+   */
+  public async drainForegroundInput(): Promise<ForegroundInput | null> {
+    if (!this.focused || !this.currentConversationId) {
+      return null;
+    }
+    const conversation = this.conversations.get(this.currentConversationId);
+    if (!conversation) {
+      return null;
+    }
+    // 空判据看**真实未读**而非缓冲长度：回声占缓冲位但不计未读，若只剩回声也注入，
+    // stale 敲门就会把小镜自己的发言渲染成「新消息」唤醒新一轮——回声防御被从 drain
+    // 侧绕穿（红队实证）。回声留在缓冲里，随下一次真实增量一起上屏。
+    const snapshot = conversation.takeUnreadSnapshot();
+    if (snapshot.length === 0 || conversation.getUnreadCount() === 0) {
+      return null;
+    }
+    // 计数不封顶、缓冲封顶：差额即被挤掉未展示的更早未读（回声占位会让差额略偏小，接受）。
+    const olderUnread = Math.max(0, conversation.getUnreadCount() - snapshot.length);
+    const text = renderServerStaticTemplate(
+      import.meta.url,
+      "context/qq-conversation-new-messages.hbs",
+      {
+        displayName: conversation.getDisplayName(),
+        hasOlderUnread: olderUnread > 0,
+        olderUnread,
+        // 带 @ 的消息被封顶挤出缓冲时，提示行把这个事实带出来——否则「有人 @ 你」
+        // 会随 consumeUnreadTail 清零而从所有输出里消失（后台通知路径反而带得出）。
+        squeezedMention: conversation.hasMentionOutsideBuffer(),
+        messages: snapshot.map(renderMessagePlainText),
+      },
+    );
+    conversation.consumeUnreadTail();
+    return { text, itemCount: snapshot.length };
+  }
+
+  /**
+   * 退化补推（只准向前）：会话还有未投递的真实未读时，用权威快照计数现造 draft 推回
+   * center（merge 取最新，免疫重复累加）。onBlur / 切会话 / reset 失焦广播三个出口共用。
+   */
+  private pushDegradedDraftFor(conversation: Conversation | undefined): void {
+    if (!conversation || conversation.getUnreadCount() <= 0) {
+      return;
+    }
+    this.pushDraftFor(conversation);
+  }
+
+  private pushDegradedDraftForCurrent(): void {
+    this.pushDegradedDraftFor(
+      this.currentConversationId ? this.conversations.get(this.currentConversationId) : undefined,
+    );
+  }
+
+  /** 用会话当前的权威未读状态现造一条 draft 推给 center（ingest 横幅路径与退化补推共用）。 */
+  private pushDraftFor(conversation: Conversation): void {
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
@@ -497,6 +643,17 @@ export class QqApp implements App {
 
 function isGroupMessage(message: ConversationMessage): message is NapcatGroupMessageData {
   return "groupId" in message;
+}
+
+/** 收集一批消息的非 null messageId（null 无法参与去重匹配，由调用方保守保留）。 */
+function collectMessageIds(messages: readonly ConversationMessage[]): Set<number> {
+  const ids = new Set<number>();
+  for (const message of messages) {
+    if (message.messageId !== null) {
+      ids.add(message.messageId);
+    }
+  }
+  return ids;
 }
 
 function renderMessagePlainText(message: ConversationMessage): string {

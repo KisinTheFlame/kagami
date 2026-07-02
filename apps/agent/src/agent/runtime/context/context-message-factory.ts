@@ -92,6 +92,16 @@ export function createNotificationMessage(lines: string[]): UserMessage {
 }
 
 /**
+ * 前台输入消息：当前前台 App drain 出的实时输入，文本已由 App 自己的模板渲染好、
+ * 自带伪标签（如 QQ 的 `<qq_conversation_new_messages>`），这里只做薄包装成 user
+ * message，不再套第二层标签。与 `<notification>` / `<async_tool_result>` 同为
+ * 「事件 → 尾部 append」路径的消息装配点，收在同一处可审。
+ */
+export function createForegroundInputMessage(text: string): UserMessage {
+  return createUserMessage(text);
+}
+
+/**
  * 异步工具任务完成后的回流消息：包成一条 `<async_tool_result>` user message 追加到尾部。
  * 凭 task_id 对应到当初的 `<async_task_submitted>`。content/message 原样插入，不做 XML 转义
  * （与 `<notification>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。

@@ -137,10 +137,10 @@ Main modules:
 `apps/agent/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
 
 - `runtime/`: Kagami-specific runtime such as `RootAgentRuntime`, session (the App launcher), `NotificationCenter`, event queue, context rendering, App-state persistence
-- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `ledger`, `ithome`, `vision`, `web-search`, `browser`, `terminal`, `todo`
-- `apps/`: the phone-OS Apps (places reachable via `enter` from the Portal), currently `qq`, `ithome`, `hn`, `calc`, `clock`, `browser`, `terminal`, `todo`
+- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `ledger`, `ithome`, `vision`, `web-search`, `browser`, `resource`, `spire`, `terminal`, `todo`
+- `apps/`: the phone-OS Apps (places reachable via `enter` from the Portal), currently `qq`, `ithome`, `hn`, `calc`, `clock`, `browser`, `amap`, `spire`, `terminal`, `todo`
 
-Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge from Apps/sources to the Agent — sources fold signals into notifications, which it batches and enqueues to wake the Agent. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `web-search` lets him look things up, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
+Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge for background / unfocused signals to the Agent (the "banner") — sources fold signals into notifications, which it batches and enqueues to wake the Agent; the conversation he is currently looking at behaves like the phone screen instead: new messages flow straight into context via `foreground_input`, no banner needed. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `web-search` lets him look things up, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
 
 Main endpoint groups:
 

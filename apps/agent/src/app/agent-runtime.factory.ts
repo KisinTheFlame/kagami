@@ -33,6 +33,7 @@ import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
+import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-input.js";
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import {
   ListAppsTool,
@@ -216,6 +217,14 @@ export async function buildAgentRuntime({
     imageMessageAnalyzer: napcat.imageMessageAnalyzer,
     qqMessageDao: napcat.qqMessageDao,
     notificationCenter,
+    // 前台输入敲门端口：knock 计数（fire-and-forget）+ enqueue 不带内容的敲门事件。
+    // 与 inject / drain_empty（session 侧）合成前台路径的三计数观测。
+    notifyForegroundInput: () => {
+      void metricService
+        .record({ metricName: FOREGROUND_METRIC_KNOCK, value: 1, tags: { runtime: "agent" } })
+        .catch(() => undefined);
+      eventQueue.enqueue({ type: "foreground_input" });
+    },
     botQQ: config.server.bot.qq,
     creatorName: config.server.bot.creator.name,
     creatorQQ: config.server.bot.creator.qq,
@@ -279,6 +288,7 @@ export async function buildAgentRuntime({
   const rootAgentSession = new RootAgentSession({
     context,
     appManager,
+    metricService,
   });
   const helpTool = new HelpTool({
     appManager,
