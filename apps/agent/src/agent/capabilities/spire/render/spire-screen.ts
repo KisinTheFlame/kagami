@@ -19,6 +19,7 @@ const POWER_LABELS: Record<string, string> = {
   strength: "力量",
   vulnerable: "易伤",
   weak: "虚弱",
+  frail: "脆弱",
   ritual: "仪式",
   curl_up: "蜷缩",
   sharp_hide: "反甲",

@@ -14,6 +14,7 @@ export type PowerId =
   | "strength" // 力量：攻击伤害 +N（被动）
   | "vulnerable" // 易伤：受到攻击伤害 ×1.5（回合末 -1）
   | "weak" // 虚弱：造成攻击伤害 ×0.75（回合末 -1）
+  | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
@@ -176,6 +177,8 @@ export type GameState = {
   currentNodeId: string | null;
   combat: CombatState | null;
   reward: RewardState | null;
+  /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
+  combatsEntered: number;
   rng: RngState;
   /** 递增的牌实例 uid 分配器。 */
   nextUid: number;

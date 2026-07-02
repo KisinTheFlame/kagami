@@ -11,6 +11,7 @@ import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
   addPower,
+  applyFrailToBlock,
   computeAttackDamage,
   decayDebuffs,
   getPower,
@@ -217,10 +218,12 @@ function applyEffect(
       break;
     }
     case "gain_block": {
+      // 脆弱使获得的格挡打七五折（按「获得方」自己的 powers 判定）。
+      const gained = applyFrailToBlock(effect.amount, powers);
       if (actor.side === "player") {
-        combat.playerBlock += effect.amount;
+        combat.playerBlock += gained;
       } else {
-        combat.enemies[actor.index]!.block += effect.amount;
+        combat.enemies[actor.index]!.block += gained;
       }
       break;
     }
