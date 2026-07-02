@@ -1,4 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { renderIthomeArticleListContent } from "./ithome-screen.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { IthomeService } from "../../capabilities/ithome/application/ithome.service.js";
@@ -39,14 +40,7 @@ export class IthomeApp implements App {
   }
 
   public async help(): Promise<string> {
-    return [
-      "你在 IT 之家 App 里。",
-      "",
-      "可调用工具：",
-      "  - open_ithome_article(articleId): 在当前文章列表里挑一篇打开全文。",
-      "",
-      "要去别的 App，用 switch(id=...) 切过去。",
-    ].join("\n");
+    return renderServerStaticTemplate(import.meta.url, "prompts/ithome-app-help.hbs");
   }
 
   /**
