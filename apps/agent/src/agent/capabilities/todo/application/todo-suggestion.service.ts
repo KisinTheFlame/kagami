@@ -1,5 +1,5 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { TaskAgentInvoker } from "@kagami/agent-runtime";
+import { TaskAgentMaxRoundsExceededError, type TaskAgentInvoker } from "@kagami/agent-runtime";
 import { isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
 import type { TodoSuggestionTaskInput } from "../task-agent/todo-suggestion-task-agent.js";
 
@@ -72,6 +72,16 @@ export class TodoSuggestionService {
       try {
         return await this.taskAgent.invoke(input);
       } catch (error) {
+        if (error instanceof TaskAgentMaxRoundsExceededError) {
+          // 与 provider 故障区分开：这是「调用成功但模型始终没按约定 propose」，
+          // 单独记事件让 digest 静默丢第三段可在日志里归因到模型输出质量。
+          logger.info("Todo suggestion task agent exceeded max rounds without proposing", {
+            event: "todo.suggestion_max_rounds_exceeded",
+            maxRounds: error.maxRounds,
+          });
+          return [];
+        }
+
         const canRetry = attempt < this.maxAttempts && isRetryableLlmFailure(error);
         logger.warn(
           canRetry

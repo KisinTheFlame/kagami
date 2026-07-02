@@ -83,10 +83,13 @@ type RootAgentRuntimeDeps = {
   metricService?: MetricService;
   llmRetryBackoffMs?: number;
   loopExtensions?: RootLoopExtension[];
+  /** 纯文本轮挂起的自唤醒上限；与 wait 工具的 maxWaitMs 同源（waitToolMaxWaitMs）。 */
+  idleWakeMaxWaitMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 };
 
+const DEFAULT_IDLE_WAKE_MAX_WAIT_MS = 600_000;
 const DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
@@ -572,6 +575,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly host: RootAgentHost;
   private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
+  private readonly idleWakeMaxWaitMs: number;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
     null;
@@ -586,6 +590,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     loopExtensions,
     session,
     context,
+    idleWakeMaxWaitMs,
     ...rest
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
@@ -639,6 +644,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     this.host = host;
     this.tools = resolvedTools;
     this.eventQueue = eventQueue;
+    this.idleWakeMaxWaitMs = idleWakeMaxWaitMs ?? DEFAULT_IDLE_WAKE_MAX_WAIT_MS;
   }
 
   public async run(): Promise<void> {
@@ -761,11 +767,37 @@ export class RootLoopAgent extends BaseLoopAgent<
     const roundResult = await this.runReactRound();
 
     // toolChoice auto 下模型可以一个工具都不调（纯文本轮：text 用完即弃、上下文
-    // 零写入）。此时本轮视为自然结束，阻塞到事件队列非空才进下一轮——否则外层
-    // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。stop/reset/compact
-    // 路径已有的 wake 注入同样能解除这里的阻塞。
+    // 零写入）。此时本轮视为自然结束，挂起到事件队列非空才进下一轮——否则外层
+    // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。
     if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
+      await this.suspendUntilNextEvent();
+    }
+  }
+
+  /**
+   * 纯文本轮后的挂起，语义对齐 wait 工具的 wait_for_event：
+   * - stopRequested 先行复查：stop() 注入的那个 wake 可能已被本轮 step-1 的
+   *   consumePendingEvents 吃掉，不复查会在空队列上永久阻塞，关停死锁。
+   * - 自唤醒 timer 兜底：与 wait 工具同一个 maxWaitMs 上限，保证生活完全安静时
+   *   Agent 也会按自己的节奏醒来（空闲时刻的自主行动心跳），不会无限期沉睡。
+   *   timer unref，不阻进程退出；无论谁唤醒都清 timer，避免 stale wake。
+   */
+  private async suspendUntilNextEvent(): Promise<void> {
+    if (this.stopRequested) {
+      return;
+    }
+
+    const timerHandle = setTimeout(() => {
+      this.eventQueue.enqueue({ type: "wake" });
+    }, this.idleWakeMaxWaitMs);
+    if (typeof timerHandle.unref === "function") {
+      timerHandle.unref();
+    }
+
+    try {
       await this.eventQueue.waitNonEmpty();
+    } finally {
+      clearTimeout(timerHandle);
     }
   }
 
