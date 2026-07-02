@@ -1,6 +1,6 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
-import { NORMAL_ENCOUNTER_POOL } from "../enemies/enemies.js";
+import { pickNormalEncounter } from "../enemies/enemies.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
 import { generateMap, availableNext } from "../map/map.js";
@@ -40,7 +40,9 @@ function resolveNode(state: GameState, node: MapNode): void {
   switch (node.type) {
     case "combat":
     case "elite": {
-      const encounterId = NORMAL_ENCOUNTER_POOL[nextInt(state.rng, NORMAL_ENCOUNTER_POOL.length)]!;
+      // 前若干场抽 weak 池、其余抽 strong 池（复刻 StS Act1 战斗节奏）。
+      const encounterId = pickNormalEncounter(state.rng, state.combatsEntered);
+      state.combatsEntered += 1;
       startCombat(state, encounterId);
       return;
     }

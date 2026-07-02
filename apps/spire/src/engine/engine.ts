@@ -46,6 +46,7 @@ export function newRun(input: {
     currentNodeId: null,
     combat: null,
     reward: null,
+    combatsEntered: 0,
     rng,
     nextUid,
     log: [],

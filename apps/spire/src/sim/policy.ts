@@ -75,8 +75,8 @@ export class GreedyPolicy implements Policy {
     }
     const combat = state.combat;
     const target = lowestHpEnemyIndex(state);
-    // 先出攻击牌，再出加格挡牌，够费就打。
-    const order = ["attack", "skill"];
+    // 先上能力牌（常驻收益），再出攻击牌，最后加格挡牌，够费就打。
+    const order = ["power", "attack", "skill"];
     for (const wantType of order) {
       for (let handIndex = 0; handIndex < combat.hand.length; handIndex += 1) {
         const def = getCardDef(combat.hand[handIndex]!.defId);

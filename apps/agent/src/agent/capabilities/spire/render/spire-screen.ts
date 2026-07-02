@@ -19,6 +19,7 @@ const POWER_LABELS: Record<string, string> = {
   strength: "力量",
   vulnerable: "易伤",
   weak: "虚弱",
+  frail: "脆弱",
   ritual: "仪式",
   curl_up: "蜷缩",
   sharp_hide: "反甲",
@@ -106,7 +107,7 @@ export function renderSpireNoRun(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-no-run.hbs", {});
 }
 
-/** 进入尖塔 App 的静态提示屏（onFocus / help 用，无网络 I/O）。 */
+/** 进入尖塔 App 的定位屏（onFocus 用，无网络 I/O）；子工具清单归 spire-app-help.hbs。 */
 export function renderSpirePortal(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-portal.hbs", {});
 }

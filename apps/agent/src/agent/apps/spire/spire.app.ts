@@ -1,4 +1,5 @@
 import type { App } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { SpireStartRunTool } from "../../capabilities/spire/tools/start-run.tool.js";
 import { SpirePlayCardTool } from "../../capabilities/spire/tools/play-card.tool.js";
 import { SpireEndTurnTool } from "../../capabilities/spire/tools/end-turn.tool.js";
@@ -17,12 +18,12 @@ type SpireAppDeps = {
 };
 
 /**
- * 尖塔 App：把杀戮尖塔式卡牌游戏的 5 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 BrowserApp。
+ * 尖塔 App：把杀戮尖塔式卡牌游戏的 6 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 BrowserApp。
  *
  * 拆进程：本 App 不持有游戏引擎，只持有一个打到独立 kagami-spire 进程的 HttpSpireClient。
  * 游戏进程有自己的 PM2 生命周期与存档，agent 重启不影响进行中的对局。
  *
- * - 工具：start_run / play_card / end_turn / choose / look。
+ * - 工具：start_run / play_card / end_turn / choose / look / lookup。
  * - canInvoke 恒 true（粗门控）：出牌是否合法（能量 / 目标 / 屏幕）由游戏服务权威裁定，
  *   非法动作回一条可读的 SPIRE_REJECTED 失败（issue #234 C2）。
  * - onFocus 只给静态提示屏，不做网络 I/O（永不因服务未就绪而进不去，issue #234 B）。
@@ -59,7 +60,7 @@ export class SpireApp implements App {
   }
 
   public async help(): Promise<string> {
-    return renderSpirePortal();
+    return renderServerStaticTemplate(import.meta.url, "prompts/spire-app-help.hbs");
   }
 
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
