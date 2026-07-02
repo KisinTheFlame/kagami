@@ -6,7 +6,7 @@ import {
   type LlmChatErrorPayload,
   type LlmChatRequestPayload,
   type LlmChatResponsePayload,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/llm-api/llm-chat";
 
 export type LlmChatCallDetailParseResult = {
   request: LlmChatRequestPayload | null;

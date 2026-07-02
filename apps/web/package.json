@@ -9,8 +9,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kagami/agent-api": "workspace:*",
     "@kagami/console-api": "workspace:*",
     "@kagami/http": "workspace:*",
+    "@kagami/llm-api": "workspace:*",
     "@kagami/metric-api": "workspace:*",
     "@kagami/shared": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.15",

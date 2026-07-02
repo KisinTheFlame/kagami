@@ -1,13 +1,15 @@
 import { type LlmChatCallItem } from "@kagami/console-api/llm-chat-call";
 import {
   type LlmChatRequestPayload,
-  type LlmPlaygroundChatRequest,
   type LlmProviderOption,
   type LlmRequestMessage,
   type LlmRequestUserContentPart,
+} from "@kagami/llm-api/llm-chat";
+import {
+  type LlmPlaygroundChatRequest,
   type PlaygroundContentPart,
   type PlaygroundMessage,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 
 export type PlaygroundImportWarningCode =
   | "image_omitted"

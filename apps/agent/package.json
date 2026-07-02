@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kagami/agent-api": "workspace:*",
     "@kagami/agent-runtime": "workspace:*",
     "@kagami/browser-api": "workspace:*",
     "@kagami/http": "workspace:*",

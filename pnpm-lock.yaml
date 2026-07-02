@@ -47,6 +47,9 @@ importers:
 
   apps/agent:
     dependencies:
+      '@kagami/agent-api':
+        specifier: workspace:*
+        version: link:../../packages/agent-api
       '@kagami/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
@@ -364,12 +367,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@kagami/agent-api':
+        specifier: workspace:*
+        version: link:../../packages/agent-api
       '@kagami/console-api':
         specifier: workspace:*
         version: link:../../packages/console-api
       '@kagami/http':
         specifier: workspace:*
         version: link:../../packages/http
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../../packages/llm-api
       '@kagami/metric-api':
         specifier: workspace:*
         version: link:../../packages/metric-api
@@ -452,6 +461,25 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/agent-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../llm-api
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/agent-runtime:
     dependencies:
@@ -615,9 +643,9 @@ importers:
       '@kagami/http':
         specifier: workspace:*
         version: link:../http
-      '@kagami/shared':
+      '@kagami/llm':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../llm
       zod:
         specifier: ^3.24.4
         version: 3.25.76
@@ -640,6 +668,9 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../llm-api
       '@kagami/shared':
         specifier: workspace:*
         version: link:../shared

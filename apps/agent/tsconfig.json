@@ -25,7 +25,8 @@
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
       "@kagami/shared/*": ["./../../packages/shared/src/*"],
       "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"],
-      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"]
+      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
+      "@kagami/agent-api/*": ["./../../packages/agent-api/src/*"]
     }
   },
   "include": ["src", "test"]

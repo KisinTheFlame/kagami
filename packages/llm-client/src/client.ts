@@ -4,7 +4,7 @@ import {
   type LlmChatRequestPayload,
   type LlmProviderOption,
   type LlmRequestUserContentPart,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/llm-api/llm-chat";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";

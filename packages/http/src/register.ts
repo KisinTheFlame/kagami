@@ -44,7 +44,9 @@ export function registerJsonRoute<
   execute: JsonRouteExecute<TInput, TOutput, TParams>,
 ): void {
   const handler = async (request: FastifyRequest, reply: FastifyReply): Promise<unknown> => {
-    const raw = contract.method === "POST" ? request.body : request.query;
+    // POST 空 body（无 content-type）时 Fastify 给 undefined；归一化成 {}，让「无入参的 POST」
+    // （如 /scheduler/tasks/:name/trigger）以 input: z.object({}) 建模而不被 parse(undefined) 打成 500。
+    const raw = contract.method === "POST" ? (request.body ?? {}) : request.query;
     const input = contract.input.parse(raw) as z.infer<TInput>;
     const params = (
       contract.params ? contract.params.parse(request.params) : undefined

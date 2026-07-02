@@ -1,9 +1,9 @@
+import { LlmProviderListResponseSchema } from "@kagami/llm-api/llm-chat";
 import {
   LlmPlaygroundChatRequestSchema,
   LlmPlaygroundChatResponseSchema,
   LlmPlaygroundToolListResponseSchema,
-  LlmProviderListResponseSchema,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 import { describe, expect, it } from "vitest";
 
 describe("llm playground schemas", () => {

@@ -120,3 +120,21 @@ describe("registerJsonRoute — params 通道", () => {
     await app.close();
   });
 });
+
+describe("registerJsonRoute — POST 空 body 归一化", () => {
+  it("无 content-type 的空体 POST 对 input z.object({}) 路由返回 200", async () => {
+    const contract = defineJsonRoute({
+      method: "POST",
+      path: "/fire",
+      input: z.object({}),
+      output: z.object({ ok: z.boolean() }),
+    });
+    const app = Fastify();
+    registerJsonRoute(app, contract, () => ({ ok: true }));
+
+    const res = await app.inject({ method: "POST", url: "/fire" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    await app.close();
+  });
+});

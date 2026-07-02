@@ -1,4 +1,4 @@
-import type { MainAgentContextItem } from "@kagami/shared/schemas/main-agent-context";
+import type { MainAgentContextItem } from "@kagami/agent-api/main-agent-context";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMainAgentContext } from "./useMainAgentContext";

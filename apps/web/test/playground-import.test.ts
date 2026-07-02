@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LlmChatCallItem, LlmChatRequestPayload } from "@kagami/shared/schemas/llm-chat";
+import type { LlmChatCallItem, LlmChatRequestPayload } from "@kagami/llm-api/llm-chat";
 import {
   buildPlaygroundImportDraftFromHistory,
   getPlaygroundImportDraftFromLocationState,

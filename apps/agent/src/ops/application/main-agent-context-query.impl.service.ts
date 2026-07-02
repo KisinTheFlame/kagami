@@ -1,7 +1,7 @@
 import type {
   MainAgentContextCompactionResult,
   MainAgentContextSnapshot,
-} from "@kagami/shared/schemas/main-agent-context";
+} from "@kagami/agent-api/main-agent-context";
 import type { RootLoopAgent } from "../../agent/runtime/root-agent/root-agent-runtime.js";
 import type { MainAgentContextQueryService } from "./main-agent-context-query.service.js";
 
