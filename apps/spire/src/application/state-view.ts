@@ -132,6 +132,14 @@ function computeIntent(state: GameState, enemy: EnemyState): IntentView {
         hits: effect.times,
       };
     }
+    if (effect.kind === "deal_damage_rolled") {
+      // 红虱咬击：基础值是本敌人出生时掷定的固定值。
+      return {
+        kind: "attack",
+        value: computeAttackDamage(enemy.rolledDamage, enemy.powers, playerPowers),
+        hits: 1,
+      };
+    }
   }
   // 无攻击：按意图分类给玩家看。
   return { kind: move.intent };

@@ -23,6 +23,8 @@ const GUARDIAN_MODE_SHIFT_STEP = 10;
 const GUARDIAN_SHIFT_BLOCK = 20;
 const LOUSE_CURL_UP_MIN = 3;
 const LOUSE_CURL_UP_MAX = 7;
+const LOUSE_BITE_MIN = 5;
+const LOUSE_BITE_MAX = 7;
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
@@ -42,10 +44,13 @@ export function startCombat(state: GameState, encounterId: string): void {
   const enemies: EnemyState[] = encounter.enemies.map(defId => {
     const def = getEnemyDef(defId);
     const powers: PowerInstance[] = [];
+    let rolledDamage = 0;
     if (defId === "louse") {
       // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
       const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
       powers.push({ id: "curl_up", amount: curl });
+      // 咬击基础伤害出生时掷一次、整场固定（5~7）。
+      rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
     }
     const hp = nextRange(state.rng, def.hpMin, def.hpMax);
     return {
@@ -59,6 +64,7 @@ export function startCombat(state: GameState, encounterId: string): void {
       rotationIndex: 0,
       currentMove: "",
       curlUpConsumed: false,
+      rolledDamage,
       modeShiftAccum: 0,
       modeShiftThreshold: def.modeShiftThreshold ?? null,
       stance: def.stanceMoves ? "offensive" : null,
@@ -144,6 +150,13 @@ function applyEffect(
         }
       } else {
         dealDamageToPlayer(state, effect.amount, powers);
+      }
+      break;
+    }
+    case "deal_damage_rolled": {
+      // 敌人专用：用出生时掷定、整场固定的基础值攻击玩家（红虱咬击）。
+      if (actor.side === "enemy") {
+        dealDamageToPlayer(state, combat.enemies[actor.index]!.rolledDamage, powers);
       }
       break;
     }
