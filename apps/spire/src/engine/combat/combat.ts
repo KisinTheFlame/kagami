@@ -18,6 +18,7 @@ import {
   removePower,
 } from "../powers/powers.js";
 import { getRelicDef } from "../relics/relics.js";
+import { getPotionDef } from "../potions/potions.js";
 
 // === 战斗状态机 ===
 //
@@ -323,6 +324,13 @@ function applyEffect(
       }
       break;
     }
+    case "heal_percent": {
+      if (actor.side === "player") {
+        const heal = Math.floor((state.maxHp * effect.percent) / 100);
+        state.hp = Math.min(state.maxHp, state.hp + heal);
+      }
+      break;
+    }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
       break;
@@ -592,6 +600,52 @@ function performSplit(state: GameState, index: number): void {
     selectNextMove(state, newIndex);
   }
   state.log.push(`${def.name}分裂了！`);
+}
+
+// —— 使用药水 ——
+
+export type UsePotionResult = { ok: true } | { ok: false; reason: string };
+
+export function usePotion(
+  state: GameState,
+  slotIndex: number,
+  targetIndex: number | null,
+): UsePotionResult {
+  const potionId = state.potions[slotIndex];
+  if (potionId === undefined || potionId === null) {
+    return { ok: false, reason: `药水槽 ${slotIndex} 是空的。` };
+  }
+  const def = getPotionDef(potionId);
+  const combat = state.combat;
+  if (def.combatOnly && (!combat || state.screen !== "combat")) {
+    return { ok: false, reason: `「${def.name}」只能在战斗中使用。` };
+  }
+
+  let resolvedTarget: number | null = null;
+  if (def.targeted && combat) {
+    const living = combat.enemies
+      .map((enemy, index) => ({ enemy, index }))
+      .filter(entry => entry.enemy.hp > 0);
+    if (
+      targetIndex !== null &&
+      combat.enemies[targetIndex] &&
+      combat.enemies[targetIndex]!.hp > 0
+    ) {
+      resolvedTarget = targetIndex;
+    } else if (living.length === 1) {
+      resolvedTarget = living[0]!.index;
+    } else {
+      return { ok: false, reason: "这瓶药水需要指定一个存活的敌人目标。" };
+    }
+  }
+
+  state.potions[slotIndex] = null; // 药水一次性，先清槽再结算。
+  applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  state.log.push(`你使用了「${def.name}」。`);
+  if (combat) {
+    resolveCombatIfEnded(state);
+  }
+  return { ok: true };
 }
 
 // —— 结束回合 / 敌人行动 ——

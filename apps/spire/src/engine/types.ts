@@ -46,6 +46,8 @@ export type Effect =
   | { kind: "draw"; amount: number }
   | { kind: "gain_energy"; amount: number }
   | { kind: "lose_hp"; amount: number }
+  // 玩家回复最大生命的百分比（血之药水 40%）。
+  | { kind: "heal_percent"; percent: number }
   | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
@@ -197,6 +199,10 @@ export type GameState = {
   deck: CardInstance[];
   /** 持有的遗物（按获得顺序）。 */
   relics: RelicState[];
+  /** 药水槽（定长 3；null = 空槽）。 */
+  potions: (string | null)[];
+  /** 战斗后掉药水的概率加成（基础 40%，未掉 +10、掉了 -10）。 */
+  potionDropBonus: number;
   map: MapGraph;
   /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
   currentNodeId: string | null;

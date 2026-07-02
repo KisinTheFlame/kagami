@@ -66,6 +66,13 @@ export const SpireRelicViewSchema = z.object({
   description: z.string(),
 });
 
+export const SpirePotionViewSchema = z.object({
+  slot: z.number().int(),
+  name: z.string(),
+  description: z.string(),
+  targeted: z.boolean(),
+});
+
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
   screen: z.enum(["map", "combat", "reward", "rest", "gameover", "victory"]),
@@ -76,6 +83,7 @@ export const SpireScreenSchema = z.object({
   }),
   deckCount: z.number().int(),
   relics: z.array(SpireRelicViewSchema),
+  potions: z.array(SpirePotionViewSchema),
   combat: SpireCombatViewSchema.nullable(),
   options: z.array(z.string()),
   log: z.array(z.string()),
@@ -88,6 +96,11 @@ export const SpireActionSchema = z.discriminatedUnion("type", [
     targetIndex: z.number().int().min(0).nullish(),
   }),
   z.object({ type: z.literal("end_turn") }),
+  z.object({
+    type: z.literal("use_potion"),
+    slotIndex: z.number().int().min(0),
+    targetIndex: z.number().int().min(0).nullish(),
+  }),
   z.object({ type: z.literal("choose"), optionIndex: z.number().int().min(0) }),
 ]);
 

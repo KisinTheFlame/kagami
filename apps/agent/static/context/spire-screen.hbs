@@ -3,6 +3,8 @@
 你在尖塔地图上。生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
 {{#if hasRelics}}遗物：{{#each relics}}{{name}}（{{description}}）{{/each}}
 {{/if}}
+{{#if hasPotions}}药水：{{#each potions}}[槽{{slot}}]{{name}}（{{description}}）{{/each}}
+{{/if}}
 选择接下来往哪走：
 {{#each options}}
 [{{n}}] {{text}}
@@ -12,6 +14,9 @@
 第 {{combat.turn}} 回合　能量 {{combat.energy}}/{{combat.maxEnergy}}
 你：生命 {{hp}}/{{maxHp}}{{#if combat.hasBlock}}　格挡 {{combat.block}}{{/if}}{{#if combat.hasPowers}}　状态：{{#each combat.powers}}{{label}}{{amount}} {{/each}}{{/if}}
 {{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
+{{#if hasPotions}}药水：{{#each potions}}[槽{{slot}}]{{name}}（{{description}}）{{/each}}
+用 invoke(tool="use_potion", slot_index=槽号[, target_index=敌人编号]) 使用药水。
 {{/if}}
 ————敌人————
 {{#each combat.enemies}}
