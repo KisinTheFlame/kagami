@@ -12,11 +12,16 @@ describe("registerJsonRoute", () => {
       output: z.object({ greeting: z.string() }),
     });
     const app = Fastify();
-    registerJsonRoute(app, contract, ({ input }) => ({
-      greeting: `hi ${input.name}`,
-      // output.parse 应剥掉未声明字段
-      extra: "dropped",
-    }) as { greeting: string });
+    registerJsonRoute(
+      app,
+      contract,
+      ({ input }) =>
+        ({
+          greeting: `hi ${input.name}`,
+          // output.parse 应剥掉未声明字段
+          extra: "dropped",
+        }) as { greeting: string },
+    );
 
     const res = await app.inject({ method: "GET", url: "/echo?name=kagami" });
     expect(res.statusCode).toBe(200);
@@ -50,7 +55,11 @@ describe("registerJsonRoute", () => {
     const app = Fastify();
     registerJsonRoute(app, contract, () => ({ ok: true }));
 
-    const res = await app.inject({ method: "POST", url: "/strict", payload: { n: "not-a-number" } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/strict",
+      payload: { n: "not-a-number" },
+    });
     expect(res.statusCode).toBe(500);
     await app.close();
   });

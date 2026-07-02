@@ -122,7 +122,7 @@ async function callJsonRoute(
 
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = (await response.json()) as unknown;
   } catch (cause) {
     throw new BizError({
       message: ctx.unreachableMessage,
@@ -141,7 +141,14 @@ function toQueryString(input: unknown): string {
   }
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (value !== undefined && value !== null) {
+    // query 参数只接受原始值；对象/symbol/函数不属于 query，跳过（避免 [object Object]）。
+    if (typeof value === "string") {
+      search.set(key, value);
+    } else if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
       search.set(key, String(value));
     }
   }

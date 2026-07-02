@@ -13,7 +13,8 @@ describe("llm-api 契约：编译期类型强制", () => {
   it("createClient 派生的 listProviders 返回类型 == 契约 output（LlmProviderOption[]）", () => {
     const api = createClient(llmApiContract, { baseUrl: "http://llm" });
     // 门面 == 契约：返回类型必须精确赋给 Promise<LlmProviderOption[]>，否则编译失败。
-    const assertReturnType = (): Promise<LlmProviderOption[]> => api.listProviders({ usage: "agent" });
+    const assertReturnType = (): Promise<LlmProviderOption[]> =>
+      api.listProviders({ usage: "agent" });
     void assertReturnType;
     expect(typeof api.listProviders).toBe("function");
   });
