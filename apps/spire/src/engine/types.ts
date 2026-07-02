@@ -24,6 +24,8 @@ export type Effect =
   | { kind: "deal_damage_all"; amount: number }
   | { kind: "deal_damage_multi"; amount: number; times: number }
   | { kind: "deal_damage_equal_to_block" }
+  // 敌人用：伤害取自本敌人出生时掷定的固定值（红虱咬击：整场用同一个 5~7 基础值）。
+  | { kind: "deal_damage_rolled" }
   | { kind: "gain_block"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
   | { kind: "draw"; amount: number }
@@ -99,6 +101,8 @@ export type EnemyState = {
   currentMove: string;
   /** 蜷缩是否已消耗。 */
   curlUpConsumed: boolean;
+  /** 出生时掷定、整场固定的攻击基础值（红虱咬击 5~7）。0 表示该敌人不用此机制。 */
+  rolledDamage: number;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */
   modeShiftAccum: number;
   modeShiftThreshold: number | null;

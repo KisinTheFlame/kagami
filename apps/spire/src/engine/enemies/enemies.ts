@@ -78,8 +78,9 @@ const ENEMY_LIST: EnemyDef[] = [
     moves: [
       {
         id: "bite",
+        // 咬击基础伤害在出生时掷定（5~7）、整场固定，见 startCombat 的 rolledDamage。
         name: "啃咬",
-        effects: [{ kind: "deal_damage", amount: 6 }],
+        effects: [{ kind: "deal_damage_rolled" }],
         intent: "attack",
       },
       {
@@ -92,8 +93,8 @@ const ENEMY_LIST: EnemyDef[] = [
     intentRule: {
       scripted: [],
       weighted: [
-        { move: "bite", weight: 75, maxInARow: 3 },
-        { move: "grow", weight: 25, maxInARow: 1 },
+        { move: "bite", weight: 75, maxInARow: 2 },
+        { move: "grow", weight: 25, maxInARow: 2 },
       ],
     },
   },
@@ -128,9 +129,9 @@ const ENEMY_LIST: EnemyDef[] = [
     intentRule: {
       scripted: [],
       weighted: [
-        { move: "corrosive_spit", weight: 40, maxInARow: 2 },
-        { move: "tackle", weight: 40, maxInARow: 2 },
-        { move: "lick", weight: 20, maxInARow: 1 },
+        { move: "corrosive_spit", weight: 30, maxInARow: 2 },
+        { move: "tackle", weight: 40, maxInARow: 1 },
+        { move: "lick", weight: 30, maxInARow: 2 },
       ],
     },
   },
