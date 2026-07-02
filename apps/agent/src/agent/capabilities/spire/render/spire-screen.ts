@@ -21,6 +21,7 @@ const POWER_LABELS: Record<string, string> = {
   weak: "虚弱",
   ritual: "仪式",
   curl_up: "蜷缩",
+  sharp_hide: "反甲",
   mode_shift: "模式",
 };
 

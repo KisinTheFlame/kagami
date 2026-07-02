@@ -35,6 +35,14 @@ function pruneEmpty(powers: PowerInstance[], id: PowerId): void {
   }
 }
 
+/** 直接移除某个 power（不衰减，一次清空）。用于守卫者离开防御姿态时清反甲。 */
+export function removePower(powers: PowerInstance[], id: PowerId): void {
+  const index = powers.findIndex(power => power.id === id);
+  if (index >= 0) {
+    powers.splice(index, 1);
+  }
+}
+
 /** 回合末衰减：易伤 / 虚弱各 -1。 */
 export function decayDebuffs(powers: PowerInstance[]): void {
   if (getPower(powers, "vulnerable") > 0) {
