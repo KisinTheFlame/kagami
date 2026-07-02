@@ -33,7 +33,7 @@ export type InnerVoiceIdlePolicy = {
 export const INNER_VOICE_IDLE_POLICY: InnerVoiceIdlePolicy = {
   windowMs: 60 * 60 * 1000,
   minWaitCount: 6,
-  dailyAttemptLimit: 2,
+  dailyAttemptLimit: 3,
   attemptCooldownMs: 4 * 60 * 60 * 1000,
   activeStartHour: 10,
   activeEndHour: 23,

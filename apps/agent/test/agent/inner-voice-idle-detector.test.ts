@@ -94,14 +94,19 @@ describe("evaluateIdleTrigger", () => {
     ).toBe(true);
   });
 
-  it("当日注入尝试达上限 → 不触发", () => {
+  it("当日注入尝试达上限（3 次）→ 不触发", () => {
     expect(
       evaluateIdleTrigger({
         now: NOW,
         signals: signals({
           waitAt: waitsWithin(6),
-          // 同为北京 7/2 的两次尝试（Beijing 10:30 / 11:00）。
-          attemptAt: [new Date("2026-07-02T02:30:00Z"), new Date("2026-07-02T03:00:00Z")],
+          // 同为北京 7/2 的三次尝试（Beijing 09:00 / 09:30 / 10:00）；最后一次距 NOW 恰
+          // 满 4h 不应期（不再被 cooldown 拦），故此处只由日上限判定拦下。
+          attemptAt: [
+            new Date("2026-07-02T01:00:00Z"),
+            new Date("2026-07-02T01:30:00Z"),
+            new Date("2026-07-02T02:00:00Z"),
+          ],
         }),
       }),
     ).toBe(false);
@@ -149,7 +154,7 @@ describe("evaluateIdleTrigger", () => {
   });
 
   it("政策常量与 issue #265 定稿一致", () => {
-    expect(INNER_VOICE_IDLE_POLICY.dailyAttemptLimit).toBe(2);
+    expect(INNER_VOICE_IDLE_POLICY.dailyAttemptLimit).toBe(3);
     expect(INNER_VOICE_IDLE_POLICY.attemptCooldownMs).toBe(4 * 60 * 60 * 1000);
     expect(INNER_VOICE_IDLE_POLICY.activeStartHour).toBe(10);
     expect(INNER_VOICE_IDLE_POLICY.activeEndHour).toBe(23);
