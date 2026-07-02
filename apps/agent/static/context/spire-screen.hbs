@@ -1,0 +1,42 @@
+<spire_screen>
+{{#if isCombat}}
+第 {{combat.turn}} 回合　能量 {{combat.energy}}/{{combat.maxEnergy}}
+你：生命 {{hp}}/{{maxHp}}{{#if combat.hasBlock}}　格挡 {{combat.block}}{{/if}}{{#if combat.hasPowers}}　状态：{{#each combat.powers}}{{label}}{{amount}} {{/each}}{{/if}}
+————敌人————
+{{#each combat.enemies}}
+[{{n}}] {{name}}　生命 {{hp}}/{{maxHp}}{{#if hasBlock}}　格挡 {{block}}{{/if}}{{#if hasPowers}}　状态：{{#each powers}}{{label}}{{amount}} {{/each}}{{/if}}
+　　意图：{{#if isAttack}}攻击 {{intentValue}}{{#if isMultiHit}}×{{intentHits}}{{/if}}{{else if isDefend}}防御{{else if isBuff}}强化自身{{else if isDebuff}}对你施加减益{{else}}意图不明{{/if}}
+{{/each}}
+————手牌（牌库 {{combat.draw}}｜弃牌 {{combat.discard}}｜消耗 {{combat.exhaust}}）————
+{{#each combat.hand}}
+[{{n}}] {{name}}　{{#if playable}}费{{cost}}{{else}}不可打{{/if}}{{#if targeted}}（需指定敌人）{{/if}}　{{description}}
+{{/each}}
+打牌用 invoke(tool="play_card", hand_index=手牌编号, target_index=敌人编号)；出完这回合就 end_turn。
+{{else if isReward}}
+战斗胜利。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+挑一张牌加入牌组，或跳过：
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 选择。
+{{else if isRest}}
+你来到篝火旁。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 选择。
+{{else if isGameover}}
+你倒下了，这一局到此为止。生命 0/{{maxHp}}。
+想再来一局就调用 start_run。
+{{else if isVictory}}
+你击败了守卫者，登顶成功！生命 {{hp}}/{{maxHp}}。
+想再爬一次就调用 start_run。
+{{/if}}
+{{#if hasLog}}
+————刚刚发生————
+{{#each logLines}}
+{{this}}
+{{/each}}
+{{/if}}
+要去别的 App，用 switch(id=...) 切过去。
+</spire_screen>

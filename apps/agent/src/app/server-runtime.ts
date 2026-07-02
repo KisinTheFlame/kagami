@@ -31,6 +31,7 @@ import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gatew
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../oss/oss-client.js";
 import { HttpBrowserClient } from "../browser/browser-client.js";
+import { HttpSpireClient } from "../spire/spire-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -129,6 +130,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const browserClient = new HttpBrowserClient({
     baseUrl: `http://${config.services.browser.host}:${config.services.browser.port}`,
   });
+  // 尖塔卡牌游戏拆成独立 kagami-spire 进程（issue #234）：agent 经 HTTP client 调它，地址从
+  // 顶层 services.spire 派生。游戏进程未起时，client 把错误归一成 SPIRE_NOT_READY，工具仍回规整失败结构。
+  const spireClient = new HttpSpireClient({
+    baseUrl: `http://${config.services.spire.host}:${config.services.spire.port}`,
+  });
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
     ossClient,
@@ -183,6 +189,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     eventQueue,
     ossClient,
     browserClient,
+    spireClient,
   });
 
   // TodoReminderPoller 构造放在 agentRuntime 之后：digest 第三段要 fork 主 Agent 上下文，
