@@ -247,6 +247,36 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  {
+    id: "fungi_beast",
+    name: "真菌兽",
+    hpMin: 22,
+    hpMax: 28,
+    deathEffects: [{ kind: "apply_power", power: "vulnerable", amount: 2, on: "target" }],
+    moves: [
+      {
+        id: "fungi_bite",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+      {
+        id: "fungi_grow",
+        name: "成长",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    // 连两次撕咬后强制成长；刚成长完回撕咬；否则随机（近似权重）。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "fungi_bite", weight: 60, maxInARow: 2 },
+        { move: "fungi_grow", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -607,6 +637,11 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   three_sentries: { id: "three_sentries", enemies: ["sentry", "sentry", "sentry"], isBoss: false },
   large_slime_acid: { id: "large_slime_acid", enemies: ["acid_slime_l"], isBoss: false },
   large_slime_spike: { id: "large_slime_spike", enemies: ["spike_slime_l"], isBoss: false },
+  two_fungi_beasts: {
+    id: "two_fungi_beasts",
+    enemies: ["fungi_beast", "fungi_beast"],
+    isBoss: false,
+  },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -642,6 +677,7 @@ const STRONG_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "blue_slaver", weight: 2 },
   { id: "three_louse", weight: 2 },
   { id: "large_slime", weight: 2 }, // 选中后 50/50 展开为 酸液大 / 尖刺大
+  { id: "two_fungi_beasts", weight: 2 },
   { id: "lots_of_slimes", weight: 1 },
 ];
 

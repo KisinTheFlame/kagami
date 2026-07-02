@@ -27,6 +27,8 @@ const POWER_LABELS: Record<string, string> = {
   sharp_hide: "反甲",
   enrage: "激怒",
   artifact: "神器",
+  angry: "狂怒",
+  spore_cloud: "孢子云",
   mode_shift: "模式",
 };
 

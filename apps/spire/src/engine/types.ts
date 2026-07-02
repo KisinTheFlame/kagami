@@ -22,6 +22,8 @@ export type PowerId =
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
   | "enrage" // 激怒：玩家每打出一张技能牌，此敌人获得 = 层数的力量（地精头目）
   | "artifact" // 神器：抵消下一个施加到自己身上的减益（每抵消一个消耗一层）
+  | "angry" // 狂怒：每次受到攻击伤害，获得 = 层数的力量（狂暴地精）
+  | "spore_cloud" // 孢子云：死亡时给玩家施加易伤（真菌兽，显示用；实际死亡效果在 deathEffects）
   | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
@@ -99,6 +101,8 @@ export type EnemyDef = {
   stanceMoves?: { offensive: string[]; defensive: string[] };
   /** 半血分裂：降到 ≤maxHp/2 时分裂成这些敌人（各自 HP = 分裂瞬间当前 HP）。 */
   splitInto?: string[];
+  /** 亡语：此敌人死亡时结算的效果（真菌兽孢子云给玩家易伤）。 */
+  deathEffects?: Effect[];
 };
 
 export type EnemyState = {

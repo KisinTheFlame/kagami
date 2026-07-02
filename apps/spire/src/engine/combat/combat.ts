@@ -85,6 +85,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 哨卫开局各带 1 层神器（抵消你首个减益）。
     powers.push({ id: "artifact", amount: 1 });
   }
+  if (defId === "fungi_beast") {
+    // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
+    powers.push({ id: "spore_cloud", amount: 2 });
+  }
   const hp = hpOverride ?? nextRange(state.rng, def.hpMin, def.hpMax);
   return {
     defId,
@@ -411,7 +415,15 @@ function dealDamageToEnemy(
   }
   const afterBlock = Math.max(0, dmg - enemy.block);
   enemy.block = Math.max(0, enemy.block - dmg);
+  const wasAlive = enemy.hp > 0;
   enemy.hp = Math.max(0, enemy.hp - afterBlock);
+  // 亡语：此击致死则结算敌人的死亡效果（真菌兽孢子云给玩家易伤）。
+  if (wasAlive && enemy.hp === 0) {
+    const dyingDef = getEnemyDef(enemy.defId);
+    if (dyingDef.deathEffects) {
+      applyEffects(state, dyingDef.deathEffects, { side: "enemy", index: enemyIndex }, null);
+    }
+  }
   // 拉加维林：睡眠中受到穿透格挡的伤害立即苏醒，去掉金属化。
   if (enemy.asleep && afterBlock > 0 && enemy.hp > 0) {
     enemy.asleep = false;
