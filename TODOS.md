@@ -150,6 +150,17 @@
 
 ---
 
+## web
+
+### 评估把 web 前端做成服务器渲染应用（Next.js 一类）
+
+- **Priority:** P3
+- **Status:** open
+- **Context:** 当前 `apps/web` 是纯静态 SPA（Vite 构建，`kagami-gateway` 托管静态文件 + 代理 `/api/*`）。想法：改成有自己服务端的框架（Next.js / React Router SSR 等），前端本身成为一个服务进程。潜在收益：服务端渲染、API 层可以直接在服务端调各上游（消除浏览器侧契约消费的特殊性，与其他服务一样走 `rpc-client`）、更顺的鉴权位置。代价：多一个常驻进程、部署拓扑变化、与现有 gateway 职责重叠需重划。2026-07-03 提出，契约包体系收尾（spire/metric/console/agent 纳入）那一期明确不做。
+- **Notes:** 若做，gateway 的静态托管职责会被吸收或退化成纯反代；web 侧契约消费方式（保留 `apiGetWithSchema`、契约作单一事实源）届时可重新评估为直接用 `createClient`。
+
+---
+
 ## Web 设计走查（2026-06-30 /design-review）延后项
 
 ### landing 统计大色块需后端聚合数据
