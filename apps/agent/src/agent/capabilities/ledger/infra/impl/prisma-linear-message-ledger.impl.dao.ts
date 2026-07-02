@@ -41,6 +41,33 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
 
     return rows.map(mapLinearMessageLedgerRow);
   }
+
+  public async listCreatedAfter(input: {
+    runtimeKey: string;
+    createdAfter: Date;
+    limit: number;
+  }): Promise<LinearMessageLedgerRecord[]> {
+    const rows = await this.database.linearMessageLedger.findMany({
+      where: {
+        runtimeKey: input.runtimeKey,
+        createdAt: {
+          gt: input.createdAfter,
+        },
+      },
+      orderBy: {
+        id: "asc",
+      },
+      take: Math.max(1, input.limit),
+      select: {
+        id: true,
+        runtimeKey: true,
+        message: true,
+        createdAt: true,
+      },
+    });
+
+    return rows.map(mapLinearMessageLedgerRow);
+  }
 }
 
 function mapLinearMessageLedgerRow(row: {

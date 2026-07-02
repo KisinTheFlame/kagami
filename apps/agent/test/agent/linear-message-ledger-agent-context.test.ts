@@ -11,6 +11,7 @@ describe("LinearMessageLedgerAgentContext", () => {
       }),
       linearMessageLedgerDao: {
         insertMany,
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });
@@ -70,6 +71,7 @@ describe("LinearMessageLedgerAgentContext", () => {
       }),
       linearMessageLedgerDao: {
         insertMany,
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });

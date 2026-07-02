@@ -4,4 +4,5 @@ export type LlmUsageId =
   | "contextSummarizer"
   | "vision"
   | "webSearchAgent"
-  | "todoSuggestionAgent";
+  | "todoSuggestionAgent"
+  | "innerVoice";

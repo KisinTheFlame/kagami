@@ -145,6 +145,29 @@ export function createTodoSuggestionInstructionMessage(
   );
 }
 
+/**
+ * 内心独白回流消息：摸鱼判定触发、inner-voice Operation 产出的念头，包成一条
+ * `<inner_thought>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
+ * 不是任务也不是要求（issue #265）。
+ */
+export function createInnerThoughtMessage(thought: string): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/inner-thought.hbs", {
+      thought: thought.trim(),
+    }),
+  );
+}
+
+/**
+ * inner-voice Operation 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
+ * 口吻产出（或放弃产出）一个锚定近期真实经历的念头，经 emit_inner_thought 提交。
+ */
+export function createInnerVoiceInstructionMessage(): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/inner-voice-instruction.hbs"),
+  );
+}
+
 export function createMessagesFromEvent(_event: Event): UserMessage[] {
   // 目前没有任何事件类型需要渲染成上下文消息：notification 由 session 直接装配成
   // <notification> 消息追加（不是 event 类 ContextItem），wake 是纯唤醒。保留此入口是为
