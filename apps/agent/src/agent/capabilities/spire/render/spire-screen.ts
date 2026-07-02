@@ -5,7 +5,7 @@ import type {
   SpirePower,
   SpireReference,
   SpireScreen,
-} from "@kagami/spire-api/contract";
+} from "../../../../spire/spire-client.js";
 
 // === ScreenView → 文字屏幕（走 .hbs 模板）===
 //
@@ -17,13 +17,19 @@ import type {
 
 const POWER_LABELS: Record<string, string> = {
   strength: "力量",
+  dexterity: "敏捷",
   vulnerable: "易伤",
   weak: "虚弱",
   frail: "脆弱",
+  metallicize: "金属化",
   ritual: "仪式",
   curl_up: "蜷缩",
   sharp_hide: "反甲",
   enrage: "激怒",
+  artifact: "神器",
+  angry: "狂怒",
+  spore_cloud: "孢子云",
+  demon_form: "恶魔形态",
   mode_shift: "模式",
 };
 
@@ -71,6 +77,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
     isCombat: screen.screen === "combat",
     isReward: screen.screen === "reward",
     isRest: screen.screen === "rest",
+    isEvent: screen.screen === "event",
+    eventDescription: screen.event?.description ?? "",
     isGameover: screen.screen === "gameover",
     isVictory: screen.screen === "victory",
     hp: screen.player.hp,
@@ -79,6 +87,13 @@ export function renderSpireScreen(screen: SpireScreen): string {
     deckCount: screen.deckCount,
     relics: screen.relics,
     hasRelics: screen.relics.length > 0,
+    potions: screen.potions.map(potion => ({
+      slot: potion.slot,
+      name: potion.name,
+      description: potion.description,
+      targeted: potion.targeted,
+    })),
+    hasPotions: screen.potions.length > 0,
     combat: combat
       ? {
           turn: combat.turn,
@@ -98,11 +113,6 @@ export function renderSpireScreen(screen: SpireScreen): string {
     options: screen.options.map((text, index) => ({ n: index, text })),
     hasOptions: screen.options.length > 0,
   });
-}
-
-/** 服务不可达时的降级屏（错误已被工具基类序列化，这里只在 onFocus 等处兜底用）。 */
-export function renderSpireUnavailable(): string {
-  return renderServerStaticTemplate(import.meta.url, "context/spire-unavailable.hbs", {});
 }
 
 /** 没有进行中对局时的提示屏（look 拿到 null 时用）。 */

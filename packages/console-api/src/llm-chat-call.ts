@@ -8,7 +8,7 @@ import {
 
 // === llm_chat_call 历史查询的 wire schema（console 服务产出，web 管理台消费） ===
 //
-// 自 @kagami/shared/schemas/llm-chat 迁入（#279 PR4）。LLM 负载核心 schema
+// 自旧 shared/schemas/llm-chat 迁入（#279 PR4）。LLM 负载核心 schema
 // （LlmChatRequest/ResponsePayload 等）与本段无耦合，归 llm-api（PR5）。
 
 export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);

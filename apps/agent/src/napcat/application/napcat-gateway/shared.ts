@@ -48,7 +48,6 @@ export const BLOCKED_NAPCAT_EVENT_POST_TYPES = new Set<string>(["meta_event"]);
 export const GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export const MessageSegmentsSchema = z.array(NapcatReceiveMessageSegmentSchema);
-export type NapcatReceiveTextOrAtSegment = NapcatReceiveTextSegment | NapcatReceiveAtSegment;
 
 export const ActionResponseSchema = z.object({
   status: z.string(),
@@ -159,10 +158,6 @@ export function parseMessageSegments(value: unknown): NapcatReceiveMessageSegmen
   }
 
   return parsed.data;
-}
-
-export function toStoredMessageSegments(value: unknown): NapcatReceiveMessageSegment[] {
-  return parseMessageSegments(value) ?? [];
 }
 
 export function formatImageSegmentText(summary: string, resid?: string | null): string {

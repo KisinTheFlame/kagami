@@ -1,6 +1,7 @@
 import type { MainAgentContextItem } from "@kagami/agent-api/main-agent-context";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatOptionalDateTime } from "@/lib/format";
 import { useMainAgentContext } from "./useMainAgentContext";
 
 export function MainAgentContextPage() {
@@ -39,7 +40,7 @@ export function MainAgentContextPage() {
             {query.isError ? "刷新失败" : "轮询中"}
           </Badge>
           <Badge variant="outline" className="min-w-[19ch] justify-center font-mono tabular-nums">
-            更新于 {formatStableDateTime(snapshot.generatedAt) ?? "----/--/-- --:--:--"}
+            更新于 {formatOptionalDateTime(snapshot.generatedAt, "----/--/-- --:--:--")}
           </Badge>
         </div>
       </div>
@@ -97,19 +98,4 @@ function ContextItemCard({ item }: { item: MainAgentContextItem }) {
       </p>
     </div>
   );
-}
-
-function formatStableDateTime(value: string | null): string | null {
-  if (!value) return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  const year = parsed.getFullYear();
-  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
-  const day = `${parsed.getDate()}`.padStart(2, "0");
-  const hours = `${parsed.getHours()}`.padStart(2, "0");
-  const minutes = `${parsed.getMinutes()}`.padStart(2, "0");
-  const seconds = `${parsed.getSeconds()}`.padStart(2, "0");
-  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 }

@@ -1,7 +1,14 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import {
+  RETRYABLE_STATUS,
+  computeBackoffMs,
+  parseRetryAfter,
+  sleep,
+} from "../../shared/http-retry.js";
 
 /**
- * 高德 Web 服务 API 的 HTTP 取数助手。结构照抄 hn 的 `hn-fetch.ts`，但多两件高德特有的事：
+ * 高德 Web 服务 API 的 HTTP 取数助手。退避原语走共享的 `apps/shared/http-retry`，
+ * 但多两件高德特有的事：
  *
  * 1. **infocode 分类**：高德即使 HTTP 200 也可能在 body 里回错误（`infocode !== "10000"`）。
  *    成功信号统一以 `infocode === "10000"` 判定（v5 的 POI 接口甚至不返回 `status` 字段，
@@ -15,8 +22,6 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
  * 退避策略与 hn-fetch 一致：只对 408/429/5xx/网络错误/超时 + retryable infocode 重试；
  * 指数退避 + 全抖动；每次请求用 `AbortSignal.timeout` 限时。
  */
-
-const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 export type AmapFetchOptions = {
   timeoutMs: number;
@@ -271,28 +276,4 @@ function resolveWaitMs(response: Response, attempt: number, baseMs: number, maxM
     return Math.min(retryAfterMs, maxMs);
   }
   return computeBackoffMs(attempt, baseMs, maxMs);
-}
-
-function computeBackoffMs(attempt: number, baseMs: number, maxMs: number): number {
-  const exp = Math.min(baseMs * 2 ** (attempt - 1), maxMs);
-  return Math.floor(Math.random() * exp);
-}
-
-function parseRetryAfter(headerValue: string | null): number | undefined {
-  if (!headerValue) {
-    return undefined;
-  }
-  const seconds = Number(headerValue);
-  if (Number.isFinite(seconds)) {
-    return Math.max(0, seconds * 1000);
-  }
-  const dateMs = Date.parse(headerValue);
-  if (Number.isFinite(dateMs)) {
-    return Math.max(0, dateMs - Date.now());
-  }
-  return undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

@@ -11,9 +11,7 @@ describe("LinearMessageLedgerAgentContext", () => {
       }),
       linearMessageLedgerDao: {
         insertMany,
-        listAfterSeq: vi.fn(),
-        countAfterSeq: vi.fn(),
-        findLatest: vi.fn(),
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });
@@ -73,9 +71,7 @@ describe("LinearMessageLedgerAgentContext", () => {
       }),
       linearMessageLedgerDao: {
         insertMany,
-        listAfterSeq: vi.fn(),
-        countAfterSeq: vi.fn(),
-        findLatest: vi.fn(),
+        listCreatedAfter: vi.fn(),
       },
       runtimeKey: "root-agent",
     });

@@ -42,7 +42,10 @@ import {
 } from "../agent/runtime/root-agent/tools/list-apps.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
+import {
+  createInnerVoiceInstructionMessage,
+  createRootContextSummaryReminderMessage,
+} from "../agent/runtime/context/context-message-factory.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -55,6 +58,14 @@ import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-age
 import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
 import { TodoSuggestionTaskAgent } from "../agent/capabilities/todo/task-agent/todo-suggestion-task-agent.js";
 import { ProposeTodosTool } from "../agent/capabilities/todo/task-agent/tools/propose-todos.tool.js";
+import {
+  EmitInnerThoughtTool,
+  EMIT_INNER_THOUGHT_TOOL_NAME,
+} from "../agent/capabilities/inner-voice/tools/emit-inner-thought.tool.js";
+import { InnerVoiceOperation } from "../agent/capabilities/inner-voice/operations/inner-voice.operation.js";
+import { InnerVoiceIdleTracker } from "../agent/capabilities/inner-voice/domain/idle-tracker.js";
+import { collectInnerVoiceIdleSignals } from "../agent/capabilities/inner-voice/domain/ledger-idle-signals.js";
+import { InnerVoiceExtension } from "../agent/runtime/root-agent/extensions/inner-voice.extension.js";
 import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/prisma-terminal-state.dao.js";
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
@@ -429,6 +440,21 @@ export async function buildAgentRuntime({
     llmClient,
     taskTools: todoAgentTools,
   });
+  // 内心独白（issue #265）：摸鱼判定 tracker + 隔离 Operation + loop extension。
+  // emit_inner_thought 只作为 Operation 的结构化出口，走独立的一元 catalog，
+  // 绝不进主 Agent 顶层工具集（mainTopLevelTools），前缀零污染。
+  const innerVoiceEmitTools = new ToolCatalog([new EmitInnerThoughtTool()]);
+  const innerVoiceIdleTracker = new InnerVoiceIdleTracker();
+  const innerVoiceOperation = new InnerVoiceOperation({
+    llmClient,
+    emitToolExecutor: innerVoiceEmitTools.pick([EMIT_INNER_THOUGHT_TOOL_NAME]),
+    instructionMessageFactory: createInnerVoiceInstructionMessage,
+  });
+  const innerVoiceExtension = new InnerVoiceExtension({
+    tracker: innerVoiceIdleTracker,
+    operation: innerVoiceOperation,
+    eventQueue,
+  });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,
     context,
@@ -443,7 +469,10 @@ export async function buildAgentRuntime({
     // 纯文本轮挂起的自唤醒兜底与 wait 工具共用同一个上限，语义一致：Agent 最多
     // 安静这么久就会自己醒来一轮。
     idleWakeMaxWaitMs: config.server.agent.waitToolMaxWaitMs,
-    loopExtensions: [new AppEntryResetExtension({ session: rootAgentSession })],
+    loopExtensions: [
+      new AppEntryResetExtension({ session: rootAgentSession }),
+      innerVoiceExtension,
+    ],
   });
 
   const restoredSnapshot = await rootAgentRuntimeSnapshotRepository.load(
@@ -451,6 +480,22 @@ export async function buildAgentRuntime({
   );
   if (restoredSnapshot) {
     await rootAgentRuntime.restorePersistedSnapshot(restoredSnapshot);
+  }
+
+  // 摸鱼判定重启回扫：从 ledger 读最近 48h（覆盖当日注入计数与不应期）重建三组时间戳。
+  // 失败只降级为「冷启动从零累积」，不阻塞 agent 启动。
+  try {
+    const innerVoiceLookbackMs = 48 * 60 * 60 * 1000;
+    const recentLedgerRecords = await linearMessageLedgerDao.listCreatedAfter({
+      runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
+      createdAfter: new Date(Date.now() - innerVoiceLookbackMs),
+      limit: 20_000,
+    });
+    innerVoiceIdleTracker.restore(collectInnerVoiceIdleSignals(recentLedgerRecords));
+  } catch (error) {
+    logger.errorWithCause("Inner voice idle tracker restore failed; starting cold", error, {
+      event: "agent.inner_voice.restore_failed",
+    });
   }
 
   const llmPlaygroundService = new DefaultLlmPlaygroundService({

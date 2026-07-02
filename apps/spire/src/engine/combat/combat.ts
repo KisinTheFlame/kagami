@@ -11,13 +11,14 @@ import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
   addPower,
-  applyFrailToBlock,
   computeAttackDamage,
+  computeBlockGain,
   decayDebuffs,
   getPower,
   removePower,
 } from "../powers/powers.js";
 import { getRelicDef } from "../relics/relics.js";
+import { getPotionDef } from "../potions/potions.js";
 
 // === 战斗状态机 ===
 //
@@ -33,6 +34,20 @@ const LOUSE_CURL_UP_MIN = 3;
 const LOUSE_CURL_UP_MAX = 7;
 const LOUSE_BITE_MIN = 5;
 const LOUSE_BITE_MAX = 7;
+const LAGAVULIN_METALLICIZE = 8;
+const LAGAVULIN_WAKE_TURN = 3; // 睡满两回合、第 3 回合自然醒（combat.turn 从 1 起）。
+const BURN_DAMAGE = 2;
+
+// 六火之灵激活后的固定仪轨循环（Divider 之后重复）。
+const HEXAGHOST_RITUAL = [
+  "sear",
+  "tackle",
+  "sear",
+  "inflame",
+  "tackle",
+  "sear",
+  "inferno",
+] as const;
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
@@ -47,37 +62,62 @@ function actorPowers(state: GameState, actor: ActorRef): PowerInstance[] {
 
 // —— 开局 ——
 
+/** 造一个敌人实例。hpOverride 用于分裂出的敌人（HP = 分裂瞬间当前值）。 */
+function createEnemyState(state: GameState, defId: string, hpOverride?: number): EnemyState {
+  const def = getEnemyDef(defId);
+  const powers: PowerInstance[] = [];
+  let rolledDamage = 0;
+  let block = 0;
+  let asleep = false;
+  if (defId === "louse") {
+    // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
+    const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
+    powers.push({ id: "curl_up", amount: curl });
+    // 咬击基础伤害出生时掷一次、整场固定（5~7）。
+    rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
+  }
+  if (defId === "lagavulin") {
+    // 拉加维林开局沉睡：金属化 8（每回合结束回 8 格挡）+ 立即 8 格挡；受伤或睡满自然醒。
+    asleep = true;
+    block = LAGAVULIN_METALLICIZE;
+    powers.push({ id: "metallicize", amount: LAGAVULIN_METALLICIZE });
+  }
+  if (defId === "sentry") {
+    // 哨卫开局各带 1 层神器（抵消你首个减益）。
+    powers.push({ id: "artifact", amount: 1 });
+  }
+  if (defId === "fungi_beast") {
+    // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
+    powers.push({ id: "spore_cloud", amount: 2 });
+  }
+  if (defId === "mad_gremlin") {
+    // 狂暴地精开局自带狂怒 1（每次受攻击伤害 +1 力量）。
+    powers.push({ id: "angry", amount: 1 });
+  }
+  const hp = hpOverride ?? nextRange(state.rng, def.hpMin, def.hpMax);
+  return {
+    defId,
+    name: def.name,
+    hp,
+    maxHp: hp,
+    block,
+    powers,
+    moveHistory: [],
+    rotationIndex: 0,
+    currentMove: "",
+    curlUpConsumed: false,
+    rolledDamage,
+    asleep,
+    hasSplit: false,
+    modeShiftAccum: 0,
+    modeShiftThreshold: def.modeShiftThreshold ?? null,
+    stance: def.stanceMoves ? "offensive" : null,
+  } satisfies EnemyState;
+}
+
 export function startCombat(state: GameState, encounterId: string): void {
   const encounter = getEncounterDef(encounterId);
-  const enemies: EnemyState[] = encounter.enemies.map(defId => {
-    const def = getEnemyDef(defId);
-    const powers: PowerInstance[] = [];
-    let rolledDamage = 0;
-    if (defId === "louse") {
-      // 红虱开局自带蜷缩（首次被攻击获得格挡），block 值随机。
-      const curl = nextRange(state.rng, LOUSE_CURL_UP_MIN, LOUSE_CURL_UP_MAX);
-      powers.push({ id: "curl_up", amount: curl });
-      // 咬击基础伤害出生时掷一次、整场固定（5~7）。
-      rolledDamage = nextRange(state.rng, LOUSE_BITE_MIN, LOUSE_BITE_MAX);
-    }
-    const hp = nextRange(state.rng, def.hpMin, def.hpMax);
-    return {
-      defId,
-      name: def.name,
-      hp,
-      maxHp: hp,
-      block: 0,
-      powers,
-      moveHistory: [],
-      rotationIndex: 0,
-      currentMove: "",
-      curlUpConsumed: false,
-      rolledDamage,
-      modeShiftAccum: 0,
-      modeShiftThreshold: def.modeShiftThreshold ?? null,
-      stance: def.stanceMoves ? "offensive" : null,
-    } satisfies EnemyState;
-  });
+  const enemies: EnemyState[] = encounter.enemies.map(defId => createEnemyState(state, defId));
 
   const drawPile: CardInstance[] = state.deck.map(card => ({ ...card }));
   shuffleInPlace(state.rng, drawPile);
@@ -193,9 +233,21 @@ function applyEffect(
       break;
     }
     case "deal_damage_rolled": {
-      // 敌人专用：用出生时掷定、整场固定的基础值攻击玩家（红虱咬击）。
+      // 敌人专用：用锁定的固定基础值攻击玩家（红虱咬击 ×1；六火之灵分割 ×times）。
       if (actor.side === "enemy") {
-        dealDamageToPlayer(state, combat.enemies[actor.index]!.rolledDamage, powers);
+        const rolled = combat.enemies[actor.index]!.rolledDamage;
+        const times = effect.times ?? 1;
+        for (let hit = 0; hit < times; hit += 1) {
+          dealDamageToPlayer(state, rolled, powers);
+        }
+      }
+      break;
+    }
+    case "store_hp_scaled_damage": {
+      // 敌人专用：按玩家当前生命锁定每击伤害存入 rolledDamage（六火之灵激活）。
+      if (actor.side === "enemy") {
+        combat.enemies[actor.index]!.rolledDamage =
+          Math.floor(state.hp / effect.divisor) + effect.add;
       }
       break;
     }
@@ -228,12 +280,25 @@ function applyEffect(
       break;
     }
     case "gain_block": {
-      // 脆弱使获得的格挡打七五折（按「获得方」自己的 powers 判定）。
-      const gained = applyFrailToBlock(effect.amount, powers);
+      // 获得的格挡按「获得方」的敏捷/脆弱修正。
+      const gained = computeBlockGain(effect.amount, powers);
       if (actor.side === "player") {
         combat.playerBlock += gained;
       } else {
         combat.enemies[actor.index]!.block += gained;
+      }
+      break;
+    }
+    case "gain_block_ally": {
+      // 护盾地精：给一名随机存活友军（不含自己）加格挡。
+      if (actor.side === "enemy") {
+        const allies = combat.enemies
+          .map((enemy, index) => ({ enemy, index }))
+          .filter(entry => entry.enemy.hp > 0 && entry.index !== actor.index);
+        if (allies.length > 0) {
+          const pick = allies[nextInt(state.rng, allies.length)]!;
+          pick.enemy.block += effect.amount;
+        }
       }
       break;
     }
@@ -256,6 +321,13 @@ function applyEffect(
     case "lose_hp": {
       if (actor.side === "player") {
         state.hp = Math.max(0, state.hp - effect.amount);
+      }
+      break;
+    }
+    case "heal_percent": {
+      if (actor.side === "player") {
+        const heal = Math.floor((state.maxHp * effect.percent) / 100);
+        state.hp = Math.min(state.maxHp, state.hp + heal);
       }
       break;
     }
@@ -286,7 +358,7 @@ function applyPowerEffect(
   if (on === "all_enemies") {
     for (const enemy of combat.enemies) {
       if (enemy.hp > 0) {
-        addPower(enemy.powers, power, amount);
+        applyPowerToEnemy(enemy, power, amount);
       }
     }
     return;
@@ -294,11 +366,22 @@ function applyPowerEffect(
   // on === "target"
   if (actor.side === "player") {
     if (targetEnemyIndex !== null) {
-      addPower(combat.enemies[targetEnemyIndex]!.powers, power, amount);
+      applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
     addPower(combat.playerPowers, power, amount);
   }
+}
+
+const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set(["vulnerable", "weak", "frail"]);
+
+/** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
+function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount: number): void {
+  if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(enemy.powers, "artifact") > 0) {
+    addPower(enemy.powers, "artifact", -1);
+    return;
+  }
+  addPower(enemy.powers, power, amount);
 }
 
 function addCards(
@@ -357,7 +440,31 @@ function dealDamageToEnemy(
   }
   const afterBlock = Math.max(0, dmg - enemy.block);
   enemy.block = Math.max(0, enemy.block - dmg);
+  const wasAlive = enemy.hp > 0;
   enemy.hp = Math.max(0, enemy.hp - afterBlock);
+  // 亡语：此击致死则结算敌人的死亡效果（真菌兽孢子云给玩家易伤）。
+  if (wasAlive && enemy.hp === 0) {
+    const dyingDef = getEnemyDef(enemy.defId);
+    if (dyingDef.deathEffects) {
+      applyEffects(state, dyingDef.deathEffects, { side: "enemy", index: enemyIndex }, null);
+    }
+  }
+  // 拉加维林：睡眠中受到穿透格挡的伤害立即苏醒，去掉金属化。
+  if (enemy.asleep && afterBlock > 0 && enemy.hp > 0) {
+    enemy.asleep = false;
+    removePower(enemy.powers, "metallicize");
+  }
+  // 狂怒（狂暴地精）：每次受到穿透格挡的攻击伤害，获得 = 层数的力量。
+  const angry = getPower(enemy.powers, "angry");
+  if (angry > 0 && afterBlock > 0 && enemy.hp > 0) {
+    addPower(enemy.powers, "strength", angry);
+  }
+  // 半血分裂：降到 ≤maxHp/2 且未分裂过 → 下一动作强制变分裂。
+  const def = getEnemyDef(enemy.defId);
+  if (def.splitInto && !enemy.hasSplit && enemy.hp > 0 && enemy.hp <= Math.floor(enemy.maxHp / 2)) {
+    enemy.hasSplit = true;
+    enemy.currentMove = "split";
+  }
   if (
     enemy.stance === "offensive" &&
     enemy.modeShiftThreshold !== null &&
@@ -389,6 +496,14 @@ function dealDamageToPlayer(
   const dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
   const afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
+  state.hp = Math.max(0, state.hp - afterBlock);
+}
+
+/** 无来源的固定伤害（灼烧废牌），经玩家格挡但不受力量/易伤影响。 */
+function applyBurnDamage(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  const afterBlock = Math.max(0, amount - combat.playerBlock);
+  combat.playerBlock = Math.max(0, combat.playerBlock - amount);
   state.hp = Math.max(0, state.hp - afterBlock);
 }
 
@@ -466,6 +581,73 @@ export function playCard(
   return { ok: true };
 }
 
+/** 分裂：index 处的敌人消失，用分裂体替换（各自 HP = 分裂瞬间当前值），并 telegraph 它们。 */
+function performSplit(state: GameState, index: number): void {
+  const combat = state.combat!;
+  const splitter = combat.enemies[index]!;
+  const def = getEnemyDef(splitter.defId);
+  const hp = splitter.hp;
+  const spawnIds = def.splitInto ?? [];
+  const spawns = spawnIds.map(id => createEnemyState(state, id, hp));
+  if (spawns.length === 0) {
+    return;
+  }
+  combat.enemies[index] = spawns[0]!;
+  selectNextMove(state, index);
+  for (let k = 1; k < spawns.length; k += 1) {
+    const newIndex = combat.enemies.length;
+    combat.enemies.push(spawns[k]!);
+    selectNextMove(state, newIndex);
+  }
+  state.log.push(`${def.name}分裂了！`);
+}
+
+// —— 使用药水 ——
+
+export type UsePotionResult = { ok: true } | { ok: false; reason: string };
+
+export function usePotion(
+  state: GameState,
+  slotIndex: number,
+  targetIndex: number | null,
+): UsePotionResult {
+  const potionId = state.potions[slotIndex];
+  if (potionId === undefined || potionId === null) {
+    return { ok: false, reason: `药水槽 ${slotIndex} 是空的。` };
+  }
+  const def = getPotionDef(potionId);
+  const combat = state.combat;
+  if (def.combatOnly && (!combat || state.screen !== "combat")) {
+    return { ok: false, reason: `「${def.name}」只能在战斗中使用。` };
+  }
+
+  let resolvedTarget: number | null = null;
+  if (def.targeted && combat) {
+    const living = combat.enemies
+      .map((enemy, index) => ({ enemy, index }))
+      .filter(entry => entry.enemy.hp > 0);
+    if (
+      targetIndex !== null &&
+      combat.enemies[targetIndex] &&
+      combat.enemies[targetIndex]!.hp > 0
+    ) {
+      resolvedTarget = targetIndex;
+    } else if (living.length === 1) {
+      resolvedTarget = living[0]!.index;
+    } else {
+      return { ok: false, reason: "这瓶药水需要指定一个存活的敌人目标。" };
+    }
+  }
+
+  state.potions[slotIndex] = null; // 药水一次性，先清槽再结算。
+  applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  state.log.push(`你使用了「${def.name}」。`);
+  if (combat) {
+    resolveCombatIfEnded(state);
+  }
+  return { ok: true };
+}
+
 // —— 结束回合 / 敌人行动 ——
 
 export function endTurn(state: GameState): void {
@@ -473,15 +655,42 @@ export function endTurn(state: GameState): void {
   if (!combat || state.screen !== "combat") {
     return;
   }
-  // 玩家回合结束：手牌进弃牌堆，玩家 debuff 衰减。
-  combat.discardPile.push(...combat.hand);
+  // 回合结束：手牌中每张灼烧对玩家造成 2 点伤害（经格挡，六火之灵）。
+  const burnCount = combat.hand.filter(instance => instance.defId === "burn").length;
+  for (let i = 0; i < burnCount; i += 1) {
+    applyBurnDamage(state, BURN_DAMAGE);
+  }
+  if (state.hp <= 0) {
+    state.screen = "gameover";
+    state.log.push("你倒下了。");
+    return;
+  }
+  // 玩家回合结束：虚无牌被消耗，其余手牌进弃牌堆；玩家 debuff 衰减。
+  for (const instance of combat.hand) {
+    if (getCardDef(instance.defId).ethereal) {
+      combat.exhaustPile.push(instance);
+    } else {
+      combat.discardPile.push(instance);
+    }
+  }
   combat.hand = [];
+  // 金属化（玩家能力牌）：回合结束获得等量格挡（定值，不受敏捷/脆弱影响），带进敌人回合防御。
+  const playerMetallicize = getPower(combat.playerPowers, "metallicize");
+  if (playerMetallicize > 0) {
+    combat.playerBlock += playerMetallicize;
+  }
   decayDebuffs(combat.playerPowers);
 
-  // 敌人回合。
-  for (let i = 0; i < combat.enemies.length; i += 1) {
+  // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
+  const enemyCount = combat.enemies.length;
+  for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
     if (enemy.hp <= 0) {
+      continue;
+    }
+    // 半血分裂：本体消失，原位与末位各生成一个分裂体（HP = 当前值），本回合不行动。
+    if (enemy.currentMove === "split") {
+      performSplit(state, i);
       continue;
     }
     enemy.block = 0; // 敌人回合开始清格挡。
@@ -497,6 +706,11 @@ export function endTurn(state: GameState): void {
       state.log.push("你倒下了。");
       return;
     }
+    // 金属化：自己回合结束获得格挡（拉加维林睡眠期每回合回 8）。
+    const metallicize = getPower(enemy.powers, "metallicize");
+    if (metallicize > 0) {
+      enemy.block += metallicize;
+    }
     decayDebuffs(enemy.powers);
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
     selectNextMove(state, i);
@@ -506,6 +720,11 @@ export function endTurn(state: GameState): void {
   combat.turn += 1;
   combat.playerBlock = 0;
   combat.energy = combat.maxEnergy;
+  // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
+  const demonForm = getPower(combat.playerPowers, "demon_form");
+  if (demonForm > 0) {
+    addPower(combat.playerPowers, "strength", demonForm);
+  }
   drawCards(state, STARTING_HAND_SIZE);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
@@ -520,11 +739,99 @@ function triggerOnTurnStart(enemy: EnemyState): void {
 // —— 敌人意图选择 ——
 
 function selectNextMove(state: GameState, enemyIndex: number): void {
-  const enemy = state.combat!.enemies[enemyIndex]!;
+  const combat = state.combat!;
+  const enemy = combat.enemies[enemyIndex]!;
   if (enemy.hp <= 0) {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 护盾地精：场上还有其他存活友军时保护友军，只剩自己时改攻击。
+  if (enemy.defId === "shield_gremlin") {
+    enemy.currentMove = livingEnemies(combat).length > 1 ? "protect" : "shield_bash";
+    return;
+  }
+
+  // 地精巫师：蓄力 3 回合 → 终极爆发 → 归零重新蓄力（4 段循环）。
+  if (enemy.defId === "gremlin_wizard") {
+    const cycle = ["charging", "charging", "charging", "ultimate_blast"] as const;
+    if (enemy.moveHistory.length === 0) {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = cycle[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
+    enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 史莱姆王：黏液喷射 → 蓄力 → 猛砸 固定 3 段循环（半血分裂另由 split 覆盖）。
+  if (enemy.defId === "slime_boss") {
+    const cycle = ["goop_spray", "preparing", "slam"] as const;
+    if (enemy.moveHistory.length === 0) {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = cycle[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
+    enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 六火之灵：激活(锁分割伤害) → 分割(6连击) → 固定 7 段仪轨循环。
+  if (enemy.defId === "hexaghost") {
+    const history = enemy.moveHistory;
+    if (history.length === 0) {
+      enemy.currentMove = "activate";
+      return;
+    }
+    const last = history[history.length - 1]!;
+    if (last === "activate") {
+      enemy.currentMove = "divider";
+      return;
+    }
+    if (last === "divider") {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = HEXAGHOST_RITUAL[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % HEXAGHOST_RITUAL.length;
+    enemy.currentMove = HEXAGHOST_RITUAL[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 哨卫：错位开局（两侧先射钉、中间先光束）+ 光束↔射钉 严格交替。
+  if (enemy.defId === "sentry") {
+    if (enemy.moveHistory.length === 0) {
+      enemy.currentMove = enemyIndex % 2 === 0 ? "bolt" : "beam";
+    } else {
+      enemy.currentMove =
+        enemy.moveHistory[enemy.moveHistory.length - 1] === "beam" ? "bolt" : "beam";
+    }
+    return;
+  }
+
+  // 拉加维林：睡眠 → 苏醒 → 重击/重击/吸取灵魂 循环。
+  if (enemy.defId === "lagavulin") {
+    if (enemy.asleep) {
+      // 睡满（第 3 回合）自然苏醒；否则继续睡。
+      if (combat.turn >= LAGAVULIN_WAKE_TURN) {
+        enemy.asleep = false;
+        removePower(enemy.powers, "metallicize");
+        enemy.currentMove = "lag_attack";
+      } else {
+        enemy.currentMove = "sleep";
+      }
+      return;
+    }
+    const history = enemy.moveHistory;
+    const lastTwoAttack =
+      history.length >= 2 &&
+      history[history.length - 1] === "lag_attack" &&
+      history[history.length - 2] === "lag_attack";
+    enemy.currentMove = lastTwoAttack ? "siphon_soul" : "lag_attack";
+    return;
+  }
 
   // Boss：按姿态循环出招。
   if (def.stanceMoves) {

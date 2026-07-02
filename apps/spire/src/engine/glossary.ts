@@ -15,7 +15,17 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
   {
     term: "力量",
     aliases: ["strength", "str"],
-    definition: "每有 1 层，攻击牌每次造成的伤害 +1（对多段攻击每段都 +1）。持续整场战斗。",
+    definition: "每有 1 层，攻击牌每次造成的伤害 +1（对多段攻击每段都 +1）。持续整场战斗，可为负。",
+  },
+  {
+    term: "敏捷",
+    aliases: ["dexterity", "dex"],
+    definition: "每有 1 层，获得的格挡 +1。持续整场战斗，可为负。",
+  },
+  {
+    term: "金属化",
+    aliases: ["metallicize"],
+    definition: "敌人专属：每当它的回合结束，获得等量的格挡。拉加维林睡眠期靠它维持护盾。",
   },
   {
     term: "易伤",
@@ -48,10 +58,48 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：你每打出一张技能牌，它就获得等于层数的力量。地精头目开局自带。",
   },
   {
+    term: "狂怒",
+    aliases: ["angry"],
+    definition: "敌人专属：每次受到攻击伤害，就获得等于层数的力量。狂暴地精自带，越打越猛。",
+  },
+  {
+    term: "孢子云",
+    aliases: ["spore cloud", "sporecloud"],
+    definition: "敌人专属：它死亡时对你施加 2 层易伤。真菌兽自带——秒杀它反而会吃到易伤。",
+  },
+  {
+    term: "金属化",
+    aliases: ["metallicize"],
+    definition: "每回合结束时获得等于层数的格挡（定值，不受敏捷/脆弱影响）。持续整场战斗。",
+  },
+  {
+    term: "恶魔形态",
+    aliases: ["demon form", "demonform"],
+    definition: "每个回合开始时获得等于层数的力量。持续整场战斗，越拖越强。",
+  },
+  {
     term: "反甲",
     aliases: ["sharp hide", "sharphide", "thorns"],
     definition:
       "敌人专属：你每攻击它一次，就受到 N 点无视格挡的反弹伤害（直接掉血）。守卫者防御姿态期间持有。",
+  },
+  {
+    term: "神器",
+    aliases: ["artifact"],
+    definition:
+      "敌人专属：抵消下一个施加到它身上的减益（易伤/虚弱/脆弱等），每抵消一个消耗一层。哨卫开局各带 1 层。",
+  },
+  {
+    term: "虚无",
+    aliases: ["ethereal"],
+    definition:
+      "带此关键字的牌若在回合结束时仍留在手牌中，会被消耗（移出本场战斗），而非进入弃牌堆。",
+  },
+  {
+    term: "眩晕",
+    aliases: ["dazed"],
+    definition:
+      "无法打出的状态牌，带虚无。占用手牌，回合结束时若还在手里就被消耗。哨卫的射钉会塞给你。",
   },
   {
     term: "格挡",

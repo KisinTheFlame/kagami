@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { ZodToolComponent, type JsonSchema, type ToolKind } from "@kagami/agent-runtime";
+import { BEIJING_TIME_ZONE } from "@kagami/kernel/utils/time";
 
 export const VIEW_TIME_TOOL_NAME = "view_time";
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 const ViewTimeArgumentsSchema = z.object({});
 

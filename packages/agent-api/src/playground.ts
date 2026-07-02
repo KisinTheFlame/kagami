@@ -9,7 +9,7 @@ import { z } from "zod";
 
 // === Playground（管理台 LLM 调试）wire schema，agent 服务产出（#279 PR5） ===
 //
-// 自 @kagami/shared/schemas/llm-chat 迁入。逐字段建模是既有状态原样保留（D3）：
+// 自旧 shared/schemas/llm-chat 迁入。逐字段建模是既有状态原样保留（D3）：
 // llm 内部 /internal/chat* 的信封级判例（#237）不适用于这里。
 
 export const PlaygroundTextContentPartSchema = z

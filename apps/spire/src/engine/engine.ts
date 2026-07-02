@@ -2,8 +2,9 @@ import type { CardInstance, CharacterId, GameState } from "./types.js";
 import { IRONCLAD_STARTER_DECK } from "./cards/cards.js";
 import { IRONCLAD_STARTER_RELIC } from "./relics/relics.js";
 import { seedRng } from "./rng.js";
-import { endTurn, playCard } from "./combat/combat.js";
+import { endTurn, playCard, usePotion } from "./combat/combat.js";
 import { applyChoose, buildMap, generateReward } from "./run/run.js";
+import { POTION_SLOTS } from "./potions/potions.js";
 
 // === 引擎顶层：新建对局 + 动作分发 ===
 //
@@ -14,6 +15,7 @@ const IRONCLAD_MAX_HP = 80;
 export type GameAction =
   | { type: "play_card"; handIndex: number; targetIndex?: number | null }
   | { type: "end_turn" }
+  | { type: "use_potion"; slotIndex: number; targetIndex?: number | null }
   | { type: "choose"; optionIndex: number };
 
 export type ActionResult = { ok: true } | { ok: false; reason: string };
@@ -44,10 +46,13 @@ export function newRun(input: {
     gold: 0,
     deck,
     relics: [{ id: IRONCLAD_STARTER_RELIC, counter: 0 }],
+    potions: new Array<string | null>(POTION_SLOTS).fill(null),
+    potionDropBonus: 0,
     map: { nodes: {}, rows: 0, startNodeIds: [], bossNodeId: "" },
     currentNodeId: null,
     combat: null,
     reward: null,
+    event: null,
     combatsEntered: 0,
     pendingRelicReward: false,
     rng,
@@ -80,8 +85,20 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       settleAfterCombat(state);
       return { ok: true };
     }
+    case "use_potion": {
+      const result = usePotion(state, action.slotIndex, action.targetIndex ?? null);
+      if (result.ok) {
+        settleAfterCombat(state);
+      }
+      return result;
+    }
     case "choose": {
-      if (state.screen !== "reward" && state.screen !== "rest" && state.screen !== "map") {
+      if (
+        state.screen !== "reward" &&
+        state.screen !== "rest" &&
+        state.screen !== "map" &&
+        state.screen !== "event"
+      ) {
         return { ok: false, reason: "当前屏幕没有可选项。" };
       }
       return applyChoose(state, action.optionIndex);
