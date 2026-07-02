@@ -674,6 +674,11 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = [];
+  // 金属化（玩家能力牌）：回合结束获得等量格挡（定值，不受敏捷/脆弱影响），带进敌人回合防御。
+  const playerMetallicize = getPower(combat.playerPowers, "metallicize");
+  if (playerMetallicize > 0) {
+    combat.playerBlock += playerMetallicize;
+  }
   decayDebuffs(combat.playerPowers);
 
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
@@ -715,6 +720,11 @@ export function endTurn(state: GameState): void {
   combat.turn += 1;
   combat.playerBlock = 0;
   combat.energy = combat.maxEnergy;
+  // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
+  const demonForm = getPower(combat.playerPowers, "demon_form");
+  if (demonForm > 0) {
+    addPower(combat.playerPowers, "strength", demonForm);
+  }
   drawCards(state, STARTING_HAND_SIZE);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }

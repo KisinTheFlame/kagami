@@ -314,6 +314,49 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "获得 3 点力量。",
   },
 
+  {
+    id: "metallicize",
+    name: "金属化",
+    type: "power",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "metallicize", amount: 3, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "metallicize", amount: 4, on: "self" }],
+    description: "获得 3 层金属化：每回合结束时获得 3 点格挡。",
+    upgradedDescription: "获得 4 层金属化：每回合结束时获得 4 点格挡。",
+  },
+  {
+    id: "demon_form",
+    name: "恶魔形态",
+    type: "power",
+    cost: 3,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "demon_form", amount: 2, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "demon_form", amount: 3, on: "self" }],
+    description: "获得 2 层恶魔形态：每回合开始时获得 2 点力量。",
+    upgradedDescription: "获得 3 层恶魔形态：每回合开始时获得 3 点力量。",
+  },
+  {
+    id: "reckless_charge",
+    name: "鲁莽冲锋",
+    type: "attack",
+    cost: 0,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 7 },
+      { kind: "add_card", cardId: "dazed", pile: "draw", count: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 10 },
+      { kind: "add_card", cardId: "dazed", pile: "draw", count: 1 },
+    ],
+    description: "造成 7 点伤害。将一张「眩晕」洗入抽牌堆。",
+    upgradedDescription: "造成 10 点伤害。将一张「眩晕」洗入抽牌堆。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "wound",
@@ -412,6 +455,9 @@ export const REWARD_CARD_POOL: readonly string[] = [
   "wild_strike",
   "sword_boomerang",
   "inflame",
+  "metallicize",
+  "demon_form",
+  "reckless_charge",
 ];
 
 /** 取一张牌当前生效的效果（升级则用升级效果）。 */

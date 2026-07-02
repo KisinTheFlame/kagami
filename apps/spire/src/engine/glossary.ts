@@ -68,6 +68,16 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：它死亡时对你施加 2 层易伤。真菌兽自带——秒杀它反而会吃到易伤。",
   },
   {
+    term: "金属化",
+    aliases: ["metallicize"],
+    definition: "每回合结束时获得等于层数的格挡（定值，不受敏捷/脆弱影响）。持续整场战斗。",
+  },
+  {
+    term: "恶魔形态",
+    aliases: ["demon form", "demonform"],
+    definition: "每个回合开始时获得等于层数的力量。持续整场战斗，越拖越强。",
+  },
+  {
     term: "反甲",
     aliases: ["sharp hide", "sharphide", "thorns"],
     definition:
