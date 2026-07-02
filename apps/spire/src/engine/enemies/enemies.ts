@@ -145,7 +145,8 @@ const ENEMY_LIST: EnemyDef[] = [
     modeShiftThreshold: 30,
     stanceMoves: {
       offensive: ["charging_up", "fierce_bash", "vent_steam", "whirlwind"],
-      defensive: ["twin_slam"],
+      // 防御姿态三招链：进入获得反甲 → 滚压 → 双重猛击（打完清反甲、回进攻的旋风）。
+      defensive: ["defensive_mode", "roll_attack", "twin_slam"],
     },
     moves: [
       {
@@ -153,6 +154,19 @@ const ENEMY_LIST: EnemyDef[] = [
         name: "蓄能",
         effects: [{ kind: "gain_block", amount: 9 }],
         intent: "defend",
+      },
+      {
+        id: "defensive_mode",
+        name: "防御形态",
+        // 获得反甲 3（被攻击反弹 3 点无视格挡伤害），持续到防御链结束。
+        effects: [{ kind: "apply_power", power: "sharp_hide", amount: 3, on: "self" }],
+        intent: "buff",
+      },
+      {
+        id: "roll_attack",
+        name: "滚压",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
       },
       {
         id: "fierce_bash",
