@@ -27,7 +27,6 @@
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/llm-api": "workspace:*",
-    "@kagami/shared": "workspace:*",
     "openai": "^6.25.0"
   },
   "devDependencies": {

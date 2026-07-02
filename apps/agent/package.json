@@ -23,7 +23,6 @@
     "@kagami/oss-api": "workspace:*",
     "@kagami/persistence": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
-    "@kagami/shared": "workspace:*",
     "@kagami/spire-api": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "croner": "^10.0.1",

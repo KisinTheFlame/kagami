@@ -7,9 +7,7 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
-    "paths": {
-      "@kagami/shared/*": ["./../shared/src/*"]
-    }
+    "paths": {}
   },
   "include": ["src"]
 }

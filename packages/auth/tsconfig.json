@@ -6,7 +6,11 @@
     "target": "ES2022",
     "types": ["node"],
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@kagami/llm-api/*": ["./../llm-api/src/*"],
+      "@kagami/http/*": ["./../http/src/*"]
+    }
   },
   "include": ["src"]
 }

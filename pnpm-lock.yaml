@@ -83,9 +83,6 @@ importers:
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@kagami/spire-api':
         specifier: workspace:*
         version: link:../../packages/spire-api
@@ -147,9 +144,6 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       cloakbrowser:
         specifier: ^0.4.3
         version: 0.4.3(playwright-core@1.61.1)
@@ -187,9 +181,6 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -246,9 +237,6 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -280,9 +268,6 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -342,9 +327,6 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@kagami/spire-api':
         specifier: workspace:*
         version: link:../../packages/spire-api
@@ -382,9 +364,6 @@ importers:
       '@kagami/metric-api':
         specifier: workspace:*
         version: link:../../packages/metric-api
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -511,12 +490,12 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../llm-api
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../persistence
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../shared
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -609,9 +588,6 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../shared
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
@@ -671,9 +647,6 @@ importers:
       '@kagami/llm-api':
         specifier: workspace:*
         version: link:../llm-api
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../shared
       openai:
         specifier: ^6.25.0
         version: 6.25.0(ws@8.19.0)(zod@3.25.76)
@@ -734,9 +707,6 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
-      '@kagami/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@prisma/adapter-better-sqlite3':
         specifier: ^7.8.0
         version: 7.8.0
@@ -784,22 +754,6 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
-
-  packages/shared:
-    dependencies:
-      '@kagami/http':
-        specifier: workspace:*
-        version: link:../http
-      '@kagami/llm':
-        specifier: workspace:*
-        version: link:../llm
-      zod:
-        specifier: ^3.24.4
-        version: 3.25.76
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   packages/spire-api:
     dependencies:
