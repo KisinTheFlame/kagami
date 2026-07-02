@@ -1,7 +1,8 @@
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineJsonRoute, registerJsonRoute } from "../src/contract.js";
+import { defineJsonRoute } from "../src/contract.js";
+import { registerJsonRoute } from "../src/register.js";
 
 describe("registerJsonRoute", () => {
   it("GET：按 input schema 解析 query，按 output schema 解析返回", async () => {

@@ -1,5 +1,5 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { RecordMetricRequest } from "@kagami/shared/schemas/metric";
+import type { RecordMetricRequest } from "@kagami/metric-api/record";
 import type { MetricDao } from "@kagami/persistence/dao/metric.dao";
 import type { MetricTags } from "../domain/metric.js";
 import type { MetricRecordService } from "./metric-record.service.js";

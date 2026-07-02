@@ -5,7 +5,7 @@ import {
   registerBinaryEnvelopeRoute,
   registerBinaryRawRoute,
   useRawBodyPassthrough,
-} from "@kagami/http/contract";
+} from "@kagami/http/register";
 import { ossApiContract } from "@kagami/oss-api/contract";
 import { PayloadTooLargeError } from "../store/object-store.js";
 import type { ObjectStore } from "../store/object-store.js";

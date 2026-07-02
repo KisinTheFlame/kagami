@@ -68,6 +68,9 @@ importers:
       '@kagami/llm-client':
         specifier: workspace:*
         version: link:../../packages/llm-client
+      '@kagami/metric-api':
+        specifier: workspace:*
+        version: link:../../packages/metric-api
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -265,6 +268,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/metric-api':
+        specifier: workspace:*
+        version: link:../../packages/metric-api
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
@@ -358,6 +364,9 @@ importers:
       '@kagami/http':
         specifier: workspace:*
         version: link:../../packages/http
+      '@kagami/metric-api':
+        specifier: workspace:*
+        version: link:../../packages/metric-api
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -628,6 +637,22 @@ importers:
       zod:
         specifier: ^3.24.4
         version: 3.25.76
+
+  packages/metric-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/oss-api:
     dependencies:

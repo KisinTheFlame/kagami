@@ -1,4 +1,4 @@
-import type { RecordMetricRequest } from "@kagami/shared/schemas/metric";
+import type { RecordMetricRequest } from "@kagami/metric-api/record";
 
 export interface MetricRecordService {
   record(input: RecordMetricRequest): Promise<void>;

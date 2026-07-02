@@ -14,7 +14,8 @@
       "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
       "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/shared/*": ["./../../packages/shared/src/*"]
+      "@kagami/shared/*": ["./../../packages/shared/src/*"],
+      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"]
     }
   },
   "include": ["src", "test"]

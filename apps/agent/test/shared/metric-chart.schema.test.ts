@@ -3,7 +3,7 @@ import {
   MetricChartCreateRequestSchema,
   MetricChartDataQuerySchema,
   MetricChartDataResponseSchema,
-} from "@kagami/shared/schemas/metric-chart";
+} from "@kagami/metric-api/chart";
 
 describe("metric chart schemas", () => {
   it("should parse create request with optional defaults", () => {
