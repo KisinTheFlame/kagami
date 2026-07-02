@@ -3,11 +3,36 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { LlmClient } from "@kagami/llm-client";
 import type { LlmMessage, Tool } from "@kagami/llm-client";
 import { createTodoSuggestionInstructionMessage } from "../../../runtime/context/context-message-factory.js";
+import { isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
 
 const logger = new AppLogger({ source: "todo.suggestion-service" });
 
 /** 单次子调用最多采纳的候选待办条数（模型多返回也在此截断）。 */
 const MAX_SUGGESTIONS = 5;
+
+/**
+ * 一次 digest 里「发现待办」子调用的总尝试次数（含首次）；耗尽仍失败则降级为两段。
+ * 底层 llm-client 已按 usage 配置（todoSuggestionAgent: times 3）对每次 chat 做无退避的
+ * 立即重试，两层是乘法关系（外层 N × 底层 times 次 provider 调用）——外层只留 2，
+ * 专补底层没有的「隔一段再试」，不把最坏调用数推得更高。
+ */
+const DEFAULT_MAX_ATTEMPTS = 2;
+
+/** 两次尝试之间的固定退避；这是后台 digest，不抢主循环，短退避即可。 */
+const DEFAULT_RETRY_BACKOFF_MS = 2_000;
+
+/** 归一化上限：外层重试是补充不是主力，不给配置出「调度器长期占坑」的空间。 */
+const MAX_ATTEMPTS_CEILING = 5;
+
+const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+/** 把外部传入的次数/毫秒归一到安全区间（防 Infinity/NaN/负数/小数这类 footgun）。 */
+function clampInt(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
 
 export const PROPOSE_TODOS_TOOL_NAME = "propose_todos";
 
@@ -57,47 +82,90 @@ export type TodoSuggestionInput = {
  *
  * 全程 try/catch：无 provider / 超时 / 无 toolCall / 参数解析失败 / 空 —— 一律返回 []，绝不 rethrow，
  * 让 digest 降级为只发原两段。
+ *
+ * 重试：只有「真正的调用失败」（provider 不可用 / 上游服务调用失败，判定复用主循环的
+ * isRetryableLlmFailure）才会退避后重试，最多 DEFAULT_MAX_ATTEMPTS 次，抹平偶发抖动。
+ * 模型返回畸形（无 toolCall / 参数解析失败）属于调用成功但内容不合规，不重试、直接降级；
+ * 其它非可重试异常同样立即降级。
  */
 export class TodoSuggestionService {
   private readonly llmClient: LlmClient;
+  private readonly maxAttempts: number;
+  private readonly retryBackoffMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
-  public constructor({ llmClient }: { llmClient: LlmClient }) {
+  public constructor({
+    llmClient,
+    maxAttempts = DEFAULT_MAX_ATTEMPTS,
+    retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS,
+    sleep = defaultSleep,
+  }: {
+    llmClient: LlmClient;
+    maxAttempts?: number;
+    retryBackoffMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  }) {
     this.llmClient = llmClient;
+    this.maxAttempts = clampInt(maxAttempts, 1, MAX_ATTEMPTS_CEILING, DEFAULT_MAX_ATTEMPTS);
+    this.retryBackoffMs = clampInt(retryBackoffMs, 0, 60_000, DEFAULT_RETRY_BACKOFF_MS);
+    this.sleep = sleep;
   }
 
   public async propose(input: TodoSuggestionInput): Promise<string[]> {
-    try {
-      const response = await this.llmClient.chat(
-        {
-          system: input.systemPrompt,
-          messages: [...input.messages, createTodoSuggestionInstructionMessage(input.openTodos)],
-          tools: [PROPOSE_TODOS_TOOL],
-          toolChoice: { tool_name: PROPOSE_TODOS_TOOL_NAME },
-        },
-        { usage: "todoSuggestionAgent" },
-      );
-
-      const toolCall = response.message.toolCalls[0];
-      if (!toolCall || toolCall.name !== PROPOSE_TODOS_TOOL_NAME) {
-        return [];
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      try {
+        return await this.proposeOnce(input);
+      } catch (error) {
+        const canRetry = attempt < this.maxAttempts && isRetryableLlmFailure(error);
+        logger.warn(
+          canRetry
+            ? "Failed to propose todo suggestions; will retry"
+            : "Failed to propose todo suggestions; digest degrades to two sections",
+          {
+            event: canRetry ? "todo.suggestion_retry" : "todo.suggestion_failed",
+            attempt,
+            maxAttempts: this.maxAttempts,
+            errorName: error instanceof Error ? error.name : "Error",
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+        );
+        if (!canRetry) {
+          return [];
+        }
+        await this.sleep(this.retryBackoffMs);
       }
+    }
+    return [];
+  }
 
-      const parsed = ProposeTodosArgsSchema.safeParse(toolCall.arguments);
-      if (!parsed.success) {
-        return [];
-      }
+  /**
+   * 单次子调用：畸形响应（无 toolCall / 参数解析失败）正常返回 []（调用成功，不触发重试）；
+   * chat 抛出的异常向上抛给 propose，由那里按可重试性决定是重试还是降级。
+   */
+  private async proposeOnce(input: TodoSuggestionInput): Promise<string[]> {
+    const response = await this.llmClient.chat(
+      {
+        system: input.systemPrompt,
+        messages: [...input.messages, createTodoSuggestionInstructionMessage(input.openTodos)],
+        tools: [PROPOSE_TODOS_TOOL],
+        toolChoice: { tool_name: PROPOSE_TODOS_TOOL_NAME },
+      },
+      { usage: "todoSuggestionAgent" },
+    );
 
-      return parsed.data.suggestions
-        .map(suggestion => suggestion.trim())
-        .filter(suggestion => suggestion.length > 0)
-        .slice(0, MAX_SUGGESTIONS);
-    } catch (error) {
-      logger.warn("Failed to propose todo suggestions; digest degrades to two sections", {
-        event: "todo.suggestion_failed",
-        errorName: error instanceof Error ? error.name : "Error",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
+    const toolCall = response.message.toolCalls[0];
+    if (!toolCall || toolCall.name !== PROPOSE_TODOS_TOOL_NAME) {
       return [];
     }
+
+    const parsed = ProposeTodosArgsSchema.safeParse(toolCall.arguments);
+    if (!parsed.success) {
+      return [];
+    }
+
+    return parsed.data.suggestions
+      .map(suggestion => suggestion.trim())
+      .filter(suggestion => suggestion.length > 0)
+      .slice(0, MAX_SUGGESTIONS);
   }
 }

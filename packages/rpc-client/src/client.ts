@@ -16,8 +16,17 @@ import type { JsonContractMap, JsonRouteContract } from "@kagami/http/contract";
  */
 type FetchLike = typeof fetch;
 
-/** 非 2xx 时把 (status, body) 解码成要抛的 Error。返回 undefined → 用默认兜底。browser 用它重建 BrowserError。 */
+/** 非 2xx 时把 (status, body) 解码成要抛的 Error。返回 undefined → 用兜底错误。browser 用它重建 BrowserError。 */
 export type ErrorDecoder = (status: number, body: unknown) => Error | undefined;
+
+/** 兜底错误的三种成因：服务不可达（含超时）/ 非 2xx 且 decodeError 未接手 / 2xx 但响应体非 JSON。 */
+export type FallbackErrorInfo =
+  | { reason: "unreachable"; cause: unknown }
+  | { reason: "bad_status"; status: number }
+  | { reason: "invalid_response_body"; cause: unknown };
+
+/** 把兜底成因映射成要抛的 Error。默认产 BizError(unreachableMessage)；browser 用它产 BrowserError。 */
+export type FallbackErrorMapper = (info: FallbackErrorInfo) => Error;
 
 export type CreateClientOptions = {
   baseUrl: string;
@@ -27,10 +36,16 @@ export type CreateClientOptions = {
   /**
    * 兜底 BizError 的 message：不可达 / 超时 / 非 2xx 无富信封 / 响应体无效时用。
    * llm 必须传 `"LLM 上游服务调用失败"` —— isRetryableLlmFailure 精确匹配它来决定退避重试。
+   * 传了 mapFallbackError 时此项不生效（兜底错误形状完全交给 mapper）。
    */
   unreachableMessage?: string;
   /** 自定义非 2xx 错误通道。默认解码 `{ error: BizErrorWire }` → 重建 BizError（llm/oss）。 */
   decodeError?: ErrorDecoder;
+  /**
+   * 自定义兜底错误形状（默认 BizError）。给错误模型不是 BizError 的消费者用：browser 把三种
+   * 成因统一映射成 BrowserError("BROWSER_NOT_READY", …)，保住 tool_result 的冻结序列化结构。
+   */
+  mapFallbackError?: FallbackErrorMapper;
 };
 
 export type JsonClient<TContracts extends JsonContractMap> = {
@@ -51,6 +66,8 @@ export function createClient<TContracts extends JsonContractMap>(
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const unreachableMessage = options.unreachableMessage ?? DEFAULT_UNREACHABLE_MESSAGE;
   const decodeError = options.decodeError ?? decodeBizErrorWire;
+  const mapFallbackError =
+    options.mapFallbackError ?? defaultFallbackErrorMapper(unreachableMessage);
 
   const client = {} as JsonClient<TContracts>;
   for (const key of Object.keys(contracts) as (keyof TContracts)[]) {
@@ -60,8 +77,8 @@ export function createClient<TContracts extends JsonContractMap>(
         baseUrl,
         fetchImpl,
         timeoutMs: contract.timeoutMs ?? defaultTimeoutMs,
-        unreachableMessage,
         decodeError,
+        mapFallbackError,
       });
     client[key] = call as JsonClient<TContracts>[typeof key];
   }
@@ -72,8 +89,8 @@ type CallContext = {
   baseUrl: string;
   fetchImpl: FetchLike;
   timeoutMs: number;
-  unreachableMessage: string;
   decodeError: ErrorDecoder;
+  mapFallbackError: FallbackErrorMapper;
 };
 
 async function callJsonRoute(
@@ -101,11 +118,7 @@ async function callJsonRoute(
   try {
     response = await ctx.fetchImpl(url, init);
   } catch (cause) {
-    throw new BizError({
-      message: ctx.unreachableMessage,
-      meta: { reason: "unreachable" },
-      cause,
-    });
+    throw ctx.mapFallbackError({ reason: "unreachable", cause });
   }
 
   if (!response.ok) {
@@ -114,24 +127,42 @@ async function callJsonRoute(
     if (decoded) {
       throw decoded;
     }
-    throw new BizError({
-      message: ctx.unreachableMessage,
-      meta: { reason: "bad_status", status: response.status },
-    });
+    throw ctx.mapFallbackError({ reason: "bad_status", status: response.status });
   }
 
   let payload: unknown;
   try {
     payload = (await response.json()) as unknown;
   } catch (cause) {
-    throw new BizError({
-      message: ctx.unreachableMessage,
-      meta: { reason: "invalid_response_body" },
-      cause,
-    });
+    throw ctx.mapFallbackError({ reason: "invalid_response_body", cause });
   }
 
   return contract.output.parse(payload);
+}
+
+/** 默认兜底：三种成因都映射成 BizError(unreachableMessage)，meta 带成因与状态码便于诊断。 */
+function defaultFallbackErrorMapper(unreachableMessage: string): FallbackErrorMapper {
+  return info => {
+    switch (info.reason) {
+      case "unreachable":
+        return new BizError({
+          message: unreachableMessage,
+          meta: { reason: "unreachable" },
+          cause: info.cause,
+        });
+      case "bad_status":
+        return new BizError({
+          message: unreachableMessage,
+          meta: { reason: "bad_status", status: info.status },
+        });
+      case "invalid_response_body":
+        return new BizError({
+          message: unreachableMessage,
+          meta: { reason: "invalid_response_body" },
+          cause: info.cause,
+        });
+    }
+  };
 }
 
 /** GET/DELETE 入参对象 → querystring。undefined/null 跳过，其余 String() 化。 */
