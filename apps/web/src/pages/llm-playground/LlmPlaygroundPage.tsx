@@ -1,12 +1,16 @@
+import { contractUrl } from "@kagami/http/url";
+import { agentApiContract } from "@kagami/agent-api/contract";
+import {
+  LlmProviderListResponseSchema,
+  type LlmToolDefinition,
+  type LlmProviderOption,
+} from "@kagami/llm-api/llm-chat";
 import {
   LlmPlaygroundChatResponseSchema,
   LlmPlaygroundToolListResponseSchema,
-  LlmProviderListResponseSchema,
   type LlmPlaygroundChatRequest,
   type LlmPlaygroundChatResponse,
-  type LlmToolDefinition,
-  type LlmProviderOption,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCcw, SendHorizontal } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -89,7 +93,7 @@ export function LlmPlaygroundPage() {
   const providersQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.llm.providers(),
-      path: "/llm/providers",
+      path: contractUrl(agentApiContract.listProviders),
       schema: LlmProviderListResponseSchema,
     }),
   });
@@ -97,7 +101,7 @@ export function LlmPlaygroundPage() {
   const toolLibraryQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.llm.playgroundTools(),
-      path: "/llm/playground-tools",
+      path: contractUrl(agentApiContract.listPlaygroundTools),
       schema: LlmPlaygroundToolListResponseSchema,
     }),
   });
@@ -156,7 +160,7 @@ export function LlmPlaygroundPage() {
     mutationFn: async (payload: LlmPlaygroundChatRequest): Promise<PlaygroundResult> => {
       let response: ApiRequestResult;
       try {
-        response = await apiPost("/llm/chat", payload);
+        response = await apiPost(contractUrl(agentApiContract.playgroundChat), payload);
       } catch (error) {
         if (error instanceof ApiError) {
           return {

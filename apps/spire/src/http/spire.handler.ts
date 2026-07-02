@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { registerJsonRoute } from "@kagami/http/contract";
+import { registerJsonRoute } from "@kagami/http/register";
 import { spireApiContract } from "@kagami/spire-api/contract";
 import type { SpireService } from "../application/spire.service.js";
 import { toScreenView } from "../application/state-view.js";

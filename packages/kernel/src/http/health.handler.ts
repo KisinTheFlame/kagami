@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { HealthQuerySchema, HealthResponseSchema } from "@kagami/shared/schemas/health";
-import { createHealthResponse } from "@kagami/shared/utils";
+import { createHealthResponse, HealthQuerySchema, HealthResponseSchema } from "@kagami/http/wire";
 import { registerQueryRoute } from "@kagami/http/route";
 
 /**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assertNever, stripLoneSurrogates, truncateWithEllipsis } from "../src/utils.js";
+import { assertNever } from "../src/utils/assert.js";
+import { stripLoneSurrogates, truncateWithEllipsis } from "../src/utils/text.js";
 
 describe("stripLoneSurrogates — 剥除落单代理项（事故：半个 emoji 打挂会话）", () => {
   it("完整代理对（emoji）成对保留", () => {

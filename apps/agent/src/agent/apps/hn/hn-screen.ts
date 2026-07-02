@@ -1,4 +1,4 @@
-import { formatBeijingDateTime } from "@kagami/shared/utils";
+import { formatBeijingDateTime } from "@kagami/kernel/utils/time";
 import type { HnFeed } from "./client/firebase.js";
 import type { HnGlanceResult, HnThreadResult, HnSearchResult, HnUserResult } from "./hn-reader.js";
 

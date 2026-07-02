@@ -2,7 +2,7 @@ import type {
   SchedulerTaskRun,
   SchedulerTaskSchedule,
   SchedulerTaskStatus,
-} from "@kagami/shared/schemas/scheduler";
+} from "@kagami/agent-api/scheduler";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

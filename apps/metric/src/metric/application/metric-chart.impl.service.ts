@@ -10,7 +10,7 @@ import type {
   MetricChartListResponse,
   MetricChartRangePreset,
   MetricChartSeries,
-} from "@kagami/shared/schemas/metric-chart";
+} from "@kagami/metric-api/chart";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { MetricChartItem } from "../domain/metric.js";
 import type { MetricChartDao } from "../infra/metric-chart.dao.js";

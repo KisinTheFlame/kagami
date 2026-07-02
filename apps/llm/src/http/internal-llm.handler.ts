@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { registerJsonRoute } from "@kagami/http/contract";
+import { registerJsonRoute } from "@kagami/http/register";
 import { llmApiContract } from "@kagami/llm-api/contract";
 import type { LlmProviderId } from "@kagami/llm";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";

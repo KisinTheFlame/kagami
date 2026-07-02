@@ -1,7 +1,7 @@
 import {
   type NapcatQqMessageItem,
   type NapcatQqMessageType,
-} from "@kagami/shared/schemas/napcat-group-message";
+} from "@kagami/console-api/napcat-group-message";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
 import { Button } from "@/components/ui/button";

@@ -1,11 +1,6 @@
 import { LLM_PROVIDER_IDS } from "@kagami/llm";
 import { z } from "zod";
-import {
-  createPaginatedResponseSchema,
-  JsonRecordSchema,
-  PaginationQuerySchema,
-  parseOptionalStringInput,
-} from "./base.js";
+import { JsonRecordSchema } from "@kagami/http/wire";
 
 // provider 标识全集的单源在 @kagami/llm；这里只派生 zod schema，不再手写字面量。
 // 需要 `LlmProviderId` 类型的代码请直接从 @kagami/llm 导入（项目禁止 re-export barrel）。
@@ -146,52 +141,6 @@ export const LlmChatErrorPayloadSchema = z
 
 export type LlmChatErrorPayload = z.infer<typeof LlmChatErrorPayloadSchema>;
 
-export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);
-
-export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
-
-export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
-  provider: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
-});
-
-export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
-
-export const LlmChatCallSummarySchema = z.object({
-  id: z.number().int().positive(),
-  requestId: z.string().min(1),
-  seq: z.number().int().positive(),
-  provider: z.string().min(1),
-  model: z.string().min(1),
-  extension: JsonRecordSchema.nullable(),
-  status: LlmChatCallStatusSchema,
-  latencyMs: z.number().int().nullable(),
-  createdAt: z.string().datetime(),
-});
-
-export type LlmChatCallSummary = z.infer<typeof LlmChatCallSummarySchema>;
-
-export const LlmChatCallItemSchema = LlmChatCallSummarySchema.extend({
-  requestPayload: JsonRecordSchema,
-  responsePayload: JsonRecordSchema.nullable(),
-  nativeRequestPayload: JsonRecordSchema.nullable(),
-  nativeResponsePayload: JsonRecordSchema.nullable(),
-  error: JsonRecordSchema.nullable(),
-  nativeError: JsonRecordSchema.nullable(),
-});
-
-export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
-
-export const LlmChatCallListResponseSchema =
-  createPaginatedResponseSchema(LlmChatCallSummarySchema);
-
-export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
-
-export const LlmChatCallDetailResponseSchema = LlmChatCallItemSchema;
-
-export type LlmChatCallDetailResponse = z.infer<typeof LlmChatCallDetailResponseSchema>;
-
 export const LlmProviderOptionSchema = z
   .object({
     id: LlmProviderIdSchema,
@@ -208,87 +157,3 @@ export const LlmProviderListResponseSchema = z
   .strict();
 
 export type LlmProviderListResponse = z.infer<typeof LlmProviderListResponseSchema>;
-
-export const PlaygroundTextContentPartSchema = z
-  .object({
-    type: z.literal("text"),
-    text: z.string(),
-  })
-  .strict();
-
-export const PlaygroundImageContentPartSchema = z
-  .object({
-    type: z.literal("image"),
-    fileName: z.string().min(1).optional(),
-    mimeType: z.string().min(1),
-    dataUrl: z.string().min(1),
-  })
-  .strict();
-
-export const PlaygroundContentPartSchema = z.discriminatedUnion("type", [
-  PlaygroundTextContentPartSchema,
-  PlaygroundImageContentPartSchema,
-]);
-
-export type PlaygroundContentPart = z.infer<typeof PlaygroundContentPartSchema>;
-
-export const PlaygroundMessageSchema = z.discriminatedUnion("role", [
-  z
-    .object({
-      role: z.literal("user"),
-      content: z.union([z.string(), z.array(PlaygroundContentPartSchema)]),
-    })
-    .strict(),
-  z
-    .object({
-      role: z.literal("assistant"),
-      content: z.string(),
-      toolCalls: z.array(LlmToolCallPayloadSchema),
-    })
-    .strict(),
-  z
-    .object({
-      role: z.literal("tool"),
-      toolCallId: z.string().min(1),
-      content: z.string(),
-    })
-    .strict(),
-]);
-
-export type PlaygroundMessage = z.infer<typeof PlaygroundMessageSchema>;
-
-export const LlmPlaygroundToolListResponseSchema = z
-  .object({
-    tools: z.array(LlmToolDefinitionSchema),
-  })
-  .strict();
-
-export type LlmPlaygroundToolListResponse = z.infer<typeof LlmPlaygroundToolListResponseSchema>;
-
-export const LlmPlaygroundChatRequestSchema = z
-  .object({
-    provider: LlmProviderIdSchema,
-    model: z.string().min(1),
-    system: z.string().optional(),
-    messages: z.array(PlaygroundMessageSchema),
-    tools: z.array(LlmToolDefinitionSchema),
-    toolChoice: z.union([
-      z.literal("required"),
-      z.literal("auto"),
-      z.literal("none"),
-      z
-        .object({
-          tool_name: z.string().min(1),
-        })
-        .strict(),
-    ]),
-  })
-  .strict();
-
-export type LlmPlaygroundChatRequest = z.infer<typeof LlmPlaygroundChatRequestSchema>;
-
-export const LlmPlaygroundChatResponseSchema = LlmChatResponsePayloadSchema.extend({
-  nativeRequestPayload: JsonRecordSchema.nullable(),
-}).strict();
-
-export type LlmPlaygroundChatResponse = z.infer<typeof LlmPlaygroundChatResponseSchema>;

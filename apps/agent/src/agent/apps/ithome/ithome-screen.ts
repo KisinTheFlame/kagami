@@ -1,5 +1,5 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
-import { formatBeijingDateTime } from "@kagami/shared/utils";
+import { formatBeijingDateTime } from "@kagami/kernel/utils/time";
 
 // === IT之家 App 屏幕渲染 ===
 // 文章列表 / 详情渲染成 <ithome_*> 段落，经 append_message Effect 追加到上下文尾部。

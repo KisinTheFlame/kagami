@@ -1,8 +1,7 @@
-import {
-  LlmProviderListResponseSchema,
-  type LlmChatCallStatus,
-  type LlmChatCallSummary,
-} from "@kagami/shared/schemas/llm-chat";
+import { contractUrl } from "@kagami/http/url";
+import { agentApiContract } from "@kagami/agent-api/contract";
+import { type LlmChatCallStatus, type LlmChatCallSummary } from "@kagami/console-api/llm-chat-call";
+import { LlmProviderListResponseSchema } from "@kagami/llm-api/llm-chat";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";
@@ -49,7 +48,7 @@ export function LlmHistoryPage() {
   const providersQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.llm.providers(),
-      path: "/llm/providers",
+      path: contractUrl(agentApiContract.listProviders),
       schema: LlmProviderListResponseSchema,
     }),
   });

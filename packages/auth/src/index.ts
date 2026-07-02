@@ -1,4 +1,4 @@
-import { type AuthUsageLimitsResponse } from "@kagami/shared/schemas/auth";
+import { type AuthUsageLimitsResponse } from "@kagami/llm-api/auth";
 import { SharedOAuthCallbackServer } from "./shared/callback-server.js";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
 import type { Database } from "@kagami/persistence/db/client";

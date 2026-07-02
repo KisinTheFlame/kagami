@@ -1,26 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import {
-  LlmChatCallDetailResponseSchema,
-  LlmChatCallListQuerySchema,
-  LlmChatCallListResponseSchema,
-} from "@kagami/shared/schemas/llm-chat";
+import { registerJsonRoute } from "@kagami/http/register";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import type { LlmChatCallQueryService } from "../application/llm-chat-call-query.service.js";
-import { registerParamRoute, registerQueryRoute } from "@kagami/http/route";
-
-const LlmChatCallDetailParamSchema = z.object({
-  id: z.preprocess(
-    value => (typeof value === "string" ? Number.parseInt(value, 10) : value),
-    z.number().int().positive(),
-  ),
-});
 
 type LlmChatCallHandlerDeps = {
   llmChatCallQueryService: LlmChatCallQueryService;
 };
 
+/** LLM 调用历史查询路由。路由与 schema 的单一事实源在 @kagami/console-api（#279 PR4）。 */
 export class LlmChatCallHandler {
-  public readonly prefix = "/llm-chat-call";
   private readonly llmChatCallQueryService: LlmChatCallQueryService;
 
   public constructor({ llmChatCallQueryService }: LlmChatCallHandlerDeps) {
@@ -28,24 +16,12 @@ export class LlmChatCallHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/query`,
-      querySchema: LlmChatCallListQuerySchema,
-      responseSchema: LlmChatCallListResponseSchema,
-      execute: ({ query }) => {
-        return this.llmChatCallQueryService.queryList(query);
-      },
-    });
+    registerJsonRoute(app, consoleApiContract.queryLlmChatCalls, ({ input }) =>
+      this.llmChatCallQueryService.queryList(input),
+    );
 
-    registerParamRoute({
-      app,
-      path: `${this.prefix}/:id`,
-      paramSchema: LlmChatCallDetailParamSchema,
-      responseSchema: LlmChatCallDetailResponseSchema,
-      execute: ({ params }) => {
-        return this.llmChatCallQueryService.getDetail(params.id);
-      },
-    });
+    registerJsonRoute(app, consoleApiContract.getLlmChatCallDetail, ({ params }) =>
+      this.llmChatCallQueryService.getDetail(params.id),
+    );
   }
 }

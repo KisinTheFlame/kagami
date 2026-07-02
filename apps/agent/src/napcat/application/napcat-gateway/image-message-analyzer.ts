@@ -1,5 +1,5 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { truncateWithEllipsis } from "@kagami/shared/utils";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import { detectMime } from "../../../oss/detect-mime.js";
 import type { OssClient } from "../../../oss/oss-client.js";

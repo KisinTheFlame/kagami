@@ -5,7 +5,7 @@ import {
   JsonValueSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
-} from "./base.js";
+} from "@kagami/http/wire";
 
 export const NapcatQqMessageTypeSchema = z.enum(["group", "private"]);
 

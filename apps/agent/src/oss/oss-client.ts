@@ -1,5 +1,5 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { interpolatePath } from "@kagami/rpc-client/client";
+import { interpolatePath } from "@kagami/http/url";
 import { ossApiContract } from "@kagami/oss-api/contract";
 
 /**

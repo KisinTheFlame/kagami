@@ -1,5 +1,5 @@
 import type { App, JsonValue } from "@kagami/agent-runtime";
-import { truncateWithEllipsis } from "@kagami/shared/utils";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import { renderGroupMessagePlainText, renderPrivateMessagePlainText } from "./qq-message-render.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";

@@ -5,7 +5,7 @@ import {
   registerBinaryEnvelopeRoute,
   registerBinaryRawRoute,
   useRawBodyPassthrough,
-} from "@kagami/http/contract";
+} from "@kagami/http/register";
 import { ossApiContract } from "@kagami/oss-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp, type ServiceErrorHandler } from "@kagami/kernel/http/service-app";

@@ -1,22 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import {
-  LlmPlaygroundChatRequestSchema,
-  LlmPlaygroundChatResponseSchema,
-  LlmPlaygroundToolListResponseSchema,
-  LlmProviderListResponseSchema,
-} from "@kagami/shared/schemas/llm-chat";
-import { z } from "zod";
+import { registerJsonRoute } from "@kagami/http/register";
+import { agentApiContract } from "@kagami/agent-api/contract";
 import type { LlmPlaygroundService } from "../application/llm-playground.service.js";
-import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
 
 type LlmHandlerDeps = {
   llmPlaygroundService: LlmPlaygroundService;
 };
 
-const EmptyQuerySchema = z.object({});
-
+/** Playground（管理台 LLM 调试）路由。路由与 schema 的单一事实源在 @kagami/agent-api（#279 PR5）。 */
 export class LlmHandler {
-  public readonly prefix = "/llm";
   private readonly llmPlaygroundService: LlmPlaygroundService;
 
   public constructor({ llmPlaygroundService }: LlmHandlerDeps) {
@@ -24,34 +16,16 @@ export class LlmHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/providers`,
-      querySchema: EmptyQuerySchema,
-      responseSchema: LlmProviderListResponseSchema,
-      execute: () => {
-        return this.llmPlaygroundService.listProviders();
-      },
+    registerJsonRoute(app, agentApiContract.listProviders, () => {
+      return this.llmPlaygroundService.listProviders();
     });
 
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/playground-tools`,
-      querySchema: EmptyQuerySchema,
-      responseSchema: LlmPlaygroundToolListResponseSchema,
-      execute: () => {
-        return this.llmPlaygroundService.listPlaygroundTools();
-      },
+    registerJsonRoute(app, agentApiContract.listPlaygroundTools, () => {
+      return this.llmPlaygroundService.listPlaygroundTools();
     });
 
-    registerCommandRoute({
-      app,
-      path: `${this.prefix}/chat`,
-      bodySchema: LlmPlaygroundChatRequestSchema,
-      responseSchema: LlmPlaygroundChatResponseSchema,
-      execute: ({ body }) => {
-        return this.llmPlaygroundService.chat(body);
-      },
+    registerJsonRoute(app, agentApiContract.playgroundChat, ({ input }) => {
+      return this.llmPlaygroundService.chat(input);
     });
   }
 }

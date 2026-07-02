@@ -1,4 +1,4 @@
-import { type AppLogItem } from "@kagami/shared/schemas/app-log";
+import { type AppLogItem } from "@kagami/console-api/app-log";
 import { formatDateTime } from "@/lib/format";
 
 type AppLogDetailPanelProps = {

@@ -1,7 +1,9 @@
+import { contractUrl } from "@kagami/http/url";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import {
   NapcatEventListResponseSchema,
   type NapcatEventListQuery,
-} from "@kagami/shared/schemas/napcat-event";
+} from "@kagami/console-api/napcat-event";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
@@ -25,7 +27,7 @@ export function useNapcatEventList(
   return useQuery(
     createHistoryListQueryOptions({
       queryKey: queryKeys.napcatEvent.historyList(params),
-      path: "/napcat-event/query",
+      path: contractUrl(consoleApiContract.queryNapcatEvents),
       schema: NapcatEventListResponseSchema,
       params,
     }),

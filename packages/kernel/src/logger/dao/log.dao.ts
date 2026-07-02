@@ -1,4 +1,6 @@
-import { type AppLogLevel, type AppLogListQuery } from "@kagami/shared/schemas/app-log";
+// 日志域类型由 kernel 自持：与 console 的 wire 查询 schema 形状一致但不共享——
+// 存储层接口不被 HTTP wire 形状钉死（shared 退役重划，#279 PR0）。
+export type AppLogLevel = "debug" | "info" | "warn" | "error" | "fatal";
 
 export type InsertAppLogItem = {
   traceId: string;
@@ -19,8 +21,19 @@ export type AppLogItem = {
   updatedAt: Date;
 };
 
-export type QueryAppLogListFilterInput = Omit<AppLogListQuery, "page" | "pageSize">;
-export type QueryAppLogListPageInput = AppLogListQuery;
+export type QueryAppLogListFilterInput = {
+  level?: AppLogLevel;
+  traceId?: string;
+  message?: string;
+  source?: string;
+  startAt?: string;
+  endAt?: string;
+};
+
+export type QueryAppLogListPageInput = QueryAppLogListFilterInput & {
+  page: number;
+  pageSize: number;
+};
 
 export interface LogDao {
   insertBatch(items: InsertAppLogItem[]): Promise<void>;

@@ -1,11 +1,13 @@
-import { MainAgentContextSnapshotSchema } from "@kagami/shared/schemas/main-agent-context";
+import { contractUrl } from "@kagami/http/url";
+import { agentApiContract } from "@kagami/agent-api/contract";
+import { MainAgentContextSnapshotSchema } from "@kagami/agent-api/main-agent-context";
 import { useQuery } from "@tanstack/react-query";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
 
 export function useMainAgentContext() {
   const queryOptions = createSchemaQueryOptions({
     queryKey: queryKeys.mainAgentContext.recent(),
-    path: "/main-agent-context/recent",
+    path: contractUrl(agentApiContract.getRecentMainAgentContext),
     schema: MainAgentContextSnapshotSchema,
   });
 
