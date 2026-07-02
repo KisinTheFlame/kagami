@@ -35,6 +35,10 @@ export class WebSearchTaskAgent
     super({
       model: llmClient,
       taskTools,
+      // 多次检索 + 读页 + 整理的正常上限；toolChoice auto 下纯文本轮也计数，
+      // 跑满仍未 finalize 则抛 TaskAgentMaxRoundsExceededError，经 AsyncTaskManager
+      // 以错误结果回流主 Agent。
+      maxRounds: 24,
     });
   }
 

@@ -1,85 +1,20 @@
-import OpenAI from "openai";
-import type { ChatCompletion } from "openai/resources/chat/completions";
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
-import {
-  attachLlmProviderFailureContext,
-  toSerializableLlmNativeRecord,
-  toSerializableLlmNativeRecordOrNull,
-  type LlmProvider,
-} from "../provider.js";
-import type { LlmChatRequest } from "../types.js";
-import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
+import type { LlmProvider } from "../provider.js";
+import { createOpenAiCompatibleProvider } from "./openai-compatible-provider.js";
 
 type LlmProviderConfig = Config["server"]["llm"]["providers"]["deepseek"] & {
   timeoutMs: Config["server"]["llm"]["timeoutMs"];
 };
 
+/** DeepSeek 走 OpenAI 兼容协议，实现收敛在 openai-compatible-provider。 */
 export function createDeepSeekProvider(
   config: LlmProviderConfig & { apiKey: string },
 ): LlmProvider {
-  const client = new OpenAI({
-    apiKey: config.apiKey,
-    baseURL: config.baseUrl,
-    timeout: config.timeoutMs,
-  });
-
-  return {
+  return createOpenAiCompatibleProvider({
     id: "deepseek",
-    async chat(request: LlmChatRequest) {
-      const model = requireRequestModel(request);
-      const payload = toOpenAiChatRequest({ model, request });
-      let completion: ChatCompletion | null = null;
-
-      try {
-        completion = await client.chat.completions.create(payload, {
-          timeout: config.timeoutMs,
-        });
-      } catch (error) {
-        throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: "deepseek",
-            },
-            cause: error,
-          }),
-          {
-            nativeRequestPayload: toSerializableLlmNativeRecord(payload),
-            nativeError: toSerializableLlmNativeRecord(error),
-          },
-        );
-      }
-
-      if (!completion?.choices[0]?.message) {
-        throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: "deepseek",
-              reason: "EMPTY_CHOICES",
-            },
-          }),
-          {
-            nativeRequestPayload: toSerializableLlmNativeRecord(payload),
-            nativeResponsePayload: toSerializableLlmNativeRecordOrNull(completion),
-          },
-        );
-      }
-
-      return {
-        response: toLlmChatResponsePayload(completion, "deepseek"),
-        nativeRequestPayload: toSerializableLlmNativeRecord(payload),
-        nativeResponsePayload: toSerializableLlmNativeRecord(completion),
-      };
-    },
-  };
-}
-
-function requireRequestModel(request: LlmChatRequest): string {
-  if (!request.model) {
-    throw new Error("DeepSeek provider requires an explicit model");
-  }
-
-  return request.model;
+    displayLabel: "DeepSeek",
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    timeoutMs: config.timeoutMs,
+  });
 }

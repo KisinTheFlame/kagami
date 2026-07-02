@@ -70,11 +70,16 @@ function groupMessage(text: string, atQQ?: string): NapcatGroupMessageData {
   };
 }
 
-function createApp(scheduler: FakeScheduler, onFlush: (lines: string[]) => void) {
+function createApp(
+  scheduler: FakeScheduler,
+  onFlush: (lines: string[]) => void,
+  options: { notifyForegroundInput?: () => void; napcatGateway?: NapcatGatewayService } = {},
+) {
   const center = new NotificationCenter({ leadingWindowMs: 50, windowMs: 100, onFlush, scheduler });
   return new QqApp({
-    napcatGateway: fakeGateway(),
+    napcatGateway: options.napcatGateway ?? fakeGateway(),
     notificationCenter: center,
+    notifyForegroundInput: options.notifyForegroundInput ?? (() => {}),
     botQQ: "10001",
     creatorName: "测试创造者",
     creatorQQ: "20002",
@@ -96,6 +101,12 @@ describe("QqApp", () => {
     // 平台知识 + 消息格式下沉到这里
     expect(help).toContain("## QQ 和 QQ 群");
     expect(help).toContain("<qq_message>");
+    // 前台实时输入（issue #251）：新标签说明 + 「不回 = wait」机制句 + 通知计数快照语义
+    expect(help).toContain("<qq_conversation_new_messages>");
+    expect(help).toContain("不想回就直接 wait");
+    expect(help).toContain("通知里的未读计数是发出时刻的快照");
+    // 旧语义的错话（当前会话也走通知）必须已移除
+    expect(help).not.toContain("新消息会以通知形式提醒你（不在这个 App 里也会）");
     // 群聊行为整块从主 system prompt 迁到 QQ App
     expect(help).toContain("<attention_and_reply>");
     expect(help).toContain("<anti_ai_tone>");
@@ -127,6 +138,7 @@ describe("QqApp", () => {
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
       }),
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -156,8 +168,8 @@ describe("QqApp", () => {
     scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
     expect(onFlush).toHaveBeenCalledTimes(1);
-    // 通知只报信号，不带正文：单条且未 @ 时兜底显示"有新消息"。
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 有新消息"]);
+    // 通知带最新一条预览：群聊附发言人 + 正文。
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友: 在吗"]);
   });
 
   it("keeps the unread count climbing across windows, resetting only on open", async () => {
@@ -166,29 +178,31 @@ describe("QqApp", () => {
     const app = createApp(scheduler, onFlush);
     await app.onStartup();
 
-    // 空闲第一条→开前沿短窗，窗结束 flush，count 1（无条数标签，兜底"有新消息"）。
+    // 空闲第一条→开前沿短窗，窗结束 flush，count 1（无条数标签，只带预览）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("1") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 有新消息"]);
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 群友: 1"]);
 
-    // 再来一条→窗内攒着，窗结束 flush，count 2。
+    // 再来一条→窗内攒着，窗结束 flush，count 2，预览取最新一条。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("2") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[1][0]).toEqual(["QQ:", "产品群: [2 条消息]"]);
+    expect(onFlush.mock.calls[1][0]).toEqual(["QQ:", "产品群: [2 条消息] 群友: 2"]);
 
     // 又一条→没有 open，计数继续涨到 3，而不是按窗口重新计数。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("3") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[2][0]).toEqual(["QQ:", "产品群: [3 条消息]"]);
+    expect(onFlush.mock.calls[2][0]).toEqual(["QQ:", "产品群: [3 条消息] 群友: 3"]);
 
-    // 小镜终于来看→未读清零；窗口排空回到空闲。
+    // 小镜终于来看→未读清零；窗口排空回到空闲。open 成功后会话成为前台当前
+    // （focused 自愈），先 blur 让后续消息回到通知路径。
     await app.openConversation("qq_group:1");
     scheduler.fireWindowEnd();
+    await app.onBlur();
 
     // 之后的新消息从 count 1 重新开始（又走前沿短窗）。
     app.handleNapcatEvent({ type: "napcat_group_message", data: groupMessage("4") });
     scheduler.fireWindowEnd();
-    expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 有新消息"]);
+    expect(onFlush.mock.calls[3][0]).toEqual(["QQ:", "产品群: 群友: 4"]);
   });
 
   it("marks [有人@你] when the bot is mentioned", async () => {
@@ -215,6 +229,7 @@ describe("QqApp", () => {
     const app = new QqApp({
       napcatGateway: fakeGateway(),
       notificationCenter: center,
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -299,6 +314,7 @@ describe("QqApp", () => {
     const app = new QqApp({
       napcatGateway: fakeGateway(),
       notificationCenter: center,
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -362,6 +378,7 @@ describe("QqApp", () => {
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
       }),
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -418,7 +435,8 @@ describe("QqApp", () => {
     });
     scheduler.fireWindowEnd(); // 空闲来第一条→前沿短窗结束才 flush
 
-    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 有新消息"]);
+    // 私聊预览不重复标发送人（会话名就是对方），直接跟正文。
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "老王: 在不在"]);
     // 会话被建出来，能打开
     expect((await app.openConversation("qq_private:888")).ok).toBe(true);
     expect(app.getCurrentChatTarget()).toEqual({ chatType: "private", userId: "888" });
@@ -435,6 +453,7 @@ describe("QqApp", () => {
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
       }),
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -526,6 +545,7 @@ describe("QqApp", () => {
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
       }),
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -560,6 +580,7 @@ describe("QqApp", () => {
         onFlush: vi.fn(),
         scheduler: new FakeScheduler(),
       }),
+      notifyForegroundInput: () => {},
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
@@ -575,5 +596,467 @@ describe("QqApp", () => {
     const result = await app.viewForward("res-404", 0);
     expect(result.ok).toBe(false);
     expect(result.error).toBe("boom");
+  });
+});
+
+/** 可指定发送者与 messageId 的群消息（前台实时路径测试用）。 */
+function fgMessage(
+  text: string,
+  { userId = "654321", messageId = 1 }: { userId?: string; messageId?: number | null } = {},
+): NapcatGroupMessageData {
+  return {
+    groupId: "1",
+    userId,
+    nickname: "群友",
+    rawMessage: text,
+    messageSegments: [{ type: "text", data: { text } } as NapcatReceiveMessageSegment],
+    messageId,
+    time: 1,
+  };
+}
+
+describe("QqApp 前台实时输入（issue #251）", () => {
+  async function createFocusedApp(options: {
+    onFlush?: (lines: string[]) => void;
+    notifyForegroundInput?: () => void;
+    napcatGateway?: NapcatGatewayService;
+    scheduler?: FakeScheduler;
+  }) {
+    const app = createApp(options.scheduler ?? new FakeScheduler(), options.onFlush ?? vi.fn(), {
+      notifyForegroundInput: options.notifyForegroundInput,
+      napcatGateway: options.napcatGateway,
+    });
+    await app.onStartup();
+    await app.onFocus(); // focused = true
+    await app.openConversation("qq_group:1"); // current = qq_group:1（首进 fetch 返回 []）
+    return app;
+  }
+
+  it("前台 + 当前会话：入缓冲 + 敲门，不推 center", async () => {
+    const knock = vi.fn();
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, notifyForegroundInput: knock, scheduler });
+
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("在吗", { messageId: 11 }),
+    });
+
+    expect(knock).toHaveBeenCalledTimes(1);
+    scheduler.fireWindowEnd();
+    expect(onFlush).not.toHaveBeenCalled(); // 实时路径不经 center
+  });
+
+  it("botQQ 回声：只入缓冲，不敲门、不推 center、不计未读", async () => {
+    const knock = vi.fn();
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, notifyForegroundInput: knock, scheduler });
+
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("我自己说的", { userId: "10001", messageId: 12 }),
+    });
+
+    expect(knock).not.toHaveBeenCalled();
+    scheduler.fireWindowEnd();
+    expect(onFlush).not.toHaveBeenCalled();
+    // 回声不计未读 → 随后 blur 的退化补推也不产生 draft（回声不成通知）。
+    await app.onBlur();
+    scheduler.fireWindowEnd();
+    expect(onFlush).not.toHaveBeenCalled();
+  });
+
+  it("QQ 后台或非当前会话的消息照旧走 center", async () => {
+    const knock = vi.fn();
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, notifyForegroundInput: knock, scheduler });
+
+    await app.onBlur(); // 退到后台
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("后台消息", { messageId: 13 }),
+    });
+    scheduler.fireWindowEnd();
+
+    expect(knock).not.toHaveBeenCalled();
+    expect(onFlush).toHaveBeenCalled();
+  });
+
+  it("drainForegroundInput：渲染增量并消费，二次 drain 拉空（幂等）", async () => {
+    const app = await createFocusedApp({});
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("第一条", { messageId: 21 }),
+    });
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("第二条", { messageId: 22 }),
+    });
+
+    const input = await app.drainForegroundInput();
+
+    expect(input).not.toBeNull();
+    expect(input?.itemCount).toBe(2);
+    expect(input?.text).toContain('<qq_conversation_new_messages name="QQ 群 产品群 (1)">');
+    expect(input?.text).toContain("第一条");
+    expect(input?.text).toContain("第二条");
+    expect(input?.text).toContain("</qq_conversation_new_messages>");
+    // 实时投递过的不再出现：二次 drain 拉空。
+    expect(await app.drainForegroundInput()).toBeNull();
+    // 也不再出现在 onFocus 补档里（三路共用消费语义）。
+    const replay = (await app.onFocus())[0];
+    expect("content" in replay ? replay.content : "").not.toContain("第一条");
+  });
+
+  it("drainForegroundInput：缓冲溢出时带「更早 N 条未读未展示」提示行", async () => {
+    const app = await createFocusedApp({});
+    for (let i = 0; i < 8; i += 1) {
+      // recentMessageLimit = 5，8 条溢出 3 条。
+      app.handleNapcatEvent({
+        type: "napcat_group_message",
+        data: fgMessage(`第${i}条`, { messageId: 30 + i }),
+      });
+    }
+
+    const input = await app.drainForegroundInput();
+
+    expect(input?.itemCount).toBe(5);
+    expect(input?.text).toContain("（更早 3 条未读未展示）");
+  });
+
+  it("drainForegroundInput：失焦自查返回 null（双重校验的 App 侧）", async () => {
+    const app = await createFocusedApp({});
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("残留", { messageId: 41 }),
+    });
+    await app.onBlur();
+
+    expect(await app.drainForegroundInput()).toBeNull();
+  });
+
+  it("onBlur 退化：未投递的未读补推 center draft", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, scheduler });
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("没等到 drain", { messageId: 51 }),
+    });
+
+    await app.onBlur();
+    scheduler.fireWindowEnd();
+
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    expect(onFlush.mock.calls[0][0].join("\n")).toContain("产品群");
+  });
+
+  it("切会话退化：先对旧 current 补推 draft，再切换", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, scheduler });
+    // 让私聊会话存在（friend_list upsert）。
+    app.handleNapcatEvent({
+      type: "napcat_friend_list_updated",
+      data: { friends: [{ userId: "888", nickname: "老王", remark: null }] },
+    });
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("旧会话未读", { messageId: 61 }),
+    });
+
+    await app.openConversation("qq_private:888");
+    scheduler.fireWindowEnd();
+
+    // 旧 current（产品群）的未读出现在下一次 flush 里，不静默丢。
+    expect(onFlush).toHaveBeenCalled();
+    expect(onFlush.mock.calls[0][0].join("\n")).toContain("产品群");
+  });
+
+  it("fetch 窗口：await 期间到达且 fetch 未包含的消息保留，并敲门补投", async () => {
+    const knock = vi.fn();
+    let resolveFetch: (messages: NapcatGroupMessageData[]) => void = () => {};
+    const gateway = fakeGateway({
+      getRecentGroupMessages: vi.fn().mockImplementation(
+        () =>
+          new Promise<NapcatGroupMessageData[]>(resolve => {
+            resolveFetch = resolve;
+          }),
+      ),
+    });
+    const app = createApp(new FakeScheduler(), vi.fn(), {
+      notifyForegroundInput: knock,
+      napcatGateway: gateway,
+    });
+    await app.onStartup();
+    await app.onFocus();
+
+    const opening = app.openConversation("qq_group:1"); // 首进：挂在 fetch 上
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("fetch 期间", { messageId: 71 }),
+    });
+    resolveFetch([]); // 历史里没有它
+    await opening;
+
+    expect(knock).toHaveBeenCalledTimes(1); // leftover 敲门补投
+    const input = await app.drainForegroundInput();
+    expect(input?.text).toContain("fetch 期间"); // 不丢
+  });
+
+  it("fetch 窗口：fetch 结果已包含的消息按 messageId 剔除，不重复", async () => {
+    const knock = vi.fn();
+    const arrived = fgMessage("重叠消息", { messageId: 81 });
+    let resolveFetch: (messages: NapcatGroupMessageData[]) => void = () => {};
+    const gateway = fakeGateway({
+      getRecentGroupMessages: vi.fn().mockImplementation(
+        () =>
+          new Promise<NapcatGroupMessageData[]>(resolve => {
+            resolveFetch = resolve;
+          }),
+      ),
+    });
+    const app = createApp(new FakeScheduler(), vi.fn(), {
+      notifyForegroundInput: knock,
+      napcatGateway: gateway,
+    });
+    await app.onStartup();
+    await app.onFocus();
+
+    const opening = app.openConversation("qq_group:1");
+    app.handleNapcatEvent({ type: "napcat_group_message", data: arrived });
+    resolveFetch([arrived]); // 历史已包含同 id 消息
+    const opened = await opening;
+
+    expect(opened.content).toContain("重叠消息"); // 经 fetch 展示一次
+    expect(knock).not.toHaveBeenCalled(); // 无 leftover
+    expect(await app.drainForegroundInput()).toBeNull(); // 不会二次注入
+  });
+
+  it("后台延迟回声也只入缓冲：不计未读、不推 center（回声防御全域生效）", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = await createFocusedApp({ onFlush, scheduler });
+    await app.onBlur(); // 发完就切走，回声延迟到后台才回来
+
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("延迟回声", { userId: "10001", messageId: 101 }),
+    });
+    scheduler.fireWindowEnd();
+
+    expect(onFlush).not.toHaveBeenCalled(); // 自己的话绝不成通知（防自持振荡）
+  });
+
+  it("切会话窗口：fetch await 期间旧会话到达的消息被切换后的扫尾补推接住", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    let resolveFetch: (messages: NapcatGroupMessageData[]) => void = () => {};
+    const gateway = fakeGateway({
+      getRecentPrivateMessages: vi.fn().mockImplementation(
+        () =>
+          new Promise<never[]>(resolve => {
+            resolveFetch = resolve as (messages: NapcatGroupMessageData[]) => void;
+          }),
+      ),
+    });
+    const app = createApp(scheduler, onFlush, { napcatGateway: gateway });
+    await app.onStartup();
+    await app.onFocus();
+    await app.openConversation("qq_group:1"); // current = 产品群
+    app.handleNapcatEvent({
+      type: "napcat_friend_list_updated",
+      data: { friends: [{ userId: "888", nickname: "老王", remark: null }] },
+    });
+
+    const switching = app.openConversation("qq_private:888"); // 首开私聊：挂在 fetch 上
+    // fetch 期间旧会话（仍是前台当前）来消息：走实时路径不进 center。
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("切换窗口", { messageId: 111 }),
+    });
+    resolveFetch([]);
+    await switching;
+    scheduler.fireWindowEnd();
+
+    // 切换完成后 current 已是私聊，该消息永远 drain 不到——必须由扫尾补推接住。
+    expect(onFlush).toHaveBeenCalled();
+    expect(onFlush.mock.calls[0][0].join("\n")).toContain("产品群");
+  });
+
+  it("onBlur：补推抛错时 focused 仍已同步归位（第一行翻转的不变式）", async () => {
+    const scheduler = new FakeScheduler();
+    const onFlush = vi.fn();
+    const app = await createFocusedApp({ onFlush, scheduler });
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("残留", { messageId: 121 }),
+    });
+    // 让退化补推炸掉：center push 抛错。
+    const center = (app as unknown as { notificationCenter: { push: () => void } })
+      .notificationCenter;
+    vi.spyOn(center, "push").mockImplementation(() => {
+      throw new Error("center 炸了");
+    });
+
+    await expect(app.onBlur()).rejects.toThrow("center 炸了");
+    expect(app.getCurrentChatTarget()).toBeUndefined(); // focused 已翻 false
+  });
+
+  it("重启恢复的裸计数首开后不残留幻影红点（reconcile 对账）", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    const app = createApp(scheduler, onFlush);
+    await app.onStartup();
+    // 模拟重启恢复：7 条未读裸计数（无缓冲内容）+ @ 标记。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 7, mentioned: true }],
+    });
+    await app.onFocus();
+
+    await app.openConversation("qq_group:1"); // 首开：拉历史覆盖旧未读
+    scheduler.fireWindowEnd();
+    onFlush.mockClear();
+
+    // 对账后无幻影：blur 不再对已被历史覆盖的旧计数反复补推假通知。
+    await app.onBlur();
+    scheduler.fireWindowEnd();
+    expect(onFlush).not.toHaveBeenCalled();
+    const list = (await app.onFocus())[0];
+    expect("content" in list ? list.content : "").not.toContain("未读 7");
+  });
+
+  it("onFocus 半途抛错时 focused 保持 false（成功路径末尾才翻转）", async () => {
+    const scheduler = new FakeScheduler();
+    const knock = vi.fn();
+    const onFlush = vi.fn();
+    const app = await createFocusedApp({ onFlush, notifyForegroundInput: knock, scheduler });
+    await app.onBlur();
+    // 让 onFocus 的补档渲染炸掉（借 center 清理路径之外最近的可注入点：模板渲染依赖
+    // displayName——这里直接 mock enterConversation 依赖面较深，改用私有态断言路径：
+    // 用一个会抛错的 notificationCenter.clearForSource 模拟半途失败）。
+    const center = (app as unknown as { notificationCenter: { clearForSource: () => void } })
+      .notificationCenter;
+    vi.spyOn(center, "clearForSource").mockImplementation(() => {
+      throw new Error("onFocus 半途炸了");
+    });
+
+    await expect(app.onFocus()).rejects.toThrow("onFocus 半途炸了");
+
+    // focused 仍为 false：后续消息走 center 通知路径（安全方向），不会静默滞留。
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("失败后消息", { messageId: 131 }),
+    });
+    expect(knock).not.toHaveBeenCalled();
+    scheduler.fireWindowEnd();
+    expect(onFlush).toHaveBeenCalled();
+  });
+
+  it("回声-only 缓冲 + stale 敲门：drain 返回 null，绝不把自己的发言注入成新消息（红队 P1）", async () => {
+    const app = await createFocusedApp({});
+    // 真实消息到达并被 open 补看消费（模拟同轮内重开会话），随后只剩自己的回声入缓冲。
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("真消息", { messageId: 141 }),
+    });
+    await app.openConversation("qq_group:1"); // 消费掉真消息（重开同会话）
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("我自己回的", { userId: "10001", messageId: 142 }),
+    });
+
+    // stale 敲门触发 drain：缓冲只剩回声（不计未读）→ 必须拉空。
+    expect(await app.drainForegroundInput()).toBeNull();
+
+    // 回声随下一次真实增量一起上屏。
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("别人又说话", { messageId: 143 }),
+    });
+    const input = await app.drainForegroundInput();
+    expect(input?.text).toContain("我自己回的");
+    expect(input?.text).toContain("别人又说话");
+  });
+
+  it("首开会话 fetch 返回空历史：缓冲内容直接展示，不被快照剔除吞掉（红队 P2）", async () => {
+    const onFlush = vi.fn();
+    const scheduler = new FakeScheduler();
+    let resolveFetch: (messages: NapcatGroupMessageData[]) => void = () => {};
+    const gateway = fakeGateway({
+      getRecentGroupMessages: vi.fn().mockImplementation(
+        () =>
+          new Promise<NapcatGroupMessageData[]>(resolve => {
+            resolveFetch = resolve;
+          }),
+      ),
+    });
+    const app = createApp(scheduler, onFlush, { napcatGateway: gateway });
+    await app.onStartup();
+    // 先攒 3 条未读（未进过、非前台路径）。
+    for (const [i, text] of ["一", "二", "三"].entries()) {
+      app.handleNapcatEvent({
+        type: "napcat_group_message",
+        data: fgMessage(text, { messageId: 150 + i }),
+      });
+    }
+    await app.onFocus();
+
+    const opening = app.openConversation("qq_group:1");
+    resolveFetch([]); // 合法的空历史响应
+    const opened = await opening;
+
+    expect(opened.content).toContain("一");
+    expect(opened.content).toContain("三");
+    expect(opened.content).not.toContain("暂无最近消息");
+  });
+
+  it("被缓冲挤掉的 @ 在 drain 提示行里带出（红队 P2）", async () => {
+    const app = await createFocusedApp({});
+    // 第 1 条带 @，随后 7 条把它挤出缓冲（recentMessageLimit=5）。
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: {
+        ...fgMessage("@小镜 在吗", { messageId: 160 }),
+        messageSegments: [
+          { type: "at", data: { qq: "10001" } } as NapcatReceiveMessageSegment,
+          { type: "text", data: { text: " 在吗" } } as NapcatReceiveMessageSegment,
+        ],
+      },
+    });
+    for (let i = 1; i <= 7; i += 1) {
+      app.handleNapcatEvent({
+        type: "napcat_group_message",
+        data: fgMessage(`刷屏${i}`, { messageId: 160 + i }),
+      });
+    }
+
+    const input = await app.drainForegroundInput();
+
+    expect(input?.text).toContain("（更早 3 条未读未展示，其中有人 @ 你）");
+  });
+
+  it("fetch 抛错：未读原封不动（消费只发生在成功路径）", async () => {
+    const gateway = fakeGateway({
+      getRecentGroupMessages: vi.fn().mockRejectedValue(new Error("napcat 挂了")),
+    });
+    const scheduler = new FakeScheduler();
+    const app = createApp(scheduler, vi.fn(), { napcatGateway: gateway });
+    await app.onStartup();
+    await app.onFocus();
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: fgMessage("别丢我", { messageId: 91 }),
+    });
+
+    await expect(app.openConversation("qq_group:1")).rejects.toThrow("napcat 挂了");
+
+    // 消息仍在：之后列表里未读还在（这里用退化补推间接验证——消息未被吞）。
+    const onFocusContent = (await app.onFocus())[0];
+    expect("content" in onFocusContent ? onFocusContent.content : "").toContain("未读 1");
   });
 });

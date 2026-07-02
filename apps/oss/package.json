@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "@kagami/config": "workspace:*",
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/oss-api": "workspace:*",
+    "fastify": "^5.6.2",
     "better-sqlite3": "^12.11.1",
     "yaml": "^2.8.2"
   },

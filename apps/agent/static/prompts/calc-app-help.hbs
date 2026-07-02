@@ -1,0 +1,9 @@
+你在 calc App 里。当前可调用工具：
+  - calculate(a, op, b): 对两个有限实数做一次二元四则运算。op 取值: +, -, *, /
+  {{#if hasPrecision}}结果保留 {{precision}} 位小数。{{else}}结果不做小数位截断（按 JS 浮点直接返回）。{{/if}}
+
+需要复合运算（例如 1 + 2 * 3）时，按运算优先级分多次调用：
+  1. calculate(a=2, op="*", b=3) → 6
+  2. calculate(a=1, op="+", b=6) → 7
+
+要去别的 App，用 switch(id=...) 切过去。

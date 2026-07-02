@@ -1,0 +1,28 @@
+{
+  "name": "@kagami/spire-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "pnpm --filter \"@kagami/spire-service^...\" build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "sim": "node dist/sim/cli.js"
+  },
+  "dependencies": {
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/shared": "workspace:*",
+    "@kagami/spire-api": "workspace:*",
+    "fastify": "^5.6.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

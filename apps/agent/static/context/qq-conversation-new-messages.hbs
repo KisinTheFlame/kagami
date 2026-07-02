@@ -1,0 +1,8 @@
+<qq_conversation_new_messages name="{{displayName}}">
+{{#if hasOlderUnread}}
+（更早 {{olderUnread}} 条未读未展示{{#if squeezedMention}}，其中有人 @ 你{{/if}}）
+{{/if}}
+{{#each messages}}
+{{this}}
+{{/each}}
+</qq_conversation_new_messages>

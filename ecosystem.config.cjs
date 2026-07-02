@@ -50,7 +50,7 @@ module.exports = {
     },
     {
       // metric 领域进程：独立 PM2 生命周期，一手包办 metric 摄取（agent HTTP 上报）+ metric-chart
-      // 查询。监听端口自读 config.yaml 的 services.metric（默认 20009，仅 localhost）。
+      // 查询。监听端口自读 config.yaml 的 services.metric（默认 20010，仅 localhost）。
       name: "kagami-metric",
       cwd: path.join(__dirname, "apps/metric"),
       script: "dist/index.js",
@@ -81,6 +81,19 @@ module.exports = {
       name: "kagami-llm",
       cwd: __dirname,
       script: "apps/llm/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
+      // 尖塔卡牌游戏引擎：独立 PM2 生命周期，agent 重启不打断进行中的对局。cwd 固定仓库根，
+      // 让存档 data/spire/ 落在仓库根 data/ 下，对局跨 agent / 本进程重启留存。
+      name: "kagami-spire",
+      cwd: __dirname,
+      script: "apps/spire/dist/index.js",
       interpreter: "node",
       exec_mode: "fork",
       instances: 1,

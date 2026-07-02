@@ -32,7 +32,7 @@ export interface ReActModel<
       system?: string;
       messages: LlmMessage[];
       tools: Tool[];
-      toolChoice: "required";
+      toolChoice: "auto";
     },
     options: {
       usage: TUsage;
@@ -67,7 +67,8 @@ export type ReActToolExecution<TExtensionData = unknown> = {
   extensionData?: TExtensionData;
 };
 
-export type ReActRoundResult<
+/** 正常完成的一轮：有真实 completion，`shouldCommit: true`，可提交可持久化。 */
+export type ReActCommittedRoundResult<
   TCompletion extends { message: AssistantMessage },
   TExtensionData = unknown,
   TControl = never,
@@ -76,9 +77,32 @@ export type ReActRoundResult<
   assistantMessage: AssistantMessage;
   toolExecutions: ReActToolExecution<TExtensionData>[];
   appendedMessages: LlmMessage[];
-  shouldCommit: boolean;
+  shouldCommit: true;
   control?: TControl;
 };
+
+/**
+ * 模型调用出错且被扩展 onModelError handled 的一轮：本轮没有 completion，
+ * 各字段诚实置空/null（此前是用 `as unknown as TCompletion` 伪造空 completion
+ * 绕类型系统——若 TCompletion 有必需字段会在运行时缺字段而编译期不报）。
+ * `shouldCommit: false` 是判别符，消费方据此收窄。
+ */
+export type ReActHandledModelErrorRoundResult = {
+  completion: null;
+  assistantMessage: null;
+  toolExecutions: [];
+  appendedMessages: [];
+  shouldCommit: false;
+  control?: never;
+};
+
+export type ReActRoundResult<
+  TCompletion extends { message: AssistantMessage },
+  TExtensionData = unknown,
+  TControl = never,
+> =
+  | ReActCommittedRoundResult<TCompletion, TExtensionData, TControl>
+  | ReActHandledModelErrorRoundResult;
 
 export type ReActKernelModelErrorDecision = {
   handled: boolean;
@@ -187,7 +211,7 @@ export class ReActKernel<
           system: request.state.systemPrompt,
           messages: [...request.state.messages],
           tools: request.tools.definitions(),
-          toolChoice: "required",
+          toolChoice: "auto",
         },
         {
           usage: request.usage,
@@ -201,18 +225,8 @@ export class ReActKernel<
         });
         if (decision?.handled) {
           return {
-            completion: {
-              message: {
-                role: "assistant",
-                content: "",
-                toolCalls: [],
-              },
-            } as unknown as TCompletion,
-            assistantMessage: {
-              role: "assistant",
-              content: "",
-              toolCalls: [],
-            } as unknown as AssistantMessage,
+            completion: null,
+            assistantMessage: null,
             toolExecutions: [],
             appendedMessages: [],
             shouldCommit: false,
@@ -295,16 +309,16 @@ export class ReActKernel<
         result = fallback;
       }
 
-      const toolMessages: Array<Extract<LlmMessage, { role: "tool" }>> =
-        result.content.length > 0
-          ? [
-              {
-                role: "tool",
-                toolCallId: toolCall.id,
-                content: result.content,
-              },
-            ]
-          : [];
+      // ReAct 协议：每个 tool_call 必有对应 tool_result——即使 content 为空也要
+      // 产一条空串 tool 消息。丢掉它会让 assistant tool_use 悬空，provider 直接
+      // 400（上下文不平衡是自续型故障：进了持久化就每轮复发）。
+      const toolMessages: Array<Extract<LlmMessage, { role: "tool" }>> = [
+        {
+          role: "tool",
+          toolCallId: toolCall.id,
+          content: result.content,
+        },
+      ];
 
       // 内置消费 effects：interpreter 把 effects 翻译成 appendedMessages
       // （走原子提交）和可选 control（透传到 round result）。effects 原始数据

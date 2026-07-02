@@ -1,6 +1,6 @@
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { PkcePair } from "../shared/pkce.js";
+import { invalidOAuthTicketError, postOAuthTokenRequest } from "../shared/oauth-token-request.js";
 import type { ClaudeCodeTokenResponse } from "./types.js";
 
 const CLAUDE_CODE_AUTH_URL = "https://claude.ai/oauth/authorize";
@@ -86,43 +86,13 @@ async function requestClaudeCodeTokens(input: {
   config: ClaudeCodeAuthConfig;
   unavailableReason: string;
 }): Promise<ClaudeCodeTokenResponse> {
-  let response: Response;
-  try {
-    response = await fetch(CLAUDE_CODE_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(input.payload),
-      signal: AbortSignal.timeout(input.config.timeoutMs),
-    });
-  } catch (error) {
-    throw new BizError({
-      message: "Claude Code 登录服务调用失败",
-      meta: {
-        reason: input.unavailableReason,
-      },
-      cause: error,
-    });
-  }
-
-  const rawText = await response.text();
-  const parsed = safeParseJson<ClaudeCodeOAuthTokenApiResponse>(rawText);
-
-  if (!response.ok) {
-    throw new BizError({
-      message:
-        response.status === 400 || response.status === 401 || response.status === 403
-          ? "Claude Code 登录当前不可用"
-          : "Claude Code 登录服务调用失败",
-      meta: {
-        reason: input.unavailableReason,
-        status: response.status,
-      },
-      cause: parsed ?? rawText.slice(0, 500),
-    });
-  }
+  const { parsed, rawText } = await postOAuthTokenRequest<ClaudeCodeOAuthTokenApiResponse>({
+    tokenUrl: CLAUDE_CODE_TOKEN_URL,
+    providerLabel: "Claude Code",
+    body: { kind: "json", payload: input.payload },
+    timeoutMs: input.config.timeoutMs,
+    unavailableReason: input.unavailableReason,
+  });
 
   if (
     !parsed?.access_token ||
@@ -130,11 +100,8 @@ async function requestClaudeCodeTokens(input: {
     typeof parsed.expires_in !== "number" ||
     !parsed.account?.email_address
   ) {
-    throw new BizError({
-      message: "Claude Code 登录服务返回了无效票据",
-      meta: {
-        reason: "AUTH_INVALID_RESPONSE",
-      },
+    throw invalidOAuthTicketError({
+      providerLabel: "Claude Code",
       cause: parsed ?? rawText.slice(0, 500),
     });
   }
@@ -156,12 +123,4 @@ function parseCodeAndState(code: string): { code: string; state: string } {
     code: parsedCode,
     state: parsedState,
   };
-}
-
-function safeParseJson<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
 }

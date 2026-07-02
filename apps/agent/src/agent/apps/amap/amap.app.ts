@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { App, AppStartupContext } from "@kagami/agent-runtime";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { AmapClient } from "./client/amap-client.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../oss/oss-client.js";
@@ -45,29 +46,21 @@ const AmapConfigSchema = z
 
 type AmapConfig = z.infer<typeof AmapConfigSchema>;
 
-const AMAP_AFFORDANCE = [
-  "<amap_portal>",
-  "你进了高德地图。这里是你查地点、问路、看天气、看地图的地方。",
-  "可调用工具：",
-  "  - geocode(address, city?)：地名 → 坐标 + adcode + citycode（查天气 / 规划路线前先用它拿坐标）。",
-  "  - regeocode(location)：坐标 → 地址。",
-  "  - search_poi(keywords|types, region?)：按关键字 / 类型搜地点。",
-  "  - search_around(location, keywords?)：搜某坐标周边（先 geocode 拿坐标）。",
-  "  - plan_route(origin, destination, mode)：驾车 / 步行 / 骑行路线。",
-  "  - plan_transit(origin, destination, city1, city2)：公交换乘（city 用 citycode）。",
-  "  - weather(adcode, kind?)：天气实况 / 预报（adcode 从 geocode 拿）。",
-  "  - static_map(location?, markers?, paths?)：生成地图图片，原图直接进你的上下文。",
-  "坐标一律 GCJ-02 '经度,纬度'（经度在前）。要去别的 App，用 switch(id=...) 切过去。",
-  "</amap_portal>",
-].join("\n");
+/** 进入高德地图时的定位屏：不含子工具清单（清单归 help）；未配置 key 时给未配置提示。 */
+function renderAmapPortal(configured: boolean): string {
+  return renderServerStaticTemplate(
+    import.meta.url,
+    configured ? "prompts/amap-app-portal.hbs" : "prompts/amap-app-not-configured.hbs",
+  );
+}
 
-const AMAP_NOT_CONFIGURED = [
-  "<amap_portal>",
-  "你进了高德地图，但它还没配置 key，暂时不能用。",
-  "（让创造者在 config.yaml 的 server.apps.amap.apiKey 填上高德 Web 服务 key。）",
-  "要去别的 App，用 switch(id=...) 切过去。",
-  "</amap_portal>",
-].join("\n");
+/** help 屏：已配置时披露完整子工具清单与用法要点；未配置时与 portal 同为未配置提示。 */
+function renderAmapHelp(configured: boolean): string {
+  return renderServerStaticTemplate(
+    import.meta.url,
+    configured ? "prompts/amap-app-help.hbs" : "prompts/amap-app-not-configured.hbs",
+  );
+}
 
 /**
  * 高德地图 App。把高德 Web 服务 API 包成桌面上的一个能力单元，8 个 InvokeTool 子工具。
@@ -134,10 +127,7 @@ export class AmapApp implements App<AmapConfig> {
   }
 
   public async help(): Promise<string> {
-    if (!this.canInvoke()) {
-      return AMAP_NOT_CONFIGURED;
-    }
-    return AMAP_AFFORDANCE;
+    return renderAmapHelp(this.canInvoke());
   }
 
   public async onStartup(ctx: AppStartupContext<AmapConfig>): Promise<void> {
@@ -161,9 +151,8 @@ export class AmapApp implements App<AmapConfig> {
     });
   }
 
-  /** 进入高德地图：只给静态提示屏，不自动拉任何接口（无网络 I/O，永不失败）。 */
+  /** 进入高德地图：只给静态提示屏，不自动拉任何接口（本地模板渲染，永不失败）。 */
   public async onFocus(): Promise<readonly RootAgentEffect[]> {
-    const content = this.canInvoke() ? AMAP_AFFORDANCE : AMAP_NOT_CONFIGURED;
-    return [{ type: "append_message", content }];
+    return [{ type: "append_message", content: renderAmapPortal(this.canInvoke()) }];
   }
 }

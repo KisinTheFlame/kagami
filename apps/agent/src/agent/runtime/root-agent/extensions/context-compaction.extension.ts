@@ -1,4 +1,4 @@
-import type { LoopAgentExtension, ReActRoundResult } from "@kagami/agent-runtime";
+import type { LoopAgentExtension, ReActCommittedRoundResult } from "@kagami/agent-runtime";
 import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
@@ -13,7 +13,7 @@ export class ContextCompactionExtension implements LoopAgentExtension<
 > {
   public async onAfterCommit(input: {
     context: RootLoopExtensionContext;
-    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>;
+    result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>;
   }): Promise<void> {
     const compacted = await input.context.host.compactContextIfNeeded(
       input.result.completion.usage?.totalTokens,

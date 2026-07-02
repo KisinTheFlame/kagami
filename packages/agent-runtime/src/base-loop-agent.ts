@@ -3,6 +3,7 @@ import type { LoopAgent } from "./loop-agent.js";
 import type { LoopAgentExtension } from "./loop-agent-extension.js";
 import type {
   AssistantLikeMessage,
+  ReActCommittedRoundResult,
   ReActKernel,
   ReActKernelRunRoundInput,
   ReActRoundResult,
@@ -111,7 +112,9 @@ export abstract class BaseLoopAgent<
 
   protected abstract buildRoundInput(): Promise<ReActKernelRunRoundInput<TUsage> | null>;
   protected abstract commitRoundResult(
-    result: ReActRoundResult<TCompletion, TExtensionData>,
+    // 只有 shouldCommit: true 的轮才会走到这里（runReactRound 里收窄），故收
+    // committed 变体：completion/assistantMessage 保证非 null。
+    result: ReActCommittedRoundResult<TCompletion, TExtensionData>,
   ): Promise<void>;
 
   /**

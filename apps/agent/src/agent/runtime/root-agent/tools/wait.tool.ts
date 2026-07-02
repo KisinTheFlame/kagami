@@ -42,7 +42,7 @@ export class WaitTool extends ZodToolComponent<typeof WaitArgumentsSchema> {
     // 产出（state.handleEvent -> append_message）。
     const effects: RootAgentEffect[] = [{ type: "wait_for_event", maxWaitMs: this.maxWaitMs }];
     return {
-      content: "休息结束了",
+      content: "等待结束",
       effects,
     };
   }

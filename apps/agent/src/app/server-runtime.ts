@@ -12,7 +12,7 @@ import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-gr
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
-import { HealthHandler } from "./http/health.handler.js";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { HttpLlmClient } from "../llm/http-llm-client.js";
@@ -31,6 +31,7 @@ import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gatew
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../oss/oss-client.js";
 import { HttpBrowserClient } from "../browser/browser-client.js";
+import { HttpSpireClient } from "../spire/spire-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -129,6 +130,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const browserClient = new HttpBrowserClient({
     baseUrl: `http://${config.services.browser.host}:${config.services.browser.port}`,
   });
+  // 尖塔卡牌游戏拆成独立 kagami-spire 进程（issue #234）：agent 经 HTTP client 调它，地址从
+  // 顶层 services.spire 派生。游戏进程未起时，client 把错误归一成 SPIRE_NOT_READY，工具仍回规整失败结构。
+  const spireClient = new HttpSpireClient({
+    baseUrl: `http://${config.services.spire.host}:${config.services.spire.port}`,
+  });
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
     ossClient,
@@ -183,12 +189,17 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     eventQueue,
     ossClient,
     browserClient,
+    spireClient,
   });
 
   // TodoReminderPoller 构造放在 agentRuntime 之后：digest 第三段要 fork 主 Agent 上下文，
   // 依赖 agentRuntime.rootAgentRuntime.getContextSnapshot()。reminder-tick 路径不依赖它，故安全。
   // 提醒/汇总以纯数据回调，draft 在这层（wiring 边界）构造并 push，capabilities 层不依赖 apps 层。
-  const todoSuggestionService = new TodoSuggestionService({ llmClient });
+  const todoSuggestionService = new TodoSuggestionService({
+    // 工具装配与主 Agent 字节相等的 task agent（见 agent-runtime.factory），
+    // propose_todos 经 invoke 终止子工具提交，不新增顶层工具。
+    taskAgent: agentRuntime.todoSuggestionTaskAgent,
+  });
   const suggestTodos = async (openTodos: { title: string }[]): Promise<string[]> => {
     try {
       const snapshot = await agentRuntime.rootAgentRuntime.getContextSnapshot();
