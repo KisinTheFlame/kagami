@@ -1,9 +1,8 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
+import { formatBeijingDateTime } from "@kagami/shared/utils";
 
 // === IT之家 App 屏幕渲染 ===
 // 文章列表 / 详情渲染成 <ithome_*> 段落，经 append_message Effect 追加到上下文尾部。
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 type IthomeArticleListInput = {
   displayName: string;
@@ -25,7 +24,7 @@ export function renderIthomeArticleListContent(input: IthomeArticleListInput): s
     hiddenNewCount: input.hiddenNewCount,
     articles: input.articles.map(article => ({
       ...article,
-      publishedAtText: formatDateTime(article.publishedAt),
+      publishedAtText: formatBeijingDateTime(article.publishedAt),
     })),
   });
 }
@@ -44,22 +43,10 @@ export function renderIthomeArticleDetailContent(input: IthomeArticleDetailInput
   return renderServerStaticTemplate(import.meta.url, "context/ithome-article-detail.hbs", {
     title: input.title,
     url: input.url,
-    publishedAtText: formatDateTime(input.publishedAt),
+    publishedAtText: formatBeijingDateTime(input.publishedAt),
     content: input.content.trim(),
     fallbackToSummary: input.contentSource === "rss_summary",
     truncated: input.truncated,
     maxChars: input.maxChars,
   });
-}
-
-function formatDateTime(value: Date): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: BEIJING_TIME_ZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(value);
 }

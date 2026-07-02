@@ -103,11 +103,6 @@ export function renderSpireScreen(screen: SpireScreen): string {
   });
 }
 
-/** 服务不可达时的降级屏（错误已被工具基类序列化，这里只在 onFocus 等处兜底用）。 */
-export function renderSpireUnavailable(): string {
-  return renderServerStaticTemplate(import.meta.url, "context/spire-unavailable.hbs", {});
-}
-
 /** 没有进行中对局时的提示屏（look 拿到 null 时用）。 */
 export function renderSpireNoRun(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-no-run.hbs", {});

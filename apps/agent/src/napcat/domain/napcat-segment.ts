@@ -367,13 +367,6 @@ export const NapcatSendMessageSegmentSchema: z.ZodType<NapcatSendMessageSegment>
   ]),
 );
 
-export type NapcatSendGroupSegment = NapcatSendTextSegment | NapcatSendImageSegment;
-
-export const NapcatSendGroupSegmentSchema: z.ZodType<NapcatSendGroupSegment> = z.union([
-  NapcatSendTextSegmentSchema,
-  NapcatSendImageSegmentSchema,
-]);
-
 export type NapcatReceiveTextSegment = {
   type: "text";
   data: {

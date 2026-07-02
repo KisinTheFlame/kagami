@@ -1,11 +1,10 @@
+import { formatBeijingDateTime } from "@kagami/shared/utils";
 import type { HnFeed } from "./client/firebase.js";
 import type { HnGlanceResult, HnThreadResult, HnSearchResult, HnUserResult } from "./hn-reader.js";
 
 // === Hacker News App 屏幕渲染 ===
 // 领域模型已在 HnReader 里清洗过（htmlToPlainText 去标签 + 软化尖括号），
 // 所以这里直接拼进 <hn_*> XML 段落是安全的——HN 文本无法伪造闭合标签越狱。
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
 
 const HN_FEED_LABEL: Record<HnFeed, string> = {
   top: "热榜",
@@ -27,7 +26,7 @@ export function renderHnFrontPageContent(result: HnGlanceResult): string {
       story.descendants !== null ? `${story.descendants} 评论` : null,
       story.by ? `by ${story.by}` : null,
       story.domain,
-      story.postedAt ? formatDateTime(story.postedAt) : null,
+      story.postedAt ? formatBeijingDateTime(story.postedAt) : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -46,7 +45,7 @@ export function renderHnThreadContent(result: HnThreadResult): string {
   const head = [
     result.by ? `by ${result.by}` : null,
     result.domain,
-    result.postedAt ? formatDateTime(result.postedAt) : null,
+    result.postedAt ? formatBeijingDateTime(result.postedAt) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -89,7 +88,7 @@ export function renderHnSearchContent(result: HnSearchResult): string {
       hit.numComments !== null ? `${hit.numComments} 评论` : null,
       hit.author ? `by ${hit.author}` : null,
       hit.domain,
-      hit.postedAt ? formatDateTime(hit.postedAt) : null,
+      hit.postedAt ? formatBeijingDateTime(hit.postedAt) : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -113,7 +112,7 @@ export function renderHnUserContent(result: HnUserResult): string {
   }
   const meta = [
     result.karma !== null ? `karma ${result.karma}` : null,
-    result.createdAt ? `注册于 ${formatDateTime(result.createdAt)}` : null,
+    result.createdAt ? `注册于 ${formatBeijingDateTime(result.createdAt)}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -129,22 +128,10 @@ export function renderHnUserContent(result: HnUserResult): string {
   }
   for (const item of result.recent) {
     const kind = item.kind === "comment" ? "评论" : "帖子";
-    const when = item.postedAt ? formatDateTime(item.postedAt) : "";
+    const when = item.postedAt ? formatBeijingDateTime(item.postedAt) : "";
     const body = item.title ?? item.snippet ?? "(无内容)";
     lines.push(`- [${kind}${when ? ` ${when}` : ""}] ${body}`);
   }
   lines.push("</hn_user>");
   return lines.join("\n");
-}
-
-function formatDateTime(value: Date): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: BEIJING_TIME_ZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(value);
 }
