@@ -1,5 +1,3 @@
-import { type NapcatEventListQuery } from "@kagami/shared/schemas/napcat-event";
-
 export type InsertNapcatEventItem = {
   postType: string;
   messageType: string | null;
@@ -23,8 +21,19 @@ export type NapcatEventItem = {
   createdAt: Date;
 };
 
-export type QueryNapcatEventListFilterInput = Omit<NapcatEventListQuery, "page" | "pageSize">;
-export type QueryNapcatEventListPageInput = NapcatEventListQuery;
+// 查询入参由存储层自持：与 console-api 的 wire 查询 schema 形状一致但不共享（#279 PR0）。
+export type QueryNapcatEventListFilterInput = {
+  postType?: string;
+  messageType?: string;
+  userId?: string;
+  startAt?: string;
+  endAt?: string;
+};
+
+export type QueryNapcatEventListPageInput = QueryNapcatEventListFilterInput & {
+  page: number;
+  pageSize: number;
+};
 
 export interface NapcatEventDao {
   insert(item: InsertNapcatEventItem): Promise<void>;

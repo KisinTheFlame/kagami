@@ -349,6 +349,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -638,6 +641,9 @@ importers:
 
   packages/persistence:
     dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -697,6 +703,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
@@ -707,9 +716,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
 packages:
 

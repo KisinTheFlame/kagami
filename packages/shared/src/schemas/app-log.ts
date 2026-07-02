@@ -4,7 +4,7 @@ import {
   JsonRecordSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
-} from "./base.js";
+} from "@kagami/http/wire";
 
 export const AppLogLevelSchema = z.enum(["debug", "info", "warn", "error", "fatal"]);
 

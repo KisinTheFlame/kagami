@@ -1,5 +1,4 @@
-import { type JsonValue } from "@kagami/shared/schemas/base";
-import { type NapcatQqMessageListQuery } from "@kagami/shared/schemas/napcat-group-message";
+import { type JsonValue } from "@kagami/http/wire";
 
 export type InsertNapcatQqMessageItem = {
   messageType: "group" | "private";
@@ -38,11 +37,21 @@ export type NapcatQqMessageContextItem = {
   createdAt: Date;
 };
 
-export type QueryNapcatQqMessageListFilterInput = Omit<
-  NapcatQqMessageListQuery,
-  "page" | "pageSize"
->;
-export type QueryNapcatQqMessageListPageInput = NapcatQqMessageListQuery;
+// 查询入参由存储层自持：与 console-api 的 wire 查询 schema 形状一致但不共享（#279 PR0）。
+export type QueryNapcatQqMessageListFilterInput = {
+  messageType?: "group" | "private";
+  groupId?: string;
+  userId?: string;
+  nickname?: string;
+  keyword?: string;
+  startAt?: string;
+  endAt?: string;
+};
+
+export type QueryNapcatQqMessageListPageInput = QueryNapcatQqMessageListFilterInput & {
+  page: number;
+  pageSize: number;
+};
 
 export interface NapcatQqMessageDao {
   insert(item: InsertNapcatQqMessageItem): Promise<number>;

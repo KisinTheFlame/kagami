@@ -8,7 +8,8 @@
     "strict": true,
     "noEmit": true,
     "paths": {
-      "@kagami/shared/*": ["./../shared/src/*"]
+      "@kagami/shared/*": ["./../shared/src/*"],
+      "@kagami/http/*": ["./../http/src/*"]
     }
   },
   "include": ["src"]

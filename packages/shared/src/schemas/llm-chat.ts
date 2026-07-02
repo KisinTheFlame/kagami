@@ -5,7 +5,7 @@ import {
   JsonRecordSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
-} from "./base.js";
+} from "@kagami/http/wire";
 
 // provider 标识全集的单源在 @kagami/llm；这里只派生 zod schema，不再手写字面量。
 // 需要 `LlmProviderId` 类型的代码请直接从 @kagami/llm 导入（项目禁止 re-export barrel）。

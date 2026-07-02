@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseOptionalStringInput } from "./base.js";
+import { parseOptionalStringInput } from "@kagami/http/wire";
 
 export const AuthUsageTrendRangeSchema = z.enum(["24h", "7d"]);
 

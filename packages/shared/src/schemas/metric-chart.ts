@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseOptionalStringInput } from "./base.js";
+import { parseOptionalStringInput } from "@kagami/http/wire";
 
 export const MetricChartAggregatorSchema = z.enum(["sum", "count", "avg", "max", "min", "last"]);
 

@@ -4,7 +4,7 @@ import {
   JsonRecordSchema,
   PaginationQuerySchema,
   parseOptionalStringInput,
-} from "./base.js";
+} from "@kagami/http/wire";
 
 export const NapcatEventListQuerySchema = PaginationQuerySchema.extend({
   postType: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),

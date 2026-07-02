@@ -1,4 +1,4 @@
-import { stripLoneSurrogates, truncateWithEllipsis } from "@kagami/shared/utils";
+import { stripLoneSurrogates, truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import { describe, expect, it } from "vitest";
 
 // 🎯 = U+1F3AF = "🎯"（高代理 U+D83C + 低代理 U+DFAF）

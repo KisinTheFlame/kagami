@@ -1,16 +1,3 @@
-import type { HealthResponse } from "./schemas/health.js";
-
-export function createHealthResponse(): HealthResponse {
-  return {
-    status: "ok",
-    timestamp: new Date().toISOString(),
-  };
-}
-
-export function assertNever(value: never, message = "Unexpected value"): never {
-  throw new Error(`${message}: ${String(value)}`);
-}
-
 /**
  * 剥除落单的 UTF-16 代理项（unpaired surrogate）：孤立的高代理（U+D800–U+DBFF 后面没有
  * 配对低代理）或孤立的低代理（U+DC00–U+DFFF）。这种半个字符会让 JSON 非法——Anthropic 等

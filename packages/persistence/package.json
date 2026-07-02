@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/shared": "workspace:*",
