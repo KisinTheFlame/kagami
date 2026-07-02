@@ -33,8 +33,10 @@ export type Effect =
   // 每次命中随机挑一个存活敌人（剑刃回旋镖：3 点 ×3，逐次随机目标）。
   | { kind: "deal_damage_random"; amount: number; times: number }
   | { kind: "deal_damage_equal_to_block" }
-  // 敌人用：伤害取自本敌人出生时掷定的固定值（红虱咬击：整场用同一个 5~7 基础值）。
-  | { kind: "deal_damage_rolled" }
+  // 敌人用：伤害取自本敌人锁定的固定值（红虱咬击；六火之灵分割 times 连击）。
+  | { kind: "deal_damage_rolled"; times?: number }
+  // 敌人用：按玩家当前生命锁定一个每击伤害存入 rolledDamage（六火之灵激活：floor(hp/divisor)+add）。
+  | { kind: "store_hp_scaled_damage"; divisor: number; add: number }
   | { kind: "gain_block"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
   | { kind: "draw"; amount: number }

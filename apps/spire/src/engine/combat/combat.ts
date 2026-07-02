@@ -35,6 +35,18 @@ const LOUSE_BITE_MIN = 5;
 const LOUSE_BITE_MAX = 7;
 const LAGAVULIN_METALLICIZE = 8;
 const LAGAVULIN_WAKE_TURN = 3; // 睡满两回合、第 3 回合自然醒（combat.turn 从 1 起）。
+const BURN_DAMAGE = 2;
+
+// 六火之灵激活后的固定仪轨循环（Divider 之后重复）。
+const HEXAGHOST_RITUAL = [
+  "sear",
+  "tackle",
+  "sear",
+  "inflame",
+  "tackle",
+  "sear",
+  "inferno",
+] as const;
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
@@ -208,9 +220,21 @@ function applyEffect(
       break;
     }
     case "deal_damage_rolled": {
-      // 敌人专用：用出生时掷定、整场固定的基础值攻击玩家（红虱咬击）。
+      // 敌人专用：用锁定的固定基础值攻击玩家（红虱咬击 ×1；六火之灵分割 ×times）。
       if (actor.side === "enemy") {
-        dealDamageToPlayer(state, combat.enemies[actor.index]!.rolledDamage, powers);
+        const rolled = combat.enemies[actor.index]!.rolledDamage;
+        const times = effect.times ?? 1;
+        for (let hit = 0; hit < times; hit += 1) {
+          dealDamageToPlayer(state, rolled, powers);
+        }
+      }
+      break;
+    }
+    case "store_hp_scaled_damage": {
+      // 敌人专用：按玩家当前生命锁定每击伤害存入 rolledDamage（六火之灵激活）。
+      if (actor.side === "enemy") {
+        combat.enemies[actor.index]!.rolledDamage =
+          Math.floor(state.hp / effect.divisor) + effect.add;
       }
       break;
     }
@@ -423,6 +447,14 @@ function dealDamageToPlayer(
   state.hp = Math.max(0, state.hp - afterBlock);
 }
 
+/** 无来源的固定伤害（灼烧废牌），经玩家格挡但不受力量/易伤影响。 */
+function applyBurnDamage(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  const afterBlock = Math.max(0, amount - combat.playerBlock);
+  combat.playerBlock = Math.max(0, combat.playerBlock - amount);
+  state.hp = Math.max(0, state.hp - afterBlock);
+}
+
 // —— 玩家出牌 ——
 
 export type PlayCardResult = { ok: true } | { ok: false; reason: string };
@@ -504,6 +536,16 @@ export function endTurn(state: GameState): void {
   if (!combat || state.screen !== "combat") {
     return;
   }
+  // 回合结束：手牌中每张灼烧对玩家造成 2 点伤害（经格挡，六火之灵）。
+  const burnCount = combat.hand.filter(instance => instance.defId === "burn").length;
+  for (let i = 0; i < burnCount; i += 1) {
+    applyBurnDamage(state, BURN_DAMAGE);
+  }
+  if (state.hp <= 0) {
+    state.screen = "gameover";
+    state.log.push("你倒下了。");
+    return;
+  }
   // 玩家回合结束：虚无牌被消耗，其余手牌进弃牌堆；玩家 debuff 衰减。
   for (const instance of combat.hand) {
     if (getCardDef(instance.defId).ethereal) {
@@ -568,6 +610,28 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 六火之灵：激活(锁分割伤害) → 分割(6连击) → 固定 7 段仪轨循环。
+  if (enemy.defId === "hexaghost") {
+    const history = enemy.moveHistory;
+    if (history.length === 0) {
+      enemy.currentMove = "activate";
+      return;
+    }
+    const last = history[history.length - 1]!;
+    if (last === "activate") {
+      enemy.currentMove = "divider";
+      return;
+    }
+    if (last === "divider") {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = HEXAGHOST_RITUAL[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % HEXAGHOST_RITUAL.length;
+    enemy.currentMove = HEXAGHOST_RITUAL[enemy.rotationIndex]!;
+    return;
+  }
 
   // 哨卫：错位开局（两侧先射钉、中间先光束）+ 光束↔射钉 严格交替。
   if (enemy.defId === "sentry") {

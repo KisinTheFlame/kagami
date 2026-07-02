@@ -328,6 +328,18 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "状态牌，无法打出。占用手牌，本场战斗结束后消失。",
   },
   {
+    id: "burn",
+    name: "灼烧",
+    type: "status",
+    cost: null,
+    targeted: false,
+    exhausts: false,
+    effects: [],
+    upgradedEffects: [],
+    description: "状态牌，无法打出。回合结束时若在手牌中，对你造成 2 点伤害。",
+    upgradedDescription: "状态牌，无法打出。回合结束时若在手牌中，对你造成 2 点伤害。",
+  },
+  {
     id: "dazed",
     name: "眩晕",
     type: "status",

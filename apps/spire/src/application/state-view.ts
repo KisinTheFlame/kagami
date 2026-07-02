@@ -141,11 +141,11 @@ function computeIntent(state: GameState, enemy: EnemyState): IntentView {
       };
     }
     if (effect.kind === "deal_damage_rolled") {
-      // 红虱咬击：基础值是本敌人出生时掷定的固定值。
+      // 红虱咬击 / 六火之灵分割：基础值是锁定的固定值，可多段。
       return {
         kind: "attack",
         value: computeAttackDamage(enemy.rolledDamage, enemy.powers, playerPowers),
-        hits: 1,
+        hits: effect.times ?? 1,
       };
     }
   }

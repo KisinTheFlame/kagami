@@ -1,6 +1,6 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
-import { pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
+import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
@@ -53,7 +53,7 @@ function resolveNode(state: GameState, node: MapNode): void {
       return;
     }
     case "boss": {
-      startCombat(state, "guardian");
+      startCombat(state, pickBossEncounter(state.rng));
       return;
     }
     case "rest": {
