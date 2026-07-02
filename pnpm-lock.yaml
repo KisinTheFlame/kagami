@@ -59,12 +59,18 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../../packages/llm-api
       '@kagami/llm-client':
         specifier: workspace:*
         version: link:../../packages/llm-client
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../../packages/rpc-client
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -210,6 +216,9 @@ importers:
       '@kagami/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../../packages/llm-api
       '@kagami/llm-client':
         specifier: workspace:*
         version: link:../../packages/llm-client
@@ -485,6 +494,25 @@ importers:
         version: 5.9.3
 
   packages/llm:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/llm-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      '@kagami/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^24.10.1

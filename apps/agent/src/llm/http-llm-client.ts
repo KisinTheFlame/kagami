@@ -1,5 +1,7 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { bizErrorFromWire, isBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
+import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import { llmApiContract } from "@kagami/llm-api/contract";
 import type {
   LlmClient,
   LlmChatOptions,
@@ -10,6 +12,9 @@ import type {
   LlmListAvailableProvidersOptions,
 } from "@kagami/llm-client";
 import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+
+// isRetryableLlmFailure 精确匹配这个 message 决定退避重试；createClient 的兜底错误必须沿用它。
+const LLM_UNREACHABLE_MESSAGE = "LLM 上游服务调用失败";
 
 type FetchLike = typeof fetch;
 
@@ -33,10 +38,19 @@ const QUERY_CLIENT_TIMEOUT_MS = 30_000;
 export class HttpLlmClient implements LlmClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  // providers 走契约驱动的 client（@kagami/llm-api）：门面 == 契约，改契约 output 则此处与
+  // 服务端 handler 同时编译报错。chat / chat-direct 仍走下方手写 post（复杂 union，信封级留后续）。
+  private readonly api: JsonClient<typeof llmApiContract>;
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.fetchImpl = fetchImpl ?? fetch;
+    this.api = createClient(llmApiContract, {
+      baseUrl: this.baseUrl,
+      fetch: this.fetchImpl,
+      timeoutMs: QUERY_CLIENT_TIMEOUT_MS,
+      unreachableMessage: LLM_UNREACHABLE_MESSAGE,
+    });
   }
 
   public async chat(
@@ -73,12 +87,7 @@ export class HttpLlmClient implements LlmClient {
   public async listAvailableProviders(
     options: LlmListAvailableProvidersOptions,
   ): Promise<LlmProviderOption[]> {
-    const search = new URLSearchParams({ usage: options.usage });
-    return (await this.request(
-      `/internal/providers?${search.toString()}`,
-      QUERY_CLIENT_TIMEOUT_MS,
-      { method: "GET" },
-    )) as LlmProviderOption[];
+    return this.api.listProviders({ usage: options.usage });
   }
 
   private async post(path: string, body: unknown, timeoutMs: number): Promise<unknown> {
