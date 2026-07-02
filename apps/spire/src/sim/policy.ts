@@ -2,6 +2,7 @@ import type { GameState } from "../engine/types.js";
 import type { GameAction } from "../engine/engine.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { nextInt } from "../engine/rng.js";
+import { availableNext } from "../engine/map/map.js";
 import type { RngState } from "../engine/types.js";
 
 // === 自动对战策略 ===
@@ -28,6 +29,13 @@ export function legalActions(state: GameState): GameAction[] {
     });
     actions.push({ type: "end_turn" });
     return actions;
+  }
+  if (state.screen === "map") {
+    const count = availableNext(state.map, state.currentNodeId).length;
+    return Array.from({ length: Math.max(1, count) }, (_, optionIndex) => ({
+      type: "choose" as const,
+      optionIndex,
+    }));
   }
   if (state.screen === "reward" || state.screen === "rest") {
     // 选项数量 = currentOptions().length；这里不引 run 层，直接按已知结构估算上界后再交给引擎校验。

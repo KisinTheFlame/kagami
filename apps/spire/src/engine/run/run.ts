@@ -1,41 +1,75 @@
-import type { GameState, MapNode } from "../types.js";
+import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
 import { NORMAL_ENCOUNTER_POOL } from "../enemies/enemies.js";
-import { nextInt } from "../rng.js";
+import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
+import { generateMap, availableNext } from "../map/map.js";
 
-// === 爬塔 / 地图 / 奖励 / 休息 ===
+// === 爬塔 / 分支地图 / 奖励 / 休息 / 宝箱 ===
 //
-// 切片地图固定形状（issue #234 C4）：3 个普通战斗 → 1 篝火 → 守卫者。
-// 无精英、无商店、无未知节点、无分支选路。choose 只用于卡奖励与篝火二选一。
+// 分支地图（StS 节点图）：在 "map" 屏 choose 一个上层节点 → 进入该节点（战斗/篝火/宝箱/Boss）
+// → 结算后回到 "map" 屏继续选路，直到 Boss。节点类型内容随里程碑启用（当前 combat/rest/treasure/boss）。
 
 const REST_HEAL_RATIO = 0.3;
 const REWARD_CARD_COUNT = 3;
+const TREASURE_GOLD_MIN = 25;
+const TREASURE_GOLD_MAX = 35;
+
+/** 本里程碑启用的地图节点类型（精英/事件/商店随内容里程碑加入）。 */
+const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "rest", "treasure"];
+
+const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
+  combat: "战斗",
+  elite: "精英",
+  event: "未知",
+  rest: "篝火",
+  shop: "商店",
+  treasure: "宝箱",
+  boss: "首领",
+};
 
 export function buildMap(state: GameState): void {
-  const nodes: MapNode[] = [];
-  for (let i = 0; i < 3; i += 1) {
-    const encounterId = NORMAL_ENCOUNTER_POOL[nextInt(state.rng, NORMAL_ENCOUNTER_POOL.length)]!;
-    nodes.push({ type: "combat", encounterId });
-  }
-  nodes.push({ type: "rest", encounterId: "" });
-  nodes.push({ type: "boss", encounterId: "guardian" });
-  state.map = { nodes, index: 0 };
+  state.map = generateMap(state.rng, ENABLED_MAP_TYPES);
+  state.currentNodeId = null;
+  state.screen = "map";
 }
 
-/** 进入当前 map.index 指向的节点，切到对应屏幕。 */
-export function enterNode(state: GameState): void {
-  const node = state.map.nodes[state.map.index];
-  if (!node) {
-    state.screen = "victory";
-    return;
+/** 进入一个地图节点：按类型路由。战斗/Boss 起战斗；篝火切 rest 屏；宝箱即时给金币后回地图。 */
+function resolveNode(state: GameState, node: MapNode): void {
+  state.currentNodeId = node.id;
+  switch (node.type) {
+    case "combat":
+    case "elite": {
+      const encounterId = NORMAL_ENCOUNTER_POOL[nextInt(state.rng, NORMAL_ENCOUNTER_POOL.length)]!;
+      startCombat(state, encounterId);
+      return;
+    }
+    case "boss": {
+      startCombat(state, "guardian");
+      return;
+    }
+    case "rest": {
+      state.screen = "rest";
+      state.log.push("你来到一处篝火。");
+      return;
+    }
+    case "treasure": {
+      const gold = nextRange(state.rng, TREASURE_GOLD_MIN, TREASURE_GOLD_MAX);
+      state.gold += gold;
+      state.log.push(`你打开宝箱，获得 ${gold} 金币。`);
+      backToMap(state);
+      return;
+    }
+    default: {
+      // event / shop 尚未启用（未来里程碑）；保守回地图。
+      backToMap(state);
+    }
   }
-  if (node.type === "rest") {
-    state.screen = "rest";
-    state.log.push("你来到一处篝火。");
-    return;
-  }
-  startCombat(state, node.encounterId);
+}
+
+/** 结算完一个节点后回到地图选路屏。 */
+export function backToMap(state: GameState): void {
+  state.screen = "map";
 }
 
 /** 非 Boss 战斗胜利后生成三选一卡奖励。 */
@@ -53,12 +87,17 @@ export function generateReward(state: GameState): void {
 
 /** 当前屏幕可选项（渲染 + 校验 choose 用）。 */
 export function currentOptions(state: GameState): string[] {
+  if (state.screen === "map") {
+    return availableNext(state.map, state.currentNodeId).map(id => {
+      const node = state.map.nodes[id]!;
+      return `第${node.row + 1}层 ${NODE_TYPE_LABELS[node.type]}`;
+    });
+  }
   if (state.screen === "reward" && state.reward) {
     const cards = state.reward.cardChoices.map(choice => {
       const def = getCardDef(choice.defId);
       const cost = costOf(def, choice.upgraded);
       const desc = choice.upgraded ? def.upgradedDescription : def.description;
-      // 选项带牌信息：名 (+升级) 费用 · 效果，方便挑牌时判断（用户反馈）。
       return `${def.name}${choice.upgraded ? "+" : ""} 费${cost ?? "-"} · ${desc}`;
     });
     return [...cards, "跳过（不拿卡）"];
@@ -81,6 +120,16 @@ function upgradableCards(state: GameState): GameState["deck"] {
 export type ChooseResult = { ok: true } | { ok: false; reason: string };
 
 export function applyChoose(state: GameState, optionIndex: number): ChooseResult {
+  if (state.screen === "map") {
+    const options = availableNext(state.map, state.currentNodeId);
+    const nodeId = options[optionIndex];
+    if (nodeId === undefined) {
+      return { ok: false, reason: `选项 ${optionIndex} 无效。` };
+    }
+    resolveNode(state, state.map.nodes[nodeId]!);
+    return { ok: true };
+  }
+
   if (state.screen === "reward" && state.reward) {
     const choices = state.reward.cardChoices;
     if (optionIndex === choices.length) {
@@ -93,7 +142,7 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
       return { ok: false, reason: `选项 ${optionIndex} 无效。` };
     }
     state.reward = null;
-    advance(state);
+    backToMap(state);
     return { ok: true };
   }
 
@@ -111,14 +160,9 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
       target.upgraded = true;
       state.log.push(`你升级了「${getCardDef(target.defId).name}」。`);
     }
-    advance(state);
+    backToMap(state);
     return { ok: true };
   }
 
   return { ok: false, reason: "当前屏幕没有可选项。" };
-}
-
-function advance(state: GameState): void {
-  state.map.index += 1;
-  enterNode(state);
 }

@@ -37,7 +37,7 @@ describe("SpireService 并发与持久化", () => {
     const store = new FakeStore();
     const service = makeService(store);
     await service.startRun({ seed: 1 });
-    const outcome = await service.action({ type: "end_turn" }, 0); // 带过期版本 0，当前是 1
+    const outcome = await service.action({ type: "choose", optionIndex: 0 }, 0); // 带过期版本 0，当前是 1
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(outcome.reason).toContain("look");
@@ -50,7 +50,7 @@ describe("SpireService 并发与持久化", () => {
     const store = new FakeStore();
     const service = makeService(store);
     await service.startRun({ seed: 1 });
-    const outcome = await service.action({ type: "end_turn" }, 1);
+    const outcome = await service.action({ type: "choose", optionIndex: 0 }, 1);
     expect(outcome.ok).toBe(true);
     expect(service.getState()?.version).toBe(2);
   });
@@ -61,7 +61,7 @@ describe("SpireService 并发与持久化", () => {
     await service.startRun({ seed: 1 });
     const before = structuredClone(service.getState()!);
     store.failNext = true;
-    await expect(service.action({ type: "end_turn" }, 1)).rejects.toThrow();
+    await expect(service.action({ type: "choose", optionIndex: 0 }, 1)).rejects.toThrow();
     // 内存 version 仍为动作前，磁盘最后一次成功存档也是 v1。
     expect(service.getState()?.version).toBe(before.version);
     expect(store.saved.at(-1)?.version).toBe(1);

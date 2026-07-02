@@ -131,17 +131,26 @@ export type RewardState = {
   cardChoices: { defId: string; upgraded: boolean }[];
 };
 
-export type NodeType = "combat" | "elite" | "rest" | "boss";
+export type MapNodeType = "combat" | "elite" | "event" | "rest" | "shop" | "treasure" | "boss";
 
-export type MapNode = { type: NodeType; encounterId: string };
-
-export type MapState = {
-  nodes: MapNode[];
-  /** 当前所在节点下标。 */
-  index: number;
+/** 分支地图节点（DAG）。next 是上一层可达节点 id；Boss 节点 next 为空。 */
+export type MapNode = {
+  id: string;
+  row: number;
+  col: number;
+  type: MapNodeType;
+  next: string[];
 };
 
-export type Screen = "combat" | "reward" | "rest" | "gameover" | "victory";
+export type MapGraph = {
+  nodes: Record<string, MapNode>;
+  rows: number;
+  /** 底层入口节点 id（首次选路从这里挑）。 */
+  startNodeIds: string[];
+  bossNodeId: string;
+};
+
+export type Screen = "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
 
 /** RNG 内部状态：必须完整可序列化并从存档精确复原（issue #234 C11）。 */
 export type RngState = { s0: number; s1: number; s2: number; s3: number };
@@ -159,7 +168,9 @@ export type GameState = {
   gold: number;
   /** 大牌组（master deck）。 */
   deck: CardInstance[];
-  map: MapState;
+  map: MapGraph;
+  /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
+  currentNodeId: string | null;
   combat: CombatState | null;
   reward: RewardState | null;
   rng: RngState;
