@@ -58,6 +58,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：你每打出一张技能牌，它就获得等于层数的力量。地精头目开局自带。",
   },
   {
+    term: "孢子云",
+    aliases: ["spore cloud", "sporecloud"],
+    definition: "敌人专属：它死亡时对你施加 2 层易伤。真菌兽自带——秒杀它反而会吃到易伤。",
+  },
+  {
     term: "反甲",
     aliases: ["sharp hide", "sharphide", "thorns"],
     definition:
