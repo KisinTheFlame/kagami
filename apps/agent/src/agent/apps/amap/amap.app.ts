@@ -46,11 +46,19 @@ const AmapConfigSchema = z
 
 type AmapConfig = z.infer<typeof AmapConfigSchema>;
 
-/** 进入/查看高德地图时的提示屏：按是否配置了 key 二选一，散文本体在 static 模板里。 */
+/** 进入高德地图时的定位屏：不含子工具清单（清单归 help）；未配置 key 时给未配置提示。 */
 function renderAmapPortal(configured: boolean): string {
   return renderServerStaticTemplate(
     import.meta.url,
     configured ? "prompts/amap-app-portal.hbs" : "prompts/amap-app-not-configured.hbs",
+  );
+}
+
+/** help 屏：已配置时披露完整子工具清单与用法要点；未配置时与 portal 同为未配置提示。 */
+function renderAmapHelp(configured: boolean): string {
+  return renderServerStaticTemplate(
+    import.meta.url,
+    configured ? "prompts/amap-app-help.hbs" : "prompts/amap-app-not-configured.hbs",
   );
 }
 
@@ -119,7 +127,7 @@ export class AmapApp implements App<AmapConfig> {
   }
 
   public async help(): Promise<string> {
-    return renderAmapPortal(this.canInvoke());
+    return renderAmapHelp(this.canInvoke());
   }
 
   public async onStartup(ctx: AppStartupContext<AmapConfig>): Promise<void> {
