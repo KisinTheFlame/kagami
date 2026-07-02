@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kagami/console-api": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/metric-api": "workspace:*",
     "@kagami/shared": "workspace:*",

@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { AppLogListQuerySchema, AppLogListResponseSchema } from "@kagami/shared/schemas/app-log";
+import { registerJsonRoute } from "@kagami/http/register";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import type { AppLogQueryService } from "../application/app-log-query.service.js";
-import { registerQueryRoute } from "@kagami/http/route";
 
 type AppLogHandlerDeps = {
   appLogQueryService: AppLogQueryService;
 };
 
+/** 应用日志查询路由。路由与 schema 的单一事实源在 @kagami/console-api（#279 PR4）。 */
 export class AppLogHandler {
-  public readonly prefix = "/app-log";
   private readonly appLogQueryService: AppLogQueryService;
 
   public constructor({ appLogQueryService }: AppLogHandlerDeps) {
@@ -16,14 +16,8 @@ export class AppLogHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/query`,
-      querySchema: AppLogListQuerySchema,
-      responseSchema: AppLogListResponseSchema,
-      execute: ({ query }) => {
-        return this.appLogQueryService.queryList(query);
-      },
-    });
+    registerJsonRoute(app, consoleApiContract.queryAppLogs, ({ input }) =>
+      this.appLogQueryService.queryList(input),
+    );
   }
 }

@@ -1,7 +1,7 @@
 import {
   type NapcatEventItem,
   type NapcatEventListResponse,
-} from "@kagami/shared/schemas/napcat-event";
+} from "@kagami/console-api/napcat-event";
 import type { NapcatEventItem as NapcatEventDaoItem } from "@kagami/persistence/dao/napcat-event.dao";
 
 type MapNapcatEventListInput = {

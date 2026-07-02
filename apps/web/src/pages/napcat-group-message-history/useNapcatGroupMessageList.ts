@@ -1,7 +1,9 @@
+import { contractUrl } from "@kagami/http/url";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import {
   NapcatQqMessageListResponseSchema,
   type NapcatQqMessageListQuery,
-} from "@kagami/shared/schemas/napcat-group-message";
+} from "@kagami/console-api/napcat-group-message";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
@@ -27,7 +29,7 @@ export function useNapcatGroupMessageList(
   return useQuery(
     createHistoryListQueryOptions({
       queryKey: queryKeys.napcatGroupMessage.historyList(params),
-      path: "/napcat-group-message/query",
+      path: contractUrl(consoleApiContract.queryNapcatQqMessages),
       schema: NapcatQqMessageListResponseSchema,
       params,
     }),

@@ -1,11 +1,6 @@
 import { LLM_PROVIDER_IDS } from "@kagami/llm";
 import { z } from "zod";
-import {
-  createPaginatedResponseSchema,
-  JsonRecordSchema,
-  PaginationQuerySchema,
-  parseOptionalStringInput,
-} from "@kagami/http/wire";
+import { JsonRecordSchema } from "@kagami/http/wire";
 
 // provider 标识全集的单源在 @kagami/llm；这里只派生 zod schema，不再手写字面量。
 // 需要 `LlmProviderId` 类型的代码请直接从 @kagami/llm 导入（项目禁止 re-export barrel）。
@@ -145,52 +140,6 @@ export const LlmChatErrorPayloadSchema = z
   .strict();
 
 export type LlmChatErrorPayload = z.infer<typeof LlmChatErrorPayloadSchema>;
-
-export const LlmChatCallStatusSchema = z.enum(["success", "failed"]);
-
-export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
-
-export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
-  provider: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
-});
-
-export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;
-
-export const LlmChatCallSummarySchema = z.object({
-  id: z.number().int().positive(),
-  requestId: z.string().min(1),
-  seq: z.number().int().positive(),
-  provider: z.string().min(1),
-  model: z.string().min(1),
-  extension: JsonRecordSchema.nullable(),
-  status: LlmChatCallStatusSchema,
-  latencyMs: z.number().int().nullable(),
-  createdAt: z.string().datetime(),
-});
-
-export type LlmChatCallSummary = z.infer<typeof LlmChatCallSummarySchema>;
-
-export const LlmChatCallItemSchema = LlmChatCallSummarySchema.extend({
-  requestPayload: JsonRecordSchema,
-  responsePayload: JsonRecordSchema.nullable(),
-  nativeRequestPayload: JsonRecordSchema.nullable(),
-  nativeResponsePayload: JsonRecordSchema.nullable(),
-  error: JsonRecordSchema.nullable(),
-  nativeError: JsonRecordSchema.nullable(),
-});
-
-export type LlmChatCallItem = z.infer<typeof LlmChatCallItemSchema>;
-
-export const LlmChatCallListResponseSchema =
-  createPaginatedResponseSchema(LlmChatCallSummarySchema);
-
-export type LlmChatCallListResponse = z.infer<typeof LlmChatCallListResponseSchema>;
-
-export const LlmChatCallDetailResponseSchema = LlmChatCallItemSchema;
-
-export type LlmChatCallDetailResponse = z.infer<typeof LlmChatCallDetailResponseSchema>;
 
 export const LlmProviderOptionSchema = z
   .object({

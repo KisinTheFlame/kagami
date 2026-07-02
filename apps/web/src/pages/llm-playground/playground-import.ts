@@ -1,5 +1,5 @@
+import { type LlmChatCallItem } from "@kagami/console-api/llm-chat-call";
 import {
-  type LlmChatCallItem,
   type LlmChatRequestPayload,
   type LlmPlaygroundChatRequest,
   type LlmProviderOption,

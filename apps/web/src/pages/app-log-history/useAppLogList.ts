@@ -1,4 +1,6 @@
-import { AppLogListResponseSchema, type AppLogListQuery } from "@kagami/shared/schemas/app-log";
+import { contractUrl } from "@kagami/http/url";
+import { consoleApiContract } from "@kagami/console-api/contract";
+import { AppLogListResponseSchema, type AppLogListQuery } from "@kagami/console-api/app-log";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
@@ -19,7 +21,7 @@ export function useAppLogList(page: number, pageSize: number, filters: AppLogLis
   return useQuery(
     createHistoryListQueryOptions({
       queryKey: queryKeys.appLog.historyList(params),
-      path: "/app-log/query",
+      path: contractUrl(consoleApiContract.queryAppLogs),
       schema: AppLogListResponseSchema,
       params,
     }),

@@ -1,8 +1,10 @@
+import { contractUrl } from "@kagami/http/url";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import {
   type LlmChatCallListQuery,
   type LlmChatCallListResponse,
   LlmChatCallListResponseSchema,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/console-api/llm-chat-call";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
 
@@ -27,7 +29,7 @@ export function useLlmChatCallList(
       ReturnType<typeof queryKeys.llm.historyList>
     >({
       queryKey: queryKeys.llm.historyList(params),
-      path: "/llm-chat-call/query",
+      path: contractUrl(consoleApiContract.queryLlmChatCalls),
       schema: LlmChatCallListResponseSchema,
       params,
     }),

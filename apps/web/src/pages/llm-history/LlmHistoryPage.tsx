@@ -1,8 +1,5 @@
-import {
-  LlmProviderListResponseSchema,
-  type LlmChatCallStatus,
-  type LlmChatCallSummary,
-} from "@kagami/shared/schemas/llm-chat";
+import { type LlmChatCallStatus, type LlmChatCallSummary } from "@kagami/console-api/llm-chat-call";
+import { LlmProviderListResponseSchema } from "@kagami/shared/schemas/llm-chat";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useMemo } from "react";
 import { HistoryListPageLayout } from "@/components/layout/HistoryListPageLayout";

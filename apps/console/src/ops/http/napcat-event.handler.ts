@@ -1,17 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import {
-  NapcatEventListQuerySchema,
-  NapcatEventListResponseSchema,
-} from "@kagami/shared/schemas/napcat-event";
+import { registerJsonRoute } from "@kagami/http/register";
+import { consoleApiContract } from "@kagami/console-api/contract";
 import type { NapcatEventQueryService } from "../application/napcat-event-query.service.js";
-import { registerQueryRoute } from "@kagami/http/route";
 
 type NapcatEventHandlerDeps = {
   napcatEventQueryService: NapcatEventQueryService;
 };
 
+/** NapCat 事件查询路由。路由与 schema 的单一事实源在 @kagami/console-api（#279 PR4）。 */
 export class NapcatEventHandler {
-  public readonly prefix = "/napcat-event";
   private readonly napcatEventQueryService: NapcatEventQueryService;
 
   public constructor({ napcatEventQueryService }: NapcatEventHandlerDeps) {
@@ -19,14 +16,8 @@ export class NapcatEventHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/query`,
-      querySchema: NapcatEventListQuerySchema,
-      responseSchema: NapcatEventListResponseSchema,
-      execute: ({ query }) => {
-        return this.napcatEventQueryService.queryList(query);
-      },
-    });
+    registerJsonRoute(app, consoleApiContract.queryNapcatEvents, ({ input }) =>
+      this.napcatEventQueryService.queryList(input),
+    );
   }
 }

@@ -2,6 +2,8 @@ import {
   type LlmChatCallItem,
   type LlmChatCallStatus,
   type LlmChatCallSummary,
+} from "@kagami/console-api/llm-chat-call";
+import {
   type LlmRequestMessage,
   type LlmRequestUserContentPart,
 } from "@kagami/shared/schemas/llm-chat";
