@@ -5,6 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
+import { createHealthResponse } from "@kagami/shared/utils";
 import { loadGatewayConfig } from "./config.js";
 
 const config = loadGatewayConfig();
@@ -70,7 +71,8 @@ const server = createServer(async (req, res) => {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
       });
-      res.end(JSON.stringify({ ok: true }));
+      // 与其余服务共享 HealthResponseSchema 形状（{ status, timestamp }），监控探活全进程统一。
+      res.end(JSON.stringify(createHealthResponse()));
       return;
     }
 

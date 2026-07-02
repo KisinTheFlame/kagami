@@ -12,7 +12,7 @@ import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-gr
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
-import { HealthHandler } from "./http/health.handler.js";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { HttpLlmClient } from "../llm/http-llm-client.js";

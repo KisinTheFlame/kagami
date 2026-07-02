@@ -1,18 +1,21 @@
 {
-  "name": "@kagami/gateway",
+  "name": "@kagami/spire-api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kagami/config": "workspace:*",
-    "@kagami/shared": "workspace:*",
-    "yaml": "^2.8.2"
+    "@kagami/http": "workspace:*",
+    "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

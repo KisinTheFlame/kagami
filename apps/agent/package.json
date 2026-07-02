@@ -21,6 +21,7 @@
     "@kagami/llm-client": "workspace:*",
     "@kagami/persistence": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
+    "@kagami/spire-api": "workspace:*",
     "@kagami/shared": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "croner": "^10.0.1",

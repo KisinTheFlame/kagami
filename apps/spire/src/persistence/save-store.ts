@@ -49,4 +49,9 @@ export class SaveStore {
       });
     return this.writeChain;
   }
+
+  /** 等待写队列排空。关停时调用，避免 SIGTERM 撞上在途写盘丢档（写失败不阻断退出）。 */
+  public flush(): Promise<void> {
+    return this.writeChain.catch(() => undefined);
+  }
 }

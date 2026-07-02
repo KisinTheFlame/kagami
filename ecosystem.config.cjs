@@ -50,7 +50,7 @@ module.exports = {
     },
     {
       // metric 领域进程：独立 PM2 生命周期，一手包办 metric 摄取（agent HTTP 上报）+ metric-chart
-      // 查询。监听端口自读 config.yaml 的 services.metric（默认 20009，仅 localhost）。
+      // 查询。监听端口自读 config.yaml 的 services.metric（默认 20010，仅 localhost）。
       name: "kagami-metric",
       cwd: path.join(__dirname, "apps/metric"),
       script: "dist/index.js",
