@@ -55,6 +55,7 @@ describe("Act1 战斗池节奏：前 3 场 weak、其余 strong", () => {
     "lots_of_slimes",
     "large_slime_acid",
     "large_slime_spike",
+    "two_fungi_beasts",
   ]);
 
   it("combatsEntered < 3 只抽 weak 池", () => {
