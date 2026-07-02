@@ -13,3 +13,4 @@ coverage
 packages/persistence/src/generated/prisma
 .claude/worktrees
 .gstack
+.context/
