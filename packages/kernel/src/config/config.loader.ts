@@ -181,8 +181,9 @@ const NapcatConfigSchema = z.preprocess(
 
 /**
  * 单机服务拓扑的唯一事实来源。每个进程从这里读自己的监听端口与依赖服务的地址；
- * `host` 语义是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——
- * 各进程一律绑 0.0.0.0。详见 issue #162。
+ * `host` 语义是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址（issue #162）。
+ * 绑定地址是各服务代码里的安全决策：卫星进程一律绑 127.0.0.1（runService 的 bindHost），
+ * 只有 gateway（前门）绑 0.0.0.0。
  */
 const ServiceEndpointSchema = z
   .object({

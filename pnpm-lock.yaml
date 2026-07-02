@@ -83,6 +83,9 @@ importers:
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@kagami/spire-api':
+        specifier: workspace:*
+        version: link:../../packages/spire-api
       cloakbrowser:
         specifier: ^0.4.3
         version: 0.4.3(playwright-core@1.61.1)
@@ -203,6 +206,9 @@ importers:
       '@kagami/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@kagami/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -296,6 +302,9 @@ importers:
       '@kagami/http':
         specifier: workspace:*
         version: link:../../packages/http
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -333,6 +342,9 @@ importers:
       '@kagami/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@kagami/spire-api':
+        specifier: workspace:*
+        version: link:../../packages/spire-api
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -541,12 +553,18 @@ importers:
       '@kagami/config':
         specifier: workspace:*
         version: link:../config
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
       '@kagami/llm':
         specifier: workspace:*
         version: link:../llm
       '@kagami/shared':
         specifier: workspace:*
         version: link:../shared
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
@@ -713,6 +731,22 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/spire-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 

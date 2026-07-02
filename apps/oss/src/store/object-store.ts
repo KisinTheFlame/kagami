@@ -4,6 +4,7 @@ import { mkdir, open, readdir, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import type Database from "better-sqlite3";
+import { AppLogger } from "@kagami/kernel/logger/logger";
 
 /**
  * Typed content-addressed object store（对标 S3 / MinIO）。对外是「bytes + content-type」的
@@ -42,6 +43,8 @@ import type Database from "better-sqlite3";
 const SHARD_PREFIX_LENGTH = 2;
 const KEY_PREFIX = "res-";
 const TMP_DIR_NAME = "tmp";
+
+const logger = new AppLogger({ source: "oss-store" });
 
 /** put 的字节流超过调用方给定的 maxBytes 上限时抛出；HTTP 层映射成 413。 */
 export class PayloadTooLargeError extends Error {}
@@ -316,7 +319,10 @@ export class ObjectStore {
           await unlink(path.join(shardDir, name));
           removed += 1;
         } catch (error) {
-          console.error(`[oss] sweep unlink failed: ${path.join(shard, name)}`, error);
+          logger.errorWithCause("OSS sweep unlink failed", error, {
+            event: "oss.sweep_unlink_failed",
+            path: path.join(shard, name),
+          });
         }
       }
     }
@@ -349,7 +355,10 @@ export class ObjectStore {
     try {
       await unlink(this.blobPath(sha256));
     } catch (error) {
-      console.error(`[oss] unlink orphan blob failed: ${sha256}`, error);
+      logger.errorWithCause("OSS unlink orphan blob failed", error, {
+        event: "oss.unlink_orphan_failed",
+        sha256,
+      });
     }
   }
 }
