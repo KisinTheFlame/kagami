@@ -196,7 +196,7 @@ Notes:
 ### Agent Runtime Package
 
 - `packages/agent-runtime` only carries the generic Agent / App framework kernel, not Kagami-specific semantics.
-- Core exports currently include `TaskAgent`, `Operation`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/agent`, not here.)
+- Core exports currently include `TaskAgent`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/agent`, not here.)
 - NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/agent/src/agent`.
 
 ## Deployment

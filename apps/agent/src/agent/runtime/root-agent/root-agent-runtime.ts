@@ -5,8 +5,10 @@ import {
   ReActKernel,
   type ReActKernelRunRoundInput,
   type ReActCommittedRoundResult,
+  REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
   type ReplaceLeadingMessagesEffect,
   SerialExecutor,
+  TaskAgentMaxRoundsExceededError,
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
@@ -16,14 +18,16 @@ import type {
   AgentContextSnapshot,
   AssistantMessage,
 } from "../context/agent-context.js";
-import { createWakeReminderMessage } from "../context/context-message-factory.js";
+import {
+  createConversationSummaryMessage,
+  createWakeReminderMessage,
+} from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "@kagami/llm-client";
-import type { LlmMessage, Tool } from "@kagami/llm-client";
+import type { LlmMessage } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../metric/application/metric.service.js";
-import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
   FixedRetryBackoffPolicy,
@@ -50,7 +54,13 @@ import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
 
-type ContextSummaryLike = Pick<ContextSummaryOperation, "execute">;
+/**
+ * 上下文摘要器的结构类型（SummaryTaskAgent 的 invoke 面）。runtime 只依赖
+ * "给 system + 前缀消息、回摘要字符串"这一契约，不 import 具体 capability 实现。
+ */
+type ContextSummarizerLike = {
+  invoke(input: { systemPrompt: string; messages: LlmMessage[] }): Promise<string>;
+};
 
 type RootLoopExtension = LoopAgentExtension<
   RootLoopExtensionContext,
@@ -68,16 +78,20 @@ type RootAgentRuntimeDeps = {
   runtimeKey?: string;
   tools?: ToolExecutor;
   agentTools?: ToolExecutor;
-  contextSummaryOperation?: ContextSummaryLike;
-  summaryTools?: Tool[];
+  contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
   metricService?: MetricService;
   llmRetryBackoffMs?: number;
   loopExtensions?: RootLoopExtension[];
+  /** 纯文本轮挂起的自唤醒上限；与 wait 工具的 maxWaitMs 同源（waitToolMaxWaitMs）。 */
+  idleWakeMaxWaitMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 };
 
+const DEFAULT_IDLE_WAKE_MAX_WAIT_MS = 600_000;
+/** 摘要超轮失败后，阈值压缩的冷却时长：期间不再每轮重试，防成本放大。 */
+const SUMMARY_MAX_ROUNDS_COOLDOWN_MS = 600_000;
 const DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
@@ -122,8 +136,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private readonly interpreter: EffectInterpreter<never>;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
-  private readonly contextSummaryOperation?: ContextSummaryLike;
-  private readonly summaryTools: Tool[];
+  private readonly contextSummarizer?: ContextSummarizerLike;
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly llmRetryBackoffMs: number;
   private readonly metricService: MetricService;
@@ -132,6 +145,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private lastWakeReminderAt: Date | null = null;
   private initialized = false;
   private lastPersistedSnapshotFingerprint: string | null = null;
+  /** 摘要超轮失败后的阈值压缩冷却截止时刻（epoch ms）；null = 无冷却。 */
+  private summaryCooldownUntilMs: number | null = null;
   private readonly mutationExecutor = new SerialExecutor();
 
   public constructor({
@@ -141,8 +156,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     interpreter,
     snapshotRepository,
     runtimeKey,
-    contextSummaryOperation,
-    summaryTools,
+    contextSummarizer,
     contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs,
@@ -159,8 +173,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     this.interpreter = interpreter;
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
-    this.contextSummaryOperation = contextSummaryOperation;
-    this.summaryTools = summaryTools ?? [];
+    this.contextSummarizer = contextSummarizer;
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
     this.metricService = metricService ?? NOOP_METRIC_SERVICE;
@@ -271,15 +284,19 @@ export class RootAgentHost implements RootAgentExtensionHost {
     result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
     tools: ToolExecutor,
   ): Promise<void> {
-    const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
-    const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
-      ? persistentAssistantMessage
-      : null;
+    const persistentAssistantMessage = toPersistableAssistantMessage(
+      result.assistantMessage,
+      tools,
+    );
+    const assistantToPersist =
+      persistentAssistantMessage.toolCalls.length > 0 ? persistentAssistantMessage : null;
     const toolPersistences: PendingToolPersistence[] = result.toolExecutions.map(execution => ({
+      // 不再按 content 是否为空过滤：被持久化的 assistant tool_use 必须有配对的
+      // tool_result（空串也合法），否则上下文不平衡、下一轮 provider 400 且每轮复发。
       ...(shouldPersistToolResultInContext({
         toolName: execution.toolCall.name,
         toolResult: execution.result,
-      }) && execution.result.content.length > 0
+      })
         ? {
             toolResult: {
               toolCallId: execution.toolCall.id,
@@ -367,8 +384,19 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<boolean> {
-    const operation = this.contextSummaryOperation;
-    if (!operation) {
+    const summarizer = this.contextSummarizer;
+    if (!summarizer) {
+      return false;
+    }
+
+    // 超轮失败后的冷却闸：压缩在每轮 commit 后触发，若 summarizer 持续不 finalize
+    //（toolChoice auto 下模型可能被上下文带偏），没有冷却就会每轮白烧 maxRounds 次
+    // LLM 调用（跨模型对抗审查各自独立命中的成本放大点）。冷却期内跳过阈值压缩；
+    // 人工触发的 compactEntireContext 不受此限。
+    if (
+      this.summaryCooldownUntilMs !== null &&
+      this.now().getTime() < this.summaryCooldownUntilMs
+    ) {
       return false;
     }
 
@@ -394,7 +422,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      const attempt = await this.attemptSummarize(operation, {
+      const attempt = await this.attemptSummarize(summarizer, {
         systemPrompt: snapshot.systemPrompt,
         messages: compactionPlan.messagesToSummarize,
       });
@@ -402,12 +430,15 @@ export class RootAgentHost implements RootAgentExtensionHost {
         continue;
       }
       if (attempt.effects.length === 0) {
+        this.summaryCooldownUntilMs = this.now().getTime() + SUMMARY_MAX_ROUNDS_COOLDOWN_MS;
         return false;
       }
 
-      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。Operation 自己产
-      // replace_leading_messages Effect，host 只把它交给 Interpreter。
-      // Interpreter 是 Agent 状态变更的唯一入口。
+      this.summaryCooldownUntilMs = null;
+
+      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。attemptSummarize
+      // 把 task agent 的摘要拼成 replace_leading_messages Effect，host 只把它交给
+      // Interpreter。Interpreter 是 Agent 状态变更的唯一入口。
       await this.interpreter.apply(attempt.effects);
       return true;
     }
@@ -420,8 +451,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
    * "计划性重建"路径之一。
    */
   public async compactEntireContext(): Promise<boolean> {
-    const operation = this.contextSummaryOperation;
-    if (!operation) {
+    const summarizer = this.contextSummarizer;
+    if (!summarizer) {
       return false;
     }
 
@@ -431,8 +462,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      // 全量压缩：摘要整条消息列表，Operation 产的 count = 全部 message 数。
-      const attempt = await this.attemptSummarize(operation, {
+      // 全量压缩：摘要整条消息列表，count = 全部 message 数。
+      const attempt = await this.attemptSummarize(summarizer, {
         systemPrompt: snapshot.systemPrompt,
         messages: snapshot.messages,
       });
@@ -444,25 +475,45 @@ export class RootAgentHost implements RootAgentExtensionHost {
       }
 
       await this.interpreter.apply(attempt.effects);
+      // 全量压缩成功 = 上下文已重建，阈值压缩的冷却没有存在意义了。
+      this.summaryCooldownUntilMs = null;
       return true;
     }
   }
 
   private async attemptSummarize(
-    operation: ContextSummaryLike,
+    summarizer: ContextSummarizerLike,
     input: {
       systemPrompt: string;
       messages: LlmMessage[];
     },
   ): Promise<{ retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect[] }> {
     try {
-      const result = await operation.execute({
+      const summary = await summarizer.invoke({
         systemPrompt: input.systemPrompt,
         messages: input.messages,
-        tools: this.summaryTools,
       });
-      return { retry: false, effects: result.effects };
+      return {
+        retry: false,
+        effects: [
+          {
+            type: REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
+            // 把被摘要的前缀（input.messages 那 N 条）替换成单条 summary。
+            count: input.messages.length,
+            replacement: [createConversationSummaryMessage(summary)],
+          },
+        ],
+      };
     } catch (error) {
+      if (error instanceof TaskAgentMaxRoundsExceededError) {
+        // 跑满轮数仍未 finalize：本次不压缩（阈值仍超会在下一轮再触发），不重试。
+        logger.warn("Context summary exceeded max rounds; skipping this compaction", {
+          event: "agent.root_agent_runtime.context_summary_max_rounds_exceeded",
+          maxRounds: error.maxRounds,
+        });
+        return { retry: false, effects: [] };
+      }
+
       if (!isRetryableLlmFailure(error)) {
         throw error;
       }
@@ -546,6 +597,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly host: RootAgentHost;
   private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
+  private readonly idleWakeMaxWaitMs: number;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
     null;
@@ -560,6 +612,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     loopExtensions,
     session,
     context,
+    idleWakeMaxWaitMs,
     ...rest
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
@@ -613,6 +666,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     this.host = host;
     this.tools = resolvedTools;
     this.eventQueue = eventQueue;
+    this.idleWakeMaxWaitMs = idleWakeMaxWaitMs ?? DEFAULT_IDLE_WAKE_MAX_WAIT_MS;
   }
 
   public async run(): Promise<void> {
@@ -732,7 +786,50 @@ export class RootLoopAgent extends BaseLoopAgent<
     // Step 2: run one ReAct round. The LLM may call blocking tools like
     // wait; those block inside eventQueue.waitNonEmpty
     // until a producer (real event or timer-enqueued wake) resolves them.
-    await this.runReactRound();
+    const roundResult = await this.runReactRound();
+
+    // toolChoice auto 下模型可以一个工具都不调（纯文本轮：text 用完即弃、上下文
+    // 零写入）。此时本轮视为自然结束，挂起到事件队列非空才进下一轮——否则外层
+    // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。
+    if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
+      try {
+        // 可观测性：纯文本轮意味着模型「看到但选择不行动」（含对通知不回应）。
+        // 完整文本在 llm_chat_call 可查，这里只留一条轻量事件供时间序列归因。
+        logger.info("Root agent idle round (zero tool calls); suspending until next event", {
+          event: "agent.root_agent_runtime.idle_round_suspended",
+        });
+      } catch {
+        // Ignore logger runtime setup gaps in tests and early boot.
+      }
+      await this.suspendUntilNextEvent();
+    }
+  }
+
+  /**
+   * 纯文本轮后的挂起，语义对齐 wait 工具的 wait_for_event：
+   * - stopRequested 先行复查：stop() 注入的那个 wake 可能已被本轮 step-1 的
+   *   consumePendingEvents 吃掉，不复查会在空队列上永久阻塞，关停死锁。
+   * - 自唤醒 timer 兜底：与 wait 工具同一个 maxWaitMs 上限，保证生活完全安静时
+   *   Agent 也会按自己的节奏醒来（空闲时刻的自主行动心跳），不会无限期沉睡。
+   *   timer unref，不阻进程退出；无论谁唤醒都清 timer，避免 stale wake。
+   */
+  private async suspendUntilNextEvent(): Promise<void> {
+    if (this.stopRequested) {
+      return;
+    }
+
+    const timerHandle = setTimeout(() => {
+      this.eventQueue.enqueue({ type: "wake" });
+    }, this.idleWakeMaxWaitMs);
+    if (typeof timerHandle.unref === "function") {
+      timerHandle.unref();
+    }
+
+    try {
+      await this.eventQueue.waitNonEmpty();
+    } finally {
+      clearTimeout(timerHandle);
+    }
   }
 
   protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<"agent"> | null> {
@@ -781,12 +878,18 @@ function failMissingTools(): never {
   throw new Error("RootLoopAgent requires tools");
 }
 
-function omitControlToolCalls(
+/**
+ * assistant turn 的持久化形态：text 是一次性草稿（用完即弃、不进上下文，完整原文
+ * 留在 llm_chat_call 审计记录里可查），control 工具调用同样不留痕（wait 除外）。
+ * 剥离发生在写入时——已写入的历史只追加不改写，不违反 KV 缓存的只追加原则。
+ */
+function toPersistableAssistantMessage(
   message: AssistantMessage,
   agentTools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,
+    content: "",
     toolCalls: message.toolCalls.filter(
       toolCall =>
         agentTools.getKind(toolCall.name) !== "control" ||
@@ -804,10 +907,6 @@ function shouldPersistToolResultInContext(input: {
 
 function shouldPersistControlToolInContext(toolName: string): boolean {
   return toolName === WAIT_TOOL_NAME;
-}
-
-function shouldPersistAssistantMessage(message: AssistantMessage): boolean {
-  return message.content.trim().length > 0 || message.toolCalls.length > 0;
 }
 
 function isSameWakeReminderBucket(previous: Date | null, current: Date): boolean {

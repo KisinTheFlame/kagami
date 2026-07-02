@@ -196,10 +196,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 依赖 agentRuntime.rootAgentRuntime.getContextSnapshot()。reminder-tick 路径不依赖它，故安全。
   // 提醒/汇总以纯数据回调，draft 在这层（wiring 边界）构造并 push，capabilities 层不依赖 apps 层。
   const todoSuggestionService = new TodoSuggestionService({
-    llmClient,
-    // 与主 Agent 字节相等的顶层工具定义：子调用复用它命中 KV 缓存前缀，
-    // propose_todos 经 invoke 子工具提交，不新增顶层工具。
-    topLevelToolDefinitions: agentRuntime.rootAgentToolDefinitions,
+    // 工具装配与主 Agent 字节相等的 task agent（见 agent-runtime.factory），
+    // propose_todos 经 invoke 终止子工具提交，不新增顶层工具。
+    taskAgent: agentRuntime.todoSuggestionTaskAgent,
   });
   const suggestTodos = async (openTodos: { title: string }[]): Promise<string[]> => {
     try {

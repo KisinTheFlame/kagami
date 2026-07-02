@@ -217,19 +217,10 @@ describe("createClaudeCodeProvider", () => {
         text: "你是一个测试助手。",
       });
       expect(body.thinking).toEqual({
-        type: "adaptive",
+        type: "disabled",
       });
-      expect(body.output_config).toEqual({
-        effort: "medium",
-      });
-      expect(body.context_management).toEqual({
-        edits: [
-          {
-            type: "clear_thinking_20251015",
-            keep: "all",
-          },
-        ],
-      });
+      expect(body.output_config).toBeUndefined();
+      expect(body.context_management).toBeUndefined();
       expect(init?.headers).toMatchObject({
         Accept: "application/json",
         "Anthropic-Version": "2023-06-01",
@@ -304,18 +295,7 @@ describe("createClaudeCodeProvider", () => {
           },
         ],
         thinking: {
-          type: "adaptive",
-        },
-        output_config: {
-          effort: "medium",
-        },
-        context_management: {
-          edits: [
-            {
-              type: "clear_thinking_20251015",
-              keep: "all",
-            },
-          ],
+          type: "disabled",
         },
         messages: [
           {
@@ -585,8 +565,7 @@ describe("createClaudeCodeProvider", () => {
       nativeRequestPayload: {
         model: "claude-sonnet-4-5-20250929",
         thinking: {
-          type: "enabled",
-          budget_tokens: 1024,
+          type: "disabled",
         },
       },
     });

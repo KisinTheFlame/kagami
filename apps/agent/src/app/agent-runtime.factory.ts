@@ -2,18 +2,19 @@ import {
   AppManager,
   AsyncTaskManager,
   createAppSubtoolOwner,
+  createUnguardedSubtoolOwner,
   HELP_TOOL_NAME,
   HelpTool,
   OutOfScopeTool,
   ToolCatalog,
   type Queue,
   type ToolComponent,
+  type ToolExecutor,
 } from "@kagami/agent-runtime";
-import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
-import type { LlmClient, Tool } from "@kagami/llm-client";
+import type { LlmClient } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -50,11 +51,10 @@ import {
   createSearchWebTool,
   SEARCH_WEB_TOOL_NAME,
 } from "../agent/capabilities/web-search/tools/search-web.tool.js";
-import { ContextSummaryOperation } from "../agent/capabilities/context-summary/operations/context-summary.operation.js";
-import {
-  SummaryTool,
-  SUMMARY_TOOL_NAME,
-} from "../agent/capabilities/context-summary/tools/summary.tool.js";
+import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-agent/summary-task-agent.js";
+import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
+import { TodoSuggestionTaskAgent } from "../agent/capabilities/todo/task-agent/todo-suggestion-task-agent.js";
+import { ProposeTodosTool } from "../agent/capabilities/todo/task-agent/tools/propose-todos.tool.js";
 import { PrismaTerminalStateDao } from "../agent/capabilities/terminal/infra/prisma-terminal-state.dao.js";
 import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/prisma-terminal-output.dao.js";
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
@@ -73,14 +73,8 @@ import {
   ReadResourceTool,
   READ_RESOURCE_TOOL_NAME,
 } from "../agent/capabilities/resource/tools/read-resource.tool.js";
-import {
-  DownloadResourceTool,
-  DOWNLOAD_RESOURCE_TOOL_NAME,
-} from "../agent/capabilities/resource/tools/download-resource.tool.js";
-import {
-  UploadResourceTool,
-  UPLOAD_RESOURCE_TOOL_NAME,
-} from "../agent/capabilities/resource/tools/upload-resource.tool.js";
+import { DownloadResourceTool } from "../agent/capabilities/resource/tools/download-resource.tool.js";
+import { UploadResourceTool } from "../agent/capabilities/resource/tools/upload-resource.tool.js";
 import type { OssClient } from "../oss/oss-client.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
@@ -126,11 +120,11 @@ export type AgentRuntimeBundle = {
   llmPlaygroundService: LlmPlaygroundService;
   hasTavilyApiKey: boolean;
   /**
-   * 主 Agent 的顶层工具定义（react-kernel 每轮实际发送的那一份）。fork 主上下文的旁路
-   * 调用（如 todo「发现待办」子调用）复用它作 tools，保证 tools 字段与主 Agent 字节相等，
-   * 命中 KV 缓存的 tools / system 层前缀（子工具经 invoke 提交，不新增顶层工具）。
+   * 「发现待办」task agent：工具装配与主 Agent 字节相等（tools / system 前缀命中
+   * KV 缓存），invoke 只挂 propose_todos 终止子工具。由 wiring 层包进
+   * TodoSuggestionService（重试/降级外壳）供 digest 使用。
    */
-  rootAgentToolDefinitions: Tool[];
+  todoSuggestionTaskAgent: TodoSuggestionTaskAgent;
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
   /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
@@ -140,6 +134,39 @@ export type AgentRuntimeBundle = {
 };
 
 const logger = new AppLogger({ source: "agent.runtime-factory" });
+
+/**
+ * fork 型 task agent（web-search / summary / todo）的镜像工具目录：与主 Agent
+ * 顶层工具集一字不差（同样的 name / description / parameters / llmTool 与顺序），
+ * 执行语义完全隔离——invoke 换成只挂该 task agent 子工具的实例，其余顶层工具用
+ * OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，不会真的改主 Agent 的
+ * session。这是 prompt cache 字节相等 + 行为隔离的关键搭配。
+ *
+ * 从主 Agent 的同一份有序清单（mainTopLevelTools）派生：主 Agent 加/删/重排
+ * 顶层工具时所有镜像自动跟随，不会漂移出字节不等的 tools 前缀。
+ */
+function createMirroredTaskAgentTools({
+  mainTopLevelTools,
+  invokeTool,
+  overrideReasons = {},
+  defaultReason,
+}: {
+  mainTopLevelTools: readonly ToolComponent[];
+  invokeTool: ToolComponent;
+  /** 个别工具的定制拒绝话术（如 switch 上顺带指路终止子工具）。 */
+  overrideReasons?: Record<string, string>;
+  defaultReason: (toolName: string) => string;
+}): ToolExecutor {
+  const mirrored = mainTopLevelTools.map(tool =>
+    tool.name === INVOKE_TOOL_NAME
+      ? invokeTool
+      : new OutOfScopeTool({
+          inner: tool,
+          reason: overrideReasons[tool.name] ?? defaultReason(tool.name),
+        }),
+  );
+  return new ToolCatalog(mirrored).pick(mirrored.map(tool => tool.name));
+}
 
 export async function buildAgentRuntime({
   config,
@@ -171,7 +198,7 @@ export async function buildAgentRuntime({
     new FinalizeWebSearchTool(),
   ];
   const webSearchInvokeTool = new InvokeTool({
-    owners: [createWebSearchSubtoolOwner({ tools: webSearchSubtools })],
+    owners: [createUnguardedSubtoolOwner({ tools: webSearchSubtools })],
   });
 
   // WebSearchTaskAgent 的 taskTools 需要等到主 Agent rootAgentTools 装配完才能
@@ -331,8 +358,10 @@ export async function buildAgentRuntime({
   const readResourceTool = new ReadResourceTool({ resourceService });
   const downloadResourceTool = new DownloadResourceTool({ resourceFileService });
   const uploadResourceTool = new UploadResourceTool({ resourceFileService });
-  const summaryTool = new SummaryTool();
-  const toolCatalog = new ToolCatalog([
+  // 主 Agent 顶层工具的唯一有序清单：toolCatalog / rootAgentTools / 三个 fork 型
+  // task agent 的镜像目录都从它派生。顺序即 LLM tools 数组顺序，是 KV 缓存稳定
+  // 前缀的一部分——加/删/重排只改这一处。
+  const mainTopLevelTools: ToolComponent[] = [
     switchTool,
     listAppsTool,
     waitTool,
@@ -341,86 +370,64 @@ export async function buildAgentRuntime({
     readResourceTool,
     downloadResourceTool,
     uploadResourceTool,
-    summaryTool,
     helpTool,
-  ]);
-  const rootAgentTools = toolCatalog.pick([
-    SWITCH_TOOL_NAME,
-    LIST_APPS_TOOL_NAME,
-    WAIT_TOOL_NAME,
-    INVOKE_TOOL_NAME,
-    SEARCH_WEB_TOOL_NAME,
-    READ_RESOURCE_TOOL_NAME,
-    DOWNLOAD_RESOURCE_TOOL_NAME,
-    UPLOAD_RESOURCE_TOOL_NAME,
-    HELP_TOOL_NAME,
-  ]);
+  ];
+  const toolCatalog = new ToolCatalog(mainTopLevelTools);
+  const rootAgentTools = toolCatalog.pick(mainTopLevelTools.map(tool => tool.name));
 
-  // WebSearchTaskAgent 看到的顶层工具集：和主 Agent 一字不差（同样 9 个工具的
-  // name / description / parameters / llmTool），但执行语义完全隔离——
-  //  - invoke 换成 webSearchInvokeTool（owner = webSearchSubtoolOwner，只识别
-  //    search_web_raw / finalize_web_search）
-  //  - 其余 8 个顶层工具用 OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，
-  //    不会真的改主 Agent 的 session / 触发嵌套搜索
-  // 这是 prompt cache 字节相等 + 行为隔离的关键搭配。
-  const webSearchAgentToolCatalog = new ToolCatalog([
-    new OutOfScopeTool({
-      inner: switchTool,
-      reason:
+  // 三个 fork 型 task agent（web-search / summary / todo）共用同一套镜像装配，
+  // 从主 Agent 的同一份有序顶层工具清单派生（见 createMirroredTaskAgentTools），
+  // 主 Agent 加/删/重排工具时镜像自动跟随，不会漂移出字节不等的 tools 前缀。
+  const webSearchAgentTools = createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: webSearchInvokeTool,
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]:
         '在网页搜索子任务中不可调用 switch。请用 invoke(tool="search_web_raw", ...) 检索，必要时反复，信息足够后用 invoke(tool="finalize_web_search", summary=...) 输出最终摘要。',
-    }),
-    new OutOfScopeTool({
-      inner: listAppsTool,
-      reason: "在网页搜索子任务中不可调用 list_apps。",
-    }),
-    new OutOfScopeTool({
-      inner: waitTool,
-      reason: "在网页搜索子任务中不可调用 wait。",
-    }),
-    webSearchInvokeTool,
-    new OutOfScopeTool({
-      inner: searchWebTool,
-      reason: "网页搜索子任务内禁止再次调用 search_web，否则会无限嵌套。",
-    }),
-    new OutOfScopeTool({
-      inner: readResourceTool,
-      reason: "在网页搜索子任务中不可调用 read_resource。",
-    }),
-    new OutOfScopeTool({
-      inner: downloadResourceTool,
-      reason: "在网页搜索子任务中不可调用 download_resource。",
-    }),
-    new OutOfScopeTool({
-      inner: uploadResourceTool,
-      reason: "在网页搜索子任务中不可调用 upload_resource。",
-    }),
-    new OutOfScopeTool({
-      inner: helpTool,
-      reason: "在网页搜索子任务中不可调用 help。",
-    }),
-  ]);
-  const webSearchAgentTools = webSearchAgentToolCatalog.pick([
-    SWITCH_TOOL_NAME,
-    LIST_APPS_TOOL_NAME,
-    WAIT_TOOL_NAME,
-    INVOKE_TOOL_NAME,
-    SEARCH_WEB_TOOL_NAME,
-    READ_RESOURCE_TOOL_NAME,
-    DOWNLOAD_RESOURCE_TOOL_NAME,
-    UPLOAD_RESOURCE_TOOL_NAME,
-    HELP_TOOL_NAME,
-  ]);
+      [SEARCH_WEB_TOOL_NAME]: "网页搜索子任务内禁止再次调用 search_web，否则会无限嵌套。",
+    },
+    defaultReason: toolName => `在网页搜索子任务中不可调用 ${toolName}。`,
+  });
 
   // 现在所有依赖都就位了，真正构造 WebSearchTaskAgent 并回填 ref。
   webSearchTaskAgentRef.current = new WebSearchTaskAgent({
     llmClient,
     taskTools: webSearchAgentTools,
   });
-  const summaryToolExecutor = toolCatalog.pick([SUMMARY_TOOL_NAME]);
-  const rootContextSummaryOperation = new ContextSummaryOperation({
+  // SummaryTaskAgent：同一套镜像装配，invoke 只挂 finalize_summary 终止子工具。
+  const summaryInvokeTool = new InvokeTool({
+    owners: [createUnguardedSubtoolOwner({ tools: [new FinalizeSummaryTool()] })],
+  });
+  const summaryAgentTools = createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: summaryInvokeTool,
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]:
+        '在上下文摘要子任务中不可调用 switch。请用 invoke(tool="finalize_summary", summary=...) 提交最终摘要。',
+    },
+    defaultReason: toolName => `在上下文摘要子任务中不可调用 ${toolName}。`,
+  });
+  const summaryTaskAgent = new SummaryTaskAgent({
     llmClient,
-    summaryToolExecutor,
+    taskTools: summaryAgentTools,
     reminderMessageFactory: createRootContextSummaryReminderMessage,
+  });
+  // TodoSuggestionTaskAgent：同一套镜像装配，invoke 只挂 propose_todos 终止子工具。
+  const todoInvokeTool = new InvokeTool({
+    owners: [createUnguardedSubtoolOwner({ tools: [new ProposeTodosTool()] })],
+  });
+  const todoAgentTools = createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: todoInvokeTool,
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]:
+        '在「发现待办」子任务中不可调用 switch。请用 invoke(tool="propose_todos", suggestions=[...]) 提交候选待办。',
+    },
+    defaultReason: toolName => `在「发现待办」子任务中不可调用 ${toolName}。`,
+  });
+  const todoSuggestionTaskAgent = new TodoSuggestionTaskAgent({
+    llmClient,
+    taskTools: todoAgentTools,
   });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,
@@ -429,15 +436,14 @@ export async function buildAgentRuntime({
     session: rootAgentSession,
     snapshotRepository: rootAgentRuntimeSnapshotRepository,
     tools: rootAgentTools,
-    contextSummaryOperation: rootContextSummaryOperation,
+    contextSummarizer: summaryTaskAgent,
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
+    // 纯文本轮挂起的自唤醒兜底与 wait 工具共用同一个上限，语义一致：Agent 最多
+    // 安静这么久就会自己醒来一轮。
+    idleWakeMaxWaitMs: config.server.agent.waitToolMaxWaitMs,
     loopExtensions: [new AppEntryResetExtension({ session: rootAgentSession })],
-    summaryTools: [
-      ...rootAgentTools.definitions(),
-      ...toolCatalog.pick([SUMMARY_TOOL_NAME]).definitions(),
-    ],
   });
 
   const restoredSnapshot = await rootAgentRuntimeSnapshotRepository.load(
@@ -458,7 +464,6 @@ export async function buildAgentRuntime({
         SEARCH_WEB_TOOL_NAME,
         READ_RESOURCE_TOOL_NAME,
         HELP_TOOL_NAME,
-        SUMMARY_TOOL_NAME,
       ])
       .definitions(),
   });
@@ -471,7 +476,7 @@ export async function buildAgentRuntime({
     mainAgentContextQueryService,
     llmPlaygroundService,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
-    rootAgentToolDefinitions: rootAgentTools.definitions(),
+    todoSuggestionTaskAgent,
     qqApp,
     qqOutboundService,
     shutdownApps: () => appManager.shutdownAll(),
