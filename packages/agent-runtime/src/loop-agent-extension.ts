@@ -1,6 +1,7 @@
 import type { LlmMessage } from "@kagami/llm";
 import type {
   AssistantLikeMessage,
+  ReActCommittedRoundResult,
   ReActKernelRunRoundInput,
   ReActRoundResult,
 } from "./react-kernel.js";
@@ -26,7 +27,8 @@ export interface LoopAgentExtension<
   }): Promise<void> | void;
   onAfterCommit?(input: {
     context: TContext;
-    result: ReActRoundResult<TCompletion, TExtensionData>;
+    // 只在 shouldCommit: true 的轮触发，收 committed 变体（completion 非 null）。
+    result: ReActCommittedRoundResult<TCompletion, TExtensionData>;
   }): Promise<void> | void;
   onAfterReset?(context: TContext): Promise<void> | void;
   onContextCompacted?(context: TContext): Promise<void> | void;
