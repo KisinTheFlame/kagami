@@ -68,6 +68,9 @@ importers:
       '@kagami/llm-client':
         specifier: workspace:*
         version: link:../../packages/llm-client
+      '@kagami/oss-api':
+        specifier: workspace:*
+        version: link:../../packages/oss-api
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
@@ -287,9 +290,18 @@ importers:
       '@kagami/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+      '@kagami/oss-api':
+        specifier: workspace:*
+        version: link:../../packages/oss-api
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -573,6 +585,22 @@ importers:
       zod:
         specifier: ^3.24.4
         version: 3.25.76
+
+  packages/oss-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/persistence:
     dependencies:
