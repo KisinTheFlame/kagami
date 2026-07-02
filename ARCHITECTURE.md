@@ -112,6 +112,8 @@ apps/agent/src/agent/
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
 │   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
+│   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
+│   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体
 │   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
@@ -120,6 +122,7 @@ apps/agent/src/agent/
     ├── hn/             Hacker News App（只读）
     ├── calc / clock /  小工具 App
     ├── browser/        Browser App：有头浏览器登录 + 交互式逛网站
+    ├── amap/           高德地图 App：地点搜索 / 路线规划 / 静态地图出图（#182）
     ├── spire/          Spire App：杀塔式卡牌游戏薄壳，经 HttpSpireClient 打到独立 apps/spire 进程（#234）
     ├── terminal/       终端 App 壳
     └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
@@ -151,7 +154,7 @@ apps/web/src/
 
 ## 数据流与生命周期
 
-### 输入：生活输入 → NotificationCenter → 事件队列
+### 输入：生活输入 → 事件队列（横幅经 NotificationCenter，屏幕经 foreground_input）
 
 Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，后台 / 非焦点信号折叠成通知（「横幅」），由被动的 `NotificationCenter` 聚合后投入共享事件队列；前台当前会话的实时输入走 `foreground_input` 直达（「屏幕」）：
 
