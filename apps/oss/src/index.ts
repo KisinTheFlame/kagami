@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { loadOssConfig } from "./config/config.js";
-import { createOssServer } from "./http/server.js";
+import { buildOssApp } from "./http/server.js";
 import { ObjectStore } from "./store/object-store.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -20,7 +20,7 @@ if (swept.removed > 0) {
   console.log(`[oss] swept ${swept.removed} orphan blob file(s) on startup`);
 }
 
-const server = createOssServer(store, config.maxBodyBytes);
+const app = buildOssApp(store, config.maxBodyBytes);
 
 let shuttingDown = false;
 function shutdown(signal: NodeJS.Signals): void {
@@ -33,7 +33,7 @@ function shutdown(signal: NodeJS.Signals): void {
     db.close();
     process.exit(0);
   };
-  server.close(finish);
+  void app.close().then(finish, finish);
   setTimeout(finish, SHUTDOWN_TIMEOUT_MS).unref();
 }
 
@@ -44,6 +44,5 @@ process.on("SIGINT", () => {
   shutdown("SIGINT");
 });
 
-server.listen(config.port, "127.0.0.1", () => {
-  console.log(`[oss] listening on 127.0.0.1:${config.port} (pid ${process.pid})`);
-});
+await app.listen({ port: config.port, host: "127.0.0.1" });
+console.log(`[oss] listening on 127.0.0.1:${config.port} (pid ${process.pid})`);

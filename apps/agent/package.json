@@ -17,6 +17,7 @@
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/llm-api": "workspace:*",
+    "@kagami/oss-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
     "@kagami/persistence": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
