@@ -4,6 +4,7 @@ import { SpirePlayCardTool } from "../../capabilities/spire/tools/play-card.tool
 import { SpireEndTurnTool } from "../../capabilities/spire/tools/end-turn.tool.js";
 import { SpireChooseTool } from "../../capabilities/spire/tools/choose.tool.js";
 import { SpireLookTool } from "../../capabilities/spire/tools/look.tool.js";
+import { SpireLookupTool } from "../../capabilities/spire/tools/lookup.tool.js";
 import { renderSpirePortal } from "../../capabilities/spire/render/spire-screen.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { SpireClient } from "../../../spire/spire-client.js";
@@ -38,6 +39,7 @@ export class SpireApp implements App {
     SpireEndTurnTool,
     SpireChooseTool,
     SpireLookTool,
+    SpireLookupTool,
   ];
 
   public constructor({ spireClient }: SpireAppDeps) {
@@ -48,6 +50,7 @@ export class SpireApp implements App {
       new SpireEndTurnTool({ getSpireClient }),
       new SpireChooseTool({ getSpireClient }),
       new SpireLookTool({ getSpireClient }),
+      new SpireLookupTool({ getSpireClient }),
     ];
   }
 

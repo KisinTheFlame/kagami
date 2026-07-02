@@ -60,10 +60,28 @@ export type SpireAction =
   | { type: "end_turn" }
   | { type: "choose"; optionIndex: number };
 
+/** 参考查询结果（与服务端 ReferenceResult 同构）。 */
+export type SpireCardRef = {
+  name: string;
+  type: string;
+  cost: number | null;
+  upgradedCost: number | null;
+  targeted: boolean;
+  description: string;
+  upgradedDescription: string;
+};
+export type SpireGlossaryEntry = { term: string; aliases: string[]; definition: string };
+export type SpireReference = {
+  query: string;
+  cards: SpireCardRef[];
+  terms: SpireGlossaryEntry[];
+};
+
 export interface SpireClient {
   startRun(): Promise<SpireScreen>;
   act(action: SpireAction): Promise<SpireScreen>;
   getState(): Promise<SpireScreen | null>;
+  lookup(query: string): Promise<SpireReference>;
 }
 
 type FetchLike = typeof fetch;
@@ -112,6 +130,11 @@ export class HttpSpireClient implements SpireClient {
       this.lastVersion = screen.version;
     }
     return screen;
+  }
+
+  public async lookup(query: string): Promise<SpireReference> {
+    const path = `/reference?q=${encodeURIComponent(query)}`;
+    return (await this.get(path)) as SpireReference;
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {
