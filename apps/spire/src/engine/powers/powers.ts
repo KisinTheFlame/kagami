@@ -62,8 +62,9 @@ export function computeAttackDamage(
   base: number,
   attackerPowers: readonly PowerInstance[],
   defenderPowers: readonly PowerInstance[],
+  strengthMultiplier = 1,
 ): number {
-  let amount = base + getPower(attackerPowers, "strength");
+  let amount = base + getPower(attackerPowers, "strength") * strengthMultiplier;
   if (amount < 0) {
     amount = 0;
   }
