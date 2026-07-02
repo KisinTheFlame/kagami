@@ -17,6 +17,7 @@ import type {
   NapcatPrivateMessageData,
 } from "../../../napcat/application/napcat-gateway.service.js";
 import {
+  buildChatNotificationPreview,
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../capabilities/messaging/chat-notification-draft.js";
@@ -103,7 +104,7 @@ type QqAppDeps = {
  * 消息分流（手机 OS 的「屏幕 vs 横幅」）：QQ 在前台且消息属于当前会话时走前台实时
  * 路径——入缓冲 + 敲门（foreground_input 事件），drain 时经 drainForegroundInput 把增量
  * 直接刷进上下文尾部，不经 center；其余（别的会话 / QQ 在后台）照旧走 center 成通知
- * （只报信号不报正文）。小镜自己的回声（botQQ）只入缓冲不敲门不推 center。退化收口在
+ * （标签 + 最新一条预览）。小镜自己的回声（botQQ）只入缓冲不敲门不推 center。退化收口在
  * onBlur / 切会话：未投递的未读补推 center draft，绝不静默丢。
  */
 export class QqApp implements App, ForegroundInputSource {
@@ -434,9 +435,9 @@ export class QqApp implements App, ForegroundInputSource {
    * - 前台 + 当前会话：入缓冲 + 敲门（实时路径，不推 center）；小镜自己的回声只入缓冲
    *   （不计未读、不敲门、不推 center——回声防御，防「自己发言→自己被唤醒」的自持振荡，
    *   见 2026-05-30 空转事故同款拓扑）。
-   * - 其余：照旧走 center。通知只报信号（未读条数 / 有人@），不带消息正文：用会话当前的
-   *   权威未读状态现造 draft，计数与 @ 跨窗口累积，open 才清零。想看内容一律
-   *   open_conversation。
+   * - 其余：照旧走 center。通知报信号（未读条数 / 有人@）+ 最新一条真实未读的预览（群聊
+   *   带发言人）：用会话当前的权威未读状态现造 draft，计数与 @ 跨窗口累积，open 才清零。
+   *   预览只有最新一条且截断，想看全量上下文一律 open_conversation。
    */
   private ingestMessage(
     conversation: Conversation,
@@ -516,14 +517,20 @@ export class QqApp implements App, ForegroundInputSource {
     );
   }
 
-  /** 用会话当前的权威未读状态现造一条 draft 推给 center（ingest 横幅路径与退化补推共用）。 */
+  /**
+   * 用会话当前的权威未读状态现造一条 draft 推给 center（ingest 横幅路径与退化补推共用）。
+   * 附带最新一条真实未读的预览（群聊带发言人）；缓冲空（restore 裸计数）时无预览，
+   * draft 退回纯标签格式。
+   */
   private pushDraftFor(conversation: Conversation): void {
+    const latest = conversation.getLatestUnread();
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
         conversation.getShortName(),
         conversation.hasUnreadMention(),
         conversation.getUnreadCount(),
+        latest ? buildChatNotificationPreview(latest, conversation.kind) : null,
       ),
     );
   }
