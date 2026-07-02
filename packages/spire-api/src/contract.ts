@@ -73,9 +73,13 @@ export const SpirePotionViewSchema = z.object({
   targeted: z.boolean(),
 });
 
+export const SpireEventViewSchema = z.object({
+  description: z.string(),
+});
+
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
-  screen: z.enum(["map", "combat", "reward", "rest", "gameover", "victory"]),
+  screen: z.enum(["map", "combat", "reward", "rest", "event", "gameover", "victory"]),
   player: z.object({
     hp: z.number().int(),
     maxHp: z.number().int(),
@@ -84,6 +88,7 @@ export const SpireScreenSchema = z.object({
   deckCount: z.number().int(),
   relics: z.array(SpireRelicViewSchema),
   potions: z.array(SpirePotionViewSchema),
+  event: SpireEventViewSchema.nullable(),
   combat: SpireCombatViewSchema.nullable(),
   options: z.array(z.string()),
   log: z.array(z.string()),

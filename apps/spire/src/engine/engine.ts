@@ -52,6 +52,7 @@ export function newRun(input: {
     currentNodeId: null,
     combat: null,
     reward: null,
+    event: null,
     combatsEntered: 0,
     pendingRelicReward: false,
     rng,
@@ -92,7 +93,12 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return result;
     }
     case "choose": {
-      if (state.screen !== "reward" && state.screen !== "rest" && state.screen !== "map") {
+      if (
+        state.screen !== "reward" &&
+        state.screen !== "rest" &&
+        state.screen !== "map" &&
+        state.screen !== "event"
+      ) {
         return { ok: false, reason: "当前屏幕没有可选项。" };
       }
       return applyChoose(state, action.optionIndex);
