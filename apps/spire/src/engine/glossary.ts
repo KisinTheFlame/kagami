@@ -15,7 +15,17 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
   {
     term: "力量",
     aliases: ["strength", "str"],
-    definition: "每有 1 层，攻击牌每次造成的伤害 +1（对多段攻击每段都 +1）。持续整场战斗。",
+    definition: "每有 1 层，攻击牌每次造成的伤害 +1（对多段攻击每段都 +1）。持续整场战斗，可为负。",
+  },
+  {
+    term: "敏捷",
+    aliases: ["dexterity", "dex"],
+    definition: "每有 1 层，获得的格挡 +1。持续整场战斗，可为负。",
+  },
+  {
+    term: "金属化",
+    aliases: ["metallicize"],
+    definition: "敌人专属：每当它的回合结束，获得等量的格挡。拉加维林睡眠期靠它维持护盾。",
   },
   {
     term: "易伤",
