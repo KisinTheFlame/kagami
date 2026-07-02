@@ -1,7 +1,6 @@
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { PkcePair } from "../shared/pkce.js";
-import { safeParseJson } from "../shared/safe-parse-json.js";
+import { invalidOAuthTicketError, postOAuthTokenRequest } from "../shared/oauth-token-request.js";
 import type { CodexTokenResponse } from "./types.js";
 
 const CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize";
@@ -86,55 +85,22 @@ async function requestCodexTokens(input: {
   config: Pick<CodexAuthConfig, "timeoutMs">;
   unavailableReason: string;
 }): Promise<CodexTokenResponse> {
-  let response: Response;
-  try {
-    response = await fetch(CODEX_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: input.body,
-      signal: AbortSignal.timeout(input.config.timeoutMs),
-    });
-  } catch (error) {
-    throw new BizError({
-      message: "Codex 登录服务调用失败",
-      meta: {
-        reason: input.unavailableReason,
-      },
-      cause: error,
-    });
-  }
-
-  const rawText = await response.text();
-  const parsed = safeParseJson<{
+  const { parsed, rawText } = await postOAuthTokenRequest<{
     access_token?: string;
     refresh_token?: string;
     id_token?: string;
     expires_in?: number;
-  }>(rawText);
-
-  if (!response.ok) {
-    throw new BizError({
-      message:
-        response.status === 400 || response.status === 401 || response.status === 403
-          ? "Codex 登录当前不可用"
-          : "Codex 登录服务调用失败",
-      meta: {
-        reason: input.unavailableReason,
-        status: response.status,
-      },
-      cause: parsed ?? rawText.slice(0, 500),
-    });
-  }
+  }>({
+    tokenUrl: CODEX_TOKEN_URL,
+    providerLabel: "Codex",
+    body: { kind: "form", params: input.body },
+    timeoutMs: input.config.timeoutMs,
+    unavailableReason: input.unavailableReason,
+  });
 
   if (!parsed?.access_token || !parsed.refresh_token || typeof parsed.expires_in !== "number") {
-    throw new BizError({
-      message: "Codex 登录服务返回了无效票据",
-      meta: {
-        reason: "AUTH_INVALID_RESPONSE",
-      },
+    throw invalidOAuthTicketError({
+      providerLabel: "Codex",
       cause: parsed ?? rawText.slice(0, 500),
     });
   }
