@@ -5,7 +5,6 @@ import {
   createAsyncToolResultMessage,
   createNotificationMessage,
   createPortalReminderMessage,
-  createStoryRecallMessage,
 } from "../../context/context-message-factory.js";
 import type { Event } from "../../event/event.js";
 
@@ -15,7 +14,7 @@ import type { Event } from "../../event/event.js";
  *
  * session 只剩：
  * - Portal（桌面）+ currentApp（当前进入的 App）这一个焦点维度；
- * - 顶层事件路由（wake / story_recall / notification）——napcat 消息不再走这里，
+ * - 顶层事件路由（wake / async_tool_result / notification）——napcat 消息不再走这里，
  *   由 QqApp 直接接收。
  *
  * 聊天目标（send_message 的发送会话）属于 QqApp 的私有概念，由 QqApp 自管，不再经 session
@@ -101,11 +100,6 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public async consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }> {
     await this.initializeContext();
-
-    if (event.type === "story_recall_completed") {
-      this.pendingIncomingMessages.push(createStoryRecallMessage(event.data.stories));
-      return { shouldTriggerRound: true };
-    }
 
     if (event.type === "async_tool_result_completed") {
       // 异步工具任务完成：装配成 <async_tool_result> 消息追加到尾部，触发一轮 round。

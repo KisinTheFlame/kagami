@@ -21,19 +21,12 @@ let shutdownApps: (() => Promise<void>) | null = null;
 let taskScheduler: TaskScheduler | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let rootAgentRuntime: AgentRuntimeController | null = null;
-let storyAgentRuntime: AgentRuntimeController | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
 
 async function startAgentLoop(runtime: {
-  storyAgentEnabled: boolean;
-  storyAgentRuntime: {
-    initialize(): Promise<void>;
-    run(): Promise<void>;
-    stop(): Promise<void>;
-  };
   rootAgentRuntime: {
     initialize(): Promise<void>;
     run(): Promise<void>;
@@ -42,9 +35,6 @@ async function startAgentLoop(runtime: {
 }): Promise<void> {
   try {
     await runtime.rootAgentRuntime.initialize();
-    if (runtime.storyAgentEnabled) {
-      await runtime.storyAgentRuntime.initialize();
-    }
   } catch (error) {
     logger.errorWithCause(
       "Agent runtime initialization failed; backend will continue without agent loop",
@@ -61,14 +51,6 @@ async function startAgentLoop(runtime: {
       event: "agent.loop.crashed",
     });
   });
-
-  if (runtime.storyAgentEnabled) {
-    void runtime.storyAgentRuntime.run().catch(error => {
-      logger.errorWithCause("Story loop crashed; backend will continue without story loop", error, {
-        event: "agent.story_loop.crashed",
-      });
-    });
-  }
 }
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
@@ -91,7 +73,6 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     taskScheduler,
     callbackServers,
     rootAgentRuntime,
-    storyAgentRuntime,
     closeLlmProviders,
     closeDatabase: closeDb,
   });
@@ -113,8 +94,6 @@ try {
   taskScheduler = runtime.taskScheduler;
   callbackServers = runtime.callbackServers;
   rootAgentRuntime = runtime.rootAgentRuntime;
-  // Story Agent 关停时不接管其生命周期：未 initialize/run，shutdown 也不必 stop。
-  storyAgentRuntime = runtime.storyAgentEnabled ? runtime.storyAgentRuntime : null;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 

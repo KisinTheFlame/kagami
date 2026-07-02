@@ -25,7 +25,6 @@ type ShutdownServerResourcesOptions = {
   taskScheduler: TaskScheduler | null;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: AgentRuntimeController | null;
-  storyAgentRuntime: AgentRuntimeController | null;
   closeLlmProviders: (() => Promise<void>) | null;
   logger?: ShutdownLogger;
   closeLoggerRuntime?: () => Promise<void>;
@@ -47,7 +46,6 @@ export async function shutdownServerResources({
   taskScheduler,
   callbackServers,
   rootAgentRuntime,
-  storyAgentRuntime,
   closeLlmProviders,
   logger: shutdownLogger = logger,
   closeLoggerRuntime = async () => {
@@ -103,13 +101,6 @@ export async function shutdownServerResources({
       await rootAgentRuntime.stop();
       shutdownLogger.info("Root agent runtime closed", {
         event: "server.shutdown.root_agent_runtime_closed",
-      });
-    }
-
-    if (storyAgentRuntime) {
-      await storyAgentRuntime.stop();
-      shutdownLogger.info("Story agent runtime closed", {
-        event: "server.shutdown.story_agent_runtime_closed",
       });
     }
 

@@ -67,7 +67,7 @@ export class NoopEffectInterpreter implements EffectInterpreter<never> {
 // 装不同的 handler 子集：
 //   - RootAgent：ReplaceLeadingMessagesHandler（公共）+ 自己的 switch_app /
 //     switch_state / wait_for_event / append_message handler
-//   - StoryAgent compact：只装 ReplaceLeadingMessagesHandler（公共）
+//   - 只做上下文压缩的 Agent：只装 ReplaceLeadingMessagesHandler（公共）
 // 公共 Effect + 公共 handler 收在 agent-runtime；Agent 专属 Effect + 专属 handler
 // 留在各 Agent 自己的包里。
 //
@@ -166,7 +166,7 @@ export interface ReplaceLeadingMessagesTarget {
  * target.replaceLeadingMessages。
  *
  * replace 不走 kernel 的原子追加协议（它是"计划性重建"，不是追加），所以直接改
- * context、不返 appendedMessages。RootAgent 和 StoryAgent compact 都复用它。
+ * context、不返 appendedMessages。任何做上下文压缩的 Agent 都能复用它。
  */
 export class ReplaceLeadingMessagesHandler implements EffectHandler<never> {
   private readonly target: ReplaceLeadingMessagesTarget;

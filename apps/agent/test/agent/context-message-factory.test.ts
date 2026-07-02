@@ -4,8 +4,6 @@ import {
   createNotificationMessage,
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
-  createStoryContextSummaryReminderMessage,
-  createStoryRecallMessage,
   createWakeReminderMessage,
   createWebSearchInstructionMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
@@ -29,44 +27,6 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should wrap a single recalled story in the story_recall tag", () => {
-    expect(
-      createStoryRecallMessage([
-        { id: "s1", markdown: "## 那天\n和闻震聊了部署方案", createdAt: new Date(2026, 0, 15) },
-      ]),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<story_recall>",
-        "你想起了一件发生在 2026-01-15 的事情：",
-        "",
-        "## 那天\n和闻震聊了部署方案",
-        "</story_recall>",
-      ].join("\n"),
-    });
-  });
-
-  it("should stack multiple recalled stories under one story_recall tag", () => {
-    expect(
-      createStoryRecallMessage([
-        { id: "s1", markdown: "MD1", createdAt: new Date(2026, 0, 15) },
-        { id: "s2", markdown: "MD2", createdAt: new Date(2026, 1, 20) },
-      ]),
-    ).toEqual({
-      role: "user",
-      content: [
-        "<story_recall>",
-        "你想起了一件发生在 2026-01-15 的事情：",
-        "",
-        "MD1",
-        "你想起了一件发生在 2026-02-20 的事情：",
-        "",
-        "MD2",
-        "</story_recall>",
-      ].join("\n"),
-    });
-  });
-
   it("should wrap conversation summaries in the conversation_summary tag", () => {
     expect(
       createConversationSummaryMessage(
@@ -79,7 +39,7 @@ describe("context-message-factory", () => {
     });
   });
 
-  it("should render root and story context summary reminders", () => {
+  it("should render the root context summary reminder", () => {
     expect(createRootContextSummaryReminderMessage()).toEqual({
       role: "user",
       content: [
@@ -99,23 +59,6 @@ describe("context-message-factory", () => {
         "`## 还可以继续展开的点` 保留 1 到 3 个最自然能继续的点，可包含极短原话或极短线索摘录。",
         "忽略寒暄、纯重复内容、已经失效的瞬时界面信息和明显无关细节。",
         "不要写成冷冰冰的流程单，也不要写成长篇流水账。",
-        "不要直接输出自由文本回复，必须调用 `summary` 工具；`summary` 参数应是简洁但信息完整的中文字符串。",
-        "</system_reminder>",
-      ].join("\n"),
-    });
-
-    expect(createStoryContextSummaryReminderMessage()).toEqual({
-      role: "user",
-      content: [
-        "<system_reminder>",
-        "你现在不是在创建新回复，而是在为当前 story runtime 整理「稍后继续工作用」的累计上下文摘要。",
-        "请基于你刚刚继承到的完整上下文（包括当前 system prompt 与已有消息）提炼真正会影响后续叙事归并和批处理完成的信息。",
-        "摘要使用 Markdown 二级标题，按固定顺序组织为：`## 当前处理范围`、`## 已确认叙事`、`## 新增线索与判断`、`## 待完成事项`。",
-        "`## 当前处理范围` 写当前批次或当前压缩范围正在处理什么主题、消息簇或叙事簇。",
-        "`## 已确认叙事` 写已识别出的 story、归属关系、稳定判断；如果没有可留空但标题保留。",
-        "`## 新增线索与判断` 写本轮新增消息带来的 merge / split / rewrite / create 判断，以及关键工具结果。",
-        "`## 待完成事项` 写尚未完成的 create/rewrite/finish，以及仍有歧义的归并点。",
-        "忽略寒暄、重复内容、无关细节和冗余措辞。",
         "不要直接输出自由文本回复，必须调用 `summary` 工具；`summary` 参数应是简洁但信息完整的中文字符串。",
         "</system_reminder>",
       ].join("\n"),

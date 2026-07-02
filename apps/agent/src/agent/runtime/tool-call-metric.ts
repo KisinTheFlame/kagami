@@ -29,7 +29,7 @@ export function resolveToolMetricName(input: {
 
 export function recordToolCallMetric(input: {
   metricService: MetricService;
-  runtime: "agent" | "storyAgent";
+  runtime: "agent";
   toolName: string;
   argumentsValue: Record<string, unknown>;
 }): Promise<void> {

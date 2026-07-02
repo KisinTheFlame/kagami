@@ -26,7 +26,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 群聊只是他生活的一部分，就像一个人不会把自己定义为"聊天的人"。只要给他足够多的能力（capability），他就可以像一个真正的人那样，去读新闻、去记住发生过的事、去主动做自己感兴趣的事。项目的核心概念是 **Agent as a life**：
 
 - QQ 群消息只是他接收到的一种事件，与 RSS 轮询、定时任务、系统通知在架构上是平级的"生活输入"。
-- 他有自己的记忆（Story / RAG）、自己的兴趣（IThome 轮询、主动发言）、自己的节奏（事件队列、空闲时刻的后台动作）。
+- 他有自己的兴趣（IThome 轮询、主动发言）、自己的节奏（事件队列、空闲时刻的后台动作）；长期记忆系统正在重新设计（原 Story 记忆已拆除，仅保留 `ledger` 消息账本作原始素材）。
 - 新增 capability 时，应该问自己："这是在给 Agent 的生活加一种新的存在方式吗？"，而不是"这是在给聊天机器人加一个功能吗？"。
 - 不要把 NapCat、群聊相关的概念泄漏到 `agent/runtime` 的核心抽象里。它只是众多外部事件源之一。
 
@@ -41,14 +41,14 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 把 Agent 的 message 列表想象成三段：
 
 1. **稳定前缀**：system prompt、工具定义、历史对话。只追加、不修改。
-2. **易变尾部**：当轮新事件、召回注入、工具调用结果。可以变，但只影响最后一段。
+2. **易变尾部**：当轮新事件、通知注入、工具调用结果。可以变，但只影响最后一段。
 3. **计划性重建**：只有上下文压缩这类明确的、罕见的动作才允许整体 `replaceMessages`，一次性把旧前缀换成更短的新前缀，从此作为新的稳定前缀继续生长。
 
 对应到运行时，`AgentContext` 只暴露两个会改动 message 列表的操作：`appendMessages`（保留前缀）与 `replaceMessages`（明确破坏并重建前缀）。新功能如果既不是追加也不是压缩，就要警惕。
 
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
-`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `list_apps` / `wait` / `invoke` / `search_web` / `search_memory` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
+`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `list_apps` / `wait` / `invoke` / `search_web` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
 
 如果不通过 InvokeTool，每加一个工具都要在 LLM 的 tools 参数里多一个 entry，这是稳定前缀的一部分，意味着每加一个新工具都会让所有进行中的会话从零换入。InvokeTool 把"加新东西就触发一次前缀失效"的代价从"每加一个工具一次"压缩到"几乎不会发生"。
 
@@ -69,11 +69,11 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 **教训**：任何会产生大量中间 token 的能力（搜索、抓网页、读长文件、跑代码），都应该封装成 TaskAgent 或 Operation，只向主 Agent 回传摘要。不要让原始素材进主 Agent 的消息列表。
 
-**2. Story Recall —— 追加到尾部，而非插入前缀**
+**2. NotificationCenter —— 追加到尾部，而非插入前缀**
 
-`capabilities/story/runtime/story-recall.extension.ts` 在 `onBeforeRound` 阶段通过 `context.host.appendMessages([recallMessage])` 把召回结果**追加到消息尾部**，包在 `<story_recall>` 标签里。它绝不把召回内容塞到 system prompt 或历史中段。配合 `lastRecallMessageCount` 去重，只在真的有新消息时才产出新召回，避免空转写入。压缩发生时，扩展通过 `onContextCompacted()` 清空自身的注入集合，跟着新前缀重新开始。
+各生活输入（IThome 新文、QQ 未读、todo 提醒）经 `NotificationCenter` 窗口聚合后，作为一条 `notification` 事件进共享事件队列；`RootAgentSession` 在路由时通过 `createNotificationMessage` 装配成一条 `<notification>` user message，**追加到消息尾部**并触发一轮 round。它绝不把通知内容塞到 system prompt 或历史中段。异步工具结果（`<async_tool_result>`）走的是同一条尾部追加路径。
 
-**教训**：想给 Agent "喂"外部信息（召回、新闻、提醒、周期状态），一律**往尾部 append**。永远不要为了"让它更显眼"而把动态内容插到 system prompt 或前缀里——那会让整个会话每轮都从零换入。
+**教训**：想给 Agent "喂"外部信息（新闻、提醒、周期状态、异步结果、以及将来的记忆召回），一律**往尾部 append**。永远不要为了"让它更显眼"而把动态内容插到 system prompt 或前缀里——那会让整个会话每轮都从零换入。
 
 **3. Context Summarizer —— 唯一允许破坏前缀的地方**
 
@@ -89,7 +89,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 - **不要**给主 Agent 添加会返回大块原始数据的工具。大数据先进子 Agent / Operation，再以摘要回传。
 - **不要**在压缩之外的地方调用 `replaceMessages`。
 - **system prompt 和工具集的改动要集中提交**：每次改动都会让所有在飞会话的前缀失效一次，小步高频修改是最糟糕的模式。
-- **进上下文的散文一律走模板，禁止在 TS 里内联字面量**：任何最终会进 LLM 上下文的成句文案（system prompt、各类 reminder、`<notification>` / `<story_recall>` / `<async_tool_result>` 等伪标签内容、通知 draft 的渲染文本）都必须落在 `apps/agent/static/` 下的 `.hbs` 模板，经 `renderServerStaticTemplate(import.meta.url, ...)` 渲染。TS 侧只负责算 view-model（计数、数组、布尔 flag、预格式化好的日期/截断文本），不写成句文案。这样调小镜的语气只改 `static/` 一棵树、不碰代码，也让"所有会进上下文的文本"始终收在同一处可审。**例外（留 TS 常量）**：分组 key / 结构标识（如 `"QQ"`、`"IT之家"`、`"待办"`）这类不是语气的标识符；以及工具 description 与工具 result 的 error/status note（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部且与控制流交织，见 `TODOS.md`）。
+- **进上下文的散文一律走模板，禁止在 TS 里内联字面量**：任何最终会进 LLM 上下文的成句文案（system prompt、各类 reminder、`<notification>` / `<async_tool_result>` 等伪标签内容、通知 draft 的渲染文本）都必须落在 `apps/agent/static/` 下的 `.hbs` 模板，经 `renderServerStaticTemplate(import.meta.url, ...)` 渲染。TS 侧只负责算 view-model（计数、数组、布尔 flag、预格式化好的日期/截断文本），不写成句文案。这样调小镜的语气只改 `static/` 一棵树、不碰代码，也让"所有会进上下文的文本"始终收在同一处可审。**例外（留 TS 常量）**：分组 key / 结构标识（如 `"QQ"`、`"IT之家"`、`"待办"`）这类不是语气的标识符；以及工具 description 与工具 result 的 error/status note（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部且与控制流交织，见 `TODOS.md`）。
 - Review 新 capability / operation / tool 时，把"会不会破坏 KV 缓存命中"以及"进上下文的散文是否走了模板"作为显式检查项写进自检清单。
 
 ## 硬约束
@@ -155,7 +155,7 @@ pnpm app:deploy <agent|console|gateway|oss|browser|llm>  # 单服务：只重建
 
 - 方向代号：**晒褪了色的蒙德里安 / The Painted Ledger**（蒙德里安骨架 + 文艺复兴 / 印象派颜料色）。
 - 前端不再用 shadcn 的有样式组件与默认 slate 主题；保留 Radix 无样式行为基元，其余外观自定义。
-- 配色铁律：颜色是配给不是涂抹，90% 中性 + 暖近黑，饱和色只落在「活着 / 有语义」的数据上（红 = 错/主动发言、蓝 = LLM/context、黄 = scheduler/等待、绿 = Story/记忆、茜 = 高成本）。
+- 配色铁律：颜色是配给不是涂抹，90% 中性 + 暖近黑，饱和色只落在「活着 / 有语义」的数据上（红 = 错/主动发言、蓝 = LLM/context、黄 = scheduler/等待、绿 = 记忆/持久数据、茜 = 高成本）。
 - QA / Review 时，发现不符合 DESIGN.md 的代码要标出来。
 
 ## 部署速查

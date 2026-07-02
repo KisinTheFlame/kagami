@@ -4,16 +4,16 @@ import type { EmbeddingCacheDao } from "../src/embedding/cache.dao.js";
 import { createEmbeddingClient } from "../src/embedding/client.js";
 import type { EmbeddingProvider } from "../src/embedding/provider.js";
 
-type StoryMemoryEmbeddingConfig = Config["server"]["agent"]["story"]["memory"]["embedding"];
+type EmbeddingConfig = Config["server"]["llm"]["embedding"];
 
-const googleConfig: StoryMemoryEmbeddingConfig = {
+const googleConfig: EmbeddingConfig = {
   provider: "google",
   apiKey: "key",
   baseUrl: "https://generativelanguage.googleapis.com",
   model: "gemini-embedding-001",
   outputDimensionality: 768,
 };
-const teiConfig: StoryMemoryEmbeddingConfig = {
+const teiConfig: EmbeddingConfig = {
   provider: "tei-embedding-gemma",
   baseUrl: "http://127.0.0.1:20008",
   model: "google/embeddinggemma-300m",

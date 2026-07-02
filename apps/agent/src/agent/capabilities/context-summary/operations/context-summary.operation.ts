@@ -28,7 +28,7 @@ export type ContextSummaryInput = {
  * 从 input.messages.length 自己算。
  *
  * 产公共的 `ReplaceLeadingMessagesEffect<LlmMessage>`（来自 agent-runtime），不依赖
- * 任何具体 Agent 的 Effect 联合——RootAgent / StoryAgent 都能用同一个 Operation。
+ * 任何具体 Agent 的 Effect 联合——任何 Agent（当前是 RootAgent）都能复用同一个 Operation。
  */
 export type ContextSummaryResult = {
   /** 空数组表示 LLM 没产出有效摘要，调用方不做任何变更。 */

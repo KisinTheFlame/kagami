@@ -69,8 +69,8 @@ describe("DefaultAgentContext", () => {
       systemPromptFactory: () => "system-prompt",
     });
 
-    // 手机 OS 模型下没有任何事件类型渲染成上下文消息：notification / story_recall 由
-    // session 直接装配追加，QQ 消息归 QQ App。appendEvents 因此对 snapshot 是 no-op。
+    // 手机 OS 模型下没有任何事件类型渲染成上下文消息：notification 由 session 直接装配
+    // 追加，QQ 消息归 QQ App。appendEvents 因此对 snapshot 是 no-op。
     await context.appendEvents([{ type: "notification", data: { lines: ["QQ: 产品群: 你好"] } }]);
 
     await expect(context.getSnapshot()).resolves.toEqual({

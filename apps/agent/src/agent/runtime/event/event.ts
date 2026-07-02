@@ -25,12 +25,6 @@ export type WakeEvent = {
   type: "wake";
 };
 
-export type StoryRecallStoryPayload = {
-  id: string;
-  markdown: string;
-  createdAt: Date;
-};
-
 /**
  * 异步工具任务完成后，AsyncTaskManager 的 onComplete 把结果以事件形式塞回主 Agent
  * 的事件队列。Session 路由时装配成一条 `<async_tool_result>` user message 追加到上下文，
@@ -41,20 +35,4 @@ export type AsyncToolResultCompletedEvent = {
   data: AsyncTaskCompletion;
 };
 
-/**
- * Story recall 后台任务异步完成后，把召回到的故事以事件形式塞回主 Agent 的事件队列。
- * Session 在路由时把 stories 装配成 <story_recall> user message 并追加到上下文，
- * 同时触发新一轮 round，让主 Agent 想起记忆后继续行动。召回结果为空时不会发出该事件。
- */
-export type StoryRecallCompletedEvent = {
-  type: "story_recall_completed";
-  data: {
-    stories: StoryRecallStoryPayload[];
-  };
-};
-
-export type Event =
-  | NotificationEvent
-  | StoryRecallCompletedEvent
-  | AsyncToolResultCompletedEvent
-  | WakeEvent;
+export type Event = NotificationEvent | AsyncToolResultCompletedEvent | WakeEvent;

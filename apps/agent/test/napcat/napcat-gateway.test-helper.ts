@@ -110,29 +110,6 @@ export function createConfigManager(): ConfigManager {
         asyncTask: {
           maxTaskDurationMs: 600_000,
         },
-        story: {
-          enabled: true,
-          batchSize: 24,
-          idleFlushMs: 120_000,
-          memory: {
-            embedding: {
-              provider: "google",
-              apiKey: "gemini-key",
-              baseUrl: "https://generativelanguage.googleapis.com",
-              model: "gemini-embedding-001",
-              outputDimensionality: 768,
-            },
-            vectorIndexPath: "./data/vector/story-memory.hnsw",
-            retrieval: {
-              topK: 3,
-            },
-          },
-          recall: {
-            enabled: true,
-            topK: 2,
-            scoreThreshold: 0.65,
-          },
-        },
         messaging: {
           aiTone: {
             enabled: true,
@@ -160,6 +137,13 @@ export function createConfigManager(): ConfigManager {
       llm: {
         timeoutMs: 45_000,
         authUsageRefreshIntervalMs: 600_000,
+        embedding: {
+          provider: "google",
+          apiKey: "gemini-key",
+          baseUrl: "https://generativelanguage.googleapis.com",
+          model: "gemini-embedding-001",
+          outputDimensionality: 768,
+        },
         codexAuth: {
           enabled: true,
           publicBaseUrl: "http://localhost:20004",
@@ -200,9 +184,6 @@ export function createConfigManager(): ConfigManager {
         },
         usages: {
           agent: {
-            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
-          },
-          storyAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
           contextSummarizer: {

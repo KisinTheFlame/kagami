@@ -724,7 +724,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     await this.awaitPendingMutations();
 
     // Step 2: run one ReAct round. The LLM may call blocking tools like
-    // wait / finish_story_batch; those block inside eventQueue.waitNonEmpty
+    // wait; those block inside eventQueue.waitNonEmpty
     // until a producer (real event or timer-enqueued wake) resolves them.
     await this.runReactRound();
   }

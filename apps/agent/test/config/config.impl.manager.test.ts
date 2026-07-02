@@ -50,12 +50,10 @@ ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
 ${indent(napcatBlock, 4)}
   agent:
     contextCompactionTotalTokenThreshold: 150000
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
@@ -110,19 +108,19 @@ ${indent(napcatBlock, 4)}
 
 function useTeiEmbeddingConfig(content: string, extraLines = ""): string {
   const teiBlock = [
-    "        embedding:",
-    "          provider: tei-embedding-gemma",
-    "          baseUrl: http://127.0.0.1:20008",
-    "          model: google/embeddinggemma-300m",
-    "          outputDimensionality: 768",
+    "    embedding:",
+    "      provider: tei-embedding-gemma",
+    "      baseUrl: http://127.0.0.1:20008",
+    "      model: google/embeddinggemma-300m",
+    "      outputDimensionality: 768",
     extraLines,
   ]
     .filter(Boolean)
     .join("\n");
 
   return content.replace(
-    `        embedding:
-          apiKey: gemini-key`,
+    `    embedding:
+      apiKey: gemini-key`,
     teiBlock,
   );
 }
@@ -398,11 +396,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
 server:
   databaseUrl: "file::memory:"
-  agent:
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
+  agent: {}
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -411,6 +405,8 @@ server:
       - "123456"
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
@@ -581,7 +577,7 @@ listenGroupIds:
 
     const config = await loadStaticConfig({ configPath });
 
-    expect(config.server.agent.story.memory.embedding).toEqual({
+    expect(config.server.llm.embedding).toEqual({
       provider: "tei-embedding-gemma",
       baseUrl: "http://127.0.0.1:20008",
       model: "google/embeddinggemma-300m",
@@ -599,14 +595,14 @@ requestTimeoutMs: 10000
 listenGroupIds:
   - "123456"
 `),
-      ).replace("          baseUrl: http://127.0.0.1:20008\n", ""),
+      ).replace("      baseUrl: http://127.0.0.1:20008\n", ""),
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
       name: "ConfigError",
       message: "配置值不合法",
       meta: {
-        key: "server.agent.story.memory.embedding.baseUrl",
+        key: "server.llm.embedding.baseUrl",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<ConfigError>);
@@ -622,14 +618,14 @@ requestTimeoutMs: 10000
 listenGroupIds:
   - "123456"
 `),
-      ).replace("          model: google/embeddinggemma-300m\n", ""),
+      ).replace("      model: google/embeddinggemma-300m\n", ""),
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
       name: "ConfigError",
       message: "配置值不合法",
       meta: {
-        key: "server.agent.story.memory.embedding.model",
+        key: "server.llm.embedding.model",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<ConfigError>);
@@ -645,14 +641,14 @@ requestTimeoutMs: 10000
 listenGroupIds:
   - "123456"
 `),
-      ).replace("          outputDimensionality: 768\n", ""),
+      ).replace("      outputDimensionality: 768\n", ""),
     );
 
     await expect(loadStaticConfig({ configPath })).rejects.toMatchObject({
       name: "ConfigError",
       message: "配置值不合法",
       meta: {
-        key: "server.agent.story.memory.embedding.outputDimensionality",
+        key: "server.llm.embedding.outputDimensionality",
         reason: "CONFIG_INVALID",
       },
     } satisfies Partial<ConfigError>);
@@ -717,10 +713,6 @@ server:
   databaseUrl: "file::memory:"
   agent:
     contextCompactionTotalTokenThreshold: 80000
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -729,6 +721,8 @@ server:
       - "123456"
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
@@ -799,10 +793,6 @@ server:
   databaseUrl: "file::memory:"
   agent:
     contextCompactionThreshold: 80
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -811,6 +801,8 @@ server:
       - "123456"
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
@@ -884,10 +876,6 @@ server:
   databaseUrl: "file::memory:"
   agent:
     llmRetryBackoffMs: 45000
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -896,6 +884,8 @@ server:
       - "123456"
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
@@ -967,10 +957,6 @@ server:
     waitToolMaxWaitMs: 120000
     asyncTask:
       maxTaskDurationMs: 120000
-    story:
-      memory:
-        embedding:
-          apiKey: gemini-key
   napcat:
     wsUrl: wss://example.com/napcat
     reconnectMs: 3000
@@ -979,6 +965,8 @@ server:
       - "123456"
   llm:
     timeoutMs: 15000
+    embedding:
+      apiKey: gemini-key
     codexAuth:
       publicBaseUrl: http://localhost:20004
     claudeCodeAuth:
