@@ -86,3 +86,69 @@ describe("ReActKernel.runRound — tool effects → toolExecution.effectMessages
     expect(result.toolExecutions[0].effectMessages).toEqual([]);
   });
 });
+
+/**
+ * toolChoice auto 的两条基础契约：
+ * 1. kernel 每轮请求发送 toolChoice "auto"（不再强制工具调用）。
+ * 2. 零 toolCall 的纯文本轮是合法轮：shouldCommit true、toolExecutions/appendedMessages
+ *    为空，text 的取舍由持久化边界决定（root 剥离、task agent 留在本地工作区）。
+ */
+describe("ReActKernel.runRound — toolChoice auto 与纯文本轮", () => {
+  const noopInterpreter: EffectInterpreter<never> = {
+    apply: async () => ({ appendedMessages: [] }),
+  };
+
+  it("每轮请求 toolChoice 为 auto", async () => {
+    let seenToolChoice: string | undefined;
+    const kernel = new ReActKernel<"agent", Completion>({
+      model: {
+        chat: async (request: { toolChoice: string }) => {
+          seenToolChoice = request.toolChoice;
+          return {
+            message: { role: "assistant", content: "", toolCalls: [] },
+          };
+        },
+      } as unknown as ReActModel<"agent", Completion>,
+      interpreter: noopInterpreter,
+    });
+
+    await kernel.runRound({
+      state: { systemPrompt: undefined, messages: [] },
+      tools: makeNoTools(),
+      usage: "agent",
+    } as unknown as ReActKernelRunRoundInput<"agent">);
+
+    expect(seenToolChoice).toBe("auto");
+  });
+
+  it("零 toolCall 的纯文本轮：shouldCommit true、无工具执行、无追加消息", async () => {
+    const kernel = new ReActKernel<"agent", Completion>({
+      model: {
+        chat: async () => ({
+          message: { role: "assistant", content: "我先想想再动手。", toolCalls: [] },
+        }),
+      } as unknown as ReActModel<"agent", Completion>,
+      interpreter: noopInterpreter,
+    });
+
+    const result = await kernel.runRound({
+      state: { systemPrompt: undefined, messages: [] },
+      tools: makeNoTools(),
+      usage: "agent",
+    } as unknown as ReActKernelRunRoundInput<"agent">);
+
+    expect(result.shouldCommit).toBe(true);
+    expect(result.assistantMessage?.content).toBe("我先想想再动手。");
+    expect(result.assistantMessage?.toolCalls).toEqual([]);
+    expect(result.toolExecutions).toEqual([]);
+    expect(result.appendedMessages).toEqual([]);
+  });
+});
+
+function makeNoTools(): ToolExecutor {
+  return {
+    definitions: () => [],
+    getKind: () => "business",
+    execute: async () => ({ content: "", kind: "business" }),
+  } as unknown as ToolExecutor;
+}

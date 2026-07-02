@@ -32,7 +32,7 @@ export interface ReActModel<
       system?: string;
       messages: LlmMessage[];
       tools: Tool[];
-      toolChoice: "required";
+      toolChoice: "auto";
     },
     options: {
       usage: TUsage;
@@ -211,7 +211,7 @@ export class ReActKernel<
           system: request.state.systemPrompt,
           messages: [...request.state.messages],
           tools: request.tools.definitions(),
-          toolChoice: "required",
+          toolChoice: "auto",
         },
         {
           usage: request.usage,

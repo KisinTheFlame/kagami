@@ -33,7 +33,7 @@ apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔
 | `@kagami/oss`           | 自建对象存储服务（独立进程，Fastify + 裸 better-sqlite3；路由走 `@kagami/oss-api` 契约，get/head/delete 为 raw 路由保流式管道 / fd / 安全头语义）                                                   |
 | `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173）               |
 | `@kagami/spire-service` | 杀塔式卡牌游戏引擎独立进程（`apps/spire`，Fastify，仅 localhost）：纯游戏引擎 + JSON 存档 + 自动对战模拟器，不碰共享 SQLite；agent 经 `HttpSpireClient` 驱动，拆进程让 agent 重启不打断对局（#234） |
-| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                                                  |
+| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Tool / App 框架）                                                                                                              |
 | `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等，零依赖契约叶子）                                                                                                           |
 | `@kagami/llm-client`    | LLM chat client + provider + embedding client 运行时；只发 observation 事件，落库 / 缓存归 agent 装配层，对 persistence 零依赖                                                                      |
 | `@kagami/auth`          | OAuth 凭据管理全套（PKCE 登录 / callback server / 刷新 scheduler / secret store / 配额快照 / 认证 handler）；随 `kagami-llm` 进程装配                                                               |
@@ -111,7 +111,7 @@ apps/agent/src/agent/
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
-│   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
+│   ├── context-summary/ 上下文压缩 task agent（唯一允许 replaceMessages 的路径）
 │   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
 │   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体

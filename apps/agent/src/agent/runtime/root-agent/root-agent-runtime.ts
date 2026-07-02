@@ -5,8 +5,10 @@ import {
   ReActKernel,
   type ReActKernelRunRoundInput,
   type ReActCommittedRoundResult,
+  REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
   type ReplaceLeadingMessagesEffect,
   SerialExecutor,
+  TaskAgentMaxRoundsExceededError,
   type ToolExecutor,
   type ToolSetExecutionResult,
 } from "@kagami/agent-runtime";
@@ -16,14 +18,16 @@ import type {
   AgentContextSnapshot,
   AssistantMessage,
 } from "../context/agent-context.js";
-import { createWakeReminderMessage } from "../context/context-message-factory.js";
+import {
+  createConversationSummaryMessage,
+  createWakeReminderMessage,
+} from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "@kagami/llm-client";
-import type { LlmMessage, Tool } from "@kagami/llm-client";
+import type { LlmMessage } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { MetricService } from "../../../metric/application/metric.service.js";
-import type { ContextSummaryOperation } from "../../capabilities/context-summary/operations/context-summary.operation.js";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
   FixedRetryBackoffPolicy,
@@ -50,7 +54,13 @@ import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
 
-type ContextSummaryLike = Pick<ContextSummaryOperation, "execute">;
+/**
+ * 上下文摘要器的结构类型（SummaryTaskAgent 的 invoke 面）。runtime 只依赖
+ * "给 system + 前缀消息、回摘要字符串"这一契约，不 import 具体 capability 实现。
+ */
+type ContextSummarizerLike = {
+  invoke(input: { systemPrompt: string; messages: LlmMessage[] }): Promise<string>;
+};
 
 type RootLoopExtension = LoopAgentExtension<
   RootLoopExtensionContext,
@@ -68,8 +78,7 @@ type RootAgentRuntimeDeps = {
   runtimeKey?: string;
   tools?: ToolExecutor;
   agentTools?: ToolExecutor;
-  contextSummaryOperation?: ContextSummaryLike;
-  summaryTools?: Tool[];
+  contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
   metricService?: MetricService;
   llmRetryBackoffMs?: number;
@@ -122,8 +131,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private readonly interpreter: EffectInterpreter<never>;
   private readonly snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   private readonly runtimeKey: string;
-  private readonly contextSummaryOperation?: ContextSummaryLike;
-  private readonly summaryTools: Tool[];
+  private readonly contextSummarizer?: ContextSummarizerLike;
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly llmRetryBackoffMs: number;
   private readonly metricService: MetricService;
@@ -141,8 +149,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     interpreter,
     snapshotRepository,
     runtimeKey,
-    contextSummaryOperation,
-    summaryTools,
+    contextSummarizer,
     contextCompactionTotalTokenThreshold,
     metricService,
     llmRetryBackoffMs,
@@ -159,8 +166,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     this.interpreter = interpreter;
     this.snapshotRepository = snapshotRepository;
     this.runtimeKey = runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
-    this.contextSummaryOperation = contextSummaryOperation;
-    this.summaryTools = summaryTools ?? [];
+    this.contextSummarizer = contextSummarizer;
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
     this.metricService = metricService ?? NOOP_METRIC_SERVICE;
@@ -271,10 +277,12 @@ export class RootAgentHost implements RootAgentExtensionHost {
     result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
     tools: ToolExecutor,
   ): Promise<void> {
-    const persistentAssistantMessage = omitControlToolCalls(result.assistantMessage, tools);
-    const assistantToPersist = shouldPersistAssistantMessage(persistentAssistantMessage)
-      ? persistentAssistantMessage
-      : null;
+    const persistentAssistantMessage = toPersistableAssistantMessage(
+      result.assistantMessage,
+      tools,
+    );
+    const assistantToPersist =
+      persistentAssistantMessage.toolCalls.length > 0 ? persistentAssistantMessage : null;
     const toolPersistences: PendingToolPersistence[] = result.toolExecutions.map(execution => ({
       ...(shouldPersistToolResultInContext({
         toolName: execution.toolCall.name,
@@ -367,8 +375,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   public async compactContextIfNeeded(totalTokens: number | null | undefined): Promise<boolean> {
-    const operation = this.contextSummaryOperation;
-    if (!operation) {
+    const summarizer = this.contextSummarizer;
+    if (!summarizer) {
       return false;
     }
 
@@ -394,7 +402,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      const attempt = await this.attemptSummarize(operation, {
+      const attempt = await this.attemptSummarize(summarizer, {
         systemPrompt: snapshot.systemPrompt,
         messages: compactionPlan.messagesToSummarize,
       });
@@ -405,9 +413,9 @@ export class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。Operation 自己产
-      // replace_leading_messages Effect，host 只把它交给 Interpreter。
-      // Interpreter 是 Agent 状态变更的唯一入口。
+      // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。attemptSummarize
+      // 把 task agent 的摘要拼成 replace_leading_messages Effect，host 只把它交给
+      // Interpreter。Interpreter 是 Agent 状态变更的唯一入口。
       await this.interpreter.apply(attempt.effects);
       return true;
     }
@@ -420,8 +428,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
    * "计划性重建"路径之一。
    */
   public async compactEntireContext(): Promise<boolean> {
-    const operation = this.contextSummaryOperation;
-    if (!operation) {
+    const summarizer = this.contextSummarizer;
+    if (!summarizer) {
       return false;
     }
 
@@ -431,8 +439,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
         return false;
       }
 
-      // 全量压缩：摘要整条消息列表，Operation 产的 count = 全部 message 数。
-      const attempt = await this.attemptSummarize(operation, {
+      // 全量压缩：摘要整条消息列表，count = 全部 message 数。
+      const attempt = await this.attemptSummarize(summarizer, {
         systemPrompt: snapshot.systemPrompt,
         messages: snapshot.messages,
       });
@@ -449,20 +457,38 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   private async attemptSummarize(
-    operation: ContextSummaryLike,
+    summarizer: ContextSummarizerLike,
     input: {
       systemPrompt: string;
       messages: LlmMessage[];
     },
   ): Promise<{ retry: true } | { retry: false; effects: readonly ReplaceLeadingMessagesEffect[] }> {
     try {
-      const result = await operation.execute({
+      const summary = await summarizer.invoke({
         systemPrompt: input.systemPrompt,
         messages: input.messages,
-        tools: this.summaryTools,
       });
-      return { retry: false, effects: result.effects };
+      return {
+        retry: false,
+        effects: [
+          {
+            type: REPLACE_LEADING_MESSAGES_EFFECT_TYPE,
+            // 把被摘要的前缀（input.messages 那 N 条）替换成单条 summary。
+            count: input.messages.length,
+            replacement: [createConversationSummaryMessage(summary)],
+          },
+        ],
+      };
     } catch (error) {
+      if (error instanceof TaskAgentMaxRoundsExceededError) {
+        // 跑满轮数仍未 finalize：本次不压缩（阈值仍超会在下一轮再触发），不重试。
+        logger.warn("Context summary exceeded max rounds; skipping this compaction", {
+          event: "agent.root_agent_runtime.context_summary_max_rounds_exceeded",
+          maxRounds: error.maxRounds,
+        });
+        return { retry: false, effects: [] };
+      }
+
       if (!isRetryableLlmFailure(error)) {
         throw error;
       }
@@ -732,7 +758,15 @@ export class RootLoopAgent extends BaseLoopAgent<
     // Step 2: run one ReAct round. The LLM may call blocking tools like
     // wait; those block inside eventQueue.waitNonEmpty
     // until a producer (real event or timer-enqueued wake) resolves them.
-    await this.runReactRound();
+    const roundResult = await this.runReactRound();
+
+    // toolChoice auto 下模型可以一个工具都不调（纯文本轮：text 用完即弃、上下文
+    // 零写入）。此时本轮视为自然结束，阻塞到事件队列非空才进下一轮——否则外层
+    // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。stop/reset/compact
+    // 路径已有的 wake 注入同样能解除这里的阻塞。
+    if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
+      await this.eventQueue.waitNonEmpty();
+    }
   }
 
   protected override async buildRoundInput(): Promise<ReActKernelRunRoundInput<"agent"> | null> {
@@ -781,12 +815,18 @@ function failMissingTools(): never {
   throw new Error("RootLoopAgent requires tools");
 }
 
-function omitControlToolCalls(
+/**
+ * assistant turn 的持久化形态：text 是一次性草稿（用完即弃、不进上下文，完整原文
+ * 留在 llm_chat_call 审计记录里可查），control 工具调用同样不留痕（wait 除外）。
+ * 剥离发生在写入时——已写入的历史只追加不改写，不违反 KV 缓存的只追加原则。
+ */
+function toPersistableAssistantMessage(
   message: AssistantMessage,
   agentTools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,
+    content: "",
     toolCalls: message.toolCalls.filter(
       toolCall =>
         agentTools.getKind(toolCall.name) !== "control" ||
@@ -804,10 +844,6 @@ function shouldPersistToolResultInContext(input: {
 
 function shouldPersistControlToolInContext(toolName: string): boolean {
   return toolName === WAIT_TOOL_NAME;
-}
-
-function shouldPersistAssistantMessage(message: AssistantMessage): boolean {
-  return message.content.trim().length > 0 || message.toolCalls.length > 0;
 }
 
 function isSameWakeReminderBucket(previous: Date | null, current: Date): boolean {

@@ -46,6 +46,8 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 对应到运行时，`AgentContext` 只暴露两个会改动 message 列表的操作：`appendMessages`（保留前缀）与 `replaceMessages`（明确破坏并重建前缀）。新功能如果既不是追加也不是压缩，就要警惕。
 
+另外两条与 ReAct 循环相关的既定语义（#268）：主 Agent 每轮 `toolChoice: auto`，assistant 的纯文本输出是**用完即弃的草稿**——持久化边界剥掉 content、只留 tool_use / tool_result 进上下文（完整原文在 `llm_chat_call` 可查）；模型某轮零工具调用时主循环**挂起等下一个事件**，不会立即再起一轮。thinking 目前显式关死（`disabled`），开启 adaptive thinking 需要 thinking 块全链路支持，见 issue #269。
+
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
 `InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `list_apps` / `wait` / `invoke` / `search_web` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。
@@ -67,7 +69,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 `capabilities/web-search/` 的做法是开一个独立的 `WebSearchTaskAgent`，通过 `structuredClone` 复制主 Agent 的 snapshot，在隔离上下文里跑多轮搜索、读网页、整理，然后只把**最终摘要字符串**作为 tool result 返回给主 Agent。原始搜索结果、网页正文、中间推理全都留在子 Agent 的上下文里用完即弃，主 Agent 的前缀完全不受影响。
 
-**教训**：任何会产生大量中间 token 的能力（搜索、抓网页、读长文件、跑代码），都应该封装成 TaskAgent 或 Operation，只向主 Agent 回传摘要。不要让原始素材进主 Agent 的消息列表。
+**教训**：任何会产生大量中间 token 的能力（搜索、抓网页、读长文件、跑代码），都应该封装成 TaskAgent（终止工具返回结果），只向主 Agent 回传摘要。不要让原始素材进主 Agent 的消息列表。
 
 **2. NotificationCenter —— 追加到尾部，而非插入前缀**
 
@@ -92,7 +94,7 @@ QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-a
 - **不要**在 system prompt 或稳定前缀里写入时间戳、随机 ID、轮次计数、当前时间、会变的运行时状态。这些属于尾部或工具结果。
 - **不要**在一轮内反复改写 system prompt 或工具描述来"传递状态"。状态走消息尾部或工具参数。
 - **不要**为了排版/美观调整历史消息的序列化格式、字段顺序、JSON 键顺序——同一会话内这类改动会让已命中的前缀全部报废。
-- **不要**给主 Agent 添加会返回大块原始数据的工具。大数据先进子 Agent / Operation，再以摘要回传。
+- **不要**给主 Agent 添加会返回大块原始数据的工具。大数据先进子 Agent（TaskAgent），再以摘要回传。
 - **不要**在压缩之外的地方调用 `replaceMessages`。
 - **system prompt 和工具集的改动要集中提交**：每次改动都会让所有在飞会话的前缀失效一次，小步高频修改是最糟糕的模式。
 - **进上下文的散文一律走模板，禁止在 TS 里内联字面量**：任何最终会进 LLM 上下文的成句文案（system prompt、各类 reminder、`<notification>` / `<async_tool_result>` 等伪标签内容、通知 draft 的渲染文本）都必须落在 `apps/agent/static/` 下的 `.hbs` 模板，经 `renderServerStaticTemplate(import.meta.url, ...)` 渲染。TS 侧只负责算 view-model（计数、数组、布尔 flag、预格式化好的日期/截断文本），不写成句文案。这样调小镜的语气只改 `static/` 一棵树、不碰代码，也让"所有会进上下文的文本"始终收在同一处可审。**例外（留 TS 常量）**：分组 key / 结构标识（如 `"QQ"`、`"IT之家"`、`"待办"`）这类不是语气的标识符；以及工具 description 与工具 result 的 error/status note（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部且与控制流交织，见 `TODOS.md`）。
@@ -118,7 +120,7 @@ pnpm format
 完整的包拓扑与模块 DAG 见 [ARCHITECTURE.md](./ARCHITECTURE.md)。写代码时守住这几条边界：
 
 - 后端 `apps/agent` 用「扁平模块 + 模块内分层」（`domain / application / infra / http`）。新代码放进所属模块，从模块根入口或分层路径导入；**不要**新增全局 `handler / service / dao / event / tools / rag` 风格目录。
-- 通用 Agent Runtime 内核放 `packages/agent-runtime`（`TaskAgent` / `Operation` / `Tool` / `App` 框架）；**不要**把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 塞进去。Kagami 项目语义放 `apps/agent/src/agent`。
+- 通用 Agent Runtime 内核放 `packages/agent-runtime`（`TaskAgent` / `Tool` / `App` 框架；原 `Operation` 概念已退役，一次性子任务一律做成 TaskAgent + 终止工具）；**不要**把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 塞进去。Kagami 项目语义放 `apps/agent/src/agent`。
 - `apps/agent/src/agent` 按 `runtime / capabilities / apps` 分层；新实现只进 `runtime/` 或 `capabilities/`，不要回填旧风格的 `agents / service / dao / tools/*` 目录。
 - `Tool` 只是上层调用入口，不承载能力本体；业务语义放 capability service / task-agent / operation。
 - 群聊相关逻辑只属于 `messaging` capability，不要扩散到 runtime 或其他 capability。

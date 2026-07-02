@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolCatalog } from "@kagami/agent-runtime";
+import { createUnguardedSubtoolOwner, ToolCatalog } from "@kagami/agent-runtime";
 import {
   FINALIZE_WEB_SEARCH_TOOL_NAME,
   FinalizeWebSearchTool,
@@ -8,7 +8,6 @@ import {
   SEARCH_WEB_RAW_TOOL_NAME,
   SearchWebRawTool,
 } from "../../src/agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
-import { createWebSearchSubtoolOwner } from "../../src/agent/capabilities/web-search/task-agent/web-search-subtool-owner.js";
 import { WebSearchTaskAgent as WebSearchAgent } from "../../src/agent/capabilities/web-search/task-agent/web-search-task-agent.js";
 import { createWebSearchInstructionMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import {
@@ -53,7 +52,7 @@ function createWebSearchAgent(params?: {
   };
   const invokeTool = new InvokeTool({
     owners: [
-      createWebSearchSubtoolOwner({
+      createUnguardedSubtoolOwner({
         tools: [new SearchWebRawTool({ webSearchService }), new FinalizeWebSearchTool()],
       }),
     ],
@@ -136,7 +135,7 @@ describe("WebSearchAgent", () => {
           },
           createWebSearchInstructionMessage("OpenAI 最近有什么新动态？"),
         ],
-        toolChoice: "required",
+        toolChoice: "auto",
         tools: expect.arrayContaining([expect.objectContaining({ name: INVOKE_TOOL_NAME })]),
       },
       {
