@@ -23,11 +23,18 @@ export type HttpMethod = "GET" | "POST" | "DELETE";
 export type JsonRouteContract<
   TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput extends z.ZodTypeAny = z.ZodTypeAny,
+  TParams extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
 > = {
   kind: "json";
   method: HttpMethod;
-  /** 路径。JSON kind 不含 `:param`（路径参数属 binary/OSS 形态）。 */
+  /** 路径。声明了 `params` 时可含 `:param` 段（如 `/auth/:provider/status`）。 */
   path: string;
+  /**
+   * 路径参数 schema；无路径参数的路由为 `undefined`。与 `input` 是**分离的通道**：params 走
+   * 路径插值（interpolatePath），input 走 query（GET/DELETE）或 body（POST）——若混进 input
+   * 会拼出 `/auth/codex/status?provider=codex` 这类错误形态。
+   */
+  params: TParams;
   /** 入参 schema。GET/DELETE → 序列化进 query；POST → JSON body。 */
   input: TInput;
   /** 出参 schema。服务端 execute 返回类型由它反推；客户端对响应 `output.parse`。 */
@@ -39,10 +46,32 @@ export type JsonRouteContract<
   timeoutMs?: number;
 };
 
-export function defineJsonRoute<TInput extends z.ZodTypeAny, TOutput extends z.ZodTypeAny>(
-  contract: Omit<JsonRouteContract<TInput, TOutput>, "kind">,
-): JsonRouteContract<TInput, TOutput> {
-  return { kind: "json", ...contract };
+export function defineJsonRoute<
+  TInput extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+>(contract: {
+  method: HttpMethod;
+  path: string;
+  input: TInput;
+  output: TOutput;
+  timeoutMs?: number;
+}): JsonRouteContract<TInput, TOutput, undefined>;
+export function defineJsonRoute<
+  TInput extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+  TParams extends z.ZodTypeAny,
+>(contract: {
+  method: HttpMethod;
+  path: string;
+  params: TParams;
+  input: TInput;
+  output: TOutput;
+  timeoutMs?: number;
+}): JsonRouteContract<TInput, TOutput, TParams>;
+export function defineJsonRoute(
+  contract: Omit<JsonRouteContract, "kind" | "params"> & { params?: z.ZodTypeAny },
+): JsonRouteContract {
+  return { kind: "json", params: undefined, ...contract };
 }
 
 /**
@@ -108,27 +137,45 @@ export type RouteContract =
 /** 一个生产者导出的契约集合：方法名 → 契约。消费端 `createClient` 消费它。 */
 export type JsonContractMap = Record<string, JsonRouteContract>;
 
-type JsonRouteExecute<TInput extends z.ZodTypeAny, TOutput extends z.ZodTypeAny> = (args: {
+/** params 通道的推导：声明了 schema → `z.infer`；未声明 → `undefined`。 */
+export type JsonRouteParams<TParams extends z.ZodTypeAny | undefined> = TParams extends z.ZodTypeAny
+  ? z.infer<TParams>
+  : undefined;
+
+type JsonRouteExecute<
+  TInput extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+  TParams extends z.ZodTypeAny | undefined,
+> = (args: {
   input: z.infer<TInput>;
+  /** 路径参数（按 `contract.params` 解析）；无 params 的路由恒为 undefined。 */
+  params: JsonRouteParams<TParams>;
   request: FastifyRequest;
   reply: FastifyReply;
 }) => Promise<z.infer<TOutput>> | z.infer<TOutput>;
 
 /**
  * 把一条 JSON 契约接到 Fastify handler。入参按 `contract.input` 解析（GET/DELETE 取 query，POST
- * 取 body），`execute` 返回值按 `contract.output` 解析后回出 —— 返回错形状即编译报错（`execute`
- * 的返回类型由 `output` 反推）。抛出的 BizError 交给 runtime 的 setErrorHandler 统一序列化成富错误
- * 信封，消费端据此重建。
+ * 取 body），路径参数按 `contract.params` 解析（未声明则为 undefined），`execute` 返回值按
+ * `contract.output` 解析后回出 —— 返回错形状即编译报错（`execute` 的返回类型由 `output` 反推）。
+ * 抛出的 BizError 交给 runtime 的 setErrorHandler 统一序列化成富错误信封，消费端据此重建。
  */
-export function registerJsonRoute<TInput extends z.ZodTypeAny, TOutput extends z.ZodTypeAny>(
+export function registerJsonRoute<
+  TInput extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+  TParams extends z.ZodTypeAny | undefined,
+>(
   app: FastifyInstance,
-  contract: JsonRouteContract<TInput, TOutput>,
-  execute: JsonRouteExecute<TInput, TOutput>,
+  contract: JsonRouteContract<TInput, TOutput, TParams>,
+  execute: JsonRouteExecute<TInput, TOutput, TParams>,
 ): void {
   const handler = async (request: FastifyRequest, reply: FastifyReply): Promise<unknown> => {
     const raw = contract.method === "POST" ? request.body : request.query;
     const input = contract.input.parse(raw) as z.infer<TInput>;
-    const result = await execute({ input, request, reply });
+    const params = (
+      contract.params ? contract.params.parse(request.params) : undefined
+    ) as JsonRouteParams<TParams>;
+    const result = await execute({ input, params, request, reply });
     return contract.output.parse(result);
   };
 

@@ -64,3 +64,58 @@ describe("registerJsonRoute", () => {
     await app.close();
   });
 });
+
+describe("registerJsonRoute — params 通道", () => {
+  it("GET :param：路径参数按 params schema 解析，与 query input 分离", async () => {
+    const contract = defineJsonRoute({
+      method: "GET",
+      path: "/auth/:provider/status",
+      params: z.object({ provider: z.enum(["codex", "claude-code"]) }),
+      input: z.object({ verbose: z.coerce.boolean().optional() }),
+      output: z.object({ provider: z.string(), verbose: z.boolean() }),
+    });
+    const app = Fastify();
+    registerJsonRoute(app, contract, ({ input, params }) => ({
+      provider: params.provider,
+      verbose: input.verbose ?? false,
+    }));
+
+    const res = await app.inject({ method: "GET", url: "/auth/codex/status?verbose=true" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ provider: "codex", verbose: true });
+    await app.close();
+  });
+
+  it("params 不合 schema → 500（parse 抛出交上层 errorHandler）", async () => {
+    const contract = defineJsonRoute({
+      method: "GET",
+      path: "/auth/:provider/status",
+      params: z.object({ provider: z.enum(["codex"]) }),
+      input: z.object({}),
+      output: z.object({ ok: z.boolean() }),
+    });
+    const app = Fastify();
+    registerJsonRoute(app, contract, () => ({ ok: true }));
+
+    const res = await app.inject({ method: "GET", url: "/auth/unknown/status" });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  it("无 params 的路由 execute 收到 params: undefined", async () => {
+    const contract = defineJsonRoute({
+      method: "GET",
+      path: "/plain",
+      input: z.object({}),
+      output: z.object({ paramsIsUndefined: z.boolean() }),
+    });
+    const app = Fastify();
+    registerJsonRoute(app, contract, ({ params }) => ({
+      paramsIsUndefined: params === undefined,
+    }));
+
+    const res = await app.inject({ method: "GET", url: "/plain" });
+    expect(res.json()).toEqual({ paramsIsUndefined: true });
+    await app.close();
+  });
+});

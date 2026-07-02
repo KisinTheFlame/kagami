@@ -2,6 +2,7 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import { bizErrorFromWire, isBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
 import type { z } from "zod";
 import type { JsonContractMap, JsonRouteContract } from "@kagami/http/contract";
+import { interpolatePath, toQueryString } from "@kagami/http/url";
 
 /**
  * 契约驱动的 typed HTTP client 工厂。给一份生产者契约集合，回出一个方法名逐一对应的 client：
@@ -48,10 +49,19 @@ export type CreateClientOptions = {
   mapFallbackError?: FallbackErrorMapper;
 };
 
+/**
+ * 单条路由的调用形状：无 params 的路由保持 `(input)`，有 params 的路由是 `({ params, input })`
+ * —— 两个通道在类型上就分开，路径参数永远不会漏进 query。
+ */
+type JsonCall<C extends JsonRouteContract> = C["params"] extends z.ZodTypeAny
+  ? (args: {
+      params: z.infer<C["params"]>;
+      input: z.infer<C["input"]>;
+    }) => Promise<z.infer<C["output"]>>
+  : (input: z.infer<C["input"]>) => Promise<z.infer<C["output"]>>;
+
 export type JsonClient<TContracts extends JsonContractMap> = {
-  [K in keyof TContracts]: (
-    input: z.infer<TContracts[K]["input"]>,
-  ) => Promise<z.infer<TContracts[K]["output"]>>;
+  [K in keyof TContracts]: JsonCall<TContracts[K]>;
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -72,14 +82,19 @@ export function createClient<TContracts extends JsonContractMap>(
   const client = {} as JsonClient<TContracts>;
   for (const key of Object.keys(contracts) as (keyof TContracts)[]) {
     const contract = contracts[key];
-    const call = (input: unknown): Promise<unknown> =>
-      callJsonRoute(contract, input, {
+    const call = (arg: unknown): Promise<unknown> => {
+      // 有 params 的路由，调用形状是 { params, input }；否则整个实参就是 input。
+      const { params, input } = contract.params
+        ? (arg as { params: Record<string, unknown>; input: unknown })
+        : { params: undefined, input: arg };
+      return callJsonRoute(contract, params, input, {
         baseUrl,
         fetchImpl,
         timeoutMs: contract.timeoutMs ?? defaultTimeoutMs,
         decodeError,
         mapFallbackError,
       });
+    };
     client[key] = call as JsonClient<TContracts>[typeof key];
   }
   return client;
@@ -95,10 +110,21 @@ type CallContext = {
 
 async function callJsonRoute(
   contract: JsonRouteContract,
+  params: Record<string, unknown> | undefined,
   input: unknown,
   ctx: CallContext,
 ): Promise<unknown> {
-  let url = `${ctx.baseUrl}${contract.path}`;
+  let path = contract.path;
+  if (contract.params) {
+    // 客户端先按 schema 校验路径参数（挡掉错值），再 String() 化插进路径段。
+    const parsed = contract.params.parse(params ?? {}) as Record<string, unknown>;
+    const stringified: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      stringified[key] = String(value);
+    }
+    path = interpolatePath(path, stringified);
+  }
+  let url = `${ctx.baseUrl}${path}`;
   const init: RequestInit = {
     method: contract.method,
     signal: AbortSignal.timeout(ctx.timeoutMs),
@@ -165,27 +191,6 @@ function defaultFallbackErrorMapper(unreachableMessage: string): FallbackErrorMa
   };
 }
 
-/** GET/DELETE 入参对象 → querystring。undefined/null 跳过，其余 String() 化。 */
-function toQueryString(input: unknown): string {
-  if (input === undefined || input === null || typeof input !== "object") {
-    return "";
-  }
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    // query 参数只接受原始值；对象/symbol/函数不属于 query，跳过（避免 [object Object]）。
-    if (typeof value === "string") {
-      search.set(key, value);
-    } else if (
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      typeof value === "bigint"
-    ) {
-      search.set(key, String(value));
-    }
-  }
-  return search.toString();
-}
-
 /** 默认错误解码：非 2xx body 若为 `{ error: BizErrorWire }` → 重建等价 BizError。 */
 const decodeBizErrorWire: ErrorDecoder = (_status, body) => {
   if (body !== null && typeof body === "object") {
@@ -196,18 +201,3 @@ const decodeBizErrorWire: ErrorDecoder = (_status, body) => {
   }
   return undefined;
 };
-
-/**
- * 把契约里的 `:param` 路径插值成实际 URL 路径段（encodeURIComponent）。binary 路由的门面用它
- * 从契约取路径（如 `/objects/:key` + `{key:"res-1"}` → `/objects/res-1`），保证 client 与服务端
- * 路由共享同一份 path 字符串。缺参数直接抛错（编程错误，不进业务错误通道）。
- */
-export function interpolatePath(path: string, params: Record<string, string>): string {
-  return path.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) => {
-    const value = params[name];
-    if (value === undefined) {
-      throw new Error(`路径参数缺失：${name}（path: ${path}）`);
-    }
-    return encodeURIComponent(value);
-  });
-}

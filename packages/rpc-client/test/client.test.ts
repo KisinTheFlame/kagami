@@ -126,3 +126,69 @@ describe("createClient", () => {
     expect((err as FakeBrowserError).code).toBe("TIMEOUT");
   });
 });
+
+describe("createClient — params 通道", () => {
+  const paramContracts = {
+    getDetail: defineJsonRoute({
+      method: "GET",
+      path: "/items/:id",
+      params: z.object({ id: z.number().int().positive() }),
+      input: z.object({ verbose: z.boolean().optional() }),
+      output: z.object({ id: z.number() }),
+    }),
+    trigger: defineJsonRoute({
+      method: "POST",
+      path: "/tasks/:name/trigger",
+      params: z.object({ name: z.string().min(1) }),
+      input: z.object({}),
+      output: z.object({ ok: z.boolean() }),
+    }),
+  };
+
+  it("GET：params 插进路径段，input 进 query，两通道不串", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: 42 }));
+    const client = createClient(paramContracts, { baseUrl: "http://svc", fetch: fetchImpl });
+
+    await client.getDetail({ params: { id: 42 }, input: { verbose: true } });
+
+    const [url] = fetchImpl.mock.calls[0] as [string];
+    expect(url).toBe("http://svc/items/42?verbose=true");
+  });
+
+  it("POST：params 插路径，input 进 body", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    const client = createClient(paramContracts, { baseUrl: "http://svc", fetch: fetchImpl });
+
+    await client.trigger({ params: { name: "re index" }, input: {} });
+
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://svc/tasks/re%20index/trigger");
+    expect(init.body).toBe("{}");
+  });
+
+  it("params 不合 schema：请求发出前就抛（不打到网络）", async () => {
+    const fetchImpl = vi.fn();
+    const client = createClient(paramContracts, { baseUrl: "http://svc", fetch: fetchImpl });
+
+    await expect(client.getDetail({ params: { id: -1 }, input: {} })).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("负向类型：调用形状由契约决定（编译期强制，闭包只定义不执行）", () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: 1 }));
+    const client = createClient(paramContracts, { baseUrl: "http://svc", fetch: fetchImpl });
+    const plainClient = createClient(contracts, { baseUrl: "http://svc", fetch: fetchImpl });
+
+    const mustNotCompile = [
+      // @ts-expect-error params 路由不能用扁平 input 直调
+      () => client.getDetail({ verbose: true }),
+      // @ts-expect-error params 路由必须带 params 键
+      () => client.getDetail({ input: { verbose: true } }),
+      // @ts-expect-error 无 params 路由不接受 { params, input } 包装
+      () => plainClient.getGreeting({ params: {}, input: { name: "x" } }),
+      // @ts-expect-error params 字段名必须匹配 schema
+      () => client.trigger({ params: { wrong: "x" }, input: {} }),
+    ];
+    expect(mustNotCompile).toHaveLength(4);
+  });
+});
