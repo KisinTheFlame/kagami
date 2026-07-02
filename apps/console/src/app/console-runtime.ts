@@ -1,17 +1,13 @@
-import { randomUUID } from "node:crypto";
-import Fastify, { type FastifyInstance } from "fastify";
-import { z } from "zod";
+import type { FastifyInstance } from "fastify";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
 import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
-import { BizError } from "@kagami/kernel/errors/biz-error";
-import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { withTraceContext } from "@kagami/kernel/logger/runtime";
-import { HealthHandler } from "./http/health.handler.js";
+import { createServiceApp } from "@kagami/kernel/http/service-app";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
@@ -21,12 +17,7 @@ import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 
-const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "console-bootstrap" });
-
-type AppRouteHandler = {
-  register(app: FastifyInstance): void;
-};
 
 export type ConsoleRuntime = {
   app: FastifyInstance;
@@ -64,7 +55,10 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
     napcatQqMessageDao,
   });
 
-  const app = createConsoleApp({
+  // 面向前端查询服务：traceId / 默认错误三分支（ZodError→400、BizError→toHttpErrorResponse、
+  // 其余→500）都由公共装配壳提供。
+  const app = createServiceApp({
+    logger,
     handlers: [
       new HealthHandler(),
       new AppLogHandler({ appLogQueryService }),
@@ -75,60 +69,4 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   });
 
   return { app, database, port: config.services.console.port };
-}
-
-function createConsoleApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {
-  const app = Fastify({ logger: false, disableRequestLogging: true });
-
-  app.addHook("onRequest", (_request, reply, done) => {
-    const traceId = randomUUID();
-    reply.header(TRACE_ID_HEADER_NAME, traceId);
-
-    withTraceContext(traceId, () => {
-      done();
-    });
-  });
-
-  app.setErrorHandler((error, request, reply) => {
-    if (error instanceof z.ZodError) {
-      logger.warn("Request validation failed", {
-        event: "http.request.validation_failed",
-        method: request.method,
-        url: request.url,
-        issues: error.issues,
-      });
-
-      return reply.code(400).send({
-        message: "请求参数不合法",
-      });
-    }
-
-    if (error instanceof BizError) {
-      logger.errorWithCause("Handled business request error", error, {
-        event: "http.request.biz_error",
-        method: request.method,
-        url: request.url,
-        ...(error.meta ?? {}),
-      });
-
-      const response = toHttpErrorResponse(error);
-      return reply.code(response.statusCode).send(response.body);
-    }
-
-    logger.errorWithCause("Unhandled request error", error, {
-      event: "http.request.unhandled_error",
-      method: request.method,
-      url: request.url,
-    });
-
-    return reply.code(500).send({
-      message: "服务器内部错误",
-    });
-  });
-
-  for (const handler of handlers) {
-    handler.register(app);
-  }
-
-  return app;
 }

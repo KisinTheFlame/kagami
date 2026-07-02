@@ -2,8 +2,7 @@ import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 import type { Event } from "../event/event.js";
 import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
+import { BEIJING_TIME_ZONE } from "@kagami/shared/utils";
 
 type UserMessage = Extract<LlmMessage, { role: "user" }>;
 
@@ -92,6 +91,16 @@ export function createNotificationMessage(lines: string[]): UserMessage {
 }
 
 /**
+ * 前台输入消息：当前前台 App drain 出的实时输入，文本已由 App 自己的模板渲染好、
+ * 自带伪标签（如 QQ 的 `<qq_conversation_new_messages>`），这里只做薄包装成 user
+ * message，不再套第二层标签。与 `<notification>` / `<async_tool_result>` 同为
+ * 「事件 → 尾部 append」路径的消息装配点，收在同一处可审。
+ */
+export function createForegroundInputMessage(text: string): UserMessage {
+  return createUserMessage(text);
+}
+
+/**
  * 异步工具任务完成后的回流消息：包成一条 `<async_tool_result>` user message 追加到尾部。
  * 凭 task_id 对应到当初的 `<async_task_submitted>`。content/message 原样插入，不做 XML 转义
  * （与 `<notification>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。
@@ -133,6 +142,29 @@ export function createTodoSuggestionInstructionMessage(
       openTodos: openTodos.map(todo => todo.title),
       hasOpenTodos: openTodos.length > 0,
     }),
+  );
+}
+
+/**
+ * 内心独白回流消息：摸鱼判定触发、inner-voice Operation 产出的念头，包成一条
+ * `<inner_thought>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
+ * 不是任务也不是要求（issue #265）。
+ */
+export function createInnerThoughtMessage(thought: string): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/inner-thought.hbs", {
+      thought: thought.trim(),
+    }),
+  );
+}
+
+/**
+ * inner-voice Operation 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
+ * 口吻产出（或放弃产出）一个锚定近期真实经历的念头，经 emit_inner_thought 提交。
+ */
+export function createInnerVoiceInstructionMessage(): UserMessage {
+  return createUserMessage(
+    renderServerStaticTemplate(import.meta.url, "context/inner-voice-instruction.hbs"),
   );
 }
 

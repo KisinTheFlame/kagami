@@ -1,12 +1,17 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import {
+  RETRYABLE_STATUS,
+  computeBackoffMs,
+  parseRetryAfter,
+  sleep,
+} from "../../shared/http-retry.js";
 
 /**
  * Hacker News 两个只读 API（Firebase + Algolia）共用的 HTTP 取数助手。
  *
  * ithome 的 client 用裸 fetch + 失败即抛，没有退避；HN 是外部公共服务、会 429/5xx，
- * 所以这里独立实现一套 HTTP 退避，**不**复用 `llm-retry.ts`（那是 ReAct kernel
- * extension，不是 HTTP retry helper）。Firebase / Algolia 两个 client 都调本助手，
- * 退避逻辑只活一处（DRY）。
+ * 所以这里叠一层 HTTP 退避。退避原语（可重试状态集 / 指数退避 / Retry-After 解析）走
+ * 共享的 `apps/shared/http-retry`，本文件只保留 HN 专属的错误 meta 与重试编排。
  *
  * 退避策略：
  *   - 只对 429 / 408 / 5xx / 网络错误 / 超时重试；其余 4xx 直接抛（不可重试）。
@@ -14,8 +19,6 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
  *   - 每次请求用 `AbortSignal.timeout` 限时。
  *   - 重试耗尽抛 BizError（沿用 ithome 的 `meta: { reason, status }` 约定）。
  */
-
-const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 export type HnFetchOptions = {
   userAgent: string;
@@ -88,30 +91,4 @@ export async function hnFetchJson(url: string, options: HnFetchOptions): Promise
     meta: { reason: "HN_FETCH_EXHAUSTED", url },
     cause: lastError,
   });
-}
-
-function computeBackoffMs(attempt: number, baseMs: number, maxMs: number): number {
-  const exp = Math.min(baseMs * 2 ** (attempt - 1), maxMs);
-  // 全抖动：[0, exp)，避免多请求同步重试形成 thundering herd。
-  return Math.floor(Math.random() * exp);
-}
-
-/** 解析 Retry-After：纯数字按秒，HTTP 日期按到现在的差值；无法解析返回 undefined。 */
-function parseRetryAfter(headerValue: string | null): number | undefined {
-  if (!headerValue) {
-    return undefined;
-  }
-  const seconds = Number(headerValue);
-  if (Number.isFinite(seconds)) {
-    return Math.max(0, seconds * 1000);
-  }
-  const dateMs = Date.parse(headerValue);
-  if (Number.isFinite(dateMs)) {
-    return Math.max(0, dateMs - Date.now());
-  }
-  return undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

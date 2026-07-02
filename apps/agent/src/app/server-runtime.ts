@@ -12,7 +12,7 @@ import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-gr
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
-import { HealthHandler } from "./http/health.handler.js";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { HttpLlmClient } from "../llm/http-llm-client.js";
@@ -111,7 +111,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // LLM provider + OAuth 凭据中心已外移到独立 kagami-llm 进程（issue：多 Agent 共享网关）。
   // agent 经 HttpLlmClient 直连它（地址从顶层 services.llm 派生），实现现有 LlmClient
   // 接口——下游 root-agent/vision/... 零改动。llm_chat_call 落库、auth callback/刷新全在
-  // 服务侧，agent 不再碰。embedding 能力也在服务侧（HttpEmbeddingClient 保留待将来复用）。
+  // 服务侧，agent 不再碰。embedding 能力也在服务侧（将来记忆系统接线时按需在 agent 侧新建 client）。
   const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
   const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
   const visionAgent = new VisionAgent({
@@ -196,10 +196,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 依赖 agentRuntime.rootAgentRuntime.getContextSnapshot()。reminder-tick 路径不依赖它，故安全。
   // 提醒/汇总以纯数据回调，draft 在这层（wiring 边界）构造并 push，capabilities 层不依赖 apps 层。
   const todoSuggestionService = new TodoSuggestionService({
-    llmClient,
-    // 与主 Agent 字节相等的顶层工具定义：子调用复用它命中 KV 缓存前缀，
-    // propose_todos 经 invoke 子工具提交，不新增顶层工具。
-    topLevelToolDefinitions: agentRuntime.rootAgentToolDefinitions,
+    // 工具装配与主 Agent 字节相等的 task agent（见 agent-runtime.factory），
+    // propose_todos 经 invoke 终止子工具提交，不新增顶层工具。
+    taskAgent: agentRuntime.todoSuggestionTaskAgent,
   });
   const suggestTodos = async (openTodos: { title: string }[]): Promise<string[]> => {
     try {

@@ -98,6 +98,10 @@ ${indent(napcatBlock, 4)}
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      innerVoice:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -214,6 +218,10 @@ listenGroupIds:
   - "123456"
 `).replace(
         `      todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      innerVoice:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -450,6 +458,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      innerVoice:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -771,6 +783,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      innerVoice:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -850,6 +866,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      innerVoice:
         attempts:
           - provider: openai
             model: gpt-4o-mini
@@ -938,6 +958,10 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
+      innerVoice:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
   tavily:
     apiKey: tavily-key
   bot:
@@ -1018,6 +1042,10 @@ server:
           - provider: openai
             model: gpt-4o-mini
       todoSuggestionAgent:
+        attempts:
+          - provider: openai
+            model: gpt-4o-mini
+      innerVoice:
         attempts:
           - provider: openai
             model: gpt-4o-mini

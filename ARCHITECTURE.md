@@ -15,37 +15,38 @@ apps/console ──→ packages/persistence ──→ packages/kernel ──→ 
 apps/llm     ──→ packages/llm-client + packages/auth ──→ packages/kernel / persistence  （独立进程，LLM + OAuth 网关）
 apps/metric  ──→ packages/persistence / kernel / http / shared  （独立进程，metric 摄取 + 图表查询）
 apps/web     ──→ packages/shared
-apps/oss     （独立进程，Fastify + @kagami/oss-api 契约）
+apps/oss     ──→ packages/kernel / http  （独立进程，Fastify + @kagami/oss-api 契约）
 apps/browser ──→ packages/persistence / kernel / http  （独立进程，持有 CloakBrowser）
-apps/spire   ──→ packages/kernel / http / shared  （独立进程，杀塔式卡牌游戏引擎；不碰 persistence，存档走 JSON）
+apps/spire   ──→ packages/kernel / http / shared / spire-api  （独立进程，杀塔式卡牌游戏引擎；不碰 persistence，存档走 JSON）
 ```
 
 > `@kagami/config` 是零依赖叶子包（repo-root 定位 + 两文件合并），被 kernel / gateway / oss / 脚本复用。
 
-| 包                      | 角色                                                                                                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / auth / scheduler / LLM playground / QQ 发送）                                                                             |
-| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message），经 @kagami/persistence 共享 DAO 直读 SQLite                                     |
-| `@kagami/gateway`       | 前门网关进程（独立进程，零 `@kagami/*` 依赖）：托管 `apps/web/dist` 静态资源 + 按前缀把 `/api/*` 反代分流到 console / agent，`/auth/*` 到 llm、`/metric-chart` 到 metric                            |
-| `@kagami/llm-service`   | LLM 网关 + OAuth 凭据中心进程（`apps/llm`，仅 localhost）：持有全部 provider + OAuth callback server + 刷新 timer，落 `llm_chat_call` / `embedding_cache`；agent 经 HTTP 直连                       |
-| `@kagami/metric`        | metric 领域独立进程（Fastify，仅 localhost）：一手包办 metric 摄取（`POST /metric/record`，agent HTTP 上报）+ metric-chart 查询，经 @kagami/persistence 共享 DAO 直读 SQLite                        |
-| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                                              |
-| `@kagami/oss`           | 自建对象存储服务（独立进程，Fastify + 裸 better-sqlite3；路由走 `@kagami/oss-api` 契约，get/head/delete 为 raw 路由保流式管道 / fd / 安全头语义）                                                   |
-| `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173）               |
-| `@kagami/spire-service` | 杀塔式卡牌游戏引擎独立进程（`apps/spire`，Fastify，仅 localhost）：纯游戏引擎 + JSON 存档 + 自动对战模拟器，不碰共享 SQLite；agent 经 `HttpSpireClient` 驱动，拆进程让 agent 重启不打断对局（#234） |
-| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Operation / Tool / App 框架）                                                                                                  |
-| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等，零依赖契约叶子）                                                                                                           |
-| `@kagami/llm-client`    | LLM chat client + provider + embedding client 运行时；只发 observation 事件，落库 / 缓存归 agent 装配层，对 persistence 零依赖                                                                      |
-| `@kagami/auth`          | OAuth 凭据管理全套（PKCE 登录 / callback server / 刷新 scheduler / secret store / 配额快照 / 认证 handler）；随 `kagami-llm` 进程装配                                                               |
-| `@kagami/kernel`        | 后端纯净基础设施：config / logger / 后端 common 契约与错误 / `isRecord` 等纯工具（无 fastify / 无 Prisma / 无 better-sqlite3）                                                                      |
-| `@kagami/http`          | HTTP 路由辅助（`route.helper` + `contract`：服务间调用的单一事实源 `RouteContract` / `registerJsonRoute`，仅 fastify + zod，零 `@kagami/*` 依赖）                                                   |
-| `@kagami/rpc-client`    | 契约驱动的 typed HTTP client 工厂（`createClient(contract)`）：消费端从生产者契约派生类型 + 对响应 `output.parse`；kernel 依赖（重建 BizError）隔离在此，让 `@kagami/http` 保持零 kernel            |
-| `@kagami/llm-api`       | kagami-llm 进程对 agent 暴露的 RPC 契约包（per-producer `xxx-api`，issue #230）；覆盖 providers/chat/chat-direct/embed（后三条信封级），服务端与 agent client 共享同一份 schema                     |
-| `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                             |
-| `@kagami/oss-api`       | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                              |
-| `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                                       |
-| `@kagami/config`        | 零依赖叶子包：repo-root 定位 + `config.yaml` / `config.secret.yaml` 两文件深合并，被 kernel / gateway / oss / 脚本复用                                                                              |
-| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                                                     |
+| 包                      | 角色                                                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / auth / scheduler / LLM playground / QQ 发送）                                                                                                            |
+| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message），经 @kagami/persistence 共享 DAO 直读 SQLite                                                                    |
+| `@kagami/gateway`       | 前门网关进程（独立进程，仅依赖 `@kagami/config` / `@kagami/shared`）：托管 `apps/web/dist` 静态资源 + 按前缀把 `/api/*` 反代分流到 console / agent，`/auth/*` 到 llm、`/metric-chart` 到 metric                                    |
+| `@kagami/llm-service`   | LLM 网关 + OAuth 凭据中心进程（`apps/llm`，仅 localhost）：持有全部 provider + OAuth callback server + 刷新 timer，落 `llm_chat_call` / `embedding_cache`；agent 经 HTTP 直连                                                      |
+| `@kagami/metric`        | metric 领域独立进程（Fastify，仅 localhost）：一手包办 metric 摄取（`POST /metric/record`，agent HTTP 上报）+ metric-chart 查询，经 @kagami/persistence 共享 DAO 直读 SQLite                                                       |
+| `@kagami/web`           | React 19 + Vite 管理台                                                                                                                                                                                                             |
+| `@kagami/oss`           | 自建对象存储服务（独立进程，Fastify + 裸 better-sqlite3；路由走 `@kagami/oss-api` 契约，get/head/delete 为 raw 路由保流式管道 / fd / 安全头语义）                                                                                  |
+| `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173）                                              |
+| `@kagami/spire-service` | 杀塔式卡牌游戏引擎独立进程（`apps/spire`，Fastify，仅 localhost）：纯游戏引擎 + JSON 存档 + 自动对战模拟器，不碰共享 SQLite；agent 经 `HttpSpireClient`（`@kagami/spire-api` 契约驱动）驱动，拆进程让 agent 重启不打断对局（#234） |
+| `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Tool / App 框架）                                                                                                                                             |
+| `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等，零依赖契约叶子）                                                                                                                                          |
+| `@kagami/llm-client`    | LLM chat client + provider + embedding client 运行时；只发 observation 事件，落库 / 缓存归 agent 装配层，对 persistence 零依赖                                                                                                     |
+| `@kagami/auth`          | OAuth 凭据管理全套（PKCE 登录 / callback server / 刷新 scheduler / secret store / 配额快照 / 认证 handler）；随 `kagami-llm` 进程装配                                                                                              |
+| `@kagami/kernel`        | 后端纯净基础设施：config / logger / 后端 common 契约与错误 / 卫星服务公共装配壳与启动器（`http/service-app` + `http/service-runner` + 统一 `HealthHandler`，issue #274）/ `isRecord` 等纯工具（无 Prisma / 无 better-sqlite3）     |
+| `@kagami/http`          | HTTP 路由辅助（`route.helper` + `contract`：服务间调用的单一事实源 `RouteContract` / `registerJsonRoute`，仅 fastify + zod，零 `@kagami/*` 依赖）                                                                                  |
+| `@kagami/rpc-client`    | 契约驱动的 typed HTTP client 工厂（`createClient(contract)`）：消费端从生产者契约派生类型 + 对响应 `output.parse`；kernel 依赖（重建 BizError）隔离在此，让 `@kagami/http` 保持零 kernel                                           |
+| `@kagami/llm-api`       | kagami-llm 进程对 agent 暴露的 RPC 契约包（per-producer `xxx-api`，issue #230）；覆盖 providers/chat/chat-direct/embed（后三条信封级），服务端与 agent client 共享同一份 schema                                                    |
+| `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                                                            |
+| `@kagami/oss-api`       | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                                                             |
+| `@kagami/spire-api`     | kagami-spire 进程对 agent 暴露的 RPC 契约包（start/action/state/reference 四条 JSON 路由，ScreenView 全类型化；服务端 state-view 与 agent 侧 `HttpSpireClient` 的类型都由它派生）                                                  |
+| `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                                                                      |
+| `@kagami/config`        | 零依赖叶子包：repo-root 定位 + `config.yaml` / `config.secret.yaml` 两文件深合并，被 kernel / gateway / oss / 脚本复用                                                                                                             |
+| `@kagami/shared`        | Zod schema、DTO、前后端共用工具                                                                                                                                                                                                    |
 
 ## 后端模块 DAG
 
@@ -111,15 +112,19 @@ apps/agent/src/agent/
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
-│   ├── context-summary/ 上下文压缩 Operation（唯一允许 replaceMessages 的路径）
+│   ├── context-summary/ 上下文压缩 task agent（唯一允许 replaceMessages 的路径）
+│   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
+│   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体
-│   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
+│   ├── todo/           待办本能力本体（到点提醒经通知中心）
+│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 Operation：空闲时以小镜口吻注入 `<inner_thought>`（#265）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
     ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
     ├── ithome/         IThome App：RSS 未读推送
     ├── hn/             Hacker News App（只读）
     ├── calc / clock /  小工具 App
     ├── browser/        Browser App：有头浏览器登录 + 交互式逛网站
+    ├── amap/           高德地图 App：地点搜索 / 路线规划 / 静态地图出图（#182）
     ├── spire/          Spire App：杀塔式卡牌游戏薄壳，经 HttpSpireClient 打到独立 apps/spire 进程（#234）
     ├── terminal/       终端 App 壳
     └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
@@ -151,23 +156,23 @@ apps/web/src/
 
 ## 数据流与生命周期
 
-### 输入：生活输入 → NotificationCenter → 事件队列
+### 输入：生活输入 → 事件队列（横幅经 NotificationCenter，屏幕经 foreground_input）
 
-Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，各 App / 源把信号折叠成通知，由被动的 `NotificationCenter` 聚合后投入共享事件队列：
+Agent 不区分输入来源；所有外部信号都是「生活输入」。手机 OS 模型下，后台 / 非焦点信号折叠成通知（「横幅」），由被动的 `NotificationCenter` 聚合后投入共享事件队列；前台当前会话的实时输入走 `foreground_input` 直达（「屏幕」）：
 
 ```
-NapCat 群/私聊 ─→ QQ App.handleNapcatEvent ─┐
-IThome RSS 轮询 ─→ IThome poller            ─┼─→ NotificationCenter ─→ notification 事件
-                                            │     （前沿触发 + 节流窗口）        │
-                                            ┘                                    ↓
-async_tool_result / wake 等内部事件 ─────────────────────────→ 共享事件队列 ─→ RootAgentRuntime ─→ ReAct 循环
+NapCat 群/私聊 ─→ QQ App.handleNapcatEvent ─┬─（后台/非当前会话）→ NotificationCenter ─→ notification 事件
+IThome RSS 轮询 ─→ IThome poller  ──────────┘   （前沿触发 + 节流窗口）                        │
+                                                                                              ↓
+QQ 前台当前会话新消息 ─→ 敲门 foreground_input 事件（不带内容，drain 时向当前 App 现拉）→ 共享事件队列 ─→ RootAgentRuntime ─→ ReAct 循环
+async_tool_result / wake 等内部事件 ────────────────────────────────────────────────────→ ↑
 ```
 
 关键点：
 
-- **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 把消息累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
-- **NotificationCenter 是 App→Agent 的唯一桥**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。
-- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `wake` 等已归一的事件，不承载原始协议消息。
+- **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 按「屏幕 vs 横幅」分流：前台且属当前会话的消息入缓冲并敲门（实时路径），其余累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
+- **NotificationCenter 是后台 / 非焦点信号到 Agent 的唯一桥（横幅）**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。前台当前会话经 `foreground_input` 直达上下文尾部（屏幕），不经 center；焦点漂移（退后台 / 切会话 / reset）时未投递的未读退化回通知路径，绝不静默丢。
+- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `foreground_input` / `wake` / `inner_thought` 等已归一的事件，不承载原始协议消息。`foreground_input` 是不带内容的敲门：内容在 drain 时由 session 向当前前台 App（实现 `ForegroundInputSource` 的）现拉，永不 stale。`inner_thought` 由 inner-voice 摸鱼判定触发（#265），装配成 `<inner_thought>` 追加尾部并唤醒一轮。
 
 ### App 与状态
 
@@ -214,6 +219,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 ## 部署
 
 - PM2（`ecosystem.config.cjs`）托管八个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent、`/auth/*` 到 llm、`/metric-chart` 到 metric，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）、`kagami-llm`（`apps/llm`，LLM + OAuth 凭据网关，默认 20009，仅 localhost；持有 provider + callback server + 刷新 timer，`app:deploy agent` 不触及它，有 DB 迁移时 `deploy.sh` 会连它一并停服再迁）、`kagami-metric`（`apps/metric`，metric 摄取 + metric-chart 查询，默认 20010，仅 localhost；agent fire-and-forget HTTP 上报，有 DB 迁移时一并停服再迁）、`kagami-spire`（`apps/spire`，杀塔式卡牌游戏引擎，默认 20011，仅 localhost；`cwd` 固定仓库根让存档 `data/spire/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不打断对局，见 #234）。后端进程并发读写同一 SQLite 库靠库文件级 WAL（`apps/spire` 不入库，存档走 JSON）。
+- 卫星进程（console / oss / browser / llm / metric / spire）统一经 `@kagami/kernel` 的 `runService` 启动（issue #274）：全局 `uncaughtException` / `unhandledRejection` 兜底（记日志后 exit(1) 交 PM2 重启）、信号驱动优雅关停 + 10s 强退兜底、绑定地址一律 `127.0.0.1`（绑定是代码级安全决策；config 的 `services.*.host` 语义是 reachable host）。gateway 是唯一绑 `0.0.0.0` 的前门（裸 node:http，自带同款兜底）。所有进程的 `GET /health` 统一为 shared 的 `{ status: "ok", timestamp }` 形状。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
 - 部署机需能编译原生模块（better-sqlite3、hnswlib-node）。

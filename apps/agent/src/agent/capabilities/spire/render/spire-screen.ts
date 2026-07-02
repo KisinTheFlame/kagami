@@ -112,17 +112,12 @@ export function renderSpireScreen(screen: SpireScreen): string {
   });
 }
 
-/** 服务不可达时的降级屏（错误已被工具基类序列化，这里只在 onFocus 等处兜底用）。 */
-export function renderSpireUnavailable(): string {
-  return renderServerStaticTemplate(import.meta.url, "context/spire-unavailable.hbs", {});
-}
-
 /** 没有进行中对局时的提示屏（look 拿到 null 时用）。 */
 export function renderSpireNoRun(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-no-run.hbs", {});
 }
 
-/** 进入尖塔 App 的静态提示屏（onFocus / help 用，无网络 I/O）。 */
+/** 进入尖塔 App 的定位屏（onFocus 用，无网络 I/O）；子工具清单归 spire-app-help.hbs。 */
 export function renderSpirePortal(): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-portal.hbs", {});
 }

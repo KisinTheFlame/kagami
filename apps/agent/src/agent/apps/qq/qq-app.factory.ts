@@ -25,6 +25,8 @@ type BuildQqAppInput = {
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
   qqMessageDao: NapcatQqMessageDao;
   notificationCenter: NotificationCenter;
+  /** 前台输入敲门端口（组合根组装的闭包：knock 计数 + enqueue foreground_input）。 */
+  notifyForegroundInput: () => void;
   botQQ: string;
   creatorName: string;
   creatorQQ: string;
@@ -62,6 +64,7 @@ export async function buildQqApp({
   imageMessageAnalyzer,
   qqMessageDao,
   notificationCenter,
+  notifyForegroundInput,
   botQQ,
   creatorName,
   creatorQQ,
@@ -121,6 +124,7 @@ export async function buildQqApp({
   const qqApp = new QqApp({
     napcatGateway,
     notificationCenter,
+    notifyForegroundInput,
     botQQ,
     creatorName,
     creatorQQ,

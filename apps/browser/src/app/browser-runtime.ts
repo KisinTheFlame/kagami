@@ -1,23 +1,21 @@
-import { randomUUID } from "node:crypto";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { withTraceContext } from "@kagami/kernel/logger/runtime";
+import {
+  createServiceApp,
+  type AppRouteHandler,
+  type ServiceErrorHandler,
+} from "@kagami/kernel/http/service-app";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { BrowserService } from "../application/browser.service.js";
 import { SerialExecutor } from "../application/serial-executor.js";
 import { BrowserError } from "../domain/errors.js";
 import { PrismaBrowserCredentialDao } from "../infra/prisma-browser-credential.dao.js";
 import { BrowserHandler } from "../http/browser.handler.js";
-import { HealthHandler } from "../http/health.handler.js";
 import { loadBrowserProcessConfig } from "./config.js";
 
-const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "browser-bootstrap" });
-
-type AppRouteHandler = {
-  register(app: FastifyInstance): void;
-};
 
 export type BrowserRuntime = {
   app: FastifyInstance;
@@ -58,20 +56,10 @@ export async function buildBrowserRuntime(): Promise<BrowserRuntime> {
 }
 
 function createBrowserApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {
-  const app = Fastify({ logger: false, disableRequestLogging: true });
-
-  app.addHook("onRequest", (_request, reply, done) => {
-    const traceId = randomUUID();
-    reply.header(TRACE_ID_HEADER_NAME, traceId);
-    withTraceContext(traceId, () => {
-      done();
-    });
-  });
-
   // 统一错误出口：BrowserError → 422 + { code, message, context }，让 agent 侧 client
   // 原样重建 BrowserError（KV 字节契约）。ZodError / 未知错误也归一成同形状的 wire，
   // 保证 client 永远拿到 { code, message, context }。
-  app.setErrorHandler((error, request, reply) => {
+  const errorHandler: ServiceErrorHandler = (error, request, reply) => {
     if (error instanceof z.ZodError) {
       logger.warn("Browser request validation failed", {
         event: "browser.http.validation_failed",
@@ -98,11 +86,7 @@ function createBrowserApp({ handlers }: { handlers: AppRouteHandler[] }): Fastif
     return reply
       .code(500)
       .send({ code: "BROWSER_ERROR", message: "浏览器服务内部错误", context: {} });
-  });
+  };
 
-  for (const handler of handlers) {
-    handler.register(app);
-  }
-
-  return app;
+  return createServiceApp({ logger, handlers, errorHandler });
 }

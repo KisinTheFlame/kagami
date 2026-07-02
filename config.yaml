@@ -4,7 +4,8 @@
 
 # 服务拓扑：单机各进程的监听端口与地址的唯一事实来源（见 issue #162）。
 # 每个进程从这里读自己的端口和依赖服务的地址；改端口只改这里一处，全网生效。
-# host 是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址——各进程一律绑 0.0.0.0。
+# host 是「别的服务/网关如何 reach 它」（reachable host），不是绑定地址。绑定地址是各服务
+# 代码里的安全决策：卫星进程一律绑 127.0.0.1，只有 gateway（前门）绑 0.0.0.0（issue #274）。
 services:
   agent: { host: localhost, port: 20003 } # kagami-agent
   console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
@@ -22,7 +23,7 @@ server:
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
     notificationLeadingWindowMs: 1000 # 空闲来第一条通知时先开这么长的前沿短窗聚合首批，窗结束才 flush（不再前沿立即发）
-    notificationBatchWindowMs: 5000
+    notificationBatchWindowMs: 30000
     messaging:
       aiTone:
         enabled: true # 发言 AI 味门控；置 false 完全退化为原发送行为
@@ -115,6 +116,11 @@ server:
             model: claude-opus-4-6
             times: 3
       todoSuggestionAgent:
+        attempts:
+          - provider: claude-code
+            model: claude-opus-4-6
+            times: 3
+      innerVoice:
         attempts:
           - provider: claude-code
             model: claude-opus-4-6
