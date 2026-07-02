@@ -1,5 +1,5 @@
 {
-  "name": "@kagami/http",
+  "name": "@kagami/rpc-client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "fastify": "^5.6.2",
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
     "zod": "^3.24.4"
   },
   "devDependencies": {
