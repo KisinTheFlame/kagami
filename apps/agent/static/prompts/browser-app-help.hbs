@@ -4,7 +4,7 @@
   - browser_navigate(url): 打开网址。
   - browser_observe(): 读当前页语义树（含可点元素 ref + box + iframe）。操作前先 observe。
   - browser_click(target): 点元素（ref 形如 7:e3，或一段可见文本）。
-  - browser_type(ref, text|secret_handle, secret_field?, submit?): 填输入框；密码走 secret_handle。
+  - browser_type(ref, text|secret_handle, secret_field?, submit?): 填输入框；密码走 secret_handle（你看不到明文）。
   - browser_press(key): 按键（Enter/Tab/Escape/Control+A 等）。
   - browser_wait_for(selector|ms): 等元素出现 / 死等若干毫秒。
   - browser_screenshot(reason?): 截图原图进上下文（observe 够用就别频繁截）。
