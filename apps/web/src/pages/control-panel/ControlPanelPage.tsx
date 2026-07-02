@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getApiErrorMessage } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import { useCompactMainAgentContext } from "./useCompactMainAgentContext";
 
 export function ControlPanelPage() {
@@ -55,10 +56,4 @@ export function ControlPanelPage() {
       </div>
     </div>
   );
-}
-
-function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("zh-CN", { hour12: false });
 }

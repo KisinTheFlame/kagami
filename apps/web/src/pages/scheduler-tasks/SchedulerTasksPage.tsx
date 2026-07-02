@@ -6,6 +6,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatOptionalDateTime } from "@/lib/format";
 import { useSchedulerTasks, useTriggerSchedulerTask } from "./useSchedulerTasks";
 
 export function SchedulerTasksPage() {
@@ -85,7 +86,7 @@ function SchedulerTaskCard({
             {task.isRunning ? "运行中" : "空闲"}
           </Badge>
           <Badge variant="outline" className="font-mono tabular-nums">
-            下次：{formatDateTime(task.nextRunAt) ?? "—"}
+            下次：{formatOptionalDateTime(task.nextRunAt)}
           </Badge>
         </div>
 
@@ -105,7 +106,7 @@ function SchedulerTaskCard({
                 {formatRunStatus(latest.status)}
               </Badge>
               <span className="text-muted-foreground">
-                {formatDateTime(latest.startedAt) ?? "—"}
+                {formatOptionalDateTime(latest.startedAt)}
                 {latest.durationMs !== null ? ` · ${latest.durationMs} ms` : ""}
               </span>
             </div>
@@ -135,7 +136,7 @@ function SchedulerTaskCard({
                 .slice(1)
                 .map((run, index) => (
                   <li key={`${run.startedAt}-${index}`}>
-                    {formatDateTime(run.startedAt) ?? "—"} · {formatRunStatus(run.status)}
+                    {formatOptionalDateTime(run.startedAt)} · {formatRunStatus(run.status)}
                     {run.durationMs !== null ? ` · ${run.durationMs} ms` : ""}
                   </li>
                 ))}
@@ -187,13 +188,4 @@ function formatMetadata(metadata: Record<string, unknown>): string {
   } catch {
     return "[unserializable metadata]";
   }
-}
-
-function formatDateTime(value: string | null): string | null {
-  if (!value) return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return parsed.toLocaleString("zh-CN", { hour12: false });
 }
