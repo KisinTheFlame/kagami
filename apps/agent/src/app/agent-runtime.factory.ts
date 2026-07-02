@@ -13,7 +13,7 @@ import { createWebSearchSubtoolOwner } from "../agent/capabilities/web-search/ta
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
-import type { LlmClient } from "@kagami/llm-client";
+import type { LlmClient, Tool } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricService } from "../metric/application/metric.service.js";
@@ -124,6 +124,12 @@ export type AgentRuntimeBundle = {
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
   hasTavilyApiKey: boolean;
+  /**
+   * 主 Agent 的顶层工具定义（react-kernel 每轮实际发送的那一份）。fork 主上下文的旁路
+   * 调用（如 todo「发现待办」子调用）复用它作 tools，保证 tools 字段与主 Agent 字节相等，
+   * 命中 KV 缓存的 tools / system 层前缀（子工具经 invoke 提交，不新增顶层工具）。
+   */
+  rootAgentToolDefinitions: Tool[];
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
   /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
@@ -455,6 +461,7 @@ export async function buildAgentRuntime({
     mainAgentContextQueryService,
     llmPlaygroundService,
     hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
+    rootAgentToolDefinitions: rootAgentTools.definitions(),
     qqApp,
     qqOutboundService,
     shutdownApps: () => appManager.shutdownAll(),
