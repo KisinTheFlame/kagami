@@ -58,6 +58,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：你每打出一张技能牌，它就获得等于层数的力量。地精头目开局自带。",
   },
   {
+    term: "狂怒",
+    aliases: ["angry"],
+    definition: "敌人专属：每次受到攻击伤害，就获得等于层数的力量。狂暴地精自带，越打越猛。",
+  },
+  {
     term: "孢子云",
     aliases: ["spore cloud", "sporecloud"],
     definition: "敌人专属：它死亡时对你施加 2 层易伤。真菌兽自带——秒杀它反而会吃到易伤。",
