@@ -76,6 +76,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
     maxHp: screen.player.maxHp,
     gold: screen.player.gold,
     deckCount: screen.deckCount,
+    relics: screen.relics,
+    hasRelics: screen.relics.length > 0,
     combat: combat
       ? {
           turn: combat.turn,

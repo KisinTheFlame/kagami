@@ -1,6 +1,7 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
 import { pickNormalEncounter } from "../enemies/enemies.js";
+import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
 import { generateMap, availableNext } from "../map/map.js";
@@ -56,9 +57,7 @@ function resolveNode(state: GameState, node: MapNode): void {
       return;
     }
     case "treasure": {
-      const gold = nextRange(state.rng, TREASURE_GOLD_MIN, TREASURE_GOLD_MAX);
-      state.gold += gold;
-      state.log.push(`你打开宝箱，获得 ${gold} 金币。`);
+      grantTreasure(state);
       backToMap(state);
       return;
     }
@@ -67,6 +66,25 @@ function resolveNode(state: GameState, node: MapNode): void {
       backToMap(state);
     }
   }
+}
+
+/** 宝箱：优先给一个未持有的遗物，遗物都齐了则给金币兜底（复刻 StS 宝箱给遗物）。 */
+function grantTreasure(state: GameState): void {
+  const available = COMMON_RELIC_POOL.filter(id => !hasRelic(state, id));
+  if (available.length > 0) {
+    const id = available[nextInt(state.rng, available.length)]!;
+    state.relics.push({ id, counter: 0 });
+    state.log.push(`你打开宝箱，获得遗物「${getRelicDef(id).name}」。`);
+    return;
+  }
+  const gold = nextRange(state.rng, TREASURE_GOLD_MIN, TREASURE_GOLD_MAX);
+  state.gold += gold;
+  state.log.push(`你打开宝箱，获得 ${gold} 金币。`);
+}
+
+/** 给一个未持有的普通遗物（精英 / 战斗掉落用）；都齐了给金币兜底。返回是否给了遗物。 */
+export function grantRandomRelic(state: GameState): void {
+  grantTreasure(state);
 }
 
 /** 结算完一个节点后回到地图选路屏。 */

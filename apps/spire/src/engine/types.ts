@@ -135,6 +135,9 @@ export type RewardState = {
   cardChoices: { defId: string; upgraded: boolean }[];
 };
 
+/** 持有的遗物实例。counter 供计数型遗物用（如「每出 N 张攻击牌」），默认 0。 */
+export type RelicState = { id: string; counter: number };
+
 export type MapNodeType = "combat" | "elite" | "event" | "rest" | "shop" | "treasure" | "boss";
 
 /** 分支地图节点（DAG）。next 是上一层可达节点 id；Boss 节点 next 为空。 */
@@ -172,6 +175,8 @@ export type GameState = {
   gold: number;
   /** 大牌组（master deck）。 */
   deck: CardInstance[];
+  /** 持有的遗物（按获得顺序）。 */
+  relics: RelicState[];
   map: MapGraph;
   /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
   currentNodeId: string | null;

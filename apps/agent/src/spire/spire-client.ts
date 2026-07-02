@@ -45,11 +45,14 @@ export type SpireCombatView = {
   piles: { draw: number; discard: number; exhaust: number };
 };
 
+export type SpireRelicView = { name: string; description: string };
+
 export type SpireScreen = {
   version: number;
   screen: "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
   player: { hp: number; maxHp: number; gold: number };
   deckCount: number;
+  relics: SpireRelicView[];
   combat: SpireCombatView | null;
   options: string[];
   log: string[];

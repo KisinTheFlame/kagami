@@ -1,6 +1,8 @@
 <spire_screen>
 {{#if isMap}}
 你在尖塔地图上。生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}}（{{description}}）{{/each}}
+{{/if}}
 选择接下来往哪走：
 {{#each options}}
 [{{n}}] {{text}}
@@ -9,6 +11,8 @@
 {{else if isCombat}}
 第 {{combat.turn}} 回合　能量 {{combat.energy}}/{{combat.maxEnergy}}
 你：生命 {{hp}}/{{maxHp}}{{#if combat.hasBlock}}　格挡 {{combat.block}}{{/if}}{{#if combat.hasPowers}}　状态：{{#each combat.powers}}{{label}}{{amount}} {{/each}}{{/if}}
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
 ————敌人————
 {{#each combat.enemies}}
 [{{n}}] {{name}}　生命 {{hp}}/{{maxHp}}{{#if hasBlock}}　格挡 {{block}}{{/if}}{{#if hasPowers}}　状态：{{#each powers}}{{label}}{{amount}} {{/each}}{{/if}}
@@ -21,6 +25,8 @@
 打牌用 invoke(tool="play_card", hand_index=手牌编号, target_index=敌人编号)；出完这回合就 end_turn。
 {{else if isReward}}
 战斗胜利。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
 挑一张牌加入牌组，或跳过：
 {{#each options}}
 [{{n}}] {{text}}
@@ -28,6 +34,8 @@
 用 invoke(tool="choose", option_index=编号) 选择。
 {{else if isRest}}
 你来到篝火旁。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
 {{#each options}}
 [{{n}}] {{text}}
 {{/each}}
