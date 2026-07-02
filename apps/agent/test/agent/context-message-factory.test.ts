@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createConversationSummaryMessage,
+  createForegroundInputMessage,
   createNotificationMessage,
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
@@ -24,6 +25,18 @@ describe("context-message-factory", () => {
       role: "user",
       content:
         "<notification>\nIT之家：2篇新文，最新《某标题》\n产品群：[有人@你] 在吗\n</notification>",
+    });
+  });
+
+  it("should pass foreground input text through as-is (App 已自带伪标签，不套第二层)", () => {
+    expect(
+      createForegroundInputMessage(
+        '<qq_conversation_new_messages name="产品群">\n群友 (1): 在吗\n</qq_conversation_new_messages>',
+      ),
+    ).toEqual({
+      role: "user",
+      content:
+        '<qq_conversation_new_messages name="产品群">\n群友 (1): 在吗\n</qq_conversation_new_messages>',
     });
   });
 
