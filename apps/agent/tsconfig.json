@@ -23,7 +23,8 @@
       "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
       "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
-      "@kagami/shared/*": ["./../../packages/shared/src/*"]
+      "@kagami/shared/*": ["./../../packages/shared/src/*"],
+      "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"]
     }
   },
   "include": ["src", "test"]

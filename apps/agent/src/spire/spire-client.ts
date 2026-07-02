@@ -1,84 +1,22 @@
+import { ZodError } from "zod";
+import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import {
+  spireApiContract,
+  type SpireAction,
+  type SpireReference,
+  type SpireScreen,
+} from "@kagami/spire-api/contract";
 import { SpireError } from "../agent/capabilities/spire/domain/errors.js";
 
 // === 尖塔客户端：把游戏动作经 HTTP 打到独立的 kagami-spire 进程 ===
 //
-// 服务返回结构化 ScreenView（渲染成文字屏幕的活在 agent 侧 render/）。客户端缓存 lastVersion，
-// 每个动作自动带 expectedVersion——HTTP 超时后主 Agent 重发同一动作时服务判为重放、不重复出牌
-// （issue #234 B 幂等）。连接失败/超时/坏响应统一映射 SPIRE_NOT_READY。
+// 路由 / 类型的单一事实源是 @kagami/spire-api（#279 PR2）：门面类型全部由 z.infer 派生，
+// 改服务端 ScreenView 字段这里同时编译报错。客户端缓存 lastVersion，每个动作自动带
+// expectedVersion——HTTP 超时后主 Agent 重发同一动作时服务判为重放、不重复出牌（issue #234 B
+// 幂等）。错误语义与旧手写实现逐字节一致（wire 基线测试钉死）：连接失败/超时/非 2xx/坏响应
+// 统一 SPIRE_NOT_READY；引擎拒绝（200 ok:false）→ SPIRE_REJECTED。
 
-/** 与服务端 ScreenView 同构（跨包不共享类型，这里独立声明）。 */
-export type SpirePower = { id: string; amount: number };
-
-export type SpireIntent = {
-  kind: "attack" | "defend" | "buff" | "debuff" | "unknown";
-  value?: number;
-  hits?: number;
-};
-
-export type SpireEnemyView = {
-  index: number;
-  name: string;
-  hp: number;
-  maxHp: number;
-  block: number;
-  powers: SpirePower[];
-  intent: SpireIntent;
-};
-
-export type SpireHandCardView = {
-  index: number;
-  name: string;
-  cost: number | null;
-  type: string;
-  targeted: boolean;
-  description: string;
-};
-
-export type SpireCombatView = {
-  turn: number;
-  energy: number;
-  maxEnergy: number;
-  block: number;
-  powers: SpirePower[];
-  enemies: SpireEnemyView[];
-  hand: SpireHandCardView[];
-  piles: { draw: number; discard: number; exhaust: number };
-};
-
-export type SpireRelicView = { name: string; description: string };
-
-export type SpireScreen = {
-  version: number;
-  screen: "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
-  player: { hp: number; maxHp: number; gold: number };
-  deckCount: number;
-  relics: SpireRelicView[];
-  combat: SpireCombatView | null;
-  options: string[];
-  log: string[];
-};
-
-export type SpireAction =
-  | { type: "play_card"; handIndex: number; targetIndex?: number | null }
-  | { type: "end_turn" }
-  | { type: "choose"; optionIndex: number };
-
-/** 参考查询结果（与服务端 ReferenceResult 同构）。 */
-export type SpireCardRef = {
-  name: string;
-  type: string;
-  cost: number | null;
-  upgradedCost: number | null;
-  targeted: boolean;
-  description: string;
-  upgradedDescription: string;
-};
-export type SpireGlossaryEntry = { term: string; aliases: string[]; definition: string };
-export type SpireReference = {
-  query: string;
-  cards: SpireCardRef[];
-  terms: SpireGlossaryEntry[];
-};
+const CLIENT_TIMEOUT_MS = 15_000;
 
 export interface SpireClient {
   startRun(): Promise<SpireScreen>;
@@ -88,34 +26,48 @@ export interface SpireClient {
 }
 
 type FetchLike = typeof fetch;
-type ActionResponse =
-  | { ok: true; screen: SpireScreen }
-  | { ok: false; reason: string; screen: SpireScreen | null };
-
-const CLIENT_TIMEOUT_MS = 15_000;
 
 export class HttpSpireClient implements SpireClient {
-  private readonly baseUrl: string;
-  private readonly fetchImpl: FetchLike;
+  private readonly rpc: JsonClient<typeof spireApiContract>;
   /** 最近一次见到的对局版本号；随每个响应更新，作为下一动作的 expectedVersion。 */
   private lastVersion: number | undefined;
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.rpc = createClient(spireApiContract, {
+      baseUrl,
+      fetch: fetchImpl,
+      timeoutMs: CLIENT_TIMEOUT_MS,
+      // spire 无富错误信封（BizErrorWire），非 2xx 一律走兜底映射成 SPIRE_NOT_READY。
+      decodeError: () => undefined,
+      mapFallbackError: info => {
+        switch (info.reason) {
+          case "unreachable":
+            return new SpireError(
+              "SPIRE_NOT_READY",
+              `尖塔服务不可达（未启动 / 半开 / 超时）：${
+                info.cause instanceof Error ? info.cause.message : String(info.cause)
+              }`,
+            );
+          case "bad_status":
+            return new SpireError("SPIRE_NOT_READY", `尖塔服务返回 HTTP ${info.status}`);
+          case "invalid_response_body":
+            return new SpireError("SPIRE_NOT_READY", "尖塔服务返回了无法解析的响应体");
+        }
+      },
+    });
   }
 
   public async startRun(): Promise<SpireScreen> {
-    const screen = (await this.post("/run/start", {})) as SpireScreen;
+    const screen = await this.guard(() => this.rpc.startRun({}));
     this.lastVersion = screen.version;
     return screen;
   }
 
   public async act(action: SpireAction): Promise<SpireScreen> {
-    const response = (await this.post("/run/action", {
-      action,
-      expectedVersion: this.lastVersion,
-    })) as ActionResponse;
+    // 键序保持 action → expectedVersion（wire 字节基线）；无已知版本时键整体缺席。
+    const response = await this.guard(() =>
+      this.rpc.action({ action, expectedVersion: this.lastVersion }),
+    );
     if (!response.ok) {
       // 引擎拒绝（能量不足 / 目标非法等）不是服务故障：带回当前屏幕，作为可读失败让主 Agent 纠正。
       if (response.screen) {
@@ -128,7 +80,7 @@ export class HttpSpireClient implements SpireClient {
   }
 
   public async getState(): Promise<SpireScreen | null> {
-    const screen = (await this.get("/run/state")) as SpireScreen | null;
+    const screen = await this.guard(() => this.rpc.getState({}));
     if (screen) {
       this.lastVersion = screen.version;
     }
@@ -136,42 +88,18 @@ export class HttpSpireClient implements SpireClient {
   }
 
   public async lookup(query: string): Promise<SpireReference> {
-    const path = `/reference?q=${encodeURIComponent(query)}`;
-    return (await this.get(path)) as SpireReference;
+    return this.guard(() => this.rpc.reference({ q: query }));
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
-    return this.request(path, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }
-
-  private async get(path: string): Promise<unknown> {
-    return this.request(path, { method: "GET" });
-  }
-
-  private async request(path: string, init: RequestInit): Promise<unknown> {
-    let response: Response;
+  /** 把 output.parse 的 ZodError 归入 SPIRE_NOT_READY（响应形状不对 == 服务返回了坏响应）。 */
+  private async guard<T>(call: () => Promise<T>): Promise<T> {
     try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-        ...init,
-        signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
-      });
+      return await call();
     } catch (error) {
-      throw new SpireError(
-        "SPIRE_NOT_READY",
-        `尖塔服务不可达（未启动 / 半开 / 超时）：${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-    if (!response.ok) {
-      throw new SpireError("SPIRE_NOT_READY", `尖塔服务返回 HTTP ${response.status}`);
-    }
-    try {
-      return await response.json();
-    } catch {
-      throw new SpireError("SPIRE_NOT_READY", "尖塔服务返回了无法解析的响应体");
+      if (error instanceof ZodError) {
+        throw new SpireError("SPIRE_NOT_READY", "尖塔服务返回了无法解析的响应体");
+      }
+      throw error;
     }
   }
 }

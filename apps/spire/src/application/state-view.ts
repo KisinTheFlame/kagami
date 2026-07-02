@@ -1,4 +1,12 @@
-import type { EnemyState, GameState, PowerInstance } from "../engine/types.js";
+import type {
+  SpireCombatView,
+  SpireEnemyView,
+  SpireHandCardView,
+  SpireIntent,
+  SpireRelicView,
+  SpireScreen,
+} from "@kagami/spire-api/contract";
+import type { EnemyState, GameState } from "../engine/types.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
@@ -9,55 +17,16 @@ import { currentOptions } from "../engine/run/run.js";
 //
 // 服务返回这个纯 JSON，agent 侧 render/screen.ts 据此渲染文字屏幕（分工原则，issue #234）。
 // 意图展示数值在此按当前状态重算（玩家看到的是含力量/虚弱/易伤修正后的实际伤害）。
+//
+// 类型由 @kagami/spire-api 契约派生（#279 PR2）：这里构造的对象直接以契约类型标注，
+// 服务端加/改字段而契约没跟上时在本文件与 agent 消费端同时编译报错。
 
-export type IntentView = {
-  kind: "attack" | "defend" | "buff" | "debuff" | "unknown";
-  value?: number;
-  hits?: number;
-};
-
-export type EnemyView = {
-  index: number;
-  name: string;
-  hp: number;
-  maxHp: number;
-  block: number;
-  powers: PowerInstance[];
-  intent: IntentView;
-};
-
-export type HandCardView = {
-  index: number;
-  name: string;
-  cost: number | null;
-  type: string;
-  targeted: boolean;
-  description: string;
-};
-
-export type CombatView = {
-  turn: number;
-  energy: number;
-  maxEnergy: number;
-  block: number;
-  powers: PowerInstance[];
-  enemies: EnemyView[];
-  hand: HandCardView[];
-  piles: { draw: number; discard: number; exhaust: number };
-};
-
-export type RelicView = { name: string; description: string };
-
-export type ScreenView = {
-  version: number;
-  screen: GameState["screen"];
-  player: { hp: number; maxHp: number; gold: number };
-  deckCount: number;
-  relics: RelicView[];
-  combat: CombatView | null;
-  options: string[];
-  log: string[];
-};
+export type IntentView = SpireIntent;
+export type EnemyView = SpireEnemyView;
+export type HandCardView = SpireHandCardView;
+export type CombatView = SpireCombatView;
+export type RelicView = SpireRelicView;
+export type ScreenView = SpireScreen;
 
 export function toScreenView(state: GameState, opts: { suppressLog?: boolean }): ScreenView {
   return {

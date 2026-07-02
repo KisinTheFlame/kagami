@@ -6,10 +6,7 @@
     "target": "ES2022",
     "types": ["node"],
     "strict": true,
-    "noEmit": true,
-    "paths": {
-      "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"]
-    }
+    "noEmit": true
   },
-  "include": ["src", "test"]
+  "include": ["src"]
 }

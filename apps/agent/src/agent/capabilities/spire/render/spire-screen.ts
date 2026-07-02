@@ -5,7 +5,7 @@ import type {
   SpirePower,
   SpireReference,
   SpireScreen,
-} from "../../../../spire/spire-client.js";
+} from "@kagami/spire-api/contract";
 
 // === ScreenView → 文字屏幕（走 .hbs 模板）===
 //

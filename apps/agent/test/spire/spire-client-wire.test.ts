@@ -36,7 +36,14 @@ const SCREEN_V3 = {
       },
     ],
     hand: [
-      { index: 0, name: "打击", cost: 1, type: "attack", targeted: true, description: "造成 6 点伤害" },
+      {
+        index: 0,
+        name: "打击",
+        cost: 1,
+        type: "attack",
+        targeted: true,
+        description: "造成 6 点伤害",
+      },
     ],
     piles: { draw: 4, discard: 0, exhaust: 0 },
   },
@@ -121,7 +128,9 @@ describe("HttpSpireClient wire 基线 — 请求字节", () => {
   });
 
   it("lookup：含空格 query 按解码语义断言（%20 与 + 等价）", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ query: "a b", cards: [], terms: [] }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ query: "a b", cards: [], terms: [] }));
     const client = makeClient(fetchImpl);
 
     await client.lookup("a b");
@@ -138,9 +147,7 @@ describe("HttpSpireClient wire 基线 — 版本缓存与拒绝分支", () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(SCREEN_V3))
-      .mockResolvedValueOnce(
-        jsonResponse({ ok: false, reason: "能量不足", screen: SCREEN_V4 }),
-      )
+      .mockResolvedValueOnce(jsonResponse({ ok: false, reason: "能量不足", screen: SCREEN_V4 }))
       .mockResolvedValueOnce(jsonResponse({ ok: true, screen: { ...SCREEN_V3, version: 5 } }));
     const client = makeClient(fetchImpl);
 
@@ -218,7 +225,10 @@ describe("HttpSpireClient wire 基线 — SPIRE_NOT_READY 三种成因", () => {
 
   it("响应体不是合法 JSON", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      new Response("<html>oops</html>", { status: 200, headers: { "content-type": "text/html" } }),
+      new Response("<html>oops</html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
     );
     const client = makeClient(fetchImpl);
 
