@@ -102,7 +102,7 @@ describe("燃焰", () => {
 });
 
 describe("Boss 随机选择", () => {
-  it("只从 guardian / hexaghost 里选", () => {
+  it("能选到 guardian 和 hexaghost，且只在 Boss 池内", () => {
     const seen = new Set<string>();
     for (let seed = 0; seed < 60; seed += 1) {
       seen.add(pickBossEncounter(seedRng(seed)));
@@ -110,7 +110,7 @@ describe("Boss 随机选择", () => {
     expect(seen.has("guardian")).toBe(true);
     expect(seen.has("hexaghost")).toBe(true);
     for (const id of seen) {
-      expect(["guardian", "hexaghost"]).toContain(id);
+      expect(["guardian", "hexaghost", "slime_boss"]).toContain(id);
     }
   });
 });

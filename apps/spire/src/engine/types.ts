@@ -97,6 +97,8 @@ export type EnemyDef = {
   modeShiftThreshold?: number;
   /** 守卫者专用：防御姿态下的出招表 id 与进攻姿态出招表 id。 */
   stanceMoves?: { offensive: string[]; defensive: string[] };
+  /** 半血分裂：降到 ≤maxHp/2 时分裂成这些敌人（各自 HP = 分裂瞬间当前 HP）。 */
+  splitInto?: string[];
 };
 
 export type EnemyState = {
@@ -118,6 +120,8 @@ export type EnemyState = {
   rolledDamage: number;
   /** 是否沉睡（拉加维林开局睡眠；受伤或睡满自然醒时置 false）。 */
   asleep: boolean;
+  /** 是否已分裂过（半血分裂只触发一次）。 */
+  hasSplit: boolean;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */
   modeShiftAccum: number;
   modeShiftThreshold: number | null;
