@@ -116,7 +116,8 @@ apps/agent/src/agent/
 │   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
 │   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体
-│   └── todo/           待办本能力本体（到点 / 每日提醒经通知中心）
+│   ├── todo/           待办本能力本体（到点提醒经通知中心）
+│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 Operation：空闲时以小镜口吻注入 `<inner_thought>`（#265）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
     ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
     ├── ithome/         IThome App：RSS 未读推送
@@ -171,7 +172,7 @@ async_tool_result / wake 等内部事件 ─────────────
 
 - **NapCat 网关收纳进 QQ App**。入站事件不再进共享事件队列，而是直达 `QqApp.handleNapcatEvent`；QQ App 按「屏幕 vs 横幅」分流：前台且属当前会话的消息入缓冲并敲门（实时路径），其余累积进会话、向 NotificationCenter push 一个 `ChatNotificationDraft`。出站发送（工具 + 管理台 HTTP）统一走 QQ App 的出站端口。
 - **NotificationCenter 是后台 / 非焦点信号到 Agent 的唯一桥（横幅）**。它源无关，按 source 折叠 draft，窗口聚合后 enqueue 一个 `notification` 事件——这条事件既投递内容也唤醒 Agent。前台当前会话经 `foreground_input` 直达上下文尾部（屏幕），不经 center；焦点漂移（退后台 / 切会话 / reset）时未投递的未读退化回通知路径，绝不静默丢。
-- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `foreground_input` / `wake` 等已归一的事件，不承载原始协议消息。`foreground_input` 是不带内容的敲门：内容在 drain 时由 session 向当前前台 App（实现 `ForegroundInputSource` 的）现拉，永不 stale。
+- 共享事件队列只承载 `notification` / `async_tool_result_completed` / `foreground_input` / `wake` / `inner_thought` 等已归一的事件，不承载原始协议消息。`foreground_input` 是不带内容的敲门：内容在 drain 时由 session 向当前前台 App（实现 `ForegroundInputSource` 的）现拉，永不 stale。`inner_thought` 由 inner-voice 摸鱼判定触发（#265），装配成 `<inner_thought>` 追加尾部并唤醒一轮。
 
 ### App 与状态
 

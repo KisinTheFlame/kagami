@@ -200,6 +200,9 @@ export function createConfigManager(): ConfigManager {
           todoSuggestionAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
+          innerVoice: {
+            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          },
         },
       },
       tavily: {
