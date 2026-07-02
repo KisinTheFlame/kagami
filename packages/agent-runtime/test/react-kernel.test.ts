@@ -152,3 +152,34 @@ function makeNoTools(): ToolExecutor {
     execute: async () => ({ content: "", kind: "business" }),
   } as unknown as ToolExecutor;
 }
+
+describe("ReActKernel.runRound — tool_use/tool_result 配对", () => {
+  it("tool 返回空 content 也产一条空串 tool 消息，维持 ReAct 配对", async () => {
+    const kernel = new ReActKernel<"agent", Completion>({
+      model: {
+        chat: async () => ({
+          message: {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ id: "tc1", name: "do", arguments: {} }],
+          },
+        }),
+      } as unknown as ReActModel<"agent", Completion>,
+      interpreter: { apply: async () => ({ appendedMessages: [] }) } as EffectInterpreter<never>,
+    });
+
+    const result = await kernel.runRound({
+      state: { systemPrompt: undefined, messages: [] },
+      tools: {
+        definitions: () => [{ name: "do", parameters: { type: "object", properties: {} } }],
+        getKind: () => "business",
+        execute: async () => ({ content: "", kind: "business" }),
+      } as unknown as ToolExecutor,
+      usage: "agent",
+    } as unknown as ReActKernelRunRoundInput<"agent">);
+
+    expect(result.toolExecutions[0].appendedMessages).toEqual([
+      { role: "tool", toolCallId: "tc1", content: "" },
+    ]);
+  });
+});

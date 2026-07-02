@@ -90,6 +90,8 @@ type RootAgentRuntimeDeps = {
 };
 
 const DEFAULT_IDLE_WAKE_MAX_WAIT_MS = 600_000;
+/** 摘要超轮失败后，阈值压缩的冷却时长：期间不再每轮重试，防成本放大。 */
+const SUMMARY_MAX_ROUNDS_COOLDOWN_MS = 600_000;
 const DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
@@ -143,6 +145,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private lastWakeReminderAt: Date | null = null;
   private initialized = false;
   private lastPersistedSnapshotFingerprint: string | null = null;
+  /** 摘要超轮失败后的阈值压缩冷却截止时刻（epoch ms）；null = 无冷却。 */
+  private summaryCooldownUntilMs: number | null = null;
   private readonly mutationExecutor = new SerialExecutor();
 
   public constructor({
@@ -287,10 +291,12 @@ export class RootAgentHost implements RootAgentExtensionHost {
     const assistantToPersist =
       persistentAssistantMessage.toolCalls.length > 0 ? persistentAssistantMessage : null;
     const toolPersistences: PendingToolPersistence[] = result.toolExecutions.map(execution => ({
+      // 不再按 content 是否为空过滤：被持久化的 assistant tool_use 必须有配对的
+      // tool_result（空串也合法），否则上下文不平衡、下一轮 provider 400 且每轮复发。
       ...(shouldPersistToolResultInContext({
         toolName: execution.toolCall.name,
         toolResult: execution.result,
-      }) && execution.result.content.length > 0
+      })
         ? {
             toolResult: {
               toolCallId: execution.toolCall.id,
@@ -383,6 +389,17 @@ export class RootAgentHost implements RootAgentExtensionHost {
       return false;
     }
 
+    // 超轮失败后的冷却闸：压缩在每轮 commit 后触发，若 summarizer 持续不 finalize
+    //（toolChoice auto 下模型可能被上下文带偏），没有冷却就会每轮白烧 maxRounds 次
+    // LLM 调用（跨模型对抗审查各自独立命中的成本放大点）。冷却期内跳过阈值压缩；
+    // 人工触发的 compactEntireContext 不受此限。
+    if (
+      this.summaryCooldownUntilMs !== null &&
+      this.now().getTime() < this.summaryCooldownUntilMs
+    ) {
+      return false;
+    }
+
     if (typeof totalTokens !== "number") {
       try {
         logger.warn("Skipping context summary because totalTokens is missing", {
@@ -413,8 +430,11 @@ export class RootAgentHost implements RootAgentExtensionHost {
         continue;
       }
       if (attempt.effects.length === 0) {
+        this.summaryCooldownUntilMs = this.now().getTime() + SUMMARY_MAX_ROUNDS_COOLDOWN_MS;
         return false;
       }
+
+      this.summaryCooldownUntilMs = null;
 
       // 阶段 5：compact 通过 Effect 模型收口，不再直接改 context。attemptSummarize
       // 把 task agent 的摘要拼成 replace_leading_messages Effect，host 只把它交给
@@ -455,6 +475,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
       }
 
       await this.interpreter.apply(attempt.effects);
+      // 全量压缩成功 = 上下文已重建，阈值压缩的冷却没有存在意义了。
+      this.summaryCooldownUntilMs = null;
       return true;
     }
   }
@@ -770,6 +792,15 @@ export class RootLoopAgent extends BaseLoopAgent<
     // 零写入）。此时本轮视为自然结束，挂起到事件队列非空才进下一轮——否则外层
     // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。
     if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
+      try {
+        // 可观测性：纯文本轮意味着模型「看到但选择不行动」（含对通知不回应）。
+        // 完整文本在 llm_chat_call 可查，这里只留一条轻量事件供时间序列归因。
+        logger.info("Root agent idle round (zero tool calls); suspending until next event", {
+          event: "agent.root_agent_runtime.idle_round_suspended",
+        });
+      } catch {
+        // Ignore logger runtime setup gaps in tests and early boot.
+      }
       await this.suspendUntilNextEvent();
     }
   }

@@ -13,7 +13,7 @@
 ## 阅读路径（按任务选）
 
 - 第一次上手，想理解 Kagami 是什么 → 本文「项目理念」+ README.md
-- **动手写任何新 capability / tool / operation 之前** → 本文「开发原则：KV 缓存命中率优先」（必读，含三个参考实现）
+- **动手写任何新 capability / tool / task agent 之前** → 本文「开发原则：KV 缓存命中率优先」（必读，含三个参考实现）
 - 找代码放哪、模块怎么依赖 → ARCHITECTURE.md
 - 改配置或 DB schema、跑迁移 → 本文「硬约束」+ docs/configuration.md
 - 改前端视觉 → DESIGN.md
@@ -34,7 +34,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ## 开发原则：KV 缓存命中率优先
 
-开发 Agent 的新功能时，**必须非常非常重视 KV 缓存能否命中**。provider 侧 KV cache 的命中与否直接决定每轮推理的延迟和成本，一次前缀漂移会让整段历史从零换入。这条原则的优先级等同于项目理念，任何新 capability / operation / tool 在设计阶段就要想清楚"它会不会让已有会话的前缀失效"。
+开发 Agent 的新功能时，**必须非常非常重视 KV 缓存能否命中**。provider 侧 KV cache 的命中与否直接决定每轮推理的延迟和成本，一次前缀漂移会让整段历史从零换入。这条原则的优先级等同于项目理念，任何新 capability / task agent / tool 在设计阶段就要想清楚"它会不会让已有会话的前缀失效"。
 
 ### 核心模型：稳定前缀 + 易变尾部 + 计划性重建
 
@@ -98,7 +98,7 @@ QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-a
 - **不要**在压缩之外的地方调用 `replaceMessages`。
 - **system prompt 和工具集的改动要集中提交**：每次改动都会让所有在飞会话的前缀失效一次，小步高频修改是最糟糕的模式。
 - **进上下文的散文一律走模板，禁止在 TS 里内联字面量**：任何最终会进 LLM 上下文的成句文案（system prompt、各类 reminder、`<notification>` / `<async_tool_result>` 等伪标签内容、通知 draft 的渲染文本）都必须落在 `apps/agent/static/` 下的 `.hbs` 模板，经 `renderServerStaticTemplate(import.meta.url, ...)` 渲染。TS 侧只负责算 view-model（计数、数组、布尔 flag、预格式化好的日期/截断文本），不写成句文案。这样调小镜的语气只改 `static/` 一棵树、不碰代码，也让"所有会进上下文的文本"始终收在同一处可审。**例外（留 TS 常量）**：分组 key / 结构标识（如 `"QQ"`、`"IT之家"`、`"待办"`）这类不是语气的标识符；以及工具 description 与工具 result 的 error/status note（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部且与控制流交织，见 `TODOS.md`）。
-- Review 新 capability / operation / tool 时，把"会不会破坏 KV 缓存命中"以及"进上下文的散文是否走了模板"作为显式检查项写进自检清单。
+- Review 新 capability / task agent / tool 时，把"会不会破坏 KV 缓存命中"以及"进上下文的散文是否走了模板"作为显式检查项写进自检清单。
 
 ## 硬约束
 
@@ -122,7 +122,7 @@ pnpm format
 - 后端 `apps/agent` 用「扁平模块 + 模块内分层」（`domain / application / infra / http`）。新代码放进所属模块，从模块根入口或分层路径导入；**不要**新增全局 `handler / service / dao / event / tools / rag` 风格目录。
 - 通用 Agent Runtime 内核放 `packages/agent-runtime`（`TaskAgent` / `Tool` / `App` 框架；原 `Operation` 概念已退役，一次性子任务一律做成 TaskAgent + 终止工具）；**不要**把 NapCat 事件模型、Kagami system prompt、`RootAgentRuntime`、具体 capability 塞进去。Kagami 项目语义放 `apps/agent/src/agent`。
 - `apps/agent/src/agent` 按 `runtime / capabilities / apps` 分层；新实现只进 `runtime/` 或 `capabilities/`，不要回填旧风格的 `agents / service / dao / tools/*` 目录。
-- `Tool` 只是上层调用入口，不承载能力本体；业务语义放 capability service / task-agent / operation。
+- `Tool` 只是上层调用入口，不承载能力本体；业务语义放 capability service / task-agent。
 - 群聊相关逻辑只属于 `messaging` capability，不要扩散到 runtime 或其他 capability。
 
 ## 常用命令
