@@ -49,7 +49,13 @@ describe("脆弱：格挡打七五折", () => {
 describe("Act1 战斗池节奏：前 3 场 weak、其余 strong", () => {
   // weak 的 small_slimes 被展开成 _a / _b。
   const WEAK = new Set(["cultist", "jaw_worm", "two_louse", "small_slimes_a", "small_slimes_b"]);
-  const STRONG = new Set(["blue_slaver", "three_louse", "lots_of_slimes"]);
+  const STRONG = new Set([
+    "blue_slaver",
+    "three_louse",
+    "lots_of_slimes",
+    "large_slime_acid",
+    "large_slime_spike",
+  ]);
 
   it("combatsEntered < 3 只抽 weak 池", () => {
     for (let seed = 0; seed < 40; seed += 1) {

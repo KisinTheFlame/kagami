@@ -460,6 +460,109 @@ const ENEMY_LIST: EnemyDef[] = [
     // 出招由 combat.ts 的 hexaghost 专属分支处理，intentRule 留空。
     intentRule: { scripted: [], weighted: [] },
   },
+
+  // —— 大史莱姆（半血分裂成两只中史莱姆）——
+  {
+    id: "acid_slime_l",
+    name: "酸液史莱姆（大）",
+    hpMin: 65,
+    hpMax: 69,
+    splitInto: ["acid_slime_m", "acid_slime_m"],
+    moves: [
+      {
+        id: "corrosive_spit_l",
+        name: "腐蚀喷吐",
+        effects: [
+          { kind: "deal_damage", amount: 11 },
+          { kind: "add_card", cardId: "slimed", pile: "discard", count: 2 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "tackle_l",
+        name: "冲撞",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+      {
+        id: "lick_l",
+        name: "舔舐",
+        effects: [{ kind: "apply_power", power: "weak", amount: 2, on: "target" }],
+        intent: "debuff",
+      },
+    ],
+    // 权重近似（对齐中酸液史莱姆的手感，L 精确权重待校准）。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "corrosive_spit_l", weight: 30, maxInARow: 2 },
+        { move: "tackle_l", weight: 40, maxInARow: 1 },
+        { move: "lick_l", weight: 30, maxInARow: 2 },
+      ],
+    },
+  },
+  {
+    id: "spike_slime_l",
+    name: "尖刺史莱姆（大）",
+    hpMin: 64,
+    hpMax: 70,
+    splitInto: ["spike_slime_m", "spike_slime_m"],
+    moves: [
+      {
+        id: "flame_tackle_l",
+        name: "火焰冲撞",
+        effects: [
+          { kind: "deal_damage", amount: 16 },
+          { kind: "add_card", cardId: "slimed", pile: "discard", count: 2 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "lick_frail_l",
+        name: "舔舐",
+        effects: [{ kind: "apply_power", power: "frail", amount: 2, on: "target" }],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "flame_tackle_l", weight: 70, maxInARow: 2 },
+        { move: "lick_frail_l", weight: 30, maxInARow: 2 },
+      ],
+    },
+  },
+
+  // —— Boss：史莱姆王（3 回合循环 + 半血分裂成两只大史莱姆）——
+  {
+    id: "slime_boss",
+    name: "史莱姆王",
+    hpMin: 140,
+    hpMax: 140,
+    splitInto: ["spike_slime_l", "acid_slime_l"],
+    moves: [
+      {
+        id: "goop_spray",
+        name: "黏液喷射",
+        effects: [{ kind: "add_card", cardId: "slimed", pile: "discard", count: 3 }],
+        intent: "debuff",
+      },
+      {
+        id: "preparing",
+        name: "蓄力",
+        effects: [],
+        intent: "unknown",
+      },
+      {
+        id: "slam",
+        name: "猛砸",
+        effects: [{ kind: "deal_damage", amount: 35 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 slime_boss 专属分支处理（黏液→蓄力→猛砸 循环），intentRule 留空。
+    intentRule: { scripted: [], weighted: [] },
+  },
 ];
 
 const ENEMY_MAP: ReadonlyMap<string, EnemyDef> = new Map(
@@ -502,8 +605,11 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   gremlin_nob: { id: "gremlin_nob", enemies: ["gremlin_nob"], isBoss: false },
   lagavulin: { id: "lagavulin", enemies: ["lagavulin"], isBoss: false },
   three_sentries: { id: "three_sentries", enemies: ["sentry", "sentry", "sentry"], isBoss: false },
+  large_slime_acid: { id: "large_slime_acid", enemies: ["acid_slime_l"], isBoss: false },
+  large_slime_spike: { id: "large_slime_spike", enemies: ["spike_slime_l"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
+  slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
 };
 
 export function getEncounterDef(id: string): EncounterDef {
@@ -535,6 +641,7 @@ const WEAK_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
 const STRONG_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "blue_slaver", weight: 2 },
   { id: "three_louse", weight: 2 },
+  { id: "large_slime", weight: 2 }, // 选中后 50/50 展开为 酸液大 / 尖刺大
   { id: "lots_of_slimes", weight: 1 },
 ];
 
@@ -558,6 +665,10 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
     // 小史莱姆组的两种组成 50/50。
     return nextFloat(rng) < 0.5 ? "small_slimes_a" : "small_slimes_b";
   }
+  if (picked === "large_slime") {
+    // 大史莱姆 50/50 酸液 / 尖刺。
+    return nextFloat(rng) < 0.5 ? "large_slime_acid" : "large_slime_spike";
+  }
   return picked;
 }
 
@@ -578,6 +689,7 @@ export function pickEliteEncounter(rng: RngState): string {
 const BOSS_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "guardian", weight: 1 },
   { id: "hexaghost", weight: 1 },
+  { id: "slime_boss", weight: 1 },
 ];
 
 /** Boss 节点：随机挑一个 Boss encounter id。 */
