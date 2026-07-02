@@ -38,6 +38,12 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "敌人专属：第一次被攻击时获得一次性格挡（能挡住那一击的一部分），随后蜷缩消失。",
   },
   {
+    term: "反甲",
+    aliases: ["sharp hide", "sharphide", "thorns"],
+    definition:
+      "敌人专属：你每攻击它一次，就受到 N 点无视格挡的反弹伤害（直接掉血）。守卫者防御姿态期间持有。",
+  },
+  {
     term: "格挡",
     aliases: ["block"],
     definition: "抵挡伤害的护盾。受击时先扣格挡、扣完再扣生命。每当你的回合开始时清零。",

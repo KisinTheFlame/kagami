@@ -67,7 +67,8 @@ export type ReActToolExecution<TExtensionData = unknown> = {
   extensionData?: TExtensionData;
 };
 
-export type ReActRoundResult<
+/** 正常完成的一轮：有真实 completion，`shouldCommit: true`，可提交可持久化。 */
+export type ReActCommittedRoundResult<
   TCompletion extends { message: AssistantMessage },
   TExtensionData = unknown,
   TControl = never,
@@ -76,9 +77,32 @@ export type ReActRoundResult<
   assistantMessage: AssistantMessage;
   toolExecutions: ReActToolExecution<TExtensionData>[];
   appendedMessages: LlmMessage[];
-  shouldCommit: boolean;
+  shouldCommit: true;
   control?: TControl;
 };
+
+/**
+ * 模型调用出错且被扩展 onModelError handled 的一轮：本轮没有 completion，
+ * 各字段诚实置空/null（此前是用 `as unknown as TCompletion` 伪造空 completion
+ * 绕类型系统——若 TCompletion 有必需字段会在运行时缺字段而编译期不报）。
+ * `shouldCommit: false` 是判别符，消费方据此收窄。
+ */
+export type ReActHandledModelErrorRoundResult = {
+  completion: null;
+  assistantMessage: null;
+  toolExecutions: [];
+  appendedMessages: [];
+  shouldCommit: false;
+  control?: never;
+};
+
+export type ReActRoundResult<
+  TCompletion extends { message: AssistantMessage },
+  TExtensionData = unknown,
+  TControl = never,
+> =
+  | ReActCommittedRoundResult<TCompletion, TExtensionData, TControl>
+  | ReActHandledModelErrorRoundResult;
 
 export type ReActKernelModelErrorDecision = {
   handled: boolean;
@@ -201,18 +225,8 @@ export class ReActKernel<
         });
         if (decision?.handled) {
           return {
-            completion: {
-              message: {
-                role: "assistant",
-                content: "",
-                toolCalls: [],
-              },
-            } as unknown as TCompletion,
-            assistantMessage: {
-              role: "assistant",
-              content: "",
-              toolCalls: [],
-            } as unknown as AssistantMessage,
+            completion: null,
+            assistantMessage: null,
             toolExecutions: [],
             appendedMessages: [],
             shouldCommit: false,
