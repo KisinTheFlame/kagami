@@ -286,6 +286,39 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 精英：拉加维林（睡眠状态机 + 金属化 + 吸取灵魂减力量敏捷）——
+  {
+    id: "lagavulin",
+    name: "拉加维林",
+    hpMin: 109,
+    hpMax: 111,
+    moves: [
+      {
+        id: "sleep",
+        name: "沉睡",
+        effects: [],
+        intent: "unknown",
+      },
+      {
+        id: "lag_attack",
+        name: "重击",
+        effects: [{ kind: "deal_damage", amount: 18 }],
+        intent: "attack",
+      },
+      {
+        id: "siphon_soul",
+        name: "吸取灵魂",
+        effects: [
+          { kind: "apply_power", power: "strength", amount: -1, on: "target" },
+          { kind: "apply_power", power: "dexterity", amount: -1, on: "target" },
+        ],
+        intent: "debuff",
+      },
+    ],
+    // 出招由 combat.ts 的 lagavulin 专属分支处理（睡眠/苏醒/攻击循环），intentRule 留空。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
   // —— 切片 Boss：守卫者（模式切换 = 引擎能力验证点，issue #234 C10）——
   {
     id: "the_guardian",
@@ -389,6 +422,7 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     isBoss: false,
   },
   gremlin_nob: { id: "gremlin_nob", enemies: ["gremlin_nob"], isBoss: false },
+  lagavulin: { id: "lagavulin", enemies: ["lagavulin"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
 };
 
@@ -449,7 +483,10 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
 
 // Act1 精英池（等权重，不重复限制由 StS 的洗牌保证；此处简化为等权随机）。
 // 拉加维林 / 哨卫在 M3b-2 加入。
-const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [{ id: "gremlin_nob", weight: 1 }];
+const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
+  { id: "gremlin_nob", weight: 1 },
+  { id: "lagavulin", weight: 1 },
+];
 
 /** 精英节点：从精英池挑一个 encounter id。 */
 export function pickEliteEncounter(rng: RngState): string {
