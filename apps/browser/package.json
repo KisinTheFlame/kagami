@@ -13,6 +13,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@kagami/browser-api": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/persistence": "workspace:*",
