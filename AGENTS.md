@@ -130,7 +130,7 @@ pnpm format
 ```bash
 pnpm build        # 按 workspace 依赖拓扑构建所有包
 pnpm typecheck    # 全部包类型检查
-pnpm test         # 运行所有声明了 test 脚本的包（后端各服务/包 + apps/web 纯函数层）
+pnpm test         # 根级 vitest projects 单进程跑全部包的测试（新包只需自带 vitest.config.ts 即被纳入）
 pnpm lint         # ESLint 检查（lint:fix 自动修复）
 pnpm format       # Prettier 检查（format:write 自动格式化）
 
