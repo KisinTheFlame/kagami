@@ -39,9 +39,8 @@ export type RetentionSpec = {
  * which tables are logs/metrics/caches and which are Agent memory.
  *
  * Intentionally NOT cleaned up (not in this list):
- * - `linear_message_ledger` — Story Agent's source-of-truth message ledger
- * - `story` / `story_memory_document` — Agent long-term memory
- * - `root_agent_runtime_snapshot` / `story_agent_runtime_snapshot` — runtime snapshots
+ * - `ledger` (model LinearMessageLedger) — root agent 消息账本，只写不读，留作将来记忆系统的原始素材
+ * - `root_agent_runtime_snapshot` — runtime snapshot
  * - `oauth_session` — persistent auth state
  * - `ithome_article` / `ithome_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
  * - `metric_chart` — chart definitions (meta, not data)

@@ -81,12 +81,6 @@ export function createRootContextSummaryReminderMessage(): UserMessage {
   );
 }
 
-export function createStoryContextSummaryReminderMessage(): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/story-context-summary-reminder.hbs"),
-  );
-}
-
 /**
  * 手机 OS 模型的统一通知消息：NotificationCenter 聚合后每源一行，包在
  * `<notification>` 标签里追加到上下文尾部。`lines` 已由各源 Draft 渲染好。
@@ -97,23 +91,10 @@ export function createNotificationMessage(lines: string[]): UserMessage {
   );
 }
 
-export function createStoryRecallMessage(
-  stories: Array<{ id: string; markdown: string; createdAt: Date }>,
-): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/story-recall.hbs", {
-      stories: stories.map(story => ({
-        date: formatStoryRecallDate(story.createdAt),
-        markdown: story.markdown,
-      })),
-    }),
-  );
-}
-
 /**
  * 异步工具任务完成后的回流消息：包成一条 `<async_tool_result>` user message 追加到尾部。
  * 凭 task_id 对应到当初的 `<async_task_submitted>`。content/message 原样插入，不做 XML 转义
- * （与 `<notification>` / `<story_recall>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。
+ * （与 `<notification>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。
  */
 export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): UserMessage {
   const { taskId, toolName, outcome } = completion;
@@ -130,13 +111,6 @@ export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): U
       ...view,
     }),
   );
-}
-
-function formatStoryRecallDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 export function createWebSearchInstructionMessage(question: string): UserMessage {
@@ -163,9 +137,8 @@ export function createTodoSuggestionInstructionMessage(
 }
 
 export function createMessagesFromEvent(_event: Event): UserMessage[] {
-  // 目前没有任何事件类型需要渲染成上下文消息：notification / story_recall 由 session
-  // 直接装配成 <notification> / <story_recall> 消息追加（不是 event 类 ContextItem），
-  // wake 是纯唤醒。保留此入口是为 event→ContextItem 渲染路径留口子——未来若有需要直接
-  // 进上下文的新事件类型，在这里加分支即可。
+  // 目前没有任何事件类型需要渲染成上下文消息：notification 由 session 直接装配成
+  // <notification> 消息追加（不是 event 类 ContextItem），wake 是纯唤醒。保留此入口是为
+  // event→ContextItem 渲染路径留口子——未来若有需要直接进上下文的新事件类型，在这里加分支即可。
   return [];
 }
