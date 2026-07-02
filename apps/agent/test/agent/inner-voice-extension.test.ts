@@ -59,7 +59,9 @@ function createHarness(input: {
 type OnAfterCommitInput = Parameters<InnerVoiceExtension["onAfterCommit"]>[0];
 
 /** onAfterCommit 只读 result.toolExecutions[].toolCall；构造最小 round 结果并断言到完整类型。 */
-function round(toolNames: { name: string; args?: Record<string, unknown> }[]): OnAfterCommitInput["result"] {
+function round(
+  toolNames: { name: string; args?: Record<string, unknown> }[],
+): OnAfterCommitInput["result"] {
   return {
     toolExecutions: toolNames.map(t => ({ toolCall: { name: t.name, arguments: t.args ?? {} } })),
   } as unknown as OnAfterCommitInput["result"];
