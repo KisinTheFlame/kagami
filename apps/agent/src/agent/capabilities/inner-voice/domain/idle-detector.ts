@@ -46,6 +46,12 @@ export const ENGAGED_TOP_LEVEL_TOOL_NAMES: ReadonlySet<string> = new Set(["searc
  * 投入型 invoke 子工具的显式枚举：browser / terminal / hn / ithome / amap 的全部子工具，
  * 外加 add_todo 与 QQ 的 send_resource。QQ 的 open_conversation / send_message /
  * view_forward 等聊天动作刻意不在列。
+ *
+ * ⚠️ 维护注意：这份清单与真正的工具注册表脱耦、靠人肉同步。新增投入型子工具、或某 App
+ * 改子工具名时，必须回填这里，否则摸鱼判定会把它当中性调用——小镜刚认真干完活反被判成
+ * 摸鱼、误触发内心独白。更本质的做法是给 Tool 抽象加「是否投入型」的声明维度（现
+ * ToolKind 只有 business/control），让工具自报、classifyRootToolCall 查注册表而非查字面量
+ * 集合；那属需下沉到 agent-runtime 的抽象补齐，见 issue #288（技术债，与本功能解耦）。
  */
 export const ENGAGED_INVOKE_SUBTOOL_NAMES: ReadonlySet<string> = new Set([
   // browser

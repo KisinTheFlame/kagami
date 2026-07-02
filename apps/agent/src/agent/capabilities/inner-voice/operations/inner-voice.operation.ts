@@ -1,5 +1,6 @@
 import type { LlmClient, LlmMessage, Tool } from "@kagami/llm-client";
 import type { Operation, ToolExecutor } from "@kagami/agent-runtime";
+import { truncateWithEllipsis } from "@kagami/shared/utils";
 import { EMIT_INNER_THOUGHT_TOOL_NAME } from "../tools/emit-inner-thought.tool.js";
 
 /** 念头文本的码点上限：超长通常意味着跑题成小作文，按码点截断绝不劈 UTF-16 代理对。 */
@@ -69,17 +70,14 @@ export class InnerVoiceOperation implements Operation<InnerVoiceInput, InnerVoic
       toolCall.arguments,
       {},
     );
-    const thought = truncateByCodePoints(executionResult.content.trim(), MAX_THOUGHT_CODE_POINTS);
+    // 复用 @kagami/shared 的码点截断：它先剥落单代理项再按码点切，绝不产出 lone
+    // surrogate（教训见 issue #187）。ellipsis 传 "" —— 念头是自言自语，截断不加省略号。
+    const thought = truncateWithEllipsis(
+      executionResult.content.trim(),
+      MAX_THOUGHT_CODE_POINTS,
+      "",
+    );
 
     return { thought: thought.length > 0 ? thought : null };
   }
-}
-
-/** 按 Unicode 码点截断，绝不把代理对劈成 lone surrogate（教训见 issue #187）。 */
-export function truncateByCodePoints(value: string, maxCodePoints: number): string {
-  const codePoints = [...value];
-  if (codePoints.length <= maxCodePoints) {
-    return value;
-  }
-  return codePoints.slice(0, maxCodePoints).join("");
 }

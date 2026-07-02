@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ToolCatalog } from "@kagami/agent-runtime";
 import type { LlmClient } from "@kagami/llm-client";
-import {
-  InnerVoiceOperation,
-  truncateByCodePoints,
-} from "../../src/agent/capabilities/inner-voice/operations/inner-voice.operation.js";
+import { InnerVoiceOperation } from "../../src/agent/capabilities/inner-voice/operations/inner-voice.operation.js";
 import {
   EmitInnerThoughtTool,
   EMIT_INNER_THOUGHT_TOOL_NAME,
@@ -75,19 +72,14 @@ describe("InnerVoiceOperation", () => {
     const result = await operation.execute({ systemPrompt: "p", messages: [] });
     expect(result.thought).toHaveLength(120);
   });
-});
 
-describe("truncateByCodePoints", () => {
-  it("不劈 UTF-16 代理对（issue #187 教训）", () => {
-    const value = "🀄".repeat(130); // 每个是一个代理对（2 个 UTF-16 code unit）
-    const truncated = truncateByCodePoints(value, 120);
-    expect([...truncated]).toHaveLength(120);
-    // 尾部不是 lone surrogate。
-    const lastCodeUnit = truncated.charCodeAt(truncated.length - 1);
+  it("超长 emoji 念头按码点截断且不劈代理对（issue #187 教训）", async () => {
+    // 每个麻将牌是一个代理对（2 个 UTF-16 码元）；复用的 truncateWithEllipsis 按码点切。
+    const { operation } = createOperation(assistantEmit("🀄".repeat(130)));
+    const result = await operation.execute({ systemPrompt: "p", messages: [] });
+    expect([...(result.thought ?? "")]).toHaveLength(120);
+    const last = result.thought ?? "";
+    const lastCodeUnit = last.charCodeAt(last.length - 1);
     expect(lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff).toBe(false);
-  });
-
-  it("不超限时原样返回", () => {
-    expect(truncateByCodePoints("短", 120)).toBe("短");
   });
 });

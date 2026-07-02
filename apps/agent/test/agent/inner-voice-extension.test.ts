@@ -56,10 +56,17 @@ function createHarness(input: {
   return { extension, enqueue, execute, context };
 }
 
-function waitRound(): {
-  toolExecutions: readonly { toolCall: { name: string; arguments: Record<string, unknown> } }[];
-} {
-  return { toolExecutions: [{ toolCall: { name: "wait", arguments: {} } }] };
+type OnAfterCommitInput = Parameters<InnerVoiceExtension["onAfterCommit"]>[0];
+
+/** onAfterCommit 只读 result.toolExecutions[].toolCall；构造最小 round 结果并断言到完整类型。 */
+function round(toolNames: { name: string; args?: Record<string, unknown> }[]): OnAfterCommitInput["result"] {
+  return {
+    toolExecutions: toolNames.map(t => ({ toolCall: { name: t.name, arguments: t.args ?? {} } })),
+  } as unknown as OnAfterCommitInput["result"];
+}
+
+function waitRound(): OnAfterCommitInput["result"] {
+  return round([{ name: "wait" }]);
 }
 
 describe("InnerVoiceExtension", () => {
@@ -104,9 +111,7 @@ describe("InnerVoiceExtension", () => {
     });
     await extension.onAfterCommit({
       context,
-      result: {
-        toolExecutions: [{ toolCall: { name: "invoke", arguments: { tool: "glance_hn" } } }],
-      },
+      result: round([{ name: "invoke", args: { tool: "glance_hn" } }]),
     });
     expect(execute).not.toHaveBeenCalled();
   });

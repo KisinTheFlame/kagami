@@ -1,4 +1,4 @@
-import type { LoopAgentExtension } from "@kagami/agent-runtime";
+import type { LoopAgentExtension, ReActRoundResult } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { classifyRootToolCall } from "../../../capabilities/inner-voice/domain/idle-detector.js";
 import type { InnerVoiceIdleTracker } from "../../../capabilities/inner-voice/domain/idle-tracker.js";
@@ -58,9 +58,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
 
   public async onAfterCommit(input: {
     context: RootLoopExtensionContext;
-    result: {
-      toolExecutions: readonly { toolCall: { name: string; arguments: Record<string, unknown> } }[];
-    };
+    result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>;
   }): Promise<void> {
     try {
       const committedAt = this.now();
