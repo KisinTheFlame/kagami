@@ -9,7 +9,13 @@ import type {
 import { getCardDef, costOf, effectsOf } from "../cards/cards.js";
 import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
-import { addPower, computeAttackDamage, decayDebuffs, getPower } from "../powers/powers.js";
+import {
+  addPower,
+  computeAttackDamage,
+  decayDebuffs,
+  getPower,
+  removePower,
+} from "../powers/powers.js";
 
 // === 战斗状态机 ===
 //
@@ -301,6 +307,11 @@ function dealDamageToEnemy(
     addPower(enemy.powers, "curl_up", -getPower(enemy.powers, "curl_up"));
     enemy.curlUpConsumed = true;
   }
+  // 反甲（守卫者防御姿态）：每次被攻击对玩家反弹固定伤害，无视玩家格挡（直接掉血）。
+  const sharpHide = getPower(enemy.powers, "sharp_hide");
+  if (sharpHide > 0) {
+    state.hp = Math.max(0, state.hp - sharpHide);
+  }
   const dmg = computeAttackDamage(base, attackerPowers, enemy.powers);
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
@@ -324,10 +335,11 @@ function triggerModeShift(enemy: EnemyState): void {
   enemy.block += GUARDIAN_SHIFT_BLOCK;
   enemy.modeShiftAccum = 0;
   enemy.modeShiftThreshold = (enemy.modeShiftThreshold ?? 0) + GUARDIAN_MODE_SHIFT_STEP;
-  enemy.rotationIndex = 0;
-  // 立即重新 telegraph 到防御姿态出招（守卫者防御列表首项）。
+  // 立即重新 telegraph 到防御链首招（防御形态）；rotationIndex=1 表示该首招已消费，
+  // 下次 selectNextMove 从防御链第 2 招（滚压）续，见 selectNextMove 的 Boss 分支。
   const def = getEnemyDef(enemy.defId);
   enemy.currentMove = def.stanceMoves!.defensive[0]!;
+  enemy.rotationIndex = 1;
 }
 
 function dealDamageToPlayer(
@@ -397,6 +409,11 @@ export function playCard(
   state.log.push(`你打出「${def.name}」。`);
 
   resolveCombatIfEnded(state);
+  // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
+  if (state.combat !== null && state.hp <= 0) {
+    state.screen = "gameover";
+    state.log.push("你倒下了。");
+  }
   return { ok: true };
 }
 
@@ -432,11 +449,7 @@ export function endTurn(state: GameState): void {
       return;
     }
     decayDebuffs(enemy.powers);
-    // 守卫者防御姿态出招后翻回进攻。
-    if (enemy.stance === "defensive") {
-      enemy.stance = "offensive";
-      enemy.rotationIndex = 0;
-    }
+    // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
     selectNextMove(state, i);
   }
 
@@ -466,11 +479,20 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
 
   // Boss：按姿态循环出招。
   if (def.stanceMoves) {
+    // 防御三招链走完（rotationIndex 越过防御列表）→ 回进攻姿态：清反甲、从旋风续接，
+    // 下一轮进攻再从蓄能开始（复刻 StS 守卫者 Twin Slam 后回到 Whirlwind）。
+    if (enemy.stance === "defensive" && enemy.rotationIndex >= def.stanceMoves.defensive.length) {
+      enemy.stance = "offensive";
+      removePower(enemy.powers, "sharp_hide");
+      const whirlwindIdx = def.stanceMoves.offensive.length - 1;
+      enemy.currentMove = def.stanceMoves.offensive[whirlwindIdx]!;
+      enemy.rotationIndex = whirlwindIdx + 1;
+      return;
+    }
     const list =
       enemy.stance === "defensive" ? def.stanceMoves.defensive : def.stanceMoves.offensive;
-    const move = list[enemy.rotationIndex % list.length]!;
+    enemy.currentMove = list[enemy.rotationIndex % list.length]!;
     enemy.rotationIndex += 1;
-    enemy.currentMove = move;
     return;
   }
 
