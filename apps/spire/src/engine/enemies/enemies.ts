@@ -406,6 +406,60 @@ const ENEMY_LIST: EnemyDef[] = [
     // Boss 出招走 stanceMoves 循环，不用 intentRule；留空满足类型。
     intentRule: { scripted: [], weighted: [] },
   },
+
+  // —— Boss：六火之灵（激活锁伤 → 分割6连 → 7 段仪轨循环）——
+  {
+    id: "hexaghost",
+    name: "六火之灵",
+    hpMin: 250,
+    hpMax: 250,
+    moves: [
+      {
+        id: "activate",
+        name: "激活",
+        effects: [{ kind: "store_hp_scaled_damage", divisor: 12, add: 1 }],
+        intent: "buff",
+      },
+      {
+        id: "divider",
+        name: "分割",
+        effects: [{ kind: "deal_damage_rolled", times: 6 }],
+        intent: "attack",
+      },
+      {
+        id: "sear",
+        name: "灼烧",
+        effects: [
+          { kind: "deal_damage", amount: 6 },
+          { kind: "add_card", cardId: "burn", pile: "discard", count: 1 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "tackle",
+        name: "冲撞",
+        effects: [{ kind: "deal_damage_multi", amount: 5, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "inflame",
+        name: "燃焰",
+        effects: [
+          { kind: "gain_block", amount: 12 },
+          { kind: "apply_power", power: "strength", amount: 2, on: "self" },
+        ],
+        intent: "buff",
+      },
+      {
+        id: "inferno",
+        name: "地狱火",
+        effects: [{ kind: "deal_damage_multi", amount: 2, times: 6 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 hexaghost 专属分支处理，intentRule 留空。
+    intentRule: { scripted: [], weighted: [] },
+  },
 ];
 
 const ENEMY_MAP: ReadonlyMap<string, EnemyDef> = new Map(
@@ -449,6 +503,7 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   lagavulin: { id: "lagavulin", enemies: ["lagavulin"], isBoss: false },
   three_sentries: { id: "three_sentries", enemies: ["sentry", "sentry", "sentry"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
+  hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
 };
 
 export function getEncounterDef(id: string): EncounterDef {
@@ -517,4 +572,15 @@ const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
 /** 精英节点：从精英池挑一个 encounter id。 */
 export function pickEliteEncounter(rng: RngState): string {
   return weightedPick(rng, ELITE_ENCOUNTER_POOL);
+}
+
+// Act1 Boss 池（等权重随机）。史莱姆王待分裂机制里程碑加入。
+const BOSS_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
+  { id: "guardian", weight: 1 },
+  { id: "hexaghost", weight: 1 },
+];
+
+/** Boss 节点：随机挑一个 Boss encounter id。 */
+export function pickBossEncounter(rng: RngState): string {
+  return weightedPick(rng, BOSS_ENCOUNTER_POOL);
 }
