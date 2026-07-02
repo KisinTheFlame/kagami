@@ -439,6 +439,15 @@ export function playCard(
   combat.energy -= cost;
   combat.hand.splice(handIndex, 1);
   applyEffects(state, effectsOf(def, instance.upgraded), { side: "player" }, resolvedTarget);
+  // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
+  if (def.type === "skill") {
+    for (const enemy of combat.enemies) {
+      const enrage = getPower(enemy.powers, "enrage");
+      if (enemy.hp > 0 && enrage > 0) {
+        addPower(enemy.powers, "strength", enrage);
+      }
+    }
+  }
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
   } else if (def.exhausts) {
