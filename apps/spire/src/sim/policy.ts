@@ -1,6 +1,7 @@
 import type { GameState } from "../engine/types.js";
 import type { GameAction } from "../engine/engine.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
+import { getEventDef } from "../engine/events/events.js";
 import { nextInt } from "../engine/rng.js";
 import { availableNext } from "../engine/map/map.js";
 import type { RngState } from "../engine/types.js";
@@ -32,6 +33,13 @@ export function legalActions(state: GameState): GameAction[] {
   }
   if (state.screen === "map") {
     const count = availableNext(state.map, state.currentNodeId).length;
+    return Array.from({ length: Math.max(1, count) }, (_, optionIndex) => ({
+      type: "choose" as const,
+      optionIndex,
+    }));
+  }
+  if (state.screen === "event" && state.event) {
+    const count = getEventDef(state.event.id).choices.length;
     return Array.from({ length: Math.max(1, count) }, (_, optionIndex) => ({
       type: "choose" as const,
       optionIndex,

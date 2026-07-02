@@ -12,6 +12,7 @@ import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
 import { getRelicDef } from "../engine/relics/relics.js";
 import { getPotionDef } from "../engine/potions/potions.js";
+import { getEventDef } from "../engine/events/events.js";
 import { currentOptions } from "../engine/run/run.js";
 
 // === 结构化屏幕视图（ScreenView）===
@@ -45,6 +46,7 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
       const def = getPotionDef(id);
       return [{ slot, name: def.name, description: def.description, targeted: def.targeted }];
     }),
+    event: state.event ? { description: getEventDef(state.event.id).description } : null,
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,

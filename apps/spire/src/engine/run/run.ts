@@ -3,22 +3,24 @@ import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
+import { EVENT_POOL, getEventDef } from "../events/events.js";
+import type { EventOutcome } from "../events/events.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
 import { generateMap, availableNext } from "../map/map.js";
 
 // === 爬塔 / 分支地图 / 奖励 / 休息 / 宝箱 ===
 //
-// 分支地图（StS 节点图）：在 "map" 屏 choose 一个上层节点 → 进入该节点（战斗/篝火/宝箱/Boss）
-// → 结算后回到 "map" 屏继续选路，直到 Boss。节点类型内容随里程碑启用（当前 combat/rest/treasure/boss）。
+// 分支地图（StS 节点图）：在 "map" 屏 choose 一个上层节点 → 进入该节点（战斗/精英/未知/篝火/宝箱/Boss）
+// → 结算后回到 "map" 屏继续选路，直到 Boss。节点类型内容随里程碑启用（商店待后续）。
 
 const REST_HEAL_RATIO = 0.3;
 const REWARD_CARD_COUNT = 3;
 const TREASURE_GOLD_MIN = 25;
 const TREASURE_GOLD_MAX = 35;
 
-/** 本里程碑启用的地图节点类型（事件/商店随内容里程碑加入）。 */
-const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "elite", "rest", "treasure"];
+/** 本里程碑启用的地图节点类型（商店随后续里程碑加入）。 */
+const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "elite", "event", "rest", "treasure"];
 
 const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   combat: "战斗",
@@ -57,6 +59,13 @@ function resolveNode(state: GameState, node: MapNode): void {
       startCombat(state, pickBossEncounter(state.rng));
       return;
     }
+    case "event": {
+      const eventId = EVENT_POOL[nextInt(state.rng, EVENT_POOL.length)]!;
+      state.event = { id: eventId };
+      state.screen = "event";
+      state.log.push("你踏进一处未知的房间。");
+      return;
+    }
     case "rest": {
       state.screen = "rest";
       state.log.push("你来到一处篝火。");
@@ -68,7 +77,7 @@ function resolveNode(state: GameState, node: MapNode): void {
       return;
     }
     default: {
-      // event / shop 尚未启用（未来里程碑）；保守回地图。
+      // shop 尚未启用（未来里程碑）；保守回地图。
       backToMap(state);
     }
   }
@@ -158,7 +167,52 @@ export function currentOptions(state: GameState): string[] {
     }
     return options;
   }
+  if (state.screen === "event" && state.event) {
+    return getEventDef(state.event.id).choices.map(choice => choice.label);
+  }
   return [];
+}
+
+/** 结算一个事件结果（原地改 state）。金币/生命/牌组/遗物/药水复用既有系统。 */
+function applyEventOutcome(state: GameState, outcome: EventOutcome): void {
+  switch (outcome.kind) {
+    case "gain_gold":
+      state.gold += outcome.amount;
+      break;
+    case "lose_gold":
+      state.gold = Math.max(0, state.gold - outcome.amount);
+      break;
+    case "heal":
+      state.hp = Math.min(state.maxHp, state.hp + outcome.amount);
+      break;
+    case "lose_hp":
+      // 事件不会致死：至少留 1 点生命（复刻 StS 事件不杀人）。
+      state.hp = Math.max(1, state.hp - outcome.amount);
+      break;
+    case "gain_max_hp":
+      state.maxHp += outcome.amount;
+      state.hp += outcome.amount;
+      break;
+    case "add_card":
+      state.deck.push({ uid: state.nextUid++, defId: outcome.cardId, upgraded: false });
+      break;
+    case "gain_relic":
+      grantTreasure(state);
+      break;
+    case "gain_potion": {
+      const slot = state.potions.indexOf(null);
+      if (slot >= 0) {
+        state.potions[slot] = POTION_DROP_POOL[nextInt(state.rng, POTION_DROP_POOL.length)]!;
+      }
+      break;
+    }
+    case "nothing":
+      break;
+    default: {
+      const _exhaustive: never = outcome;
+      void _exhaustive;
+    }
+  }
 }
 
 function upgradableCards(state: GameState): GameState["deck"] {
@@ -190,6 +244,21 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
       return { ok: false, reason: `选项 ${optionIndex} 无效。` };
     }
     state.reward = null;
+    backToMap(state);
+    return { ok: true };
+  }
+
+  if (state.screen === "event" && state.event) {
+    const event = getEventDef(state.event.id);
+    const choice = event.choices[optionIndex];
+    if (!choice) {
+      return { ok: false, reason: `选项 ${optionIndex} 无效。` };
+    }
+    for (const outcome of choice.outcomes) {
+      applyEventOutcome(state, outcome);
+    }
+    state.log.push(choice.resultText);
+    state.event = null;
     backToMap(state);
     return { ok: true };
   }

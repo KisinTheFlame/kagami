@@ -77,6 +77,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
     isCombat: screen.screen === "combat",
     isReward: screen.screen === "reward",
     isRest: screen.screen === "rest",
+    isEvent: screen.screen === "event",
+    eventDescription: screen.event?.description ?? "",
     isGameover: screen.screen === "gameover",
     isVictory: screen.screen === "victory",
     hp: screen.player.hp,
