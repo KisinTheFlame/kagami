@@ -40,6 +40,8 @@ export type Effect =
   // 敌人用：按玩家当前生命锁定一个每击伤害存入 rolledDamage（六火之灵激活：floor(hp/divisor)+add）。
   | { kind: "store_hp_scaled_damage"; divisor: number; add: number }
   | { kind: "gain_block"; amount: number }
+  // 敌人用：给一名随机存活友军加格挡（护盾地精保护）。
+  | { kind: "gain_block_ally"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
   | { kind: "draw"; amount: number }
   | { kind: "gain_energy"; amount: number }

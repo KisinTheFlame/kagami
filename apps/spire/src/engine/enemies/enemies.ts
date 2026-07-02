@@ -277,6 +277,95 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 地精帮（狂暴/鬼祟/肥胖/护盾/巫师）——
+  {
+    id: "mad_gremlin",
+    name: "狂暴地精",
+    hpMin: 20,
+    hpMax: 24,
+    moves: [
+      {
+        id: "scratch",
+        name: "抓挠",
+        effects: [{ kind: "deal_damage", amount: 4 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "scratch", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "sneaky_gremlin",
+    name: "鬼祟地精",
+    hpMin: 10,
+    hpMax: 14,
+    moves: [
+      {
+        id: "puncture",
+        name: "穿刺",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "puncture", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "fat_gremlin",
+    name: "肥胖地精",
+    hpMin: 13,
+    hpMax: 17,
+    moves: [
+      {
+        id: "smash",
+        name: "猛击",
+        effects: [
+          { kind: "deal_damage", amount: 4 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "smash", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "shield_gremlin",
+    name: "护盾地精",
+    hpMin: 12,
+    hpMax: 15,
+    moves: [
+      {
+        id: "protect",
+        name: "保护",
+        effects: [{ kind: "gain_block_ally", amount: 7 }],
+        intent: "defend",
+      },
+      {
+        id: "shield_bash",
+        name: "盾击",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 shield_gremlin 专属分支处理（有友军则保护、否则攻击）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+  {
+    id: "gremlin_wizard",
+    name: "地精巫师",
+    hpMin: 21,
+    hpMax: 25,
+    moves: [
+      { id: "charging", name: "蓄力", effects: [], intent: "unknown" },
+      {
+        id: "ultimate_blast",
+        name: "终极爆发",
+        effects: [{ kind: "deal_damage", amount: 25 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 gremlin_wizard 专属分支处理（蓄力3回合→大招→循环）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -642,6 +731,12 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     enemies: ["fungi_beast", "fungi_beast"],
     isBoss: false,
   },
+  // 地精帮：固定代表性 4 只（含护盾/巫师/狂暴，展示各机制；StS 为随机组成）。
+  gremlin_gang: {
+    id: "gremlin_gang",
+    enemies: ["mad_gremlin", "sneaky_gremlin", "shield_gremlin", "gremlin_wizard"],
+    isBoss: false,
+  },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -678,6 +773,7 @@ const STRONG_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "three_louse", weight: 2 },
   { id: "large_slime", weight: 2 }, // 选中后 50/50 展开为 酸液大 / 尖刺大
   { id: "two_fungi_beasts", weight: 2 },
+  { id: "gremlin_gang", weight: 1 },
   { id: "lots_of_slimes", weight: 1 },
 ];
 

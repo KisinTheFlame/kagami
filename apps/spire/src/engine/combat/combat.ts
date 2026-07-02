@@ -89,6 +89,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
     powers.push({ id: "spore_cloud", amount: 2 });
   }
+  if (defId === "mad_gremlin") {
+    // 狂暴地精开局自带狂怒 1（每次受攻击伤害 +1 力量）。
+    powers.push({ id: "angry", amount: 1 });
+  }
   const hp = hpOverride ?? nextRange(state.rng, def.hpMin, def.hpMax);
   return {
     defId,
@@ -284,6 +288,19 @@ function applyEffect(
       }
       break;
     }
+    case "gain_block_ally": {
+      // 护盾地精：给一名随机存活友军（不含自己）加格挡。
+      if (actor.side === "enemy") {
+        const allies = combat.enemies
+          .map((enemy, index) => ({ enemy, index }))
+          .filter(entry => entry.enemy.hp > 0 && entry.index !== actor.index);
+        if (allies.length > 0) {
+          const pick = allies[nextInt(state.rng, allies.length)]!;
+          pick.enemy.block += effect.amount;
+        }
+      }
+      break;
+    }
     case "apply_power": {
       applyPowerEffect(state, effect.power, effect.amount, effect.on, actor, targetEnemyIndex);
       break;
@@ -428,6 +445,11 @@ function dealDamageToEnemy(
   if (enemy.asleep && afterBlock > 0 && enemy.hp > 0) {
     enemy.asleep = false;
     removePower(enemy.powers, "metallicize");
+  }
+  // 狂怒（狂暴地精）：每次受到穿透格挡的攻击伤害，获得 = 层数的力量。
+  const angry = getPower(enemy.powers, "angry");
+  if (angry > 0 && afterBlock > 0 && enemy.hp > 0) {
+    addPower(enemy.powers, "strength", angry);
   }
   // 半血分裂：降到 ≤maxHp/2 且未分裂过 → 下一动作强制变分裂。
   const def = getEnemyDef(enemy.defId);
@@ -659,6 +681,25 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     return;
   }
   const def = getEnemyDef(enemy.defId);
+
+  // 护盾地精：场上还有其他存活友军时保护友军，只剩自己时改攻击。
+  if (enemy.defId === "shield_gremlin") {
+    enemy.currentMove = livingEnemies(combat).length > 1 ? "protect" : "shield_bash";
+    return;
+  }
+
+  // 地精巫师：蓄力 3 回合 → 终极爆发 → 归零重新蓄力（4 段循环）。
+  if (enemy.defId === "gremlin_wizard") {
+    const cycle = ["charging", "charging", "charging", "ultimate_blast"] as const;
+    if (enemy.moveHistory.length === 0) {
+      enemy.rotationIndex = 0;
+      enemy.currentMove = cycle[0];
+      return;
+    }
+    enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
+    enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
 
   // 史莱姆王：黏液喷射 → 蓄力 → 猛砸 固定 3 段循环（半血分裂另由 split 覆盖）。
   if (enemy.defId === "slime_boss") {
