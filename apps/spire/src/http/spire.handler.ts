@@ -24,6 +24,11 @@ const ActionSchema = z.discriminatedUnion("type", [
     targetIndex: z.number().int().min(0).nullish(),
   }),
   z.object({ type: z.literal("end_turn") }),
+  z.object({
+    type: z.literal("use_potion"),
+    slotIndex: z.number().int().min(0),
+    targetIndex: z.number().int().min(0).nullish(),
+  }),
   z.object({ type: z.literal("choose"), optionIndex: z.number().int().min(0) }),
 ]);
 

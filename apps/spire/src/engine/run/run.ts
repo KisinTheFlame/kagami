@@ -2,6 +2,7 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
+import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
 import { generateMap, availableNext } from "../map/map.js";
@@ -97,12 +98,30 @@ export function backToMap(state: GameState): void {
   state.screen = "map";
 }
 
-/** 非 Boss 战斗胜利后生成奖励：精英战先发一个遗物，再给三选一卡奖励。 */
+/** 战斗后按概率掉药水（基础 40%，未掉逐场 +10、掉了 -10；槽满则不掉不调整）。 */
+function rollPotionDrop(state: GameState): void {
+  const emptySlot = state.potions.indexOf(null);
+  if (emptySlot < 0) {
+    return; // 槽满，不掉。
+  }
+  const chance = Math.max(0, Math.min(100, BASE_POTION_DROP_CHANCE + state.potionDropBonus));
+  if (nextInt(state.rng, 100) < chance) {
+    const id = POTION_DROP_POOL[nextInt(state.rng, POTION_DROP_POOL.length)]!;
+    state.potions[emptySlot] = id;
+    state.potionDropBonus -= 10;
+    state.log.push(`你获得了药水「${getPotionDef(id).name}」。`);
+  } else {
+    state.potionDropBonus += 10;
+  }
+}
+
+/** 非 Boss 战斗胜利后生成奖励：精英战先发一个遗物，掷药水掉落，再给三选一卡奖励。 */
 export function generateReward(state: GameState): void {
   if (state.pendingRelicReward) {
     grantRandomRelic(state);
     state.pendingRelicReward = false;
   }
+  rollPotionDrop(state);
   const pool = [...REWARD_CARD_POOL];
   const choices: { defId: string; upgraded: boolean }[] = [];
   for (let i = 0; i < REWARD_CARD_COUNT && pool.length > 0; i += 1) {

@@ -46,6 +46,12 @@ export type SpireCombatView = {
 };
 
 export type SpireRelicView = { name: string; description: string };
+export type SpirePotionView = {
+  slot: number;
+  name: string;
+  description: string;
+  targeted: boolean;
+};
 
 export type SpireScreen = {
   version: number;
@@ -53,6 +59,7 @@ export type SpireScreen = {
   player: { hp: number; maxHp: number; gold: number };
   deckCount: number;
   relics: SpireRelicView[];
+  potions: SpirePotionView[];
   combat: SpireCombatView | null;
   options: string[];
   log: string[];
@@ -61,6 +68,7 @@ export type SpireScreen = {
 export type SpireAction =
   | { type: "play_card"; handIndex: number; targetIndex?: number | null }
   | { type: "end_turn" }
+  | { type: "use_potion"; slotIndex: number; targetIndex?: number | null }
   | { type: "choose"; optionIndex: number };
 
 /** 参考查询结果（与服务端 ReferenceResult 同构）。 */

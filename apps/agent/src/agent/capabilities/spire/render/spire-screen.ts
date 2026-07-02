@@ -84,6 +84,13 @@ export function renderSpireScreen(screen: SpireScreen): string {
     deckCount: screen.deckCount,
     relics: screen.relics,
     hasRelics: screen.relics.length > 0,
+    potions: screen.potions.map(potion => ({
+      slot: potion.slot,
+      name: potion.name,
+      description: potion.description,
+      targeted: potion.targeted,
+    })),
+    hasPotions: screen.potions.length > 0,
     combat: combat
       ? {
           turn: combat.turn,
