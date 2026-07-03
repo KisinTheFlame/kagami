@@ -1,4 +1,4 @@
-import type { CardType, Effect, GameState, RelicState } from "../types.js";
+import type { CardType, CharacterId, Effect, GameState, RelicState } from "../types.js";
 import { addPower } from "../powers/powers.js";
 
 // === 遗物系统 ===
@@ -19,17 +19,15 @@ import { addPower } from "../powers/powers.js";
 
 export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss";
 
+/** emit：以玩家为行动者发射一个战斗 Effect（发伤 / AoE / 加牌走 add_card）。 */
+type Emit = (effect: Effect) => void;
+
 export type RelicHooks = {
-  onCombatStart?: (state: GameState, self: RelicState) => void;
-  onCombatEnd?: (state: GameState, self: RelicState) => void;
-  onTurnStart?: (state: GameState, self: RelicState) => void;
-  onTurnEnd?: (state: GameState, self: RelicState) => void;
-  onCardPlayed?: (
-    state: GameState,
-    self: RelicState,
-    cardType: CardType,
-    emit: (effect: Effect) => void,
-  ) => void;
+  onCombatStart?: (state: GameState, self: RelicState, emit: Emit) => void;
+  onCombatEnd?: (state: GameState, self: RelicState, emit: Emit) => void;
+  onTurnStart?: (state: GameState, self: RelicState, emit: Emit) => void;
+  onTurnEnd?: (state: GameState, self: RelicState, emit: Emit) => void;
+  onCardPlayed?: (state: GameState, self: RelicState, cardType: CardType, emit: Emit) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -47,6 +45,8 @@ export type RelicDef = {
   name: string;
   rarity: RelicRarity;
   description: string;
+  /** 角色专属：仅该角色的奖励 / 商店池里出现（省略=通用，任何角色可得）。 */
+  characterLock?: CharacterId;
   hooks: RelicHooks;
 };
 
@@ -304,6 +304,186 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+
+  // —— 补全批次：通用遗物 ——
+  {
+    id: "nunchaku",
+    name: "双节棍",
+    rarity: "common",
+    description: "每打出 10 张攻击牌，获得 1 点能量。",
+    hooks: {
+      onCardPlayed: (state, self, cardType) => {
+        if (state.combat && cardType === "attack" && tickEvery(self, 10)) {
+          state.combat.energy += 1;
+        }
+      },
+    },
+  },
+  {
+    id: "mercury_hourglass",
+    name: "水银沙漏",
+    rarity: "uncommon",
+    description: "每个回合开始时，对所有敌人造成 3 点伤害。",
+    hooks: {
+      onTurnStart: (state, _self, emit) => {
+        if (state.combat) {
+          emit({ kind: "deal_damage_all", amount: 3 });
+        }
+      },
+    },
+  },
+  {
+    id: "pantograph",
+    name: "缩放仪",
+    rarity: "uncommon",
+    description: "进入 Boss 战时，回复 25 点生命。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat?.isBoss) {
+          healPlayer(state, 25);
+        }
+      },
+    },
+  },
+  {
+    id: "captains_wheel",
+    name: "船长之轮",
+    rarity: "rare",
+    description: "第 3 个回合开始时，获得 18 点格挡。",
+    hooks: {
+      onTurnStart: (state, self) => {
+        self.counter += 1;
+        if (state.combat && self.counter === 3) {
+          state.combat.playerBlock += 18;
+        }
+      },
+    },
+  },
+  {
+    id: "stone_calendar",
+    name: "石历",
+    rarity: "rare",
+    description: "第 7 个回合结束时，对所有敌人造成 52 点伤害。",
+    hooks: {
+      onTurnEnd: (state, self, emit) => {
+        self.counter += 1;
+        if (state.combat && self.counter === 7) {
+          emit({ kind: "deal_damage_all", amount: 52 });
+        }
+      },
+    },
+  },
+  {
+    id: "thread_and_needle",
+    name: "织补针线",
+    rarity: "rare",
+    description: "每场战斗开始时，获得 4 层镀甲（每回合结束获得 4 点格挡）。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          addPower(state.combat.playerPowers, "plated_armor", 4);
+        }
+      },
+    },
+  },
+
+  // —— 补全批次：角色专属遗物 ——
+  {
+    id: "red_mask",
+    name: "赤红面具",
+    rarity: "common",
+    characterLock: "silent",
+    description: "每场战斗开始时，令所有敌人获得 1 层虚弱。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          for (const enemy of state.combat.enemies) {
+            if (enemy.hp > 0) {
+              addPower(enemy.powers, "weak", 1);
+            }
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "ninja_scroll",
+    name: "忍者卷轴",
+    rarity: "common",
+    characterLock: "silent",
+    description: "每场战斗开始时，将 3 张飞刀加入手牌。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          for (let i = 0; i < 3; i += 1) {
+            state.combat.hand.push({ uid: state.nextUid++, defId: "shiv", upgraded: false });
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "twisted_funnel",
+    name: "扭曲漏斗",
+    rarity: "uncommon",
+    characterLock: "silent",
+    description: "每场战斗开始时，令所有敌人获得 4 层中毒。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          for (const enemy of state.combat.enemies) {
+            if (enemy.hp > 0) {
+              addPower(enemy.powers, "poison", 4);
+            }
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "data_disk",
+    name: "数据盘",
+    rarity: "common",
+    characterLock: "defect",
+    description: "每场战斗开始时，获得 1 点集中。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          addPower(state.combat.playerPowers, "focus", 1);
+        }
+      },
+    },
+  },
+  {
+    id: "teardrop_locket",
+    name: "泪滴坠饰",
+    rarity: "uncommon",
+    characterLock: "watcher",
+    description: "每场战斗开始时，进入平静姿态。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          state.combat.playerStance = "calm";
+        }
+      },
+    },
+  },
+  {
+    id: "holy_water",
+    name: "圣水",
+    rarity: "rare",
+    characterLock: "watcher",
+    description: "每场战斗开始时，将 3 张奇迹加入手牌。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          for (let i = 0; i < 3; i += 1) {
+            state.combat.hand.push({ uid: state.nextUid++, defId: "miracle", upgraded: false });
+          }
+        }
+      },
+    },
+  },
 ];
 
 const RELIC_MAP: ReadonlyMap<string, RelicDef> = new Map(
@@ -327,13 +507,37 @@ export function hasRelic(state: GameState, id: string): boolean {
 /** 铁甲战士起始遗物。 */
 export const IRONCLAD_STARTER_RELIC = "burning_blood";
 
+// 通用遗物（无 characterLock）按稀有度取 id；角色专属遗物由 relicIdsForCharacter 单独并入。
 function relicIdsOfRarity(...rarities: RelicRarity[]): readonly string[] {
   const set = new Set(rarities);
-  return RELIC_LIST.filter(relic => set.has(relic.rarity)).map(relic => relic.id);
+  return RELIC_LIST.filter(relic => set.has(relic.rarity) && relic.characterLock === undefined).map(
+    relic => relic.id,
+  );
 }
 
-/** 宝箱 / 精英 / 事件掉落的遗物池（common + uncommon）。 */
+/** 某角色专属、且在给定稀有度里的遗物 id。 */
+function relicIdsForCharacter(
+  character: CharacterId,
+  ...rarities: RelicRarity[]
+): readonly string[] {
+  const set = new Set(rarities);
+  return RELIC_LIST.filter(relic => set.has(relic.rarity) && relic.characterLock === character).map(
+    relic => relic.id,
+  );
+}
+
+/** 通用宝箱 / 精英 / 事件掉落的遗物池（common + uncommon，不含角色专属）。 */
 export const REWARD_RELIC_POOL: readonly string[] = relicIdsOfRarity("common", "uncommon");
 
-/** 商店遗物池（含稀有）。 */
+/** 通用商店遗物池（含稀有，不含角色专属）。 */
 export const SHOP_RELIC_POOL: readonly string[] = relicIdsOfRarity("common", "uncommon", "rare");
+
+/** 某角色实际可得的掉落遗物池 = 通用 + 该角色专属（common + uncommon）。 */
+export function rewardRelicPool(character: CharacterId): readonly string[] {
+  return [...REWARD_RELIC_POOL, ...relicIdsForCharacter(character, "common", "uncommon")];
+}
+
+/** 某角色实际可得的商店遗物池 = 通用 + 该角色专属（含稀有）。 */
+export function shopRelicPool(character: CharacterId): readonly string[] {
+  return [...SHOP_RELIC_POOL, ...relicIdsForCharacter(character, "common", "uncommon", "rare")];
+}
