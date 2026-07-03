@@ -29,7 +29,37 @@ export type EventDef = {
   choices: EventChoice[];
 };
 
+// 开局祝福（涅奥）：不进 ? 节点池，只在 newRun 时作为第一个界面出现（复用事件机制）。
+export const NEOW_EVENT_ID = "neow_blessing";
+
 const EVENT_LIST: EventDef[] = [
+  {
+    id: NEOW_EVENT_ID,
+    description:
+      "尖塔脚下，一团柔和的光影缓缓聚成人形，向你伸出手——它说，愿为踏塔者赠上一份临行的祝福。",
+    choices: [
+      {
+        label: "强健体魄（最大生命 +8）",
+        resultText: "一股暖流沉入四肢，你觉得自己比来时更结实了。",
+        outcomes: [{ kind: "gain_max_hp", amount: 8 }],
+      },
+      {
+        label: "满囊金币（+100 金币）",
+        resultText: "沉甸甸的钱袋落进你手心。",
+        outcomes: [{ kind: "gain_gold", amount: 100 }],
+      },
+      {
+        label: "神秘馈赠（获得一件遗物）",
+        resultText: "光影散去，一件古旧的器物留在了你掌中。",
+        outcomes: [{ kind: "gain_relic" }],
+      },
+      {
+        label: "行者补给（一瓶药水 + 回 10 生命）",
+        resultText: "你的行囊里多了一瓶药水，旅途的倦意也消了几分。",
+        outcomes: [{ kind: "gain_potion" }, { kind: "heal", amount: 10 }],
+      },
+    ],
+  },
   {
     id: "cooling_embers",
     description: "半塌的石室中央，一堆灰烬还残着余温，灰里似乎埋着被人匆忙丢下的东西。",
@@ -239,4 +269,7 @@ export function getEventDef(id: string): EventDef {
   return def;
 }
 
-export const EVENT_POOL: readonly string[] = EVENT_LIST.map(event => event.id);
+/** ? 节点事件池（不含开局祝福涅奥）。 */
+export const EVENT_POOL: readonly string[] = EVENT_LIST.filter(
+  event => event.id !== NEOW_EVENT_ID,
+).map(event => event.id);

@@ -8,15 +8,25 @@ import { GreedyPolicy } from "../src/sim/policy.js";
 import type { GameState } from "../src/engine/types.js";
 
 describe("newRun", () => {
-  it("铁甲战士开局：80 血、10 张起始牌、落在地图选路屏", () => {
+  it("铁甲战士开局：80 血、10 张起始牌、先落在涅奥祝福屏", () => {
     const state = newRun({ runId: "t", seed: 123 });
     expect(state.hp).toBe(80);
     expect(state.maxHp).toBe(80);
     expect(state.deck).toHaveLength(10);
-    expect(state.screen).toBe("map");
+    expect(state.screen).toBe("event");
+    expect(state.event?.id).toBe("neow_blessing");
     expect(state.combat).toBeNull();
     expect(state.currentNodeId).toBeNull();
     expect(state.map.startNodeIds.length).toBeGreaterThan(0);
+  });
+
+  it("选完涅奥祝福后进入地图", () => {
+    const state = newRun({ runId: "t", seed: 123 });
+    const before = state.maxHp;
+    applyAction(state, { type: "choose", optionIndex: 0 }); // 最大生命 +8
+    expect(state.screen).toBe("map");
+    expect(state.event).toBeNull();
+    expect(state.maxHp).toBe(before + 8);
   });
 
   it("分支地图：底层入口全是战斗、有 Boss 节点", () => {
