@@ -62,6 +62,10 @@ export type Effect =
   | { kind: "steal_gold"; amount: number }
   // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。
   | { kind: "escape" }
+  // 敌人用：本敌人回复自身生命（带壳寄生虫吸取）。
+  | { kind: "heal_self"; amount: number }
+  // 敌人用：治疗一名受伤的友军（秘法师；无受伤友军则治自己）。
+  | { kind: "heal_ally"; amount: number }
   | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
