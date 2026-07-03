@@ -9,6 +9,9 @@ export type CharacterId = "ironclad";
 
 export type CardType = "attack" | "skill" | "power" | "status";
 
+/** 卡稀有度：奖励按稀有度加权抽取；starter/special 不进普通奖励池。 */
+export type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
+
 /** 状态效果标识。切片集合：被动修正器 + 时机触发机制（见 powers/）。 */
 export type PowerId =
   | "strength" // 力量：攻击伤害 +N（被动，可负、持续）
@@ -56,6 +59,7 @@ export type CardDef = {
   id: string;
   name: string;
   type: CardType;
+  rarity: CardRarity;
   cost: number | null;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
