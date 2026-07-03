@@ -127,7 +127,6 @@ Main modules:
 - `auth/`: OAuth, callback service, secret store, usage cache, usage trend, unified auth HTTP endpoints
 - `llm/`: providers, chat client, embedding, playground, related DAOs
 - `napcat/`: NapCat protocol adapter (gateway transport, inbound normalization, image analysis, persistence) — the gateway instance is owned by the QQ App, just one of the Agent's event sources
-- `metric/`: HTTP reporting client for metric points (`HttpMetricService`, fire-and-forget POST to the standalone `apps/metric` at `/metric/record`); ingestion and metric-chart queries now live in `@kagami/metric`
 - `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
 - `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
 - `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction

@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@kagami/persistence/db/client";
-import type { MetricService } from "../../src/metric/application/metric.service.js";
+import type { MetricClient } from "@kagami/metric-client/client";
 import { buildDataRetentionTasks } from "../../src/scheduler/tasks/data-retention/data-retention-task.factory.js";
 import { RETENTION_TASKS } from "../../src/scheduler/tasks/data-retention/retention-tasks.js";
 
-function makeMetricService(): MetricService {
+function makeMetricClient(): MetricClient {
   return {
     record: vi.fn(async () => {}),
   };
@@ -36,7 +36,7 @@ function makeDelegate(rows: number): FakeDelegate {
 
 describe("buildDataRetentionTasks", () => {
   it("registers exactly one task per retention spec", () => {
-    const metricService = makeMetricService();
+    const metricService = makeMetricClient();
     const db = {} as Database;
     const tasks = buildDataRetentionTasks({ db, metricService });
     expect(tasks).toHaveLength(RETENTION_TASKS.length);
@@ -48,7 +48,7 @@ describe("buildDataRetentionTasks", () => {
   it("each task uses a staggered cron at 00:<offset>", () => {
     const tasks = buildDataRetentionTasks({
       db: {} as Database,
-      metricService: makeMetricService(),
+      metricService: makeMetricClient(),
     });
     for (let i = 0; i < tasks.length; i++) {
       const spec = RETENTION_TASKS[i]!;
@@ -61,7 +61,7 @@ describe("buildDataRetentionTasks", () => {
   });
 
   it("loops in chunks until no more expired rows and emits a metric", async () => {
-    const metricService = makeMetricService();
+    const metricService = makeMetricClient();
     const spec = RETENTION_TASKS[0]!;
     const delegate = makeDelegate(12_000);
 
@@ -98,7 +98,7 @@ describe("buildDataRetentionTasks", () => {
   });
 
   it("aborts the loop when the signal is triggered between chunks", async () => {
-    const metricService = makeMetricService();
+    const metricService = makeMetricClient();
     const spec = RETENTION_TASKS[0]!;
     const delegate = makeDelegate(20_000);
 

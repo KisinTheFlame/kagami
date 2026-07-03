@@ -7,7 +7,7 @@ import {
   type ForegroundInput,
 } from "../../src/agent/runtime/root-agent/foreground-input.js";
 import type { Event } from "../../src/agent/runtime/event/event.js";
-import type { RecordMetricInput } from "../../src/metric/application/metric.service.js";
+import type { RecordMetricInput } from "@kagami/metric-client/client";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 initTestLoggerRuntime();

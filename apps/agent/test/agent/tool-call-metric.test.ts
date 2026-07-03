@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MetricService } from "../../src/metric/application/metric.service.js";
+import type { MetricClient } from "@kagami/metric-client/client";
 import {
   recordToolCallMetric,
   resolveToolMetricName,
 } from "../../src/agent/runtime/tool-call-metric.js";
 
-function createMetricServiceMock(): MetricService {
+function createMetricClientMock(): MetricClient {
   return {
     record: vi.fn().mockResolvedValue(undefined),
   };
@@ -42,7 +42,7 @@ describe("tool-call-metric", () => {
   });
 
   it("records tool call metrics with runtime and normalized tool tags", async () => {
-    const metricService = createMetricServiceMock();
+    const metricService = createMetricClientMock();
 
     await recordToolCallMetric({
       metricService,

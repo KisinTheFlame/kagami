@@ -16,8 +16,7 @@ import {
   isForegroundInputSource,
   type ForegroundInput,
 } from "../foreground-input.js";
-import { NOOP_METRIC_SERVICE } from "../../tool-call-metric.js";
-import type { MetricService } from "../../../../metric/application/metric.service.js";
+import { NOOP_METRIC_CLIENT, type MetricClient } from "@kagami/metric-client/client";
 
 const logger = new AppLogger({ source: "agent.root-session" });
 
@@ -66,7 +65,7 @@ type RootAgentSessionDeps = {
   /** Portal 渲染时枚举已注册 Apps 喂给 reminder 消息；也是 foreground_input drain 的 App 查找入口。 */
   appManager?: AppManager;
   /** 前台输入观测计数（inject / drain_empty）。缺省 NOOP。 */
-  metricService?: MetricService;
+  metricService?: MetricClient;
 };
 
 export class RootAgentSession implements RootAgentSessionController {
@@ -87,12 +86,12 @@ export class RootAgentSession implements RootAgentSessionController {
    */
   private readonly enteredApps = new Set<AppId>();
 
-  private readonly metricService: MetricService;
+  private readonly metricService: MetricClient;
 
   public constructor({ context, appManager, metricService }: RootAgentSessionDeps) {
     this.context = context;
     this.appManager = appManager ?? null;
-    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
+    this.metricService = metricService ?? NOOP_METRIC_CLIENT;
   }
 
   public getCurrentApp(): AppId | undefined {

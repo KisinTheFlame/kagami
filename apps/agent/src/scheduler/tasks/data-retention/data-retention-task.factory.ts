@@ -1,5 +1,5 @@
 import type { Database } from "@kagami/persistence/db/client";
-import type { MetricService } from "../../../metric/application/metric.service.js";
+import type { MetricClient } from "@kagami/metric-client/client";
 import type { ScheduledTask, TaskRunMetadata } from "../../domain/scheduled-task.js";
 import {
   RETENTION_TASKS,
@@ -12,7 +12,7 @@ const DAY_MS = 86_400_000;
 
 type DataRetentionTaskDeps = {
   db: Database;
-  metricService: MetricService;
+  metricService: MetricClient;
   spec: RetentionSpec;
 };
 
@@ -71,7 +71,7 @@ function buildTask({ db, metricService, spec }: DataRetentionTaskDeps): Schedule
 
 export function buildDataRetentionTasks(deps: {
   db: Database;
-  metricService: MetricService;
+  metricService: MetricClient;
 }): ScheduledTask[] {
   return RETENTION_TASKS.map(spec =>
     buildTask({ db: deps.db, metricService: deps.metricService, spec }),

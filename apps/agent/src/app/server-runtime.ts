@@ -47,8 +47,7 @@ import { buildTodoScheduledTasks } from "../agent/capabilities/todo/application/
 import { TodoReminderDraft } from "../agent/apps/todo/todo-reminder-draft.js";
 import { TodoDigestDraft } from "../agent/apps/todo/todo-digest-draft.js";
 import { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
-import type { MetricService } from "../metric/application/metric.service.js";
-import { HttpMetricService } from "../metric/application/metric.impl.service.js";
+import { HttpMetricClient, type MetricClient } from "@kagami/metric-client/client";
 import { buildAgentRuntime } from "./agent-runtime.factory.js";
 
 const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
@@ -66,7 +65,7 @@ export type ServerRuntime = {
   taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
-  metricService: MetricService;
+  metricService: MetricClient;
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
@@ -94,7 +93,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
 
   const logDao = new PrismaLogDao({ database });
   // metric 打点改走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
-  const metricService = new HttpMetricService({
+  const metricService = new HttpMetricClient({
     baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
   });
   initLoggerRuntime({

@@ -10,7 +10,7 @@ import {
   INNER_VOICE_METRIC_TRIGGERED,
 } from "../../src/agent/runtime/root-agent/extensions/inner-voice.extension.js";
 import { InnerVoiceIdleTracker } from "../../src/agent/capabilities/inner-voice/domain/idle-tracker.js";
-import type { MetricService } from "../../src/agent/../metric/application/metric.service.js";
+import type { MetricClient } from "@kagami/metric-client/client";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
 import { createInnerThoughtMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
@@ -50,7 +50,7 @@ function createHarness(input: {
     ? vi.fn().mockRejectedValue(input.operationError)
     : vi.fn().mockResolvedValue({ thought: input.thought });
   const metrics: string[] = [];
-  const metricService: MetricService = {
+  const metricService: MetricClient = {
     record: async ({ metricName }) => {
       metrics.push(metricName);
     },

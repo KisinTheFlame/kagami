@@ -1,10 +1,4 @@
-import type { MetricService } from "../../metric/application/metric.service.js";
-
-export const NOOP_METRIC_SERVICE: MetricService = {
-  async record(): Promise<void> {
-    // no-op
-  },
-};
+import type { MetricClient } from "@kagami/metric-client/client";
 
 export function resolveToolMetricName(input: {
   toolName: string;
@@ -28,7 +22,7 @@ export function resolveToolMetricName(input: {
 }
 
 export function recordToolCallMetric(input: {
-  metricService: MetricService;
+  metricService: MetricClient;
   runtime: "agent";
   toolName: string;
   argumentsValue: Record<string, unknown>;
