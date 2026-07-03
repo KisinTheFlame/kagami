@@ -6,6 +6,7 @@ import type {
   BinaryEnvelopeRouteContract,
   BinaryHttpMethod,
   BinaryRawRouteContract,
+  BinaryRouteHeaders,
   JsonRouteContract,
   JsonRouteParams,
 } from "./contract.js";
@@ -68,8 +69,14 @@ export function registerJsonRoute<
   }
 }
 
-type BinaryEnvelopeExecute<TParams extends z.ZodTypeAny, TOutput extends z.ZodTypeAny> = (args: {
+type BinaryEnvelopeExecute<
+  TParams extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+  THeaders extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+> = (args: {
   params: z.infer<TParams>;
+  /** 声明了 headers 通道时为校验后的入站请求头（`z.infer<contract.headers>`）；否则 undefined。 */
+  headers: BinaryRouteHeaders<THeaders>;
   /** bytesIn 时为未消费的原始上行字节流；否则 undefined。 */
   body: Readable | undefined;
   request: FastifyRequest;
@@ -86,18 +93,24 @@ type BinaryEnvelopeExecute<TParams extends z.ZodTypeAny, TOutput extends z.ZodTy
 export function registerBinaryEnvelopeRoute<
   TParams extends z.ZodTypeAny,
   TOutput extends z.ZodTypeAny,
+  THeaders extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
 >(
   app: FastifyInstance,
-  contract: BinaryEnvelopeRouteContract<TParams, TOutput>,
-  execute: BinaryEnvelopeExecute<TParams, TOutput>,
+  contract: BinaryEnvelopeRouteContract<TParams, TOutput, THeaders>,
+  execute: BinaryEnvelopeExecute<TParams, TOutput, THeaders>,
 ): void {
   const handler = async (request: FastifyRequest, reply: FastifyReply): Promise<unknown> => {
     const params = contract.params.parse(request.params) as z.infer<TParams>;
+    // 声明了 headers 通道时按 schema 校验入站请求头（z.object 默认 strip 未知键，只抽出声明的头）——
+    // 与客户端 createBinaryClient 共享同一份 schema，收口 header 单一事实源。未声明则 undefined。
+    const headers = (
+      contract.headers ? contract.headers.parse(request.headers) : undefined
+    ) as BinaryRouteHeaders<THeaders>;
     // 透传 parser 下 body 即原始流；无 content-type 时 Fastify 跳过 parser，退回 request.raw。
     const body = contract.bytesIn
       ? ((request.body as Readable | undefined) ?? request.raw)
       : undefined;
-    const result = await execute({ params, body, request, reply });
+    const result = await execute({ params, headers, body, request, reply });
     const parsed = contract.output.parse(result) as z.infer<TOutput>;
     return reply.code(contract.statusCode ?? 200).send(parsed);
   };
