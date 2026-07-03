@@ -1,7 +1,10 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
-import type { ConversationMessage } from "./conversation.js";
+import type {
+  NapcatGroupMessageData,
+  NapcatPrivateMessageData,
+} from "../../../napcat/application/napcat-gateway.service.js";
 import {
   renderSupportedMessageSegments,
   type NapcatReceiveMessageSegment,
@@ -76,11 +79,12 @@ export class ChatNotificationDraft implements NotificationDraft {
 }
 
 /**
- * 从一条未读消息现算通知预览 view-model：段渲染（@/图片/表情等转占位文本）→ 折叠
+ * 从一条未读**内容消息**现算通知预览 view-model：段渲染（@/图片/表情等转占位文本）→ 折叠
  * 空白成单行 → 截断。正文渲染出来是空（如纯不支持段）时返回 null，退回无预览格式。
+ * group_notice 变体不走这里（无 messageSegments）——它由 QQ App 渲染裸正文后走 buildNoticePreview。
  */
 export function buildChatNotificationPreview(
-  message: ConversationMessage,
+  message: NapcatGroupMessageData | NapcatPrivateMessageData,
   kind: "group" | "private",
 ): ChatNotificationPreview | null {
   const body =
@@ -93,6 +97,16 @@ export function buildChatNotificationPreview(
   }
   const senderName = kind === "group" ? message.nickname.trim() || message.userId : null;
   return { senderName, text };
+}
+
+/**
+ * 群禁言 / 解禁通知的预览 view-model：正文由 QQ App 用 qq-notice 模板渲染成裸文本（无标签）
+ * 传入，这里只负责与内容消息一致的折叠 + 截断。senderName 恒 null（notice 无发言人）。
+ * 折叠/截断口径收在这一处，两条预览路径共用。
+ */
+export function buildNoticePreview(noticeText: string): ChatNotificationPreview | null {
+  const text = truncateWithEllipsis(noticeText.replace(/\s+/g, " ").trim(), PREVIEW_MAX_CHARS);
+  return text ? { senderName: null, text } : null;
 }
 
 /** 群消息里是否 @ 了机器人（at 段的 qq 命中 botQQ）。私聊无 @ 概念，恒为 false。 */

@@ -4,6 +4,7 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 import type { ResourceService } from "../../resource/application/resource.service.js";
 import type { AgentMessageService } from "../application/agent-message.service.js";
+import { MutedSendError, formatMutedNote } from "../application/muted-send-error.js";
 
 export const SEND_RESOURCE_TOOL_NAME = "send_resource";
 
@@ -95,11 +96,25 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
     }
 
     const fileRef = `base64://${resolved.bytes.toString("base64")}`;
-    const result = await this.agentMessageService.sendImage({
-      target: chatTarget,
-      fileRef,
-      replyToMessageId: input.reply_to,
-    });
+    let result;
+    try {
+      result = await this.agentMessageService.sendImage({
+        target: chatTarget,
+        fileRef,
+        replyToMessageId: input.reply_to,
+      });
+    } catch (error) {
+      // 禁言：翻译成 MUTED（与 send_message 对齐），其它错误照旧冒泡。
+      if (error instanceof MutedSendError) {
+        return JSON.stringify({
+          ok: false,
+          resid: input.resid,
+          error: "MUTED",
+          note: formatMutedNote(error),
+        });
+      }
+      throw error;
+    }
 
     return JSON.stringify({
       ok: true,

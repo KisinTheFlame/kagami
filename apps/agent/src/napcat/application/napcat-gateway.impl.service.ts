@@ -22,6 +22,7 @@ import type {
   NapcatFriendInfo,
   NapcatGetGroupInfoInput,
   NapcatGetGroupInfoResult,
+  NapcatGroupBanData,
   NapcatGroupFileListing,
   NapcatGroupMessageData,
   NapcatGatewayService,
@@ -132,6 +133,10 @@ const GroupFileListingResponseSchema = z.object({
 const GroupFileUrlResponseSchema = z.object({
   url: NonEmptyStringSchema,
 });
+// shut_up_timestamp：成员禁言到期的 epoch 秒；0 / 缺失 / 过去时间都视为未禁言。
+const GroupMemberInfoShutUpResponseSchema = z.object({
+  shut_up_timestamp: z.union([z.number(), z.string()]).optional(),
+});
 const logger = new AppLogger({ source: "service.napcat-gateway" });
 const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
 const FORWARD_MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -155,6 +160,7 @@ type OrderedPostTypeEventResult =
         ReturnType<NapcatGroupMessageProcessor["process"]>
       >["groupMessageEvent"];
       privateMessageEvent: NapcatPrivateMessageEvent | null;
+      groupBanEvent: NapcatGroupBanData | null;
     }
   | {
       kind: "failed";
@@ -252,6 +258,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         if (result.privateMessageEvent) {
           this.publishAgentEvent(result.privateMessageEvent);
         }
+        if (result.groupBanEvent) {
+          this.publishAgentEvent({ type: "napcat_group_ban", data: result.groupBanEvent });
+        }
         persistenceWriter.persistEvent(result.normalizedEvent);
       }
     };
@@ -274,6 +283,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
               qqMessage: result.qqMessage,
               groupMessageEvent: result.groupMessageEvent,
               privateMessageEvent,
+              groupBanEvent: result.groupBanEvent,
             });
             flushCompletedResults();
           })
@@ -679,6 +689,48 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return { url: parsed.data.url };
   }
 
+  /**
+   * 查某群成员禁言到期时间（get_group_member_info.shut_up_timestamp，epoch 秒）。返回该
+   * 毫秒时间戳；未禁言（0 / 过去 / 缺失 / 畸形响应 / 请求失败）返回 null。发送失败兜底用，
+   * 不抛错——判定失败时保守当作「未确认禁言」，让原始发送错误照旧冒泡。no_cache 取实时值。
+   */
+  public async getGroupMemberShutUp({
+    groupId,
+    userId,
+  }: {
+    groupId: string;
+    userId: string;
+  }): Promise<number | null> {
+    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
+    const userIdResult = NonEmptyStringSchema.safeParse(userId);
+    if (!groupIdResult.success || !userIdResult.success) {
+      return null;
+    }
+
+    const data = await this.transport.request("get_group_member_info", {
+      group_id: groupIdResult.data,
+      user_id: userIdResult.data,
+      no_cache: true,
+    });
+    const parsed = GroupMemberInfoShutUpResponseSchema.safeParse(data ?? {});
+    if (!parsed.success) {
+      return null;
+    }
+
+    const rawSeconds = parsed.data.shut_up_timestamp;
+    const seconds =
+      typeof rawSeconds === "number"
+        ? rawSeconds
+        : typeof rawSeconds === "string"
+          ? Number(rawSeconds)
+          : NaN;
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return null;
+    }
+    const untilMs = Math.trunc(seconds) * 1000;
+    return untilMs > Date.now() ? untilMs : null;
+  }
+
   public async uploadGroupFile({
     groupId,
     fileRef,
@@ -977,27 +1029,46 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   }
 
   private publishAgentEvent(event: NapcatAgentEvent): void {
+    const meta = {
+      event: "napcat.gateway.agent_message_publish_failed",
+      messageType: toAgentEventMessageType(event),
+      groupId: agentEventGroupId(event),
+      userId: agentEventUserId(event),
+      messageId: agentEventMessageId(event),
+    };
     try {
       const result = this.enqueueAgentEvent(event);
       void Promise.resolve(result).catch(error => {
-        logger.errorWithCause("Failed to publish agent message event", error, {
-          event: "napcat.gateway.agent_message_publish_failed",
-          messageType: toAgentEventMessageType(event),
-          groupId: event.type === "napcat_group_message" ? event.data.groupId : null,
-          userId: event.type === "napcat_friend_list_updated" ? null : event.data.userId,
-          messageId: event.type === "napcat_friend_list_updated" ? null : event.data.messageId,
-        });
+        logger.errorWithCause("Failed to publish agent message event", error, meta);
       });
     } catch (error) {
-      logger.errorWithCause("Failed to publish agent message event", error, {
-        event: "napcat.gateway.agent_message_publish_failed",
-        messageType: toAgentEventMessageType(event),
-        groupId: event.type === "napcat_group_message" ? event.data.groupId : null,
-        userId: event.type === "napcat_friend_list_updated" ? null : event.data.userId,
-        messageId: event.type === "napcat_friend_list_updated" ? null : event.data.messageId,
-      });
+      logger.errorWithCause("Failed to publish agent message event", error, meta);
     }
   }
+}
+
+function agentEventGroupId(event: NapcatAgentEvent): string | null {
+  if (event.type === "napcat_group_message" || event.type === "napcat_group_ban") {
+    return event.data.groupId;
+  }
+  return null;
+}
+
+function agentEventUserId(event: NapcatAgentEvent): string | null {
+  if (event.type === "napcat_group_message" || event.type === "napcat_private_message") {
+    return event.data.userId;
+  }
+  if (event.type === "napcat_group_ban") {
+    return event.data.targetUserId;
+  }
+  return null;
+}
+
+function agentEventMessageId(event: NapcatAgentEvent): number | null {
+  if (event.type === "napcat_group_message" || event.type === "napcat_private_message") {
+    return event.data.messageId;
+  }
+  return null;
 }
 
 function normalizeFriendList(friendList: NapcatFriendInfo[]): NapcatFriendInfo[] {
@@ -1044,13 +1115,19 @@ function normalizeRemark(remark: string | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function toAgentEventMessageType(event: NapcatAgentEvent): "group" | "private" | "friend_list" {
+function toAgentEventMessageType(
+  event: NapcatAgentEvent,
+): "group" | "private" | "friend_list" | "group_ban" {
   if (event.type === "napcat_group_message") {
     return "group";
   }
 
   if (event.type === "napcat_private_message") {
     return "private";
+  }
+
+  if (event.type === "napcat_group_ban") {
+    return "group_ban";
   }
 
   return "friend_list";

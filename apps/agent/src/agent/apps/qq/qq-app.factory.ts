@@ -6,6 +6,7 @@ import type { NapcatGatewayPersistenceWriter } from "../../../napcat/application
 import type { NapcatImageMessageAnalyzer } from "../../../napcat/application/napcat-gateway/image-message-analyzer.js";
 import type { AgentMessageService } from "../../capabilities/messaging/application/agent-message.service.js";
 import { DefaultAgentMessageService } from "../../capabilities/messaging/application/default-agent-message.service.js";
+import { GroupMuteStateStore } from "../../capabilities/messaging/application/group-mute-state.store.js";
 import { PendingDraftStore } from "../../capabilities/messaging/application/pending-draft.store.js";
 import { AiToneScorer } from "../../capabilities/messaging/infra/ai-tone-scorer.js";
 import { SendMessageTool } from "../../capabilities/messaging/tools/send-message.tool.js";
@@ -88,8 +89,12 @@ export async function buildQqApp({
     imageMessageAnalyzer,
     qqMessageDao,
   });
+  // 禁言状态：QqApp（禁言事件写）与 outboundService（发送前读 + 兜底回填）共享同一实例。
+  const muteStore = new GroupMuteStateStore();
   const outboundService = new DefaultAgentMessageService({
     napcatGatewayService: napcatGateway,
+    muteStore,
+    botQQ,
   });
   // send_message 的发送目标 = QqApp 当前打开的会话。QqApp 与工具互为引用（工具要问 App 当前
   // 会话，App 持有工具），用一个局部 forward-ref 就地解环——和上面 inbound holder 同套路。
@@ -130,6 +135,7 @@ export async function buildQqApp({
     creatorQQ,
     listenGroupIds,
     recentMessageLimit,
+    muteStore,
     sendMessageTool,
     sendResourceTool,
     listGroupFilesTool,

@@ -3,6 +3,7 @@ import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import type { PendingDraftStore } from "../application/pending-draft.store.js";
 import type { AiToneScorer } from "../infra/ai-tone-scorer.js";
+import { MutedSendError, formatMutedNote } from "../application/muted-send-error.js";
 import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
 
 export const SEND_MESSAGE_TOOL_NAME = "send_message";
@@ -103,7 +104,15 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
 
     // 门控关闭：完全退化为原发送行为，不打分、不拦截、响应不含 aiToneScore。
     if (!this.aiTone.enabled) {
-      const result = await this.dispatch(chatTarget, input.message, input.reply_to);
+      let result: DispatchResult;
+      try {
+        result = await this.dispatch(chatTarget, input.message, input.reply_to);
+      } catch (error) {
+        if (error instanceof MutedSendError) {
+          return mutedResponse(error);
+        }
+        throw error;
+      }
       this.pendingDraftStore.clear();
       return JSON.stringify({ ok: true, ...result });
     }
@@ -127,7 +136,15 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
     }
 
     // 通过：正常发送，回带分数（教学信号）；成功即清空待确认草稿。
-    const result = await this.dispatch(chatTarget, input.message, input.reply_to);
+    let result: DispatchResult;
+    try {
+      result = await this.dispatch(chatTarget, input.message, input.reply_to);
+    } catch (error) {
+      if (error instanceof MutedSendError) {
+        return mutedResponse(error);
+      }
+      throw error;
+    }
     this.pendingDraftStore.clear();
     return JSON.stringify({ ok: true, ...result, aiToneScore: round(score) });
   }
@@ -155,7 +172,11 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
           : {}),
       });
     } catch (error) {
-      // 重发失败：保留草稿，让其可再次 confirm_last 重试。
+      // 禁言：保留草稿（解禁后可再 confirm_last 补发），返回 MUTED 而非 RESEND_FAILED。
+      if (error instanceof MutedSendError) {
+        return mutedResponse(error);
+      }
+      // 其它重发失败：同样保留草稿，让其可再次 confirm_last 重试。
       return JSON.stringify({
         ok: false,
         error: "RESEND_FAILED",
@@ -189,4 +210,9 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
 
 function round(value: number): number {
   return Number(value.toFixed(4));
+}
+
+/** 禁言错误 → 工具 result（error: "MUTED" + 友好 note）。 */
+function mutedResponse(error: MutedSendError): string {
+  return JSON.stringify({ ok: false, error: "MUTED", note: formatMutedNote(error) });
 }
