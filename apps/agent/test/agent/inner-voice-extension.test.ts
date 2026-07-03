@@ -2,8 +2,15 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
-import { InnerVoiceExtension } from "../../src/agent/runtime/root-agent/extensions/inner-voice.extension.js";
+import {
+  InnerVoiceExtension,
+  INNER_VOICE_METRIC_EMPTY,
+  INNER_VOICE_METRIC_FAILED,
+  INNER_VOICE_METRIC_INJECTED,
+  INNER_VOICE_METRIC_TRIGGERED,
+} from "../../src/agent/runtime/root-agent/extensions/inner-voice.extension.js";
 import { InnerVoiceIdleTracker } from "../../src/agent/capabilities/inner-voice/domain/idle-tracker.js";
+import type { MetricService } from "../../src/agent/../metric/application/metric.service.js";
 import { RootAgentSession } from "../../src/agent/runtime/root-agent/session/root-agent-session.js";
 import { createInnerThoughtMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { AgentEventQueue } from "../../src/agent/runtime/event/event.queue.js";
@@ -20,8 +27,9 @@ const NOW = new Date("2026-07-02T06:00:00Z");
 
 function trackerAboutToTrigger(): InnerVoiceIdleTracker {
   const tracker = new InnerVoiceIdleTracker();
-  for (let i = 0; i < 6; i++) {
-    tracker.recordToolCall("wait", new Date(NOW.getTime() - (5 + i * 5) * 60_000));
+  // 30min 窗内 3 个 wait 即达标（5/10/15 分钟前）。
+  for (let i = 0; i < 3; i++) {
+    tracker.recordWait(new Date(NOW.getTime() - (5 + i * 5) * 60_000));
   }
   return tracker;
 }
@@ -34,16 +42,24 @@ function createHarness(input: {
   extension: InnerVoiceExtension;
   enqueue: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
+  metrics: string[];
   context: RootLoopExtensionContext;
 } {
   const enqueue = vi.fn();
   const execute = input.operationError
     ? vi.fn().mockRejectedValue(input.operationError)
     : vi.fn().mockResolvedValue({ thought: input.thought });
+  const metrics: string[] = [];
+  const metricService: MetricService = {
+    record: async ({ metricName }) => {
+      metrics.push(metricName);
+    },
+  };
   const extension = new InnerVoiceExtension({
     tracker: input.tracker,
     operation: { execute },
     eventQueue: { enqueue } as unknown as AgentEventQueue,
+    metricService,
     now: () => NOW,
   });
   const context = {
@@ -53,7 +69,7 @@ function createHarness(input: {
         .mockResolvedValue({ systemPrompt: "persona", messages: [{ role: "user", content: "m" }] }),
     },
   } as unknown as RootLoopExtensionContext;
-  return { extension, enqueue, execute, context };
+  return { extension, enqueue, execute, metrics, context };
 }
 
 type OnAfterCommitInput = Parameters<InnerVoiceExtension["onAfterCommit"]>[0];
@@ -72,8 +88,8 @@ function waitRound(): OnAfterCommitInput["result"] {
 }
 
 describe("InnerVoiceExtension", () => {
-  it("摸鱼成立且产出念头 → enqueue inner_thought 事件", async () => {
-    const { extension, enqueue, execute, context } = createHarness({
+  it("摸鱼成立且产出念头 → enqueue inner_thought 事件 + triggered/injected metric", async () => {
+    const { extension, enqueue, execute, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
       thought: "想翻翻那篇文章",
     });
@@ -85,41 +101,49 @@ describe("InnerVoiceExtension", () => {
       type: "inner_thought",
       data: { thought: "想翻翻那篇文章" },
     });
+    expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_INJECTED]);
   });
 
-  it("空念头 → 不 enqueue，但配额已被消耗（防连环空转）", async () => {
+  it("空念头 → 不 enqueue，配额已消耗，打 triggered/empty metric", async () => {
     const tracker = trackerAboutToTrigger();
-    const { extension, enqueue, context } = createHarness({ tracker, thought: null });
+    const { extension, enqueue, metrics, context } = createHarness({ tracker, thought: null });
 
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(enqueue).not.toHaveBeenCalled();
+    expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_EMPTY]);
     // 紧接着的下一轮不会再次触发（不应期生效）。
     expect(tracker.shouldTrigger(new Date(NOW.getTime() + 60_000))).toBe(false);
   });
 
-  it("摸鱼不成立 → 完全不跑 operation", async () => {
-    const { extension, execute, context } = createHarness({
+  it("摸鱼不成立 → 完全不跑 operation、不打 metric", async () => {
+    const { extension, execute, metrics, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
       thought: "x",
     });
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(execute).not.toHaveBeenCalled();
+    expect(metrics).toEqual([]);
   });
 
-  it("本轮的投入型调用先入账再判定——刚干完活不算摸鱼", async () => {
+  it("非 wait 调用不推进摸鱼判定（wait 才计数）", async () => {
     const { extension, execute, context } = createHarness({
-      tracker: trackerAboutToTrigger(),
+      tracker: new InnerVoiceIdleTracker(),
       thought: "x",
     });
+    // 一轮 3 个 invoke 不等于 3 个 wait —— 判定不成立。
     await extension.onAfterCommit({
       context,
-      result: round([{ name: "invoke", args: { tool: "glance_hn" } }]),
+      result: round([
+        { name: "invoke", args: { tool: "glance_hn" } },
+        { name: "invoke", args: { tool: "search_hn" } },
+        { name: "invoke", args: { tool: "open_ithome_article" } },
+      ]),
     });
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("operation 抛错被吞掉，不拖垮主循环", async () => {
-    const { extension, enqueue, context } = createHarness({
+  it("operation 抛错被吞掉，不拖垮主循环，打 triggered/failed metric", async () => {
+    const { extension, enqueue, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
       thought: null,
       operationError: new Error("boom"),
@@ -128,6 +152,7 @@ describe("InnerVoiceExtension", () => {
       extension.onAfterCommit({ context, result: waitRound() }),
     ).resolves.toBeUndefined();
     expect(enqueue).not.toHaveBeenCalled();
+    expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_FAILED]);
   });
 });
 

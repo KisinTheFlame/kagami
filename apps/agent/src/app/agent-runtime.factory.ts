@@ -454,6 +454,7 @@ export async function buildAgentRuntime({
     tracker: innerVoiceIdleTracker,
     operation: innerVoiceOperation,
     eventQueue,
+    metricService,
   });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,
@@ -482,10 +483,10 @@ export async function buildAgentRuntime({
     await rootAgentRuntime.restorePersistedSnapshot(restoredSnapshot);
   }
 
-  // 摸鱼判定重启回扫：从 ledger 读最近 48h（覆盖当日注入计数与不应期）重建三组时间戳。
-  // 失败只降级为「冷启动从零累积」，不阻塞 agent 启动。
+  // 摸鱼判定重启回扫：从 ledger 读最近 2h（覆盖 30min 滑动窗 + 30min 不应期，富余充足）
+  // 重建两组时间戳。失败只降级为「冷启动从零累积」，不阻塞 agent 启动。
   try {
-    const innerVoiceLookbackMs = 48 * 60 * 60 * 1000;
+    const innerVoiceLookbackMs = 2 * 60 * 60 * 1000;
     const recentLedgerRecords = await linearMessageLedgerDao.listCreatedAfter({
       runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
       createdAfter: new Date(Date.now() - innerVoiceLookbackMs),
