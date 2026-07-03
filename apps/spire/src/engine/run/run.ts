@@ -1,5 +1,6 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
-import { cardPoolOfRarity, getCardDef, costOf } from "../cards/cards.js";
+import { cardPoolOf, getCardDef, costOf } from "../cards/cards.js";
+import { getCharacterConfig } from "../characters/characters.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { REWARD_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import {
@@ -198,13 +199,14 @@ export function generateReward(state: GameState): void {
   state.screen = "reward";
 }
 
-/** 掷一张奖励卡：先掷稀有度（稀有 4% / 罕见 36% / 普通 60%），再从该档池里挑未重复的。 */
+/** 掷一张奖励卡：先掷稀有度（稀有 4% / 罕见 36% / 普通 60%），再从本角色该档池里挑未重复的。 */
 function rollRewardCard(state: GameState, exclude: ReadonlySet<string>): string | null {
+  const color = getCharacterConfig(state.character).color;
   const roll = nextInt(state.rng, 100);
   const rarity = roll < 4 ? "rare" : roll < 40 ? "uncommon" : "common";
   // 依次尝试目标档 → 降级兜底，保证总能给出一张不重复的卡。
   for (const tier of [rarity, "uncommon", "common"] as const) {
-    const candidates = cardPoolOfRarity(tier).filter(id => !exclude.has(id));
+    const candidates = cardPoolOf(color, tier).filter(id => !exclude.has(id));
     if (candidates.length > 0) {
       return candidates[nextInt(state.rng, candidates.length)]!;
     }
