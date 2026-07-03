@@ -1164,6 +1164,117 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  {
+    id: "repulsor",
+    name: "斥力怪",
+    hpMin: 29,
+    hpMax: 35,
+    moves: [
+      {
+        id: "rep_bash",
+        name: "撞击",
+        effects: [{ kind: "deal_damage", amount: 11 }],
+        intent: "attack",
+      },
+      {
+        id: "repulse",
+        name: "斥力",
+        effects: [{ kind: "add_card", cardId: "dazed", pile: "draw", count: 1 }],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "rep_bash", weight: 60, maxInARow: 2 },
+        { move: "repulse", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "transient",
+    name: "无常",
+    hpMin: 88,
+    hpMax: 92,
+    moves: [
+      {
+        id: "transient_slam",
+        name: "重殴",
+        effects: [{ kind: "deal_damage", amount: 30 }],
+        intent: "attack",
+      },
+      {
+        id: "fade",
+        name: "消散",
+        effects: [{ kind: "escape" }],
+        intent: "unknown",
+      },
+    ],
+    // 出招由 combat.ts transient 分支处理（重殴数回合后消散离场）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
+  // —— 第三幕精英：巨型头颅（蓄势后连续重击）——
+  {
+    id: "giant_head",
+    name: "巨型头颅",
+    hpMin: 500,
+    hpMax: 500,
+    moves: [
+      {
+        id: "gh_glare",
+        name: "凝视",
+        effects: [{ kind: "deal_damage", amount: 10 }],
+        intent: "attack",
+      },
+      {
+        id: "it_is_time",
+        name: "时候到了",
+        effects: [{ kind: "deal_damage", amount: 35 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts giant_head 分支处理（前 3 回合凝视，之后每回合重击）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
+  // —— 第三幕 Boss：觉醒者（死亡后复活二阶段）——
+  {
+    id: "awakened_one",
+    name: "觉醒者",
+    hpMin: 300,
+    hpMax: 300,
+    reviveHp: 300,
+    moves: [
+      {
+        id: "aw_slash",
+        name: "斩击",
+        effects: [{ kind: "deal_damage", amount: 20 }],
+        intent: "attack",
+      },
+      {
+        id: "soul_strike",
+        name: "灵魂打击",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 4 }],
+        intent: "attack",
+      },
+      {
+        id: "aw_buff",
+        name: "汲取",
+        effects: [{ kind: "apply_power", power: "strength", amount: 2, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "aw_slash", weight: 45, maxInARow: 2 },
+        { move: "soul_strike", weight: 35, maxInARow: 1 },
+        { move: "aw_buff", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -1566,6 +1677,11 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   two_exploders: { id: "two_exploders", enemies: ["exploder", "exploder"], isBoss: false },
   reptomancer: { id: "reptomancer", enemies: ["reptomancer"], isBoss: false },
   donu_deca: { id: "donu_deca", enemies: ["deca", "donu"], isBoss: true },
+  repulsor: { id: "repulsor", enemies: ["repulsor"], isBoss: false },
+  transient: { id: "transient", enemies: ["transient"], isBoss: false },
+  two_orb_walkers: { id: "two_orb_walkers", enemies: ["orb_walker", "orb_walker"], isBoss: false },
+  giant_head: { id: "giant_head", enemies: ["giant_head"], isBoss: false },
+  awakened_one: { id: "awakened_one", enemies: ["awakened_one"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -1644,12 +1760,16 @@ const ACT3_WEAK_POOL: readonly WeightedEncounter[] = [
   { id: "spiker", weight: 1 },
   { id: "orb_walker", weight: 1 },
   { id: "exploder", weight: 1 },
+  { id: "repulsor", weight: 1 },
 ];
 
 const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "orb_walker", weight: 2 },
   { id: "spiker", weight: 2 },
+  { id: "transient", weight: 2 },
+  { id: "repulsor", weight: 1 },
   { id: "two_exploders", weight: 1 },
+  { id: "two_orb_walkers", weight: 1 },
 ];
 
 function actWeakPool(act: number): readonly WeightedEncounter[] {
@@ -1693,7 +1813,10 @@ const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
 ];
 
 // Act3 精英池（切片：蛇法师；后续补 巨型头颅 / 复仇者）。
-const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [{ id: "reptomancer", weight: 1 }];
+const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [
+  { id: "reptomancer", weight: 1 },
+  { id: "giant_head", weight: 1 },
+];
 
 /** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
 export function pickEliteEncounter(rng: RngState, act = 1): string {

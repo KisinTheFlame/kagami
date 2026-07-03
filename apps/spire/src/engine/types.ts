@@ -145,6 +145,8 @@ export type EnemyDef = {
   splitInto?: string[];
   /** 亡语：此敌人死亡时结算的效果（真菌兽孢子云给玩家易伤）。 */
   deathEffects?: Effect[];
+  /** 复活：首次死亡时以此 HP 复活并获得力量（觉醒者二阶段），仅触发一次。 */
+  reviveHp?: number;
 };
 
 export type EnemyState = {
@@ -168,6 +170,8 @@ export type EnemyState = {
   asleep: boolean;
   /** 是否已分裂过（半血分裂只触发一次）。 */
   hasSplit: boolean;
+  /** 是否已复活过（觉醒者二阶段只触发一次）。 */
+  hasRevived: boolean;
   /** 是否已逃离战斗（拾荒者烟雾弹后逃跑；逃跑后不再算作战斗目标）。 */
   escaped: boolean;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */

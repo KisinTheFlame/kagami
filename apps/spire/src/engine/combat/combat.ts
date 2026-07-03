@@ -42,6 +42,9 @@ const FROST_PASSIVE = 2;
 const FROST_EVOKE = 5;
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
+const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
+const TRANSIENT_FADE_TURN = 5; // 无常连续攻击到第 5 回合消散离场。
+const GIANT_HEAD_GLARE_TURNS = 3; // 巨型头颅前 3 回合凝视蓄势，之后连续重击。
 const GUARDIAN_MODE_SHIFT_STEP = 10;
 const GUARDIAN_SHIFT_BLOCK = 20;
 const LOUSE_CURL_UP_MIN = 3;
@@ -136,6 +139,7 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     rolledDamage,
     asleep,
     hasSplit: false,
+    hasRevived: false,
     escaped: false,
     modeShiftAccum: 0,
     modeShiftThreshold: def.modeShiftThreshold ?? null,
@@ -610,6 +614,14 @@ function dealDamageToEnemy(
     const dyingDef = getEnemyDef(enemy.defId);
     if (dyingDef.deathEffects) {
       applyEffects(state, dyingDef.deathEffects, { side: "enemy", index: enemyIndex }, null);
+    }
+    // 复活：觉醒者首次死亡时满血复活 + 获得力量（二阶段），仅一次。
+    if (dyingDef.reviveHp !== undefined && !enemy.hasRevived) {
+      enemy.hasRevived = true;
+      enemy.hp = dyingDef.reviveHp;
+      enemy.block = 0;
+      addPower(enemy.powers, "strength", AWAKENED_REVIVE_STRENGTH);
+      state.log.push(`${enemy.name}复活了！`);
     }
   }
   // 拉加维林：睡眠中受到穿透格挡的伤害立即苏醒，去掉金属化。
@@ -1207,6 +1219,19 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
       history[history.length - 1] === "lag_attack" &&
       history[history.length - 2] === "lag_attack";
     enemy.currentMove = lastTwoAttack ? "siphon_soul" : "lag_attack";
+    return;
+  }
+
+  // 无常：连续重殴，第 5 回合消散离场（逃跑）。
+  if (enemy.defId === "transient") {
+    enemy.currentMove = enemy.moveHistory.length >= TRANSIENT_FADE_TURN ? "fade" : "transient_slam";
+    return;
+  }
+
+  // 巨型头颅：前 3 回合凝视蓄势，之后每回合「时候到了」重击。
+  if (enemy.defId === "giant_head") {
+    enemy.currentMove =
+      enemy.moveHistory.length < GIANT_HEAD_GLARE_TURNS ? "gh_glare" : "it_is_time";
     return;
   }
 
