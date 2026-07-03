@@ -90,6 +90,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 哨卫开局各带 1 层神器（抵消你首个减益）。
     powers.push({ id: "artifact", amount: 1 });
   }
+  if (defId === "spheric_guardian") {
+    // 球形守卫开局自带 3 层神器（抵消你前三个减益）。
+    powers.push({ id: "artifact", amount: 3 });
+  }
   if (defId === "fungi_beast") {
     // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
     powers.push({ id: "spore_cloud", amount: 2 });
@@ -875,6 +879,16 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     }
     enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
     enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 冠军（第二幕 Boss）：血量首次降到 ≤半血时暴怒一次（+6 力量），其余走 weighted。
+  if (
+    enemy.defId === "champ" &&
+    enemy.hp <= Math.floor(enemy.maxHp / 2) &&
+    !enemy.moveHistory.includes("anger")
+  ) {
+    enemy.currentMove = "anger";
     return;
   }
 

@@ -438,6 +438,199 @@ const ENEMY_LIST: EnemyDef[] = [
     intentRule: { scripted: [], weighted: [] },
   },
 
+  // —— 第二幕（城市）普通敌人 ——
+  {
+    id: "snake_plant",
+    name: "食蛇草",
+    hpMin: 75,
+    hpMax: 79,
+    moves: [
+      {
+        id: "sp_chomp",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+      {
+        id: "sp_spores",
+        name: "散播孢子",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "sp_chomp", weight: 65, maxInARow: 2 },
+        { move: "sp_spores", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "spheric_guardian",
+    name: "球形守卫",
+    hpMin: 20,
+    hpMax: 20,
+    moves: [
+      {
+        id: "sg_activate",
+        name: "激活",
+        effects: [{ kind: "gain_block", amount: 25 }],
+        intent: "defend",
+      },
+      {
+        id: "sg_slam",
+        name: "猛击",
+        effects: [{ kind: "deal_damage", amount: 10 }],
+        intent: "attack",
+      },
+      {
+        id: "sg_harden",
+        name: "硬化",
+        effects: [{ kind: "gain_block", amount: 15 }],
+        intent: "defend",
+      },
+    ],
+    // 首招激活(大格挡)，之后 猛击/硬化 交替；开局自带 3 层神器（见 createEnemyState）。
+    intentRule: {
+      scripted: ["sg_activate"],
+      weighted: [
+        { move: "sg_slam", weight: 50, maxInARow: 1 },
+        { move: "sg_harden", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "centurion",
+    name: "百夫长",
+    hpMin: 76,
+    hpMax: 80,
+    moves: [
+      {
+        id: "cent_slash",
+        name: "斩击",
+        effects: [{ kind: "deal_damage", amount: 12 }],
+        intent: "attack",
+      },
+      {
+        id: "cent_fury",
+        name: "狂怒连斩",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "cent_defend",
+        name: "防守",
+        effects: [{ kind: "gain_block", amount: 15 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "cent_slash", weight: 50, maxInARow: 2 },
+        { move: "cent_fury", weight: 25, maxInARow: 1 },
+        { move: "cent_defend", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕精英：穿刺之书（多段攻击）——
+  {
+    id: "book_of_stabbing",
+    name: "穿刺之书",
+    hpMin: 160,
+    hpMax: 162,
+    moves: [
+      {
+        id: "multi_stab",
+        name: "乱刺",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "big_stab",
+        name: "重刺",
+        effects: [{ kind: "deal_damage", amount: 21 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "multi_stab", weight: 70, maxInARow: 99 },
+        { move: "big_stab", weight: 30, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕 Boss：冠军（半血暴怒）——
+  {
+    id: "champ",
+    name: "冠军",
+    hpMin: 420,
+    hpMax: 440,
+    moves: [
+      {
+        id: "champ_slash",
+        name: "重斩",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+      {
+        id: "face_slap",
+        name: "扇脸",
+        effects: [
+          { kind: "deal_damage", amount: 12 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "champ_defend",
+        name: "防御姿态",
+        effects: [
+          { kind: "gain_block", amount: 15 },
+          { kind: "apply_power", power: "metallicize", amount: 5, on: "self" },
+        ],
+        intent: "defend",
+      },
+      {
+        id: "execute",
+        name: "处决",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "gloat",
+        name: "自夸",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "self" }],
+        intent: "buff",
+      },
+      {
+        id: "anger",
+        name: "暴怒",
+        effects: [{ kind: "apply_power", power: "strength", amount: 6, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    // 半血暴怒（一次性）由 combat.ts champ 分支覆盖；其余走 weighted。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "champ_slash", weight: 30, maxInARow: 2 },
+        { move: "face_slap", weight: 20, maxInARow: 1 },
+        { move: "champ_defend", weight: 20, maxInARow: 1 },
+        { move: "execute", weight: 15, maxInARow: 1 },
+        { move: "gloat", weight: 15, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -811,6 +1004,13 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   },
   looter: { id: "looter", enemies: ["looter"], isBoss: false },
   red_slaver: { id: "red_slaver", enemies: ["red_slaver"], isBoss: false },
+  // 第二幕
+  snake_plant: { id: "snake_plant", enemies: ["snake_plant"], isBoss: false },
+  spheric_guardian: { id: "spheric_guardian", enemies: ["spheric_guardian"], isBoss: false },
+  centurion: { id: "centurion", enemies: ["centurion"], isBoss: false },
+  two_centurions: { id: "two_centurions", enemies: ["centurion", "centurion"], isBoss: false },
+  book_of_stabbing: { id: "book_of_stabbing", enemies: ["book_of_stabbing"], isBoss: false },
+  champ: { id: "champ", enemies: ["champ"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -865,9 +1065,25 @@ function weightedPick(rng: RngState, pool: readonly WeightedEncounter[]): string
   return pool[pool.length - 1]!.id;
 }
 
-/** 按已进入的普通战斗数选池 + 加权随机挑一个 encounter id。 */
-export function pickNormalEncounter(rng: RngState, combatsEntered: number): string {
-  const pool = combatsEntered < WEAK_COMBAT_COUNT ? WEAK_ENCOUNTER_POOL : STRONG_ENCOUNTER_POOL;
+// —— 第二幕（城市）战斗池（切片：3 普通 + 1 精英 + 1 Boss；后续里程碑补齐 6 火之灵/自动机/收藏家等）——
+const ACT2_WEAK_POOL: readonly WeightedEncounter[] = [
+  { id: "spheric_guardian", weight: 1 },
+  { id: "snake_plant", weight: 1 },
+  { id: "centurion", weight: 1 },
+];
+
+const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
+  { id: "centurion", weight: 2 },
+  { id: "snake_plant", weight: 2 },
+  { id: "two_centurions", weight: 1 },
+  { id: "spheric_guardian", weight: 1 },
+];
+
+/** 按已进入的普通战斗数选池 + 加权随机挑一个 encounter id（按幕选池）。 */
+export function pickNormalEncounter(rng: RngState, combatsEntered: number, act = 1): string {
+  const weak = act >= 2 ? ACT2_WEAK_POOL : WEAK_ENCOUNTER_POOL;
+  const strong = act >= 2 ? ACT2_STRONG_POOL : STRONG_ENCOUNTER_POOL;
+  const pool = combatsEntered < WEAK_COMBAT_COUNT ? weak : strong;
   const picked = weightedPick(rng, pool);
   if (picked === "small_slimes") {
     // 小史莱姆组的两种组成 50/50。
@@ -881,26 +1097,31 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
 }
 
 // Act1 精英池（等权重，不重复限制由 StS 的洗牌保证；此处简化为等权随机）。
-// 拉加维林 / 哨卫在 M3b-2 加入。
 const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "gremlin_nob", weight: 1 },
   { id: "lagavulin", weight: 1 },
   { id: "three_sentries", weight: 1 },
 ];
 
-/** 精英节点：从精英池挑一个 encounter id。 */
-export function pickEliteEncounter(rng: RngState): string {
-  return weightedPick(rng, ELITE_ENCOUNTER_POOL);
+// Act2 精英池（切片：穿刺之书；后续补 地精首领 / 夜魔）。
+const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [{ id: "book_of_stabbing", weight: 1 }];
+
+/** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
+export function pickEliteEncounter(rng: RngState, act = 1): string {
+  return weightedPick(rng, act >= 2 ? ACT2_ELITE_POOL : ELITE_ENCOUNTER_POOL);
 }
 
-// Act1 Boss 池（等权重随机）。史莱姆王待分裂机制里程碑加入。
+// Act1 Boss 池（等权重随机）。
 const BOSS_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "guardian", weight: 1 },
   { id: "hexaghost", weight: 1 },
   { id: "slime_boss", weight: 1 },
 ];
 
-/** Boss 节点：随机挑一个 Boss encounter id。 */
-export function pickBossEncounter(rng: RngState): string {
-  return weightedPick(rng, BOSS_ENCOUNTER_POOL);
+// Act2 Boss 池（切片：冠军；后续补 青铜自动机 / 收藏家）。
+const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "champ", weight: 1 }];
+
+/** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
+export function pickBossEncounter(rng: RngState, act = 1): string {
+  return weightedPick(rng, act >= 2 ? ACT2_BOSS_POOL : BOSS_ENCOUNTER_POOL);
 }

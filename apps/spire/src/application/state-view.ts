@@ -33,6 +33,7 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
   return {
     version: state.version,
     screen: state.screen,
+    act: state.act,
     player: { hp: state.hp, maxHp: state.maxHp, gold: state.gold },
     deckCount: state.deck.length,
     relics: state.relics.map(relic => {
