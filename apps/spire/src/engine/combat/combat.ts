@@ -32,6 +32,8 @@ const STARTING_ENERGY = 3;
 const STARTING_HAND_SIZE = 5;
 const MAX_HAND_SIZE = 10;
 const MAX_ENEMIES = 5; // 场上敌人上限（地精首领召唤封顶）。
+const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
+const BOSS_GOLD_MAX = 105;
 const GUARDIAN_MODE_SHIFT_STEP = 10;
 const GUARDIAN_SHIFT_BLOCK = 20;
 const LOUSE_CURL_UP_MIN = 3;
@@ -1120,6 +1122,10 @@ function resolveCombatIfEnded(state: GameState): void {
   // 战斗内牌堆（含临时状态牌）随战斗消失，master deck 不受影响。
   state.combat = null;
   if (combat.isBoss) {
+    // 击败首领掉金币（~100，对齐 StS）；随后 victory / 进入下一幕由 settleAfterCombat 决定。
+    const gold = nextRange(state.rng, BOSS_GOLD_MIN, BOSS_GOLD_MAX);
+    state.gold += gold;
+    state.log.push(`击败首领，获得 ${gold} 金币。`);
     state.screen = "victory";
   }
   // 非 Boss 的奖励生成在 run 层处理（避免 combat 依赖 run）。

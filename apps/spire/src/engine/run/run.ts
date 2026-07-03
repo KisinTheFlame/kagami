@@ -24,6 +24,11 @@ const REST_HEAL_RATIO = 0.3;
 const REWARD_CARD_COUNT = 3;
 const TREASURE_GOLD_MIN = 25;
 const TREASURE_GOLD_MAX = 35;
+// 战斗胜利金币区间（对齐 StS asc0）。
+const NORMAL_GOLD_MIN = 10;
+const NORMAL_GOLD_MAX = 20;
+const ELITE_GOLD_MIN = 25;
+const ELITE_GOLD_MAX = 35;
 
 /** 启用的地图节点类型（全类型齐备）。 */
 const ENABLED_MAP_TYPES: readonly MapNodeType[] = [
@@ -167,10 +172,17 @@ function rollPotionDrop(state: GameState): void {
 
 /** 非 Boss 战斗胜利后生成奖励：精英战先发一个遗物，掷药水掉落，再给三选一卡奖励。 */
 export function generateReward(state: GameState): void {
+  const isElite = state.pendingRelicReward;
   if (state.pendingRelicReward) {
     grantRandomRelic(state);
     state.pendingRelicReward = false;
   }
+  // 战斗胜利掉金币（普通 10-20 / 精英 25-35，对齐 StS）。
+  const gold = isElite
+    ? nextRange(state.rng, ELITE_GOLD_MIN, ELITE_GOLD_MAX)
+    : nextRange(state.rng, NORMAL_GOLD_MIN, NORMAL_GOLD_MAX);
+  state.gold += gold;
+  state.log.push(`战斗胜利，获得 ${gold} 金币。`);
   rollPotionDrop(state);
   const choices: { defId: string; upgraded: boolean }[] = [];
   const picked = new Set<string>();
