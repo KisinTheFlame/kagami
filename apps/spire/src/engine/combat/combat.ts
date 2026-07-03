@@ -205,28 +205,37 @@ function fireRelics(
   }
 }
 
-function triggerRelicCombatStart(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onCombatStart?.(state, self));
-}
-function triggerRelicCombatEnd(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onCombatEnd?.(state, self));
-}
-function triggerRelicTurnStart(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onTurnStart?.(state, self));
-}
-function triggerRelicTurnEnd(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onTurnEnd?.(state, self));
-}
-function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
-  // 遗物可通过 emit 发射战斗 Effect（信封等发伤遗物）；收集后以玩家为行动者统一结算。
+// 遗物可通过 emit 发射战斗 Effect（发伤 / AoE 遗物）；收集后以玩家为行动者统一结算。
+function fireRelicsCollectingEmits(
+  state: GameState,
+  invoke: (hooks: RelicDef["hooks"], self: RelicState, emit: (effect: Effect) => void) => void,
+): void {
   const emitted: Effect[] = [];
   const emit = (effect: Effect): void => {
     emitted.push(effect);
   };
-  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType, emit));
+  fireRelics(state, (hooks, self) => invoke(hooks, self, emit));
   if (emitted.length > 0) {
     applyEffects(state, emitted, { side: "player" }, null);
   }
+}
+
+function triggerRelicCombatStart(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onCombatStart?.(state, self, emit));
+}
+function triggerRelicCombatEnd(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onCombatEnd?.(state, self, emit));
+}
+function triggerRelicTurnStart(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnStart?.(state, self, emit));
+}
+function triggerRelicTurnEnd(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
+}
+function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) =>
+    hooks.onCardPlayed?.(state, self, cardType, emit),
+  );
 }
 
 // —— 抽牌 ——
@@ -1067,8 +1076,13 @@ export function endTurn(state: GameState): void {
       return;
     }
   }
-  // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
+  // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
+  // 回合始遗物可能（如水银沙漏 AoE）打死全部残敌 → 结算胜利，不再发牌。
+  resolveCombatIfEnded(state);
+  if (state.combat === null || state.screen !== "combat") {
+    return;
+  }
   drawCards(state, STARTING_HAND_SIZE);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
