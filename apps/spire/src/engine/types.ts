@@ -208,7 +208,15 @@ export type ShopItem =
   | { kind: "potion"; id: string; cost: number; sold: boolean };
 
 /** 商店库存（进店时一次性生成，定价固定）。 */
-export type ShopState = { items: ShopItem[] };
+export type ShopState = {
+  items: ShopItem[];
+  /** 去牌服务费用。 */
+  purgeCost: number;
+  /** 本店去牌服务是否已用（每店限一次）。 */
+  purgeUsed: boolean;
+  /** 是否处于「选择要移除的牌」子界面。 */
+  removing: boolean;
+};
 
 /** RNG 内部状态：必须完整可序列化并从存档精确复原（issue #234 C11）。 */
 export type RngState = { s0: number; s1: number; s2: number; s3: number };

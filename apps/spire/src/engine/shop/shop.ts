@@ -19,6 +19,7 @@ const RELIC_PRICE_MIN = 140;
 const RELIC_PRICE_MAX = 180;
 const POTION_PRICE_MIN = 50;
 const POTION_PRICE_MAX = 70;
+const PURGE_COST = 75;
 
 /** 从池里不重复抽 count 个 id。 */
 function sampleUnique(rng: GameState["rng"], pool: readonly string[], count: number): string[] {
@@ -62,6 +63,11 @@ export function generateShop(state: GameState): void {
     });
   }
 
-  state.shop = { items } satisfies ShopState;
+  state.shop = {
+    items,
+    purgeCost: PURGE_COST,
+    purgeUsed: false,
+    removing: false,
+  } satisfies ShopState;
   state.screen = "shop";
 }
