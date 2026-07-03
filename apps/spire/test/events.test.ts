@@ -16,7 +16,7 @@ function atEvent(eventId: string): GameState {
 
 describe("事件数据", () => {
   it("每个事件都有描述和至少两个带结果文案的选项", () => {
-    expect(ALL_EVENTS.length).toBeGreaterThanOrEqual(4);
+    expect(ALL_EVENTS.length).toBeGreaterThanOrEqual(10);
     for (const event of ALL_EVENTS) {
       expect(event.description.length).toBeGreaterThan(0);
       expect(event.choices.length).toBeGreaterThanOrEqual(2);
@@ -98,5 +98,22 @@ describe("事件结算", () => {
   it("非法选项被拒", () => {
     const s = atEvent("cooling_embers");
     expect(applyChoose(s, 9).ok).toBe(false);
+  });
+
+  it("武器架·取重刃 → 牌组加入一张重刃", () => {
+    const s = atEvent("weapon_rack");
+    const before = s.deck.length;
+    expect(applyChoose(s, 0).ok).toBe(true);
+    expect(s.deck.length).toBe(before + 1);
+    expect(s.deck.some(c => c.defId === "heavy_blade")).toBe(true);
+  });
+
+  it("血色祭坛·献血 → 失血得遗物", () => {
+    const s = atEvent("blood_altar");
+    s.hp = 50;
+    const relicsBefore = s.relics.length;
+    expect(applyChoose(s, 0).ok).toBe(true);
+    expect(s.hp).toBe(40);
+    expect(s.relics.length).toBeGreaterThanOrEqual(relicsBefore); // 得遗物或金币兜底
   });
 });

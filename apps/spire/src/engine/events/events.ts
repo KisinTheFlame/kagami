@@ -93,6 +93,113 @@ const EVENT_LIST: EventDef[] = [
     ],
   },
   {
+    id: "ragged_beggar",
+    description: "一个裹着破布的乞儿蹲在墙角，见你走近，怯生生地伸出了手。",
+    choices: [
+      {
+        label: "施舍他 30 金币",
+        resultText: "他攥紧铜板，从怀里掏出一件旧物硬塞给你，说是祖上传下的护身符。",
+        outcomes: [{ kind: "lose_gold", amount: 30 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "摇摇头走开",
+        resultText: "你没有停留，身后的呼唤很快被风声盖过。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "dusty_bookshelf",
+    description: "一排蒙尘的书架斜倚在墙上，大多已被虫蛀，只有一本还算完整。",
+    choices: [
+      {
+        label: "通读那本兵书",
+        resultText: "字句晦涩，可读罢你只觉一股火气在胸腔里烧了起来。",
+        outcomes: [{ kind: "add_card", cardId: "inflame" }],
+      },
+      {
+        label: "撕下书页生火取暖",
+        resultText: "火光跳动，你就着暖意歇了好一会儿。",
+        outcomes: [{ kind: "heal", amount: 15 }],
+      },
+    ],
+  },
+  {
+    id: "blood_altar",
+    description: "一方暗红的石台立在房间中央，凹槽里干涸的痕迹还残着腥气，像在等待新的供奉。",
+    choices: [
+      {
+        label: "割破手掌，献上鲜血",
+        resultText: "血珠落进凹槽的刹那，石台亮起，一件器物凭空落入你手。",
+        outcomes: [{ kind: "lose_hp", amount: 10 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "收回手，退开",
+        resultText: "你压下心底那点悸动，绕过石台离开了。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "glowing_pool",
+    description: "地面裂缝里积着一汪泛着微光的水潭，光影随你的呼吸轻轻晃动。",
+    choices: [
+      {
+        label: "掬起一捧饮下",
+        resultText: "清冽的凉意一路淌到四肢百骸，你觉得自己比先前更耐得住了。",
+        outcomes: [{ kind: "gain_max_hp", amount: 8 }],
+      },
+      {
+        label: "用潭水冲洗伤口",
+        resultText: "伤处的刺痛迅速退去，血也止住了。",
+        outcomes: [{ kind: "heal", amount: 20 }],
+      },
+      {
+        label: "探手到潭底摸索",
+        resultText: "指尖触到几枚沉底的钱币，也被潭里不知名的东西划了一下。",
+        outcomes: [
+          { kind: "gain_gold", amount: 30 },
+          { kind: "lose_hp", amount: 5 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "weapon_rack",
+    description: "一排废弃的兵器斜插在架上，大半锈成了废铁，只有一柄还透着寒光。",
+    choices: [
+      {
+        label: "取下那柄趁手的重刃",
+        resultText: "你掂了掂分量，正合手——这一路总算多了件像样的家伙。",
+        outcomes: [{ kind: "add_card", cardId: "heavy_blade" }],
+      },
+      {
+        label: "把能拆的金属都拆下变卖",
+        resultText: "锈铁不值钱，可积少成多也换了几枚硬币。",
+        outcomes: [{ kind: "gain_gold", amount: 25 }],
+      },
+    ],
+  },
+  {
+    id: "lone_grave",
+    description: "一座无名孤坟立在路旁，土堆前的粗陶碗里还压着几枚发黑的铜钱。",
+    choices: [
+      {
+        label: "掘开坟冢取走陪葬",
+        resultText: "你搜刮到一小袋钱币，但心口莫名一沉，像是揣上了什么甩不掉的东西。",
+        outcomes: [
+          { kind: "gain_gold", amount: 40 },
+          { kind: "add_card", cardId: "wound" },
+        ],
+      },
+      {
+        label: "添一抔新土，默立片刻",
+        resultText: "你替这无名之人整了整坟头，起身时觉得脚步竟稳了几分。",
+        outcomes: [{ kind: "gain_max_hp", amount: 6 }],
+      },
+    ],
+  },
+  {
     id: "fungal_ring",
     description: "一圈鼓胀的蘑菇在幽光里轻轻搏动，凑近能闻到一股又腥又甜的气味。",
     choices: [
