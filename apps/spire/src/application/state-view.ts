@@ -82,6 +82,8 @@ function toCombatView(state: GameState): CombatView {
       discard: combat.discardPile.length,
       exhaust: combat.exhaustPile.length,
     },
+    orbs: combat.orbs.map(orb => orb.type),
+    orbSlots: combat.orbSlots,
   };
 }
 

@@ -1,5 +1,5 @@
 import type { CardColor, CharacterId } from "../types.js";
-import { IRONCLAD_STARTER_DECK, SILENT_STARTER_DECK } from "../cards/cards.js";
+import { DEFECT_STARTER_DECK, IRONCLAD_STARTER_DECK, SILENT_STARTER_DECK } from "../cards/cards.js";
 import { IRONCLAD_STARTER_RELIC } from "../relics/relics.js";
 
 // === 角色配置 ===
@@ -33,6 +33,14 @@ const CHARACTERS: Partial<Record<CharacterId, CharacterConfig>> = {
     starterRelic: "ring_of_the_snake",
     starterDeck: SILENT_STARTER_DECK,
     color: "green",
+  },
+  defect: {
+    id: "defect",
+    name: "故障机器人",
+    maxHp: 75,
+    starterRelic: "cracked_core",
+    starterDeck: DEFECT_STARTER_DECK,
+    color: "blue",
   },
 };
 

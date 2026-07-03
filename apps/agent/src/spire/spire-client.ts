@@ -40,7 +40,7 @@ export type SpireCardRef = z.infer<typeof SpireCardRefSchema>;
 export type SpireGlossaryEntry = z.infer<typeof SpireGlossaryEntrySchema>;
 export type SpireReference = z.infer<typeof SpireReferenceSchema>;
 
-export type SpireCharacter = "ironclad" | "silent";
+export type SpireCharacter = "ironclad" | "silent" | "defect";
 
 export interface SpireClient {
   startRun(character?: SpireCharacter): Promise<SpireScreen>;

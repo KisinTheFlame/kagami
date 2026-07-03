@@ -80,6 +80,14 @@ const RELIC_LIST: RelicDef[] = [
     hooks: {},
   },
   {
+    id: "cracked_core",
+    name: "残破核心",
+    rarity: "starter",
+    // 效果在 combat.ts 的 startCombat 里按 hasRelic 处理（充能球不走钩子）。
+    description: "每场战斗开始时，充能 1 颗闪电球。",
+    hooks: {},
+  },
+  {
     id: "anchor",
     name: "船锚",
     rarity: "common",
