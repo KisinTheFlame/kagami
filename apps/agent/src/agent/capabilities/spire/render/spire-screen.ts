@@ -43,6 +43,12 @@ const ORB_LABELS: Record<string, string> = {
   frost: "冰霜",
 };
 
+const STANCE_LABELS: Record<string, string> = {
+  none: "无",
+  calm: "平静",
+  wrath: "愤怒",
+};
+
 function labelPowers(powers: readonly SpirePower[]): { label: string; amount: number }[] {
   return powers.map(power => ({ label: POWER_LABELS[power.id] ?? power.id, amount: power.amount }));
 }
@@ -123,6 +129,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
           hasOrbSystem: combat.orbSlots > 0,
           orbs: combat.orbs.map(type => ORB_LABELS[type] ?? type),
           orbSlots: combat.orbSlots,
+          hasStance: combat.stance !== "none",
+          stance: STANCE_LABELS[combat.stance] ?? combat.stance,
         }
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),

@@ -88,6 +88,14 @@ const RELIC_LIST: RelicDef[] = [
     hooks: {},
   },
   {
+    id: "pure_water",
+    name: "净水",
+    rarity: "starter",
+    // 效果在 combat.ts 的 startCombat 里按 hasRelic 处理（加牌不走钩子）。
+    description: "每场战斗开始时，将 1 张奇迹加入手牌。",
+    hooks: {},
+  },
+  {
     id: "anchor",
     name: "船锚",
     rarity: "common",
