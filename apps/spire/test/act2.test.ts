@@ -14,8 +14,8 @@ import type { GameState } from "../src/engine/types.js";
 // B2：第二幕（城市）切片——act-aware 池 + 3 普通 + 穿刺之书 + 冠军。
 
 describe("多幕", () => {
-  it("TOTAL_ACTS = 2（第二幕已有内容）", () => {
-    expect(TOTAL_ACTS).toBe(2);
+  it("TOTAL_ACTS ≥ 2（第二幕已有内容）", () => {
+    expect(TOTAL_ACTS).toBeGreaterThanOrEqual(2);
   });
 });
 

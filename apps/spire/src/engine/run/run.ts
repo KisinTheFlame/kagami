@@ -59,7 +59,7 @@ const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
 };
 
 /** 有内容的幕数：打完第 TOTAL_ACTS 幕 Boss 即通关；之前的 Boss 则进入下一幕。 */
-export const TOTAL_ACTS = 2;
+export const TOTAL_ACTS = 3;
 
 export function buildMap(state: GameState): void {
   state.map = generateMap(state.rng, ENABLED_MAP_TYPES);
