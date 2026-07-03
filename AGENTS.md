@@ -138,6 +138,9 @@ pnpm --filter @kagami/agent <script>   # 单包命令，如 test / test:watch / 
 
 pnpm app:deploy                        # 全量部署：build → prisma migrate deploy → PM2 reload(全部) → pm2 save
 pnpm app:deploy <agent|console|gateway|oss|browser|llm|metric|spire>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
+
+pnpm app:stop                          # 停掉 ecosystem 里全部进程
+pnpm app:stop <agent|console|gateway|oss|browser|llm|metric|spire>    # 只停该服务（与 app:deploy 共用同一套短名别名）
 ```
 
 - 仓库当前**没有**统一的根 `pnpm dev`。前后端联调需按实际分别启动，不要假设有一键 dev。
