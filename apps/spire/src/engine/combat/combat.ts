@@ -6,6 +6,7 @@ import type {
   EnemyState,
   GameState,
   OrbType,
+  PlayerStance,
   PowerInstance,
   RelicState,
 } from "../types.js";
@@ -162,6 +163,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     exhaustPile: [],
     orbs: [],
     orbSlots: state.character === "defect" ? DEFECT_ORB_SLOTS : 0,
+    playerStance: "none",
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -183,6 +185,10 @@ export function startCombat(state: GameState, encounterId: string): void {
   // 蛇之戒指（静默起始遗物）：战斗第一回合额外抽 2 张。
   const firstTurnDraw = hasRelic(state, "ring_of_the_snake") ? 2 : 0;
   drawCards(state, STARTING_HAND_SIZE + firstTurnDraw);
+  // 净水（观者起始遗物）：战斗开始时手牌加入 1 张奇迹。
+  if (hasRelic(state, "pure_water")) {
+    addCards(state, "miracle", "hand", 1);
+  }
 }
 
 /** 遍历持有遗物，对每个的 hooks + 自身 RelicState 调用 fn（原地改 state）。 */
@@ -371,6 +377,12 @@ function applyEffect(
         for (let n = 0; n < effect.count && combat.orbs.length > 0; n += 1) {
           evokeOrb(state, 0);
         }
+      }
+      break;
+    }
+    case "enter_stance": {
+      if (actor.side === "player") {
+        enterStance(state, effect.stance);
       }
       break;
     }
@@ -580,7 +592,11 @@ function dealDamageToEnemy(
   if (sharpHide > 0) {
     state.hp = Math.max(0, state.hp - sharpHide);
   }
-  const dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
+  let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
+  // 愤怒姿态（观者）：玩家造成的伤害翻倍。
+  if (state.combat!.playerStance === "wrath") {
+    dmg *= 2;
+  }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
     enemy.modeShiftAccum += dmg;
@@ -645,7 +661,11 @@ function dealDamageToPlayer(
   attackerIndex?: number,
 ): void {
   const combat = state.combat!;
-  const dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
+  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
+  // 愤怒姿态（观者）：玩家受到的伤害也翻倍。
+  if (combat.playerStance === "wrath") {
+    dmg *= 2;
+  }
   const afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
   state.hp = Math.max(0, state.hp - afterBlock);
@@ -661,6 +681,22 @@ function dealDamageToPlayer(
       attacker.hp = Math.max(0, attacker.hp - thorns);
     }
   }
+}
+
+// —— 姿态（观者）——
+
+const CALM_EXIT_ENERGY = 2; // 离开平静姿态回复的能量。
+
+/** 进入某姿态：离开平静时 +2 能量；同姿态则无事发生。 */
+function enterStance(state: GameState, stance: PlayerStance): void {
+  const combat = state.combat!;
+  if (combat.playerStance === stance) {
+    return;
+  }
+  if (combat.playerStance === "calm" && stance !== "calm") {
+    combat.energy += CALM_EXIT_ENERGY;
+  }
+  combat.playerStance = stance;
 }
 
 // —— 充能球（机器人）——
@@ -890,15 +926,19 @@ export function endTurn(state: GameState): void {
     state.log.push("你倒下了。");
     return;
   }
-  // 玩家回合结束：虚无牌被消耗，其余手牌进弃牌堆；玩家 debuff 衰减。
+  // 玩家回合结束：保留牌留在手中，虚无牌被消耗，其余进弃牌堆；玩家 debuff 衰减。
+  const retained: CardInstance[] = [];
   for (const instance of combat.hand) {
-    if (getCardDef(instance.defId).ethereal) {
+    const cardDef = getCardDef(instance.defId);
+    if (cardDef.retain) {
+      retained.push(instance);
+    } else if (cardDef.ethereal) {
       combat.exhaustPile.push(instance);
     } else {
       combat.discardPile.push(instance);
     }
   }
-  combat.hand = [];
+  combat.hand = retained;
   // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
   const playerMetallicize = getPower(combat.playerPowers, "metallicize");
   if (playerMetallicize > 0) {

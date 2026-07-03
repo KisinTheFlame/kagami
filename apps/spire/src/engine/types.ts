@@ -59,6 +59,8 @@ export type Effect =
   | { kind: "channel_orb"; orbType: OrbType }
   // 玩家用：唤醒最左侧 count 颗球（触发唤醒效果后移除）。
   | { kind: "evoke"; count: number }
+  // 玩家用：进入指定姿态（观者；离开平静时 +2 能量）。
+  | { kind: "enter_stance"; stance: PlayerStance }
   // 敌人用：给一名随机存活友军加格挡（护盾地精保护）。
   | { kind: "gain_block_ally"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
@@ -94,6 +96,8 @@ export type CardDef = {
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
   exhausts: boolean;
+  /** 保留：回合结束时不进弃牌堆，留在手中（观者部分卡）。 */
+  retain?: boolean;
   /** 虚无：回合结束时若仍在手牌中，则被消耗（而非进弃牌堆）。 */
   ethereal?: boolean;
   effects: Effect[];
@@ -178,6 +182,9 @@ export type OrbType = "lightning" | "frost";
 /** 一颗充能球实例（占一个球槽）。 */
 export type Orb = { type: OrbType };
 
+/** 玩家姿态（观者专属）：平静 / 愤怒 / 无。 */
+export type PlayerStance = "none" | "calm" | "wrath";
+
 export type CombatState = {
   turn: number;
   energy: number;
@@ -193,6 +200,8 @@ export type CombatState = {
   orbs: Orb[];
   /** 球槽数量（机器人默认 3；其他角色 0）。 */
   orbSlots: number;
+  /** 玩家姿态（观者）：愤怒下攻击/受击双倍；离开平静 +2 能量。默认 none。 */
+  playerStance: PlayerStance;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
