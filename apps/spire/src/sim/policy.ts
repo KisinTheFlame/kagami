@@ -45,6 +45,18 @@ export function legalActions(state: GameState): GameAction[] {
       optionIndex,
     }));
   }
+  if (state.screen === "shop" && state.shop) {
+    // 只列「买得起且未售」的商品 + 离开，避免策略卡在非法购买上。
+    const actions: GameAction[] = [];
+    state.shop.items.forEach((item, optionIndex) => {
+      const roomForPotion = item.kind !== "potion" || state.potions.indexOf(null) >= 0;
+      if (!item.sold && state.gold >= item.cost && roomForPotion) {
+        actions.push({ type: "choose", optionIndex });
+      }
+    });
+    actions.push({ type: "choose", optionIndex: state.shop.items.length }); // 离开
+    return actions;
+  }
   if (state.screen === "reward" || state.screen === "rest") {
     // 选项数量 = currentOptions().length；这里不引 run 层，直接按已知结构估算上界后再交给引擎校验。
     // reward: cardChoices + 跳过；rest: 1(休息) + 可升级卡数。用一个安全上界枚举，引擎会拒绝越界。
@@ -78,6 +90,10 @@ export class RandomPolicy implements Policy {
 /** 贪心：能打的攻击往最低血敌人砸、否则出防御，最后 end_turn；非战斗屏永远选第一项。 */
 export class GreedyPolicy implements Policy {
   public decide(state: GameState): GameAction {
+    // 商店：贪心不购物，直接离开（离开是最后一个选项），避免卡在售罄/买不起上。
+    if (state.screen === "shop" && state.shop) {
+      return { type: "choose", optionIndex: state.shop.items.length };
+    }
     if (state.screen !== "combat" || !state.combat) {
       return { type: "choose", optionIndex: 0 };
     }

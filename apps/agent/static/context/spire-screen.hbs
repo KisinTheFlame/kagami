@@ -53,6 +53,13 @@
 [{{n}}] {{text}}
 {{/each}}
 用 invoke(tool="choose", option_index=编号) 做出选择。
+{{else if isShop}}
+商店。你有 {{gold}} 金币　生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+在售（买完可继续逛，逛够了就离开）：
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 购买或离开。
 {{else if isGameover}}
 你倒下了，这一局到此为止。生命 0/{{maxHp}}。
 想再来一局就调用 start_run。

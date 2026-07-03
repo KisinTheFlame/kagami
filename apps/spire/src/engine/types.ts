@@ -180,10 +180,27 @@ export type MapGraph = {
   bossNodeId: string;
 };
 
-export type Screen = "map" | "combat" | "reward" | "rest" | "event" | "gameover" | "victory";
+export type Screen =
+  | "map"
+  | "combat"
+  | "reward"
+  | "rest"
+  | "event"
+  | "shop"
+  | "gameover"
+  | "victory";
 
 /** 当前进行中的事件（? 节点）。 */
 export type EventState = { id: string };
+
+/** 商店一件在售商品。sold 后不可再买。 */
+export type ShopItem =
+  | { kind: "card"; defId: string; cost: number; sold: boolean }
+  | { kind: "relic"; id: string; cost: number; sold: boolean }
+  | { kind: "potion"; id: string; cost: number; sold: boolean };
+
+/** 商店库存（进店时一次性生成，定价固定）。 */
+export type ShopState = { items: ShopItem[] };
 
 /** RNG 内部状态：必须完整可序列化并从存档精确复原（issue #234 C11）。 */
 export type RngState = { s0: number; s1: number; s2: number; s3: number };
@@ -214,6 +231,8 @@ export type GameState = {
   reward: RewardState | null;
   /** 当前进行中的事件（? 节点）；null = 不在事件屏。 */
   event: EventState | null;
+  /** 当前商店库存；null = 不在商店屏。 */
+  shop: ShopState | null;
   /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
   combatsEntered: number;
   /** 本场战斗胜利后是否发一个遗物（精英战为 true；下次 generateReward 消费后清零）。 */

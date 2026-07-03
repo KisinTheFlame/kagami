@@ -53,6 +53,7 @@ export function newRun(input: {
     combat: null,
     reward: null,
     event: null,
+    shop: null,
     combatsEntered: 0,
     pendingRelicReward: false,
     rng,
@@ -97,7 +98,8 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
         state.screen !== "reward" &&
         state.screen !== "rest" &&
         state.screen !== "map" &&
-        state.screen !== "event"
+        state.screen !== "event" &&
+        state.screen !== "shop"
       ) {
         return { ok: false, reason: "当前屏幕没有可选项。" };
       }
