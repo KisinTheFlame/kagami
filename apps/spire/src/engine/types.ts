@@ -19,6 +19,7 @@ export type PowerId =
   | "vulnerable" // 易伤：受到攻击伤害 ×1.5（回合末 -1）
   | "weak" // 虚弱：造成攻击伤害 ×0.75（回合末 -1）
   | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
+  | "entangled" // 缠绕：本回合无法打出攻击牌（回合末 -1，红色奴隶主专属）
   | "metallicize" // 金属化：每当自己回合结束，获得 N 点格挡（拉加维林睡眠期）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
@@ -57,6 +58,10 @@ export type Effect =
   | { kind: "lose_hp"; amount: number }
   // 玩家回复最大生命的百分比（血之药水 40%）。
   | { kind: "heal_percent"; percent: number }
+  // 敌人用：偷取玩家金币（拾荒者，最多偷 amount，玩家金币不足则偷光）。
+  | { kind: "steal_gold"; amount: number }
+  // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。
+  | { kind: "escape" }
   | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
@@ -142,6 +147,8 @@ export type EnemyState = {
   asleep: boolean;
   /** 是否已分裂过（半血分裂只触发一次）。 */
   hasSplit: boolean;
+  /** 是否已逃离战斗（拾荒者烟雾弹后逃跑；逃跑后不再算作战斗目标）。 */
+  escaped: boolean;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */
   modeShiftAccum: number;
   modeShiftThreshold: number | null;

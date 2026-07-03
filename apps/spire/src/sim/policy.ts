@@ -16,11 +16,13 @@ export function legalActions(state: GameState): GameAction[] {
   if (state.screen === "combat" && state.combat) {
     const combat = state.combat;
     const target = lowestHpEnemyIndex(state);
+    const entangled = combat.playerPowers.some(p => p.id === "entangled" && p.amount > 0);
     const actions: GameAction[] = [];
     combat.hand.forEach((instance, handIndex) => {
       const def = getCardDef(instance.defId);
       const cost = costOf(def, instance.upgraded);
-      if (cost !== null && cost <= combat.energy) {
+      const blockedByEntangle = entangled && def.type === "attack";
+      if (cost !== null && cost <= combat.energy && !blockedByEntangle) {
         actions.push({
           type: "play_card",
           handIndex,
@@ -109,12 +111,16 @@ export class GreedyPolicy implements Policy {
     }
     const combat = state.combat;
     const target = lowestHpEnemyIndex(state);
+    const entangled = combat.playerPowers.some(p => p.id === "entangled" && p.amount > 0);
     // 先上能力牌（常驻收益），再出攻击牌，最后加格挡牌，够费就打。
     const order = ["power", "attack", "skill"];
     for (const wantType of order) {
       for (let handIndex = 0; handIndex < combat.hand.length; handIndex += 1) {
         const def = getCardDef(combat.hand[handIndex]!.defId);
         const cost = costOf(def, combat.hand[handIndex]!.upgraded);
+        if (entangled && def.type === "attack") {
+          continue; // 缠绕：本回合打不出攻击牌。
+        }
         if (def.type === wantType && cost !== null && cost <= combat.energy) {
           return { type: "play_card", handIndex, targetIndex: def.targeted ? target : null };
         }

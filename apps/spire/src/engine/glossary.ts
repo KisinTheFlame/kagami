@@ -43,6 +43,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "获得的格挡降低 25%（×0.75，向下取整）。每回合结束 -1 层。",
   },
   {
+    term: "缠绕",
+    aliases: ["entangled", "entangle"],
+    definition: "本回合无法打出任何攻击牌（技能/能力仍可打）。回合结束后解除。红色奴隶主专属。",
+  },
+  {
     term: "荆棘",
     aliases: ["thorns"],
     definition: "每次被攻击时，对攻击者反弹等于层数的伤害（无视其格挡）。持续整场战斗。",
