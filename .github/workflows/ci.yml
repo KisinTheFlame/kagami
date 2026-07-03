@@ -32,17 +32,12 @@ jobs:
 
       # build / typecheck / lint / format / test 全部 config-free：
       # prisma generate 用占位 DATABASE_URL（见 scripts/prisma.sh），测试不读运行时 config。
+      #
+      # build 必须先跑：typecheck / lint（type-aware）/ test 都经包间 exports 解析到
+      # dist，build 是硬屏障。build 之后四个检查彼此独立，交给 ci-checks.sh 并行跑、
+      # 隔离日志、聚合退出码，把墙钟从串行 ~173s 压到 build + max(检查)。
       - name: Build
         run: pnpm build
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Format check
-        run: pnpm format
-
-      - name: Test
-        run: pnpm test
+      - name: Checks (typecheck / lint / format / test, parallel)
+        run: bash scripts/ci-checks.sh
