@@ -1,0 +1,15 @@
+{{~#unless bare~}}<qq_notice>{{~/unless~}}
+{{~#if isBan~}}
+{{~#if wholeGroup~}}{{operator}} 开启了全员禁言
+{{~else~}}
+{{~#if selfTargeted~}}你被 {{operator}} 禁言了 {{duration}}
+{{~else~}}{{target}} 被 {{operator}} 禁言了 {{duration}}{{~/if~}}
+{{~/if~}}
+{{~else~}}
+{{~#if wholeGroup~}}{{operator}} 解除了全员禁言
+{{~else~}}
+{{~#if selfTargeted~}}{{operator}} 解除了你的禁言
+{{~else~}}{{operator}} 解除了 {{target}} 的禁言{{~/if~}}
+{{~/if~}}
+{{~/if~}}
+{{~#unless bare~}}</qq_notice>{{~/unless~}}

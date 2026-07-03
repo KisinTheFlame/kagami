@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { QqApp } from "../../../../src/agent/apps/qq/qq.app.js";
+import { GroupMuteStateStore } from "../../../../src/agent/capabilities/messaging/application/group-mute-state.store.js";
 import { NotificationCenter } from "../../../../src/agent/runtime/root-agent/notification/notification-center.js";
 import type { NotificationScheduler } from "../../../../src/agent/runtime/root-agent/notification/notification-scheduler.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
 import type {
   NapcatGatewayService,
+  NapcatGroupBanData,
   NapcatGroupMessageData,
 } from "../../../../src/napcat/application/napcat-gateway.service.js";
 import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/application/napcat-gateway/shared.js";
@@ -73,7 +75,11 @@ function groupMessage(text: string, atQQ?: string): NapcatGroupMessageData {
 function createApp(
   scheduler: FakeScheduler,
   onFlush: (lines: string[]) => void,
-  options: { notifyForegroundInput?: () => void; napcatGateway?: NapcatGatewayService } = {},
+  options: {
+    notifyForegroundInput?: () => void;
+    napcatGateway?: NapcatGatewayService;
+    muteStore?: GroupMuteStateStore;
+  } = {},
 ) {
   const center = new NotificationCenter({ leadingWindowMs: 50, windowMs: 100, onFlush, scheduler });
   return new QqApp({
@@ -85,6 +91,7 @@ function createApp(
     creatorQQ: "20002",
     listenGroupIds: ["1"],
     recentMessageLimit: 5,
+    muteStore: options.muteStore ?? new GroupMuteStateStore(),
     sendMessageTool: dummySendTool,
     sendResourceTool: dummySendTool,
     listGroupFilesTool: dummySendTool,
@@ -144,6 +151,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -235,6 +243,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -320,6 +329,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -384,6 +394,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -459,6 +470,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -551,6 +563,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -586,6 +599,7 @@ describe("QqApp", () => {
       creatorQQ: "20002",
       listenGroupIds: ["1"],
       recentMessageLimit: 5,
+      muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
       sendResourceTool: dummySendTool,
       listGroupFilesTool: dummySendTool,
@@ -1058,5 +1072,106 @@ describe("QqApp 前台实时输入（issue #251）", () => {
     // 消息仍在：之后列表里未读还在（这里用退化补推间接验证——消息未被吞）。
     const onFocusContent = (await app.onFocus())[0];
     expect("content" in onFocusContent ? onFocusContent.content : "").toContain("未读 1");
+  });
+});
+
+describe("QqApp 群禁言通知", () => {
+  function banEvent(overrides: Partial<NapcatGroupBanData> = {}): {
+    type: "napcat_group_ban";
+    data: NapcatGroupBanData;
+  } {
+    return {
+      type: "napcat_group_ban",
+      data: {
+        groupId: "1",
+        subType: "ban",
+        targetUserId: "10002",
+        targetName: "李四",
+        operatorUserId: "10001",
+        operatorName: "张三",
+        durationSeconds: 600,
+        time: null,
+        ...overrides,
+      },
+    };
+  }
+
+  it("自己被禁言：计未读 + 通知带裸正文预览 + 更新禁言态", async () => {
+    const scheduler = new FakeScheduler();
+    const onFlush = vi.fn();
+    const muteStore = new GroupMuteStateStore();
+    const app = createApp(scheduler, onFlush, { muteStore });
+    await app.onStartup();
+
+    app.handleNapcatEvent(banEvent({ targetUserId: "10001", targetName: null }));
+    scheduler.fireWindowEnd();
+
+    expect(onFlush.mock.calls[0][0]).toEqual(["QQ:", "产品群: 你被 张三(10001) 禁言了 10 分钟"]);
+    expect(muteStore.check("1")).toMatchObject({ muted: true, reason: "self" });
+  });
+
+  it("群友被解禁：同路径走对应文案（不动禁言态）", async () => {
+    const scheduler = new FakeScheduler();
+    const onFlush = vi.fn();
+    const muteStore = new GroupMuteStateStore();
+    const app = createApp(scheduler, onFlush, { muteStore });
+    await app.onStartup();
+
+    app.handleNapcatEvent(banEvent({ subType: "lift_ban", durationSeconds: 0 }));
+    scheduler.fireWindowEnd();
+
+    expect(onFlush.mock.calls[0][0]).toEqual([
+      "QQ:",
+      "产品群: 张三(10001) 解除了 李四(10002) 的禁言",
+    ]);
+    // 群友解禁不影响小镜自己的禁言态。
+    expect(muteStore.check("1")).toEqual({ muted: false });
+  });
+
+  it("全员禁言开：更新 whole 态", () => {
+    const muteStore = new GroupMuteStateStore();
+    const app = createApp(new FakeScheduler(), vi.fn(), { muteStore });
+    app.handleNapcatEvent(banEvent({ targetUserId: null, targetName: null }));
+    expect(muteStore.check("1")).toEqual({ muted: true, reason: "whole" });
+  });
+
+  it("首开会话时 notice 不被历史覆盖吞掉：不进首开块 + 敲门 + 下一轮 drain 渲染 <qq_notice>", async () => {
+    const scheduler = new FakeScheduler();
+    const notifyForegroundInput = vi.fn();
+    const napcatGateway = fakeGateway({
+      getRecentGroupMessages: vi.fn().mockResolvedValue([groupMessage("历史消息")]),
+    });
+    const app = createApp(scheduler, vi.fn(), { notifyForegroundInput, napcatGateway });
+    await app.onStartup();
+
+    // 群友被禁言（非前台当前会话）→ 进缓冲。
+    app.handleNapcatEvent(banEvent());
+
+    const open = await app.openConversation("qq_group:1");
+    expect(open.content).toContain("历史消息"); // 首开块展示的是历史
+    expect(open.content).not.toContain("<qq_notice>"); // notice 不在首开渲染结果里
+    expect(notifyForegroundInput).toHaveBeenCalled(); // 敲门：留存的 notice 等下一轮 drain
+
+    const drained = await app.drainForegroundInput();
+    expect(drained?.text).toContain(
+      "<qq_notice>李四(10002) 被 张三(10001) 禁言了 10 分钟</qq_notice>",
+    );
+  });
+
+  it("onStartup 用 groupAllShut 恢复全员禁言态（无需先失败一次）", async () => {
+    const muteStore = new GroupMuteStateStore();
+    const napcatGateway = fakeGateway({
+      getGroupInfo: vi.fn().mockResolvedValue({
+        groupId: "1",
+        groupName: "产品群",
+        memberCount: 1,
+        maxMemberCount: 2,
+        groupRemark: "",
+        groupAllShut: true,
+      }),
+    });
+    const app = createApp(new FakeScheduler(), vi.fn(), { muteStore, napcatGateway });
+    await app.onStartup();
+    expect(muteStore.check("1")).toEqual({ muted: true, reason: "whole" });
   });
 });

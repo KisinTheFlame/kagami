@@ -11,7 +11,37 @@ import {
   createPrivateConversationId,
 } from "./conversation-id.js";
 
-export type ConversationMessage = NapcatGroupMessageData | NapcatPrivateMessageData;
+/**
+ * 群禁言 / 解禁通知的会话流消息变体。与普通消息完全同路（计未读、推通知 draft、前台敲门），
+ * 只是渲染成 `<qq_notice>` 而非 `<qq_message>`。判别字段 `kind`——现有两个消息类型都没有
+ * 这个键，用 `"kind" in m`（isGroupNotice）区分即可，strict TS 下每个漏改的访问点编译即报错。
+ */
+export type GroupNoticeMessage = {
+  readonly kind: "group_notice";
+  noticeType: "ban" | "lift_ban";
+  /** 全员禁言 / 解禁（NapCat user_id=0）。 */
+  wholeGroup: boolean;
+  /** 被禁言人是小镜自己（targetUserId === botQQ），渲染"你被…"用。 */
+  selfTargeted: boolean;
+  targetUserId: string | null;
+  targetName: string | null;
+  operatorUserId: string | null;
+  operatorName: string | null;
+  durationSeconds: number;
+  /** notice 无消息 id：让 dropUnreadIn 的 messageId 去重路径类型直通（null 保守保留）。 */
+  messageId: null;
+  time: number | null;
+};
+
+export type ConversationMessage =
+  | NapcatGroupMessageData
+  | NapcatPrivateMessageData
+  | GroupNoticeMessage;
+
+/** 会话流里的禁言通知变体判别（现有两个消息类型均无 kind 字段）。 */
+export function isGroupNotice(message: ConversationMessage): message is GroupNoticeMessage {
+  return "kind" in message;
+}
 
 type GroupMeta = {
   readonly kind: "group";

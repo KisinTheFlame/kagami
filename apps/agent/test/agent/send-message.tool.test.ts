@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
+import { MutedSendError } from "../../src/agent/capabilities/messaging/application/muted-send-error.js";
 import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
 
 /** chatTarget 现由 QqApp 经 getChatTarget 注入（不再走 tool 执行上下文），执行上下文置空即可。 */
@@ -224,5 +225,35 @@ describe("send_message tool", () => {
     const parsed = JSON.parse(result.content);
     expect(parsed.ok).toBe(true);
     expect(parsed.aiToneScore).toBeUndefined();
+  });
+
+  describe("禁言拦截（service 抛 MutedSendError）", () => {
+    it("正常发送路径遇 MUTED：翻译成 error=MUTED + 友好 note", async () => {
+      const until = new Date(2026, 6, 3, 15, 30).getTime();
+      const sendGroupMessage = vi.fn().mockRejectedValue(new MutedSendError("self", until));
+      const { tool } = buildTool({ score: 0.1, sendGroupMessage });
+
+      const result = await tool.execute({ message: "在吗" }, emptyContext);
+
+      const parsed = JSON.parse(result.content);
+      expect(parsed.ok).toBe(false);
+      expect(parsed.error).toBe("MUTED");
+      expect(parsed.note).toContain("正被禁言");
+      expect(parsed.note).toContain("才能说话");
+    });
+
+    it("confirm_last 遇 MUTED：保留草稿并返回 MUTED（非 RESEND_FAILED）", async () => {
+      const sendGroupMessage = vi.fn().mockRejectedValue(new MutedSendError("whole"));
+      const { tool, pendingDraftStore } = buildTool({ score: 0.9, sendGroupMessage });
+
+      await tool.execute({ message: "这不是结束，而是开始" }, emptyContext); // 被 AI 味拦，存草稿
+      const result = await tool.execute({ confirm_last: true }, emptyContext);
+
+      const parsed = JSON.parse(result.content);
+      expect(parsed.error).toBe("MUTED");
+      expect(parsed.note).toContain("全员禁言");
+      // 草稿保留：解禁后还能 confirm_last 补发。
+      expect(pendingDraftStore.peek()).not.toBeNull();
+    });
   });
 });
