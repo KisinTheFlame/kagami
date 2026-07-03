@@ -680,6 +680,63 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 第二幕精英 ——
+  {
+    id: "gremlin_leader",
+    name: "地精首领",
+    hpMin: 140,
+    hpMax: 148,
+    moves: [
+      {
+        id: "summon_gremlins",
+        name: "召唤地精",
+        effects: [{ kind: "summon", defIds: ["mad_gremlin", "sneaky_gremlin"] }],
+        intent: "unknown",
+      },
+      {
+        id: "encourage",
+        name: "鼓舞",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "all_enemies" }],
+        intent: "buff",
+      },
+      {
+        id: "gl_stab",
+        name: "突刺",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+    ],
+    // 召唤由 combat.ts gremlin_leader 分支处理（身边地精 <2 则召唤）；否则 鼓舞/突刺。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "encourage", weight: 40, maxInARow: 1 },
+        { move: "gl_stab", weight: 60, maxInARow: 2 },
+      ],
+    },
+  },
+  {
+    id: "taskmaster",
+    name: "工头",
+    hpMin: 54,
+    hpMax: 60,
+    moves: [
+      {
+        id: "scouring_whip",
+        name: "抽打",
+        effects: [
+          { kind: "deal_damage", amount: 7 },
+          { kind: "add_card", cardId: "wound", pile: "discard", count: 1 },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "scouring_whip", weight: 1, maxInARow: 99 }],
+    },
+  },
+
   // —— 第二幕精英：穿刺之书（多段攻击）——
   {
     id: "book_of_stabbing",
@@ -1157,6 +1214,14 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   // 百夫长 + 秘法师：秘法师治疗/鼓舞百夫长，经典组合。
   centurion_mystic: { id: "centurion_mystic", enemies: ["centurion", "mystic"], isBoss: false },
   book_of_stabbing: { id: "book_of_stabbing", enemies: ["book_of_stabbing"], isBoss: false },
+  // 地精首领带 2 只地精登场；死光了会继续召唤。
+  gremlin_leader: {
+    id: "gremlin_leader",
+    enemies: ["mad_gremlin", "gremlin_leader", "sneaky_gremlin"],
+    isBoss: false,
+  },
+  // 奴隶主小队：工头 + 蓝/红奴隶主。
+  slavers: { id: "slavers", enemies: ["taskmaster", "blue_slaver", "red_slaver"], isBoss: false },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
@@ -1255,8 +1320,12 @@ const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "three_sentries", weight: 1 },
 ];
 
-// Act2 精英池（切片：穿刺之书；后续补 地精首领 / 夜魔）。
-const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [{ id: "book_of_stabbing", weight: 1 }];
+// Act2 精英池：穿刺之书 / 地精首领 / 奴隶主小队。
+const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
+  { id: "book_of_stabbing", weight: 1 },
+  { id: "gremlin_leader", weight: 1 },
+  { id: "slavers", weight: 1 },
+];
 
 /** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
 export function pickEliteEncounter(rng: RngState, act = 1): string {
