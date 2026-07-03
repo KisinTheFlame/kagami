@@ -34,15 +34,27 @@ describe("三幕", () => {
   });
 
   it("act=3 池只出第三幕内容", () => {
-    const ACT3_NORMALS = new Set(["spiker", "orb_walker", "exploder", "two_exploders"]);
+    const ACT3_NORMALS = new Set([
+      "spiker",
+      "orb_walker",
+      "exploder",
+      "two_exploders",
+      "repulsor",
+      "transient",
+      "two_orb_walkers",
+    ]);
     for (let seed = 0; seed < 40; seed += 1) {
       const rng = seedRng(seed);
       for (const entered of [0, 2, 5]) {
         expect(ACT3_NORMALS.has(pickNormalEncounter(rng, entered, 3))).toBe(true);
       }
     }
-    expect(pickEliteEncounter(seedRng(1), 3)).toBe("reptomancer");
-    expect(pickBossEncounter(seedRng(1), 3)).toBe("donu_deca");
+    const ACT3_ELITES = new Set(["reptomancer", "giant_head"]);
+    const ACT3_BOSSES = new Set(["donu_deca", "awakened_one"]);
+    for (let seed = 0; seed < 40; seed += 1) {
+      expect(ACT3_ELITES.has(pickEliteEncounter(seedRng(seed), 3))).toBe(true);
+      expect(ACT3_BOSSES.has(pickBossEncounter(seedRng(seed), 3))).toBe(true);
+    }
   });
 });
 
