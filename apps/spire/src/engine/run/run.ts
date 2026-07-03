@@ -53,10 +53,21 @@ const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   boss: "首领",
 };
 
+/** 有内容的幕数：打完第 TOTAL_ACTS 幕 Boss 即通关；之前的 Boss 则进入下一幕。 */
+export const TOTAL_ACTS = 1;
+
 export function buildMap(state: GameState): void {
   state.map = generateMap(state.rng, ENABLED_MAP_TYPES);
   state.currentNodeId = null;
   state.screen = "map";
+}
+
+/** 进入下一幕：幕号 +1、重置本幕战斗计数、生成新地图，携带血/牌/遗物/金币/药水。 */
+export function advanceToNextAct(state: GameState): void {
+  state.act += 1;
+  state.combatsEntered = 0;
+  buildMap(state);
+  state.log.push(`你踏入第 ${state.act} 幕。`);
 }
 
 /** 进入一个地图节点：按类型路由。战斗/Boss 起战斗；篝火切 rest 屏；宝箱即时给金币后回地图。 */

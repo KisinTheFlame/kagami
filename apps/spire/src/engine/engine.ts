@@ -3,7 +3,7 @@ import { IRONCLAD_STARTER_DECK } from "./cards/cards.js";
 import { IRONCLAD_STARTER_RELIC } from "./relics/relics.js";
 import { seedRng } from "./rng.js";
 import { endTurn, playCard, usePotion } from "./combat/combat.js";
-import { applyChoose, buildMap, generateReward } from "./run/run.js";
+import { TOTAL_ACTS, advanceToNextAct, applyChoose, buildMap, generateReward } from "./run/run.js";
 import { POTION_SLOTS } from "./potions/potions.js";
 import { NEOW_EVENT_ID } from "./events/events.js";
 
@@ -41,6 +41,7 @@ export function newRun(input: {
     seed: input.seed,
     character,
     ascension: input.ascension ?? 0,
+    act: 1,
     screen: "map",
     hp: IRONCLAD_MAX_HP,
     maxHp: IRONCLAD_MAX_HP,
@@ -117,9 +118,14 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   }
 }
 
-/** 战斗胜利后收尾：非 Boss 胜利（combat 清空但 screen 仍为 combat）转卡奖励。 */
+/** 战斗胜利后收尾：非 Boss 转卡奖励；Boss 胜利若还有后续幕则携带状态进入下一幕，否则通关。 */
 function settleAfterCombat(state: GameState): void {
   if (state.combat === null && state.screen === "combat") {
     generateReward(state);
+    return;
+  }
+  // Boss 胜利（combat.ts 已置 screen="victory"）：非最终幕则进入下一幕。
+  if (state.screen === "victory" && state.act < TOTAL_ACTS) {
+    advanceToNextAct(state);
   }
 }
