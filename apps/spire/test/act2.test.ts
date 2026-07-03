@@ -20,7 +20,16 @@ describe("多幕", () => {
 });
 
 describe("第二幕战斗池", () => {
-  const ACT2_NORMALS = new Set(["spheric_guardian", "snake_plant", "centurion", "two_centurions"]);
+  const ACT2_NORMALS = new Set([
+    "spheric_guardian",
+    "snake_plant",
+    "centurion",
+    "two_centurions",
+    "shelled_parasite",
+    "chosen",
+    "snecko",
+    "centurion_mystic",
+  ]);
 
   it("act=2 普通池只出第二幕怪", () => {
     for (let seed = 0; seed < 40; seed += 1) {

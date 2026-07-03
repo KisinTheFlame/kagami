@@ -94,6 +94,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 球形守卫开局自带 3 层神器（抵消你前三个减益）。
     powers.push({ id: "artifact", amount: 3 });
   }
+  if (defId === "shelled_parasite") {
+    // 带壳寄生虫开局自带 14 层镀甲（每回合结束回格挡，被穿甲攻击时递减）。
+    powers.push({ id: "plated_armor", amount: 14 });
+  }
   if (defId === "fungi_beast") {
     // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
     powers.push({ id: "spore_cloud", amount: 2 });
@@ -391,6 +395,24 @@ function applyEffect(
       }
       break;
     }
+    case "heal_self": {
+      // 敌人回复自身生命（带壳寄生虫吸取）。
+      if (actor.side === "enemy") {
+        const self = combat.enemies[actor.index]!;
+        self.hp = Math.min(self.maxHp, self.hp + effect.amount);
+      }
+      break;
+    }
+    case "heal_ally": {
+      // 敌人治疗一名受伤的友军（秘法师）；无受伤友军则治自己。
+      if (actor.side === "enemy") {
+        const wounded = combat.enemies.filter(e => e.hp > 0 && !e.escaped && e.hp < e.maxHp);
+        const targets = wounded.length > 0 ? wounded : [combat.enemies[actor.index]!];
+        const pick = targets[nextInt(state.rng, targets.length)]!;
+        pick.hp = Math.min(pick.maxHp, pick.hp + effect.amount);
+      }
+      break;
+    }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
       break;
@@ -532,6 +554,10 @@ function dealDamageToEnemy(
   const angry = getPower(enemy.powers, "angry");
   if (angry > 0 && afterBlock > 0 && enemy.hp > 0) {
     addPower(enemy.powers, "strength", angry);
+  }
+  // 镀甲（带壳寄生虫）：受到穿透格挡的攻击伤害时 -1 层。
+  if (afterBlock > 0 && enemy.hp > 0 && getPower(enemy.powers, "plated_armor") > 0) {
+    addPower(enemy.powers, "plated_armor", -1);
   }
   // 半血分裂：降到 ≤maxHp/2 且未分裂过 → 下一动作强制变分裂。
   const def = getEnemyDef(enemy.defId);
@@ -810,10 +836,14 @@ export function endTurn(state: GameState): void {
       state.log.push("你倒下了。");
       return;
     }
-    // 金属化：自己回合结束获得格挡（拉加维林睡眠期每回合回 8）。
+    // 金属化 / 镀甲：自己回合结束获得格挡（拉加维林金属化 8、带壳寄生虫镀甲 14）。
     const metallicize = getPower(enemy.powers, "metallicize");
     if (metallicize > 0) {
       enemy.block += metallicize;
+    }
+    const enemyPlated = getPower(enemy.powers, "plated_armor");
+    if (enemyPlated > 0) {
+      enemy.block += enemyPlated;
     }
     decayDebuffs(enemy.powers);
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。

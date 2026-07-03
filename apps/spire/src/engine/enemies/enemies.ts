@@ -538,6 +538,148 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  {
+    id: "shelled_parasite",
+    name: "带壳寄生虫",
+    hpMin: 68,
+    hpMax: 72,
+    moves: [
+      {
+        id: "double_strike",
+        name: "双重打击",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "suck",
+        name: "吸取",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "heal_self", amount: 10 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "fell",
+        name: "重击",
+        effects: [
+          { kind: "deal_damage", amount: 18 },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "double_strike", weight: 45, maxInARow: 2 },
+        { move: "fell", weight: 30, maxInARow: 1 },
+        { move: "suck", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "chosen",
+    name: "选民",
+    hpMin: 95,
+    hpMax: 99,
+    moves: [
+      {
+        id: "poke",
+        name: "戳刺",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+      {
+        id: "zap",
+        name: "电击",
+        effects: [{ kind: "deal_damage", amount: 18 }],
+        intent: "attack",
+      },
+      {
+        id: "drain",
+        name: "汲取",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+    ],
+    // 首招汲取(削弱玩家+自强)，之后 戳刺/电击。
+    intentRule: {
+      scripted: ["drain"],
+      weighted: [
+        { move: "poke", weight: 55, maxInARow: 2 },
+        { move: "zap", weight: 45, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "snecko",
+    name: "史尼克",
+    hpMin: 114,
+    hpMax: 120,
+    moves: [
+      {
+        id: "snecko_bite",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 15 }],
+        intent: "attack",
+      },
+      {
+        id: "tail_whip",
+        name: "尾击",
+        effects: [
+          { kind: "deal_damage", amount: 8 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "snecko_bite", weight: 60, maxInARow: 2 },
+        { move: "tail_whip", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "mystic",
+    name: "秘法师",
+    hpMin: 48,
+    hpMax: 56,
+    moves: [
+      {
+        id: "mystic_heal",
+        name: "治疗",
+        effects: [{ kind: "heal_ally", amount: 16 }],
+        intent: "buff",
+      },
+      {
+        id: "mystic_buff",
+        name: "鼓舞",
+        effects: [{ kind: "apply_power", power: "strength", amount: 2, on: "all_enemies" }],
+        intent: "buff",
+      },
+      {
+        id: "mystic_attack",
+        name: "法击",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "mystic_heal", weight: 35, maxInARow: 1 },
+        { move: "mystic_buff", weight: 30, maxInARow: 1 },
+        { move: "mystic_attack", weight: 35, maxInARow: 2 },
+      ],
+    },
+  },
+
   // —— 第二幕精英：穿刺之书（多段攻击）——
   {
     id: "book_of_stabbing",
@@ -1009,6 +1151,11 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   spheric_guardian: { id: "spheric_guardian", enemies: ["spheric_guardian"], isBoss: false },
   centurion: { id: "centurion", enemies: ["centurion"], isBoss: false },
   two_centurions: { id: "two_centurions", enemies: ["centurion", "centurion"], isBoss: false },
+  shelled_parasite: { id: "shelled_parasite", enemies: ["shelled_parasite"], isBoss: false },
+  chosen: { id: "chosen", enemies: ["chosen"], isBoss: false },
+  snecko: { id: "snecko", enemies: ["snecko"], isBoss: false },
+  // 百夫长 + 秘法师：秘法师治疗/鼓舞百夫长，经典组合。
+  centurion_mystic: { id: "centurion_mystic", enemies: ["centurion", "mystic"], isBoss: false },
   book_of_stabbing: { id: "book_of_stabbing", enemies: ["book_of_stabbing"], isBoss: false },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
@@ -1070,11 +1217,16 @@ const ACT2_WEAK_POOL: readonly WeightedEncounter[] = [
   { id: "spheric_guardian", weight: 1 },
   { id: "snake_plant", weight: 1 },
   { id: "centurion", weight: 1 },
+  { id: "shelled_parasite", weight: 1 },
+  { id: "chosen", weight: 1 },
 ];
 
 const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
-  { id: "centurion", weight: 2 },
-  { id: "snake_plant", weight: 2 },
+  { id: "chosen", weight: 2 },
+  { id: "snecko", weight: 2 },
+  { id: "centurion_mystic", weight: 2 },
+  { id: "shelled_parasite", weight: 2 },
+  { id: "snake_plant", weight: 1 },
   { id: "two_centurions", weight: 1 },
   { id: "spheric_guardian", weight: 1 },
 ];
