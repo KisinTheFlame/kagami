@@ -441,6 +441,22 @@ function applyEffect(
       }
       break;
     }
+    case "heal": {
+      if (actor.side === "player") {
+        state.hp = Math.min(state.maxHp, state.hp + effect.amount);
+      }
+      break;
+    }
+    case "double_strength": {
+      // 玩家当前力量翻倍（极限爆发）；负力量同样翻倍。
+      if (actor.side === "player") {
+        const cur = getPower(combat.playerPowers, "strength");
+        if (cur !== 0) {
+          addPower(combat.playerPowers, "strength", cur);
+        }
+      }
+      break;
+    }
     case "steal_gold": {
       // 敌人偷金币（拾荒者）：最多偷 amount，玩家金币不足则偷光。
       if (actor.side === "enemy") {

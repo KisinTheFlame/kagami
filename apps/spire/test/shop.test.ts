@@ -13,11 +13,12 @@ function shop(): GameState {
 }
 
 describe("商店库存", () => {
-  it("进店切到 shop 屏、生成 5 卡 + 2 遗物 + 3 药水", () => {
+  it("进店切到 shop 屏、生成 5 有色卡 + 1 无色卡 + 2 遗物 + 3 药水", () => {
     const s = shop();
     expect(s.screen).toBe("shop");
     const items = s.shop!.items;
-    expect(items.filter(i => i.kind === "card")).toHaveLength(5);
+    // 5 张角色有色卡 + 1 张无色卡 = 6 张 card。
+    expect(items.filter(i => i.kind === "card")).toHaveLength(6);
     expect(items.filter(i => i.kind === "relic").length).toBeLessThanOrEqual(2);
     expect(items.filter(i => i.kind === "potion")).toHaveLength(3);
     for (const item of items) {
