@@ -37,7 +37,7 @@ export class HttpLlmClient implements LlmClient {
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.api = createClient(llmApiContract, {
-      baseUrl: baseUrl.replace(/\/+$/, ""),
+      baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       timeoutMs: DEFAULT_CLIENT_TIMEOUT_MS,
       unreachableMessage: LLM_UNREACHABLE_MESSAGE,

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import { createClient, notReadyFallbackMapper, type JsonClient } from "@kagami/rpc-client/client";
 import {
   spireApiContract,
   SpireActionSchema,
@@ -56,26 +56,15 @@ export class HttpSpireClient implements SpireClient {
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.api = createClient(spireApiContract, {
-      baseUrl: baseUrl.replace(/\/+$/, ""),
+      baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       // 服务端错误信封是 { error: { message, statusCode } }（非 BizErrorWire），非 2xx 一律
       // 走 mapFallbackError 归一成 SPIRE_NOT_READY——与拆契约前的行为一致。
       decodeError: () => undefined,
-      mapFallbackError: info => {
-        switch (info.reason) {
-          case "unreachable":
-            return new SpireError(
-              "SPIRE_NOT_READY",
-              `尖塔服务不可达（未启动 / 半开 / 超时）：${
-                info.cause instanceof Error ? info.cause.message : String(info.cause)
-              }`,
-            );
-          case "bad_status":
-            return new SpireError("SPIRE_NOT_READY", `尖塔服务返回 HTTP ${info.status}`);
-          case "invalid_response_body":
-            return new SpireError("SPIRE_NOT_READY", "尖塔服务返回了无法解析的响应体");
-        }
-      },
+      mapFallbackError: notReadyFallbackMapper(
+        "尖塔服务",
+        message => new SpireError("SPIRE_NOT_READY", message),
+      ),
     });
   }
 

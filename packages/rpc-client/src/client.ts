@@ -64,8 +64,9 @@ export type JsonClient<TContracts extends JsonContractMap> = {
   [K in keyof TContracts]: JsonCall<TContracts[K]>;
 };
 
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_UNREACHABLE_MESSAGE = "上游服务调用失败";
+// 导出供 binary-client 复用同一套默认（default timeout / 兜底 message）。
+export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_UNREACHABLE_MESSAGE = "上游服务调用失败";
 
 export function createClient<TContracts extends JsonContractMap>(
   contracts: TContracts,
@@ -166,8 +167,34 @@ async function callJsonRoute(
   return contract.output.parse(payload);
 }
 
+/**
+ * 通用「服务未就绪」兜底映射器：把三种兜底成因统一成一个领域错误。`label` 拼进标准中文文案
+ * （不可达 / HTTP 状态 / 响应体无效），`make` 决定错误类。给 browser（BrowserError）/ spire
+ * （SpireError）这类「连接失败/半开/非 2xx/坏响应一律归一为 X_NOT_READY」的消费者共用，替掉各自
+ * 手写、逐字相同的 switch（issue #310）。文案与被替换的原实现逐字一致，字节基线不变。
+ */
+export function notReadyFallbackMapper(
+  label: string,
+  make: (message: string) => Error,
+): FallbackErrorMapper {
+  return info => {
+    switch (info.reason) {
+      case "unreachable":
+        return make(
+          `${label}不可达（未启动 / 半开 / 超时）：${
+            info.cause instanceof Error ? info.cause.message : String(info.cause)
+          }`,
+        );
+      case "bad_status":
+        return make(`${label}返回 HTTP ${info.status}`);
+      case "invalid_response_body":
+        return make(`${label}返回了无法解析的响应体`);
+    }
+  };
+}
+
 /** 默认兜底：三种成因都映射成 BizError(unreachableMessage)，meta 带成因与状态码便于诊断。 */
-function defaultFallbackErrorMapper(unreachableMessage: string): FallbackErrorMapper {
+export function defaultFallbackErrorMapper(unreachableMessage: string): FallbackErrorMapper {
   return info => {
     switch (info.reason) {
       case "unreachable":
@@ -192,7 +219,7 @@ function defaultFallbackErrorMapper(unreachableMessage: string): FallbackErrorMa
 }
 
 /** 默认错误解码：非 2xx body 若为 `{ error: BizErrorWire }` → 重建等价 BizError。 */
-const decodeBizErrorWire: ErrorDecoder = (_status, body) => {
+export const decodeBizErrorWire: ErrorDecoder = (_status, body) => {
   if (body !== null && typeof body === "object") {
     const error = (body as { error?: unknown }).error;
     if (isBizErrorWire(error)) {

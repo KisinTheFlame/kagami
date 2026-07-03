@@ -15,6 +15,11 @@ export const ossApiContract = {
     path: "/objects",
     params: z.object({}),
     bytesIn: true,
+    // content-type 随对象存取，是契约的一部分（不再是 client 里硬编码的裸 header）：client 按此
+    // schema 校验后写进请求头。注意服务端目前仍从 request 原样读 content-type、未绑定此 schema——
+    // 把 header 校验下沉到 registerBinaryEnvelopeRoute 是后续工作，当前只约束了 client 这一端
+    // （issue #310）。
+    headers: z.object({ "content-type": z.string().min(1) }),
     output: z.object({ key: z.string().min(1) }),
     statusCode: 201,
   }),
