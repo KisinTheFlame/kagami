@@ -25,7 +25,7 @@ describe("角色配置", () => {
   });
 
   it("未实现角色抛错（守卫栏杆，防止无效角色开局）", () => {
-    expect(() => newRun({ runId: "x", seed: 1, character: "silent" })).toThrow();
+    expect(() => newRun({ runId: "x", seed: 1, character: "defect" })).toThrow();
   });
 });
 
@@ -38,8 +38,7 @@ describe("卡池按颜色过滤", () => {
     }
   });
 
-  it("绿/蓝/紫色卡池当前为空（角色未实现）", () => {
-    expect(rewardCardPoolOf("green")).toHaveLength(0);
+  it("蓝/紫色卡池当前为空（机器人/观者未实现）", () => {
     expect(rewardCardPoolOf("blue")).toHaveLength(0);
     expect(rewardCardPoolOf("purple")).toHaveLength(0);
   });
@@ -62,7 +61,7 @@ describe("卡池按颜色过滤", () => {
 });
 
 describe("已实现角色清单", () => {
-  it("目前只有铁甲战士", () => {
-    expect(ALL_CHARACTERS.map(c => c.id)).toEqual(["ironclad"]);
+  it("铁甲战士 + 静默猎手", () => {
+    expect(ALL_CHARACTERS.map(c => c.id).sort()).toEqual(["ironclad", "silent"]);
   });
 });

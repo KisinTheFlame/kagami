@@ -19,7 +19,7 @@ import {
   getPower,
   removePower,
 } from "../powers/powers.js";
-import { getRelicDef } from "../relics/relics.js";
+import { getRelicDef, hasRelic } from "../relics/relics.js";
 import type { RelicDef } from "../relics/relics.js";
 import { getPotionDef } from "../potions/potions.js";
 
@@ -167,7 +167,9 @@ export function startCombat(state: GameState, encounterId: string): void {
   triggerRelicCombatStart(state);
   // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
   triggerRelicTurnStart(state);
-  drawCards(state, STARTING_HAND_SIZE);
+  // 蛇之戒指（静默起始遗物）：战斗第一回合额外抽 2 张。
+  const firstTurnDraw = hasRelic(state, "ring_of_the_snake") ? 2 : 0;
+  drawCards(state, STARTING_HAND_SIZE + firstTurnDraw);
 }
 
 /** 遍历持有遗物，对每个的 hooks + 自身 RelicState 调用 fn（原地改 state）。 */
@@ -481,6 +483,7 @@ const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set([
   "weak",
   "frail",
   "entangled",
+  "poison",
 ]);
 
 /** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
@@ -845,6 +848,15 @@ export function endTurn(state: GameState): void {
       continue;
     }
     enemy.block = 0; // 敌人回合开始清格挡。
+    // 中毒：回合开始受到 = 毒层数的伤害（无视格挡），然后毒 -1；毒死则跳过行动。
+    const enemyPoison = getPower(enemy.powers, "poison");
+    if (enemyPoison > 0) {
+      enemy.hp = Math.max(0, enemy.hp - enemyPoison);
+      addPower(enemy.powers, "poison", -1);
+      if (enemy.hp <= 0) {
+        continue;
+      }
+    }
     triggerOnTurnStart(enemy);
     const def = getEnemyDef(enemy.defId);
     const move = def.moves.find(candidate => candidate.id === enemy.currentMove);
@@ -890,6 +902,17 @@ export function endTurn(state: GameState): void {
   const playerRitual = getPower(combat.playerPowers, "ritual");
   if (playerRitual > 0) {
     addPower(combat.playerPowers, "strength", playerRitual);
+  }
+  // 中毒（玩家）：回合开始受到 = 毒层数的伤害（无视格挡），然后毒 -1。
+  const playerPoison = getPower(combat.playerPowers, "poison");
+  if (playerPoison > 0) {
+    state.hp = Math.max(0, state.hp - playerPoison);
+    addPower(combat.playerPowers, "poison", -1);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你中毒身亡。");
+      return;
+    }
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
   triggerRelicTurnStart(state);

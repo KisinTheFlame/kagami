@@ -144,7 +144,7 @@ export const spireApiContract = {
     path: "/run/start",
     input: z.object({
       seed: z.number().int().optional(),
-      character: z.literal("ironclad").optional(),
+      character: z.enum(["ironclad", "silent"]).optional(),
       ascension: z.number().int().min(0).optional(),
     }),
     output: SpireScreenSchema,

@@ -40,8 +40,10 @@ export type SpireCardRef = z.infer<typeof SpireCardRefSchema>;
 export type SpireGlossaryEntry = z.infer<typeof SpireGlossaryEntrySchema>;
 export type SpireReference = z.infer<typeof SpireReferenceSchema>;
 
+export type SpireCharacter = "ironclad" | "silent";
+
 export interface SpireClient {
-  startRun(): Promise<SpireScreen>;
+  startRun(character?: SpireCharacter): Promise<SpireScreen>;
   act(action: SpireAction): Promise<SpireScreen>;
   getState(): Promise<SpireScreen | null>;
   lookup(query: string): Promise<SpireReference>;
@@ -68,8 +70,8 @@ export class HttpSpireClient implements SpireClient {
     });
   }
 
-  public async startRun(): Promise<SpireScreen> {
-    const screen = await this.api.startRun({});
+  public async startRun(character?: SpireCharacter): Promise<SpireScreen> {
+    const screen = await this.api.startRun(character === undefined ? {} : { character });
     this.lastVersion = screen.version;
     return screen;
   }

@@ -48,6 +48,11 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
     definition: "本回合无法打出任何攻击牌（技能/能力仍可打）。回合结束后解除。红色奴隶主专属。",
   },
   {
+    term: "中毒",
+    aliases: ["poison"],
+    definition: "持有者每回合开始时受到等于层数的伤害（无视格挡），然后层数 -1，直到毒清。",
+  },
+  {
     term: "荆棘",
     aliases: ["thorns"],
     definition: "每次被攻击时，对攻击者反弹等于层数的伤害（无视其格挡）。持续整场战斗。",

@@ -72,6 +72,14 @@ const RELIC_LIST: RelicDef[] = [
     },
   },
   {
+    id: "ring_of_the_snake",
+    name: "蛇之戒指",
+    rarity: "starter",
+    // 效果在 combat.ts 的 startCombat 里按 hasRelic 处理（额外抽牌不走钩子）。
+    description: "每场战斗的第一回合，额外抽 2 张牌。",
+    hooks: {},
+  },
+  {
     id: "anchor",
     name: "船锚",
     rarity: "common",
