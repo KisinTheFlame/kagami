@@ -30,6 +30,8 @@ const POWER_LABELS: Record<string, string> = {
   angry: "狂怒",
   spore_cloud: "孢子云",
   demon_form: "恶魔形态",
+  regen: "再生",
+  plated_armor: "镀甲",
   mode_shift: "模式",
 };
 
