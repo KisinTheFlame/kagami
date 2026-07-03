@@ -1,7 +1,7 @@
 import type { GameState, ShopItem, ShopState } from "../types.js";
 import { rewardCardPoolOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
-import { SHOP_RELIC_POOL, hasRelic } from "../relics/relics.js";
+import { shopRelicPool, hasRelic } from "../relics/relics.js";
 import { shopPotionPool } from "../potions/potions.js";
 import { nextInt, nextRange } from "../rng.js";
 
@@ -59,7 +59,7 @@ export function generateShop(state: GameState): void {
     });
   }
 
-  const relicPool = SHOP_RELIC_POOL.filter(id => !hasRelic(state, id));
+  const relicPool = shopRelicPool(state.character).filter(id => !hasRelic(state, id));
   for (const id of sampleUnique(state.rng, relicPool, SHOP_RELIC_COUNT)) {
     items.push({
       kind: "relic",
