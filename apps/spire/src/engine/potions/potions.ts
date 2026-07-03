@@ -138,6 +138,15 @@ const POTION_LIST: PotionDef[] = [
     effects: [{ kind: "apply_power", power: "artifact", amount: 1, on: "self" }],
   },
   {
+    id: "liquid_bronze",
+    name: "液态青铜",
+    description: "获得 3 层荆棘（被攻击时反弹 3 点伤害）。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "apply_power", power: "thorns", amount: 3, on: "self" }],
+  },
+  {
     id: "cultist_potion",
     name: "邪教徒药水",
     description: "获得 1 层仪式（每回合开始获得 1 点力量）。",

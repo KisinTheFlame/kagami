@@ -1,4 +1,4 @@
-import type { CardType, GameState, RelicState } from "../types.js";
+import type { CardType, Effect, GameState, RelicState } from "../types.js";
 import { addPower } from "../powers/powers.js";
 
 // === 遗物系统 ===
@@ -12,8 +12,9 @@ import { addPower } from "../powers/powers.js";
 //   - onCombatEnd：战斗胜利结算（清 combat 前，可回血）。
 //   - onTurnStart：每个玩家回合开始（含第 1 回合；能量重置后、抽牌前）。
 //   - onTurnEnd：每个玩家回合结束（敌人行动前，可留格挡）。
-//   - onCardPlayed：每打出一张牌后（计数型遗物用 self.counter）。
-// 钩子只做直接状态改动（力量/敏捷/格挡/能量/回血）；需要走伤害结算的遗物待「遗物发射 Effect」里程碑。
+//   - onCardPlayed：每打出一张牌后（计数型遗物用 self.counter）；可通过 emit 发射战斗 Effect
+//     （发伤遗物如信封：以玩家为行动者结算）。
+// 直接状态改动（力量/敏捷/格挡/能量/回血）在钩子里做；需要走伤害结算的用 emit 发 Effect。
 // hooks 第二参 self 是该遗物自己的 RelicState，计数型遗物读写 self.counter。
 
 export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss";
@@ -23,7 +24,12 @@ export type RelicHooks = {
   onCombatEnd?: (state: GameState, self: RelicState) => void;
   onTurnStart?: (state: GameState, self: RelicState) => void;
   onTurnEnd?: (state: GameState, self: RelicState) => void;
-  onCardPlayed?: (state: GameState, self: RelicState, cardType: CardType) => void;
+  onCardPlayed?: (
+    state: GameState,
+    self: RelicState,
+    cardType: CardType,
+    emit: (effect: Effect) => void,
+  ) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -244,6 +250,32 @@ const RELIC_LIST: RelicDef[] = [
       onCardPlayed: (state, _self, cardType) => {
         if (cardType === "power") {
           healPlayer(state, 2);
+        }
+      },
+    },
+  },
+  {
+    id: "bronze_scales",
+    name: "青铜鳞片",
+    rarity: "common",
+    description: "每场战斗开始时，获得 3 层荆棘（被攻击时反弹 3 点伤害）。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          addPower(state.combat.playerPowers, "thorns", 3);
+        }
+      },
+    },
+  },
+  {
+    id: "letter_opener",
+    name: "开信刀",
+    rarity: "uncommon",
+    description: "每打出 3 张技能牌，对所有敌人造成 5 点伤害。",
+    hooks: {
+      onCardPlayed: (_state, self, cardType, emit) => {
+        if (cardType === "skill" && tickEvery(self, 3)) {
+          emit({ kind: "deal_damage_all", amount: 5 });
         }
       },
     },
