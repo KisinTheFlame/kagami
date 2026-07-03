@@ -1,6 +1,10 @@
 import type { App, JsonValue } from "@kagami/agent-runtime";
 import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
-import { renderGroupMessagePlainText, renderPrivateMessagePlainText } from "./qq-message-render.js";
+import {
+  renderGroupMessagePlainText,
+  renderGroupNoticePlainText,
+  renderPrivateMessagePlainText,
+} from "./qq-message-render.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
 import type {
@@ -13,18 +17,23 @@ import type {
   NapcatForwardMessagePage,
   NapcatFriendInfo,
   NapcatGatewayService,
+  NapcatGroupBanData,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
 } from "../../../napcat/application/napcat-gateway.service.js";
 import {
   buildChatNotificationPreview,
+  buildNoticePreview,
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../capabilities/messaging/chat-notification-draft.js";
 import {
   Conversation,
   type ConversationMessage,
+  type GroupNoticeMessage,
+  isGroupNotice,
 } from "../../capabilities/messaging/conversation.js";
+import type { GroupMuteStateStore } from "../../capabilities/messaging/application/group-mute-state.store.js";
 import {
   type ConversationId,
   createGroupConversationId,
@@ -78,6 +87,8 @@ type QqAppDeps = {
   creatorQQ: string;
   listenGroupIds: string[];
   recentMessageLimit: number;
+  /** 群禁言状态：禁言事件写、发送工具读。与 DefaultAgentMessageService 共享同一实例。 */
+  muteStore: GroupMuteStateStore;
   /** 已构造好的 send_message 工具（带 AI 味门控等依赖），由 factory 注入。 */
   sendMessageTool: ToolComponent;
   /** 已构造好的 send_resource 工具（按 resid 发图），由 factory 注入。 */
@@ -119,6 +130,7 @@ export class QqApp implements App, ForegroundInputSource {
   private readonly creatorName: string;
   private readonly creatorQQ: string;
   private readonly recentMessageLimit: number;
+  private readonly muteStore: GroupMuteStateStore;
   private readonly conversations = new Map<ConversationId, Conversation>();
   private currentConversationId: ConversationId | null = null;
   /**
@@ -136,6 +148,7 @@ export class QqApp implements App, ForegroundInputSource {
     creatorQQ,
     listenGroupIds,
     recentMessageLimit,
+    muteStore,
     sendMessageTool,
     sendResourceTool,
     listGroupFilesTool,
@@ -149,6 +162,7 @@ export class QqApp implements App, ForegroundInputSource {
     this.creatorName = creatorName;
     this.creatorQQ = creatorQQ;
     this.recentMessageLimit = recentMessageLimit;
+    this.muteStore = muteStore;
     for (const groupId of listenGroupIds) {
       const conversation = Conversation.group(groupId, recentMessageLimit);
       this.conversations.set(conversation.id, conversation);
@@ -193,7 +207,10 @@ export class QqApp implements App, ForegroundInputSource {
             return;
           }
           try {
-            conversation.setGroupInfo(await this.napcatGateway.getGroupInfo({ groupId }));
+            const groupInfo = await this.napcatGateway.getGroupInfo({ groupId });
+            conversation.setGroupInfo(groupInfo);
+            // 重启自愈：全员禁言态从群信息恢复（内存态重启即丢），无需先发一次失败。
+            this.muteStore.setWholeGroupMute(groupId, groupInfo.groupAllShut);
           } catch {
             // 群信息拉不到就退化为 groupId 显示。
           }
@@ -321,6 +338,11 @@ export class QqApp implements App, ForegroundInputSource {
       return;
     }
 
+    if (event.type === "napcat_group_ban") {
+      this.handleGroupBan(event.data);
+      return;
+    }
+
     // 私聊消息
     const conversation = this.ensurePrivateConversation(event.data.userId, {
       userId: event.data.userId,
@@ -328,6 +350,52 @@ export class QqApp implements App, ForegroundInputSource {
       remark: event.data.remark,
     });
     this.ingestMessage(conversation, event.data, false);
+  }
+
+  /**
+   * 群禁言 / 解禁事件：更新禁言状态（自己被禁言 / 解禁、全员禁言开 / 关）+ 作为 group_notice
+   * 会话流消息走 ingestMessage（与普通消息完全同路：计未读、推通知、前台敲门）。会话不存在
+   * （非监听群，理论上已被网关过滤）则丢弃。
+   */
+  private handleGroupBan(data: NapcatGroupBanData): void {
+    const conversation = this.conversations.get(createGroupConversationId(data.groupId));
+    if (!conversation) {
+      return;
+    }
+
+    const wholeGroup = data.targetUserId === null;
+    const selfTargeted = data.targetUserId === this.botQQ;
+
+    // 禁言状态更新（self 与 whole 两维独立）：只有针对小镜自己 / 全员的事件才动 store，
+    // 群友被禁言不影响小镜能否发言。
+    if (data.subType === "ban") {
+      if (wholeGroup) {
+        this.muteStore.setWholeGroupMute(data.groupId, true);
+      } else if (selfTargeted) {
+        this.muteStore.setSelfMute(data.groupId, computeSelfMuteUntil(data));
+      }
+    } else {
+      if (wholeGroup) {
+        this.muteStore.setWholeGroupMute(data.groupId, false);
+      } else if (selfTargeted) {
+        this.muteStore.clearSelfMute(data.groupId);
+      }
+    }
+
+    const notice: GroupNoticeMessage = {
+      kind: "group_notice",
+      noticeType: data.subType,
+      wholeGroup,
+      selfTargeted,
+      targetUserId: data.targetUserId,
+      targetName: data.targetName,
+      operatorUserId: data.operatorUserId,
+      operatorName: data.operatorName,
+      durationSeconds: data.durationSeconds,
+      messageId: null,
+      time: data.time,
+    };
+    this.ingestMessage(conversation, notice, false);
   }
 
   /** open_conversation 工具调用：把某个会话设为当前并渲染（清未读 + 清该会话待发通知）。 */
@@ -389,7 +457,10 @@ export class QqApp implements App, ForegroundInputSource {
         // 旧 clearUnread 行为 parity，接受。
         recent = conversation.consumeUnreadTail();
       } else {
-        conversation.dropUnreadInstances(snapshot);
+        // group_notice 不在 NapCat 历史里（get_group_msg_history 只含 message）：若把它算进
+        // 「必被历史覆盖」的快照里剔掉，就被静默吞了（spec D2）。跳过 notice——它留在缓冲里，
+        // 靠下面「首开后 unreadCount>0 即敲门」在下一轮 drain 渲染。
+        conversation.dropUnreadInstances(snapshot.filter(message => !isGroupNotice(message)));
         conversation.dropUnreadIn(collectMessageIds(recent));
         conversation.reconcileUnreadWithBuffer();
       }
@@ -446,8 +517,9 @@ export class QqApp implements App, ForegroundInputSource {
   ): void {
     // 回声防御在分流最外层：小镜自己的消息无论前后台一律只入缓冲（可见），绝不计未读、
     // 不敲门、不推 center——延迟回声（发完就切走 / blur 后才回）若走通知路径，就是
-    // 「自己发言→自己被唤醒」的自持振荡拓扑（2026-05-30 事故同款）。
-    if (message.userId === this.botQQ) {
+    // 「自己发言→自己被唤醒」的自持振荡拓扑（2026-05-30 事故同款）。notice 无 userId，
+    // 永远不是回声（禁言事件不是小镜发的），跳过回声分支。
+    if (!isGroupNotice(message) && message.userId === this.botQQ) {
       conversation.pushEcho(message);
       return;
     }
@@ -524,13 +596,21 @@ export class QqApp implements App, ForegroundInputSource {
    */
   private pushDraftFor(conversation: Conversation): void {
     const latest = conversation.getLatestUnread();
+    // notice 无 messageSegments，另走 buildNoticePreview（QQ App 侧渲染裸正文，折叠/截断复用）；
+    // 内容消息走 buildChatNotificationPreview（此处 latest 已收窄为非 notice）。
+    let preview = null;
+    if (latest) {
+      preview = isGroupNotice(latest)
+        ? buildNoticePreview(renderGroupNoticePlainText(latest, { bare: true }))
+        : buildChatNotificationPreview(latest, conversation.kind);
+    }
     this.notificationCenter.push(
       new ChatNotificationDraft(
         conversation.id,
         conversation.getShortName(),
         conversation.hasUnreadMention(),
         conversation.getUnreadCount(),
-        latest ? buildChatNotificationPreview(latest, conversation.kind) : null,
+        preview,
       ),
     );
   }
@@ -664,6 +744,9 @@ function collectMessageIds(messages: readonly ConversationMessage[]): Set<number
 }
 
 function renderMessagePlainText(message: ConversationMessage): string {
+  if (isGroupNotice(message)) {
+    return renderGroupNoticePlainText(message);
+  }
   return isGroupMessage(message)
     ? renderGroupMessagePlainText(message)
     : renderPrivateMessagePlainText(message);
@@ -703,6 +786,15 @@ function renderForwardNodeBody(rawMessage: string): string {
 /** 把 JsonValue 收窄成普通对象（非数组、非 null）；否则返回 null。restoreState 防御用。 */
 function asRecord(value: JsonValue): { [key: string]: JsonValue } | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
+}
+
+/**
+ * 小镜自己被禁言的到期毫秒时间戳。基准优先用事件 time（秒）——ordered 管线 / WS 积压会让
+ * Date.now() 偏晚，据此算到期会偏短、多拦；time 缺失才 fallback 到 Date.now()（spec D8③）。
+ */
+function computeSelfMuteUntil(data: NapcatGroupBanData): number {
+  const baseMs = data.time !== null ? data.time * 1000 : Date.now();
+  return baseMs + data.durationSeconds * 1000;
 }
 
 function parseConversationGroupId(id: ConversationId): string | null {

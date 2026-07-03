@@ -855,4 +855,168 @@ describe("NapcatGroupMessageProcessor", () => {
       },
     ]);
   });
+
+  describe("group_ban notice 归一化", () => {
+    function nameRequester() {
+      // 按 user_id 返回群名片；ban 事件的 operator/target 名解析复用该缓存路径。
+      return {
+        request: vi.fn().mockImplementation((_action: string, params: Record<string, unknown>) => {
+          const names: Record<string, string> = { "10001": "张三", "10002": "李四" };
+          return Promise.resolve({ card: names[String(params.user_id)] ?? "" });
+        }),
+      };
+    }
+
+    function makeProcessor(actionRequester: { request: ReturnType<typeof vi.fn> }) {
+      return new NapcatGroupMessageProcessor({
+        listenGroupIds: ["987654"],
+        actionRequester,
+        enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+        imageMessageAnalyzer,
+        qqMessageDao,
+      });
+    }
+
+    it("ban：解析被禁言人 / 操作者名、时长；user_id!=0 为定向禁言", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: 600,
+        self_id: 10003,
+        time: 1783000000,
+      });
+      expect(groupBanEvent).toEqual({
+        groupId: "987654",
+        subType: "ban",
+        targetUserId: "10002",
+        targetName: "李四",
+        operatorUserId: "10001",
+        operatorName: "张三",
+        durationSeconds: 600,
+        time: 1783000000,
+      });
+    });
+
+    it("lift_ban：durationSeconds 归 0", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "lift_ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: 0,
+        time: 1783000000,
+      });
+      expect(groupBanEvent).toMatchObject({ subType: "lift_ban", durationSeconds: 0 });
+    });
+
+    it("全员禁言（user_id=0）：targetUserId 归 null", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 0,
+        duration: 600,
+        time: 1783000000,
+      });
+      expect(groupBanEvent).toMatchObject({ targetUserId: null, targetName: null });
+    });
+
+    it("非监听群：不产生 groupBanEvent", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 111111,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: 600,
+      });
+      expect(groupBanEvent).toBeNull();
+    });
+
+    it("名解析失败：名字退化为 null，事件仍产生", async () => {
+      const failing = { request: vi.fn().mockRejectedValue(new Error("member info down")) };
+      const processor = makeProcessor(failing);
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: 600,
+      });
+      expect(groupBanEvent).toMatchObject({
+        targetName: null,
+        operatorName: null,
+        durationSeconds: 600,
+      });
+    });
+
+    it('duration 为数字字符串 "600"：string-tolerant 解析为 600（不静默降级 0）', async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: "600",
+      });
+      expect(groupBanEvent).toMatchObject({ subType: "ban", durationSeconds: 600 });
+    });
+
+    it("operator_id=0（系统/匿名操作者）：operatorUserId 归 null（渲染退化「管理员」）", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 0,
+        user_id: 10002,
+        duration: 600,
+      });
+      expect(groupBanEvent).toMatchObject({ operatorUserId: null, operatorName: null });
+    });
+
+    it("duration 畸形：降级为 0，事件仍保留", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: "oops",
+      });
+      expect(groupBanEvent).toMatchObject({ subType: "ban", durationSeconds: 0 });
+    });
+
+    it("非 group_ban 的 notice：不产生 groupBanEvent", async () => {
+      const processor = makeProcessor(nameRequester());
+      const { groupBanEvent } = await processor.process({
+        post_type: "notice",
+        notice_type: "group_recall",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+      });
+      expect(groupBanEvent).toBeNull();
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type {
   NapcatForwardMessageNode,
+  NapcatGroupBanData,
   NapcatGroupMessageData,
   NapcatGroupMessageEvent,
   NapcatPersistableGroupMessageEvent,
@@ -84,6 +85,7 @@ export class NapcatGroupMessageProcessor {
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
     qqMessage: NapcatPersistableQqMessage | null;
     groupMessageEvent: NapcatPersistableGroupMessageEvent | null;
+    groupBanEvent: NapcatGroupBanData | null;
   }> {
     const result = await this.process(eventPayload);
     const { groupMessageEvent } = result;
@@ -98,17 +100,103 @@ export class NapcatGroupMessageProcessor {
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
     qqMessage: NapcatPersistableQqMessage | null;
     groupMessageEvent: NapcatPersistableGroupMessageEvent | null;
+    groupBanEvent: NapcatGroupBanData | null;
   }> {
     const normalizedEvent = await this.normalize(eventPayload);
     this.logPrivateMessage(normalizedEvent);
 
     const qqMessage = this.toPersistableQqMessage(normalizedEvent);
     const groupMessageEvent = this.toPersistableGroupMessageEvent(normalizedEvent);
+    const groupBanEvent = await this.toGroupBanEvent(normalizedEvent);
 
     return {
       normalizedEvent,
       qqMessage,
       groupMessageEvent,
+      groupBanEvent,
+    };
+  }
+
+  /**
+   * 归一化 group_ban notice → 禁言事件（其余 notice 返回 null，照旧只落 persistEvent）。
+   * 识别条件：postType=notice 且 notice_type=group_ban 且 sub_type∈{ban,lift_ban} 且群在
+   * listenGroupIds。丢弃条件收窄（spec D5）：仅 groupId / sub_type 不可用时整条丢弃；
+   * duration 畸形降级为 0（事件保留、通知照发、不写 mute 态）。operator/target 名解析
+   * 复用成员名缓存，失败不阻塞（名字置 null，渲染退化裸号）。
+   */
+  private async toGroupBanEvent(
+    event: NapcatGatewayNormalizedPostTypeEvent,
+  ): Promise<NapcatGroupBanData | null> {
+    if (event.postType !== "notice") {
+      return null;
+    }
+    if (toNullableString(event.payload.notice_type) !== "group_ban") {
+      return null;
+    }
+    const subType = event.subType;
+    // 显式比较（而非 Set.has）以让 TS 收窄到 "ban" | "lift_ban"。
+    if (subType !== "ban" && subType !== "lift_ban") {
+      logger.warn("Dropping group_ban notice with invalid sub_type", {
+        event: "napcat.gateway.group_ban_invalid_sub_type",
+        groupId: event.groupId,
+        subType,
+      });
+      return null;
+    }
+    if (!event.groupId) {
+      logger.warn("Dropping group_ban notice without group id", {
+        event: "napcat.gateway.group_ban_missing_group_id",
+        subType,
+      });
+      return null;
+    }
+    if (!this.listenGroupIds.has(event.groupId)) {
+      return null;
+    }
+
+    // user_id=0（NapCat 全员禁言约定）归一化为 targetUserId=null；operator_id=0
+    // （系统 / 匿名操作者）同样归一化为 null，渲染层退化为「管理员」而非裸 "0"。
+    const rawTarget = event.userId;
+    const targetUserId = rawTarget === null || rawTarget === "0" ? null : rawTarget;
+    const rawOperator = toNullableId(event.payload.operator_id);
+    const operatorUserId = rawOperator === "0" ? null : rawOperator;
+
+    let durationSeconds = 0;
+    if (subType === "ban") {
+      // duration 用 string-tolerant 解析（与 group_id/user_id/time 同款）：NapCat 某些版本
+      // 会把 duration 发成字符串 "600"，若只认 number 会静默降级 0 → self 禁言态不写入。
+      // toNullablePositiveInt 接受 number|数字串、拒绝 0/负/畸形（→null → 降级 0）。
+      const parsedDuration = toNullablePositiveInt(event.payload.duration);
+      if (parsedDuration === null) {
+        logger.warn("group_ban notice has invalid duration, degrading to 0", {
+          event: "napcat.gateway.group_ban_invalid_duration",
+          groupId: event.groupId,
+          duration: event.payload.duration,
+        });
+      } else {
+        durationSeconds = parsedDuration;
+      }
+    }
+
+    // 名解析并行；失败不阻塞（queryGroupMemberDisplayName 内部已吞错返回 null）。
+    const [targetName, operatorName] = await Promise.all([
+      targetUserId
+        ? this.queryGroupMemberDisplayName({ groupId: event.groupId, userId: targetUserId })
+        : Promise.resolve(null),
+      operatorUserId
+        ? this.queryGroupMemberDisplayName({ groupId: event.groupId, userId: operatorUserId })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      groupId: event.groupId,
+      subType,
+      targetUserId,
+      targetName,
+      operatorUserId,
+      operatorName,
+      durationSeconds,
+      time: event.time,
     };
   }
 

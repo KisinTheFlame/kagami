@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { Conversation } from "../../src/agent/capabilities/messaging/conversation.js";
+import {
+  Conversation,
+  type ConversationMessage,
+  isGroupNotice,
+} from "../../src/agent/capabilities/messaging/conversation.js";
 import type {
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
 } from "../../src/napcat/application/napcat-gateway.service.js";
+
+/** 会话流消息取正文（notice 变体无 rawMessage）。本文件用例只压入内容消息，恒有正文。 */
+function rawOf(message: ConversationMessage | null): string | undefined {
+  return message && !isGroupNotice(message) ? message.rawMessage : undefined;
+}
 
 function groupMsg(text: string, messageId: number | null = 1): NapcatGroupMessageData {
   return {
@@ -72,7 +81,7 @@ describe("Conversation", () => {
     group.pushUnread(groupMsg("b"), false);
     group.pushUnread(groupMsg("c"), false); // 内容缓冲超上限 2，最旧的被丢，但计数不封顶
     expect(group.getUnreadCount()).toBe(3);
-    expect(group.getLatestUnread()?.rawMessage).toBe("c");
+    expect(rawOf(group.getLatestUnread())).toBe("c");
   });
 
   it("keeps counting unread across many messages, resetting only on consume", () => {
@@ -103,7 +112,7 @@ describe("Conversation", () => {
     group.pushUnread(groupMsg("a"), false);
     group.pushUnread(groupMsg("b"), false);
     const tail = group.consumeUnreadTail();
-    expect(tail.map(m => m.rawMessage)).toEqual(["a", "b"]);
+    expect(tail.map(rawOf)).toEqual(["a", "b"]);
     expect(group.getUnreadCount()).toBe(0);
   });
 
@@ -113,7 +122,7 @@ describe("Conversation", () => {
     priv.markEntered();
     expect(priv.hasEntered()).toBe(true);
     priv.pushUnread(privateMsg("hi"), false);
-    expect(priv.getLatestUnread()?.rawMessage).toBe("hi");
+    expect(rawOf(priv.getLatestUnread())).toBe("hi");
     priv.consumeUnreadTail();
     expect(priv.getUnreadCount()).toBe(0);
   });
@@ -131,7 +140,7 @@ describe("Conversation", () => {
       group.pushUnread(groupMsg("a", 1), false);
       group.pushUnread(groupMsg("b", 2), false);
       const snapshot = group.takeUnreadSnapshot();
-      expect(snapshot.map(m => m.rawMessage)).toEqual(["a", "b"]);
+      expect(snapshot.map(rawOf)).toEqual(["a", "b"]);
       expect(group.getUnreadCount()).toBe(2);
       expect(group.takeUnreadSnapshot()).toHaveLength(2);
     });
@@ -144,7 +153,7 @@ describe("Conversation", () => {
       const snapshot = group.takeUnreadSnapshot();
       group.dropUnreadInstances(snapshot.slice(0, 2));
       expect(group.getUnreadCount()).toBe(1);
-      expect(group.takeUnreadSnapshot().map(m => m.rawMessage)).toEqual(["c"]);
+      expect(group.takeUnreadSnapshot().map(rawOf)).toEqual(["c"]);
     });
 
     it("dropUnreadInstances 边界：空数组无副作用，已被挤掉的快照条目安全跳过", () => {
@@ -157,7 +166,7 @@ describe("Conversation", () => {
       // 缓冲位移：新消息把 a 挤出缓冲。
       group.pushUnread(groupMsg("c", 3), false);
       group.dropUnreadInstances(snapshot); // a 已不在缓冲，只剔 b——c 不受误伤
-      expect(group.takeUnreadSnapshot().map(m => m.rawMessage)).toEqual(["c"]);
+      expect(group.takeUnreadSnapshot().map(rawOf)).toEqual(["c"]);
       expect(group.getUnreadCount()).toBe(2); // a 的残留计数留给 reconcile 对账
       group.reconcileUnreadWithBuffer();
       expect(group.getUnreadCount()).toBe(1);
@@ -186,7 +195,7 @@ describe("Conversation", () => {
       group.pushUnread(groupMsg("c", 13), false);
       group.dropUnreadIn(new Set([11, 13, 999]));
       expect(group.getUnreadCount()).toBe(1);
-      expect(group.takeUnreadSnapshot().map(m => m.rawMessage)).toEqual(["b"]);
+      expect(group.takeUnreadSnapshot().map(rawOf)).toEqual(["b"]);
     });
 
     it("部分剔除不动 @ 粘滞标记（保守），全量消费才清零", () => {
@@ -210,9 +219,9 @@ describe("Conversation", () => {
       expect(group.getLatestUnread()).toBeNull();
       // 回声随全量消费一起被带出展示。
       group.pushUnread(groupMsg("别人说的", 22), false);
-      expect(group.getLatestUnread()?.rawMessage).toBe("别人说的");
+      expect(rawOf(group.getLatestUnread())).toBe("别人说的");
       const tail = group.consumeUnreadTail();
-      expect(tail.map(m => m.rawMessage)).toEqual(["我自己说的", "别人说的"]);
+      expect(tail.map(rawOf)).toEqual(["我自己说的", "别人说的"]);
     });
 
     it("剔除含回声的区段时计数只按真实未读扣减", () => {
@@ -223,7 +232,7 @@ describe("Conversation", () => {
       expect(group.getUnreadCount()).toBe(2);
       group.dropUnreadInstances(group.takeUnreadSnapshot().slice(0, 2)); // 剔掉 a + echo：真实未读只少 1
       expect(group.getUnreadCount()).toBe(1);
-      expect(group.takeUnreadSnapshot().map(m => m.rawMessage)).toEqual(["b"]);
+      expect(group.takeUnreadSnapshot().map(rawOf)).toEqual(["b"]);
     });
   });
 });

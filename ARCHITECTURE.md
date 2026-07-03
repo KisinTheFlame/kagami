@@ -4,7 +4,7 @@
 
 ## Workspace 拓扑
 
-pnpm workspace 当前由 26 个包组成（9 个 apps + 17 个 packages），依赖单向（apps → packages）：
+pnpm workspace 由 `apps/*`（各为独立进程）与 `packages/*` 组成，依赖单向（apps → packages）：
 
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
@@ -150,11 +150,11 @@ apps/web/src/
 │   ├── napcat-group-message-history/  群消息
 │   └── metric-charts/           运行时指标图表
 ├── components/layout/           跨页面布局（HistoryListPageLayout、MobileDetailHeader 等）
-├── components/ui/               基于 shadcn 的原子组件
+├── components/ui/               原子组件（保留 Radix 无样式行为基元，外观项目自定义，见 DESIGN.md）
 └── lib/                         api 客户端、query keys、工具
 ```
 
-技术栈：React 19、React Router、TanStack Query 5、Tailwind 3、shadcn。组件优先用 shadcn，缺失时通过 shadcn CLI 引入。
+技术栈：React 19、React Router、TanStack Query 5、Tailwind 3。已弃用 shadcn 的有样式组件层与默认 slate 主题，只保留 `@radix-ui/*` 无样式行为基元（管焦点 / 键盘可访问性），其余 class 体系与组件外观全部自定义（见 [DESIGN.md](./DESIGN.md)）。
 
 ## 数据流与生命周期
 
@@ -220,7 +220,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管八个进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent、`/auth/*` 到 llm、`/metric-chart` 到 metric，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）、`kagami-llm`（`apps/llm`，LLM + OAuth 凭据网关，默认 20009，仅 localhost；持有 provider + callback server + 刷新 timer，`app:deploy agent` 不触及它，有 DB 迁移时 `deploy.sh` 会连它一并停服再迁）、`kagami-metric`（`apps/metric`，metric 摄取 + metric-chart 查询，默认 20010，仅 localhost；agent fire-and-forget HTTP 上报，有 DB 迁移时一并停服再迁）、`kagami-spire`（`apps/spire`，杀塔式卡牌游戏引擎，默认 20011，仅 localhost；`cwd` 固定仓库根让存档 `data/spire/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不打断对局，见 #234）。后端进程并发读写同一 SQLite 库靠库文件级 WAL（`apps/spire` 不入库，存档走 JSON）。
+- PM2（`ecosystem.config.cjs`）托管以下进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent、`/auth/*` 到 llm、`/metric-chart` 到 metric，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）、`kagami-llm`（`apps/llm`，LLM + OAuth 凭据网关，默认 20009，仅 localhost；持有 provider + callback server + 刷新 timer，`app:deploy agent` 不触及它，有 DB 迁移时 `deploy.sh` 会连它一并停服再迁）、`kagami-metric`（`apps/metric`，metric 摄取 + metric-chart 查询，默认 20010，仅 localhost；agent fire-and-forget HTTP 上报，有 DB 迁移时一并停服再迁）、`kagami-spire`（`apps/spire`，杀塔式卡牌游戏引擎，默认 20011，仅 localhost；`cwd` 固定仓库根让存档 `data/spire/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不打断对局，见 #234）。后端进程并发读写同一 SQLite 库靠库文件级 WAL（`apps/spire` 不入库，存档走 JSON）。
 - 卫星进程（console / oss / browser / llm / metric / spire）统一经 `@kagami/kernel` 的 `runService` 启动（issue #274）：全局 `uncaughtException` / `unhandledRejection` 兜底（记日志后 exit(1) 交 PM2 重启）、信号驱动优雅关停 + 10s 强退兜底、绑定地址一律 `127.0.0.1`（绑定是代码级安全决策；config 的 `services.*.host` 语义是 reachable host）。gateway 是唯一绑 `0.0.0.0` 的前门（裸 node:http，自带同款兜底）。所有进程的 `GET /health` 统一为 shared 的 `{ status: "ok", timestamp }` 形状。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。
@@ -231,5 +231,4 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 - [README.md](./README.md) — 项目理念与使用入口
 - [AGENTS.md](./AGENTS.md) — 面向 LLM agent 的操作手册（KV 缓存优先、硬约束、命令、部署红线）
 - [docs/configuration.md](./docs/configuration.md) — 配置分区、SQLite 布局、Prisma 迁移
-- [docs/effect-model.md](./docs/effect-model.md) — Effect 模型设计
 - [TODOS.md](./TODOS.md) — 待办清单

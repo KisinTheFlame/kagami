@@ -24,8 +24,11 @@ describe("角色配置", () => {
     expect(s.character).toBe("ironclad");
   });
 
-  it("未实现角色抛错（守卫栏杆，防止无效角色开局）", () => {
-    expect(() => newRun({ runId: "x", seed: 1, character: "watcher" })).toThrow();
+  it("四角色都能正常开局，无效角色 id 抛错（守卫栏杆）", () => {
+    for (const c of ["ironclad", "silent", "defect", "watcher"] as const) {
+      expect(() => newRun({ runId: "x", seed: 1, character: c })).not.toThrow();
+    }
+    expect(() => getCharacterConfig("bogus" as never)).toThrow();
   });
 });
 
@@ -38,8 +41,10 @@ describe("卡池按颜色过滤", () => {
     }
   });
 
-  it("紫色卡池当前为空（观者未实现）", () => {
-    expect(rewardCardPoolOf("purple")).toHaveLength(0);
+  it("四个角色的卡池都非空（红/绿/蓝/紫）", () => {
+    for (const color of ["red", "green", "blue", "purple"] as const) {
+      expect(rewardCardPoolOf(color).length).toBeGreaterThan(0);
+    }
   });
 
   it("按颜色+稀有度取池：红色各档非空", () => {
@@ -60,7 +65,12 @@ describe("卡池按颜色过滤", () => {
 });
 
 describe("已实现角色清单", () => {
-  it("铁甲战士 + 静默猎手 + 故障机器人", () => {
-    expect(ALL_CHARACTERS.map(c => c.id).sort()).toEqual(["defect", "ironclad", "silent"]);
+  it("四个角色全部实现", () => {
+    expect(ALL_CHARACTERS.map(c => c.id).sort()).toEqual([
+      "defect",
+      "ironclad",
+      "silent",
+      "watcher",
+    ]);
   });
 });
