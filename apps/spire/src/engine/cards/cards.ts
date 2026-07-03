@@ -12,6 +12,7 @@ const CARD_LIST: CardDef[] = [
     name: "打击",
     type: "attack",
     rarity: "starter",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -25,6 +26,7 @@ const CARD_LIST: CardDef[] = [
     name: "防御",
     type: "skill",
     rarity: "starter",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -38,6 +40,7 @@ const CARD_LIST: CardDef[] = [
     name: "痛击",
     type: "attack",
     rarity: "starter",
+    color: "red",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -59,6 +62,7 @@ const CARD_LIST: CardDef[] = [
     name: "愤怒",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 0,
     targeted: true,
     exhausts: false,
@@ -78,6 +82,7 @@ const CARD_LIST: CardDef[] = [
     name: "横扫",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -91,6 +96,7 @@ const CARD_LIST: CardDef[] = [
     name: "铁臂勾拳",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -110,6 +116,7 @@ const CARD_LIST: CardDef[] = [
     name: "铁浪",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -129,6 +136,7 @@ const CARD_LIST: CardDef[] = [
     name: "剑柄打击",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -148,6 +156,7 @@ const CARD_LIST: CardDef[] = [
     name: "双重打击",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -161,6 +170,7 @@ const CARD_LIST: CardDef[] = [
     name: "泰然自若",
     type: "skill",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -180,6 +190,7 @@ const CARD_LIST: CardDef[] = [
     name: "力压",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     upgradedCost: 0,
     targeted: true,
@@ -194,6 +205,7 @@ const CARD_LIST: CardDef[] = [
     name: "疾雷",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -215,6 +227,7 @@ const CARD_LIST: CardDef[] = [
     name: "重刃",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -228,6 +241,7 @@ const CARD_LIST: CardDef[] = [
     name: "上勾拳",
     type: "attack",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -249,6 +263,7 @@ const CARD_LIST: CardDef[] = [
     name: "血魔法",
     type: "attack",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -268,6 +283,7 @@ const CARD_LIST: CardDef[] = [
     name: "乱拳",
     type: "attack",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: true,
@@ -281,6 +297,7 @@ const CARD_LIST: CardDef[] = [
     name: "重锤",
     type: "attack",
     rarity: "rare",
+    color: "red",
     cost: 3,
     targeted: true,
     exhausts: false,
@@ -294,6 +311,7 @@ const CARD_LIST: CardDef[] = [
     name: "狂野劈砍",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -313,6 +331,7 @@ const CARD_LIST: CardDef[] = [
     name: "剑刃回旋镖",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -326,6 +345,7 @@ const CARD_LIST: CardDef[] = [
     name: "燃怒",
     type: "power",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -340,6 +360,7 @@ const CARD_LIST: CardDef[] = [
     name: "金属化",
     type: "power",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -353,6 +374,7 @@ const CARD_LIST: CardDef[] = [
     name: "恶魔形态",
     type: "power",
     rarity: "rare",
+    color: "red",
     cost: 3,
     targeted: false,
     exhausts: false,
@@ -366,6 +388,7 @@ const CARD_LIST: CardDef[] = [
     name: "鲁莽冲锋",
     type: "attack",
     rarity: "common",
+    color: "red",
     cost: 0,
     targeted: true,
     exhausts: false,
@@ -386,6 +409,7 @@ const CARD_LIST: CardDef[] = [
     name: "献焰",
     type: "attack",
     rarity: "rare",
+    color: "red",
     cost: 2,
     targeted: false,
     exhausts: false,
@@ -405,6 +429,7 @@ const CARD_LIST: CardDef[] = [
     name: "献祭",
     type: "skill",
     rarity: "rare",
+    color: "red",
     cost: 0,
     targeted: false,
     exhausts: true,
@@ -428,6 +453,7 @@ const CARD_LIST: CardDef[] = [
     name: "虚魂护甲",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -442,6 +468,7 @@ const CARD_LIST: CardDef[] = [
     name: "恫吓",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 0,
     targeted: false,
     exhausts: true,
@@ -455,6 +482,7 @@ const CARD_LIST: CardDef[] = [
     name: "震荡波",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 2,
     targeted: false,
     exhausts: true,
@@ -474,6 +502,7 @@ const CARD_LIST: CardDef[] = [
     name: "缴械",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: true,
     exhausts: true,
@@ -487,6 +516,7 @@ const CARD_LIST: CardDef[] = [
     name: "放血",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 0,
     targeted: false,
     exhausts: false,
@@ -506,6 +536,7 @@ const CARD_LIST: CardDef[] = [
     name: "见红",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     upgradedCost: 0,
     targeted: false,
@@ -520,6 +551,7 @@ const CARD_LIST: CardDef[] = [
     name: "强渡",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -539,6 +571,7 @@ const CARD_LIST: CardDef[] = [
     name: "坚守",
     type: "skill",
     rarity: "uncommon",
+    color: "red",
     cost: 2,
     upgradedCost: 1,
     targeted: false,
@@ -555,6 +588,7 @@ const CARD_LIST: CardDef[] = [
     name: "伤口",
     type: "status",
     rarity: "special",
+    color: "status",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -568,6 +602,7 @@ const CARD_LIST: CardDef[] = [
     name: "灼烧",
     type: "status",
     rarity: "special",
+    color: "status",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -581,6 +616,7 @@ const CARD_LIST: CardDef[] = [
     name: "眩晕",
     type: "status",
     rarity: "special",
+    color: "status",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -595,6 +631,7 @@ const CARD_LIST: CardDef[] = [
     name: "泥泞",
     type: "status",
     rarity: "special",
+    color: "status",
     cost: null,
     targeted: false,
     exhausts: true,
@@ -632,32 +669,30 @@ export const IRONCLAD_STARTER_DECK: readonly string[] = [
   "bash",
 ];
 
-function idsByRarity(rarity: CardDef["rarity"]): readonly string[] {
-  return CARD_LIST.filter(card => card.rarity === rarity).map(card => card.id);
+/** 取某角色颜色 + 某稀有度的卡池（自动从 CARD_LIST 派生，加卡即入对应池）。 */
+export function cardPoolOf(
+  color: CardDef["color"],
+  rarity: "common" | "uncommon" | "rare",
+): readonly string[] {
+  return CARD_LIST.filter(card => card.color === color && card.rarity === rarity).map(
+    card => card.id,
+  );
 }
 
-/** 按稀有度分档的卡池（自动从 CARD_LIST 派生，加卡即入池）。 */
-export const COMMON_CARD_POOL: readonly string[] = idsByRarity("common");
-export const UNCOMMON_CARD_POOL: readonly string[] = idsByRarity("uncommon");
-export const RARE_CARD_POOL: readonly string[] = idsByRarity("rare");
-
-/** 全部可获得卡（普通+罕见+稀有；不含起始专属与废牌）：商店与「无视稀有度」场景用。 */
-export const REWARD_CARD_POOL: readonly string[] = [
-  ...COMMON_CARD_POOL,
-  ...UNCOMMON_CARD_POOL,
-  ...RARE_CARD_POOL,
-];
-
-/** 取某稀有度的卡池。 */
-export function cardPoolOfRarity(rarity: "common" | "uncommon" | "rare"): readonly string[] {
-  if (rarity === "rare") {
-    return RARE_CARD_POOL;
-  }
-  if (rarity === "uncommon") {
-    return UNCOMMON_CARD_POOL;
-  }
-  return COMMON_CARD_POOL;
+/** 某角色颜色全部可获得卡（普通+罕见+稀有）：商店 / 无视稀有度场景用。 */
+export function rewardCardPoolOf(color: CardDef["color"]): readonly string[] {
+  return [
+    ...cardPoolOf(color, "common"),
+    ...cardPoolOf(color, "uncommon"),
+    ...cardPoolOf(color, "rare"),
+  ];
 }
+
+// 铁甲战士（红）各档池 —— 兼容既有引用。
+export const COMMON_CARD_POOL: readonly string[] = cardPoolOf("red", "common");
+export const UNCOMMON_CARD_POOL: readonly string[] = cardPoolOf("red", "uncommon");
+export const RARE_CARD_POOL: readonly string[] = cardPoolOf("red", "rare");
+export const REWARD_CARD_POOL: readonly string[] = rewardCardPoolOf("red");
 
 /** 取一张牌当前生效的效果（升级则用升级效果）。 */
 export function effectsOf(def: CardDef, upgraded: boolean): CardDef["effects"] {

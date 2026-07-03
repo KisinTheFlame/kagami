@@ -1,6 +1,5 @@
 import type { CardInstance, CharacterId, GameState } from "./types.js";
-import { IRONCLAD_STARTER_DECK } from "./cards/cards.js";
-import { IRONCLAD_STARTER_RELIC } from "./relics/relics.js";
+import { getCharacterConfig } from "./characters/characters.js";
 import { seedRng } from "./rng.js";
 import { endTurn, playCard, usePotion } from "./combat/combat.js";
 import { TOTAL_ACTS, advanceToNextAct, applyChoose, buildMap, generateReward } from "./run/run.js";
@@ -10,8 +9,6 @@ import { NEOW_EVENT_ID } from "./events/events.js";
 // === 引擎顶层：新建对局 + 动作分发 ===
 //
 // 纯函数式副作用：applyAction 原地改传入的 GameState。HTTP 层负责 version 自增与存档。
-
-const IRONCLAD_MAX_HP = 80;
 
 export type GameAction =
   | { type: "play_card"; handIndex: number; targetIndex?: number | null }
@@ -28,9 +25,10 @@ export function newRun(input: {
   ascension?: number;
 }): GameState {
   const character: CharacterId = input.character ?? "ironclad";
+  const config = getCharacterConfig(character);
   const rng = seedRng(input.seed);
   let nextUid = 1;
-  const deck: CardInstance[] = IRONCLAD_STARTER_DECK.map(defId => ({
+  const deck: CardInstance[] = config.starterDeck.map(defId => ({
     uid: nextUid++,
     defId,
     upgraded: false,
@@ -43,11 +41,11 @@ export function newRun(input: {
     ascension: input.ascension ?? 0,
     act: 1,
     screen: "map",
-    hp: IRONCLAD_MAX_HP,
-    maxHp: IRONCLAD_MAX_HP,
+    hp: config.maxHp,
+    maxHp: config.maxHp,
     gold: 0,
     deck,
-    relics: [{ id: IRONCLAD_STARTER_RELIC, counter: 0 }],
+    relics: [{ id: config.starterRelic, counter: 0 }],
     potions: new Array<string | null>(POTION_SLOTS).fill(null),
     potionDropBonus: 0,
     map: { nodes: {}, rows: 0, startNodeIds: [], bossNodeId: "" },

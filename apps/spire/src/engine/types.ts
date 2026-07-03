@@ -5,9 +5,12 @@
 //
 // 设计依据：本仓库根 AGENTS.md「KV 缓存优先」+ office-hours 设计文档 + issue #234。
 
-export type CharacterId = "ironclad";
+export type CharacterId = "ironclad" | "silent" | "defect" | "watcher";
 
 export type CardType = "attack" | "skill" | "power" | "status";
+
+/** 卡牌颜色：决定属于哪个角色的卡池；status = 敌人塞的废牌（不进任何奖励池）。 */
+export type CardColor = "red" | "green" | "blue" | "purple" | "colorless" | "status";
 
 /** 卡稀有度：奖励按稀有度加权抽取；starter/special 不进普通奖励池。 */
 export type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
@@ -76,6 +79,8 @@ export type CardDef = {
   name: string;
   type: CardType;
   rarity: CardRarity;
+  /** 卡牌颜色（所属角色卡池）。 */
+  color: CardColor;
   cost: number | null;
   /** 升级后的费用（省略=不变）；用于力压/见红等升级降费卡。 */
   upgradedCost?: number;

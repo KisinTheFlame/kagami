@@ -1,5 +1,6 @@
 import type { GameState, ShopItem, ShopState } from "../types.js";
-import { REWARD_CARD_POOL } from "../cards/cards.js";
+import { rewardCardPoolOf } from "../cards/cards.js";
+import { getCharacterConfig } from "../characters/characters.js";
 import { SHOP_RELIC_POOL, hasRelic } from "../relics/relics.js";
 import { POTION_DROP_POOL } from "../potions/potions.js";
 import { nextInt, nextRange } from "../rng.js";
@@ -35,7 +36,8 @@ function sampleUnique(rng: GameState["rng"], pool: readonly string[], count: num
 export function generateShop(state: GameState): void {
   const items: ShopItem[] = [];
 
-  for (const defId of sampleUnique(state.rng, REWARD_CARD_POOL, SHOP_CARD_COUNT)) {
+  const cardPool = rewardCardPoolOf(getCharacterConfig(state.character).color);
+  for (const defId of sampleUnique(state.rng, cardPool, SHOP_CARD_COUNT)) {
     items.push({
       kind: "card",
       defId,
