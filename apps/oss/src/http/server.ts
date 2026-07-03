@@ -76,11 +76,13 @@ export function buildOssApp(store: ObjectStore, maxBodyBytes: number): FastifyIn
 }
 
 function registerOssRoutes(app: FastifyInstance, store: ObjectStore, maxBodyBytes: number): void {
-  registerBinaryEnvelopeRoute(app, ossApiContract.putObject, async ({ body, request }) => {
+  registerBinaryEnvelopeRoute(app, ossApiContract.putObject, async ({ body, headers }) => {
     if (!body) {
       throw new Error("[oss] putObject 缺少上行字节流（bytesIn 路由不应至此）");
     }
-    const mime = parseMime(request.headers["content-type"]);
+    // content-type 由契约 headers schema 校验后交来（不再裸读 request.headers）；parseMime 再剥
+    // `; charset=...` 参数。空 content-type 已由 onRequest 钩子归一成 application/octet-stream。
+    const mime = parseMime(headers["content-type"]);
     // 请求体直接作为流交给 store，边流边算 sha256 落临时文件，不整块驻留内存。
     return await store.put(body, mime, { maxBytes: maxBodyBytes });
   });
