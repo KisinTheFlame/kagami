@@ -20,6 +20,7 @@
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
     "@kagami/metric-api": "workspace:*",
+    "@kagami/metric-client": "workspace:*",
     "@kagami/oss-api": "workspace:*",
     "@kagami/persistence": "workspace:*",
     "@kagami/rpc-client": "workspace:*",

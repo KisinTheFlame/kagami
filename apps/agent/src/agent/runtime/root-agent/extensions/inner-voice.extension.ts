@@ -5,8 +5,7 @@ import type { InnerVoiceIdleTracker } from "../../../capabilities/inner-voice/do
 import { sliceRecentBalancedMessages } from "../../../capabilities/inner-voice/domain/recent-context-slice.js";
 import type { InnerVoiceOperation } from "../../../capabilities/inner-voice/operations/inner-voice.operation.js";
 import type { AgentEventQueue } from "../../event/event.queue.js";
-import { NOOP_METRIC_SERVICE } from "../../tool-call-metric.js";
-import type { MetricService } from "../../../../metric/application/metric.service.js";
+import { NOOP_METRIC_CLIENT, type MetricClient } from "@kagami/metric-client/client";
 import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
@@ -48,7 +47,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
   private readonly tracker: InnerVoiceIdleTracker;
   private readonly operation: InnerVoiceOperationLike;
   private readonly eventQueue: AgentEventQueue;
-  private readonly metricService: MetricService;
+  private readonly metricService: MetricClient;
   private readonly now: () => Date;
 
   public constructor({
@@ -61,13 +60,13 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     tracker: InnerVoiceIdleTracker;
     operation: InnerVoiceOperationLike;
     eventQueue: AgentEventQueue;
-    metricService?: MetricService;
+    metricService?: MetricClient;
     now?: () => Date;
   }) {
     this.tracker = tracker;
     this.operation = operation;
     this.eventQueue = eventQueue;
-    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
+    this.metricService = metricService ?? NOOP_METRIC_CLIENT;
     this.now = now ?? (() => new Date());
   }
 

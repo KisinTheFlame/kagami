@@ -140,7 +140,6 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 - `auth/`：OAuth、回调服务、secret store、usage cache、usage trend、统一认证 HTTP 接口
 - `llm/`：provider、chat client、embedding、playground、相关 DAO
 - `napcat/`：NapCat 协议适配（gateway transport、入站归一化、图片分析、持久化写入）；网关实例由 QQ App 持有，只是 Agent 的一种事件源
-- `metric/`：metric 打点的 HTTP 上报客户端（`HttpMetricService`，fire-and-forget POST 到独立 `apps/metric` 的 `/metric/record`）；摄取与 metric-chart 查询已下沉到 `@kagami/metric`
 - `scheduler/`：后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）
 - `oss/`：server 侧对象存储 HTTP 客户端，把图片 PUT 进自建 `apps/oss`
 - `agent/`：Kagami 的 Agent 业务层——手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩

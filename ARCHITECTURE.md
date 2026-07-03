@@ -42,7 +42,8 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 | `@kagami/rpc-client`    | 契约驱动的 typed HTTP client 工厂（`createClient(contract)`）：消费端从生产者契约派生类型 + 对响应 `output.parse`；kernel 依赖（重建 BizError）隔离在此，让 `@kagami/http` 保持零 kernel                                                                                                                             |
 | `@kagami/llm-api`       | kagami-llm 进程契约包（per-producer `xxx-api`，#230/#279）：内部 RPC providers/chat/chat-direct/embed（后三条信封级）+ `/auth/*` 六条 OAuth 管理路由（web 消费）+ LLM 负载核心 schema（`llm-chat`）与 auth 系 schema                                                                                                 |
 | `@kagami/spire-api`     | kagami-spire 进程契约包：run/start、run/action、run/state、reference 四条逐字段 schema；服务端 state-view 与 agent 门面类型同源派生（#279 PR2）                                                                                                                                                                      |
-| `@kagami/metric-api`    | kagami-metric 进程契约包：`/metric/record` 摄取（agent 侧 fire-and-forget 客户端只取 path 与请求类型，刻意不走 createClient）+ `/metric-chart/*` 四条（web 消费）                                                                                                                                                    |
+| `@kagami/metric-api`    | kagami-metric 进程契约包：`/metric/record` 摄取 + `/metric-chart/*` 四条（web 消费）；agent 侧上报客户端见 `@kagami/metric-client`                                                                                                                                                                                   |
+| `@kagami/metric-client` | metric 上报 SDK（消费端）：基于 metric-api 契约在 `createClient` 之上包一层 fire-and-forget（永不抛、失败只记日志、2s 超时）；`HttpMetricClient` / `NOOP_METRIC_CLIENT`，agent 装配                                                                                                                                  |
 | `@kagami/console-api`   | kagami-console 进程契约包：app-log / llm-chat-call（含 `:id` 路径参数）/ napcat-event / napcat-group-message 五条管理台查询路由（web 消费）                                                                                                                                                                          |
 | `@kagami/agent-api`     | kagami-agent 进程面向管理台的契约包：napcat 发送 ×2、playground ×3、scheduler ×2（`:name` 路径参数）、main-agent-context ×2（web 消费）                                                                                                                                                                              |
 | `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                                                                                                                                              |
@@ -81,20 +82,19 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 
 ### 关键模块速览
 
-| 模块        | 职责                                                                                                                                     |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `common`    | `BizError`、`toHttpErrorResponse`、路由 helper、`prisma-json` 等跨模块公共契约                                                           |
-| `config`    | `config.yaml` 加载、Zod 校验、运行时配置管理                                                                                             |
-| `db`        | Prisma client（better-sqlite3 adapter）、事务封装                                                                                        |
-| `auth`      | OAuth（Claude Code / Codex 等）回调、secret store、usage cache / trend                                                                   |
-| `llm`       | LLM provider 封装、chat client、embedding、playground、调用历史 DAO                                                                      |
-| `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有                                          |
-| `metric`    | metric 打点的 HTTP 上报客户端（`HttpMetricService`，fire-and-forget POST 到独立 `apps/metric`）；摄取与图表查询已下沉到 `@kagami/metric` |
-| `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                                                                   |
-| `oss`       | `apps/oss` 内部的 HTTP 客户端（server 侧 `oss/oss-client.ts`），把图片 PUT 进自建对象存储                                                |
-| `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩                                             |
-| `ops`       | 后台观测接口：app-log、llm-chat-call、embedding-cache、main-agent-context、napcat history                                                |
-| `app`       | 模块装配、Fastify 路由注册、健康检查、Agent / 网关生命周期编排                                                                           |
+| 模块        | 职责                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `common`    | `BizError`、`toHttpErrorResponse`、路由 helper、`prisma-json` 等跨模块公共契约                  |
+| `config`    | `config.yaml` 加载、Zod 校验、运行时配置管理                                                    |
+| `db`        | Prisma client（better-sqlite3 adapter）、事务封装                                               |
+| `auth`      | OAuth（Claude Code / Codex 等）回调、secret store、usage cache / trend                          |
+| `llm`       | LLM provider 封装、chat client、embedding、playground、调用历史 DAO                             |
+| `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有 |
+| `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                          |
+| `oss`       | `apps/oss` 内部的 HTTP 客户端（server 侧 `oss/oss-client.ts`），把图片 PUT 进自建对象存储       |
+| `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩    |
+| `ops`       | 后台观测接口：app-log、llm-chat-call、embedding-cache、main-agent-context、napcat history       |
+| `app`       | 模块装配、Fastify 路由注册、健康检查、Agent / 网关生命周期编排                                  |
 
 ### Agent 子结构（手机 OS 模型）
 

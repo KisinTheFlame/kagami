@@ -27,7 +27,7 @@ import type { AgentEventQueue } from "../event/event.queue.js";
 import type { LlmClient } from "@kagami/llm-client";
 import type { LlmMessage } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { MetricService } from "../../../metric/application/metric.service.js";
+import { NOOP_METRIC_CLIENT, type MetricClient } from "@kagami/metric-client/client";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
   FixedRetryBackoffPolicy,
@@ -40,7 +40,7 @@ import {
   ROOT_AGENT_RUNTIME_SNAPSHOT_SCHEMA_VERSION,
 } from "./persistence/root-agent-runtime-snapshot.repository.js";
 import type { PersistedRootAgentRuntimeSnapshot } from "./persistence/root-agent-runtime-snapshot.js";
-import { NOOP_METRIC_SERVICE, recordToolCallMetric } from "../tool-call-metric.js";
+import { recordToolCallMetric } from "../tool-call-metric.js";
 import type {
   RootAgentPostToolEffects,
   RootAgentSessionController,
@@ -80,7 +80,7 @@ type RootAgentRuntimeDeps = {
   agentTools?: ToolExecutor;
   contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
-  metricService?: MetricService;
+  metricService?: MetricClient;
   llmRetryBackoffMs?: number;
   loopExtensions?: RootLoopExtension[];
   /** 纯文本轮挂起的自唤醒上限；与 wait 工具的 maxWaitMs 同源（waitToolMaxWaitMs）。 */
@@ -139,7 +139,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private readonly contextSummarizer?: ContextSummarizerLike;
   private readonly contextCompactionTotalTokenThreshold: number;
   private readonly llmRetryBackoffMs: number;
-  private readonly metricService: MetricService;
+  private readonly metricService: MetricClient;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
@@ -176,7 +176,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     this.contextSummarizer = contextSummarizer;
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
-    this.metricService = metricService ?? NOOP_METRIC_SERVICE;
+    this.metricService = metricService ?? NOOP_METRIC_CLIENT;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
     this.sleep = sleep ?? createSleep;

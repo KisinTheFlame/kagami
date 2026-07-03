@@ -17,7 +17,7 @@ import type { Database } from "@kagami/persistence/db/client";
 import type { LlmClient } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
-import type { MetricService } from "../metric/application/metric.service.js";
+import type { MetricClient } from "@kagami/metric-client/client";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
 import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
 import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
@@ -107,7 +107,7 @@ type BuildAgentRuntimeInput = {
   config: Config;
   database: Database;
   llmClient: LlmClient;
-  metricService: MetricService;
+  metricService: MetricClient;
   napcat: NapcatGatewayDeps;
   ithomeService: IthomeService;
   todoService: TodoService;

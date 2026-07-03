@@ -77,6 +77,9 @@ importers:
       '@kagami/metric-api':
         specifier: workspace:*
         version: link:../../packages/metric-api
+      '@kagami/metric-client':
+        specifier: workspace:*
+        version: link:../../packages/metric-client
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -694,6 +697,28 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/metric-client:
+    dependencies:
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@kagami/metric-api':
+        specifier: workspace:*
+        version: link:../metric-api
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../rpc-client
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/oss-api:
     dependencies:
