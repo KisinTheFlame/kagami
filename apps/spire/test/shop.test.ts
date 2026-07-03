@@ -26,11 +26,12 @@ describe("商店库存", () => {
     }
   });
 
-  it("选项 = 各商品 + 离开", () => {
+  it("选项 = 各商品 + 去牌 + 离开", () => {
     const s = shop();
     const options = currentOptions(s);
-    expect(options).toHaveLength(s.shop!.items.length + 1);
+    expect(options).toHaveLength(s.shop!.items.length + 2);
     expect(options[options.length - 1]).toBe("离开商店");
+    expect(options[options.length - 2]).toContain("移除一张牌");
   });
 });
 
@@ -90,9 +91,57 @@ describe("购买", () => {
 describe("离开", () => {
   it("选最后一项离开 → 回地图、清空 shop", () => {
     const s = shop();
-    const leaveIdx = s.shop!.items.length;
+    const leaveIdx = s.shop!.items.length + 1; // 商品 + 去牌 + 离开
     expect(applyChoose(s, leaveIdx).ok).toBe(true);
     expect(s.screen).toBe("map");
     expect(s.shop).toBeNull();
+  });
+});
+
+describe("去牌服务", () => {
+  function purgeIndex(s: GameState): number {
+    return s.shop!.items.length; // 商品之后、离开之前
+  }
+
+  it("选去牌 → 进选牌子界面，列牌组 + 取消", () => {
+    const s = shop();
+    s.gold = 9999;
+    expect(applyChoose(s, purgeIndex(s)).ok).toBe(true);
+    expect(s.shop!.removing).toBe(true);
+    const options = currentOptions(s);
+    expect(options).toHaveLength(s.deck.length + 1);
+    expect(options[options.length - 1]).toBe("取消");
+  });
+
+  it("移除一张牌：扣 75 金、牌组少一张、每店限一次", () => {
+    const s = shop();
+    s.gold = 200;
+    const deckBefore = s.deck.length;
+    applyChoose(s, purgeIndex(s)); // 进子界面
+    expect(applyChoose(s, 0).ok).toBe(true); // 移除第 0 张
+    expect(s.deck.length).toBe(deckBefore - 1);
+    expect(s.gold).toBe(125);
+    expect(s.shop!.purgeUsed).toBe(true);
+    expect(s.shop!.removing).toBe(false);
+    // 再次去牌被拒
+    expect(applyChoose(s, purgeIndex(s)).ok).toBe(false);
+  });
+
+  it("金币不足不能去牌", () => {
+    const s = shop();
+    s.gold = 10;
+    expect(applyChoose(s, purgeIndex(s)).ok).toBe(false);
+    expect(s.shop!.removing).toBe(false);
+  });
+
+  it("子界面选取消 → 回商店、不扣钱", () => {
+    const s = shop();
+    s.gold = 200;
+    applyChoose(s, purgeIndex(s));
+    const cancelIdx = s.deck.length;
+    expect(applyChoose(s, cancelIdx).ok).toBe(true);
+    expect(s.shop!.removing).toBe(false);
+    expect(s.gold).toBe(200);
+    expect(s.shop!.purgeUsed).toBe(false);
   });
 });

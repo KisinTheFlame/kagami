@@ -210,6 +210,15 @@ export function currentOptions(state: GameState): string[] {
     return getEventDef(state.event.id).choices.map(choice => choice.label);
   }
   if (state.screen === "shop" && state.shop) {
+    // 去牌子界面：列可移除的牌 + 取消。
+    if (state.shop.removing) {
+      const cards = state.deck.map(card => {
+        const def = getCardDef(card.defId);
+        return `移除「${def.name}${card.upgraded ? "+" : ""}」`;
+      });
+      cards.push("取消");
+      return cards;
+    }
     const options = state.shop.items.map(item => {
       const name = shopItemName(item);
       if (item.sold) {
@@ -218,7 +227,10 @@ export function currentOptions(state: GameState): string[] {
       const affordable = state.gold >= item.cost ? "" : "（金币不足）";
       return `${name} — ${item.cost} 金${affordable}`;
     });
-    options.push("离开商店");
+    const purge = state.shop.purgeUsed
+      ? "去牌服务（已用过）"
+      : `移除一张牌 — ${state.shop.purgeCost} 金${state.gold >= state.shop.purgeCost ? "" : "（金币不足）"}`;
+    options.push(purge, "离开商店");
     return options;
   }
   return [];
@@ -341,17 +353,48 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
   }
 
   if (state.screen === "shop" && state.shop) {
-    const items = state.shop.items;
+    const shop = state.shop;
+    // 去牌子界面：选一张牌移除，或取消。
+    if (shop.removing) {
+      if (optionIndex === state.deck.length) {
+        shop.removing = false;
+        return { ok: true };
+      }
+      const card = state.deck[optionIndex];
+      if (!card) {
+        return { ok: false, reason: `选项 ${optionIndex} 无效。` };
+      }
+      state.gold -= shop.purgeCost;
+      state.deck.splice(optionIndex, 1);
+      shop.purgeUsed = true;
+      shop.removing = false;
+      state.log.push(`你花 ${shop.purgeCost} 金移除了「${getCardDef(card.defId).name}」。`);
+      return { ok: true };
+    }
+    const items = shop.items;
+    if (optionIndex < items.length) {
+      return buyShopItem(state, items[optionIndex]!);
+    }
     if (optionIndex === items.length) {
+      // 去牌服务：进入选牌子界面。
+      if (shop.purgeUsed) {
+        return { ok: false, reason: "本店的去牌服务已经用过了。" };
+      }
+      if (state.gold < shop.purgeCost) {
+        return { ok: false, reason: `金币不足：去牌需 ${shop.purgeCost}，你只有 ${state.gold}。` };
+      }
+      if (state.deck.length === 0) {
+        return { ok: false, reason: "牌组里没有可移除的牌。" };
+      }
+      shop.removing = true;
+      return { ok: true };
+    }
+    if (optionIndex === items.length + 1) {
       state.shop = null;
       backToMap(state);
       return { ok: true };
     }
-    const item = items[optionIndex];
-    if (!item) {
-      return { ok: false, reason: `选项 ${optionIndex} 无效。` };
-    }
-    return buyShopItem(state, item);
+    return { ok: false, reason: `选项 ${optionIndex} 无效。` };
   }
 
   if (state.screen === "event" && state.event) {
