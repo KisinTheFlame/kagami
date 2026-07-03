@@ -140,11 +140,7 @@ export class RootAgentSession implements RootAgentSessionController {
     if (this.initialized) {
       return;
     }
-    const apps = (this.appManager?.getAllApps() ?? []).map(app => ({
-      id: app.id,
-      displayName: app.displayName,
-    }));
-    await this.context.appendMessages([createPortalReminderMessage({ apps })]);
+    await this.context.appendMessages([createPortalReminderMessage()]);
     this.initialized = true;
   }
 

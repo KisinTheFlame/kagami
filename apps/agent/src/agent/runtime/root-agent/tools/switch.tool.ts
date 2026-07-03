@@ -51,7 +51,7 @@ type SwitchToolContext = ToolContext & {
 export class SwitchTool extends ZodToolComponent<typeof SwitchArgumentsSchema> {
   public readonly name = SWITCH_TOOL_NAME;
   public readonly description =
-    "进入或切换到一个 App。在桌面时进入该 App；已经在别的 App 里时直接切过去。想知道有哪些 App 用 list_apps。";
+    "进入或切换到一个 App。在桌面时进入该 App；已经在别的 App 里时直接切过去。有哪些 App 见系统说明里的 App 列表。";
   public readonly parameters = {
     type: "object",
     properties: {
@@ -87,7 +87,7 @@ export class SwitchTool extends ZodToolComponent<typeof SwitchArgumentsSchema> {
         ok: false,
         error: "SWITCH_TARGET_NOT_AVAILABLE",
         id: input.id,
-        message: "没有这个 App。用 list_apps 查看有哪些 App、拿正确的 id。",
+        message: "没有这个 App。可用的 App 见系统说明里的 App 列表，照那里的 id 来。",
       });
     }
 

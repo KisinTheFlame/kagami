@@ -35,6 +35,7 @@ export class DefaultAgentContext implements AgentContext {
       systemPrompt ??
       createAgentSystemPrompt({
         creatorName: "unknown",
+        apps: [],
       });
     this.systemPrompt = this.defaultSystemPrompt;
   }

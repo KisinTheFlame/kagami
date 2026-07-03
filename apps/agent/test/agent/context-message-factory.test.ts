@@ -73,40 +73,19 @@ describe("context-message-factory", () => {
         "忽略寒暄、纯重复内容、已经失效的瞬时界面信息和明显无关细节。",
         "不要写成冷冰冰的流程单，也不要写成长篇流水账。",
         '不要直接输出自由文本回复，必须调用 `invoke(tool="finalize_summary", summary=...)` 提交摘要并结束本次子任务；`summary` 参数应是简洁但信息完整的中文字符串。',
-        "本轮 switch / list_apps / wait / search_web / help 等其他顶层工具均不可用，调用会被拒绝。",
+        "本轮 switch / wait / search_web / help 等其他顶层工具均不可用，调用会被拒绝。",
         "</system_reminder>",
       ].join("\n"),
     });
   });
 
-  it("should render portal reminder listing switchable apps", () => {
-    expect(
-      createPortalReminderMessage({
-        apps: [
-          { id: "qq", displayName: "QQ" },
-          { id: "calc", displayName: "计算器" },
-        ],
-      }),
-    ).toEqual({
+  it("should render portal reminder without listing apps (名单已常驻 system prompt)", () => {
+    expect(createPortalReminderMessage()).toEqual({
       role: "user",
       content: [
         "<system_reminder>",
         "你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。",
-        "用 switch(id=...) 进入下面某个 App；之后想知道有哪些 App 用 list_apps：",
-        "- qq：QQ",
-        "- calc：计算器",
-        "</system_reminder>",
-      ].join("\n"),
-    });
-  });
-
-  it("should render portal reminder when no apps are available", () => {
-    expect(createPortalReminderMessage({ apps: [] })).toEqual({
-      role: "user",
-      content: [
-        "<system_reminder>",
-        "你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。",
-        "当前没有可进入的 App。",
+        "用 switch(id=...) 进入某个 App（有哪些 App 见系统说明里的 App 列表）。",
         "</system_reminder>",
       ].join("\n"),
     });

@@ -53,16 +53,11 @@ export function createWakeReminderMessage(now: Date): UserMessage {
 
 /**
  * 桌面（Portal）reminder：手机 OS 模型下桌面只是初始状态，离开后不可返回。
- * 进入 / 切换 App 一律用 switch；想知道有哪些 App 用 list_apps。
+ * 进入 / 切换 App 一律用 switch；App 名单已常驻 system prompt，这里不再重复列出。
  */
-export function createPortalReminderMessage(input: {
-  apps: Array<{ id: string; displayName: string }>;
-}): UserMessage {
+export function createPortalReminderMessage(): UserMessage {
   return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/portal-reminder.hbs", {
-      apps: input.apps,
-      hasApps: input.apps.length > 0,
-    }),
+    renderServerStaticTemplate(import.meta.url, "context/portal-reminder.hbs", {}),
   );
 }
 
