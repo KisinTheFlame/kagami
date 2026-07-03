@@ -11,6 +11,7 @@ const CARD_LIST: CardDef[] = [
     id: "strike",
     name: "打击",
     type: "attack",
+    rarity: "starter",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -23,6 +24,7 @@ const CARD_LIST: CardDef[] = [
     id: "defend",
     name: "防御",
     type: "skill",
+    rarity: "starter",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -35,6 +37,7 @@ const CARD_LIST: CardDef[] = [
     id: "bash",
     name: "痛击",
     type: "attack",
+    rarity: "starter",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -55,6 +58,7 @@ const CARD_LIST: CardDef[] = [
     id: "anger",
     name: "愤怒",
     type: "attack",
+    rarity: "common",
     cost: 0,
     targeted: true,
     exhausts: false,
@@ -73,6 +77,7 @@ const CARD_LIST: CardDef[] = [
     id: "cleave",
     name: "横扫",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -85,6 +90,7 @@ const CARD_LIST: CardDef[] = [
     id: "clothesline",
     name: "铁臂勾拳",
     type: "attack",
+    rarity: "common",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -103,6 +109,7 @@ const CARD_LIST: CardDef[] = [
     id: "iron_wave",
     name: "铁浪",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -121,6 +128,7 @@ const CARD_LIST: CardDef[] = [
     id: "pommel_strike",
     name: "剑柄打击",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -139,6 +147,7 @@ const CARD_LIST: CardDef[] = [
     id: "twin_strike",
     name: "双重打击",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -151,6 +160,7 @@ const CARD_LIST: CardDef[] = [
     id: "shrug_it_off",
     name: "泰然自若",
     type: "skill",
+    rarity: "common",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -169,6 +179,7 @@ const CARD_LIST: CardDef[] = [
     id: "body_slam",
     name: "力压",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -181,6 +192,7 @@ const CARD_LIST: CardDef[] = [
     id: "thunderclap",
     name: "疾雷",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -201,6 +213,7 @@ const CARD_LIST: CardDef[] = [
     id: "heavy_blade",
     name: "重刃",
     type: "attack",
+    rarity: "common",
     cost: 2,
     targeted: true,
     exhausts: false,
@@ -213,6 +226,7 @@ const CARD_LIST: CardDef[] = [
     id: "uppercut",
     name: "上勾拳",
     type: "attack",
+    rarity: "uncommon",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -233,6 +247,7 @@ const CARD_LIST: CardDef[] = [
     id: "hemokinesis",
     name: "血魔法",
     type: "attack",
+    rarity: "uncommon",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -251,6 +266,7 @@ const CARD_LIST: CardDef[] = [
     id: "pummel",
     name: "乱拳",
     type: "attack",
+    rarity: "uncommon",
     cost: 1,
     targeted: true,
     exhausts: true,
@@ -263,6 +279,7 @@ const CARD_LIST: CardDef[] = [
     id: "bludgeon",
     name: "重锤",
     type: "attack",
+    rarity: "rare",
     cost: 3,
     targeted: true,
     exhausts: false,
@@ -275,6 +292,7 @@ const CARD_LIST: CardDef[] = [
     id: "wild_strike",
     name: "狂野劈砍",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: true,
     exhausts: false,
@@ -293,6 +311,7 @@ const CARD_LIST: CardDef[] = [
     id: "sword_boomerang",
     name: "剑刃回旋镖",
     type: "attack",
+    rarity: "common",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -305,6 +324,7 @@ const CARD_LIST: CardDef[] = [
     id: "inflame",
     name: "燃怒",
     type: "power",
+    rarity: "uncommon",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -318,6 +338,7 @@ const CARD_LIST: CardDef[] = [
     id: "metallicize",
     name: "金属化",
     type: "power",
+    rarity: "uncommon",
     cost: 1,
     targeted: false,
     exhausts: false,
@@ -330,6 +351,7 @@ const CARD_LIST: CardDef[] = [
     id: "demon_form",
     name: "恶魔形态",
     type: "power",
+    rarity: "rare",
     cost: 3,
     targeted: false,
     exhausts: false,
@@ -342,6 +364,7 @@ const CARD_LIST: CardDef[] = [
     id: "reckless_charge",
     name: "鲁莽冲锋",
     type: "attack",
+    rarity: "common",
     cost: 0,
     targeted: true,
     exhausts: false,
@@ -357,11 +380,53 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 10 点伤害。将一张「眩晕」洗入抽牌堆。",
   },
 
+  {
+    id: "immolate",
+    name: "献焰",
+    type: "attack",
+    rarity: "rare",
+    cost: 2,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage_all", amount: 21 },
+      { kind: "add_card", cardId: "burn", pile: "discard", count: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage_all", amount: 28 },
+      { kind: "add_card", cardId: "burn", pile: "discard", count: 1 },
+    ],
+    description: "对所有敌人造成 21 点伤害。将一张「灼烧」置入弃牌堆。",
+    upgradedDescription: "对所有敌人造成 28 点伤害。将一张「灼烧」置入弃牌堆。",
+  },
+  {
+    id: "offering",
+    name: "献祭",
+    type: "skill",
+    rarity: "rare",
+    cost: 0,
+    targeted: false,
+    exhausts: true,
+    effects: [
+      { kind: "lose_hp", amount: 6 },
+      { kind: "gain_energy", amount: 2 },
+      { kind: "draw", amount: 3 },
+    ],
+    upgradedEffects: [
+      { kind: "lose_hp", amount: 6 },
+      { kind: "gain_energy", amount: 2 },
+      { kind: "draw", amount: 5 },
+    ],
+    description: "失去 6 点生命。获得 2 点能量。抽 3 张牌。消耗。",
+    upgradedDescription: "失去 6 点生命。获得 2 点能量。抽 5 张牌。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "wound",
     name: "伤口",
     type: "status",
+    rarity: "special",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -374,6 +439,7 @@ const CARD_LIST: CardDef[] = [
     id: "burn",
     name: "灼烧",
     type: "status",
+    rarity: "special",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -386,6 +452,7 @@ const CARD_LIST: CardDef[] = [
     id: "dazed",
     name: "眩晕",
     type: "status",
+    rarity: "special",
     cost: null,
     targeted: false,
     exhausts: false,
@@ -399,6 +466,7 @@ const CARD_LIST: CardDef[] = [
     id: "slimed",
     name: "泥泞",
     type: "status",
+    rarity: "special",
     cost: null,
     targeted: false,
     exhausts: true,
@@ -436,29 +504,32 @@ export const IRONCLAD_STARTER_DECK: readonly string[] = [
   "bash",
 ];
 
-/** 卡奖励池（不含起始专属与废牌）：三选一从这里抽。 */
+function idsByRarity(rarity: CardDef["rarity"]): readonly string[] {
+  return CARD_LIST.filter(card => card.rarity === rarity).map(card => card.id);
+}
+
+/** 按稀有度分档的卡池（自动从 CARD_LIST 派生，加卡即入池）。 */
+export const COMMON_CARD_POOL: readonly string[] = idsByRarity("common");
+export const UNCOMMON_CARD_POOL: readonly string[] = idsByRarity("uncommon");
+export const RARE_CARD_POOL: readonly string[] = idsByRarity("rare");
+
+/** 全部可获得卡（普通+罕见+稀有；不含起始专属与废牌）：商店与「无视稀有度」场景用。 */
 export const REWARD_CARD_POOL: readonly string[] = [
-  "anger",
-  "cleave",
-  "clothesline",
-  "iron_wave",
-  "pommel_strike",
-  "twin_strike",
-  "shrug_it_off",
-  "body_slam",
-  "thunderclap",
-  "heavy_blade",
-  "uppercut",
-  "hemokinesis",
-  "pummel",
-  "bludgeon",
-  "wild_strike",
-  "sword_boomerang",
-  "inflame",
-  "metallicize",
-  "demon_form",
-  "reckless_charge",
+  ...COMMON_CARD_POOL,
+  ...UNCOMMON_CARD_POOL,
+  ...RARE_CARD_POOL,
 ];
+
+/** 取某稀有度的卡池。 */
+export function cardPoolOfRarity(rarity: "common" | "uncommon" | "rare"): readonly string[] {
+  if (rarity === "rare") {
+    return RARE_CARD_POOL;
+  }
+  if (rarity === "uncommon") {
+    return UNCOMMON_CARD_POOL;
+  }
+  return COMMON_CARD_POOL;
+}
 
 /** 取一张牌当前生效的效果（升级则用升级效果）。 */
 export function effectsOf(def: CardDef, upgraded: boolean): CardDef["effects"] {

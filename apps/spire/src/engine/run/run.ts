@@ -1,5 +1,5 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
-import { REWARD_CARD_POOL, getCardDef, costOf } from "../cards/cards.js";
+import { cardPoolOfRarity, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
@@ -29,6 +29,14 @@ const ENABLED_MAP_TYPES: readonly MapNodeType[] = [
   "rest",
   "treasure",
 ];
+
+const RARITY_LABELS: Record<string, string> = {
+  common: "普通",
+  uncommon: "罕见",
+  rare: "稀有",
+  starter: "起始",
+  special: "特殊",
+};
 
 const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   combat: "战斗",
@@ -144,15 +152,32 @@ export function generateReward(state: GameState): void {
     state.pendingRelicReward = false;
   }
   rollPotionDrop(state);
-  const pool = [...REWARD_CARD_POOL];
   const choices: { defId: string; upgraded: boolean }[] = [];
-  for (let i = 0; i < REWARD_CARD_COUNT && pool.length > 0; i += 1) {
-    const idx = nextInt(state.rng, pool.length);
-    choices.push({ defId: pool[idx]!, upgraded: false });
-    pool.splice(idx, 1);
+  const picked = new Set<string>();
+  for (let i = 0; i < REWARD_CARD_COUNT; i += 1) {
+    const defId = rollRewardCard(state, picked);
+    if (defId === null) {
+      break;
+    }
+    picked.add(defId);
+    choices.push({ defId, upgraded: false });
   }
   state.reward = { cardChoices: choices };
   state.screen = "reward";
+}
+
+/** 掷一张奖励卡：先掷稀有度（稀有 4% / 罕见 36% / 普通 60%），再从该档池里挑未重复的。 */
+function rollRewardCard(state: GameState, exclude: ReadonlySet<string>): string | null {
+  const roll = nextInt(state.rng, 100);
+  const rarity = roll < 4 ? "rare" : roll < 40 ? "uncommon" : "common";
+  // 依次尝试目标档 → 降级兜底，保证总能给出一张不重复的卡。
+  for (const tier of [rarity, "uncommon", "common"] as const) {
+    const candidates = cardPoolOfRarity(tier).filter(id => !exclude.has(id));
+    if (candidates.length > 0) {
+      return candidates[nextInt(state.rng, candidates.length)]!;
+    }
+  }
+  return null;
 }
 
 /** 当前屏幕可选项（渲染 + 校验 choose 用）。 */
@@ -168,7 +193,8 @@ export function currentOptions(state: GameState): string[] {
       const def = getCardDef(choice.defId);
       const cost = costOf(def, choice.upgraded);
       const desc = choice.upgraded ? def.upgradedDescription : def.description;
-      return `${def.name}${choice.upgraded ? "+" : ""} 费${cost ?? "-"} · ${desc}`;
+      const rarity = RARITY_LABELS[def.rarity] ?? "";
+      return `[${rarity}] ${def.name}${choice.upgraded ? "+" : ""} 费${cost ?? "-"} · ${desc}`;
     });
     return [...cards, "跳过（不拿卡）"];
   }
