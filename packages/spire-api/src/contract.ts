@@ -79,7 +79,7 @@ export const SpireEventViewSchema = z.object({
 
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
-  screen: z.enum(["map", "combat", "reward", "rest", "event", "gameover", "victory"]),
+  screen: z.enum(["map", "combat", "reward", "rest", "event", "shop", "gameover", "victory"]),
   player: z.object({
     hp: z.number().int(),
     maxHp: z.number().int(),

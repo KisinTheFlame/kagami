@@ -5,6 +5,7 @@ import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
 import { EVENT_POOL, getEventDef } from "../events/events.js";
 import type { EventOutcome } from "../events/events.js";
+import { generateShop } from "../shop/shop.js";
 import { nextInt, nextRange } from "../rng.js";
 import { startCombat } from "../combat/combat.js";
 import { generateMap, availableNext } from "../map/map.js";
@@ -19,8 +20,15 @@ const REWARD_CARD_COUNT = 3;
 const TREASURE_GOLD_MIN = 25;
 const TREASURE_GOLD_MAX = 35;
 
-/** 本里程碑启用的地图节点类型（商店随后续里程碑加入）。 */
-const ENABLED_MAP_TYPES: readonly MapNodeType[] = ["combat", "elite", "event", "rest", "treasure"];
+/** 启用的地图节点类型（全类型齐备）。 */
+const ENABLED_MAP_TYPES: readonly MapNodeType[] = [
+  "combat",
+  "elite",
+  "event",
+  "shop",
+  "rest",
+  "treasure",
+];
 
 const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   combat: "战斗",
@@ -71,13 +79,18 @@ function resolveNode(state: GameState, node: MapNode): void {
       state.log.push("你来到一处篝火。");
       return;
     }
+    case "shop": {
+      generateShop(state);
+      state.log.push("你走进一间商店。");
+      return;
+    }
     case "treasure": {
       grantTreasure(state);
       backToMap(state);
       return;
     }
     default: {
-      // shop 尚未启用（未来里程碑）；保守回地图。
+      // 所有节点类型已启用；保守回地图兜底。
       backToMap(state);
     }
   }
@@ -170,7 +183,30 @@ export function currentOptions(state: GameState): string[] {
   if (state.screen === "event" && state.event) {
     return getEventDef(state.event.id).choices.map(choice => choice.label);
   }
+  if (state.screen === "shop" && state.shop) {
+    const options = state.shop.items.map(item => {
+      const name = shopItemName(item);
+      if (item.sold) {
+        return `${name}（已售罄）`;
+      }
+      const affordable = state.gold >= item.cost ? "" : "（金币不足）";
+      return `${name} — ${item.cost} 金${affordable}`;
+    });
+    options.push("离开商店");
+    return options;
+  }
   return [];
+}
+
+/** 商店商品的展示名（卡/遗物/药水）。 */
+function shopItemName(item: NonNullable<GameState["shop"]>["items"][number]): string {
+  if (item.kind === "card") {
+    return `牌·${getCardDef(item.defId).name}`;
+  }
+  if (item.kind === "relic") {
+    return `遗物·${getRelicDef(item.id).name}`;
+  }
+  return `药水·${getPotionDef(item.id).name}`;
 }
 
 /** 结算一个事件结果（原地改 state）。金币/生命/牌组/遗物/药水复用既有系统。 */
@@ -221,6 +257,36 @@ function upgradableCards(state: GameState): GameState["deck"] {
 
 export type ChooseResult = { ok: true } | { ok: false; reason: string };
 
+/** 购买一件商店商品：校验售罄/金币/药水槽 → 扣金币、入库、标记售罄，留在商店屏。 */
+function buyShopItem(
+  state: GameState,
+  item: NonNullable<GameState["shop"]>["items"][number],
+): ChooseResult {
+  if (item.sold) {
+    return { ok: false, reason: "这件商品已经卖掉了。" };
+  }
+  if (state.gold < item.cost) {
+    return { ok: false, reason: `金币不足：需 ${item.cost}，你只有 ${state.gold}。` };
+  }
+  if (item.kind === "potion" && state.potions.indexOf(null) < 0) {
+    return { ok: false, reason: "药水槽已满，先用掉一瓶再买。" };
+  }
+
+  state.gold -= item.cost;
+  item.sold = true;
+  if (item.kind === "card") {
+    state.deck.push({ uid: state.nextUid++, defId: item.defId, upgraded: false });
+    state.log.push(`你买下了牌「${getCardDef(item.defId).name}」。`);
+  } else if (item.kind === "relic") {
+    state.relics.push({ id: item.id, counter: 0 });
+    state.log.push(`你买下了遗物「${getRelicDef(item.id).name}」。`);
+  } else {
+    state.potions[state.potions.indexOf(null)] = item.id;
+    state.log.push(`你买下了药水「${getPotionDef(item.id).name}」。`);
+  }
+  return { ok: true };
+}
+
 export function applyChoose(state: GameState, optionIndex: number): ChooseResult {
   if (state.screen === "map") {
     const options = availableNext(state.map, state.currentNodeId);
@@ -246,6 +312,20 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
     state.reward = null;
     backToMap(state);
     return { ok: true };
+  }
+
+  if (state.screen === "shop" && state.shop) {
+    const items = state.shop.items;
+    if (optionIndex === items.length) {
+      state.shop = null;
+      backToMap(state);
+      return { ok: true };
+    }
+    const item = items[optionIndex];
+    if (!item) {
+      return { ok: false, reason: `选项 ${optionIndex} 无效。` };
+    }
+    return buyShopItem(state, item);
   }
 
   if (state.screen === "event" && state.event) {
