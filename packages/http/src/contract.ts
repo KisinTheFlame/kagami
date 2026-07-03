@@ -92,6 +92,7 @@ export type BinaryHttpMethod = "GET" | "POST" | "HEAD" | "DELETE";
 export type BinaryEnvelopeRouteContract<
   TParams extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput extends z.ZodTypeAny = z.ZodTypeAny,
+  THeaders extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
 > = {
   kind: "binary-envelope";
   method: BinaryHttpMethod;
@@ -101,9 +102,16 @@ export type BinaryEnvelopeRouteContract<
   params: TParams;
   /** 上行是否为原始字节流（透传，不进 Zod）。 */
   bytesIn: boolean;
+  /**
+   * 上行请求头 schema；无请求头的路由为 `undefined`。与 body 字节是**分离的通道**：headers 走
+   * HTTP header，body 走原始字节流。putObject 的 `content-type` 在此声明，成为契约的一部分——
+   * client 从这里取、按 schema 校验后写进请求头，杜绝「content-type 塞裸 headers option」的
+   * 事实源漂移（issue #310）。
+   */
+  headers: THeaders;
   /** 下行 JSON 信封 schema。服务端 execute 返回类型由它反推；客户端对响应 parse。 */
   output: TOutput;
-  /** 成功状态码，默认 200（putObject 用 201）。 */
+  /** 成功状态码，默认 200（putObject 用 201）。客户端只按 2xx 判成功，不强校验此码。 */
   statusCode?: number;
 };
 
@@ -118,10 +126,32 @@ export type BinaryRawRouteContract<TParams extends z.ZodTypeAny = z.ZodTypeAny> 
 export function defineBinaryEnvelopeRoute<
   TParams extends z.ZodTypeAny,
   TOutput extends z.ZodTypeAny,
->(
-  contract: Omit<BinaryEnvelopeRouteContract<TParams, TOutput>, "kind">,
-): BinaryEnvelopeRouteContract<TParams, TOutput> {
-  return { kind: "binary-envelope", ...contract };
+>(contract: {
+  method: BinaryHttpMethod;
+  path: string;
+  params: TParams;
+  bytesIn: boolean;
+  output: TOutput;
+  statusCode?: number;
+}): BinaryEnvelopeRouteContract<TParams, TOutput, undefined>;
+export function defineBinaryEnvelopeRoute<
+  TParams extends z.ZodTypeAny,
+  TOutput extends z.ZodTypeAny,
+  THeaders extends z.ZodTypeAny,
+>(contract: {
+  method: BinaryHttpMethod;
+  path: string;
+  params: TParams;
+  bytesIn: boolean;
+  headers: THeaders;
+  output: TOutput;
+  statusCode?: number;
+}): BinaryEnvelopeRouteContract<TParams, TOutput, THeaders>;
+export function defineBinaryEnvelopeRoute(
+  contract: Omit<BinaryEnvelopeRouteContract, "kind" | "headers"> & { headers?: z.ZodTypeAny },
+): BinaryEnvelopeRouteContract {
+  // headers 默认 undefined（无请求头通道）；contract 若声明了 headers 会经 spread 覆盖。
+  return { kind: "binary-envelope", headers: undefined, ...contract };
 }
 
 export function defineBinaryRawRoute<TParams extends z.ZodTypeAny>(
@@ -138,7 +168,17 @@ export type RouteContract =
 /** 一个生产者导出的契约集合：方法名 → 契约。消费端 `createClient` 消费它。 */
 export type JsonContractMap = Record<string, JsonRouteContract>;
 
+/** 一个生产者导出的二进制契约集合：方法名 → envelope/raw 契约。消费端 `createBinaryClient` 消费它。 */
+export type BinaryContractMap = Record<
+  string,
+  BinaryEnvelopeRouteContract | BinaryRawRouteContract
+>;
+
 /** params 通道的推导：声明了 schema → `z.infer`；未声明 → `undefined`。 */
 export type JsonRouteParams<TParams extends z.ZodTypeAny | undefined> = TParams extends z.ZodTypeAny
   ? z.infer<TParams>
   : undefined;
+
+/** headers 通道的推导：声明了 schema → `z.infer`；未声明（undefined）→ `undefined`。 */
+export type BinaryRouteHeaders<THeaders extends z.ZodTypeAny | undefined> =
+  THeaders extends z.ZodTypeAny ? z.infer<THeaders> : undefined;

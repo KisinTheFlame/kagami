@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import { createClient, notReadyFallbackMapper, type JsonClient } from "@kagami/rpc-client/client";
 import { browserApiContract, type TypeValueSchema } from "@kagami/browser-api/contract";
 import {
   BrowserError,
@@ -64,7 +64,7 @@ export class HttpBrowserClient implements BrowserClient {
 
   public constructor({ baseUrl, fetch: fetchImpl }: HttpBrowserClientDeps) {
     this.api = createClient(browserApiContract, {
-      baseUrl: baseUrl.replace(/\/+$/, ""),
+      baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       decodeError: (_status, body) => {
         const wire = body as WireError | null;
@@ -77,21 +77,10 @@ export class HttpBrowserClient implements BrowserClient {
         }
         return undefined;
       },
-      mapFallbackError: info => {
-        switch (info.reason) {
-          case "unreachable":
-            return new BrowserError(
-              "BROWSER_NOT_READY",
-              `浏览器服务不可达（未启动 / 半开 / 超时）：${
-                info.cause instanceof Error ? info.cause.message : String(info.cause)
-              }`,
-            );
-          case "bad_status":
-            return new BrowserError("BROWSER_NOT_READY", `浏览器服务返回 HTTP ${info.status}`);
-          case "invalid_response_body":
-            return new BrowserError("BROWSER_NOT_READY", "浏览器服务返回了无法解析的响应体");
-        }
-      },
+      mapFallbackError: notReadyFallbackMapper(
+        "浏览器服务",
+        message => new BrowserError("BROWSER_NOT_READY", message),
+      ),
     });
   }
 

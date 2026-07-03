@@ -54,8 +54,9 @@ const HEXAGHOST_RITUAL = [
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
+/** 仍在场的敌人：活着且未逃跑（逃跑的拾荒者退出战斗，不再算作战斗目标）。 */
 function livingEnemies(combat: CombatState): EnemyState[] {
-  return combat.enemies.filter(enemy => enemy.hp > 0);
+  return combat.enemies.filter(enemy => enemy.hp > 0 && !enemy.escaped);
 }
 
 function actorPowers(state: GameState, actor: ActorRef): PowerInstance[] {
@@ -89,6 +90,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 哨卫开局各带 1 层神器（抵消你首个减益）。
     powers.push({ id: "artifact", amount: 1 });
   }
+  if (defId === "spheric_guardian") {
+    // 球形守卫开局自带 3 层神器（抵消你前三个减益）。
+    powers.push({ id: "artifact", amount: 3 });
+  }
   if (defId === "fungi_beast") {
     // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
     powers.push({ id: "spore_cloud", amount: 2 });
@@ -112,6 +117,7 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     rolledDamage,
     asleep,
     hasSplit: false,
+    escaped: false,
     modeShiftAccum: 0,
     modeShiftThreshold: def.modeShiftThreshold ?? null,
     stance: def.stanceMoves ? "offensive" : null,
@@ -176,7 +182,15 @@ function triggerRelicTurnEnd(state: GameState): void {
   fireRelics(state, (hooks, self) => hooks.onTurnEnd?.(state, self));
 }
 function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
-  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType));
+  // 遗物可通过 emit 发射战斗 Effect（信封等发伤遗物）；收集后以玩家为行动者统一结算。
+  const emitted: Effect[] = [];
+  const emit = (effect: Effect): void => {
+    emitted.push(effect);
+  };
+  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType, emit));
+  if (emitted.length > 0) {
+    applyEffects(state, emitted, { side: "player" }, null);
+  }
 }
 
 // —— 抽牌 ——
@@ -236,7 +250,7 @@ function applyEffect(
           );
         }
       } else {
-        dealDamageToPlayer(state, effect.amount, powers);
+        dealDamageToPlayer(state, effect.amount, powers, actor.index);
       }
       break;
     }
@@ -262,7 +276,7 @@ function applyEffect(
         const rolled = combat.enemies[actor.index]!.rolledDamage;
         const times = effect.times ?? 1;
         for (let hit = 0; hit < times; hit += 1) {
-          dealDamageToPlayer(state, rolled, powers);
+          dealDamageToPlayer(state, rolled, powers, actor.index);
         }
       }
       break;
@@ -282,7 +296,7 @@ function applyEffect(
             dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
           }
         } else {
-          dealDamageToPlayer(state, effect.amount, powers);
+          dealDamageToPlayer(state, effect.amount, powers, actor.index);
         }
       }
       break;
@@ -362,6 +376,21 @@ function applyEffect(
       }
       break;
     }
+    case "steal_gold": {
+      // 敌人偷金币（拾荒者）：最多偷 amount，玩家金币不足则偷光。
+      if (actor.side === "enemy") {
+        state.gold = Math.max(0, state.gold - Math.min(state.gold, effect.amount));
+      }
+      break;
+    }
+    case "escape": {
+      // 敌人逃离战斗（拾荒者）：标记 escaped，不再算作战斗目标。
+      if (actor.side === "enemy") {
+        combat.enemies[actor.index]!.escaped = true;
+        state.log.push(`${combat.enemies[actor.index]!.name}逃走了。`);
+      }
+      break;
+    }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
       break;
@@ -400,11 +429,16 @@ function applyPowerEffect(
       applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
-    addPower(combat.playerPowers, power, amount);
+    applyPowerToPlayer(combat, power, amount);
   }
 }
 
-const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set(["vulnerable", "weak", "frail"]);
+const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set([
+  "vulnerable",
+  "weak",
+  "frail",
+  "entangled",
+]);
 
 /** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
 function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount: number): void {
@@ -413,6 +447,15 @@ function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount
     return;
   }
   addPower(enemy.powers, power, amount);
+}
+
+/** 给玩家加 power；若是减益且玩家有神器，则消耗一层神器抵消（远古药水）。 */
+function applyPowerToPlayer(combat: CombatState, power: PowerInstance["id"], amount: number): void {
+  if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(combat.playerPowers, "artifact") > 0) {
+    addPower(combat.playerPowers, "artifact", -1);
+    return;
+  }
+  addPower(combat.playerPowers, power, amount);
 }
 
 function addCards(
@@ -522,12 +565,25 @@ function dealDamageToPlayer(
   state: GameState,
   base: number,
   attackerPowers: readonly PowerInstance[],
+  attackerIndex?: number,
 ): void {
   const combat = state.combat!;
   const dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
   const afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
   state.hp = Math.max(0, state.hp - afterBlock);
+  // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
+  if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
+    addPower(combat.playerPowers, "plated_armor", -1);
+  }
+  // 荆棘：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
+  const thorns = getPower(combat.playerPowers, "thorns");
+  if (thorns > 0 && attackerIndex !== undefined) {
+    const attacker = combat.enemies[attackerIndex];
+    if (attacker && attacker.hp > 0) {
+      attacker.hp = Math.max(0, attacker.hp - thorns);
+    }
+  }
 }
 
 /** 无来源的固定伤害（灼烧废牌），经玩家格挡但不受力量/易伤影响。 */
@@ -556,6 +612,9 @@ export function playCard(
     return { ok: false, reason: `手牌位 ${handIndex} 无效。` };
   }
   const def = getCardDef(instance.defId);
+  if (def.type === "attack" && getPower(combat.playerPowers, "entangled") > 0) {
+    return { ok: false, reason: "你被缠绕了，本回合无法打出攻击牌。" };
+  }
   const cost = costOf(def, instance.upgraded);
   if (cost === null) {
     return { ok: false, reason: `「${def.name}」无法打出。` };
@@ -707,10 +766,20 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = [];
-  // 金属化（玩家能力牌）：回合结束获得等量格挡（定值，不受敏捷/脆弱影响），带进敌人回合防御。
+  // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
   const playerMetallicize = getPower(combat.playerPowers, "metallicize");
   if (playerMetallicize > 0) {
     combat.playerBlock += playerMetallicize;
+  }
+  const platedArmor = getPower(combat.playerPowers, "plated_armor");
+  if (platedArmor > 0) {
+    combat.playerBlock += platedArmor;
+  }
+  // 再生（玩家）：回合结束回血，然后层数 -1。
+  const regen = getPower(combat.playerPowers, "regen");
+  if (regen > 0) {
+    state.hp = Math.min(state.maxHp, state.hp + regen);
+    addPower(combat.playerPowers, "regen", -1);
   }
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
   triggerRelicTurnEnd(state);
@@ -720,7 +789,7 @@ export function endTurn(state: GameState): void {
   const enemyCount = combat.enemies.length;
   for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
-    if (enemy.hp <= 0) {
+    if (enemy.hp <= 0 || enemy.escaped) {
       continue;
     }
     // 半血分裂：本体消失，原位与末位各生成一个分裂体（HP = 当前值），本回合不行动。
@@ -751,6 +820,12 @@ export function endTurn(state: GameState): void {
     selectNextMove(state, i);
   }
 
+  // 敌人全部逃跑 / 死亡 → 战斗结束（拾荒者逃走后无人可打）。
+  resolveCombatIfEnded(state);
+  if (state.combat === null) {
+    return;
+  }
+
   // 下个玩家回合开始。
   combat.turn += 1;
   combat.playerBlock = 0;
@@ -759,6 +834,11 @@ export function endTurn(state: GameState): void {
   const demonForm = getPower(combat.playerPowers, "demon_form");
   if (demonForm > 0) {
     addPower(combat.playerPowers, "strength", demonForm);
+  }
+  // 仪式（玩家·邪教徒药水）：每个玩家回合开始获得等量力量。
+  const playerRitual = getPower(combat.playerPowers, "ritual");
+  if (playerRitual > 0) {
+    addPower(combat.playerPowers, "strength", playerRitual);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
   triggerRelicTurnStart(state);
@@ -799,6 +879,55 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     }
     enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
     enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 冠军（第二幕 Boss）：血量首次降到 ≤半血时暴怒一次（+6 力量），其余走 weighted。
+  if (
+    enemy.defId === "champ" &&
+    enemy.hp <= Math.floor(enemy.maxHp / 2) &&
+    !enemy.moveHistory.includes("anger")
+  ) {
+    enemy.currentMove = "anger";
+    return;
+  }
+
+  // 拾荒者：抢劫×2 → 猛扑或烟雾弹 → 逃跑（偷完金币就跑）。
+  if (enemy.defId === "looter") {
+    const h = enemy.moveHistory;
+    const last = h[h.length - 1];
+    if (h.length === 0 || h.length === 1) {
+      enemy.currentMove = "mug";
+    } else if (last === "mug") {
+      enemy.currentMove = nextFloat(state.rng) < 0.5 ? "lunge" : "smoke_bomb";
+    } else if (last === "lunge") {
+      enemy.currentMove = "smoke_bomb";
+    } else {
+      enemy.currentMove = "flee";
+    }
+    return;
+  }
+
+  // 红色奴隶主：首招刺击；缠绕整场一次性；其余刮擦 / 刺击（连招上限 2）。
+  if (enemy.defId === "red_slaver") {
+    const h = enemy.moveHistory;
+    if (h.length === 0) {
+      enemy.currentMove = "rs_stab";
+      return;
+    }
+    const lastTwoSame = (id: string): boolean =>
+      h.length >= 2 && h[h.length - 1] === id && h[h.length - 2] === id;
+    const usedEntangle = h.includes("entangle");
+    const roll = nextInt(state.rng, 100);
+    if (roll >= 75 && !usedEntangle) {
+      enemy.currentMove = "entangle";
+    } else if (roll >= 50 && usedEntangle && !lastTwoSame("rs_stab")) {
+      enemy.currentMove = "rs_stab";
+    } else if (!lastTwoSame("scrape")) {
+      enemy.currentMove = "scrape";
+    } else {
+      enemy.currentMove = "rs_stab";
+    }
     return;
   }
 

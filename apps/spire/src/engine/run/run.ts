@@ -2,7 +2,12 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOfRarity, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { REWARD_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
-import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
+import {
+  BASE_POTION_DROP_CHANCE,
+  POTION_DROP_POOL,
+  getPotionDef,
+  potionPoolOfRarity,
+} from "../potions/potions.js";
 import { EVENT_POOL, getEventDef } from "../events/events.js";
 import type { EventOutcome } from "../events/events.js";
 import { generateShop } from "../shop/shop.js";
@@ -48,10 +53,21 @@ const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
   boss: "首领",
 };
 
+/** 有内容的幕数：打完第 TOTAL_ACTS 幕 Boss 即通关；之前的 Boss 则进入下一幕。 */
+export const TOTAL_ACTS = 2;
+
 export function buildMap(state: GameState): void {
   state.map = generateMap(state.rng, ENABLED_MAP_TYPES);
   state.currentNodeId = null;
   state.screen = "map";
+}
+
+/** 进入下一幕：幕号 +1、重置本幕战斗计数、生成新地图，携带血/牌/遗物/金币/药水。 */
+export function advanceToNextAct(state: GameState): void {
+  state.act += 1;
+  state.combatsEntered = 0;
+  buildMap(state);
+  state.log.push(`你踏入第 ${state.act} 幕。`);
 }
 
 /** 进入一个地图节点：按类型路由。战斗/Boss 起战斗；篝火切 rest 屏；宝箱即时给金币后回地图。 */
@@ -60,19 +76,19 @@ function resolveNode(state: GameState, node: MapNode): void {
   switch (node.type) {
     case "combat": {
       // 前若干场抽 weak 池、其余抽 strong 池（复刻 StS Act1 战斗节奏）。
-      const encounterId = pickNormalEncounter(state.rng, state.combatsEntered);
+      const encounterId = pickNormalEncounter(state.rng, state.combatsEntered, state.act);
       state.combatsEntered += 1;
       startCombat(state, encounterId);
       return;
     }
     case "elite": {
       // 精英战：独立精英池；胜利后必发 1 个遗物。
-      startCombat(state, pickEliteEncounter(state.rng));
+      startCombat(state, pickEliteEncounter(state.rng, state.act));
       state.pendingRelicReward = true;
       return;
     }
     case "boss": {
-      startCombat(state, pickBossEncounter(state.rng));
+      startCombat(state, pickBossEncounter(state.rng, state.act));
       return;
     }
     case "event": {
@@ -136,7 +152,11 @@ function rollPotionDrop(state: GameState): void {
   }
   const chance = Math.max(0, Math.min(100, BASE_POTION_DROP_CHANCE + state.potionDropBonus));
   if (nextInt(state.rng, 100) < chance) {
-    const id = POTION_DROP_POOL[nextInt(state.rng, POTION_DROP_POOL.length)]!;
+    // 掷稀有度（稀有 5% / 罕见 30% / 普通 65%），再从该档抽一瓶。
+    const roll = nextInt(state.rng, 100);
+    const rarity = roll < 5 ? "rare" : roll < 35 ? "uncommon" : "common";
+    const pool = potionPoolOfRarity(rarity);
+    const id = pool[nextInt(state.rng, pool.length)]!;
     state.potions[emptySlot] = id;
     state.potionDropBonus -= 10;
     state.log.push(`你获得了药水「${getPotionDef(id).name}」。`);

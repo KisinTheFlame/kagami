@@ -21,6 +21,7 @@ const POWER_LABELS: Record<string, string> = {
   vulnerable: "易伤",
   weak: "虚弱",
   frail: "脆弱",
+  entangled: "缠绕",
   metallicize: "金属化",
   ritual: "仪式",
   curl_up: "蜷缩",
@@ -30,6 +31,9 @@ const POWER_LABELS: Record<string, string> = {
   angry: "狂怒",
   spore_cloud: "孢子云",
   demon_form: "恶魔形态",
+  thorns: "荆棘",
+  regen: "再生",
+  plated_armor: "镀甲",
   mode_shift: "模式",
 };
 
@@ -73,6 +77,7 @@ function handView(card: SpireHandCardView): Record<string, unknown> {
 export function renderSpireScreen(screen: SpireScreen): string {
   const combat = screen.combat;
   return renderServerStaticTemplate(import.meta.url, "context/spire-screen.hbs", {
+    act: screen.act,
     isMap: screen.screen === "map",
     isCombat: screen.screen === "combat",
     isReward: screen.screen === "reward",
