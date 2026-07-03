@@ -34,21 +34,21 @@ describe("WaitTool", () => {
     const result = await executeWait(tool, []);
 
     expect(result.effects).toEqual([{ type: "wait_for_event", maxWaitMs: 1_000 }]);
-    expect(result.content).toBe("休息结束了");
+    expect(result.content).toBe("等待结束");
   });
 
   it("still produces wait_for_event Effect after repeated waits", async () => {
     const tool = createWaitTool();
     const messages: LlmMessage[] = [
       assistantWith(makeToolCall("wait", "t1")),
-      toolResult("t1", "休息结束了"),
+      toolResult("t1", "等待结束"),
       assistantWith(makeToolCall("wait", "t2")),
-      toolResult("t2", "休息结束了"),
+      toolResult("t2", "等待结束"),
       assistantWith(makeToolCall("wait", "t3")),
     ];
     const result = await executeWait(tool, messages);
 
     expect(result.effects).toEqual([{ type: "wait_for_event", maxWaitMs: 1_000 }]);
-    expect(result.content).toBe("休息结束了");
+    expect(result.content).toBe("等待结束");
   });
 });

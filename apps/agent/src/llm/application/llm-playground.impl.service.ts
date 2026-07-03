@@ -1,12 +1,11 @@
+import { type LlmToolDefinition, type LlmProviderListResponse } from "@kagami/llm-api/llm-chat";
 import {
   type LlmPlaygroundToolListResponse,
   type LlmPlaygroundChatRequest,
   type LlmPlaygroundChatResponse,
-  type LlmToolDefinition,
   type PlaygroundContentPart,
-  type LlmProviderListResponse,
   type PlaygroundMessage,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { LlmClient, LlmChatRequest, LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import type { LlmPlaygroundService } from "./llm-playground.service.js";

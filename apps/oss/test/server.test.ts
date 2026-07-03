@@ -7,8 +7,13 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
+import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import { buildOssApp } from "../src/http/server.js";
 import { ObjectStore } from "../src/store/object-store.js";
+
+// server / store 经 AppLogger 打日志（issue #274 统一日志格式），emit 前必须先初始化运行时。
+initLoggerRuntime({ sinks: [new StdoutLogSink()] });
 
 const MAX_BODY_BYTES = 64 * 1024; // 测试用小上限，机制与生产 50MB 完全一致。
 
@@ -148,9 +153,11 @@ describe("OSS HTTP server (streaming)", () => {
     expect(delMissing.status).toBe(404);
   });
 
-  it("GET /health → 200 ok", async () => {
+  it("GET /health → 200 + 全服务统一的 { status, timestamp } 形状", async () => {
     const res = await fetch(`${baseUrl}/health`);
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe("ok");
+    const body = (await res.json()) as { status: string; timestamp: string };
+    expect(body.status).toBe("ok");
+    expect(typeof body.timestamp).toBe("string");
   });
 });

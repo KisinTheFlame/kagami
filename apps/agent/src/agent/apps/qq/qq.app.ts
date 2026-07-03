@@ -1,5 +1,5 @@
 import type { App, JsonValue } from "@kagami/agent-runtime";
-import { truncateWithEllipsis } from "@kagami/shared/utils";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import {
   renderGroupMessagePlainText,
   renderGroupNoticePlainText,

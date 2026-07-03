@@ -6,14 +6,14 @@
   "scripts": {
     "build": "pnpm -r build",
     "app:deploy": "bash ./scripts/deploy.sh",
-    "app:stop": "pm2 stop ecosystem.config.cjs",
+    "app:stop": "bash ./scripts/stop.sh",
     "db:migrate:dev": "bash ./scripts/prisma.sh migrate dev",
     "db:migrate:deploy": "bash ./scripts/prisma.sh migrate deploy",
     "db:migrate:status": "bash ./scripts/prisma.sh migrate status",
     "db:migrate:reset": "bash ./scripts/prisma.sh migrate reset",
     "db:migrate:resolve": "bash ./scripts/prisma.sh migrate resolve",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r --workspace-concurrency=1 --if-present test",
+    "test": "NODE_OPTIONS=--max-old-space-size=2048 vitest run",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --check",
@@ -31,6 +31,7 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.0",
+    "vitest": "^3.2.4",
     "yaml": "^2.8.2"
   }
 }

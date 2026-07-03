@@ -2,9 +2,8 @@ import {
   type LlmChatCallItem,
   type LlmChatCallStatus,
   type LlmChatCallSummary,
-  type LlmRequestMessage,
-  type LlmRequestUserContentPart,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/console-api/llm-chat-call";
+import { type LlmRequestMessage, type LlmRequestUserContentPart } from "@kagami/llm-api/llm-chat";
 import { FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";

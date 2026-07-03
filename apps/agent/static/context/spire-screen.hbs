@@ -1,6 +1,10 @@
 <spire_screen>
 {{#if isMap}}
-你在尖塔地图上。生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
+你在尖塔第 {{act}} 幕的地图上。生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}}（{{description}}）{{/each}}
+{{/if}}
+{{#if hasPotions}}药水：{{#each potions}}[槽{{slot}}]{{name}}（{{description}}）{{/each}}
+{{/if}}
 选择接下来往哪走：
 {{#each options}}
 [{{n}}] {{text}}
@@ -9,6 +13,15 @@
 {{else if isCombat}}
 第 {{combat.turn}} 回合　能量 {{combat.energy}}/{{combat.maxEnergy}}
 你：生命 {{hp}}/{{maxHp}}{{#if combat.hasBlock}}　格挡 {{combat.block}}{{/if}}{{#if combat.hasPowers}}　状态：{{#each combat.powers}}{{label}}{{amount}} {{/each}}{{/if}}
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
+{{#if hasPotions}}药水：{{#each potions}}[槽{{slot}}]{{name}}（{{description}}）{{/each}}
+用 invoke(tool="use_potion", slot_index=槽号[, target_index=敌人编号]) 使用药水。
+{{/if}}
+{{#if combat.hasOrbSystem}}充能球（{{combat.orbs.length}}/{{combat.orbSlots}}，左→右）：{{#if combat.orbs.length}}{{#each combat.orbs}}[{{this}}]{{/each}}{{else}}（空）{{/if}}　回合结束时每颗球触发被动（闪电=随机伤害、冰霜=格挡）。
+{{/if}}
+{{#if combat.hasStance}}姿态：{{combat.stance}}　（愤怒=你造成与受到的伤害都翻倍；离开平静时 +2 能量）
+{{/if}}
 ————敌人————
 {{#each combat.enemies}}
 [{{n}}] {{name}}　生命 {{hp}}/{{maxHp}}{{#if hasBlock}}　格挡 {{block}}{{/if}}{{#if hasPowers}}　状态：{{#each powers}}{{label}}{{amount}} {{/each}}{{/if}}
@@ -21,6 +34,8 @@
 打牌用 invoke(tool="play_card", hand_index=手牌编号, target_index=敌人编号)；出完这回合就 end_turn。
 {{else if isReward}}
 战斗胜利。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
 挑一张牌加入牌组，或跳过：
 {{#each options}}
 [{{n}}] {{text}}
@@ -28,15 +43,32 @@
 用 invoke(tool="choose", option_index=编号) 选择。
 {{else if isRest}}
 你来到篝火旁。你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#if hasRelics}}遗物：{{#each relics}}{{name}} {{/each}}
+{{/if}}
 {{#each options}}
 [{{n}}] {{text}}
 {{/each}}
 用 invoke(tool="choose", option_index=编号) 选择。
+{{else if isEvent}}
+你：生命 {{hp}}/{{maxHp}}　金币 {{gold}}　牌组 {{deckCount}} 张。
+{{eventDescription}}
+你可以：
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 做出选择。
+{{else if isShop}}
+商店。你有 {{gold}} 金币　生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+在售（买完可继续逛，逛够了就离开）：
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 购买或离开。
 {{else if isGameover}}
 你倒下了，这一局到此为止。生命 0/{{maxHp}}。
 想再来一局就调用 start_run。
 {{else if isVictory}}
-你击败了守卫者，登顶成功！生命 {{hp}}/{{maxHp}}。
+你击败了这一层的首领，登顶成功！生命 {{hp}}/{{maxHp}}。
 想再爬一次就调用 start_run。
 {{/if}}
 </spire_screen>

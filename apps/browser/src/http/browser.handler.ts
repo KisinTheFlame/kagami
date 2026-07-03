@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { registerJsonRoute } from "@kagami/http/contract";
+import { registerJsonRoute } from "@kagami/http/register";
 import { browserApiContract } from "@kagami/browser-api/contract";
 import type { BrowserService } from "../application/browser.service.js";
 import type { SerialExecutor } from "../application/serial-executor.js";

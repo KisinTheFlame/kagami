@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@kagami/config": "workspace:*",
+    "@kagami/http": "workspace:*",
     "yaml": "^2.8.2"
   },
   "devDependencies": {

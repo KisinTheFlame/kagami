@@ -1,17 +1,14 @@
-import {
-  RecordMetricRequestSchema,
-  RecordMetricResponseSchema,
-} from "@kagami/shared/schemas/metric";
 import type { FastifyInstance } from "fastify";
-import { registerCommandRoute } from "@kagami/http/route";
+import { registerJsonRoute } from "@kagami/http/register";
+import { metricApiContract } from "@kagami/metric-api/contract";
 import type { MetricRecordService } from "../application/metric-record.service.js";
 
 type MetricRecordHandlerDeps = {
   metricRecordService: MetricRecordService;
 };
 
+/** 打点摄取路由。路由与 schema 的单一事实源在 @kagami/metric-api（#279 PR3）。 */
 export class MetricRecordHandler {
-  public readonly prefix = "/metric";
   private readonly metricRecordService: MetricRecordService;
 
   public constructor({ metricRecordService }: MetricRecordHandlerDeps) {
@@ -19,15 +16,9 @@ export class MetricRecordHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerCommandRoute({
-      app,
-      path: `${this.prefix}/record`,
-      bodySchema: RecordMetricRequestSchema,
-      responseSchema: RecordMetricResponseSchema,
-      execute: async ({ body }) => {
-        await this.metricRecordService.record(body);
-        return { ok: true as const };
-      },
+    registerJsonRoute(app, metricApiContract.record, async ({ input }) => {
+      await this.metricRecordService.record(input);
+      return { ok: true as const };
     });
   }
 }

@@ -1,9 +1,9 @@
+import { type LlmProviderListResponse } from "@kagami/llm-api/llm-chat";
 import {
   type LlmPlaygroundChatRequest,
   type LlmPlaygroundChatResponse,
   type LlmPlaygroundToolListResponse,
-  type LlmProviderListResponse,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 
 export interface LlmPlaygroundService {
   listProviders(): Promise<LlmProviderListResponse>;

@@ -1,4 +1,4 @@
-import { type NapcatEventItem } from "@kagami/shared/schemas/napcat-event";
+import { type NapcatEventItem } from "@kagami/console-api/napcat-event";
 import { formatOptionalDateTime } from "@/lib/format";
 
 type NapcatEventDetailPanelProps = {

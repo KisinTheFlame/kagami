@@ -1,4 +1,4 @@
-import { type AppLogItem, type AppLogListResponse } from "@kagami/shared/schemas/app-log";
+import { type AppLogItem, type AppLogListResponse } from "@kagami/console-api/app-log";
 import type { AppLogItem as AppLogDaoItem } from "@kagami/kernel/logger/dao/log.dao";
 
 type MapAppLogListInput = {

@@ -1,5 +1,4 @@
 import { imageContentToBase64 } from "@kagami/llm";
-import { isRecord } from "@kagami/kernel/json/is-record";
 import type { JsonSchema, LlmChatRequest, LlmContentPart } from "../types.js";
 import type {
   ClaudeMessageRequest,
@@ -12,17 +11,12 @@ const CLAUDE_CODE_BILLING_HEADER =
   "x-anthropic-billing-header: cc_version=2.1.76.b57; cc_entrypoint=sdk-cli; cch=00000;";
 const DEFAULT_MAX_TOKENS = 4096;
 const CLAUDE_4_MAX_TOKENS = 32000;
-const CLAUDE_4_THINKING_BUDGET = 1024;
 
 /** LlmChatRequest → Anthropic Messages 请求体（含 system 前缀块 / thinking / 工具映射）。 */
 export function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestBody {
   const model = requireRequestModel(request);
   const toolsEnabled = request.tools.length > 0 && request.toolChoice !== "none";
   const toolChoice = toClaudeToolChoice(request.toolChoice);
-  const thinkingConfig = toClaudeThinkingConfig({
-    model,
-    toolChoice: request.toolChoice,
-  });
 
   return {
     model,
@@ -86,7 +80,12 @@ export function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageR
         },
       ];
     }),
-    ...(thinkingConfig ? thinkingConfig : {}),
+    // thinking 显式关死：消息模型与持久化尚不认识 thinking 块（解析层会静默丢弃），
+    // tool loop 续轮回放缺块会被 API 拒绝（400）。开启 adaptive thinking 是独立
+    // 工程，见 https://github.com/KisinTheFlame/kagami/issues/269。
+    thinking: {
+      type: "disabled",
+    },
     ...(toolsEnabled
       ? {
           tools: request.tools.map(tool => ({
@@ -174,49 +173,6 @@ function toClaudeToolChoice(
   };
 }
 
-function toClaudeThinkingConfig(input: {
-  model: string;
-  toolChoice: LlmChatRequest["toolChoice"];
-}): Record<string, unknown> | null {
-  if (forcesToolUse(input.toolChoice)) {
-    return {
-      thinking: {
-        type: "disabled",
-      },
-    };
-  }
-
-  if (isClaudeAdaptiveModel(input.model)) {
-    return {
-      thinking: {
-        type: "adaptive",
-      },
-      output_config: {
-        effort: "medium",
-      },
-      context_management: {
-        edits: [
-          {
-            type: "clear_thinking_20251015",
-            keep: "all",
-          },
-        ],
-      },
-    };
-  }
-
-  if (isClaude4Model(input.model)) {
-    return {
-      thinking: {
-        type: "enabled",
-        budget_tokens: CLAUDE_4_THINKING_BUDGET,
-      },
-    };
-  }
-
-  return null;
-}
-
 function resolveClaudeMaxTokens(model: string): number {
   if (isClaude4Model(model)) {
     return CLAUDE_4_MAX_TOKENS;
@@ -225,18 +181,8 @@ function resolveClaudeMaxTokens(model: string): number {
   return DEFAULT_MAX_TOKENS;
 }
 
-function isClaudeAdaptiveModel(model: string): boolean {
-  return model.startsWith("claude-sonnet-4-6") || model.startsWith("claude-opus-4-6");
-}
-
 function isClaude4Model(model: string): boolean {
   return model.startsWith("claude-sonnet-4-") || model.startsWith("claude-opus-4-");
-}
-
-function forcesToolUse(toolChoice: LlmChatRequest["toolChoice"]): boolean {
-  return (
-    toolChoice === "required" || (isRecord(toolChoice) && typeof toolChoice.tool_name === "string")
-  );
 }
 
 function requireRequestModel(request: { model?: string }): string {

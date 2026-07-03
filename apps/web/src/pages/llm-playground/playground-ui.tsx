@@ -1,6 +1,6 @@
 /** Playground 的小型展示组件（Panel/Field/StateHint/ToolCallCard/MetaItem）。从 LlmPlaygroundPage.tsx 拆出（纯移动）。 */
 import type { ReactNode } from "react";
-import type { LlmToolCallPayload } from "@kagami/shared/schemas/llm-chat";
+import type { LlmToolCallPayload } from "@kagami/llm-api/llm-chat";
 import { formatJson } from "./playground-editor";
 export function Panel({
   title,

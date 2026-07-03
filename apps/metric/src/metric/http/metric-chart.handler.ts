@@ -1,25 +1,14 @@
-import {
-  MetricChartCreateRequestSchema,
-  MetricChartCreateResponseSchema,
-  MetricChartDataQuerySchema,
-  MetricChartDataResponseSchema,
-  MetricChartDeleteRequestSchema,
-  MetricChartDeleteResponseSchema,
-  MetricChartListResponseSchema,
-} from "@kagami/shared/schemas/metric-chart";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
+import { registerJsonRoute } from "@kagami/http/register";
+import { metricApiContract } from "@kagami/metric-api/contract";
 import type { MetricChartService } from "../application/metric-chart.service.js";
-
-const EmptyQuerySchema = z.object({}).strict();
 
 type MetricChartHandlerDeps = {
   metricChartService: MetricChartService;
 };
 
+/** 图表定义 / 查数路由。路由与 schema 的单一事实源在 @kagami/metric-api（#279 PR3）。 */
 export class MetricChartHandler {
-  public readonly prefix = "/metric-chart";
   private readonly metricChartService: MetricChartService;
 
   public constructor({ metricChartService }: MetricChartHandlerDeps) {
@@ -27,36 +16,18 @@ export class MetricChartHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/list`,
-      querySchema: EmptyQuerySchema,
-      responseSchema: MetricChartListResponseSchema,
-      execute: () => this.metricChartService.list(),
-    });
+    registerJsonRoute(app, metricApiContract.listCharts, () => this.metricChartService.list());
 
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/data`,
-      querySchema: MetricChartDataQuerySchema,
-      responseSchema: MetricChartDataResponseSchema,
-      execute: ({ query }) => this.metricChartService.queryData(query),
-    });
+    registerJsonRoute(app, metricApiContract.chartData, ({ input }) =>
+      this.metricChartService.queryData(input),
+    );
 
-    registerCommandRoute({
-      app,
-      path: `${this.prefix}/create`,
-      bodySchema: MetricChartCreateRequestSchema,
-      responseSchema: MetricChartCreateResponseSchema,
-      execute: ({ body }) => this.metricChartService.create(body),
-    });
+    registerJsonRoute(app, metricApiContract.createChart, ({ input }) =>
+      this.metricChartService.create(input),
+    );
 
-    registerCommandRoute({
-      app,
-      path: `${this.prefix}/delete`,
-      bodySchema: MetricChartDeleteRequestSchema,
-      responseSchema: MetricChartDeleteResponseSchema,
-      execute: ({ body }) => this.metricChartService.delete(body),
-    });
+    registerJsonRoute(app, metricApiContract.deleteChart, ({ input }) =>
+      this.metricChartService.delete(input),
+    );
   }
 }

@@ -1,12 +1,16 @@
-import { randomUUID } from "node:crypto";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import { withTraceContext } from "@kagami/kernel/logger/runtime";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
+import {
+  createServiceApp,
+  type AppRouteHandler,
+  type ServiceErrorHandler,
+} from "@kagami/kernel/http/service-app";
+import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { createAuthModule } from "@kagami/auth";
 import {
   createLlmClient,
@@ -20,16 +24,10 @@ import {
 import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/embedding";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
-import { HealthHandler } from "../http/health.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
 
-const TRACE_ID_HEADER_NAME = "X-Kagami-Trace-Id";
 const logger = new AppLogger({ source: "llm-service-bootstrap" });
-
-type AppRouteHandler = {
-  register(app: FastifyInstance): void;
-};
 
 export type LlmServiceRuntime = {
   app: FastifyInstance;
@@ -169,24 +167,11 @@ export function createLlmServiceApp({
   // in-process 时没有这道限制，拆 HTTP 后必须放开，否则大请求被 413「Request body is too large」
   // 挡在 handler 之前、LLM 调用直接失败。给 100 MB 富余上限（localhost 内部 RPC，ceiling 非分配）。
   const LLM_SERVICE_BODY_LIMIT_BYTES = 100 * 1024 * 1024;
-  const app = Fastify({
-    logger: false,
-    disableRequestLogging: true,
-    bodyLimit: LLM_SERVICE_BODY_LIMIT_BYTES,
-  });
-
-  app.addHook("onRequest", (_request, reply, done) => {
-    const traceId = randomUUID();
-    reply.header(TRACE_ID_HEADER_NAME, traceId);
-    withTraceContext(traceId, () => {
-      done();
-    });
-  });
 
   // 统一错误出口：BizError → 富错误信封 { error: BizErrorWire }（带 meta/statusCode），
   // 让 agent 侧 HttpLlmClient 忠实重建 BizError（retry / 控制流 instanceof 语义不变）。
-  // 注意：这里刻意不用面向前端的 toHttpErrorResponse（它只回 { message }、丢 meta）。
-  app.setErrorHandler((error, request, reply) => {
+  // 注意：这里刻意不用默认处理器的 toHttpErrorResponse（它面向前端、只回 { message }、丢 meta）。
+  const errorHandler: ServiceErrorHandler = (error, request, reply) => {
     if (error instanceof z.ZodError) {
       logger.warn("LLM service request validation failed", {
         event: "llm_service.http.validation_failed",
@@ -217,11 +202,12 @@ export function createLlmServiceApp({
       }),
     );
     return reply.code(500).send({ error: wire });
+  };
+
+  return createServiceApp({
+    logger,
+    handlers,
+    fastifyOptions: { bodyLimit: LLM_SERVICE_BODY_LIMIT_BYTES },
+    errorHandler,
   });
-
-  for (const handler of handlers) {
-    handler.register(app);
-  }
-
-  return app;
 }

@@ -6,7 +6,7 @@ import type {
   MetricChartDeleteRequest,
   MetricChartDeleteResponse,
   MetricChartListResponse,
-} from "@kagami/shared/schemas/metric-chart";
+} from "@kagami/metric-api/chart";
 
 export interface MetricChartService {
   list(): Promise<MetricChartListResponse>;

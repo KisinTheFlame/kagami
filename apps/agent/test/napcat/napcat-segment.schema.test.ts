@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NapcatSendGroupMessageRequestSchema } from "@kagami/shared/schemas/napcat-message";
+import { NapcatSendGroupMessageRequestSchema } from "@kagami/agent-api/napcat-message";
 import {
   NapcatReceiveMessageSegmentSchema,
   NapcatSendMessageSegmentSchema,

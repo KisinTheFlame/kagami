@@ -1,18 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import {
-  MainAgentContextCompactionResultSchema,
-  MainAgentContextSnapshotSchema,
-} from "@kagami/shared/schemas/main-agent-context";
-import { registerCommandRoute, registerQueryRoute } from "@kagami/http/route";
+import { registerJsonRoute } from "@kagami/http/register";
+import { agentApiContract } from "@kagami/agent-api/contract";
 import type { MainAgentContextQueryService } from "../application/main-agent-context-query.service.js";
 
 type MainAgentContextHandlerDeps = {
   mainAgentContextQueryService: MainAgentContextQueryService;
 };
 
+/** 主 Agent 上下文查询/压缩路由。路由与 schema 的单一事实源在 @kagami/agent-api（#279 PR5）。 */
 export class MainAgentContextHandler {
-  public readonly prefix = "/main-agent-context";
   private readonly mainAgentContextQueryService: MainAgentContextQueryService;
 
   public constructor({ mainAgentContextQueryService }: MainAgentContextHandlerDeps) {
@@ -20,24 +16,12 @@ export class MainAgentContextHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerQueryRoute({
-      app,
-      path: `${this.prefix}/recent`,
-      querySchema: z.object({}).strict(),
-      responseSchema: MainAgentContextSnapshotSchema,
-      execute: async () => {
-        return await this.mainAgentContextQueryService.getRecentSnapshot();
-      },
+    registerJsonRoute(app, agentApiContract.getRecentMainAgentContext, async () => {
+      return await this.mainAgentContextQueryService.getRecentSnapshot();
     });
 
-    registerCommandRoute({
-      app,
-      path: `${this.prefix}/compact`,
-      bodySchema: z.object({}).strict(),
-      responseSchema: MainAgentContextCompactionResultSchema,
-      execute: async () => {
-        return await this.mainAgentContextQueryService.compactEntireContext();
-      },
+    registerJsonRoute(app, agentApiContract.compactMainAgentContext, async () => {
+      return await this.mainAgentContextQueryService.compactEntireContext();
     });
   }
 }

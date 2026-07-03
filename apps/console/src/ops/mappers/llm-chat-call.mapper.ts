@@ -2,7 +2,7 @@ import {
   type LlmChatCallDetailResponse,
   type LlmChatCallListResponse,
   type LlmChatCallSummary,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/console-api/llm-chat-call";
 import type {
   LlmChatCallItem as LlmChatCallDaoItem,
   LlmChatCallSummary as LlmChatCallDaoSummary,

@@ -1,6 +1,6 @@
 import { createClient } from "@kagami/rpc-client/client";
 import { llmApiContract } from "@kagami/llm-api/contract";
-import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 import { describe, expect, it } from "vitest";
 
 /**

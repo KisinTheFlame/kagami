@@ -17,13 +17,36 @@ import type {
 
 const POWER_LABELS: Record<string, string> = {
   strength: "力量",
+  dexterity: "敏捷",
   vulnerable: "易伤",
   weak: "虚弱",
   frail: "脆弱",
+  entangled: "缠绕",
+  poison: "中毒",
+  metallicize: "金属化",
   ritual: "仪式",
   curl_up: "蜷缩",
   sharp_hide: "反甲",
+  enrage: "激怒",
+  artifact: "神器",
+  angry: "狂怒",
+  spore_cloud: "孢子云",
+  demon_form: "恶魔形态",
+  thorns: "荆棘",
+  regen: "再生",
+  plated_armor: "镀甲",
   mode_shift: "模式",
+};
+
+const ORB_LABELS: Record<string, string> = {
+  lightning: "闪电",
+  frost: "冰霜",
+};
+
+const STANCE_LABELS: Record<string, string> = {
+  none: "无",
+  calm: "平静",
+  wrath: "愤怒",
 };
 
 function labelPowers(powers: readonly SpirePower[]): { label: string; amount: number }[] {
@@ -66,16 +89,29 @@ function handView(card: SpireHandCardView): Record<string, unknown> {
 export function renderSpireScreen(screen: SpireScreen): string {
   const combat = screen.combat;
   return renderServerStaticTemplate(import.meta.url, "context/spire-screen.hbs", {
+    act: screen.act,
     isMap: screen.screen === "map",
     isCombat: screen.screen === "combat",
     isReward: screen.screen === "reward",
     isRest: screen.screen === "rest",
+    isEvent: screen.screen === "event",
+    eventDescription: screen.event?.description ?? "",
+    isShop: screen.screen === "shop",
     isGameover: screen.screen === "gameover",
     isVictory: screen.screen === "victory",
     hp: screen.player.hp,
     maxHp: screen.player.maxHp,
     gold: screen.player.gold,
     deckCount: screen.deckCount,
+    relics: screen.relics,
+    hasRelics: screen.relics.length > 0,
+    potions: screen.potions.map(potion => ({
+      slot: potion.slot,
+      name: potion.name,
+      description: potion.description,
+      targeted: potion.targeted,
+    })),
+    hasPotions: screen.potions.length > 0,
     combat: combat
       ? {
           turn: combat.turn,
@@ -90,16 +126,16 @@ export function renderSpireScreen(screen: SpireScreen): string {
           draw: combat.piles.draw,
           discard: combat.piles.discard,
           exhaust: combat.piles.exhaust,
+          hasOrbSystem: combat.orbSlots > 0,
+          orbs: combat.orbs.map(type => ORB_LABELS[type] ?? type),
+          orbSlots: combat.orbSlots,
+          hasStance: combat.stance !== "none",
+          stance: STANCE_LABELS[combat.stance] ?? combat.stance,
         }
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),
     hasOptions: screen.options.length > 0,
   });
-}
-
-/** 服务不可达时的降级屏（错误已被工具基类序列化，这里只在 onFocus 等处兜底用）。 */
-export function renderSpireUnavailable(): string {
-  return renderServerStaticTemplate(import.meta.url, "context/spire-unavailable.hbs", {});
 }
 
 /** 没有进行中对局时的提示屏（look 拿到 null 时用）。 */

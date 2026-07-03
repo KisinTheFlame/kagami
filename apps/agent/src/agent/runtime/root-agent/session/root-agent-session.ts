@@ -5,6 +5,7 @@ import type { LlmMessage } from "@kagami/llm-client";
 import {
   createAsyncToolResultMessage,
   createForegroundInputMessage,
+  createInnerThoughtMessage,
   createNotificationMessage,
   createPortalReminderMessage,
 } from "../../context/context-message-factory.js";
@@ -139,11 +140,7 @@ export class RootAgentSession implements RootAgentSessionController {
     if (this.initialized) {
       return;
     }
-    const apps = (this.appManager?.getAllApps() ?? []).map(app => ({
-      id: app.id,
-      displayName: app.displayName,
-    }));
-    await this.context.appendMessages([createPortalReminderMessage({ apps })]);
+    await this.context.appendMessages([createPortalReminderMessage()]);
     this.initialized = true;
   }
 
@@ -171,6 +168,12 @@ export class RootAgentSession implements RootAgentSessionController {
         return { shouldTriggerRound: false };
       }
       this.pendingIncomingMessages.push(createForegroundInputMessage(input.text));
+      return { shouldTriggerRound: true };
+    }
+
+    if (event.type === "inner_thought") {
+      // 内心独白（issue #265）：装配成 <inner_thought> 消息追加到尾部，触发一轮 round。
+      this.pendingIncomingMessages.push(createInnerThoughtMessage(event.data.thought));
       return { shouldTriggerRound: true };
     }
 

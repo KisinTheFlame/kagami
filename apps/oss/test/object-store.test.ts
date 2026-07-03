@@ -5,8 +5,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
+import type { LogEvent } from "@kagami/kernel/logger/types";
+import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import { ObjectStore, PayloadTooLargeError } from "../src/store/object-store.js";
+
+// store 经 AppLogger 打日志（issue #274 统一日志格式），emit 前必须先初始化运行时。
+initLoggerRuntime({ sinks: [new StdoutLogSink()] });
 
 let blobDir: string;
 let db: Database.Database;
@@ -196,18 +202,24 @@ describe("ObjectStore", () => {
     const { key } = await putBuffer(bytes, "text/plain");
     await unlink(blobFilePath(bytes)); // 提交后 unlink 将抛 ENOENT，应被吞掉
 
-    // 容错路径会 console.error 一条 best-effort 日志，属预期行为：spy 掉以免污染测试输出，
-    // 同时断言确实走了该分支。
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // 容错路径会经 AppLogger 记一条 best-effort 日志，属预期行为：换成捕获 sink 以免污染
+    // 测试输出，同时断言确实走了该分支。
+    const events: LogEvent[] = [];
+    initLoggerRuntime({
+      sinks: [
+        {
+          write: event => {
+            events.push(event);
+          },
+        },
+      ],
+    });
     try {
       expect(await store.delete(key)).toBe(true);
       expect(refcountOf(sha256(bytes))).toBeUndefined();
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining("unlink orphan blob failed"),
-        expect.anything(),
-      );
+      expect(events.some(event => event.metadata.event === "oss.unlink_orphan_failed")).toBe(true);
     } finally {
-      errorSpy.mockRestore();
+      initLoggerRuntime({ sinks: [new StdoutLogSink()] });
     }
   });
 

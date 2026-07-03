@@ -42,16 +42,16 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
     return rows.map(mapLinearMessageLedgerRow);
   }
 
-  public async listAfterSeq(input: {
+  public async listCreatedAfter(input: {
     runtimeKey: string;
-    afterSeq: number;
+    createdAfter: Date;
     limit: number;
   }): Promise<LinearMessageLedgerRecord[]> {
     const rows = await this.database.linearMessageLedger.findMany({
       where: {
         runtimeKey: input.runtimeKey,
-        id: {
-          gt: input.afterSeq,
+        createdAt: {
+          gt: input.createdAfter,
         },
       },
       orderBy: {
@@ -67,38 +67,6 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
     });
 
     return rows.map(mapLinearMessageLedgerRow);
-  }
-
-  public async countAfterSeq(input: { runtimeKey: string; afterSeq: number }): Promise<number> {
-    return await this.database.linearMessageLedger.count({
-      where: {
-        runtimeKey: input.runtimeKey,
-        id: {
-          gt: input.afterSeq,
-        },
-      },
-    });
-  }
-
-  public async findLatest(input: {
-    runtimeKey: string;
-  }): Promise<LinearMessageLedgerRecord | null> {
-    const row = await this.database.linearMessageLedger.findFirst({
-      where: {
-        runtimeKey: input.runtimeKey,
-      },
-      orderBy: {
-        id: "desc",
-      },
-      select: {
-        id: true,
-        runtimeKey: true,
-        message: true,
-        createdAt: true,
-      },
-    });
-
-    return row ? mapLinearMessageLedgerRow(row) : null;
   }
 }
 

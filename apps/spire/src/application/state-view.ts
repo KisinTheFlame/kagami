@@ -1,66 +1,53 @@
-import type { EnemyState, GameState, PowerInstance } from "../engine/types.js";
+import type { z } from "zod";
+import {
+  SpireCombatViewSchema,
+  SpireEnemyViewSchema,
+  SpireIntentSchema,
+  SpireRelicViewSchema,
+  SpireScreenSchema,
+} from "@kagami/spire-api/contract";
+import type { EnemyState, GameState } from "../engine/types.js";
 import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
+import { getRelicDef } from "../engine/relics/relics.js";
+import { getPotionDef } from "../engine/potions/potions.js";
+import { getEventDef } from "../engine/events/events.js";
 import { currentOptions } from "../engine/run/run.js";
 
 // === 结构化屏幕视图（ScreenView）===
 //
 // 服务返回这个纯 JSON，agent 侧 render/screen.ts 据此渲染文字屏幕（分工原则，issue #234）。
 // 意图展示数值在此按当前状态重算（玩家看到的是含力量/虚弱/易伤修正后的实际伤害）。
+//
+// 形状的单一事实源是 @kagami/spire-api 契约（issue #230）：这里的类型全部由契约 schema 派生
+// （门面 == 契约），改形状先改契约，服务端与 agent 侧 client 一起编译报错。
 
-export type IntentView = {
-  kind: "attack" | "defend" | "buff" | "debuff" | "unknown";
-  value?: number;
-  hits?: number;
-};
-
-export type EnemyView = {
-  index: number;
-  name: string;
-  hp: number;
-  maxHp: number;
-  block: number;
-  powers: PowerInstance[];
-  intent: IntentView;
-};
-
-export type HandCardView = {
-  index: number;
-  name: string;
-  cost: number | null;
-  type: string;
-  targeted: boolean;
-  description: string;
-};
-
-export type CombatView = {
-  turn: number;
-  energy: number;
-  maxEnergy: number;
-  block: number;
-  powers: PowerInstance[];
-  enemies: EnemyView[];
-  hand: HandCardView[];
-  piles: { draw: number; discard: number; exhaust: number };
-};
-
-export type ScreenView = {
-  version: number;
-  screen: GameState["screen"];
-  player: { hp: number; maxHp: number; gold: number };
-  deckCount: number;
-  combat: CombatView | null;
-  options: string[];
-  log: string[];
-};
+export type IntentView = z.infer<typeof SpireIntentSchema>;
+export type EnemyView = z.infer<typeof SpireEnemyViewSchema>;
+export type CombatView = z.infer<typeof SpireCombatViewSchema>;
+export type RelicView = z.infer<typeof SpireRelicViewSchema>;
+export type ScreenView = z.infer<typeof SpireScreenSchema>;
 
 export function toScreenView(state: GameState, opts: { suppressLog?: boolean }): ScreenView {
   return {
     version: state.version,
     screen: state.screen,
+    act: state.act,
     player: { hp: state.hp, maxHp: state.maxHp, gold: state.gold },
     deckCount: state.deck.length,
+    relics: state.relics.map(relic => {
+      const def = getRelicDef(relic.id);
+      return { name: def.name, description: def.description };
+    }),
+    potions: state.potions.flatMap((id, slot) => {
+      if (id === null) {
+        return [];
+      }
+      const def = getPotionDef(id);
+      return [{ slot, name: def.name, description: def.description, targeted: def.targeted }];
+    }),
+    event: state.event ? { description: getEventDef(state.event.id).description } : null,
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,
@@ -95,6 +82,9 @@ function toCombatView(state: GameState): CombatView {
       discard: combat.discardPile.length,
       exhaust: combat.exhaustPile.length,
     },
+    orbs: combat.orbs.map(orb => orb.type),
+    orbSlots: combat.orbSlots,
+    stance: combat.playerStance,
   };
 }
 
@@ -133,11 +123,11 @@ function computeIntent(state: GameState, enemy: EnemyState): IntentView {
       };
     }
     if (effect.kind === "deal_damage_rolled") {
-      // 红虱咬击：基础值是本敌人出生时掷定的固定值。
+      // 红虱咬击 / 六火之灵分割：基础值是锁定的固定值，可多段。
       return {
         kind: "attack",
         value: computeAttackDamage(enemy.rolledDamage, enemy.powers, playerPowers),
-        hits: 1,
+        hits: effect.times ?? 1,
       };
     }
   }

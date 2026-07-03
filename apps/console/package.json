@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kagami/console-api": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/persistence": "workspace:*",
-    "@kagami/shared": "workspace:*",
     "fastify": "^5.6.2",
     "zod": "^3.24.4"
   },

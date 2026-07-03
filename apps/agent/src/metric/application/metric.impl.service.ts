@@ -1,5 +1,6 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { RecordMetricRequest } from "@kagami/shared/schemas/metric";
+import { metricApiContract } from "@kagami/metric-api/contract";
+import type { RecordMetricRequest } from "@kagami/metric-api/record";
 import type { MetricService, RecordMetricInput } from "./metric.service.js";
 
 type FetchLike = typeof fetch;
@@ -15,13 +16,17 @@ const logger = new AppLogger({ source: "metric.service" });
  * 独立 metric 服务（`@kagami/metric`）的最小 HTTP 上报客户端：把一条打点 POST 进
  * `/metric/record`。语义是 fire-and-forget——校验权威在服务端，client 只序列化 + 发送，
  * 对一切失败（网络异常 / 非 2xx / 400）记日志后咽下、**绝不抛**，绝不阻塞 Agent 主流程。
+ *
+ * 刻意不走 createClient：它会读并 parse 响应体、把非 2xx 变成 throw，与这里「不读响应体、
+ * 分级记日志、永不抛」的语义相悖。路由与请求类型仍以 @kagami/metric-api 为单一事实源
+ * （path 从契约取、body 按契约 input 类型标注，#279 PR3）。
  */
 export class HttpMetricService implements MetricService {
   private readonly recordUrl: string;
   private readonly fetchImpl: FetchLike;
 
   public constructor({ baseUrl, fetch: fetchImpl }: HttpMetricServiceDeps) {
-    this.recordUrl = `${baseUrl.replace(/\/+$/, "")}/metric/record`;
+    this.recordUrl = `${baseUrl.replace(/\/+$/, "")}${metricApiContract.record.path}`;
     this.fetchImpl = fetchImpl ?? fetch;
   }
 
@@ -45,6 +50,11 @@ export class HttpMetricService implements MetricService {
         // 随 tool-call 频率堆积；2s 超时后归入下面的 catch。
         signal: AbortSignal.timeout(2000),
       });
+
+      // 不解析响应体，但必须把它 drain 掉（cancel）：undici 下未消费的 body 会拖住底层
+      // 连接的复用/释放，metric 是高频打点路径，long-lived socket/stream 会累积。cancel
+      // 自身的 rejection 同样咽下，维持 fire-and-forget 契约。
+      await response.body?.cancel().catch(() => {});
 
       if (!response.ok) {
         logger.warn("Metric record endpoint returned non-2xx", {

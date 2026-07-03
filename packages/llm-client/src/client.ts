@@ -4,7 +4,7 @@ import {
   type LlmChatRequestPayload,
   type LlmProviderOption,
   type LlmRequestUserContentPart,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/llm-api/llm-chat";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
@@ -401,7 +401,7 @@ function requireUsage(usage: LlmUsageId | undefined): LlmUsageId {
 }
 
 function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknown> {
-  // payload 显式标注为共享契约类型，把「落库 shape」钉死在 @kagami/shared 上：
+  // payload 显式标注为契约类型，把「落库 shape」钉死在 @kagami/llm-api/llm-chat 上：
   // 后端序列化结构一旦漂移，这里立刻编译报错，前端 viewer 与之同源不再静默失配。
   const payload: LlmChatRequestPayload = {
     ...(request.system ? { system: request.system } : {}),

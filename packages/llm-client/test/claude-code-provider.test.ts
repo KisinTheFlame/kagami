@@ -195,6 +195,116 @@ function createProviderConfig(
 }
 
 describe("createClaudeCodeProvider", () => {
+  it("should map a completed zero-block stream to an empty assistant message (auto 空轮)", async () => {
+    // 生产实况（2026-07-03 部署 #270 后）：toolChoice auto + thinking disabled 下
+    // 模型可以合法地"什么都不说"——流完整走完（message_start → end_turn →
+    // message_stop）但零个 content block。必须映射为空 assistant 消息而非
+    // INVALID_RESPONSE，否则 agent 会陷入退避重试循环。
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            createSseResponse([
+              {
+                type: "message_start",
+                message: {
+                  id: "msg_empty",
+                  type: "message",
+                  role: "assistant",
+                  model: "claude-opus-4-6",
+                  content: [],
+                  usage: { input_tokens: 1, output_tokens: 0, cache_read_input_tokens: 165183 },
+                },
+              },
+              {
+                type: "message_delta",
+                delta: { stop_reason: "end_turn", stop_sequence: null },
+                usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 165183 },
+              },
+              { type: "message_stop" },
+            ]),
+            { status: 200, headers: { "Content-Type": "text/event-stream" } },
+          ),
+      ),
+    );
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({ models: ["claude-opus-4-6"] }),
+      authStore: createAuthStore(),
+    });
+
+    await expect(
+      provider.chat({
+        system: "你是一个测试助手。",
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "auto",
+        model: "claude-opus-4-6",
+      }),
+    ).resolves.toMatchObject({
+      response: {
+        provider: "claude-code",
+        model: "claude-opus-4-6",
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [],
+        },
+        usage: {
+          completionTokens: 2,
+          cacheHitTokens: 165183,
+        },
+      },
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("should still reject a truncated stream with zero blocks (no message_stop)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            createSseResponse([
+              {
+                type: "message_start",
+                message: {
+                  id: "msg_trunc",
+                  type: "message",
+                  role: "assistant",
+                  model: "claude-opus-4-6",
+                  content: [],
+                  usage: { input_tokens: 1, output_tokens: 0 },
+                },
+              },
+            ]),
+            { status: 200, headers: { "Content-Type": "text/event-stream" } },
+          ),
+      ),
+    );
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({ models: ["claude-opus-4-6"] }),
+      authStore: createAuthStore(),
+    });
+
+    await expect(
+      provider.chat({
+        system: "你是一个测试助手。",
+        messages: [{ role: "user", content: "ping" }],
+        tools: [],
+        toolChoice: "auto",
+        model: "claude-opus-4-6",
+      }),
+    ).rejects.toMatchObject({
+      message: "LLM 上游服务调用失败",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it("should map a final assistant message from the Claude stream response", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -217,19 +327,10 @@ describe("createClaudeCodeProvider", () => {
         text: "你是一个测试助手。",
       });
       expect(body.thinking).toEqual({
-        type: "adaptive",
+        type: "disabled",
       });
-      expect(body.output_config).toEqual({
-        effort: "medium",
-      });
-      expect(body.context_management).toEqual({
-        edits: [
-          {
-            type: "clear_thinking_20251015",
-            keep: "all",
-          },
-        ],
-      });
+      expect(body.output_config).toBeUndefined();
+      expect(body.context_management).toBeUndefined();
       expect(init?.headers).toMatchObject({
         Accept: "application/json",
         "Anthropic-Version": "2023-06-01",
@@ -304,18 +405,7 @@ describe("createClaudeCodeProvider", () => {
           },
         ],
         thinking: {
-          type: "adaptive",
-        },
-        output_config: {
-          effort: "medium",
-        },
-        context_management: {
-          edits: [
-            {
-              type: "clear_thinking_20251015",
-              keep: "all",
-            },
-          ],
+          type: "disabled",
         },
         messages: [
           {
@@ -585,8 +675,7 @@ describe("createClaudeCodeProvider", () => {
       nativeRequestPayload: {
         model: "claude-sonnet-4-5-20250929",
         thinking: {
-          type: "enabled",
-          budget_tokens: 1024,
+          type: "disabled",
         },
       },
     });

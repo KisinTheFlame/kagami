@@ -1,7 +1,7 @@
 import {
   type NapcatQqMessageItem,
   type NapcatQqMessageListResponse,
-} from "@kagami/shared/schemas/napcat-group-message";
+} from "@kagami/console-api/napcat-group-message";
 import type { NapcatQqMessageItem as NapcatQqMessageDaoItem } from "@kagami/persistence/dao/napcat-group-message.dao";
 
 type MapNapcatQqMessageListInput = {
