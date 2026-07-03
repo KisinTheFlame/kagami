@@ -44,6 +44,8 @@ export type Effect =
   // 敌人用：按玩家当前生命锁定一个每击伤害存入 rolledDamage（六火之灵激活：floor(hp/divisor)+add）。
   | { kind: "store_hp_scaled_damage"; divisor: number; add: number }
   | { kind: "gain_block"; amount: number }
+  // 玩家用：当前格挡翻倍（坚守）。
+  | { kind: "double_block" }
   // 敌人用：给一名随机存活友军加格挡（护盾地精保护）。
   | { kind: "gain_block_ally"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
@@ -61,6 +63,8 @@ export type CardDef = {
   type: CardType;
   rarity: CardRarity;
   cost: number | null;
+  /** 升级后的费用（省略=不变）；用于力压/见红等升级降费卡。 */
+  upgradedCost?: number;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */

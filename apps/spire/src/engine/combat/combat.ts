@@ -289,6 +289,13 @@ function applyEffect(
       }
       break;
     }
+    case "double_block": {
+      // 玩家当前格挡翻倍（坚守）。
+      if (actor.side === "player") {
+        combat.playerBlock *= 2;
+      }
+      break;
+    }
     case "gain_block_ally": {
       // 护盾地精：给一名随机存活友军（不含自己）加格挡。
       if (actor.side === "enemy") {
