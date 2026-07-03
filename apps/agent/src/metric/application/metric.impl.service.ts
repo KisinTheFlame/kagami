@@ -51,6 +51,11 @@ export class HttpMetricService implements MetricService {
         signal: AbortSignal.timeout(2000),
       });
 
+      // 不解析响应体，但必须把它 drain 掉（cancel）：undici 下未消费的 body 会拖住底层
+      // 连接的复用/释放，metric 是高频打点路径，long-lived socket/stream 会累积。cancel
+      // 自身的 rejection 同样咽下，维持 fire-and-forget 契约。
+      await response.body?.cancel().catch(() => {});
+
       if (!response.ok) {
         logger.warn("Metric record endpoint returned non-2xx", {
           event: "metric.record.http_failed",
