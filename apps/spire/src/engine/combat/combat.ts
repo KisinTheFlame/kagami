@@ -447,6 +447,14 @@ function applyEffect(
       }
       break;
     }
+    case "gain_max_hp": {
+      // 玩家永久 +最大生命并回复等量（果汁药水）。
+      if (actor.side === "player") {
+        state.maxHp += effect.amount;
+        state.hp += effect.amount;
+      }
+      break;
+    }
     case "double_strength": {
       // 玩家当前力量翻倍（极限爆发）；负力量同样翻倍。
       if (actor.side === "player") {

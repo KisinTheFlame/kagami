@@ -73,6 +73,8 @@ export type Effect =
   | { kind: "heal"; amount: number }
   // 玩家用：当前力量翻倍（极限爆发）。
   | { kind: "double_strength" }
+  // 玩家永久提升最大生命并回复等量（果汁药水）。
+  | { kind: "gain_max_hp"; amount: number }
   // 敌人用：偷取玩家金币（拾荒者，最多偷 amount，玩家金币不足则偷光）。
   | { kind: "steal_gold"; amount: number }
   // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。

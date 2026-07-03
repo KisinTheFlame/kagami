@@ -161,7 +161,7 @@ function rollPotionDrop(state: GameState): void {
     // 掷稀有度（稀有 5% / 罕见 30% / 普通 65%），再从该档抽一瓶。
     const roll = nextInt(state.rng, 100);
     const rarity = roll < 5 ? "rare" : roll < 35 ? "uncommon" : "common";
-    const pool = potionPoolOfRarity(rarity);
+    const pool = potionPoolOfRarity(rarity, state.character);
     const id = pool[nextInt(state.rng, pool.length)]!;
     state.potions[emptySlot] = id;
     state.potionDropBonus -= 10;
