@@ -971,6 +971,199 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 第三幕（超越）普通敌人 ——
+  {
+    id: "exploder",
+    name: "爆破怪",
+    hpMin: 30,
+    hpMax: 30,
+    // 亡语：死亡时爆炸，对玩家造成 30 点伤害（杀它有代价）。
+    deathEffects: [{ kind: "deal_damage", amount: 30 }],
+    moves: [
+      {
+        id: "exp_slam",
+        name: "撞击",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "exp_slam", weight: 1, maxInARow: 99 }],
+    },
+  },
+  {
+    id: "spiker",
+    name: "尖刺客",
+    hpMin: 42,
+    hpMax: 56,
+    // 开局自带反甲 3（你每攻击它一次反弹 3；见 createEnemyState）。
+    moves: [
+      {
+        id: "spk_cut",
+        name: "切割",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+      {
+        id: "spk_spike",
+        name: "增生尖刺",
+        effects: [{ kind: "apply_power", power: "sharp_hide", amount: 2, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "spk_cut", weight: 60, maxInARow: 2 },
+        { move: "spk_spike", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "orb_walker",
+    name: "球行者",
+    hpMin: 90,
+    hpMax: 96,
+    moves: [
+      {
+        id: "ow_laser",
+        name: "激光",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "add_card", cardId: "burn", pile: "discard", count: 1 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "ow_claw",
+        name: "利爪",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "ow_laser", weight: 50, maxInARow: 2 },
+        { move: "ow_claw", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第三幕精英：蛇法师（召唤匕首）——
+  {
+    id: "reptomancer",
+    name: "蛇法师",
+    hpMin: 180,
+    hpMax: 190,
+    moves: [
+      {
+        id: "summon_daggers",
+        name: "召唤匕首",
+        effects: [{ kind: "summon", defIds: ["dagger", "dagger"] }],
+        intent: "unknown",
+      },
+      {
+        id: "snake_strike",
+        name: "毒牙",
+        effects: [
+          { kind: "deal_damage", amount: 13 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "big_bite",
+        name: "巨口",
+        effects: [{ kind: "deal_damage", amount: 30 }],
+        intent: "attack",
+      },
+    ],
+    // 首招召唤匕首，之后 毒牙/巨口（身边匕首少时再召唤由 reptomancer 分支处理）。
+    intentRule: {
+      scripted: ["summon_daggers"],
+      weighted: [
+        { move: "snake_strike", weight: 60, maxInARow: 2 },
+        { move: "big_bite", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "dagger",
+    name: "匕首",
+    hpMin: 20,
+    hpMax: 25,
+    moves: [
+      {
+        id: "dagger_stab",
+        name: "突刺",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "dagger_stab", weight: 1, maxInARow: 99 }],
+    },
+  },
+
+  // —— 第三幕 Boss：铎努与迪卡（双子，互相增益）——
+  {
+    id: "deca",
+    name: "迪卡",
+    hpMin: 250,
+    hpMax: 250,
+    moves: [
+      {
+        id: "deca_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "deca_protect",
+        name: "守护",
+        effects: [{ kind: "gain_block", amount: 16 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "deca_beam", weight: 50, maxInARow: 1 },
+        { move: "deca_protect", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "donu",
+    name: "铎努",
+    hpMin: 250,
+    hpMax: 250,
+    moves: [
+      {
+        id: "donu_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "donu_power",
+        name: "赋能",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "all_enemies" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "donu_beam", weight: 50, maxInARow: 1 },
+        { move: "donu_power", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -1366,6 +1559,13 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
   the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
+  // 第三幕
+  exploder: { id: "exploder", enemies: ["exploder"], isBoss: false },
+  spiker: { id: "spiker", enemies: ["spiker"], isBoss: false },
+  orb_walker: { id: "orb_walker", enemies: ["orb_walker"], isBoss: false },
+  two_exploders: { id: "two_exploders", enemies: ["exploder", "exploder"], isBoss: false },
+  reptomancer: { id: "reptomancer", enemies: ["reptomancer"], isBoss: false },
+  donu_deca: { id: "donu_deca", enemies: ["deca", "donu"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -1439,11 +1639,33 @@ const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "spheric_guardian", weight: 1 },
 ];
 
+// —— 第三幕（超越）战斗池（切片）——
+const ACT3_WEAK_POOL: readonly WeightedEncounter[] = [
+  { id: "spiker", weight: 1 },
+  { id: "orb_walker", weight: 1 },
+  { id: "exploder", weight: 1 },
+];
+
+const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
+  { id: "orb_walker", weight: 2 },
+  { id: "spiker", weight: 2 },
+  { id: "two_exploders", weight: 1 },
+];
+
+function actWeakPool(act: number): readonly WeightedEncounter[] {
+  if (act >= 3) return ACT3_WEAK_POOL;
+  if (act >= 2) return ACT2_WEAK_POOL;
+  return WEAK_ENCOUNTER_POOL;
+}
+function actStrongPool(act: number): readonly WeightedEncounter[] {
+  if (act >= 3) return ACT3_STRONG_POOL;
+  if (act >= 2) return ACT2_STRONG_POOL;
+  return STRONG_ENCOUNTER_POOL;
+}
+
 /** 按已进入的普通战斗数选池 + 加权随机挑一个 encounter id（按幕选池）。 */
 export function pickNormalEncounter(rng: RngState, combatsEntered: number, act = 1): string {
-  const weak = act >= 2 ? ACT2_WEAK_POOL : WEAK_ENCOUNTER_POOL;
-  const strong = act >= 2 ? ACT2_STRONG_POOL : STRONG_ENCOUNTER_POOL;
-  const pool = combatsEntered < WEAK_COMBAT_COUNT ? weak : strong;
+  const pool = combatsEntered < WEAK_COMBAT_COUNT ? actWeakPool(act) : actStrongPool(act);
   const picked = weightedPick(rng, pool);
   if (picked === "small_slimes") {
     // 小史莱姆组的两种组成 50/50。
@@ -1470,8 +1692,12 @@ const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
   { id: "slavers", weight: 1 },
 ];
 
+// Act3 精英池（切片：蛇法师；后续补 巨型头颅 / 复仇者）。
+const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [{ id: "reptomancer", weight: 1 }];
+
 /** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
 export function pickEliteEncounter(rng: RngState, act = 1): string {
+  if (act >= 3) return weightedPick(rng, ACT3_ELITE_POOL);
   return weightedPick(rng, act >= 2 ? ACT2_ELITE_POOL : ELITE_ENCOUNTER_POOL);
 }
 
@@ -1489,7 +1715,11 @@ const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [
   { id: "the_collector", weight: 1 },
 ];
 
+// Act3 Boss 池（切片：铎努与迪卡；后续补 觉醒者 / 时间吞噬者）。
+const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "donu_deca", weight: 1 }];
+
 /** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
 export function pickBossEncounter(rng: RngState, act = 1): string {
+  if (act >= 3) return weightedPick(rng, ACT3_BOSS_POOL);
   return weightedPick(rng, act >= 2 ? ACT2_BOSS_POOL : BOSS_ENCOUNTER_POOL);
 }

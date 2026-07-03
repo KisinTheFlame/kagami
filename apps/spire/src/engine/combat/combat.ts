@@ -101,6 +101,10 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     // 带壳寄生虫开局自带 14 层镀甲（每回合结束回格挡，被穿甲攻击时递减）。
     powers.push({ id: "plated_armor", amount: 14 });
   }
+  if (defId === "spiker") {
+    // 尖刺客开局自带 3 层反甲（你每攻击它一次反弹 3 点无视格挡伤害）。
+    powers.push({ id: "sharp_hide", amount: 3 });
+  }
   if (defId === "fungi_beast") {
     // 真菌兽开局自带孢子云（显示用；死亡给玩家 2 易伤由 deathEffects 结算）。
     powers.push({ id: "spore_cloud", amount: 2 });
