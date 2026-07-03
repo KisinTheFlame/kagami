@@ -1,10 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import {
-  SchedulerTaskListResponseSchema,
-  SchedulerTriggerResponseSchema,
-  type SchedulerTaskRun,
-  type SchedulerTaskStatus,
-} from "@kagami/shared/schemas/scheduler";
+import { registerJsonRoute } from "@kagami/http/register";
+import { agentApiContract } from "@kagami/agent-api/contract";
+import { type SchedulerTaskRun, type SchedulerTaskStatus } from "@kagami/agent-api/scheduler";
 import type { TaskRun, TaskStatus } from "../domain/scheduled-task.js";
 import type { TaskScheduler } from "../application/task-scheduler.js";
 
@@ -12,8 +9,11 @@ type SchedulerHandlerDeps = {
   taskScheduler: TaskScheduler;
 };
 
+/**
+ * 调度任务查询/触发路由。路由与 schema 的单一事实源在 @kagami/agent-api（#279 PR5）；
+ * 此前是裸 app.get/post + 手动 parse，收进契约注册（行为不变，响应仍经 output schema 校验）。
+ */
 export class SchedulerHandler {
-  public readonly prefix = "/scheduler";
   private readonly taskScheduler: TaskScheduler;
 
   public constructor({ taskScheduler }: SchedulerHandlerDeps) {
@@ -21,14 +21,12 @@ export class SchedulerHandler {
   }
 
   public register(app: FastifyInstance): void {
-    app.get(`${this.prefix}/tasks`, async () => {
-      const tasks = this.taskScheduler.listStatus().map(toSchemaStatus);
-      return SchedulerTaskListResponseSchema.parse({ tasks });
+    registerJsonRoute(app, agentApiContract.listSchedulerTasks, () => {
+      return { tasks: this.taskScheduler.listStatus().map(toSchemaStatus) };
     });
 
-    app.post<{ Params: { name: string } }>(`${this.prefix}/tasks/:name/trigger`, async request => {
-      const result = await this.taskScheduler.triggerNow(request.params.name);
-      return SchedulerTriggerResponseSchema.parse(result);
+    registerJsonRoute(app, agentApiContract.triggerSchedulerTask, ({ params }) => {
+      return this.taskScheduler.triggerNow(params.name);
     });
   }
 }

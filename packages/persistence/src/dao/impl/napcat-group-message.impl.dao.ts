@@ -1,5 +1,5 @@
 import * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
-import { type JsonValue } from "@kagami/shared/schemas/base";
+import { type JsonValue } from "@kagami/http/wire";
 import { normalizeInputJsonValue, toJsonRecord } from "../../common/prisma-json.js";
 import type { Database } from "../../db/client.js";
 import type {

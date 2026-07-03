@@ -5,7 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
-import { createHealthResponse } from "@kagami/shared/utils";
+import { createHealthResponse } from "@kagami/http/wire";
 import { loadGatewayConfig } from "./config.js";
 
 const config = loadGatewayConfig();

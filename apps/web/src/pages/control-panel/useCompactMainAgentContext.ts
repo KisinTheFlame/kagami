@@ -1,7 +1,9 @@
+import { contractUrl } from "@kagami/http/url";
+import { agentApiContract } from "@kagami/agent-api/contract";
 import {
   MainAgentContextCompactionResultSchema,
   type MainAgentContextCompactionResult,
-} from "@kagami/shared/schemas/main-agent-context";
+} from "@kagami/agent-api/main-agent-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiPostWithSchema } from "@/lib/api";
 import { queryKeys } from "@/lib/query";
@@ -11,7 +13,7 @@ export function useCompactMainAgentContext() {
   return useMutation<MainAgentContextCompactionResult>({
     mutationFn: async () => {
       return await apiPostWithSchema(
-        "/main-agent-context/compact",
+        contractUrl(agentApiContract.compactMainAgentContext),
         {},
         MainAgentContextCompactionResultSchema,
       );

@@ -1,5 +1,5 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
-import { truncateWithEllipsis } from "@kagami/shared/utils";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
 import type { ConversationMessage } from "./conversation.js";
 import {

@@ -1,3 +1,5 @@
+import { contractUrl } from "@kagami/http/url";
+import { authApiContract } from "@kagami/llm-api/auth-contract";
 import {
   AuthLoginUrlResponseSchema,
   AuthRefreshResponseSchema,
@@ -7,14 +9,14 @@ import {
   type AuthStatus,
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
-} from "@kagami/shared/schemas/auth";
+} from "@kagami/llm-api/auth";
 import {
   AuthUsageTrendResponseSchema,
   type AuthUsageTrendRange,
   type AuthUsageTrendResponse,
-} from "@kagami/shared/schemas/auth-usage-trend";
-import { type ClaudeCodeUsageLimits } from "@kagami/shared/schemas/claude-code-auth";
-import { type CodexUsageLimits } from "@kagami/shared/schemas/codex-auth";
+} from "@kagami/llm-api/auth-usage-trend";
+import { type ClaudeCodeUsageLimits } from "@kagami/llm-api/claude-code-auth";
+import { type CodexUsageLimits } from "@kagami/llm-api/codex-auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
 import { type ReactElement, useMemo, useState } from "react";
@@ -653,11 +655,20 @@ function isAuthProvider(value: string): value is AuthProvider {
   return value === "codex" || value === "claude-code";
 }
 
+const AUTH_ACTION_ROUTES = {
+  status: authApiContract.getAuthStatus,
+  "login-url": authApiContract.createAuthLoginUrl,
+  logout: authApiContract.authLogout,
+  refresh: authApiContract.authRefresh,
+  "usage-limits": authApiContract.getAuthUsageLimits,
+  "usage-trend": authApiContract.getAuthUsageTrend,
+} as const;
+
 function buildAuthEndpoint(
   provider: AuthProvider,
-  action: "status" | "login-url" | "logout" | "refresh" | "usage-limits" | "usage-trend",
+  action: keyof typeof AUTH_ACTION_ROUTES,
 ): string {
-  return `/auth/${provider}/${action}`;
+  return contractUrl(AUTH_ACTION_ROUTES[action], { params: { provider } });
 }
 
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {

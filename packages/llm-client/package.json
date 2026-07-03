@@ -26,7 +26,7 @@
     "@google/genai": "^1.44.0",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
-    "@kagami/shared": "workspace:*",
+    "@kagami/llm-api": "workspace:*",
     "openai": "^6.25.0"
   },
   "devDependencies": {

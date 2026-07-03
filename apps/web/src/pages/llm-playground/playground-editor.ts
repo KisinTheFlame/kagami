@@ -4,15 +4,17 @@
  * 拆出（纯移动零行为变化），无 JSX、无 React 依赖，可单测。
  */
 import {
-  LlmPlaygroundChatRequestSchema,
-  type LlmPlaygroundChatRequest,
-  type LlmPlaygroundChatResponse,
   type LlmProviderOption,
   type LlmToolCallPayload,
   type LlmToolDefinition,
+} from "@kagami/llm-api/llm-chat";
+import {
+  LlmPlaygroundChatRequestSchema,
+  type LlmPlaygroundChatRequest,
+  type LlmPlaygroundChatResponse,
   type PlaygroundContentPart,
   type PlaygroundMessage,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/agent-api/playground";
 import type { ApiRequestResult } from "@/lib/api";
 
 export type PlaygroundResult = {

@@ -12,9 +12,12 @@ function screenOf(version: number): SpireScreen {
   return {
     version,
     screen: "map",
+    act: 1,
     player: { hp: 80, maxHp: 80, gold: 99 },
     deckCount: 10,
     relics: [{ name: "燃烧之血", description: "每场战斗结束后，回复 6 点生命。" }],
+    potions: [],
+    event: null,
     combat: null,
     options: ["0", "1"],
     log: [],

@@ -1,7 +1,7 @@
 import {
   type NapcatEventListQuery,
   type NapcatEventListResponse,
-} from "@kagami/shared/schemas/napcat-event";
+} from "@kagami/console-api/napcat-event";
 import type { NapcatEventDao } from "@kagami/persistence/dao/napcat-event.dao";
 import { mapNapcatEventList } from "../mappers/napcat-event.mapper.js";
 import type { NapcatEventQueryService } from "./napcat-event-query.service.js";

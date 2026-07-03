@@ -1,5 +1,5 @@
 import { defineJsonRoute } from "@kagami/http/contract";
-import { LlmProviderOptionSchema } from "@kagami/shared/schemas/llm-chat";
+import { LlmProviderOptionSchema } from "./llm-chat.js";
 import { z } from "zod";
 
 // chat / chat-direct 的客户端超时是「服务真挂/半开」的兜底，不是每次 chat 的时限：服务端每个

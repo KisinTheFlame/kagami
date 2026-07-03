@@ -2,8 +2,8 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type ClaudeCodeUsageLimitsResponse } from "@kagami/shared/schemas/claude-code-auth";
-import { type CodexUsageLimitsResponse } from "@kagami/shared/schemas/codex-auth";
+import { type ClaudeCodeUsageLimitsResponse } from "@kagami/llm-api/claude-code-auth";
+import { type CodexUsageLimitsResponse } from "@kagami/llm-api/codex-auth";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { AuthUsageSnapshotDao } from "@kagami/persistence/dao/auth-usage-snapshot.dao";
 import {

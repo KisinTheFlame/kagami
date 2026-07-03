@@ -1,11 +1,4 @@
 <system_reminder>
 你现在在桌面（Portal），这是初始状态。离开桌面后无法返回。
-{{#if hasApps}}
-用 switch(id=...) 进入下面某个 App；之后想知道有哪些 App 用 list_apps：
-{{#each apps}}
-- {{id}}：{{displayName}}
-{{/each}}
-{{else}}
-当前没有可进入的 App。
-{{/if}}
+用 switch(id=...) 进入某个 App（有哪些 App 见系统说明里的 App 列表）。
 </system_reminder>

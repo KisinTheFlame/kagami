@@ -17,7 +17,6 @@
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/persistence": "workspace:*",
-    "@kagami/shared": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "fastify": "^5.6.2",
     "playwright-core": "^1.61.1",

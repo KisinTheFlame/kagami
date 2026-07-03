@@ -42,44 +42,6 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
     return rows.map(mapLinearMessageLedgerRow);
   }
 
-  public async listAfterSeq(input: {
-    runtimeKey: string;
-    afterSeq: number;
-    limit: number;
-  }): Promise<LinearMessageLedgerRecord[]> {
-    const rows = await this.database.linearMessageLedger.findMany({
-      where: {
-        runtimeKey: input.runtimeKey,
-        id: {
-          gt: input.afterSeq,
-        },
-      },
-      orderBy: {
-        id: "asc",
-      },
-      take: Math.max(1, input.limit),
-      select: {
-        id: true,
-        runtimeKey: true,
-        message: true,
-        createdAt: true,
-      },
-    });
-
-    return rows.map(mapLinearMessageLedgerRow);
-  }
-
-  public async countAfterSeq(input: { runtimeKey: string; afterSeq: number }): Promise<number> {
-    return await this.database.linearMessageLedger.count({
-      where: {
-        runtimeKey: input.runtimeKey,
-        id: {
-          gt: input.afterSeq,
-        },
-      },
-    });
-  }
-
   public async listCreatedAfter(input: {
     runtimeKey: string;
     createdAfter: Date;
@@ -105,27 +67,6 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
     });
 
     return rows.map(mapLinearMessageLedgerRow);
-  }
-
-  public async findLatest(input: {
-    runtimeKey: string;
-  }): Promise<LinearMessageLedgerRecord | null> {
-    const row = await this.database.linearMessageLedger.findFirst({
-      where: {
-        runtimeKey: input.runtimeKey,
-      },
-      orderBy: {
-        id: "desc",
-      },
-      select: {
-        id: true,
-        runtimeKey: true,
-        message: true,
-        createdAt: true,
-      },
-    });
-
-    return row ? mapLinearMessageLedgerRow(row) : null;
   }
 }
 

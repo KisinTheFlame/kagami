@@ -5,9 +5,15 @@
 //
 // 设计依据：本仓库根 AGENTS.md「KV 缓存优先」+ office-hours 设计文档 + issue #234。
 
-export type CharacterId = "ironclad";
+export type CharacterId = "ironclad" | "silent" | "defect" | "watcher";
 
 export type CardType = "attack" | "skill" | "power" | "status";
+
+/** 卡牌颜色：决定属于哪个角色的卡池；status = 敌人塞的废牌（不进任何奖励池）。 */
+export type CardColor = "red" | "green" | "blue" | "purple" | "colorless" | "status";
+
+/** 卡稀有度：奖励按稀有度加权抽取；starter/special 不进普通奖励池。 */
+export type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
 
 /** 状态效果标识。切片集合：被动修正器 + 时机触发机制（见 powers/）。 */
 export type PowerId =
@@ -16,12 +22,19 @@ export type PowerId =
   | "vulnerable" // 易伤：受到攻击伤害 ×1.5（回合末 -1）
   | "weak" // 虚弱：造成攻击伤害 ×0.75（回合末 -1）
   | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
+  | "entangled" // 缠绕：本回合无法打出攻击牌（回合末 -1，红色奴隶主专属）
+  | "poison" // 中毒：持有者回合开始受到 = 层数的伤害（无视格挡），然后层数 -1（静默主机制）
+  | "focus" // 集中：机器人充能球的被动/唤醒数值 +N（被动修正器）
   | "metallicize" // 金属化：每当自己回合结束，获得 N 点格挡（拉加维林睡眠期）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
   | "sharp_hide" // 反甲：被攻击时对攻击者（玩家）反弹 N 点无视格挡的伤害（守卫者防御姿态）
   | "enrage" // 激怒：玩家每打出一张技能牌，此敌人获得 = 层数的力量（地精头目）
   | "artifact" // 神器：抵消下一个施加到自己身上的减益（每抵消一个消耗一层）
+  | "demon_form" // 恶魔形态：每个玩家回合开始时获得 = 层数的力量（玩家能力牌）
+  | "thorns" // 荆棘：每次被攻击时对攻击者反弹 = 层数的伤害（无视其格挡）
+  | "regen" // 再生：每回合结束回复 = 层数的生命，然后层数 -1
+  | "plated_armor" // 镀甲：每回合结束获得 = 层数的格挡；受到穿透格挡的攻击伤害时 -1 层
   | "angry" // 狂怒：每次受到攻击伤害，获得 = 层数的力量（狂暴地精）
   | "spore_cloud" // 孢子云：死亡时给玩家施加易伤（真菌兽，显示用；实际死亡效果在 deathEffects）
   | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
@@ -40,10 +53,30 @@ export type Effect =
   // 敌人用：按玩家当前生命锁定一个每击伤害存入 rolledDamage（六火之灵激活：floor(hp/divisor)+add）。
   | { kind: "store_hp_scaled_damage"; divisor: number; add: number }
   | { kind: "gain_block"; amount: number }
+  // 玩家用：当前格挡翻倍（坚守）。
+  | { kind: "double_block" }
+  // 玩家用：充能一颗指定类型的球（机器人；球槽满则先唤醒最左侧的球）。
+  | { kind: "channel_orb"; orbType: OrbType }
+  // 玩家用：唤醒最左侧 count 颗球（触发唤醒效果后移除）。
+  | { kind: "evoke"; count: number }
+  // 敌人用：给一名随机存活友军加格挡（护盾地精保护）。
+  | { kind: "gain_block_ally"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
   | { kind: "draw"; amount: number }
   | { kind: "gain_energy"; amount: number }
   | { kind: "lose_hp"; amount: number }
+  // 玩家回复最大生命的百分比（血之药水 40%）。
+  | { kind: "heal_percent"; percent: number }
+  // 敌人用：偷取玩家金币（拾荒者，最多偷 amount，玩家金币不足则偷光）。
+  | { kind: "steal_gold"; amount: number }
+  // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。
+  | { kind: "escape" }
+  // 敌人用：本敌人回复自身生命（带壳寄生虫吸取）。
+  | { kind: "heal_self"; amount: number }
+  // 敌人用：治疗一名受伤的友军（秘法师；无受伤友军则治自己）。
+  | { kind: "heal_ally"; amount: number }
+  // 敌人用：召唤若干敌人加入战斗（地精首领召唤地精；新生者本回合不行动）。
+  | { kind: "summon"; defIds: string[] }
   | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
@@ -51,7 +84,12 @@ export type CardDef = {
   id: string;
   name: string;
   type: CardType;
+  rarity: CardRarity;
+  /** 卡牌颜色（所属角色卡池）。 */
+  color: CardColor;
   cost: number | null;
+  /** 升级后的费用（省略=不变）；用于力压/见红等升级降费卡。 */
+  upgradedCost?: number;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -126,11 +164,19 @@ export type EnemyState = {
   asleep: boolean;
   /** 是否已分裂过（半血分裂只触发一次）。 */
   hasSplit: boolean;
+  /** 是否已逃离战斗（拾荒者烟雾弹后逃跑；逃跑后不再算作战斗目标）。 */
+  escaped: boolean;
   /** 守卫者：进攻姿态下累计受到的伤害（达阈值切姿态后清零，非每回合重置——复刻 StS 累计语义）。 */
   modeShiftAccum: number;
   modeShiftThreshold: number | null;
   stance: "offensive" | "defensive" | null;
 };
+
+/** 充能球类型（机器人专属）。 */
+export type OrbType = "lightning" | "frost";
+
+/** 一颗充能球实例（占一个球槽）。 */
+export type Orb = { type: OrbType };
 
 export type CombatState = {
   turn: number;
@@ -143,6 +189,10 @@ export type CombatState = {
   drawPile: CardInstance[];
   discardPile: CardInstance[];
   exhaustPile: CardInstance[];
+  /** 机器人充能球（左→右按槽位排列）；非机器人对局恒为空。 */
+  orbs: Orb[];
+  /** 球槽数量（机器人默认 3；其他角色 0）。 */
+  orbSlots: number;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
@@ -175,7 +225,35 @@ export type MapGraph = {
   bossNodeId: string;
 };
 
-export type Screen = "map" | "combat" | "reward" | "rest" | "gameover" | "victory";
+export type Screen =
+  | "map"
+  | "combat"
+  | "reward"
+  | "rest"
+  | "event"
+  | "shop"
+  | "gameover"
+  | "victory";
+
+/** 当前进行中的事件（? 节点）。 */
+export type EventState = { id: string };
+
+/** 商店一件在售商品。sold 后不可再买。 */
+export type ShopItem =
+  | { kind: "card"; defId: string; cost: number; sold: boolean }
+  | { kind: "relic"; id: string; cost: number; sold: boolean }
+  | { kind: "potion"; id: string; cost: number; sold: boolean };
+
+/** 商店库存（进店时一次性生成，定价固定）。 */
+export type ShopState = {
+  items: ShopItem[];
+  /** 去牌服务费用。 */
+  purgeCost: number;
+  /** 本店去牌服务是否已用（每店限一次）。 */
+  purgeUsed: boolean;
+  /** 是否处于「选择要移除的牌」子界面。 */
+  removing: boolean;
+};
 
 /** RNG 内部状态：必须完整可序列化并从存档精确复原（issue #234 C11）。 */
 export type RngState = { s0: number; s1: number; s2: number; s3: number };
@@ -187,6 +265,8 @@ export type GameState = {
   seed: number;
   character: CharacterId;
   ascension: number;
+  /** 当前幕（1-based）。打完本幕 Boss 若还有后续幕则携带状态进入下一幕。 */
+  act: number;
   screen: Screen;
   hp: number;
   maxHp: number;
@@ -195,11 +275,19 @@ export type GameState = {
   deck: CardInstance[];
   /** 持有的遗物（按获得顺序）。 */
   relics: RelicState[];
+  /** 药水槽（定长 3；null = 空槽）。 */
+  potions: (string | null)[];
+  /** 战斗后掉药水的概率加成（基础 40%，未掉 +10、掉了 -10）。 */
+  potionDropBonus: number;
   map: MapGraph;
   /** 当前所在地图节点 id；null = 还没进入地图（在底层选入口）。 */
   currentNodeId: string | null;
   combat: CombatState | null;
   reward: RewardState | null;
+  /** 当前进行中的事件（? 节点）；null = 不在事件屏。 */
+  event: EventState | null;
+  /** 当前商店库存；null = 不在商店屏。 */
+  shop: ShopState | null;
   /** 已进入过的普通战斗数（决定抽 weak / strong encounter 池，复刻 StS Act1 节奏）。 */
   combatsEntered: number;
   /** 本场战斗胜利后是否发一个遗物（精英战为 true；下次 generateReward 消费后清零）。 */

@@ -11,6 +11,8 @@ import { costOf, getCardDef } from "../engine/cards/cards.js";
 import { getEnemyDef } from "../engine/enemies/enemies.js";
 import { computeAttackDamage } from "../engine/powers/powers.js";
 import { getRelicDef } from "../engine/relics/relics.js";
+import { getPotionDef } from "../engine/potions/potions.js";
+import { getEventDef } from "../engine/events/events.js";
 import { currentOptions } from "../engine/run/run.js";
 
 // === 结构化屏幕视图（ScreenView）===
@@ -31,12 +33,21 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
   return {
     version: state.version,
     screen: state.screen,
+    act: state.act,
     player: { hp: state.hp, maxHp: state.maxHp, gold: state.gold },
     deckCount: state.deck.length,
     relics: state.relics.map(relic => {
       const def = getRelicDef(relic.id);
       return { name: def.name, description: def.description };
     }),
+    potions: state.potions.flatMap((id, slot) => {
+      if (id === null) {
+        return [];
+      }
+      const def = getPotionDef(id);
+      return [{ slot, name: def.name, description: def.description, targeted: def.targeted }];
+    }),
+    event: state.event ? { description: getEventDef(state.event.id).description } : null,
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,
@@ -71,6 +82,8 @@ function toCombatView(state: GameState): CombatView {
       discard: combat.discardPile.length,
       exhaust: combat.exhaustPile.length,
     },
+    orbs: combat.orbs.map(orb => orb.type),
+    orbSlots: combat.orbSlots,
   };
 }
 

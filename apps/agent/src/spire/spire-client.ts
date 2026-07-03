@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { createClient, type JsonClient } from "@kagami/rpc-client/client";
+import { createClient, notReadyFallbackMapper, type JsonClient } from "@kagami/rpc-client/client";
 import {
   spireApiContract,
   SpireActionSchema,
@@ -9,6 +9,7 @@ import {
   SpireGlossaryEntrySchema,
   SpireHandCardViewSchema,
   SpireIntentSchema,
+  SpirePotionViewSchema,
   SpirePowerSchema,
   SpireReferenceSchema,
   SpireRelicViewSchema,
@@ -32,14 +33,17 @@ export type SpireEnemyView = z.infer<typeof SpireEnemyViewSchema>;
 export type SpireHandCardView = z.infer<typeof SpireHandCardViewSchema>;
 export type SpireCombatView = z.infer<typeof SpireCombatViewSchema>;
 export type SpireRelicView = z.infer<typeof SpireRelicViewSchema>;
+export type SpirePotionView = z.infer<typeof SpirePotionViewSchema>;
 export type SpireScreen = z.infer<typeof SpireScreenSchema>;
 export type SpireAction = z.infer<typeof SpireActionSchema>;
 export type SpireCardRef = z.infer<typeof SpireCardRefSchema>;
 export type SpireGlossaryEntry = z.infer<typeof SpireGlossaryEntrySchema>;
 export type SpireReference = z.infer<typeof SpireReferenceSchema>;
 
+export type SpireCharacter = "ironclad" | "silent" | "defect";
+
 export interface SpireClient {
-  startRun(): Promise<SpireScreen>;
+  startRun(character?: SpireCharacter): Promise<SpireScreen>;
   act(action: SpireAction): Promise<SpireScreen>;
   getState(): Promise<SpireScreen | null>;
   lookup(query: string): Promise<SpireReference>;
@@ -54,31 +58,20 @@ export class HttpSpireClient implements SpireClient {
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.api = createClient(spireApiContract, {
-      baseUrl: baseUrl.replace(/\/+$/, ""),
+      baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       // 服务端错误信封是 { error: { message, statusCode } }（非 BizErrorWire），非 2xx 一律
       // 走 mapFallbackError 归一成 SPIRE_NOT_READY——与拆契约前的行为一致。
       decodeError: () => undefined,
-      mapFallbackError: info => {
-        switch (info.reason) {
-          case "unreachable":
-            return new SpireError(
-              "SPIRE_NOT_READY",
-              `尖塔服务不可达（未启动 / 半开 / 超时）：${
-                info.cause instanceof Error ? info.cause.message : String(info.cause)
-              }`,
-            );
-          case "bad_status":
-            return new SpireError("SPIRE_NOT_READY", `尖塔服务返回 HTTP ${info.status}`);
-          case "invalid_response_body":
-            return new SpireError("SPIRE_NOT_READY", "尖塔服务返回了无法解析的响应体");
-        }
-      },
+      mapFallbackError: notReadyFallbackMapper(
+        "尖塔服务",
+        message => new SpireError("SPIRE_NOT_READY", message),
+      ),
     });
   }
 
-  public async startRun(): Promise<SpireScreen> {
-    const screen = await this.api.startRun({});
+  public async startRun(character?: SpireCharacter): Promise<SpireScreen> {
+    const screen = await this.api.startRun(character === undefined ? {} : { character });
     this.lastVersion = screen.version;
     return screen;
   }

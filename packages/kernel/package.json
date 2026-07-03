@@ -18,7 +18,6 @@
     "@kagami/config": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/llm": "workspace:*",
-    "@kagami/shared": "workspace:*",
     "fastify": "^5.6.2",
     "handlebars": "^4.7.8",
     "zod": "^3.24.4"

@@ -36,10 +36,6 @@ import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prom
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
 import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-input.js";
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
-import {
-  ListAppsTool,
-  LIST_APPS_TOOL_NAME,
-} from "../agent/runtime/root-agent/tools/list-apps.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import {
@@ -213,7 +209,7 @@ export async function buildAgentRuntime({
   });
 
   // WebSearchTaskAgent 的 taskTools 需要等到主 Agent rootAgentTools 装配完才能
-  // 拼出来（要拿 switch / list_apps / wait / search_web / help 等
+  // 拼出来（要拿 switch / wait / search_web / help 等
   // 主 Agent 顶层工具实例，包成 OutOfScopeTool）。这里先打一个延迟引用，等下
   // 面真实 webSearchTaskAgent 构造好再回填。SearchWebTool 调用时通过这个 ref
   // 转发——执行时 webSearchTaskAgent 必然已经就位。
@@ -312,6 +308,7 @@ export async function buildAgentRuntime({
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
       creatorName: config.server.bot.creator.name,
+      apps: appManager.getAllApps().map(app => ({ id: app.id, displayName: app.displayName })),
     });
   };
   // root agent 每条进上下文的消息追加到 ledger（physical table `ledger`），只写不读，
@@ -333,9 +330,9 @@ export async function buildAgentRuntime({
     getCurrentApp: () => rootAgentSession.getCurrentApp(),
     // 导航语义（怎么进入 App）是 Kagami 的，不属于通用内核：文案在这里注入。
     notInAppHint:
-      "你不在任何 App 里。先用 switch 进入一个 App，再调用 help 查看那个 App 能做什么；想知道有哪些 App 用 list_apps。",
+      "你不在任何 App 里。先用 switch 进入一个 App，再调用 help 查看那个 App 能做什么；有哪些 App 见系统说明里的 App 列表。",
     appNotFoundHint: (appId: string) =>
-      `当前所在 App "${appId}" 已找不到。可能被卸载或重启过，用 list_apps 看看现在有哪些 App。`,
+      `当前所在 App "${appId}" 已找不到。可能被卸载或重启过，现在有哪些 App 见系统说明里的 App 列表。`,
   });
   // 主 Agent 的 invoke 子工具所有者：全部 App 工具（含 QQ 的 send_message）由
   // AppManager 把握所有权与 gate。状态树时代的 owner 已退役。
@@ -350,7 +347,6 @@ export async function buildAgentRuntime({
   // 定义（通过 OutOfScopeTool 包一层），保证两个 agent 暴露给 LLM 的 tools
   // 字段字节相等，命中 KV cache。
   const switchTool = new SwitchTool({ appManager });
-  const listAppsTool = new ListAppsTool({ appManager });
   const waitTool = new WaitTool({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
@@ -374,7 +370,6 @@ export async function buildAgentRuntime({
   // 前缀的一部分——加/删/重排只改这一处。
   const mainTopLevelTools: ToolComponent[] = [
     switchTool,
-    listAppsTool,
     waitTool,
     mainInvokeTool,
     searchWebTool,
@@ -504,7 +499,6 @@ export async function buildAgentRuntime({
     playgroundToolDefinitions: toolCatalog
       .pick([
         SWITCH_TOOL_NAME,
-        LIST_APPS_TOOL_NAME,
         WAIT_TOOL_NAME,
         INVOKE_TOOL_NAME,
         SEARCH_WEB_TOOL_NAME,

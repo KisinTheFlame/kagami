@@ -16,7 +16,7 @@ import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
 import { HttpLlmClient } from "../llm/http-llm-client.js";
-import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
 import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
@@ -111,7 +111,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // LLM provider + OAuth 凭据中心已外移到独立 kagami-llm 进程（issue：多 Agent 共享网关）。
   // agent 经 HttpLlmClient 直连它（地址从顶层 services.llm 派生），实现现有 LlmClient
   // 接口——下游 root-agent/vision/... 零改动。llm_chat_call 落库、auth callback/刷新全在
-  // 服务侧，agent 不再碰。embedding 能力也在服务侧（HttpEmbeddingClient 保留待将来复用）。
+  // 服务侧，agent 不再碰。embedding 能力也在服务侧（将来记忆系统接线时按需在 agent 侧新建 client）。
   const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
   const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
   const visionAgent = new VisionAgent({

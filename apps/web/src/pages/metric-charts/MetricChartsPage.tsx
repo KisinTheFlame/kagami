@@ -1,10 +1,7 @@
 import {
   MetricChartAggregatorSchema,
   MetricChartCreateRequestSchema,
-  MetricChartCreateResponseSchema,
   MetricChartDataQuerySchema,
-  MetricChartDataResponseSchema,
-  MetricChartListResponseSchema,
   MetricChartTagFiltersSchema,
   type MetricChartAggregator,
   type MetricChartBucket,
@@ -13,7 +10,9 @@ import {
   type MetricChartDefinition,
   type MetricChartRangePreset,
   type MetricChartSeries,
-} from "@kagami/shared/schemas/metric-chart";
+} from "@kagami/metric-api/chart";
+import { metricApiContract } from "@kagami/metric-api/contract";
+import { contractUrl } from "@kagami/http/url";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -148,14 +147,18 @@ export function MetricChartsPage() {
   const chartListQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.metricChart.list(),
-      path: "/metric-chart/list",
-      schema: MetricChartListResponseSchema,
+      path: contractUrl(metricApiContract.listCharts),
+      schema: metricApiContract.listCharts.output,
     }),
   });
 
   const createChartMutation = useMutation({
     mutationFn: async (input: MetricChartCreateRequest) =>
-      apiPostWithSchema("/metric-chart/create", input, MetricChartCreateResponseSchema),
+      apiPostWithSchema(
+        contractUrl(metricApiContract.createChart),
+        input,
+        metricApiContract.createChart.output,
+      ),
     onSuccess: async () => {
       setCreateForm({
         chartName: "",
@@ -171,7 +174,7 @@ export function MetricChartsPage() {
 
   const deleteChartMutation = useMutation({
     mutationFn: async (chartName: string) => {
-      const response = await apiPost("/metric-chart/delete", { chartName });
+      const response = await apiPost(contractUrl(metricApiContract.deleteChart), { chartName });
       return response.body;
     },
     onSuccess: async () => {
@@ -585,8 +588,8 @@ function MetricChartCard({
   const query = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.metricChart.data(chart.chartName, bucket, appliedRange),
-      path: "/metric-chart/data",
-      schema: MetricChartDataResponseSchema,
+      path: contractUrl(metricApiContract.chartData),
+      schema: metricApiContract.chartData.output,
       params: (() => {
         const request = buildMetricChartDataQuery(chart.chartName, bucket, appliedRange);
         return {

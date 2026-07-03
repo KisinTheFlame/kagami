@@ -9,7 +9,7 @@ import type {
   LlmChatResponsePayload,
   LlmListAvailableProvidersOptions,
 } from "@kagami/llm-client";
-import type { LlmProviderOption } from "@kagami/shared/schemas/llm-chat";
+import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 
 // isRetryableLlmFailure 精确匹配这个 message 决定退避重试；createClient 的兜底错误（不可达/超时/
 // 非 2xx 无富信封/响应体无效）必须沿用它。富错误信封 { error: BizErrorWire } 由 createClient 默认
@@ -37,7 +37,7 @@ export class HttpLlmClient implements LlmClient {
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.api = createClient(llmApiContract, {
-      baseUrl: baseUrl.replace(/\/+$/, ""),
+      baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       timeoutMs: DEFAULT_CLIENT_TIMEOUT_MS,
       unreachableMessage: LLM_UNREACHABLE_MESSAGE,

@@ -1,4 +1,4 @@
-import { type AuthProvider } from "@kagami/shared/schemas/auth";
+import { type AuthProvider } from "@kagami/llm-api/auth";
 import type { LlmProviderId } from "@kagami/llm";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 

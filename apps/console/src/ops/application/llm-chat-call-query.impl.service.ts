@@ -2,7 +2,7 @@ import {
   type LlmChatCallDetailResponse,
   type LlmChatCallListQuery,
   type LlmChatCallListResponse,
-} from "@kagami/shared/schemas/llm-chat";
+} from "@kagami/console-api/llm-chat-call";
 import type { LlmChatCallDao } from "@kagami/persistence/dao/llm-chat-call.dao";
 import type { LlmChatCallQueryService } from "./llm-chat-call-query.service.js";
 import { mapLlmChatCallDetail, mapLlmChatCallList } from "../mappers/llm-chat-call.mapper.js";

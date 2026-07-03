@@ -5,7 +5,7 @@ import {
   type AuthRefreshResponse,
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
-} from "@kagami/shared/schemas/auth";
+} from "@kagami/llm-api/auth";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { SharedOAuthServiceCore } from "../shared/service.js";
 import type {

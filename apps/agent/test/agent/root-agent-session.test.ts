@@ -15,7 +15,7 @@ function createContext() {
 }
 
 describe("RootAgentSession (App 启动器)", () => {
-  it("initializes with a portal reminder listing registered apps", async () => {
+  it("initializes with a portal reminder (app 名单已移到 system prompt，reminder 不再逐条列)", async () => {
     const context = createContext();
     const appManager = new AppManager();
     appManager.register(createTestApp("qq", "QQ"));
@@ -27,7 +27,10 @@ describe("RootAgentSession (App 启动器)", () => {
     const reminder = snapshot.messages.at(-1);
     expect(reminder?.content).toContain("<system_reminder>");
     expect(reminder?.content).toContain("桌面（Portal）");
-    expect(typeof reminder?.content === "string" ? reminder.content : "").toContain("QQ");
+    // App 名单常驻 system prompt，Portal 提醒只给导航说明，不再逐条列 App。
+    const content = typeof reminder?.content === "string" ? reminder.content : "";
+    expect(content).not.toContain("- qq：QQ");
+    expect(content).toContain("switch(id=...)");
   });
 
   it("appends a <notification> message and triggers a round on notification events", async () => {

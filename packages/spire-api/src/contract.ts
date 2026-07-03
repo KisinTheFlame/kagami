@@ -59,6 +59,9 @@ export const SpireCombatViewSchema = z.object({
     discard: z.number().int(),
     exhaust: z.number().int(),
   }),
+  /** 机器人充能球（左→右）；orbSlots=0 表示该角色无球系统。 */
+  orbs: z.array(z.string()),
+  orbSlots: z.number().int(),
 });
 
 export const SpireRelicViewSchema = z.object({
@@ -66,9 +69,21 @@ export const SpireRelicViewSchema = z.object({
   description: z.string(),
 });
 
+export const SpirePotionViewSchema = z.object({
+  slot: z.number().int(),
+  name: z.string(),
+  description: z.string(),
+  targeted: z.boolean(),
+});
+
+export const SpireEventViewSchema = z.object({
+  description: z.string(),
+});
+
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
-  screen: z.enum(["map", "combat", "reward", "rest", "gameover", "victory"]),
+  screen: z.enum(["map", "combat", "reward", "rest", "event", "shop", "gameover", "victory"]),
+  act: z.number().int(),
   player: z.object({
     hp: z.number().int(),
     maxHp: z.number().int(),
@@ -76,6 +91,8 @@ export const SpireScreenSchema = z.object({
   }),
   deckCount: z.number().int(),
   relics: z.array(SpireRelicViewSchema),
+  potions: z.array(SpirePotionViewSchema),
+  event: SpireEventViewSchema.nullable(),
   combat: SpireCombatViewSchema.nullable(),
   options: z.array(z.string()),
   log: z.array(z.string()),
@@ -88,6 +105,11 @@ export const SpireActionSchema = z.discriminatedUnion("type", [
     targetIndex: z.number().int().min(0).nullish(),
   }),
   z.object({ type: z.literal("end_turn") }),
+  z.object({
+    type: z.literal("use_potion"),
+    slotIndex: z.number().int().min(0),
+    targetIndex: z.number().int().min(0).nullish(),
+  }),
   z.object({ type: z.literal("choose"), optionIndex: z.number().int().min(0) }),
 ]);
 
@@ -125,7 +147,7 @@ export const spireApiContract = {
     path: "/run/start",
     input: z.object({
       seed: z.number().int().optional(),
-      character: z.literal("ironclad").optional(),
+      character: z.enum(["ironclad", "silent", "defect"]).optional(),
       ascension: z.number().int().min(0).optional(),
     }),
     output: SpireScreenSchema,

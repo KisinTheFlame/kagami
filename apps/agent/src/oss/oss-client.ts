@@ -1,11 +1,16 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { interpolatePath } from "@kagami/rpc-client/client";
+import { createBinaryClient, type BinaryClient } from "@kagami/rpc-client/binary-client";
 import { ossApiContract } from "@kagami/oss-api/contract";
 
 /**
  * 自建对象存储（@kagami/oss）的最小 HTTP client：把「bytes + content-type」PUT 进去，拿对外
  * key（resid）。对标 S3 / MinIO 的 typed object store——content-type 随对象存取，但 client 不关心
  * 图片等媒体语义（isImage 之类的判定留给上层 resource service）。
+ *
+ * wire 层走 @kagami/oss-api 契约驱动的 createBinaryClient（issue #310）：putObject 是 binary-envelope
+ * （上行字节 + content-type 头、下行 `{ key }` 信封，全由工厂处理，错误码经 mapFallbackError 归一）；
+ * getObject 是 binary-raw（工厂只做 URL 插值 + fetch，返回裸 Response），下面所有 404 / maxBytes /
+ * mime 兜底都是领域逻辑、留在本 client。
  */
 /** getObject 取回的一份资源：原始字节 + MIME + 字节数。 */
 export type OssObject = {
@@ -35,16 +40,38 @@ type HttpOssClientDeps = {
   fetch?: FetchLike;
 };
 
-// putObject 响应信封的单一事实源在 @kagami/oss-api；此处只引用，杜绝本地重定义漂移。
-const PutObjectResponseSchema = ossApiContract.putObject.output;
-
 export class HttpOssClient implements OssClient {
-  private readonly baseUrl: string;
-  private readonly fetchImpl: FetchLike;
+  private readonly api: BinaryClient<typeof ossApiContract>;
 
   public constructor({ baseUrl, fetch: fetchImpl }: HttpOssClientDeps) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.api = createBinaryClient(ossApiContract, {
+      baseUrl,
+      ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+      // 服务端 putObject 的非 2xx 错误体不是 BizErrorWire；关掉默认富信封解码，否则会被截获、
+      // 非 2xx 不再归一为 OSS_PUT_FAILED（issue #310）。仅 putObject（envelope）会走到这里，
+      // getObject（raw）返回裸 Response、错误由下方领域逻辑处理，与本 mapper 无关。
+      decodeError: () => undefined,
+      mapFallbackError: info => {
+        switch (info.reason) {
+          case "bad_status":
+            return new BizError({
+              message: `OSS 上传失败：HTTP ${info.status}`,
+              meta: { reason: "OSS_PUT_FAILED", status: info.status },
+            });
+          case "invalid_response_body":
+            return new BizError({
+              message: "OSS 返回结构无效（缺少 key）",
+              meta: { reason: "OSS_PUT_INVALID_RESPONSE" },
+            });
+          case "unreachable":
+            return new BizError({
+              message: "OSS 上传失败：服务不可达（未启动 / 半开 / 超时）",
+              meta: { reason: "OSS_PUT_FAILED" },
+              cause: info.cause,
+            });
+        }
+      },
+    });
   }
 
   public async putObject({
@@ -54,35 +81,19 @@ export class HttpOssClient implements OssClient {
     bytes: Buffer;
     mimeType: string;
   }): Promise<string> {
-    const response = await this.fetchImpl(`${this.baseUrl}${ossApiContract.putObject.path}`, {
-      method: "POST",
+    // Buffer 是 Uint8Array 子类，但契约 body 类型是 Uint8Array，转一下更贴类型。
+    const { key } = await this.api.putObject({
+      params: {},
       headers: { "content-type": mimeType },
-      // Buffer 是 Uint8Array 子类，但 fetch 的 BodyInit 类型不直接收 Buffer，转成 Uint8Array。
-      body: new Uint8Array(bytes),
+      bytes: new Uint8Array(bytes),
     });
-
-    if (!response.ok) {
-      throw new BizError({
-        message: `OSS 上传失败：HTTP ${response.status}`,
-        meta: { reason: "OSS_PUT_FAILED", status: response.status },
-      });
-    }
-
-    const parsed = PutObjectResponseSchema.safeParse(await response.json());
-    if (!parsed.success) {
-      throw new BizError({
-        message: "OSS 返回结构无效（缺少 key）",
-        meta: { reason: "OSS_PUT_INVALID_RESPONSE" },
-      });
-    }
-
-    return parsed.data.key;
+    return key;
   }
 
   public async getObject(resId: string, opts?: { maxBytes?: number }): Promise<OssObject> {
     const maxBytes = opts?.maxBytes;
-    const url = this.objectUrl(resId);
-    const response = await this.fetchImpl(url, { method: "GET" });
+    // binary-raw：工厂只插值 path + fetch，返回裸 Response；下面全是领域逻辑。
+    const response = await this.api.getObject({ params: { key: resId } });
 
     if (response.status === 404) {
       throw new BizError({
@@ -119,10 +130,5 @@ export class HttpOssClient implements OssClient {
 
     const mimeType = response.headers.get("content-type") ?? "application/octet-stream";
     return { bytes, mimeType, size: bytes.byteLength };
-  }
-
-  private objectUrl(resId: string): string {
-    // 路径与服务端路由共享契约字符串（/objects/:key），插值即 encodeURIComponent。
-    return `${this.baseUrl}${interpolatePath(ossApiContract.getObject.path, { key: resId })}`;
   }
 }

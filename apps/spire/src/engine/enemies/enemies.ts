@@ -277,6 +277,893 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 地精帮（狂暴/鬼祟/肥胖/护盾/巫师）——
+  {
+    id: "mad_gremlin",
+    name: "狂暴地精",
+    hpMin: 20,
+    hpMax: 24,
+    moves: [
+      {
+        id: "scratch",
+        name: "抓挠",
+        effects: [{ kind: "deal_damage", amount: 4 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "scratch", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "sneaky_gremlin",
+    name: "鬼祟地精",
+    hpMin: 10,
+    hpMax: 14,
+    moves: [
+      {
+        id: "puncture",
+        name: "穿刺",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "puncture", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "fat_gremlin",
+    name: "肥胖地精",
+    hpMin: 13,
+    hpMax: 17,
+    moves: [
+      {
+        id: "smash",
+        name: "猛击",
+        effects: [
+          { kind: "deal_damage", amount: 4 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: { scripted: [], weighted: [{ move: "smash", weight: 1, maxInARow: 99 }] },
+  },
+  {
+    id: "shield_gremlin",
+    name: "护盾地精",
+    hpMin: 12,
+    hpMax: 15,
+    moves: [
+      {
+        id: "protect",
+        name: "保护",
+        effects: [{ kind: "gain_block_ally", amount: 7 }],
+        intent: "defend",
+      },
+      {
+        id: "shield_bash",
+        name: "盾击",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 shield_gremlin 专属分支处理（有友军则保护、否则攻击）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+  {
+    id: "gremlin_wizard",
+    name: "地精巫师",
+    hpMin: 21,
+    hpMax: 25,
+    moves: [
+      { id: "charging", name: "蓄力", effects: [], intent: "unknown" },
+      {
+        id: "ultimate_blast",
+        name: "终极爆发",
+        effects: [{ kind: "deal_damage", amount: 25 }],
+        intent: "attack",
+      },
+    ],
+    // 出招由 combat.ts 的 gremlin_wizard 专属分支处理（蓄力3回合→大招→循环）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
+  {
+    id: "looter",
+    name: "拾荒者",
+    hpMin: 44,
+    hpMax: 48,
+    moves: [
+      {
+        id: "mug",
+        name: "抢劫",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "lunge",
+        name: "猛扑",
+        effects: [
+          { kind: "deal_damage", amount: 12 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "smoke_bomb",
+        name: "烟雾弹",
+        effects: [{ kind: "gain_block", amount: 6 }],
+        intent: "defend",
+      },
+      {
+        id: "flee",
+        name: "逃跑",
+        effects: [{ kind: "escape" }],
+        intent: "unknown",
+      },
+    ],
+    // 出招由 combat.ts 的 looter 专属分支处理（抢劫×2 → 猛扑/烟雾弹 → 逃跑）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+  {
+    id: "red_slaver",
+    name: "红色奴隶主",
+    hpMin: 46,
+    hpMax: 50,
+    moves: [
+      {
+        id: "rs_stab",
+        name: "刺击",
+        effects: [{ kind: "deal_damage", amount: 13 }],
+        intent: "attack",
+      },
+      {
+        id: "scrape",
+        name: "刮擦",
+        effects: [
+          { kind: "deal_damage", amount: 8 },
+          { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "entangle",
+        name: "缠绕",
+        effects: [{ kind: "apply_power", power: "entangled", amount: 1, on: "target" }],
+        intent: "debuff",
+      },
+    ],
+    // 出招由 combat.ts 的 red_slaver 专属分支处理（首招刺击、缠绕一次性、刮擦/刺击）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
+  // —— 第二幕（城市）普通敌人 ——
+  {
+    id: "snake_plant",
+    name: "食蛇草",
+    hpMin: 75,
+    hpMax: 79,
+    moves: [
+      {
+        id: "sp_chomp",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+      {
+        id: "sp_spores",
+        name: "散播孢子",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "sp_chomp", weight: 65, maxInARow: 2 },
+        { move: "sp_spores", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "spheric_guardian",
+    name: "球形守卫",
+    hpMin: 20,
+    hpMax: 20,
+    moves: [
+      {
+        id: "sg_activate",
+        name: "激活",
+        effects: [{ kind: "gain_block", amount: 25 }],
+        intent: "defend",
+      },
+      {
+        id: "sg_slam",
+        name: "猛击",
+        effects: [{ kind: "deal_damage", amount: 10 }],
+        intent: "attack",
+      },
+      {
+        id: "sg_harden",
+        name: "硬化",
+        effects: [{ kind: "gain_block", amount: 15 }],
+        intent: "defend",
+      },
+    ],
+    // 首招激活(大格挡)，之后 猛击/硬化 交替；开局自带 3 层神器（见 createEnemyState）。
+    intentRule: {
+      scripted: ["sg_activate"],
+      weighted: [
+        { move: "sg_slam", weight: 50, maxInARow: 1 },
+        { move: "sg_harden", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "centurion",
+    name: "百夫长",
+    hpMin: 76,
+    hpMax: 80,
+    moves: [
+      {
+        id: "cent_slash",
+        name: "斩击",
+        effects: [{ kind: "deal_damage", amount: 12 }],
+        intent: "attack",
+      },
+      {
+        id: "cent_fury",
+        name: "狂怒连斩",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "cent_defend",
+        name: "防守",
+        effects: [{ kind: "gain_block", amount: 15 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "cent_slash", weight: 50, maxInARow: 2 },
+        { move: "cent_fury", weight: 25, maxInARow: 1 },
+        { move: "cent_defend", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+
+  {
+    id: "shelled_parasite",
+    name: "带壳寄生虫",
+    hpMin: 68,
+    hpMax: 72,
+    moves: [
+      {
+        id: "double_strike",
+        name: "双重打击",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "suck",
+        name: "吸取",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "heal_self", amount: 10 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "fell",
+        name: "重击",
+        effects: [
+          { kind: "deal_damage", amount: 18 },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "double_strike", weight: 45, maxInARow: 2 },
+        { move: "fell", weight: 30, maxInARow: 1 },
+        { move: "suck", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "chosen",
+    name: "选民",
+    hpMin: 95,
+    hpMax: 99,
+    moves: [
+      {
+        id: "poke",
+        name: "戳刺",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+      {
+        id: "zap",
+        name: "电击",
+        effects: [{ kind: "deal_damage", amount: 18 }],
+        intent: "attack",
+      },
+      {
+        id: "drain",
+        name: "汲取",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+    ],
+    // 首招汲取(削弱玩家+自强)，之后 戳刺/电击。
+    intentRule: {
+      scripted: ["drain"],
+      weighted: [
+        { move: "poke", weight: 55, maxInARow: 2 },
+        { move: "zap", weight: 45, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "snecko",
+    name: "史尼克",
+    hpMin: 114,
+    hpMax: 120,
+    moves: [
+      {
+        id: "snecko_bite",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 15 }],
+        intent: "attack",
+      },
+      {
+        id: "tail_whip",
+        name: "尾击",
+        effects: [
+          { kind: "deal_damage", amount: 8 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "snecko_bite", weight: 60, maxInARow: 2 },
+        { move: "tail_whip", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "mystic",
+    name: "秘法师",
+    hpMin: 48,
+    hpMax: 56,
+    moves: [
+      {
+        id: "mystic_heal",
+        name: "治疗",
+        effects: [{ kind: "heal_ally", amount: 16 }],
+        intent: "buff",
+      },
+      {
+        id: "mystic_buff",
+        name: "鼓舞",
+        effects: [{ kind: "apply_power", power: "strength", amount: 2, on: "all_enemies" }],
+        intent: "buff",
+      },
+      {
+        id: "mystic_attack",
+        name: "法击",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "mystic_heal", weight: 35, maxInARow: 1 },
+        { move: "mystic_buff", weight: 30, maxInARow: 1 },
+        { move: "mystic_attack", weight: 35, maxInARow: 2 },
+      ],
+    },
+  },
+
+  // —— 第二幕精英 ——
+  {
+    id: "gremlin_leader",
+    name: "地精首领",
+    hpMin: 140,
+    hpMax: 148,
+    moves: [
+      {
+        id: "summon_gremlins",
+        name: "召唤地精",
+        effects: [{ kind: "summon", defIds: ["mad_gremlin", "sneaky_gremlin"] }],
+        intent: "unknown",
+      },
+      {
+        id: "encourage",
+        name: "鼓舞",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "all_enemies" }],
+        intent: "buff",
+      },
+      {
+        id: "gl_stab",
+        name: "突刺",
+        effects: [{ kind: "deal_damage", amount: 6 }],
+        intent: "attack",
+      },
+    ],
+    // 召唤由 combat.ts gremlin_leader 分支处理（身边地精 <2 则召唤）；否则 鼓舞/突刺。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "encourage", weight: 40, maxInARow: 1 },
+        { move: "gl_stab", weight: 60, maxInARow: 2 },
+      ],
+    },
+  },
+  {
+    id: "taskmaster",
+    name: "工头",
+    hpMin: 54,
+    hpMax: 60,
+    moves: [
+      {
+        id: "scouring_whip",
+        name: "抽打",
+        effects: [
+          { kind: "deal_damage", amount: 7 },
+          { kind: "add_card", cardId: "wound", pile: "discard", count: 1 },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "scouring_whip", weight: 1, maxInARow: 99 }],
+    },
+  },
+
+  // —— 第二幕精英：穿刺之书（多段攻击）——
+  {
+    id: "book_of_stabbing",
+    name: "穿刺之书",
+    hpMin: 160,
+    hpMax: 162,
+    moves: [
+      {
+        id: "multi_stab",
+        name: "乱刺",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "big_stab",
+        name: "重刺",
+        effects: [{ kind: "deal_damage", amount: 21 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "multi_stab", weight: 70, maxInARow: 99 },
+        { move: "big_stab", weight: 30, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕 Boss：冠军（半血暴怒）——
+  {
+    id: "champ",
+    name: "冠军",
+    hpMin: 420,
+    hpMax: 440,
+    moves: [
+      {
+        id: "champ_slash",
+        name: "重斩",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+      {
+        id: "face_slap",
+        name: "扇脸",
+        effects: [
+          { kind: "deal_damage", amount: 12 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "champ_defend",
+        name: "防御姿态",
+        effects: [
+          { kind: "gain_block", amount: 15 },
+          { kind: "apply_power", power: "metallicize", amount: 5, on: "self" },
+        ],
+        intent: "defend",
+      },
+      {
+        id: "execute",
+        name: "处决",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "gloat",
+        name: "自夸",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "self" }],
+        intent: "buff",
+      },
+      {
+        id: "anger",
+        name: "暴怒",
+        effects: [{ kind: "apply_power", power: "strength", amount: 6, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    // 半血暴怒（一次性）由 combat.ts champ 分支覆盖；其余走 weighted。
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "champ_slash", weight: 30, maxInARow: 2 },
+        { move: "face_slap", weight: 20, maxInARow: 1 },
+        { move: "champ_defend", weight: 20, maxInARow: 1 },
+        { move: "execute", weight: 15, maxInARow: 1 },
+        { move: "gloat", weight: 15, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕 Boss：青铜自动机（召唤青铜球 + 超射线）——
+  {
+    id: "bronze_automaton",
+    name: "青铜自动机",
+    hpMin: 300,
+    hpMax: 300,
+    moves: [
+      {
+        id: "spawn_orbs",
+        name: "召唤青铜球",
+        effects: [{ kind: "summon", defIds: ["bronze_orb", "bronze_orb"] }],
+        intent: "unknown",
+      },
+      {
+        id: "flail",
+        name: "连枷",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "boost",
+        name: "增益",
+        effects: [
+          { kind: "gain_block", amount: 9 },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+      {
+        id: "hyperbeam",
+        name: "超射线",
+        effects: [{ kind: "deal_damage", amount: 45 }],
+        intent: "attack",
+      },
+    ],
+    // 首招召唤两颗青铜球，之后 连枷/增益/超射线。
+    intentRule: {
+      scripted: ["spawn_orbs"],
+      weighted: [
+        { move: "flail", weight: 40, maxInARow: 2 },
+        { move: "boost", weight: 35, maxInARow: 1 },
+        { move: "hyperbeam", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "bronze_orb",
+    name: "青铜球",
+    hpMin: 52,
+    hpMax: 52,
+    moves: [
+      {
+        id: "orb_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+      {
+        id: "orb_support",
+        name: "支援",
+        effects: [{ kind: "gain_block", amount: 6 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "orb_beam", weight: 70, maxInARow: 2 },
+        { move: "orb_support", weight: 30, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕 Boss：收藏家（召唤火把头 + 群体减益）——
+  {
+    id: "the_collector",
+    name: "收藏家",
+    hpMin: 282,
+    hpMax: 300,
+    moves: [
+      {
+        id: "spawn_torches",
+        name: "召唤火把头",
+        effects: [{ kind: "summon", defIds: ["torch_head", "torch_head"] }],
+        intent: "unknown",
+      },
+      {
+        id: "fireball",
+        name: "火球",
+        effects: [{ kind: "deal_damage", amount: 18 }],
+        intent: "attack",
+      },
+      {
+        id: "collector_buff",
+        name: "增幅",
+        effects: [
+          { kind: "gain_block", amount: 15 },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+      {
+        id: "mega_debuff",
+        name: "巨型削弱",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "vulnerable", amount: 3, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 3, on: "target" },
+        ],
+        intent: "debuff",
+      },
+    ],
+    // 首招召唤两个火把头，之后 火球/增幅/巨型削弱。
+    intentRule: {
+      scripted: ["spawn_torches"],
+      weighted: [
+        { move: "fireball", weight: 40, maxInARow: 2 },
+        { move: "collector_buff", weight: 25, maxInARow: 1 },
+        { move: "mega_debuff", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "torch_head",
+    name: "火把头",
+    hpMin: 38,
+    hpMax: 40,
+    moves: [
+      {
+        id: "torch_tackle",
+        name: "冲撞",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "torch_tackle", weight: 1, maxInARow: 99 }],
+    },
+  },
+
+  // —— 第三幕（超越）普通敌人 ——
+  {
+    id: "exploder",
+    name: "爆破怪",
+    hpMin: 30,
+    hpMax: 30,
+    // 亡语：死亡时爆炸，对玩家造成 30 点伤害（杀它有代价）。
+    deathEffects: [{ kind: "deal_damage", amount: 30 }],
+    moves: [
+      {
+        id: "exp_slam",
+        name: "撞击",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "exp_slam", weight: 1, maxInARow: 99 }],
+    },
+  },
+  {
+    id: "spiker",
+    name: "尖刺客",
+    hpMin: 42,
+    hpMax: 56,
+    // 开局自带反甲 3（你每攻击它一次反弹 3；见 createEnemyState）。
+    moves: [
+      {
+        id: "spk_cut",
+        name: "切割",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+      {
+        id: "spk_spike",
+        name: "增生尖刺",
+        effects: [{ kind: "apply_power", power: "sharp_hide", amount: 2, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "spk_cut", weight: 60, maxInARow: 2 },
+        { move: "spk_spike", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "orb_walker",
+    name: "球行者",
+    hpMin: 90,
+    hpMax: 96,
+    moves: [
+      {
+        id: "ow_laser",
+        name: "激光",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "add_card", cardId: "burn", pile: "discard", count: 1 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "ow_claw",
+        name: "利爪",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "ow_laser", weight: 50, maxInARow: 2 },
+        { move: "ow_claw", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第三幕精英：蛇法师（召唤匕首）——
+  {
+    id: "reptomancer",
+    name: "蛇法师",
+    hpMin: 180,
+    hpMax: 190,
+    moves: [
+      {
+        id: "summon_daggers",
+        name: "召唤匕首",
+        effects: [{ kind: "summon", defIds: ["dagger", "dagger"] }],
+        intent: "unknown",
+      },
+      {
+        id: "snake_strike",
+        name: "毒牙",
+        effects: [
+          { kind: "deal_damage", amount: 13 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "big_bite",
+        name: "巨口",
+        effects: [{ kind: "deal_damage", amount: 30 }],
+        intent: "attack",
+      },
+    ],
+    // 首招召唤匕首，之后 毒牙/巨口（身边匕首少时再召唤由 reptomancer 分支处理）。
+    intentRule: {
+      scripted: ["summon_daggers"],
+      weighted: [
+        { move: "snake_strike", weight: 60, maxInARow: 2 },
+        { move: "big_bite", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "dagger",
+    name: "匕首",
+    hpMin: 20,
+    hpMax: 25,
+    moves: [
+      {
+        id: "dagger_stab",
+        name: "突刺",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "dagger_stab", weight: 1, maxInARow: 99 }],
+    },
+  },
+
+  // —— 第三幕 Boss：铎努与迪卡（双子，互相增益）——
+  {
+    id: "deca",
+    name: "迪卡",
+    hpMin: 250,
+    hpMax: 250,
+    moves: [
+      {
+        id: "deca_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "deca_protect",
+        name: "守护",
+        effects: [{ kind: "gain_block", amount: 16 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "deca_beam", weight: 50, maxInARow: 1 },
+        { move: "deca_protect", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "donu",
+    name: "铎努",
+    hpMin: 250,
+    hpMax: 250,
+    moves: [
+      {
+        id: "donu_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage_multi", amount: 10, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "donu_power",
+        name: "赋能",
+        effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "all_enemies" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "donu_beam", weight: 50, maxInARow: 1 },
+        { move: "donu_power", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -642,6 +1529,43 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     enemies: ["fungi_beast", "fungi_beast"],
     isBoss: false,
   },
+  // 地精帮：固定代表性 4 只（含护盾/巫师/狂暴，展示各机制；StS 为随机组成）。
+  gremlin_gang: {
+    id: "gremlin_gang",
+    enemies: ["mad_gremlin", "sneaky_gremlin", "shield_gremlin", "gremlin_wizard"],
+    isBoss: false,
+  },
+  looter: { id: "looter", enemies: ["looter"], isBoss: false },
+  red_slaver: { id: "red_slaver", enemies: ["red_slaver"], isBoss: false },
+  // 第二幕
+  snake_plant: { id: "snake_plant", enemies: ["snake_plant"], isBoss: false },
+  spheric_guardian: { id: "spheric_guardian", enemies: ["spheric_guardian"], isBoss: false },
+  centurion: { id: "centurion", enemies: ["centurion"], isBoss: false },
+  two_centurions: { id: "two_centurions", enemies: ["centurion", "centurion"], isBoss: false },
+  shelled_parasite: { id: "shelled_parasite", enemies: ["shelled_parasite"], isBoss: false },
+  chosen: { id: "chosen", enemies: ["chosen"], isBoss: false },
+  snecko: { id: "snecko", enemies: ["snecko"], isBoss: false },
+  // 百夫长 + 秘法师：秘法师治疗/鼓舞百夫长，经典组合。
+  centurion_mystic: { id: "centurion_mystic", enemies: ["centurion", "mystic"], isBoss: false },
+  book_of_stabbing: { id: "book_of_stabbing", enemies: ["book_of_stabbing"], isBoss: false },
+  // 地精首领带 2 只地精登场；死光了会继续召唤。
+  gremlin_leader: {
+    id: "gremlin_leader",
+    enemies: ["mad_gremlin", "gremlin_leader", "sneaky_gremlin"],
+    isBoss: false,
+  },
+  // 奴隶主小队：工头 + 蓝/红奴隶主。
+  slavers: { id: "slavers", enemies: ["taskmaster", "blue_slaver", "red_slaver"], isBoss: false },
+  champ: { id: "champ", enemies: ["champ"], isBoss: true },
+  bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
+  the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
+  // 第三幕
+  exploder: { id: "exploder", enemies: ["exploder"], isBoss: false },
+  spiker: { id: "spiker", enemies: ["spiker"], isBoss: false },
+  orb_walker: { id: "orb_walker", enemies: ["orb_walker"], isBoss: false },
+  two_exploders: { id: "two_exploders", enemies: ["exploder", "exploder"], isBoss: false },
+  reptomancer: { id: "reptomancer", enemies: ["reptomancer"], isBoss: false },
+  donu_deca: { id: "donu_deca", enemies: ["deca", "donu"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -678,6 +1602,9 @@ const STRONG_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "three_louse", weight: 2 },
   { id: "large_slime", weight: 2 }, // 选中后 50/50 展开为 酸液大 / 尖刺大
   { id: "two_fungi_beasts", weight: 2 },
+  { id: "looter", weight: 2 },
+  { id: "gremlin_gang", weight: 1 },
+  { id: "red_slaver", weight: 1 },
   { id: "lots_of_slimes", weight: 1 },
 ];
 
@@ -693,9 +1620,52 @@ function weightedPick(rng: RngState, pool: readonly WeightedEncounter[]): string
   return pool[pool.length - 1]!.id;
 }
 
-/** 按已进入的普通战斗数选池 + 加权随机挑一个 encounter id。 */
-export function pickNormalEncounter(rng: RngState, combatsEntered: number): string {
-  const pool = combatsEntered < WEAK_COMBAT_COUNT ? WEAK_ENCOUNTER_POOL : STRONG_ENCOUNTER_POOL;
+// —— 第二幕（城市）战斗池（切片：3 普通 + 1 精英 + 1 Boss；后续里程碑补齐 6 火之灵/自动机/收藏家等）——
+const ACT2_WEAK_POOL: readonly WeightedEncounter[] = [
+  { id: "spheric_guardian", weight: 1 },
+  { id: "snake_plant", weight: 1 },
+  { id: "centurion", weight: 1 },
+  { id: "shelled_parasite", weight: 1 },
+  { id: "chosen", weight: 1 },
+];
+
+const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
+  { id: "chosen", weight: 2 },
+  { id: "snecko", weight: 2 },
+  { id: "centurion_mystic", weight: 2 },
+  { id: "shelled_parasite", weight: 2 },
+  { id: "snake_plant", weight: 1 },
+  { id: "two_centurions", weight: 1 },
+  { id: "spheric_guardian", weight: 1 },
+];
+
+// —— 第三幕（超越）战斗池（切片）——
+const ACT3_WEAK_POOL: readonly WeightedEncounter[] = [
+  { id: "spiker", weight: 1 },
+  { id: "orb_walker", weight: 1 },
+  { id: "exploder", weight: 1 },
+];
+
+const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
+  { id: "orb_walker", weight: 2 },
+  { id: "spiker", weight: 2 },
+  { id: "two_exploders", weight: 1 },
+];
+
+function actWeakPool(act: number): readonly WeightedEncounter[] {
+  if (act >= 3) return ACT3_WEAK_POOL;
+  if (act >= 2) return ACT2_WEAK_POOL;
+  return WEAK_ENCOUNTER_POOL;
+}
+function actStrongPool(act: number): readonly WeightedEncounter[] {
+  if (act >= 3) return ACT3_STRONG_POOL;
+  if (act >= 2) return ACT2_STRONG_POOL;
+  return STRONG_ENCOUNTER_POOL;
+}
+
+/** 按已进入的普通战斗数选池 + 加权随机挑一个 encounter id（按幕选池）。 */
+export function pickNormalEncounter(rng: RngState, combatsEntered: number, act = 1): string {
+  const pool = combatsEntered < WEAK_COMBAT_COUNT ? actWeakPool(act) : actStrongPool(act);
   const picked = weightedPick(rng, pool);
   if (picked === "small_slimes") {
     // 小史莱姆组的两种组成 50/50。
@@ -709,26 +1679,47 @@ export function pickNormalEncounter(rng: RngState, combatsEntered: number): stri
 }
 
 // Act1 精英池（等权重，不重复限制由 StS 的洗牌保证；此处简化为等权随机）。
-// 拉加维林 / 哨卫在 M3b-2 加入。
 const ELITE_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "gremlin_nob", weight: 1 },
   { id: "lagavulin", weight: 1 },
   { id: "three_sentries", weight: 1 },
 ];
 
-/** 精英节点：从精英池挑一个 encounter id。 */
-export function pickEliteEncounter(rng: RngState): string {
-  return weightedPick(rng, ELITE_ENCOUNTER_POOL);
+// Act2 精英池：穿刺之书 / 地精首领 / 奴隶主小队。
+const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
+  { id: "book_of_stabbing", weight: 1 },
+  { id: "gremlin_leader", weight: 1 },
+  { id: "slavers", weight: 1 },
+];
+
+// Act3 精英池（切片：蛇法师；后续补 巨型头颅 / 复仇者）。
+const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [{ id: "reptomancer", weight: 1 }];
+
+/** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
+export function pickEliteEncounter(rng: RngState, act = 1): string {
+  if (act >= 3) return weightedPick(rng, ACT3_ELITE_POOL);
+  return weightedPick(rng, act >= 2 ? ACT2_ELITE_POOL : ELITE_ENCOUNTER_POOL);
 }
 
-// Act1 Boss 池（等权重随机）。史莱姆王待分裂机制里程碑加入。
+// Act1 Boss 池（等权重随机）。
 const BOSS_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "guardian", weight: 1 },
   { id: "hexaghost", weight: 1 },
   { id: "slime_boss", weight: 1 },
 ];
 
-/** Boss 节点：随机挑一个 Boss encounter id。 */
-export function pickBossEncounter(rng: RngState): string {
-  return weightedPick(rng, BOSS_ENCOUNTER_POOL);
+// Act2 Boss 池（切片：冠军；后续补 青铜自动机 / 收藏家）。
+const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [
+  { id: "champ", weight: 1 },
+  { id: "bronze_automaton", weight: 1 },
+  { id: "the_collector", weight: 1 },
+];
+
+// Act3 Boss 池（切片：铎努与迪卡；后续补 觉醒者 / 时间吞噬者）。
+const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "donu_deca", weight: 1 }];
+
+/** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
+export function pickBossEncounter(rng: RngState, act = 1): string {
+  if (act >= 3) return weightedPick(rng, ACT3_BOSS_POOL);
+  return weightedPick(rng, act >= 2 ? ACT2_BOSS_POOL : BOSS_ENCOUNTER_POOL);
 }
