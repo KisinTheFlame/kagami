@@ -181,6 +181,7 @@ const CARD_LIST: CardDef[] = [
     type: "attack",
     rarity: "common",
     cost: 1,
+    upgradedCost: 0,
     targeted: true,
     exhausts: false,
     effects: [{ kind: "deal_damage_equal_to_block" }],
@@ -421,6 +422,133 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "失去 6 点生命。获得 2 点能量。抽 5 张牌。消耗。",
   },
 
+  // —— 技能/工具类扩充（A2 批次，全用既有原语）——
+  {
+    id: "ghostly_armor",
+    name: "虚魂护甲",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    ethereal: true,
+    effects: [{ kind: "gain_block", amount: 10 }],
+    upgradedEffects: [{ kind: "gain_block", amount: 13 }],
+    description: "虚无。获得 10 点格挡。",
+    upgradedDescription: "虚无。获得 13 点格挡。",
+  },
+  {
+    id: "intimidate",
+    name: "恫吓",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 0,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "apply_power", power: "weak", amount: 1, on: "all_enemies" }],
+    upgradedEffects: [{ kind: "apply_power", power: "weak", amount: 2, on: "all_enemies" }],
+    description: "对所有敌人施加 1 层虚弱。消耗。",
+    upgradedDescription: "对所有敌人施加 2 层虚弱。消耗。",
+  },
+  {
+    id: "shockwave",
+    name: "震荡波",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 2,
+    targeted: false,
+    exhausts: true,
+    effects: [
+      { kind: "apply_power", power: "weak", amount: 3, on: "all_enemies" },
+      { kind: "apply_power", power: "vulnerable", amount: 3, on: "all_enemies" },
+    ],
+    upgradedEffects: [
+      { kind: "apply_power", power: "weak", amount: 5, on: "all_enemies" },
+      { kind: "apply_power", power: "vulnerable", amount: 5, on: "all_enemies" },
+    ],
+    description: "对所有敌人施加 3 层虚弱、3 层易伤。消耗。",
+    upgradedDescription: "对所有敌人施加 5 层虚弱、5 层易伤。消耗。",
+  },
+  {
+    id: "disarm",
+    name: "缴械",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 1,
+    targeted: true,
+    exhausts: true,
+    effects: [{ kind: "apply_power", power: "strength", amount: -2, on: "target" }],
+    upgradedEffects: [{ kind: "apply_power", power: "strength", amount: -3, on: "target" }],
+    description: "使一个敌人失去 2 点力量。消耗。",
+    upgradedDescription: "使一个敌人失去 3 点力量。消耗。",
+  },
+  {
+    id: "bloodletting",
+    name: "放血",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "lose_hp", amount: 3 },
+      { kind: "gain_energy", amount: 2 },
+    ],
+    upgradedEffects: [
+      { kind: "lose_hp", amount: 3 },
+      { kind: "gain_energy", amount: 3 },
+    ],
+    description: "失去 3 点生命。获得 2 点能量。",
+    upgradedDescription: "失去 3 点生命。获得 3 点能量。",
+  },
+  {
+    id: "seeing_red",
+    name: "见红",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 1,
+    upgradedCost: 0,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "gain_energy", amount: 2 }],
+    upgradedEffects: [{ kind: "gain_energy", amount: 2 }],
+    description: "获得 2 点能量。消耗。",
+    upgradedDescription: "费用降为 0。获得 2 点能量。消耗。",
+  },
+  {
+    id: "power_through",
+    name: "强渡",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_block", amount: 15 },
+      { kind: "add_card", cardId: "wound", pile: "hand", count: 2 },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block", amount: 20 },
+      { kind: "add_card", cardId: "wound", pile: "hand", count: 2 },
+    ],
+    description: "获得 15 点格挡。将两张「伤口」加入手牌。",
+    upgradedDescription: "获得 20 点格挡。将两张「伤口」加入手牌。",
+  },
+  {
+    id: "entrench",
+    name: "坚守",
+    type: "skill",
+    rarity: "uncommon",
+    cost: 2,
+    upgradedCost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "double_block" }],
+    upgradedEffects: [{ kind: "double_block" }],
+    description: "使当前格挡翻倍。",
+    upgradedDescription: "费用降为 1。使当前格挡翻倍。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "wound",
@@ -536,13 +664,13 @@ export function effectsOf(def: CardDef, upgraded: boolean): CardDef["effects"] {
   return upgraded ? def.upgradedEffects : def.effects;
 }
 
-/** 取一张牌当前生效的费用（力压升级后降为 0）。 */
+/** 取一张牌当前生效的费用（升级降费卡用 upgradedCost）。 */
 export function costOf(def: CardDef, upgraded: boolean): number | null {
   if (def.cost === null) {
     return null;
   }
-  if (def.id === "body_slam" && upgraded) {
-    return 0;
+  if (upgraded && def.upgradedCost !== undefined) {
+    return def.upgradedCost;
   }
   return def.cost;
 }
