@@ -31,6 +31,7 @@ import { getPotionDef } from "../potions/potions.js";
 const STARTING_ENERGY = 3;
 const STARTING_HAND_SIZE = 5;
 const MAX_HAND_SIZE = 10;
+const MAX_ENEMIES = 5; // 场上敌人上限（地精首领召唤封顶）。
 const GUARDIAN_MODE_SHIFT_STEP = 10;
 const GUARDIAN_SHIFT_BLOCK = 20;
 const LOUSE_CURL_UP_MIN = 3;
@@ -410,6 +411,20 @@ function applyEffect(
         const targets = wounded.length > 0 ? wounded : [combat.enemies[actor.index]!];
         const pick = targets[nextInt(state.rng, targets.length)]!;
         pick.hp = Math.min(pick.maxHp, pick.hp + effect.amount);
+      }
+      break;
+    }
+    case "summon": {
+      // 敌人召唤新敌人（地精首领）；场上敌人达上限则不再召唤，新生者本回合不行动。
+      if (actor.side === "enemy") {
+        for (const defId of effect.defIds) {
+          if (livingEnemies(combat).length >= MAX_ENEMIES) {
+            break;
+          }
+          const newIndex = combat.enemies.length;
+          combat.enemies.push(createEnemyState(state, defId));
+          selectNextMove(state, newIndex);
+        }
       }
       break;
     }
@@ -910,6 +925,18 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
     enemy.currentMove = cycle[enemy.rotationIndex]!;
     return;
+  }
+
+  // 地精首领：身边存活地精 <2 只则召唤，否则鼓舞 / 突刺（走 weighted）。
+  if (enemy.defId === "gremlin_leader") {
+    const otherGremlins = combat.enemies.filter(
+      e => e.hp > 0 && !e.escaped && e.defId !== "gremlin_leader",
+    ).length;
+    if (otherGremlins < 2) {
+      enemy.currentMove = "summon_gremlins";
+      return;
+    }
+    // 否则落到下方 weighted（鼓舞 / 突刺）。
   }
 
   // 冠军（第二幕 Boss）：血量首次降到 ≤半血时暴怒一次（+6 力量），其余走 weighted。

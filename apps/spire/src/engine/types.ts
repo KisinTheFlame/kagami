@@ -66,6 +66,8 @@ export type Effect =
   | { kind: "heal_self"; amount: number }
   // 敌人用：治疗一名受伤的友军（秘法师；无受伤友军则治自己）。
   | { kind: "heal_ally"; amount: number }
+  // 敌人用：召唤若干敌人加入战斗（地精首领召唤地精；新生者本回合不行动）。
+  | { kind: "summon"; defIds: string[] }
   | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
