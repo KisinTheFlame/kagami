@@ -238,6 +238,8 @@ export type GameState = {
   seed: number;
   character: CharacterId;
   ascension: number;
+  /** 当前幕（1-based）。打完本幕 Boss 若还有后续幕则携带状态进入下一幕。 */
+  act: number;
   screen: Screen;
   hp: number;
   maxHp: number;
