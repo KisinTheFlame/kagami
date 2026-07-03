@@ -176,7 +176,15 @@ function triggerRelicTurnEnd(state: GameState): void {
   fireRelics(state, (hooks, self) => hooks.onTurnEnd?.(state, self));
 }
 function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
-  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType));
+  // 遗物可通过 emit 发射战斗 Effect（信封等发伤遗物）；收集后以玩家为行动者统一结算。
+  const emitted: Effect[] = [];
+  const emit = (effect: Effect): void => {
+    emitted.push(effect);
+  };
+  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType, emit));
+  if (emitted.length > 0) {
+    applyEffects(state, emitted, { side: "player" }, null);
+  }
 }
 
 // —— 抽牌 ——
@@ -236,7 +244,7 @@ function applyEffect(
           );
         }
       } else {
-        dealDamageToPlayer(state, effect.amount, powers);
+        dealDamageToPlayer(state, effect.amount, powers, actor.index);
       }
       break;
     }
@@ -262,7 +270,7 @@ function applyEffect(
         const rolled = combat.enemies[actor.index]!.rolledDamage;
         const times = effect.times ?? 1;
         for (let hit = 0; hit < times; hit += 1) {
-          dealDamageToPlayer(state, rolled, powers);
+          dealDamageToPlayer(state, rolled, powers, actor.index);
         }
       }
       break;
@@ -282,7 +290,7 @@ function applyEffect(
             dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
           }
         } else {
-          dealDamageToPlayer(state, effect.amount, powers);
+          dealDamageToPlayer(state, effect.amount, powers, actor.index);
         }
       }
       break;
@@ -531,6 +539,7 @@ function dealDamageToPlayer(
   state: GameState,
   base: number,
   attackerPowers: readonly PowerInstance[],
+  attackerIndex?: number,
 ): void {
   const combat = state.combat!;
   const dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
@@ -540,6 +549,14 @@ function dealDamageToPlayer(
   // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
     addPower(combat.playerPowers, "plated_armor", -1);
+  }
+  // 荆棘：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
+  const thorns = getPower(combat.playerPowers, "thorns");
+  if (thorns > 0 && attackerIndex !== undefined) {
+    const attacker = combat.enemies[attackerIndex];
+    if (attacker && attacker.hp > 0) {
+      attacker.hp = Math.max(0, attacker.hp - thorns);
+    }
   }
 }
 
