@@ -400,7 +400,7 @@ function applyPowerEffect(
       applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
-    addPower(combat.playerPowers, power, amount);
+    applyPowerToPlayer(combat, power, amount);
   }
 }
 
@@ -413,6 +413,15 @@ function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount
     return;
   }
   addPower(enemy.powers, power, amount);
+}
+
+/** 给玩家加 power；若是减益且玩家有神器，则消耗一层神器抵消（远古药水）。 */
+function applyPowerToPlayer(combat: CombatState, power: PowerInstance["id"], amount: number): void {
+  if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(combat.playerPowers, "artifact") > 0) {
+    addPower(combat.playerPowers, "artifact", -1);
+    return;
+  }
+  addPower(combat.playerPowers, power, amount);
 }
 
 function addCards(
@@ -528,6 +537,10 @@ function dealDamageToPlayer(
   const afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
   state.hp = Math.max(0, state.hp - afterBlock);
+  // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
+  if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
+    addPower(combat.playerPowers, "plated_armor", -1);
+  }
 }
 
 /** 无来源的固定伤害（灼烧废牌），经玩家格挡但不受力量/易伤影响。 */
@@ -707,10 +720,20 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = [];
-  // 金属化（玩家能力牌）：回合结束获得等量格挡（定值，不受敏捷/脆弱影响），带进敌人回合防御。
+  // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
   const playerMetallicize = getPower(combat.playerPowers, "metallicize");
   if (playerMetallicize > 0) {
     combat.playerBlock += playerMetallicize;
+  }
+  const platedArmor = getPower(combat.playerPowers, "plated_armor");
+  if (platedArmor > 0) {
+    combat.playerBlock += platedArmor;
+  }
+  // 再生（玩家）：回合结束回血，然后层数 -1。
+  const regen = getPower(combat.playerPowers, "regen");
+  if (regen > 0) {
+    state.hp = Math.min(state.maxHp, state.hp + regen);
+    addPower(combat.playerPowers, "regen", -1);
   }
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
   triggerRelicTurnEnd(state);
@@ -759,6 +782,11 @@ export function endTurn(state: GameState): void {
   const demonForm = getPower(combat.playerPowers, "demon_form");
   if (demonForm > 0) {
     addPower(combat.playerPowers, "strength", demonForm);
+  }
+  // 仪式（玩家·邪教徒药水）：每个玩家回合开始获得等量力量。
+  const playerRitual = getPower(combat.playerPowers, "ritual");
+  if (playerRitual > 0) {
+    addPower(combat.playerPowers, "strength", playerRitual);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
   triggerRelicTurnStart(state);

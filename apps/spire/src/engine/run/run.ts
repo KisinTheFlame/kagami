@@ -2,7 +2,12 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOfRarity, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
 import { REWARD_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
-import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
+import {
+  BASE_POTION_DROP_CHANCE,
+  POTION_DROP_POOL,
+  getPotionDef,
+  potionPoolOfRarity,
+} from "../potions/potions.js";
 import { EVENT_POOL, getEventDef } from "../events/events.js";
 import type { EventOutcome } from "../events/events.js";
 import { generateShop } from "../shop/shop.js";
@@ -136,7 +141,11 @@ function rollPotionDrop(state: GameState): void {
   }
   const chance = Math.max(0, Math.min(100, BASE_POTION_DROP_CHANCE + state.potionDropBonus));
   if (nextInt(state.rng, 100) < chance) {
-    const id = POTION_DROP_POOL[nextInt(state.rng, POTION_DROP_POOL.length)]!;
+    // 掷稀有度（稀有 5% / 罕见 30% / 普通 65%），再从该档抽一瓶。
+    const roll = nextInt(state.rng, 100);
+    const rarity = roll < 5 ? "rare" : roll < 35 ? "uncommon" : "common";
+    const pool = potionPoolOfRarity(rarity);
+    const id = pool[nextInt(state.rng, pool.length)]!;
     state.potions[emptySlot] = id;
     state.potionDropBonus -= 10;
     state.log.push(`你获得了药水「${getPotionDef(id).name}」。`);
