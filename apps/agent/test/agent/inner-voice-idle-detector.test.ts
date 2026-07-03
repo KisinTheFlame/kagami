@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyRootToolCall,
   evaluateIdleTrigger,
-  getBeijingClock,
+  getBeijingHour,
   INNER_VOICE_IDLE_POLICY,
+  isWaitToolCall,
   type InnerVoiceIdleSignals,
 } from "../../src/agent/capabilities/inner-voice/domain/idle-detector.js";
 import { InnerVoiceIdleTracker } from "../../src/agent/capabilities/inner-voice/domain/idle-tracker.js";
@@ -11,199 +11,139 @@ import { collectInnerVoiceIdleSignals } from "../../src/agent/capabilities/inner
 import { sliceRecentBalancedMessages } from "../../src/agent/capabilities/inner-voice/domain/recent-context-slice.js";
 import type { LlmMessage } from "@kagami/llm-client";
 
-// 北京时间 = UTC+8：Beijing 14:00 → UTC 06:00。测试全部用 UTC 构造。
+// 北京时间 = UTC+8：Beijing 14:00 → UTC 06:00（非静默窗、正常触发时段）。
 const NOW = new Date("2026-07-02T06:00:00Z");
 
 function minutesAgo(minutes: number, base: Date = NOW): Date {
   return new Date(base.getTime() - minutes * 60_000);
 }
 
+/** 30min 窗口内的 count 个 wait（5/10/15… 分钟前，均落在窗内）。 */
 function waitsWithin(count: number, base: Date = NOW): Date[] {
   return Array.from({ length: count }, (_, i) => minutesAgo(5 + i * 5, base));
 }
 
 function signals(partial: Partial<InnerVoiceIdleSignals>): InnerVoiceIdleSignals {
-  return { waitAt: [], engagedAt: [], attemptAt: [], ...partial };
+  return { waitAt: [], attemptAt: [], ...partial };
 }
 
-describe("classifyRootToolCall", () => {
-  it("wait 归 wait", () => {
-    expect(classifyRootToolCall({ name: "wait", argumentsValue: {} })).toBe("wait");
-  });
-
-  it("search_web 是顶层投入型", () => {
-    expect(classifyRootToolCall({ name: "search_web", argumentsValue: {} })).toBe("engaged");
-  });
-
-  it("invoke 的投入型子工具按枚举判定", () => {
-    expect(
-      classifyRootToolCall({ name: "invoke", argumentsValue: { tool: "open_ithome_article" } }),
-    ).toBe("engaged");
-    expect(classifyRootToolCall({ name: "invoke", argumentsValue: { tool: "bash" } })).toBe(
-      "engaged",
-    );
-    expect(classifyRootToolCall({ name: "invoke", argumentsValue: { tool: "add_todo" } })).toBe(
-      "engaged",
-    );
-  });
-
-  it("QQ 聊天动作不算投入型——刷群接话正是摸鱼本身", () => {
-    expect(
-      classifyRootToolCall({ name: "invoke", argumentsValue: { tool: "open_conversation" } }),
-    ).toBe("neutral");
-    expect(classifyRootToolCall({ name: "invoke", argumentsValue: { tool: "send_message" } })).toBe(
-      "neutral",
-    );
-    expect(classifyRootToolCall({ name: "switch", argumentsValue: { id: "qq" } })).toBe("neutral");
+describe("isWaitToolCall", () => {
+  it("只认 wait", () => {
+    expect(isWaitToolCall("wait")).toBe(true);
+    expect(isWaitToolCall("invoke")).toBe(false);
+    expect(isWaitToolCall("search_web")).toBe(false);
+    expect(isWaitToolCall("switch")).toBe(false);
   });
 });
 
 describe("evaluateIdleTrigger", () => {
-  it("窗口内 wait 达标且其余条件满足 → 触发", () => {
-    expect(evaluateIdleTrigger({ now: NOW, signals: signals({ waitAt: waitsWithin(6) }) })).toBe(
+  it("30min 内 wait ≥3 且非静默、无近期尝试 → 触发", () => {
+    expect(evaluateIdleTrigger({ now: NOW, signals: signals({ waitAt: waitsWithin(3) }) })).toBe(
       true,
     );
   });
 
-  it("wait 不足 minWaitCount → 不触发", () => {
-    expect(evaluateIdleTrigger({ now: NOW, signals: signals({ waitAt: waitsWithin(5) }) })).toBe(
+  it("wait 不足 3 → 不触发", () => {
+    expect(evaluateIdleTrigger({ now: NOW, signals: signals({ waitAt: waitsWithin(2) }) })).toBe(
       false,
     );
   });
 
-  it("窗口外的 wait 不计数", () => {
-    const stale = Array.from({ length: 6 }, (_, i) => minutesAgo(70 + i * 5));
+  it("窗口外（>30min 前）的 wait 不计数", () => {
+    const stale = [minutesAgo(35), minutesAgo(40), minutesAgo(45)];
     expect(evaluateIdleTrigger({ now: NOW, signals: signals({ waitAt: stale }) })).toBe(false);
   });
 
-  it("窗口内有投入型调用 → 豁免不触发", () => {
+  it("距上次尝试不足 30min 不应期 → 不触发", () => {
     expect(
       evaluateIdleTrigger({
         now: NOW,
-        signals: signals({ waitAt: waitsWithin(8), engagedAt: [minutesAgo(30)] }),
+        signals: signals({ waitAt: waitsWithin(3), attemptAt: [minutesAgo(20)] }),
       }),
     ).toBe(false);
   });
 
-  it("窗口外的投入型调用不豁免", () => {
+  it("距上次尝试 ≥30min → 触发", () => {
     expect(
       evaluateIdleTrigger({
         now: NOW,
-        signals: signals({ waitAt: waitsWithin(6), engagedAt: [minutesAgo(90)] }),
+        signals: signals({ waitAt: waitsWithin(3), attemptAt: [minutesAgo(35)] }),
       }),
     ).toBe(true);
   });
 
-  it("当日注入尝试达上限（3 次）→ 不触发", () => {
+  it("静默窗内（北京 01:00–09:00）不触发", () => {
+    // Beijing 03:00 → UTC 前一天 19:00。
+    const deepNight = new Date("2026-07-01T19:00:00Z");
     expect(
       evaluateIdleTrigger({
-        now: NOW,
-        signals: signals({
-          waitAt: waitsWithin(6),
-          // 同为北京 7/2 的三次尝试（Beijing 09:00 / 09:30 / 10:00）；最后一次距 NOW 恰
-          // 满 4h 不应期（不再被 cooldown 拦），故此处只由日上限判定拦下。
-          attemptAt: [
-            new Date("2026-07-02T01:00:00Z"),
-            new Date("2026-07-02T01:30:00Z"),
-            new Date("2026-07-02T02:00:00Z"),
-          ],
-        }),
+        now: deepNight,
+        signals: signals({ waitAt: waitsWithin(3, deepNight) }),
       }),
+    ).toBe(false);
+    // Beijing 01:00 边界（含）→ UTC 前一天 17:00。
+    const oneAm = new Date("2026-07-01T17:00:00Z");
+    expect(
+      evaluateIdleTrigger({ now: oneAm, signals: signals({ waitAt: waitsWithin(3, oneAm) }) }),
     ).toBe(false);
   });
 
-  it("昨天的尝试不占今天的配额，但仍受不应期约束", () => {
-    // 昨天 Beijing 23:00（UTC 15:00）：距 NOW 15 小时，超过 4h 不应期。
+  it("静默窗边界外允许触发：北京 09:00（不含）与 00:30", () => {
+    // Beijing 09:00 → UTC 01:00：hour=9 不在 [1,9)，允许。
+    const nineAm = new Date("2026-07-02T01:00:00Z");
+    expect(
+      evaluateIdleTrigger({ now: nineAm, signals: signals({ waitAt: waitsWithin(3, nineAm) }) }),
+    ).toBe(true);
+    // Beijing 00:30 → UTC 前一天 16:30：hour=0 不在 [1,9)，允许。
+    const halfPastMidnight = new Date("2026-07-01T16:30:00Z");
     expect(
       evaluateIdleTrigger({
-        now: NOW,
-        signals: signals({
-          waitAt: waitsWithin(6),
-          attemptAt: [new Date("2026-07-01T15:00:00Z")],
-        }),
+        now: halfPastMidnight,
+        signals: signals({ waitAt: waitsWithin(3, halfPastMidnight) }),
       }),
     ).toBe(true);
   });
 
-  it("距上次尝试不足不应期 → 不触发", () => {
-    expect(
-      evaluateIdleTrigger({
-        now: NOW,
-        signals: signals({ waitAt: waitsWithin(6), attemptAt: [minutesAgo(120)] }),
-      }),
-    ).toBe(false);
-  });
-
-  it("时段窗外（北京深夜）不触发", () => {
-    // Beijing 23:30 → UTC 15:30。
-    const lateNight = new Date("2026-07-02T15:30:00Z");
-    expect(
-      evaluateIdleTrigger({
-        now: lateNight,
-        signals: signals({ waitAt: waitsWithin(6, lateNight) }),
-      }),
-    ).toBe(false);
-    // Beijing 09:59 → UTC 01:59。
-    const earlyMorning = new Date("2026-07-02T01:59:00Z");
-    expect(
-      evaluateIdleTrigger({
-        now: earlyMorning,
-        signals: signals({ waitAt: waitsWithin(6, earlyMorning) }),
-      }),
-    ).toBe(false);
-  });
-
-  it("政策常量与 issue #265 定稿一致", () => {
-    expect(INNER_VOICE_IDLE_POLICY.dailyAttemptLimit).toBe(3);
-    expect(INNER_VOICE_IDLE_POLICY.attemptCooldownMs).toBe(4 * 60 * 60 * 1000);
-    expect(INNER_VOICE_IDLE_POLICY.activeStartHour).toBe(10);
-    expect(INNER_VOICE_IDLE_POLICY.activeEndHour).toBe(23);
+  it("政策常量与 2026-07-04 定稿一致", () => {
+    expect(INNER_VOICE_IDLE_POLICY.windowMs).toBe(30 * 60 * 1000);
+    expect(INNER_VOICE_IDLE_POLICY.minWaitCount).toBe(3);
+    expect(INNER_VOICE_IDLE_POLICY.attemptCooldownMs).toBe(30 * 60 * 1000);
+    expect(INNER_VOICE_IDLE_POLICY.quietStartHour).toBe(1);
+    expect(INNER_VOICE_IDLE_POLICY.quietEndHour).toBe(9);
   });
 });
 
-describe("getBeijingClock", () => {
-  it("按北京时区给出自然日与小时", () => {
-    // UTC 7/1 17:00 = Beijing 7/2 01:00 —— 跨日。
-    expect(getBeijingClock(new Date("2026-07-01T17:00:00Z"))).toEqual({
-      dayKey: "2026-07-02",
-      hour: 1,
-    });
+describe("getBeijingHour", () => {
+  it("按北京时区给出小时（0–23）", () => {
+    // UTC 7/1 17:00 = Beijing 7/2 01:00。
+    expect(getBeijingHour(new Date("2026-07-01T17:00:00Z"))).toBe(1);
     // Beijing 0 点不被 Intl 的 "24" 污染。
-    expect(getBeijingClock(new Date("2026-07-01T16:00:00Z")).hour).toBe(0);
+    expect(getBeijingHour(new Date("2026-07-01T16:00:00Z"))).toBe(0);
   });
 });
 
 describe("InnerVoiceIdleTracker", () => {
-  it("记录→判定→尝试后进入不应期", () => {
+  it("记录 3 个 wait → 判定 → 尝试后进入不应期", () => {
     const tracker = new InnerVoiceIdleTracker();
-    for (const at of waitsWithin(6)) {
-      tracker.recordToolCall("wait", at);
+    for (const at of waitsWithin(3)) {
+      tracker.recordWait(at);
     }
     expect(tracker.shouldTrigger(NOW)).toBe(true);
     tracker.recordAttempt(NOW);
     expect(tracker.shouldTrigger(new Date(NOW.getTime() + 60_000))).toBe(false);
   });
 
-  it("投入型调用会豁免触发（行为回填熄火）", () => {
-    const tracker = new InnerVoiceIdleTracker();
-    for (const at of waitsWithin(6)) {
-      tracker.recordToolCall("wait", at);
-    }
-    tracker.recordToolCall("engaged", minutesAgo(2));
-    expect(tracker.shouldTrigger(NOW)).toBe(false);
-  });
-
   it("restore 覆盖既有状态", () => {
     const tracker = new InnerVoiceIdleTracker();
     tracker.recordAttempt(minutesAgo(10));
-    tracker.restore({ waitAt: waitsWithin(6), engagedAt: [], attemptAt: [] });
+    tracker.restore({ waitAt: waitsWithin(3), attemptAt: [] });
     expect(tracker.shouldTrigger(NOW)).toBe(true);
   });
 });
 
 describe("collectInnerVoiceIdleSignals", () => {
-  it("从 ledger 记录重建三组时间戳", () => {
-    const at = (i: number): Date => minutesAgo(60 - i);
+  it("从 ledger 记录重建 wait 与 attempt 两组时间戳", () => {
+    const at = (i: number): Date => minutesAgo(30 - i);
     const records = [
       {
         message: {
@@ -217,6 +157,7 @@ describe("collectInnerVoiceIdleSignals", () => {
         message: {
           role: "assistant",
           content: "",
+          // 非 wait 调用不计入（不再区分「投入型」）。
           toolCalls: [{ id: "t2", name: "invoke", arguments: { tool: "glance_hn" } }],
         } as LlmMessage,
         createdAt: at(2),
@@ -239,7 +180,6 @@ describe("collectInnerVoiceIdleSignals", () => {
 
     const result = collectInnerVoiceIdleSignals(records);
     expect(result.waitAt).toEqual([at(1)]);
-    expect(result.engagedAt).toEqual([at(2)]);
     expect(result.attemptAt).toEqual([at(3)]);
   });
 });
@@ -258,7 +198,6 @@ describe("sliceRecentBalancedMessages", () => {
       { role: "assistant", content: "hi", toolCalls: [] },
     ];
 
-    // keepRecent=2 会落在 assistant 上，应回退到 u2。
     const sliced = sliceRecentBalancedMessages(messages, 2);
     expect(sliced[0]).toEqual({ role: "user", content: "u2" });
     expect(sliced).toHaveLength(2);
