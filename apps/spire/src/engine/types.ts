@@ -69,6 +69,10 @@ export type Effect =
   | { kind: "lose_hp"; amount: number }
   // 玩家回复最大生命的百分比（血之药水 40%）。
   | { kind: "heal_percent"; percent: number }
+  // 玩家回复固定生命（包扎等）。
+  | { kind: "heal"; amount: number }
+  // 玩家用：当前力量翻倍（极限爆发）。
+  | { kind: "double_strength" }
   // 敌人用：偷取玩家金币（拾荒者，最多偷 amount，玩家金币不足则偷光）。
   | { kind: "steal_gold"; amount: number }
   // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。
