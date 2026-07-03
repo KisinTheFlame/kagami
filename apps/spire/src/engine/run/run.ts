@@ -1,7 +1,7 @@
 import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOfRarity, getCardDef, costOf } from "../cards/cards.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
-import { COMMON_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
+import { REWARD_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
 import { BASE_POTION_DROP_CHANCE, POTION_DROP_POOL, getPotionDef } from "../potions/potions.js";
 import { EVENT_POOL, getEventDef } from "../events/events.js";
 import type { EventOutcome } from "../events/events.js";
@@ -106,7 +106,7 @@ function resolveNode(state: GameState, node: MapNode): void {
 
 /** 宝箱：优先给一个未持有的遗物，遗物都齐了则给金币兜底（复刻 StS 宝箱给遗物）。 */
 function grantTreasure(state: GameState): void {
-  const available = COMMON_RELIC_POOL.filter(id => !hasRelic(state, id));
+  const available = REWARD_RELIC_POOL.filter(id => !hasRelic(state, id));
   if (available.length > 0) {
     const id = available[nextInt(state.rng, available.length)]!;
     state.relics.push({ id, counter: 0 });

@@ -3,7 +3,7 @@ import { newRun } from "../src/engine/engine.js";
 import { startCombat, playCard } from "../src/engine/combat/combat.js";
 import { getPower } from "../src/engine/powers/powers.js";
 import { grantRandomRelic } from "../src/engine/run/run.js";
-import { COMMON_RELIC_POOL } from "../src/engine/relics/relics.js";
+import { REWARD_RELIC_POOL } from "../src/engine/relics/relics.js";
 import type { CardInstance, GameState } from "../src/engine/types.js";
 
 // M3a：遗物地基 + 战斗事件钩子（onCombatStart / onCombatEnd）。数值对齐 StS asc0。
@@ -99,15 +99,15 @@ describe("宝箱 / 掉落给遗物", () => {
     const s = run([]);
     grantRandomRelic(s);
     expect(s.relics).toHaveLength(1);
-    expect(COMMON_RELIC_POOL).toContain(s.relics[0]!.id);
+    expect(REWARD_RELIC_POOL).toContain(s.relics[0]!.id);
   });
 
   it("不重复给已持有的遗物", () => {
-    const s = run(COMMON_RELIC_POOL.slice()); // 已持有全部普通遗物
+    const s = run(REWARD_RELIC_POOL.slice()); // 已持有全部普通遗物
     const goldBefore = s.gold;
     grantRandomRelic(s);
     // 无可给遗物 → 兜底给金币，遗物数不变。
-    expect(s.relics).toHaveLength(COMMON_RELIC_POOL.length);
+    expect(s.relics).toHaveLength(REWARD_RELIC_POOL.length);
     expect(s.gold).toBeGreaterThan(goldBefore);
   });
 });
