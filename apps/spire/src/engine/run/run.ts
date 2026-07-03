@@ -54,7 +54,7 @@ const NODE_TYPE_LABELS: Record<MapNodeType, string> = {
 };
 
 /** 有内容的幕数：打完第 TOTAL_ACTS 幕 Boss 即通关；之前的 Boss 则进入下一幕。 */
-export const TOTAL_ACTS = 1;
+export const TOTAL_ACTS = 2;
 
 export function buildMap(state: GameState): void {
   state.map = generateMap(state.rng, ENABLED_MAP_TYPES);
@@ -76,19 +76,19 @@ function resolveNode(state: GameState, node: MapNode): void {
   switch (node.type) {
     case "combat": {
       // 前若干场抽 weak 池、其余抽 strong 池（复刻 StS Act1 战斗节奏）。
-      const encounterId = pickNormalEncounter(state.rng, state.combatsEntered);
+      const encounterId = pickNormalEncounter(state.rng, state.combatsEntered, state.act);
       state.combatsEntered += 1;
       startCombat(state, encounterId);
       return;
     }
     case "elite": {
       // 精英战：独立精英池；胜利后必发 1 个遗物。
-      startCombat(state, pickEliteEncounter(state.rng));
+      startCombat(state, pickEliteEncounter(state.rng, state.act));
       state.pendingRelicReward = true;
       return;
     }
     case "boss": {
-      startCombat(state, pickBossEncounter(state.rng));
+      startCombat(state, pickBossEncounter(state.rng, state.act));
       return;
     }
     case "event": {
