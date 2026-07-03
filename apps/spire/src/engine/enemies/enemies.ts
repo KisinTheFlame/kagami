@@ -830,6 +830,147 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 第二幕 Boss：青铜自动机（召唤青铜球 + 超射线）——
+  {
+    id: "bronze_automaton",
+    name: "青铜自动机",
+    hpMin: 300,
+    hpMax: 300,
+    moves: [
+      {
+        id: "spawn_orbs",
+        name: "召唤青铜球",
+        effects: [{ kind: "summon", defIds: ["bronze_orb", "bronze_orb"] }],
+        intent: "unknown",
+      },
+      {
+        id: "flail",
+        name: "连枷",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 2 }],
+        intent: "attack",
+      },
+      {
+        id: "boost",
+        name: "增益",
+        effects: [
+          { kind: "gain_block", amount: 9 },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+      {
+        id: "hyperbeam",
+        name: "超射线",
+        effects: [{ kind: "deal_damage", amount: 45 }],
+        intent: "attack",
+      },
+    ],
+    // 首招召唤两颗青铜球，之后 连枷/增益/超射线。
+    intentRule: {
+      scripted: ["spawn_orbs"],
+      weighted: [
+        { move: "flail", weight: 40, maxInARow: 2 },
+        { move: "boost", weight: 35, maxInARow: 1 },
+        { move: "hyperbeam", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "bronze_orb",
+    name: "青铜球",
+    hpMin: 52,
+    hpMax: 52,
+    moves: [
+      {
+        id: "orb_beam",
+        name: "光束",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+      {
+        id: "orb_support",
+        name: "支援",
+        effects: [{ kind: "gain_block", amount: 6 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "orb_beam", weight: 70, maxInARow: 2 },
+        { move: "orb_support", weight: 30, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第二幕 Boss：收藏家（召唤火把头 + 群体减益）——
+  {
+    id: "the_collector",
+    name: "收藏家",
+    hpMin: 282,
+    hpMax: 300,
+    moves: [
+      {
+        id: "spawn_torches",
+        name: "召唤火把头",
+        effects: [{ kind: "summon", defIds: ["torch_head", "torch_head"] }],
+        intent: "unknown",
+      },
+      {
+        id: "fireball",
+        name: "火球",
+        effects: [{ kind: "deal_damage", amount: 18 }],
+        intent: "attack",
+      },
+      {
+        id: "collector_buff",
+        name: "增幅",
+        effects: [
+          { kind: "gain_block", amount: 15 },
+          { kind: "apply_power", power: "strength", amount: 3, on: "self" },
+        ],
+        intent: "buff",
+      },
+      {
+        id: "mega_debuff",
+        name: "巨型削弱",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "vulnerable", amount: 3, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 3, on: "target" },
+        ],
+        intent: "debuff",
+      },
+    ],
+    // 首招召唤两个火把头，之后 火球/增幅/巨型削弱。
+    intentRule: {
+      scripted: ["spawn_torches"],
+      weighted: [
+        { move: "fireball", weight: 40, maxInARow: 2 },
+        { move: "collector_buff", weight: 25, maxInARow: 1 },
+        { move: "mega_debuff", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "torch_head",
+    name: "火把头",
+    hpMin: 38,
+    hpMax: 40,
+    moves: [
+      {
+        id: "torch_tackle",
+        name: "冲撞",
+        effects: [{ kind: "deal_damage", amount: 7 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [{ move: "torch_tackle", weight: 1, maxInARow: 99 }],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -1223,6 +1364,8 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   // 奴隶主小队：工头 + 蓝/红奴隶主。
   slavers: { id: "slavers", enemies: ["taskmaster", "blue_slaver", "red_slaver"], isBoss: false },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
+  bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
+  the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -1340,7 +1483,11 @@ const BOSS_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
 ];
 
 // Act2 Boss 池（切片：冠军；后续补 青铜自动机 / 收藏家）。
-const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "champ", weight: 1 }];
+const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [
+  { id: "champ", weight: 1 },
+  { id: "bronze_automaton", weight: 1 },
+  { id: "the_collector", weight: 1 },
+];
 
 /** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
 export function pickBossEncounter(rng: RngState, act = 1): string {
