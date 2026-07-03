@@ -5,6 +5,7 @@ import { seedRng } from "./rng.js";
 import { endTurn, playCard, usePotion } from "./combat/combat.js";
 import { applyChoose, buildMap, generateReward } from "./run/run.js";
 import { POTION_SLOTS } from "./potions/potions.js";
+import { NEOW_EVENT_ID } from "./events/events.js";
 
 // === 引擎顶层：新建对局 + 动作分发 ===
 //
@@ -61,6 +62,9 @@ export function newRun(input: {
     log: [],
   };
   buildMap(state);
+  // 开局先给涅奥祝福（复用事件界面）；选完 backToMap 回到已生成的地图。
+  state.event = { id: NEOW_EVENT_ID };
+  state.screen = "event";
   return state;
 }
 
