@@ -1,5 +1,5 @@
 import type { CardColor, CharacterId } from "../types.js";
-import { IRONCLAD_STARTER_DECK } from "../cards/cards.js";
+import { IRONCLAD_STARTER_DECK, SILENT_STARTER_DECK } from "../cards/cards.js";
 import { IRONCLAD_STARTER_RELIC } from "../relics/relics.js";
 
 // === 角色配置 ===
@@ -25,6 +25,14 @@ const CHARACTERS: Partial<Record<CharacterId, CharacterConfig>> = {
     starterRelic: IRONCLAD_STARTER_RELIC,
     starterDeck: IRONCLAD_STARTER_DECK,
     color: "red",
+  },
+  silent: {
+    id: "silent",
+    name: "静默猎手",
+    maxHp: 70,
+    starterRelic: "ring_of_the_snake",
+    starterDeck: SILENT_STARTER_DECK,
+    color: "green",
   },
 };
 

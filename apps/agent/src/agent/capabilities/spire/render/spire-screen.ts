@@ -22,6 +22,7 @@ const POWER_LABELS: Record<string, string> = {
   weak: "虚弱",
   frail: "脆弱",
   entangled: "缠绕",
+  poison: "中毒",
   metallicize: "金属化",
   ritual: "仪式",
   curl_up: "蜷缩",
