@@ -1603,4 +1603,155 @@ describe("DefaultNapcatGatewayService", () => {
 
     await gateway.stop();
   });
+
+  it("getGroupMemberShutUp: 未来时间戳→毫秒；0/过去→null；畸形响应→null", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    const futureSec = Math.floor(Date.now() / 1000) + 3600;
+    const p1 = gateway.getGroupMemberShutUp({ groupId: "987654", userId: "10001" });
+    emitActionResponse(socket, 0, { shut_up_timestamp: futureSec });
+    await expect(p1).resolves.toBe(futureSec * 1000);
+    // no_cache=true 走实时值。
+    expect(JSON.parse(socket.sentPayloads[0]).params).toMatchObject({
+      group_id: "987654",
+      user_id: "10001",
+      no_cache: true,
+    });
+
+    const p2 = gateway.getGroupMemberShutUp({ groupId: "987654", userId: "10001" });
+    emitActionResponse(socket, 1, { shut_up_timestamp: 0 });
+    await expect(p2).resolves.toBeNull();
+
+    const p3 = gateway.getGroupMemberShutUp({ groupId: "987654", userId: "10001" });
+    emitActionResponse(socket, 2, { unrelated: true });
+    await expect(p3).resolves.toBeNull();
+
+    // 数字字符串（NapCat 某些版本发字符串）→ 解析为毫秒。
+    const futureSecStr = String(Math.floor(Date.now() / 1000) + 7200);
+    const p4 = gateway.getGroupMemberShutUp({ groupId: "987654", userId: "10001" });
+    emitActionResponse(socket, 3, { shut_up_timestamp: futureSecStr });
+    await expect(p4).resolves.toBe(Number(futureSecStr) * 1000);
+
+    // 非数字字符串 → NaN → null。
+    const p5 = gateway.getGroupMemberShutUp({ groupId: "987654", userId: "10001" });
+    emitActionResponse(socket, 4, { shut_up_timestamp: "oops" });
+    await expect(p5).resolves.toBeNull();
+
+    await gateway.stop();
+  });
+
+  it("ordered：group_ban notice 夹在两条群消息之间，保持相对发布顺序", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const firstImageAnalysis = createDeferred<{ description: string; resid: string | null }>();
+    const orderedImageAnalyzer = {
+      analyzeImageSegment: vi.fn().mockImplementation(() => firstImageAnalysis.promise),
+    };
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({}),
+      imageMessageAnalyzer: orderedImageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    // seq0：带图群消息（analysis 挂起，卡住 flush）。
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "group",
+        group_id: "987654",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 2001,
+        raw_message: "[CQ:image,file=a.png,url=https://example.com/a.png]",
+        message: [
+          {
+            type: "image",
+            data: {
+              summary: "图片",
+              file: "a.png",
+              sub_type: 0,
+              url: "https://example.com/a.png",
+              file_size: "100",
+            },
+          },
+        ],
+        sender: { card: "测试群名片" },
+      }),
+    );
+    // seq1：禁言 notice。
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "notice",
+        notice_type: "group_ban",
+        sub_type: "ban",
+        group_id: 987654,
+        operator_id: 10001,
+        user_id: 10002,
+        duration: 600,
+        self_id: 654321,
+        time: 1783000000,
+      }),
+    );
+
+    // 禁言事件的 operator/target 名解析发出 get_group_member_info 请求（target 先、operator 后）。
+    await waitOneTick();
+    emitActionResponse(socket, 0, { card: "李四" });
+    emitActionResponse(socket, 1, { card: "张三" });
+    await waitOneTick();
+
+    // seq0 的图仍挂起：ban 已处理完但被 flush 顺序卡住，什么都没发布。
+    expect(eventQueue.enqueue).not.toHaveBeenCalled();
+
+    firstImageAnalysis.resolve({ description: "第一张图", resid: null });
+    await waitOneTick();
+
+    // 顺序：先群消息（seq0），再禁言事件（seq1）。
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      1,
+      expectEnqueuedGroupMessage({ messageId: 2001 }),
+    );
+    expect(eventQueue.enqueue).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "napcat_group_ban",
+        data: expect.objectContaining({
+          groupId: "987654",
+          subType: "ban",
+          targetUserId: "10002",
+          targetName: "李四",
+          operatorName: "张三",
+          durationSeconds: 600,
+        }),
+      }),
+    );
+
+    await gateway.stop();
+  });
 });

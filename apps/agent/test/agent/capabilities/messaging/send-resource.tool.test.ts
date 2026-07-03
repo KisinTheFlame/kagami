@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { MutedSendError } from "../../../../src/agent/capabilities/messaging/application/muted-send-error.js";
 import { SendResourceTool } from "../../../../src/agent/capabilities/messaging/tools/send-resource.tool.js";
 import type { ResourceService } from "../../../../src/agent/capabilities/resource/application/resource.service.js";
 import type { AgentMessageService } from "../../../../src/agent/capabilities/messaging/application/agent-message.service.js";
@@ -112,5 +113,25 @@ describe("SendResourceTool", () => {
     expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-9" });
     expect(sendImage).toHaveBeenCalledTimes(1);
     expect(sendImage).toHaveBeenCalledWith(expect.objectContaining({ target: GROUP_TARGET }));
+  });
+
+  it("发图遇 MutedSendError：翻译成 error=MUTED（带 resid + 友好 note）", async () => {
+    const { tool } = build({
+      chatTarget: GROUP_TARGET,
+      resolve: vi.fn().mockResolvedValue({
+        resId: "res-1",
+        bytes: Buffer.from("img"),
+        mimeType: "image/png",
+        size: 3,
+        isImage: true,
+      }),
+      sendImage: vi.fn().mockRejectedValue(new MutedSendError("whole")),
+    });
+    const result = await tool.execute({ resid: "res-1" }, {});
+    const parsed = JSON.parse(result.content);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toBe("MUTED");
+    expect(parsed.resid).toBe("res-1");
+    expect(parsed.note).toContain("全员禁言");
   });
 });

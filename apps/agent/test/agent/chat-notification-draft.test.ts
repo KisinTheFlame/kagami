@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChatNotificationPreview,
+  buildNoticePreview,
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../src/agent/capabilities/messaging/chat-notification-draft.js";
-import type { ConversationMessage } from "../../src/agent/capabilities/messaging/conversation.js";
+import type { NapcatGroupMessageData } from "../../src/napcat/application/napcat-gateway.service.js";
 import type { NapcatReceiveMessageSegment } from "../../src/napcat/application/napcat-gateway/shared.js";
 
-function groupMessage(text: string, nickname = "群友"): ConversationMessage {
+function groupMessage(text: string, nickname = "群友"): NapcatGroupMessageData {
   return {
     groupId: "1",
     userId: "654321",
@@ -109,7 +110,7 @@ describe("buildChatNotificationPreview", () => {
   });
 
   it("renders non-text segments as placeholders", () => {
-    const message: ConversationMessage = {
+    const message: NapcatGroupMessageData = {
       ...groupMessage(""),
       messageSegments: [
         { type: "image", data: { summary: "" } } as unknown as NapcatReceiveMessageSegment,
@@ -119,8 +120,27 @@ describe("buildChatNotificationPreview", () => {
   });
 
   it("returns null when the body renders empty", () => {
-    const message: ConversationMessage = { ...groupMessage("   "), messageSegments: [] };
+    const message: NapcatGroupMessageData = { ...groupMessage("   "), messageSegments: [] };
     expect(buildChatNotificationPreview(message, "group")).toBeNull();
+  });
+});
+
+describe("buildNoticePreview", () => {
+  it("notice 预览无 senderName，正文折叠为单行", () => {
+    expect(buildNoticePreview("你被 张三(10001) 禁言了 10 分钟")).toEqual({
+      senderName: null,
+      text: "你被 张三(10001) 禁言了 10 分钟",
+    });
+  });
+
+  it("超长正文按 50 码点截断", () => {
+    const preview = buildNoticePreview("啊".repeat(80));
+    expect(preview?.senderName).toBeNull();
+    expect(preview?.text).toBe("啊".repeat(50) + "…");
+  });
+
+  it("空正文返回 null", () => {
+    expect(buildNoticePreview("   ")).toBeNull();
   });
 });
 

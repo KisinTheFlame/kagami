@@ -86,10 +86,35 @@ export type NapcatFriendListUpdatedEvent = {
   };
 };
 
+/**
+ * 群禁言 / 解禁事件（OneBot `notice_type: "group_ban"`）。全员禁言 / 解禁时 NapCat 的
+ * `user_id` 为 0，这里归一化为 `targetUserId: null`（渲染层据此走「全员禁言」文案）。
+ * operator/target 的显示名在网关侧复用成员名缓存解析，查不到为 null（渲染退化裸号）。
+ */
+export type NapcatGroupBanData = {
+  groupId: string;
+  subType: "ban" | "lift_ban";
+  /** 被禁言人 QQ；全员禁言 / 解禁时为 null（NapCat user_id=0）。 */
+  targetUserId: string | null;
+  /** 被禁言人显示名（成员名缓存），查不到为 null，渲染层退化裸号。 */
+  targetName: string | null;
+  operatorUserId: string | null;
+  operatorName: string | null;
+  /** 禁言秒数；lift_ban 时为 0；payload 异常时降级为 0（见 spec D5）。 */
+  durationSeconds: number;
+  time: number | null;
+};
+
+export type NapcatGroupBanEvent = {
+  type: "napcat_group_ban";
+  data: NapcatGroupBanData;
+};
+
 export type NapcatAgentEvent =
   | NapcatGroupMessageEvent
   | NapcatPrivateMessageEvent
-  | NapcatFriendListUpdatedEvent;
+  | NapcatFriendListUpdatedEvent
+  | NapcatGroupBanEvent;
 
 export type NapcatChatTarget =
   | {
@@ -192,6 +217,12 @@ export interface NapcatGatewayService {
   }): Promise<NapcatGroupFileListing>;
   /** 拿一个群文件的下载 URL（get_group_file_url，返回腾讯 CDN 直链，agent 侧可直接拉取）。 */
   getGroupFileUrl(input: { groupId: string; fileId: string }): Promise<{ url: string }>;
+  /**
+   * 查某个群成员的禁言到期时间戳（get_group_member_info 的 shut_up_timestamp，epoch 秒）。
+   * 返回该毫秒时间戳；未被禁言（0 / 过去时间 / 字段缺失 / 畸形响应）返回 null。发送失败
+   * 兜底用（重启后内存禁言态丢失时，查一次判定小镜是否真被禁言）。调用方持 botQQ 传入。
+   */
+  getGroupMemberShutUp(input: { groupId: string; userId: string }): Promise<number | null>;
   /**
    * 上传一个文件到群（upload_group_file）。fileRef 走 napcat 通用 file resolver，用
    * `base64://` 形态自包含（不依赖 napcat 访问 agent 的 OSS）。**不要记录 fileRef**——base64 会爆日志。
