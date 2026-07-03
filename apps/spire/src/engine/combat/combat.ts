@@ -1,10 +1,12 @@
 import type {
   CardInstance,
+  CardType,
   CombatState,
   Effect,
   EnemyState,
   GameState,
   PowerInstance,
+  RelicState,
 } from "../types.js";
 import { getCardDef, costOf, effectsOf } from "../cards/cards.js";
 import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
@@ -18,6 +20,7 @@ import {
   removePower,
 } from "../powers/powers.js";
 import { getRelicDef } from "../relics/relics.js";
+import type { RelicDef } from "../relics/relics.js";
 import { getPotionDef } from "../potions/potions.js";
 
 // === 战斗状态机 ===
@@ -144,15 +147,36 @@ export function startCombat(state: GameState, encounterId: string): void {
     selectNextMove(state, i);
   }
   // 战斗开始遗物（船锚格挡 / 金刚杵力量 / 弹珠袋易伤 / 提灯能量 / 血瓶回血…）。
-  triggerRelics(state, "onCombatStart");
+  triggerRelicCombatStart(state);
+  // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
+  triggerRelicTurnStart(state);
   drawCards(state, STARTING_HAND_SIZE);
 }
 
-/** 遍历持有遗物、触发指定时点的钩子（原地改 state）。 */
-function triggerRelics(state: GameState, event: "onCombatStart" | "onCombatEnd"): void {
+/** 遍历持有遗物，对每个的 hooks + 自身 RelicState 调用 fn（原地改 state）。 */
+function fireRelics(
+  state: GameState,
+  fn: (hooks: RelicDef["hooks"], self: RelicState) => void,
+): void {
   for (const relic of state.relics) {
-    getRelicDef(relic.id).hooks[event]?.(state);
+    fn(getRelicDef(relic.id).hooks, relic);
   }
+}
+
+function triggerRelicCombatStart(state: GameState): void {
+  fireRelics(state, (hooks, self) => hooks.onCombatStart?.(state, self));
+}
+function triggerRelicCombatEnd(state: GameState): void {
+  fireRelics(state, (hooks, self) => hooks.onCombatEnd?.(state, self));
+}
+function triggerRelicTurnStart(state: GameState): void {
+  fireRelics(state, (hooks, self) => hooks.onTurnStart?.(state, self));
+}
+function triggerRelicTurnEnd(state: GameState): void {
+  fireRelics(state, (hooks, self) => hooks.onTurnEnd?.(state, self));
+}
+function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
+  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType));
 }
 
 // —— 抽牌 ——
@@ -578,6 +602,8 @@ export function playCard(
     combat.discardPile.push(instance);
   }
   state.log.push(`你打出「${def.name}」。`);
+  // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
+  triggerRelicCardPlayed(state, def.type);
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
@@ -686,6 +712,8 @@ export function endTurn(state: GameState): void {
   if (playerMetallicize > 0) {
     combat.playerBlock += playerMetallicize;
   }
+  // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
+  triggerRelicTurnEnd(state);
   decayDebuffs(combat.playerPowers);
 
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
@@ -732,6 +760,8 @@ export function endTurn(state: GameState): void {
   if (demonForm > 0) {
     addPower(combat.playerPowers, "strength", demonForm);
   }
+  // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
+  triggerRelicTurnStart(state);
   drawCards(state, STARTING_HAND_SIZE);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
@@ -899,8 +929,8 @@ function resolveCombatIfEnded(state: GameState): void {
     return;
   }
   state.log.push("战斗胜利！");
-  // 战斗结束遗物（燃烧之血回血…）在清 combat 前触发。
-  triggerRelics(state, "onCombatEnd");
+  // 战斗结束遗物（燃烧之血回血 / 带肉骨头低血回血…）在清 combat 前触发。
+  triggerRelicCombatEnd(state);
   // 战斗内牌堆（含临时状态牌）随战斗消失，master deck 不受影响。
   state.combat = null;
   if (combat.isBoss) {
