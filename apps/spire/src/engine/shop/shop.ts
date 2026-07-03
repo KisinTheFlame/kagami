@@ -2,7 +2,7 @@ import type { GameState, ShopItem, ShopState } from "../types.js";
 import { rewardCardPoolOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
 import { SHOP_RELIC_POOL, hasRelic } from "../relics/relics.js";
-import { POTION_DROP_POOL } from "../potions/potions.js";
+import { shopPotionPool } from "../potions/potions.js";
 import { nextInt, nextRange } from "../rng.js";
 
 // === 商店库存生成 ===
@@ -69,7 +69,7 @@ export function generateShop(state: GameState): void {
     });
   }
 
-  for (const id of sampleUnique(state.rng, POTION_DROP_POOL, SHOP_POTION_COUNT)) {
+  for (const id of sampleUnique(state.rng, shopPotionPool(state.character), SHOP_POTION_COUNT)) {
     items.push({
       kind: "potion",
       id,

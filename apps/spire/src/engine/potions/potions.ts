@@ -1,4 +1,4 @@
-import type { Effect } from "../types.js";
+import type { CharacterId, Effect } from "../types.js";
 
 // === 药水数据表 ===
 //
@@ -16,6 +16,8 @@ export type PotionDef = {
   targeted: boolean;
   /** 只能在战斗中使用（多数如此；回血类可放宽，此切片统一战斗内用）。 */
   combatOnly: boolean;
+  /** 角色专属：仅该角色的掉落 / 商店池里出现（省略=通用，任何角色可得）。 */
+  characterLock?: CharacterId;
   effects: Effect[];
 };
 
@@ -155,6 +157,67 @@ const POTION_LIST: PotionDef[] = [
     combatOnly: true,
     effects: [{ kind: "apply_power", power: "ritual", amount: 1, on: "self" }],
   },
+
+  // —— 补全批次：通用药水 ——
+  {
+    id: "poison_potion",
+    name: "剧毒药水",
+    description: "对一个敌人施加 6 层中毒。",
+    rarity: "common",
+    targeted: true,
+    combatOnly: true,
+    effects: [{ kind: "apply_power", power: "poison", amount: 6, on: "target" }],
+  },
+  {
+    id: "heart_of_iron_potion",
+    name: "铁心药水",
+    description: "获得 6 层金属化（每回合结束获得 6 点格挡）。",
+    rarity: "rare",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "apply_power", power: "metallicize", amount: 6, on: "self" }],
+  },
+  {
+    id: "fruit_juice",
+    name: "果汁",
+    description: "永久提升 5 点最大生命，并回复 5 点生命。",
+    rarity: "rare",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "gain_max_hp", amount: 5 }],
+  },
+
+  // —— 补全批次：角色专属药水 ——
+  {
+    id: "cunning_potion",
+    name: "狡诈药水",
+    description: "将 3 张飞刀加入手牌。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    characterLock: "silent",
+    effects: [{ kind: "add_card", cardId: "shiv", pile: "hand", count: 3 }],
+  },
+  {
+    id: "focus_potion",
+    name: "集中药水",
+    description: "获得 2 点集中（充能球效果 +2）。",
+    rarity: "common",
+    targeted: false,
+    combatOnly: true,
+    characterLock: "defect",
+    effects: [{ kind: "apply_power", power: "focus", amount: 2, on: "self" }],
+  },
+  {
+    id: "bottled_miracle",
+    name: "瓶装奇迹",
+    description: "将 2 张奇迹加入手牌。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    characterLock: "watcher",
+    effects: [{ kind: "add_card", cardId: "miracle", pile: "hand", count: 2 }],
+  },
 ];
 
 const POTION_MAP: ReadonlyMap<string, PotionDef> = new Map(
@@ -171,26 +234,48 @@ export function getPotionDef(id: string): PotionDef {
   return def;
 }
 
+// 通用药水（无 characterLock）按稀有度取 id；角色专属药水由 character 参数单独并入。
 function potionIdsOfRarity(rarity: PotionRarity): readonly string[] {
-  return POTION_LIST.filter(potion => potion.rarity === rarity).map(potion => potion.id);
+  return POTION_LIST.filter(
+    potion => potion.rarity === rarity && potion.characterLock === undefined,
+  ).map(potion => potion.id);
+}
+
+function potionIdsForCharacter(character: CharacterId, rarity: PotionRarity): readonly string[] {
+  return POTION_LIST.filter(
+    potion => potion.rarity === rarity && potion.characterLock === character,
+  ).map(potion => potion.id);
 }
 
 export const COMMON_POTION_POOL: readonly string[] = potionIdsOfRarity("common");
 export const UNCOMMON_POTION_POOL: readonly string[] = potionIdsOfRarity("uncommon");
 export const RARE_POTION_POOL: readonly string[] = potionIdsOfRarity("rare");
 
-/** 全部药水 id（商店 / 无视稀有度场景用）。 */
-export const POTION_DROP_POOL: readonly string[] = POTION_LIST.map(potion => potion.id);
+/** 全部通用药水 id（不含角色专属）。 */
+export const POTION_DROP_POOL: readonly string[] = POTION_LIST.filter(
+  potion => potion.characterLock === undefined,
+).map(potion => potion.id);
 
-/** 取某稀有度的药水池。 */
-export function potionPoolOfRarity(rarity: PotionRarity): readonly string[] {
-  if (rarity === "rare") {
-    return RARE_POTION_POOL;
+/** 取某稀有度的药水池；给了角色则并入该角色专属药水。 */
+export function potionPoolOfRarity(
+  rarity: PotionRarity,
+  character?: CharacterId,
+): readonly string[] {
+  const base = potionIdsOfRarity(rarity);
+  if (character === undefined) {
+    return base;
   }
-  if (rarity === "uncommon") {
-    return UNCOMMON_POTION_POOL;
-  }
-  return COMMON_POTION_POOL;
+  return [...base, ...potionIdsForCharacter(character, rarity)];
+}
+
+/** 某角色实际可得的商店药水池 = 通用 + 该角色专属（全稀有度）。 */
+export function shopPotionPool(character: CharacterId): readonly string[] {
+  return [
+    ...POTION_DROP_POOL,
+    ...potionIdsForCharacter(character, "common"),
+    ...potionIdsForCharacter(character, "uncommon"),
+    ...potionIdsForCharacter(character, "rare"),
+  ];
 }
 
 export const POTION_SLOTS = 3;
