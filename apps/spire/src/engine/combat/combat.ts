@@ -54,8 +54,9 @@ const HEXAGHOST_RITUAL = [
 
 type ActorRef = { side: "player" } | { side: "enemy"; index: number };
 
+/** 仍在场的敌人：活着且未逃跑（逃跑的拾荒者退出战斗，不再算作战斗目标）。 */
 function livingEnemies(combat: CombatState): EnemyState[] {
-  return combat.enemies.filter(enemy => enemy.hp > 0);
+  return combat.enemies.filter(enemy => enemy.hp > 0 && !enemy.escaped);
 }
 
 function actorPowers(state: GameState, actor: ActorRef): PowerInstance[] {
@@ -112,6 +113,7 @@ function createEnemyState(state: GameState, defId: string, hpOverride?: number):
     rolledDamage,
     asleep,
     hasSplit: false,
+    escaped: false,
     modeShiftAccum: 0,
     modeShiftThreshold: def.modeShiftThreshold ?? null,
     stance: def.stanceMoves ? "offensive" : null,
@@ -370,6 +372,21 @@ function applyEffect(
       }
       break;
     }
+    case "steal_gold": {
+      // 敌人偷金币（拾荒者）：最多偷 amount，玩家金币不足则偷光。
+      if (actor.side === "enemy") {
+        state.gold = Math.max(0, state.gold - Math.min(state.gold, effect.amount));
+      }
+      break;
+    }
+    case "escape": {
+      // 敌人逃离战斗（拾荒者）：标记 escaped，不再算作战斗目标。
+      if (actor.side === "enemy") {
+        combat.enemies[actor.index]!.escaped = true;
+        state.log.push(`${combat.enemies[actor.index]!.name}逃走了。`);
+      }
+      break;
+    }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
       break;
@@ -412,7 +429,12 @@ function applyPowerEffect(
   }
 }
 
-const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set(["vulnerable", "weak", "frail"]);
+const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set([
+  "vulnerable",
+  "weak",
+  "frail",
+  "entangled",
+]);
 
 /** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
 function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount: number): void {
@@ -586,6 +608,9 @@ export function playCard(
     return { ok: false, reason: `手牌位 ${handIndex} 无效。` };
   }
   const def = getCardDef(instance.defId);
+  if (def.type === "attack" && getPower(combat.playerPowers, "entangled") > 0) {
+    return { ok: false, reason: "你被缠绕了，本回合无法打出攻击牌。" };
+  }
   const cost = costOf(def, instance.upgraded);
   if (cost === null) {
     return { ok: false, reason: `「${def.name}」无法打出。` };
@@ -760,7 +785,7 @@ export function endTurn(state: GameState): void {
   const enemyCount = combat.enemies.length;
   for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
-    if (enemy.hp <= 0) {
+    if (enemy.hp <= 0 || enemy.escaped) {
       continue;
     }
     // 半血分裂：本体消失，原位与末位各生成一个分裂体（HP = 当前值），本回合不行动。
@@ -789,6 +814,12 @@ export function endTurn(state: GameState): void {
     decayDebuffs(enemy.powers);
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
     selectNextMove(state, i);
+  }
+
+  // 敌人全部逃跑 / 死亡 → 战斗结束（拾荒者逃走后无人可打）。
+  resolveCombatIfEnded(state);
+  if (state.combat === null) {
+    return;
   }
 
   // 下个玩家回合开始。
@@ -844,6 +875,45 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     }
     enemy.rotationIndex = (enemy.rotationIndex + 1) % cycle.length;
     enemy.currentMove = cycle[enemy.rotationIndex]!;
+    return;
+  }
+
+  // 拾荒者：抢劫×2 → 猛扑或烟雾弹 → 逃跑（偷完金币就跑）。
+  if (enemy.defId === "looter") {
+    const h = enemy.moveHistory;
+    const last = h[h.length - 1];
+    if (h.length === 0 || h.length === 1) {
+      enemy.currentMove = "mug";
+    } else if (last === "mug") {
+      enemy.currentMove = nextFloat(state.rng) < 0.5 ? "lunge" : "smoke_bomb";
+    } else if (last === "lunge") {
+      enemy.currentMove = "smoke_bomb";
+    } else {
+      enemy.currentMove = "flee";
+    }
+    return;
+  }
+
+  // 红色奴隶主：首招刺击；缠绕整场一次性；其余刮擦 / 刺击（连招上限 2）。
+  if (enemy.defId === "red_slaver") {
+    const h = enemy.moveHistory;
+    if (h.length === 0) {
+      enemy.currentMove = "rs_stab";
+      return;
+    }
+    const lastTwoSame = (id: string): boolean =>
+      h.length >= 2 && h[h.length - 1] === id && h[h.length - 2] === id;
+    const usedEntangle = h.includes("entangle");
+    const roll = nextInt(state.rng, 100);
+    if (roll >= 75 && !usedEntangle) {
+      enemy.currentMove = "entangle";
+    } else if (roll >= 50 && usedEntangle && !lastTwoSame("rs_stab")) {
+      enemy.currentMove = "rs_stab";
+    } else if (!lastTwoSame("scrape")) {
+      enemy.currentMove = "scrape";
+    } else {
+      enemy.currentMove = "rs_stab";
+    }
     return;
   }
 

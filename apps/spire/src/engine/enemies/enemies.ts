@@ -366,6 +366,78 @@ const ENEMY_LIST: EnemyDef[] = [
     intentRule: { scripted: [], weighted: [] },
   },
 
+  {
+    id: "looter",
+    name: "拾荒者",
+    hpMin: 44,
+    hpMax: 48,
+    moves: [
+      {
+        id: "mug",
+        name: "抢劫",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "lunge",
+        name: "猛扑",
+        effects: [
+          { kind: "deal_damage", amount: 12 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "smoke_bomb",
+        name: "烟雾弹",
+        effects: [{ kind: "gain_block", amount: 6 }],
+        intent: "defend",
+      },
+      {
+        id: "flee",
+        name: "逃跑",
+        effects: [{ kind: "escape" }],
+        intent: "unknown",
+      },
+    ],
+    // 出招由 combat.ts 的 looter 专属分支处理（抢劫×2 → 猛扑/烟雾弹 → 逃跑）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+  {
+    id: "red_slaver",
+    name: "红色奴隶主",
+    hpMin: 46,
+    hpMax: 50,
+    moves: [
+      {
+        id: "rs_stab",
+        name: "刺击",
+        effects: [{ kind: "deal_damage", amount: 13 }],
+        intent: "attack",
+      },
+      {
+        id: "scrape",
+        name: "刮擦",
+        effects: [
+          { kind: "deal_damage", amount: 8 },
+          { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "entangle",
+        name: "缠绕",
+        effects: [{ kind: "apply_power", power: "entangled", amount: 1, on: "target" }],
+        intent: "debuff",
+      },
+    ],
+    // 出招由 combat.ts 的 red_slaver 专属分支处理（首招刺击、缠绕一次性、刮擦/刺击）。
+    intentRule: { scripted: [], weighted: [] },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -737,6 +809,8 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     enemies: ["mad_gremlin", "sneaky_gremlin", "shield_gremlin", "gremlin_wizard"],
     isBoss: false,
   },
+  looter: { id: "looter", enemies: ["looter"], isBoss: false },
+  red_slaver: { id: "red_slaver", enemies: ["red_slaver"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -773,7 +847,9 @@ const STRONG_ENCOUNTER_POOL: readonly WeightedEncounter[] = [
   { id: "three_louse", weight: 2 },
   { id: "large_slime", weight: 2 }, // 选中后 50/50 展开为 酸液大 / 尖刺大
   { id: "two_fungi_beasts", weight: 2 },
+  { id: "looter", weight: 2 },
   { id: "gremlin_gang", weight: 1 },
+  { id: "red_slaver", weight: 1 },
   { id: "lots_of_slimes", weight: 1 },
 ];
 

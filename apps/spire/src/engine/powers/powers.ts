@@ -27,8 +27,11 @@ function pruneEmpty(powers: PowerInstance[], id: PowerId): void {
     return;
   }
   const amount = powers[index]!.amount;
-  // 力量 / 敏捷可为负并保留；易伤/虚弱/脆弱降到 0 即移除。
-  if ((id === "vulnerable" || id === "weak" || id === "frail") && amount <= 0) {
+  // 力量 / 敏捷可为负并保留；易伤/虚弱/脆弱/缠绕降到 0 即移除。
+  if (
+    (id === "vulnerable" || id === "weak" || id === "frail" || id === "entangled") &&
+    amount <= 0
+  ) {
     powers.splice(index, 1);
   } else if (amount === 0 && id !== "strength" && id !== "dexterity") {
     powers.splice(index, 1);
@@ -43,7 +46,7 @@ export function removePower(powers: PowerInstance[], id: PowerId): void {
   }
 }
 
-/** 回合末衰减：易伤 / 虚弱 / 脆弱各 -1。 */
+/** 回合末衰减：易伤 / 虚弱 / 脆弱 / 缠绕各 -1。 */
 export function decayDebuffs(powers: PowerInstance[]): void {
   if (getPower(powers, "vulnerable") > 0) {
     addPower(powers, "vulnerable", -1);
@@ -53,6 +56,9 @@ export function decayDebuffs(powers: PowerInstance[]): void {
   }
   if (getPower(powers, "frail") > 0) {
     addPower(powers, "frail", -1);
+  }
+  if (getPower(powers, "entangled") > 0) {
+    addPower(powers, "entangled", -1);
   }
 }
 
