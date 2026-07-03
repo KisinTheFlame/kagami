@@ -18,6 +18,8 @@
 {{#if hasPotions}}药水：{{#each potions}}[槽{{slot}}]{{name}}（{{description}}）{{/each}}
 用 invoke(tool="use_potion", slot_index=槽号[, target_index=敌人编号]) 使用药水。
 {{/if}}
+{{#if combat.hasOrbSystem}}充能球（{{combat.orbs.length}}/{{combat.orbSlots}}，左→右）：{{#if combat.orbs.length}}{{#each combat.orbs}}[{{this}}]{{/each}}{{else}}（空）{{/if}}　回合结束时每颗球触发被动（闪电=随机伤害、冰霜=格挡）。
+{{/if}}
 ————敌人————
 {{#each combat.enemies}}
 [{{n}}] {{name}}　生命 {{hp}}/{{maxHp}}{{#if hasBlock}}　格挡 {{block}}{{/if}}{{#if hasPowers}}　状态：{{#each powers}}{{label}}{{amount}} {{/each}}{{/if}}

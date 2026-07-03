@@ -38,6 +38,11 @@ const POWER_LABELS: Record<string, string> = {
   mode_shift: "模式",
 };
 
+const ORB_LABELS: Record<string, string> = {
+  lightning: "闪电",
+  frost: "冰霜",
+};
+
 function labelPowers(powers: readonly SpirePower[]): { label: string; amount: number }[] {
   return powers.map(power => ({ label: POWER_LABELS[power.id] ?? power.id, amount: power.amount }));
 }
@@ -115,6 +120,9 @@ export function renderSpireScreen(screen: SpireScreen): string {
           draw: combat.piles.draw,
           discard: combat.piles.discard,
           exhaust: combat.piles.exhaust,
+          hasOrbSystem: combat.orbSlots > 0,
+          orbs: combat.orbs.map(type => ORB_LABELS[type] ?? type),
+          orbSlots: combat.orbSlots,
         }
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),

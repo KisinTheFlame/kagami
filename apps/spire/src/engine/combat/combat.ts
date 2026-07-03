@@ -5,6 +5,7 @@ import type {
   Effect,
   EnemyState,
   GameState,
+  OrbType,
   PowerInstance,
   RelicState,
 } from "../types.js";
@@ -32,6 +33,12 @@ const STARTING_ENERGY = 3;
 const STARTING_HAND_SIZE = 5;
 const MAX_HAND_SIZE = 10;
 const MAX_ENEMIES = 5; // 场上敌人上限（地精首领召唤封顶）。
+const DEFECT_ORB_SLOTS = 3; // 机器人默认球槽数。
+// 充能球数值（+集中层数）：闪电被动/唤醒、冰霜被动/唤醒。
+const LIGHTNING_PASSIVE = 3;
+const LIGHTNING_EVOKE = 8;
+const FROST_PASSIVE = 2;
+const FROST_EVOKE = 5;
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const GUARDIAN_MODE_SHIFT_STEP = 10;
@@ -153,6 +160,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     drawPile,
     discardPile: [],
     exhaustPile: [],
+    orbs: [],
+    orbSlots: state.character === "defect" ? DEFECT_ORB_SLOTS : 0,
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -165,6 +174,10 @@ export function startCombat(state: GameState, encounterId: string): void {
   }
   // 战斗开始遗物（船锚格挡 / 金刚杵力量 / 弹珠袋易伤 / 提灯能量 / 血瓶回血…）。
   triggerRelicCombatStart(state);
+  // 残破核心（机器人起始遗物）：战斗开始充能 1 颗闪电球。
+  if (hasRelic(state, "cracked_core")) {
+    channelOrb(state, "lightning");
+  }
   // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
   triggerRelicTurnStart(state);
   // 蛇之戒指（静默起始遗物）：战斗第一回合额外抽 2 张。
@@ -344,6 +357,20 @@ function applyEffect(
       // 玩家当前格挡翻倍（坚守）。
       if (actor.side === "player") {
         combat.playerBlock *= 2;
+      }
+      break;
+    }
+    case "channel_orb": {
+      if (actor.side === "player") {
+        channelOrb(state, effect.orbType);
+      }
+      break;
+    }
+    case "evoke": {
+      if (actor.side === "player") {
+        for (let n = 0; n < effect.count && combat.orbs.length > 0; n += 1) {
+          evokeOrb(state, 0);
+        }
       }
       break;
     }
@@ -636,6 +663,62 @@ function dealDamageToPlayer(
   }
 }
 
+// —— 充能球（机器人）——
+
+/** 球的一次伤害命中随机存活敌人：不受力量影响，但受目标易伤放大（orb 伤害语义）。 */
+function dealOrbDamage(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  const living = combat.enemies
+    .map((enemy, index) => ({ enemy, index }))
+    .filter(entry => entry.enemy.hp > 0);
+  if (living.length === 0) {
+    return;
+  }
+  const pick = living[nextInt(state.rng, living.length)]!.index;
+  dealDamageToEnemy(state, pick, amount, []);
+}
+
+/** 充能一颗球：球槽满则先唤醒最左侧的球，再把新球放到末位（机器人）。 */
+function channelOrb(state: GameState, type: OrbType): void {
+  const combat = state.combat!;
+  if (combat.orbSlots <= 0) {
+    return;
+  }
+  if (combat.orbs.length >= combat.orbSlots) {
+    evokeOrb(state, 0);
+  }
+  combat.orbs.push({ type });
+}
+
+/** 唤醒指定槽位的球：触发唤醒效果后移除。 */
+function evokeOrb(state: GameState, index: number): void {
+  const combat = state.combat!;
+  const orb = combat.orbs[index];
+  if (!orb) {
+    return;
+  }
+  const focus = getPower(combat.playerPowers, "focus");
+  if (orb.type === "lightning") {
+    dealOrbDamage(state, LIGHTNING_EVOKE + focus);
+  } else {
+    combat.playerBlock += Math.max(0, FROST_EVOKE + focus);
+  }
+  combat.orbs.splice(index, 1);
+}
+
+/** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡）。 */
+function triggerOrbPassives(state: GameState): void {
+  const combat = state.combat!;
+  const focus = getPower(combat.playerPowers, "focus");
+  for (const orb of combat.orbs) {
+    if (orb.type === "lightning") {
+      dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
+    } else {
+      combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+    }
+  }
+}
+
 /** 无来源的固定伤害（灼烧废牌），经玩家格挡但不受力量/易伤影响。 */
 function applyBurnDamage(state: GameState, amount: number): void {
   const combat = state.combat!;
@@ -831,6 +914,8 @@ export function endTurn(state: GameState): void {
     state.hp = Math.min(state.maxHp, state.hp + regen);
     addPower(combat.playerPowers, "regen", -1);
   }
+  // 充能球被动（机器人）：回合结束时每颗球触发（闪电随机伤害 / 冰霜格挡）。
+  triggerOrbPassives(state);
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
   triggerRelicTurnEnd(state);
   decayDebuffs(combat.playerPowers);

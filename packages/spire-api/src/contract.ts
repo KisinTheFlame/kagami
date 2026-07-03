@@ -59,6 +59,9 @@ export const SpireCombatViewSchema = z.object({
     discard: z.number().int(),
     exhaust: z.number().int(),
   }),
+  /** 机器人充能球（左→右）；orbSlots=0 表示该角色无球系统。 */
+  orbs: z.array(z.string()),
+  orbSlots: z.number().int(),
 });
 
 export const SpireRelicViewSchema = z.object({
@@ -144,7 +147,7 @@ export const spireApiContract = {
     path: "/run/start",
     input: z.object({
       seed: z.number().int().optional(),
-      character: z.enum(["ironclad", "silent"]).optional(),
+      character: z.enum(["ironclad", "silent", "defect"]).optional(),
       ascension: z.number().int().min(0).optional(),
     }),
     output: SpireScreenSchema,

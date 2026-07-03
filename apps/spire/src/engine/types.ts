@@ -24,6 +24,7 @@ export type PowerId =
   | "frail" // 脆弱：获得的格挡 ×0.75（回合末 -1）
   | "entangled" // 缠绕：本回合无法打出攻击牌（回合末 -1，红色奴隶主专属）
   | "poison" // 中毒：持有者回合开始受到 = 层数的伤害（无视格挡），然后层数 -1（静默主机制）
+  | "focus" // 集中：机器人充能球的被动/唤醒数值 +N（被动修正器）
   | "metallicize" // 金属化：每当自己回合结束，获得 N 点格挡（拉加维林睡眠期）
   | "ritual" // 仪式：回合开始 +N 力量（触发）
   | "curl_up" // 蜷缩：首次被攻击时获得格挡（触发，一次性）
@@ -54,6 +55,10 @@ export type Effect =
   | { kind: "gain_block"; amount: number }
   // 玩家用：当前格挡翻倍（坚守）。
   | { kind: "double_block" }
+  // 玩家用：充能一颗指定类型的球（机器人；球槽满则先唤醒最左侧的球）。
+  | { kind: "channel_orb"; orbType: OrbType }
+  // 玩家用：唤醒最左侧 count 颗球（触发唤醒效果后移除）。
+  | { kind: "evoke"; count: number }
   // 敌人用：给一名随机存活友军加格挡（护盾地精保护）。
   | { kind: "gain_block_ally"; amount: number }
   | { kind: "apply_power"; power: PowerId; amount: number; on: "self" | "target" | "all_enemies" }
@@ -167,6 +172,12 @@ export type EnemyState = {
   stance: "offensive" | "defensive" | null;
 };
 
+/** 充能球类型（机器人专属）。 */
+export type OrbType = "lightning" | "frost";
+
+/** 一颗充能球实例（占一个球槽）。 */
+export type Orb = { type: OrbType };
+
 export type CombatState = {
   turn: number;
   energy: number;
@@ -178,6 +189,10 @@ export type CombatState = {
   drawPile: CardInstance[];
   discardPile: CardInstance[];
   exhaustPile: CardInstance[];
+  /** 机器人充能球（左→右按槽位排列）；非机器人对局恒为空。 */
+  orbs: Orb[];
+  /** 球槽数量（机器人默认 3；其他角色 0）。 */
+  orbSlots: number;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
