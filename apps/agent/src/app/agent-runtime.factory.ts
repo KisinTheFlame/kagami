@@ -19,10 +19,7 @@ import type { LlmClient } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
 import type { MetricClient } from "@kagami/metric-client/client";
-import type { ConfigManager } from "@kagami/kernel/config/config.manager";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
-import type { NapcatGatewayPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
-import type { NapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
+import type { NapcatClient } from "../acl/napcat-client.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { MainAgentContextQueryService } from "../ops/application/main-agent-context-query.service.js";
@@ -93,23 +90,13 @@ import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
 import type { NotificationCenter } from "../agent/runtime/root-agent/notification/notification-center.js";
 
-/**
- * napcat 网关的协作者（组合根构造后注入）。网关本身在 buildQqApp 内构造、归 QQ App 持有；
- * 这些是跨切面基础设施：持久化写入器 + 图片分析 + 消息 DAO（DAO 同时被 ops 查询侧读）。
- */
-type NapcatGatewayDeps = {
-  configManager: ConfigManager;
-  persistenceWriter: NapcatGatewayPersistenceWriter;
-  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
-  qqMessageDao: NapcatQqMessageDao;
-};
-
 type BuildAgentRuntimeInput = {
   config: Config;
   database: Database;
   llmClient: LlmClient;
   metricService: MetricClient;
-  napcat: NapcatGatewayDeps;
+  /** QQ 出站门面：打到独立的 kagami-napcat 进程（issue #347）。入站由 server-runtime 的订阅者注入。 */
+  napcatClient: NapcatClient;
   ithomeService: IthomeService;
   todoService: TodoService;
   notificationCenter: NotificationCenter;
@@ -181,7 +168,7 @@ export async function buildAgentRuntime({
   database,
   llmClient,
   metricService,
-  napcat,
+  napcatClient,
   ithomeService,
   todoService,
   notificationCenter,
@@ -246,11 +233,8 @@ export async function buildAgentRuntime({
   // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
   // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
   // 统一走 outboundService（收口）。这里不再见到裸网关。
-  const { qqApp, outboundService: qqOutboundService } = await buildQqApp({
-    configManager: napcat.configManager,
-    persistenceWriter: napcat.persistenceWriter,
-    imageMessageAnalyzer: napcat.imageMessageAnalyzer,
-    qqMessageDao: napcat.qqMessageDao,
+  const { qqApp, outboundService: qqOutboundService } = buildQqApp({
+    napcatClient,
     notificationCenter,
     // 前台输入敲门端口：knock 计数（fire-and-forget）+ enqueue 不带内容的敲门事件。
     // 与 inject / drain_empty（session 侧）合成前台路径的三计数观测。

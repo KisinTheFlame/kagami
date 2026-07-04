@@ -15,6 +15,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 } # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
   metric: { host: 127.0.0.1, port: 20010 } # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
   spire: { host: 127.0.0.1, port: 20011 } # kagami-spire（杀塔式卡牌游戏引擎，仅 localhost：agent 经 HttpSpireClient 驱动）
+  napcat: { host: 127.0.0.1, port: 20013 } # kagami-napcat（NapCat 接入独立进程，仅 localhost：agent 经 HttpNapcatClient 出站 + SSE 订阅入站；#347。20012 留给像素画 #365）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径

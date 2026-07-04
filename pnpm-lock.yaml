@@ -80,6 +80,9 @@ importers:
       '@kagami/metric-client':
         specifier: workspace:*
         version: link:../../packages/metric-client
+      '@kagami/napcat-api':
+        specifier: workspace:*
+        version: link:../../packages/napcat-api
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -277,6 +280,49 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  apps/napcat:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../../packages/llm-api
+      '@kagami/llm-client':
+        specifier: workspace:*
+        version: link:../../packages/llm-client
+      '@kagami/napcat-api':
+        specifier: workspace:*
+        version: link:../../packages/napcat-api
+      '@kagami/oss-api':
+        specifier: workspace:*
+        version: link:../../packages/oss-api
+      '@kagami/persistence':
+        specifier: workspace:*
+        version: link:../../packages/persistence
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../../packages/rpc-client
       fastify:
         specifier: ^5.6.2
         version: 5.7.4

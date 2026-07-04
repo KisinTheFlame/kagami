@@ -201,6 +201,7 @@ const ServicesSchema = z
     llm: ServiceEndpointSchema,
     metric: ServiceEndpointSchema,
     spire: ServiceEndpointSchema,
+    napcat: ServiceEndpointSchema,
   })
   .strict();
 

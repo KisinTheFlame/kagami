@@ -1,6 +1,6 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 
 const logger = new AppLogger({ source: "agent.qq.group-file" });
 

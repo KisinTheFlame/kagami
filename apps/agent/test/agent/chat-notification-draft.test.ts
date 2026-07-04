@@ -5,8 +5,8 @@ import {
   ChatNotificationDraft,
   detectBotMentioned,
 } from "../../src/agent/capabilities/messaging/chat-notification-draft.js";
-import type { NapcatGroupMessageData } from "../../src/napcat/application/napcat-gateway.service.js";
-import type { NapcatReceiveMessageSegment } from "../../src/napcat/application/napcat-gateway/shared.js";
+import type { NapcatGroupMessageData } from "@kagami/napcat-api/message";
+import type { NapcatReceiveMessageSegment } from "@kagami/napcat-api/segment";
 
 function groupMessage(text: string, nickname = "群友"): NapcatGroupMessageData {
   return {
@@ -109,14 +109,15 @@ describe("buildChatNotificationPreview", () => {
     expect(long?.text).toBe("啊".repeat(50) + "…");
   });
 
-  it("renders non-text segments as placeholders", () => {
+  // napcat 拆分后（issue #347），非文本段的占位/描述由 napcat 渲进 rawMessage（含 vision）；
+  // agent 侧预览直接用 rawMessage。这里验证 rawMessage 里的图片占位透传。
+  it("passes through napcat-rendered placeholders from rawMessage", () => {
     const message: NapcatGroupMessageData = {
-      ...groupMessage(""),
-      messageSegments: [
-        { type: "image", data: { summary: "" } } as unknown as NapcatReceiveMessageSegment,
-      ],
+      ...groupMessage("[图片: 一只橘猫, resid: res-5]"),
     };
-    expect(buildChatNotificationPreview(message, "group")?.text).toBe("[图片]");
+    expect(buildChatNotificationPreview(message, "group")?.text).toBe(
+      "[图片: 一只橘猫, resid: res-5]",
+    );
   });
 
   it("returns null when the body renders empty", () => {

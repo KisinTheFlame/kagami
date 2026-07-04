@@ -8,7 +8,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
-import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 import { InvokeTool } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 
 const TEST_QQ_APP_ID = "qq";

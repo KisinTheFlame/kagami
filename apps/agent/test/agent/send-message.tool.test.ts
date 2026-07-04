@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SendMessageTool } from "../../src/agent/capabilities/messaging/tools/send-message.tool.js";
 import { PendingDraftStore } from "../../src/agent/capabilities/messaging/application/pending-draft.store.js";
 import { MutedSendError } from "../../src/agent/capabilities/messaging/application/muted-send-error.js";
-import type { NapcatChatTarget } from "../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 
 /** chatTarget 现由 QqApp 经 getChatTarget 注入（不再走 tool 执行上下文），执行上下文置空即可。 */
 const emptyContext = {} as Parameters<SendMessageTool["execute"]>[1];

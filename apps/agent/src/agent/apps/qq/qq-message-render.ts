@@ -1,8 +1,5 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
-import {
-  renderSupportedMessageSegments,
-  type NapcatReceiveMessageSegment,
-} from "../../../napcat/application/napcat-gateway/shared.js";
+import type { NapcatReceiveMessageSegment } from "@kagami/napcat-api/segment";
 import type { GroupNoticeMessage } from "../../capabilities/messaging/conversation.js";
 
 // === QQ App 群/私聊消息渲染 ===
@@ -81,13 +78,9 @@ function renderQqMessageBody(input: {
   rawMessage: string;
   messageSegments?: NapcatReceiveMessageSegment[];
 }): string {
-  const segments = input.messageSegments ?? [];
-  if (segments.length === 0) {
-    return input.rawMessage.trim();
-  }
-
-  const rendered = renderSupportedMessageSegments(segments);
-  return rendered;
+  // rawMessage 已是 napcat 侧渲染好的权威文本（图片段的 vision 描述 + resid 已 hydrate 进
+  // rawMessage 与 segments）。拆分后 agent 直接用 rawMessage，不再重复渲染段（issue #347）。
+  return input.rawMessage.trim();
 }
 
 /**

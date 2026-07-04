@@ -4,12 +4,10 @@ import { GroupMuteStateStore } from "../../../../src/agent/capabilities/messagin
 import { NotificationCenter } from "../../../../src/agent/runtime/root-agent/notification/notification-center.js";
 import type { NotificationScheduler } from "../../../../src/agent/runtime/root-agent/notification/notification-scheduler.js";
 import type { ToolComponent } from "@kagami/agent-runtime";
-import type {
-  NapcatGatewayService,
-  NapcatGroupBanData,
-  NapcatGroupMessageData,
-} from "../../../../src/napcat/application/napcat-gateway.service.js";
-import type { NapcatReceiveMessageSegment } from "../../../../src/napcat/application/napcat-gateway/shared.js";
+import type { NapcatGroupBanData } from "@kagami/napcat-api/event";
+import type { NapcatGroupMessageData } from "@kagami/napcat-api/message";
+import type { NapcatClient } from "../../../../src/acl/napcat-client.js";
+import type { NapcatReceiveMessageSegment } from "@kagami/napcat-api/segment";
 import { initTestLoggerRuntime } from "../../../helpers/logger.js";
 
 initTestLoggerRuntime();
@@ -30,7 +28,7 @@ class FakeScheduler implements NotificationScheduler {
   }
 }
 
-function fakeGateway(overrides: Partial<NapcatGatewayService> = {}): NapcatGatewayService {
+function fakeGateway(overrides: Partial<NapcatClient> = {}): NapcatClient {
   return {
     start: vi.fn(),
     stop: vi.fn(),
@@ -49,7 +47,7 @@ function fakeGateway(overrides: Partial<NapcatGatewayService> = {}): NapcatGatew
     getRecentPrivateMessages: vi.fn().mockResolvedValue([]),
     getForwardMessages: vi.fn().mockResolvedValue({ nodes: [], total: 0, offset: 0 }),
     ...overrides,
-  } as NapcatGatewayService;
+  } as NapcatClient;
 }
 
 const dummySendTool = { name: "send_message" } as unknown as ToolComponent;
@@ -77,7 +75,7 @@ function createApp(
   onFlush: (lines: string[]) => void,
   options: {
     notifyForegroundInput?: () => void;
-    napcatGateway?: NapcatGatewayService;
+    napcatGateway?: NapcatClient;
     muteStore?: GroupMuteStateStore;
   } = {},
 ) {
@@ -134,37 +132,8 @@ describe("QqApp", () => {
     expect("content" in content ? content.content : "").toContain("产品群");
   });
 
-  it("owns the napcat gateway lifecycle: start on startup, stop on shutdown", async () => {
-    const start = vi.fn().mockResolvedValue(undefined);
-    const stop = vi.fn().mockResolvedValue(undefined);
-    const app = new QqApp({
-      napcatGateway: fakeGateway({ start, stop }),
-      notificationCenter: new NotificationCenter({
-        leadingWindowMs: 50,
-        windowMs: 100,
-        onFlush: vi.fn(),
-        scheduler: new FakeScheduler(),
-      }),
-      notifyForegroundInput: () => {},
-      botQQ: "10001",
-      creatorName: "测试创造者",
-      creatorQQ: "20002",
-      listenGroupIds: ["1"],
-      recentMessageLimit: 5,
-      muteStore: new GroupMuteStateStore(),
-      sendMessageTool: dummySendTool,
-      sendResourceTool: dummySendTool,
-      listGroupFilesTool: dummySendTool,
-      downloadGroupFileTool: dummySendTool,
-      uploadGroupFileTool: dummySendTool,
-    });
-
-    await app.onStartup();
-    expect(start).toHaveBeenCalledTimes(1);
-
-    await app.onShutdown();
-    expect(stop).toHaveBeenCalledTimes(1);
-  });
+  // napcat 拆成独立进程后（issue #347），QQ App 不再持有网关生命周期（WS 归 kagami-napcat，
+  // 入站订阅 + 关停归 server-runtime）。原「owns the napcat gateway lifecycle」用例随之删除。
 
   it("pushes a chat notification on an incoming group message", async () => {
     const scheduler = new FakeScheduler();
@@ -633,7 +602,7 @@ describe("QqApp 前台实时输入（issue #251）", () => {
   async function createFocusedApp(options: {
     onFlush?: (lines: string[]) => void;
     notifyForegroundInput?: () => void;
-    napcatGateway?: NapcatGatewayService;
+    napcatGateway?: NapcatClient;
     scheduler?: FakeScheduler;
   }) {
     const app = createApp(options.scheduler ?? new FakeScheduler(), options.onFlush ?? vi.fn(), {
