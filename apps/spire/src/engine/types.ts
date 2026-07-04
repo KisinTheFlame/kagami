@@ -61,7 +61,9 @@ export type PowerId =
   | "nirvana" // 涅槃：每次预知，获得 = 层数的格挡（观者）
   | "infinite_blades" // 无尽之刃：每个玩家回合开始，将 = 层数的飞刀加入手牌（静默）
   | "intangible" // 虚无缥缈：受到的一切伤害降为 1（回合结束 -1 层）
-  | "blur"; // 疾影：格挡不在回合开始清空（层数即剩余生效回合数，回合末 -1）
+  | "blur" // 疾影：格挡不在回合开始清空（层数即剩余生效回合数，回合末 -1）
+  | "biased_cognition" // 偏置认知：每个玩家回合开始失去 1 点集中（机器人）
+  | "buffer"; // 缓冲：抵消下一次会让你失去生命的伤害（每抵消一次 -1 层）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -152,7 +154,13 @@ export type Effect =
   | { kind: "discard_non_attacks" } // 弃掉手牌中所有非攻击牌（卸货）
   | { kind: "apply_poison_random"; amount: number; times: number } // 对随机敌人施加 amount 中毒，重复 times 次（弹跳药瓶）
   | { kind: "draw_up_to"; target: number } // 抽牌直到手牌达到 target 张（专精）
-  | { kind: "deal_damage_per_attack"; amount: number }; // 对目标造成 amount×(本回合此前打出的攻击牌数)（终结技）
+  | { kind: "deal_damage_per_attack"; amount: number } // 对目标造成 amount×(本回合此前打出的攻击牌数)（终结技）
+  // —— 机器人补完：条件格挡 / 随机球 / 计数能量 / 移除格挡 ——
+  | { kind: "gain_block_if_none"; amount: number } // 若当前无格挡，获得 amount 格挡（自动护盾）
+  | { kind: "channel_random_orb"; count: number } // 随机充能 count 颗球（混沌）
+  | { kind: "gain_block_discard_count"; perCard: number } // 每张弃牌堆的牌获得 perCard 格挡（堆叠）
+  | { kind: "gain_energy_per_draw_pile"; divisor: number } // 抽牌堆每 divisor 张给 1 能量（聚合）
+  | { kind: "remove_target_block" }; // 移除目标的全部格挡（熔化）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
