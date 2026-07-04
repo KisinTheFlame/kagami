@@ -189,6 +189,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     cardsPlayedThisTurn: 0,
     mantraGainedThisCombat: 0,
     frostChanneledThisCombat: 0,
+    powersPlayedThisCombat: 0,
+    timesLostHpThisCombat: 0,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
@@ -1611,7 +1613,10 @@ function dealDamageToPlayer(
     addPower(combat.playerPowers, "buffer", -1);
     afterBlock = 0;
   }
-  state.hp = Math.max(0, state.hp - afterBlock);
+  if (afterBlock > 0) {
+    state.hp = Math.max(0, state.hp - afterBlock);
+    combat.timesLostHpThisCombat += 1; // 血债血偿按本场失血次数降费。
+  }
   // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
     addPower(combat.playerPowers, "plated_armor", -1);
@@ -1827,10 +1832,18 @@ export function playCard(
   }
   // 腐化：技能牌费用变 0（打出后消耗，见下方入堆处理）。
   const corrupted = def.type === "skill" && getPower(combat.playerPowers, "corruption") > 0;
-  // 剖体斩：费用按本回合已弃牌数下调（下限 0）。
-  const discountedRawCost = def.costMinusDiscardThisTurn
-    ? Math.max(0, rawCost - combat.cardsDiscardedThisTurn)
-    : rawCost;
+  // 动态降费：剖体斩按本回合弃牌数、力场按本场能力牌数、血债血偿按本场失血次数（下限 0）。
+  let costReduction = 0;
+  if (def.costMinusDiscardThisTurn) {
+    costReduction += combat.cardsDiscardedThisTurn;
+  }
+  if (def.costMinusPowersPlayedThisCombat) {
+    costReduction += combat.powersPlayedThisCombat;
+  }
+  if (def.costMinusHpLossCountThisCombat) {
+    costReduction += combat.timesLostHpThisCombat;
+  }
+  const discountedRawCost = Math.max(0, rawCost - costReduction);
   // 回身步：下一张攻击牌费用视为 0（打出后消耗一层）。
   const freeAttack = def.type === "attack" && getPower(combat.playerPowers, "free_attack") > 0;
   // costZero（疯狂使其免费）或腐化时费用视为 0。
@@ -1907,6 +1920,7 @@ export function playCard(
   }
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
+    combat.powersPlayedThisCombat += 1; // 力场按本场打出的能力牌数降费。
   } else if (def.exhausts || corrupted) {
     // 腐化下技能牌也消耗。
     exhaustCard(state, instance);
