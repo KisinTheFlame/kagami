@@ -55,6 +55,7 @@ const POWER_LABELS: Record<string, string> = {
   machine_learning: "机器学习",
   evolve: "进化",
   corruption: "腐化",
+  nirvana: "涅槃",
 };
 
 const ORB_LABELS: Record<string, string> = {
