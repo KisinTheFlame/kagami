@@ -7,10 +7,10 @@
 
 export type CharacterId = "ironclad" | "silent" | "defect" | "watcher";
 
-export type CardType = "attack" | "skill" | "power" | "status";
+export type CardType = "attack" | "skill" | "power" | "status" | "curse";
 
-/** 卡牌颜色：决定属于哪个角色的卡池；status = 敌人塞的废牌（不进任何奖励池）。 */
-export type CardColor = "red" | "green" | "blue" | "purple" | "colorless" | "status";
+/** 卡牌颜色：决定属于哪个角色的卡池；status/curse = 塞进牌组的废牌（不进任何奖励池）。 */
+export type CardColor = "red" | "green" | "blue" | "purple" | "colorless" | "status" | "curse";
 
 /** 卡稀有度：奖励按稀有度加权抽取；starter/special 不进普通奖励池。 */
 export type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
@@ -172,7 +172,8 @@ export type Effect =
   // —— 单卡实例自我成长（读写打出的这张牌的 bonus，本场战斗内有效）——
   | { kind: "deal_damage_scaling"; base: number } // 对目标造成 base + 本牌 bonus 的伤害（暴走/玻璃刀）
   | { kind: "gain_block_scaling"; base: number } // 获得 base + 本牌 bonus 的格挡（坚韧）
-  | { kind: "grow_self"; amount: number }; // 本牌 bonus += amount（可负，玻璃刀 -2）
+  | { kind: "grow_self"; amount: number } // 本牌 bonus += amount（可负，玻璃刀 -2）
+  | { kind: "shuffle_discard_into_draw" }; // 将弃牌堆洗入抽牌堆（深呼吸）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -197,6 +198,8 @@ export type CardDef = {
   retain?: boolean;
   /** 虚无：回合结束时若仍在手牌中，则被消耗（而非进弃牌堆）。 */
   ethereal?: boolean;
+  /** 回合结束时若此牌在手牌中，以玩家为行动者结算这些效果（灼烧/腐朽自伤、疑虑虚弱等）。 */
+  endOfTurnInHand?: Effect[];
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
