@@ -4423,6 +4423,41 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "对所有敌人造成伤害，数值 = 本场战斗已充能的冰霜球数 ×3。",
   },
 
+  {
+    id: "swivel",
+    name: "回身步",
+    type: "skill",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 2,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_block", amount: 8 },
+      { kind: "apply_power", power: "free_attack", amount: 1, on: "self" },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block", amount: 11 },
+      { kind: "apply_power", power: "free_attack", amount: 1, on: "self" },
+    ],
+    description: "获得 8 点格挡。你的下一张攻击牌费用为 0。",
+    upgradedDescription: "获得 11 点格挡。你的下一张攻击牌费用为 0。",
+  },
+  {
+    id: "accuracy",
+    name: "敏锐",
+    type: "power",
+    rarity: "uncommon",
+    color: "green",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "accuracy", amount: 3, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "accuracy", amount: 5, on: "self" }],
+    description: "飞刀额外造成 3 点伤害。",
+    upgradedDescription: "飞刀额外造成 5 点伤害。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
