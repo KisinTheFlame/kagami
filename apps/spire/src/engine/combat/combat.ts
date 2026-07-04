@@ -5,6 +5,7 @@ import type {
   Effect,
   EnemyState,
   GameState,
+  Orb,
   OrbType,
   PlayerStance,
   PowerInstance,
@@ -1166,6 +1167,26 @@ function applyEffect(
       }
       break;
     }
+    case "return_discard_to_hand": {
+      // 全息影像：将弃牌堆最近一张牌收回手牌。
+      if (
+        actor.side === "player" &&
+        combat.discardPile.length > 0 &&
+        combat.hand.length < MAX_HAND_SIZE
+      ) {
+        combat.hand.push(combat.discardPile.pop()!);
+      }
+      break;
+    }
+    case "recursion": {
+      // 递归：唤醒最左侧球，再把同类型球重新充能到末位。
+      if (actor.side === "player" && combat.orbs.length > 0) {
+        const type = combat.orbs[0]!.type;
+        evokeOrb(state, 0);
+        channelOrb(state, type);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1519,26 +1540,32 @@ function evokeOrb(state: GameState, index: number): void {
   combat.orbs.splice(index, 1);
 }
 
+/** 单颗球触发一次被动（供全体被动与「循环」额外触发共用）。 */
+function triggerOneOrbPassive(state: GameState, orb: Orb): void {
+  const combat = state.combat!;
+  const focus = getPower(combat.playerPowers, "focus");
+  switch (orb.type) {
+    case "lightning":
+      dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
+      break;
+    case "frost":
+      combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+      break;
+    case "dark":
+      // 暗球被动：累积 = 6+集中 的伤害（存到自身 value，唤醒时一次打出）。
+      orb.value = (orb.value ?? 0) + Math.max(0, DARK_PASSIVE + focus);
+      break;
+    case "plasma":
+      combat.energy += PLASMA_PASSIVE_ENERGY;
+      break;
+  }
+}
+
 /** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡 / 暗球累积 / 等离子给能量）。 */
 function triggerOrbPassives(state: GameState): void {
   const combat = state.combat!;
-  const focus = getPower(combat.playerPowers, "focus");
   for (const orb of combat.orbs) {
-    switch (orb.type) {
-      case "lightning":
-        dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
-        break;
-      case "frost":
-        combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
-        break;
-      case "dark":
-        // 暗球被动：累积 = 6+集中 的伤害（存到自身 value，唤醒时一次打出）。
-        orb.value = (orb.value ?? 0) + Math.max(0, DARK_PASSIVE + focus);
-        break;
-      case "plasma":
-        combat.energy += PLASMA_PASSIVE_ENERGY;
-        break;
-    }
+    triggerOneOrbPassive(state, orb);
   }
 }
 
@@ -1964,6 +1991,13 @@ export function endTurn(state: GameState): void {
   const berserk = getPower(combat.playerPowers, "berserk");
   if (berserk > 0) {
     combat.energy += berserk;
+  }
+  // 循环：回合开始额外触发最左侧球的被动 = 层数次。
+  const loop = getPower(combat.playerPowers, "loop");
+  if (loop > 0 && combat.orbs.length > 0) {
+    for (let n = 0; n < loop; n += 1) {
+      triggerOneOrbPassive(state, combat.orbs[0]!);
+    }
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);

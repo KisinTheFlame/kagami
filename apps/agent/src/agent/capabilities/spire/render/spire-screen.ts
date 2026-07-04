@@ -66,6 +66,7 @@ const POWER_LABELS: Record<string, string> = {
   rage: "暴怒",
   double_tap: "连击",
   berserk: "狂暴",
+  loop: "循环",
 };
 
 const ORB_LABELS: Record<string, string> = {
