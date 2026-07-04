@@ -172,6 +172,10 @@ export function startCombat(state: GameState, encounterId: string): void {
     orbSlots: state.character === "defect" ? DEFECT_ORB_SLOTS : 0,
     playerStance: "none",
     mantra: 0,
+    nextTurnBlock: 0,
+    nextTurnEnergy: 0,
+    nextTurnDraw: 0,
+    attacksThisTurn: 0,
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -190,9 +194,18 @@ export function startCombat(state: GameState, encounterId: string): void {
   }
   // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
   triggerRelicTurnStart(state);
+  // 固有牌（背刺等）：开局必在起手，先从抽牌堆抽到手牌。
+  const innate = drawPile.filter(card => getCardDef(card.defId).innate);
+  for (const card of innate) {
+    const idx = combat.drawPile.indexOf(card);
+    if (idx >= 0) {
+      combat.drawPile.splice(idx, 1);
+      combat.hand.push(card);
+    }
+  }
   // 蛇之戒指（静默起始遗物）：战斗第一回合额外抽 2 张。
   const firstTurnDraw = hasRelic(state, "ring_of_the_snake") ? 2 : 0;
-  drawCards(state, STARTING_HAND_SIZE + firstTurnDraw);
+  drawCards(state, Math.max(0, STARTING_HAND_SIZE + firstTurnDraw - innate.length));
   // 净水（观者起始遗物）：战斗开始时手牌加入 1 张奇迹。
   if (hasRelic(state, "pure_water")) {
     addCards(state, "miracle", "hand", 1);
@@ -807,6 +820,82 @@ function applyEffect(
       }
       break;
     }
+    case "gain_block_next_turn": {
+      if (actor.side === "player") {
+        combat.nextTurnBlock += effect.amount;
+      }
+      break;
+    }
+    case "gain_energy_next_turn": {
+      if (actor.side === "player") {
+        combat.nextTurnEnergy += effect.amount;
+      }
+      break;
+    }
+    case "draw_next_turn": {
+      if (actor.side === "player") {
+        combat.nextTurnDraw += effect.amount;
+      }
+      break;
+    }
+    case "discard_random": {
+      // 随机弃牌（优先弃状态牌）：把选中的牌从手牌移入弃牌堆。
+      if (actor.side === "player") {
+        for (let n = 0; n < effect.count && combat.hand.length > 0; n += 1) {
+          let idx = combat.hand.findIndex(c => getCardDef(c.defId).type === "status");
+          if (idx < 0) {
+            idx = nextInt(state.rng, combat.hand.length);
+          }
+          combat.discardPile.push(combat.hand.splice(idx, 1)[0]!);
+        }
+      }
+      break;
+    }
+    case "discard_non_attacks": {
+      // 卸货：弃掉手牌中所有非攻击牌。
+      if (actor.side === "player") {
+        const keep: CardInstance[] = [];
+        for (const card of combat.hand) {
+          if (getCardDef(card.defId).type === "attack") {
+            keep.push(card);
+          } else {
+            combat.discardPile.push(card);
+          }
+        }
+        combat.hand = keep;
+      }
+      break;
+    }
+    case "apply_poison_random": {
+      // 弹跳药瓶：对随机存活敌人施加 amount 中毒，重复 times 次。
+      if (actor.side === "player") {
+        for (let n = 0; n < effect.times; n += 1) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length === 0) {
+            break;
+          }
+          const pick = living[nextInt(state.rng, living.length)]!;
+          applyPowerToEnemy(pick.enemy, "poison", effect.amount);
+        }
+      }
+      break;
+    }
+    case "draw_up_to": {
+      // 专精：抽牌直到手牌达到 target 张。
+      if (actor.side === "player") {
+        drawCards(state, Math.max(0, effect.target - combat.hand.length));
+      }
+      break;
+    }
+    case "deal_damage_per_attack": {
+      // 终结技：对目标造成 amount×(本回合此前打出的攻击牌数)。
+      if (actor.side === "player" && targetEnemyIndex !== null && combat.attacksThisTurn > 0) {
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount * combat.attacksThisTurn, powers);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1003,6 +1092,10 @@ function dealDamageToPlayer(
   // 愤怒姿态（观者）：玩家受到的伤害也翻倍。
   if (combat.playerStance === "wrath") {
     dmg *= 2;
+  }
+  // 虚无缥缈：受到的一切伤害降为 1。
+  if (getPower(combat.playerPowers, "intangible") > 0) {
+    dmg = Math.min(dmg, 1);
   }
   const afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
@@ -1243,6 +1336,10 @@ export function playCard(
     resolvedTarget,
     xValue,
   );
+  // 终结技计数：本回合已打出的攻击牌 +1（在效果结算后，故本张攻击不计入自身）。
+  if (def.type === "attack") {
+    combat.attacksThisTurn += 1;
+  }
   // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
   if (def.type === "skill") {
     for (const enemy of combat.enemies) {
@@ -1407,6 +1504,10 @@ export function endTurn(state: GameState): void {
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
   triggerRelicTurnEnd(state);
   decayDebuffs(combat.playerPowers);
+  // 虚无缥缈：回合结束 -1 层（疾影在下回合始的格挡保留判定之后才 -1，见 turn-start）。
+  if (getPower(combat.playerPowers, "intangible") > 0) {
+    addPower(combat.playerPowers, "intangible", -1);
+  }
 
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
   const enemyCount = combat.enemies.length;
@@ -1464,11 +1565,23 @@ export function endTurn(state: GameState): void {
 
   // 下个玩家回合开始。
   combat.turn += 1;
-  // 壁垒：格挡不再于回合开始清空（否则清零）。
-  if (getPower(combat.playerPowers, "barricade") === 0) {
+  combat.attacksThisTurn = 0;
+  // 壁垒 / 疾影：格挡不在回合开始清空（否则清零）。判定后疾影 -1（只保留一回合）。
+  const blur = getPower(combat.playerPowers, "blur");
+  if (getPower(combat.playerPowers, "barricade") === 0 && blur === 0) {
     combat.playerBlock = 0;
   }
+  if (blur > 0) {
+    addPower(combat.playerPowers, "blur", -1);
+  }
   combat.energy = combat.maxEnergy;
+  // 下回合预约结算（闪转腾挪格挡 / 飞膝能量 / 掠食者抽牌），随后清零。
+  combat.playerBlock += combat.nextTurnBlock;
+  combat.energy += combat.nextTurnEnergy;
+  const scheduledDraw = combat.nextTurnDraw;
+  combat.nextTurnBlock = 0;
+  combat.nextTurnEnergy = 0;
+  combat.nextTurnDraw = 0;
   // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
   const demonForm = getPower(combat.playerPowers, "demon_form");
   if (demonForm > 0) {
@@ -1527,9 +1640,9 @@ export function endTurn(state: GameState): void {
   if (state.combat === null || state.screen !== "combat") {
     return;
   }
-  // 机器学习：每回合多抽 = 层数的牌。
+  // 机器学习：每回合多抽 = 层数的牌；叠加下回合预约抽牌（掠食者）。
   const machineLearning = getPower(combat.playerPowers, "machine_learning");
-  drawCards(state, STARTING_HAND_SIZE + machineLearning);
+  drawCards(state, STARTING_HAND_SIZE + machineLearning + scheduledDraw);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
 
