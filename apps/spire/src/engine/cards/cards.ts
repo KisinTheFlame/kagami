@@ -4561,6 +4561,42 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "获得 8 点格挡。若本牌被消耗，获得 2 点能量。",
   },
 
+  {
+    id: "talk_to_the_hand",
+    name: "以手言心",
+    type: "attack",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 1,
+    targeted: true,
+    exhausts: true,
+    effects: [
+      { kind: "deal_damage", amount: 5 },
+      { kind: "apply_power", power: "mark", amount: 2, on: "target" },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 7 },
+      { kind: "apply_power", power: "mark", amount: 3, on: "target" },
+    ],
+    description: "造成 5 点伤害。使目标获得 2 层标记（你每次攻击它，获得等量格挡）。消耗。",
+    upgradedDescription: "造成 7 点伤害。使目标获得 3 层标记（你每次攻击它，获得等量格挡）。消耗。",
+  },
+  {
+    id: "envenom",
+    name: "淬毒",
+    type: "power",
+    rarity: "uncommon",
+    color: "green",
+    cost: 2,
+    upgradedCost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "envenom", amount: 1, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "envenom", amount: 1, on: "self" }],
+    description: "你的攻击每造成一次穿透格挡的伤害，给该敌人施加 1 层中毒。",
+    upgradedDescription: "你的攻击每造成一次穿透格挡的伤害，给该敌人施加 1 层中毒。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
