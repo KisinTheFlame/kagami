@@ -40,6 +40,9 @@ const LIGHTNING_PASSIVE = 3;
 const LIGHTNING_EVOKE = 8;
 const FROST_PASSIVE = 2;
 const FROST_EVOKE = 5;
+const DARK_PASSIVE = 6; // 暗球每回合结束累积的伤害（+集中）。
+const PLASMA_PASSIVE_ENERGY = 1; // 等离子球每回合结束给 1 能量（不受集中影响）。
+const PLASMA_EVOKE_ENERGY = 2; // 等离子球唤醒给 2 能量。
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
@@ -671,6 +674,17 @@ function applyEffect(
       }
       break;
     }
+    case "change_orb_slots": {
+      // 吞噬 -1 / 电容器 +2：增减球槽数，下限 0。
+      if (actor.side === "player") {
+        combat.orbSlots = Math.max(0, combat.orbSlots + effect.delta);
+        // 槽数减到比现有球少时，从最左唤醒溢出的球。
+        while (combat.orbs.length > combat.orbSlots) {
+          evokeOrb(state, 0);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -923,7 +937,8 @@ function channelOrb(state: GameState, type: OrbType): void {
   if (combat.orbs.length >= combat.orbSlots) {
     evokeOrb(state, 0);
   }
-  combat.orbs.push({ type });
+  // 暗球带累积伤害容器（初始 0）；其它球不用 value。
+  combat.orbs.push(type === "dark" ? { type, value: 0 } : { type });
 }
 
 /** 唤醒指定槽位的球：触发唤醒效果后移除。 */
@@ -934,23 +949,43 @@ function evokeOrb(state: GameState, index: number): void {
     return;
   }
   const focus = getPower(combat.playerPowers, "focus");
-  if (orb.type === "lightning") {
-    dealOrbDamage(state, LIGHTNING_EVOKE + focus);
-  } else {
-    combat.playerBlock += Math.max(0, FROST_EVOKE + focus);
+  switch (orb.type) {
+    case "lightning":
+      dealOrbDamage(state, LIGHTNING_EVOKE + focus);
+      break;
+    case "frost":
+      combat.playerBlock += Math.max(0, FROST_EVOKE + focus);
+      break;
+    case "dark":
+      // 暗球唤醒：把累积的伤害打给一个随机敌人。
+      dealOrbDamage(state, Math.max(0, orb.value ?? 0));
+      break;
+    case "plasma":
+      combat.energy += PLASMA_EVOKE_ENERGY;
+      break;
   }
   combat.orbs.splice(index, 1);
 }
 
-/** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡）。 */
+/** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡 / 暗球累积 / 等离子给能量）。 */
 function triggerOrbPassives(state: GameState): void {
   const combat = state.combat!;
   const focus = getPower(combat.playerPowers, "focus");
   for (const orb of combat.orbs) {
-    if (orb.type === "lightning") {
-      dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
-    } else {
-      combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+    switch (orb.type) {
+      case "lightning":
+        dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
+        break;
+      case "frost":
+        combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+        break;
+      case "dark":
+        // 暗球被动：累积 = 6+集中 的伤害（存到自身 value，唤醒时一次打出）。
+        orb.value = (orb.value ?? 0) + Math.max(0, DARK_PASSIVE + focus);
+        break;
+      case "plasma":
+        combat.energy += PLASMA_PASSIVE_ENERGY;
+        break;
     }
   }
 }

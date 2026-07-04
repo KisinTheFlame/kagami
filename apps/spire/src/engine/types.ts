@@ -113,7 +113,9 @@ export type Effect =
   | { kind: "gain_block_per_hand_card"; amount: number } // 每张手牌获得 amount 格挡（灵盾）
   | { kind: "deal_damage_per_hand_type"; cardType: CardType; amount: number } // 手牌中每张该类型牌，对目标造成 amount 伤害（飞镖：每张技能）
   | { kind: "deal_damage_perfected"; amount: number; per: number } // 基础 amount + per×(各区「打击」名牌数)（完美打击）
-  | { kind: "deal_damage_bane"; amount: number }; // 对目标造成 amount；若目标中毒则再造成 amount（剧毒之刃）
+  | { kind: "deal_damage_bane"; amount: number } // 对目标造成 amount；若目标中毒则再造成 amount（剧毒之刃）
+  // 玩家用：增减球槽数（吞噬 -1、电容器 +2）；下限 0。
+  | { kind: "change_orb_slots"; delta: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -216,11 +218,11 @@ export type EnemyState = {
   stance: "offensive" | "defensive" | null;
 };
 
-/** 充能球类型（机器人专属）。 */
-export type OrbType = "lightning" | "frost";
+/** 充能球类型（机器人专属）：闪电/冰霜/暗/等离子。 */
+export type OrbType = "lightning" | "frost" | "dark" | "plasma";
 
-/** 一颗充能球实例（占一个球槽）。 */
-export type Orb = { type: OrbType };
+/** 一颗充能球实例（占一个球槽）。value 供暗球累积的伤害用（其它球恒为 0/省略）。 */
+export type Orb = { type: OrbType; value?: number };
 
 /** 玩家姿态（观者专属）：平静 / 愤怒 / 无。 */
 export type PlayerStance = "none" | "calm" | "wrath";
