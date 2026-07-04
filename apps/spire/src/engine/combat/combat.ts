@@ -938,6 +938,37 @@ function applyEffect(
       // 终局：实际的结束回合在 playCard 收尾处检测本效果后触发，这里不做事。
       break;
     }
+    case "drain_marked_enemies": {
+      // 点穴：所有敌人损失 = 各自标记层数的生命（无视格挡）。
+      if (actor.side === "player") {
+        for (const enemy of combat.enemies) {
+          const marked = getPower(enemy.powers, "mark");
+          if (enemy.hp > 0 && marked > 0) {
+            enemy.hp = Math.max(0, enemy.hp - marked);
+          }
+        }
+      }
+      break;
+    }
+    case "play_top_card_exhaust": {
+      // 浩劫：打出抽牌堆顶的一张牌（若需目标则随机选存活敌人），随后消耗它。
+      if (actor.side === "player" && combat.drawPile.length > 0) {
+        const top = combat.drawPile.pop()!;
+        const topDef = getCardDef(top.defId);
+        let topTarget: number | null = null;
+        if (topDef.targeted) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length > 0) {
+            topTarget = living[nextInt(state.rng, living.length)]!.index;
+          }
+        }
+        applyEffects(state, effectsOf(topDef, top.upgraded), { side: "player" }, topTarget, 0, top);
+        exhaustCard(state, top);
+      }
+      break;
+    }
     case "bonus_if_target_vulnerable": {
       // 飞踢：目标处于易伤时，获得能量并抽牌。
       if (actor.side === "player" && targetEnemyIndex !== null) {
