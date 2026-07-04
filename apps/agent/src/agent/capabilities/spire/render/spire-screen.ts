@@ -49,6 +49,12 @@ const POWER_LABELS: Record<string, string> = {
   devotion: "虔诚",
   mental_fortress: "心之堡垒",
   rushdown: "疾攻",
+  storm: "风暴",
+  heatsinks: "散热",
+  static_discharge: "静电放电",
+  machine_learning: "机器学习",
+  evolve: "进化",
+  corruption: "腐化",
 };
 
 const ORB_LABELS: Record<string, string> = {
