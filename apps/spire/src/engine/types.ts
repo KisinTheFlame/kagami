@@ -83,7 +83,8 @@ export type PowerId =
   | "choked" // 扼喉：本回合玩家每打出一张牌，此敌人损失 = 层数的生命（玩家回合末清除，静默）
   | "well_laid_plans" // 深谋远虑：回合结束可额外保留至多 = 层数张牌（静默）
   | "mark" // 标记：玩家每次攻击此敌人，获得 = 层数的格挡（观者·以手言心，敌人身上）
-  | "envenom"; // 淬毒：玩家攻击造成穿透格挡的伤害时，给该敌人施加 = 层数的中毒（静默）
+  | "envenom" // 淬毒：玩家攻击造成穿透格挡的伤害时，给该敌人施加 = 层数的中毒（静默）
+  | "shackled"; // 枷锁：此敌人被临时削弱的力量，将在其行动过后归还（内部记账，黑暗枷锁）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -168,6 +169,8 @@ export type Effect =
   | { kind: "multiply_target_poison"; factor: number } // 将目标当前中毒层数乘以 factor（催化剂）
   | { kind: "deal_damage_per_orb"; amount: number } // 场上每颗充能球对目标造成 amount 伤害（弹幕）
   | { kind: "deal_damage_per_enemy"; amount: number } // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
+  | { kind: "bonus_if_target_vulnerable"; energy: number; draw: number } // 若目标易伤：+energy 能量并抽 draw 张（飞踢）
+  | { kind: "weaken_enemy_strength"; amount: number } // 使目标临时失去 amount 力量，其行动后归还（黑暗枷锁）
   | { kind: "deal_damage_plus_mantra_gained"; base: number } // 对目标造成 base + 本场累计法力（璀璨光辉）
   | { kind: "deal_damage_all_per_frost_channeled"; per: number } // 对所有敌人造成 per×本场充能冰霜数（暴风雪）
   // —— 下回合预约 / 弃牌 / 随机毒 / 抽到指定张数 ——

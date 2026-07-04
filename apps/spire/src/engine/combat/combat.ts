@@ -904,6 +904,27 @@ function applyEffect(
       }
       break;
     }
+    case "bonus_if_target_vulnerable": {
+      // 飞踢：目标处于易伤时，获得能量并抽牌。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        if (getPower(combat.enemies[targetEnemyIndex]!.powers, "vulnerable") > 0) {
+          combat.energy += effect.energy;
+          drawCards(state, effect.draw);
+        }
+      }
+      break;
+    }
+    case "weaken_enemy_strength": {
+      // 黑暗枷锁：目标临时失去力量，记入枷锁，待其行动过后归还。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        if (enemy.hp > 0) {
+          addPower(enemy.powers, "strength", -effect.amount);
+          addPower(enemy.powers, "shackled", effect.amount);
+        }
+      }
+      break;
+    }
     case "deal_damage_plus_mantra_gained": {
       // 璀璨光辉：对目标造成 base + 本场累计法力。
       if (actor.side === "player" && targetEnemyIndex !== null) {
@@ -2215,6 +2236,14 @@ export function endTurn(state: GameState): void {
   combat.attacksThisTurn = 0;
   combat.cardsDiscardedThisTurn = 0;
   combat.cardsPlayedThisTurn = 0;
+  // 黑暗枷锁：敌人被临时削弱的力量在其行动过后（新玩家回合开始）归还，清除枷锁。
+  for (const enemy of combat.enemies) {
+    const shackled = getPower(enemy.powers, "shackled");
+    if (shackled > 0) {
+      addPower(enemy.powers, "strength", shackled);
+      removePower(enemy.powers, "shackled");
+    }
+  }
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
     state.hp = 0;
