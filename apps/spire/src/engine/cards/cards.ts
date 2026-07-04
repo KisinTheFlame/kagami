@@ -4662,6 +4662,37 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 20 点伤害。每打出一次，本牌本场费用永久 -1。",
   },
 
+  {
+    id: "establishment",
+    name: "既定事实",
+    type: "power",
+    rarity: "rare",
+    color: "purple",
+    cost: 1,
+    upgradedCost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "establishment", amount: 1, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "establishment", amount: 1, on: "self" }],
+    description: "每当一张牌被保留，其费用永久降低 1 点。",
+    upgradedDescription: "每当一张牌被保留，其费用永久降低 1 点。",
+  },
+  {
+    id: "study",
+    name: "研习",
+    type: "power",
+    rarity: "rare",
+    color: "purple",
+    cost: 2,
+    upgradedCost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "study", amount: 1, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "study", amount: 1, on: "self" }],
+    description: "每个回合结束时，将 1 张「洞悉」加入你的抽牌堆。",
+    upgradedDescription: "每个回合结束时，将 1 张「洞悉」加入你的抽牌堆。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
