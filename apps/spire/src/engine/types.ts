@@ -88,7 +88,8 @@ export type PowerId =
   | "sadistic_nature" // 虐念：玩家每给敌人施加一个减益，对其造成 = 层数的伤害（静默）
   | "establishment" // 既定事实：每当一张牌被保留，其费用永久 -层数（观者）
   | "study" // 研习：每个玩家回合结束，将 = 层数张「洞悉」加入抽牌堆（观者）
-  | "omega"; // 奥米加：每个玩家回合结束，对所有敌人造成 50×层数 的伤害（观者）
+  | "omega" // 奥米加：每个玩家回合结束，对所有敌人造成 50×层数 的伤害（观者）
+  | "master_reality"; // 掌控现实：战斗中生成的牌进场即升级（观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -173,6 +174,7 @@ export type Effect =
   | { kind: "multiply_target_poison"; factor: number } // 将目标当前中毒层数乘以 factor（催化剂）
   | { kind: "deal_damage_per_orb"; amount: number } // 场上每颗充能球对目标造成 amount 伤害（弹幕）
   | { kind: "deal_damage_per_enemy"; amount: number } // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
+  | { kind: "deal_damage_lesson"; amount: number } // 对目标造成 amount；若因此击杀，永久升级牌组中一张随机牌（研学有成）
   | { kind: "bonus_if_target_vulnerable"; energy: number; draw: number } // 若目标易伤：+energy 能量并抽 draw 张（飞踢）
   | { kind: "weaken_enemy_strength"; amount: number } // 使目标临时失去 amount 力量，其行动后归还（黑暗枷锁）
   | { kind: "deal_damage_plus_mantra_gained"; base: number } // 对目标造成 base + 本场累计法力（璀璨光辉）

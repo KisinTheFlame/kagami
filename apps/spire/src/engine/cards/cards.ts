@@ -4737,6 +4737,35 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "每个回合结束时，对所有敌人造成 50 点伤害。",
   },
 
+  {
+    id: "master_reality",
+    name: "掌控现实",
+    type: "power",
+    rarity: "rare",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "master_reality", amount: 1, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "master_reality", amount: 1, on: "self" }],
+    description: "本场战斗中，你生成的牌进入牌堆时立即升级。",
+    upgradedDescription: "本场战斗中，你生成的牌进入牌堆时立即升级。",
+  },
+  {
+    id: "lesson_learned",
+    name: "研学有成",
+    type: "attack",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 2,
+    targeted: true,
+    exhausts: true,
+    effects: [{ kind: "deal_damage_lesson", amount: 10 }],
+    upgradedEffects: [{ kind: "deal_damage_lesson", amount: 13 }],
+    description: "造成 10 点伤害。若因此击杀目标，永久升级你牌组中一张随机牌。消耗。",
+    upgradedDescription: "造成 13 点伤害。若因此击杀目标，永久升级你牌组中一张随机牌。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

@@ -920,6 +920,20 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_lesson": {
+      // 研学有成：造成伤害；若因此击杀目标，永久升级牌组中一张随机未升级牌。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const wasAlive = combat.enemies[targetEnemyIndex]!.hp > 0;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        if (wasAlive && combat.enemies[targetEnemyIndex]!.hp <= 0) {
+          const upgradable = state.deck.filter(card => !card.upgraded);
+          if (upgradable.length > 0) {
+            upgradable[nextInt(state.rng, upgradable.length)]!.upgraded = true;
+          }
+        }
+      }
+      break;
+    }
     case "bonus_if_target_vulnerable": {
       // 飞踢：目标处于易伤时，获得能量并抽牌。
       if (actor.side === "player" && targetEnemyIndex !== null) {
@@ -1520,8 +1534,10 @@ function addCards(
   count: number,
 ): void {
   const combat = state.combat!;
+  // 掌控现实：战斗中生成的牌进场即升级。
+  const created = getPower(combat.playerPowers, "master_reality") > 0;
   for (let i = 0; i < count; i += 1) {
-    const instance: CardInstance = { uid: state.nextUid++, defId: cardId, upgraded: false };
+    const instance: CardInstance = { uid: state.nextUid++, defId: cardId, upgraded: created };
     if (pile === "hand") {
       if (combat.hand.length >= MAX_HAND_SIZE) {
         combat.discardPile.push(instance);
