@@ -448,6 +448,15 @@ function applyEffect(
         if (juggernaut > 0) {
           dealOrbDamage(state, juggernaut);
         }
+        // 挥手：本回合每当获得格挡，令所有敌人获得 = 层数的虚弱。
+        const wave = getPower(combat.playerPowers, "wave_of_the_hand");
+        if (wave > 0) {
+          for (const enemy of combat.enemies) {
+            if (enemy.hp > 0) {
+              applyPowerToEnemy(enemy, "weak", wave);
+            }
+          }
+        }
       } else {
         combat.enemies[actor.index]!.block += gained;
       }
@@ -1187,6 +1196,18 @@ function applyEffect(
       }
       break;
     }
+    case "discard_hand_for_shivs": {
+      // 钢铁风暴：弃掉全部手牌，每弃一张将 1 张飞刀加入手牌。
+      if (actor.side === "player") {
+        const count = combat.hand.length;
+        combat.discardPile.push(...combat.hand);
+        combat.hand = [];
+        for (let n = 0; n < count; n += 1) {
+          combat.hand.push({ uid: state.nextUid++, defId: "shiv", upgraded: false });
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1840,9 +1861,12 @@ export function endTurn(state: GameState): void {
     addPower(combat.playerPowers, "strength", -strengthTemp);
     removePower(combat.playerPowers, "strength_temp");
   }
-  // 暴怒：只在打出它的回合生效，回合结束清除。
+  // 暴怒 / 挥手：只在打出它的回合生效，回合结束清除。
   if (getPower(combat.playerPowers, "rage") > 0) {
     removePower(combat.playerPowers, "rage");
+  }
+  if (getPower(combat.playerPowers, "wave_of_the_hand") > 0) {
+    removePower(combat.playerPowers, "wave_of_the_hand");
   }
   // 回合末在手结算（腐朽自伤 / 疑虑虚弱 / 羞愧脆弱）：在衰减之后，让本回合施加的减益延续到敌人回合。
   if (endOfHandEffects.length > 0) {
@@ -1998,6 +2022,12 @@ export function endTurn(state: GameState): void {
     for (let n = 0; n < loop; n += 1) {
       triggerOneOrbPassive(state, combat.orbs[0]!);
     }
+  }
+  // 行业工具：回合开始抽 = 层数的牌，再随机弃 = 层数的牌。
+  const tools = getPower(combat.playerPowers, "tools_of_the_trade");
+  if (tools > 0) {
+    drawCards(state, tools);
+    applyEffects(state, [{ kind: "discard_random", count: tools }], { side: "player" }, null);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);

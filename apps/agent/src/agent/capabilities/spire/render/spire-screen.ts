@@ -67,6 +67,8 @@ const POWER_LABELS: Record<string, string> = {
   double_tap: "连击",
   berserk: "狂暴",
   loop: "循环",
+  tools_of_the_trade: "行业工具",
+  wave_of_the_hand: "挥手",
 };
 
 const ORB_LABELS: Record<string, string> = {
