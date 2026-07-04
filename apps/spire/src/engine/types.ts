@@ -161,6 +161,8 @@ export type Effect =
   | { kind: "gain_block_next_turn"; amount: number } // 下个回合开始获得 amount 格挡（闪转腾挪）
   | { kind: "gain_energy_next_turn"; amount: number } // 下个回合开始获得 amount 能量（飞膝/战略欺骗）
   | { kind: "draw_next_turn"; amount: number } // 下个回合开始多抽 amount 张（掠食者）
+  | { kind: "schedule_next_turn_x" } // X 费：下回合多抽 X 张并多得 X 能量（镜影分身）
+  | { kind: "draw_then_block_if_skill"; amount: number } // 抽 1 张，若为技能则获得 amount 格挡（脱身之策）
   | { kind: "discard_random"; count: number } // 随机弃掉 count 张手牌（优先状态牌）（杂技/有备而来）
   | { kind: "discard_non_attacks" } // 弃掉手牌中所有非攻击牌（卸货）
   | { kind: "apply_poison_random"; amount: number; times: number } // 对随机敌人施加 amount 中毒，重复 times 次（弹跳药瓶）

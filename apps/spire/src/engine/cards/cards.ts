@@ -4157,6 +4157,41 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "保留。造成 10 点伤害。本场战斗内每次打出，本牌伤害 +5。",
   },
 
+  {
+    id: "doppelganger",
+    name: "镜影分身",
+    type: "skill",
+    rarity: "rare",
+    color: "green",
+    cost: 0,
+    xCost: true,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "schedule_next_turn_x" }],
+    upgradedEffects: [
+      { kind: "schedule_next_turn_x" },
+      { kind: "draw_next_turn", amount: 1 },
+      { kind: "gain_energy_next_turn", amount: 1 },
+    ],
+    description: "消耗全部能量（X）。下个回合开始，多抽 X 张牌并多获得 X 点能量。消耗。",
+    upgradedDescription:
+      "消耗全部能量（X）。下个回合开始，多抽 X+1 张牌并多获得 X+1 点能量。消耗。",
+  },
+  {
+    id: "escape_plan",
+    name: "脱身之策",
+    type: "skill",
+    rarity: "common",
+    color: "green",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "draw_then_block_if_skill", amount: 3 }],
+    upgradedEffects: [{ kind: "draw_then_block_if_skill", amount: 4 }],
+    description: "抽 1 张牌。若抽到的是技能牌，获得 3 点格挡。",
+    upgradedDescription: "抽 1 张牌。若抽到的是技能牌，获得 4 点格挡。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
