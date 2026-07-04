@@ -58,7 +58,8 @@ export type PowerId =
   | "machine_learning" // 机器学习：每个玩家回合开始，多抽 = 层数的牌（机器人）
   | "evolve" // 进化：每抽到一张状态牌，额外抽 = 层数的牌
   | "corruption" // 腐化：技能牌费用变 0，且打出后消耗（铁甲）
-  | "nirvana"; // 涅槃：每次预知，获得 = 层数的格挡（观者）
+  | "nirvana" // 涅槃：每次预知，获得 = 层数的格挡（观者）
+  | "infinite_blades"; // 无尽之刃：每个玩家回合开始，将 = 层数的飞刀加入手牌（静默）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -136,7 +137,11 @@ export type Effect =
   | { kind: "exhaust_non_attacks" } // 消耗手牌中所有非攻击牌（断魂）
   | { kind: "exhaust_non_attacks_gain_block"; amount: number } // 消耗所有非攻击牌，每张 +amount 格挡（二度呼吸）
   | { kind: "exhaust_hand_damage"; amount: number } // 消耗全部手牌，每张对目标造成 amount 伤害（恶魔烈焰）
-  | { kind: "deal_damage_all_lifesteal"; amount: number }; // 对所有敌人造成 amount，回复实际造成的总伤害（收割）
+  | { kind: "deal_damage_all_lifesteal"; amount: number } // 对所有敌人造成 amount，回复实际造成的总伤害（收割）
+  // —— 更多计数 / 状态操作 ——
+  | { kind: "multiply_target_poison"; factor: number } // 将目标当前中毒层数乘以 factor（催化剂）
+  | { kind: "deal_damage_per_orb"; amount: number } // 场上每颗充能球对目标造成 amount 伤害（弹幕）
+  | { kind: "deal_damage_per_enemy"; amount: number }; // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
