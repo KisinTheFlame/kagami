@@ -14,6 +14,7 @@ import {
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
+import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import type { LlmClient } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
@@ -38,10 +39,7 @@ import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import {
-  createInnerVoiceInstructionMessage,
-  createRootContextSummaryReminderMessage,
-} from "../agent/runtime/context/context-message-factory.js";
+import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -54,11 +52,8 @@ import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-age
 import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
 import { TodoSuggestionTaskAgent } from "../agent/capabilities/todo/task-agent/todo-suggestion-task-agent.js";
 import { ProposeTodosTool } from "../agent/capabilities/todo/task-agent/tools/propose-todos.tool.js";
-import {
-  EmitInnerThoughtTool,
-  EMIT_INNER_THOUGHT_TOOL_NAME,
-} from "../agent/capabilities/inner-voice/tools/emit-inner-thought.tool.js";
-import { InnerVoiceOperation } from "../agent/capabilities/inner-voice/operations/inner-voice.operation.js";
+import { EmitInnerThoughtTool } from "../agent/capabilities/inner-voice/tools/emit-inner-thought.tool.js";
+import { InnerVoiceTaskAgent } from "../agent/capabilities/inner-voice/task-agent/inner-voice-task-agent.js";
 import { InnerVoiceIdleTracker } from "../agent/capabilities/inner-voice/domain/idle-tracker.js";
 import { collectInnerVoiceIdleSignals } from "../agent/capabilities/inner-voice/domain/ledger-idle-signals.js";
 import { InnerVoiceExtension } from "../agent/runtime/root-agent/extensions/inner-voice.extension.js";
@@ -441,21 +436,34 @@ export async function buildAgentRuntime({
     llmClient,
     taskTools: todoAgentTools,
   });
-  // 内心独白（issue #265）：摸鱼判定 tracker + 隔离 Operation + loop extension。
-  // emit_inner_thought 只作为 Operation 的结构化出口，走独立的一元 catalog，
-  // 绝不进主 Agent 顶层工具集（mainTopLevelTools），前缀零污染。
-  const innerVoiceEmitTools = new ToolCatalog([new EmitInnerThoughtTool()]);
+  // 内心独白（issue #265 / #410）：摸鱼判定 tracker + 镜像装配 TaskAgent + loop
+  // extension。与 web-search / summary / todo 同一套镜像装配，invoke 只挂
+  // emit_inner_thought 终止子工具，其余顶层工具 OutOfScope 软拒绝——请求前缀与主
+  // Agent 字节相等，命中 Anthropic prompt cache。
   const innerVoiceIdleTracker = new InnerVoiceIdleTracker();
-  const innerVoiceOperation = new InnerVoiceOperation({
+  const innerVoiceInvokeTool = new InvokeTool({
+    owners: [createUnguardedSubtoolOwner({ tools: [new EmitInnerThoughtTool()] })],
+  });
+  const innerVoiceAgentTools = createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: innerVoiceInvokeTool,
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]:
+        '在内心独白子任务中不可调用 switch。请用 invoke(tool="emit_inner_thought", thought=...) 提交念头。',
+    },
+    defaultReason: toolName => `在内心独白子任务中不可调用 ${toolName}。`,
+  });
+  const innerVoiceTaskAgent = new InnerVoiceTaskAgent({
     llmClient,
-    emitToolExecutor: innerVoiceEmitTools.pick([EMIT_INNER_THOUGHT_TOOL_NAME]),
-    instructionMessageFactory: createInnerVoiceInstructionMessage,
+    taskTools: innerVoiceAgentTools,
   });
   const innerVoiceExtension = new InnerVoiceExtension({
     tracker: innerVoiceIdleTracker,
-    operation: innerVoiceOperation,
+    taskAgent: innerVoiceTaskAgent,
     eventQueue,
     metricService,
+    innerThoughtDao: new PrismaInnerThoughtDao({ database }),
+    runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,

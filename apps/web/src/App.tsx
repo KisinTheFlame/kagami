@@ -33,6 +33,11 @@ const AppLogHistoryPage = lazy(() =>
     default: module.AppLogHistoryPage,
   })),
 );
+const InnerThoughtPage = lazy(() =>
+  import("@/pages/inner-thought/InnerThoughtPage").then(module => ({
+    default: module.InnerThoughtPage,
+  })),
+);
 const NapcatEventHistoryPage = lazy(() =>
   import("@/pages/napcat-event-history/NapcatEventHistoryPage").then(module => ({
     default: module.NapcatEventHistoryPage,
@@ -46,6 +51,11 @@ const NapcatGroupMessageHistoryPage = lazy(() =>
 const MetricChartsPage = lazy(() =>
   import("@/pages/metric-charts/MetricChartsPage").then(module => ({
     default: module.MetricChartsPage,
+  })),
+);
+const TodosPage = lazy(() =>
+  import("@/pages/todos/TodosPage").then(module => ({
+    default: module.TodosPage,
   })),
 );
 
@@ -62,10 +72,12 @@ function App() {
           <Route path="/scheduler-tasks" element={<SchedulerTasksPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
+          <Route path="/inner-thought" element={<InnerThoughtPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
           <Route path="/metric-charts" element={<MetricChartsPage />} />
+          <Route path="/todos" element={<TodosPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

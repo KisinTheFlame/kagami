@@ -43,6 +43,20 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "orbSlots", state["character"] === "defect" ? 3 : 0);
     backfill(combat, "playerStance", "none");
     backfill(combat, "mantra", 0); // 法力（观者神性）——老档没有。
+    backfill(combat, "nextTurnBlock", 0);
+    backfill(combat, "nextTurnEnergy", 0);
+    backfill(combat, "nextTurnDraw", 0);
+    backfill(combat, "nextTurnStance", null); // 烈怒渐起——老档没有。
+    backfill(combat, "doomedNextTurn", false); // 亵渎——老档没有。
+    backfill(combat, "nextTurnPhantasmal", false); // 幻杀——老档没有。
+    backfill(combat, "attacksThisTurn", 0);
+    backfill(combat, "cardsDiscardedThisTurn", 0); // 弃牌联动——老档没有。
+    backfill(combat, "cardsPlayedThisTurn", 0); // 出牌计数——老档没有。
+    backfill(combat, "mantraGainedThisCombat", 0); // 璀璨光辉——老档没有。
+    backfill(combat, "frostChanneledThisCombat", 0); // 暴风雪——老档没有。
+    backfill(combat, "powersPlayedThisCombat", 0); // 力场——老档没有。
+    backfill(combat, "timesLostHpThisCombat", 0); // 血债血偿——老档没有。
+    backfill(combat, "lastCardType", null);
     const enemies = Array.isArray(combat["enemies"]) ? combat["enemies"] : [];
     for (const entry of enemies) {
       const enemy = asRecord(entry);

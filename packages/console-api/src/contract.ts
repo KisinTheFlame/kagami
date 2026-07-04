@@ -1,6 +1,7 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { z } from "zod";
 import { AppLogListQuerySchema, AppLogListResponseSchema } from "./app-log.js";
+import { InnerThoughtListQuerySchema, InnerThoughtListResponseSchema } from "./inner-thought.js";
 import {
   LlmChatCallDetailResponseSchema,
   LlmChatCallListQuerySchema,
@@ -11,6 +12,7 @@ import {
   NapcatQqMessageListQuerySchema,
   NapcatQqMessageListResponseSchema,
 } from "./napcat-group-message.js";
+import { TodoListQuerySchema, TodoListResponseSchema } from "./todo.js";
 
 // === @kagami/console-api：kagami-console 服务的 HTTP 契约（issue #279 PR4） ===
 //
@@ -42,6 +44,12 @@ export const consoleApiContract = {
     input: z.object({}),
     output: LlmChatCallDetailResponseSchema,
   }),
+  queryInnerThoughts: defineJsonRoute({
+    method: "GET",
+    path: "/inner-thought/query",
+    input: InnerThoughtListQuerySchema,
+    output: InnerThoughtListResponseSchema,
+  }),
   queryNapcatEvents: defineJsonRoute({
     method: "GET",
     path: "/napcat-event/query",
@@ -53,5 +61,11 @@ export const consoleApiContract = {
     path: "/napcat-group-message/query",
     input: NapcatQqMessageListQuerySchema,
     output: NapcatQqMessageListResponseSchema,
+  }),
+  queryTodos: defineJsonRoute({
+    method: "GET",
+    path: "/todo/query",
+    input: TodoListQuerySchema,
+    output: TodoListResponseSchema,
   }),
 } as const;
