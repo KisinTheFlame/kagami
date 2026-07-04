@@ -69,6 +69,8 @@ const POWER_LABELS: Record<string, string> = {
   loop: "循环",
   tools_of_the_trade: "行业工具",
   wave_of_the_hand: "挥手",
+  deva_form: "提婆形态",
+  vigor: "活力",
 };
 
 const ORB_LABELS: Record<string, string> = {
