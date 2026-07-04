@@ -64,6 +64,7 @@ const POWER_LABELS: Record<string, string> = {
   battle_hymn: "战歌",
   strength_temp: "临时力量",
   rage: "暴怒",
+  double_tap: "连击",
 };
 
 const ORB_LABELS: Record<string, string> = {
