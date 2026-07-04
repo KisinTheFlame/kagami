@@ -93,7 +93,10 @@ export type PowerId =
   | "corpse_bomb" // 尸爆：此敌人死亡时，把它的中毒施加给其余所有敌人（静默，敌人身上）
   | "self_repair" // 自我修复：战斗结束时回复 = 层数的生命（机器人）
   | "magnetism" // 磁力：每个玩家回合开始，将 = 层数张随机无色牌加入手牌（机器人）
-  | "flame_barrier"; // 火焰屏障：本回合每当被攻击，对攻击者反弹 = 层数的伤害（回合末清除，铁甲）
+  | "flame_barrier" // 火焰屏障：本回合每当被攻击，对攻击者反弹 = 层数的伤害（回合末清除，铁甲）
+  | "like_water" // 静如止水：回合结束若处于平静姿态，获得 = 层数的格挡（观者）
+  | "burst" // 爆发：接下来的 = 层数张技能牌各额外结算一次（每消耗一次 -1 层，静默）
+  | "phantasmal"; // 幻杀：本回合你的攻击造成双倍伤害（回合末清除，静默）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -185,6 +188,11 @@ export type Effect =
   | { kind: "add_random_card_free"; pool: "power" | "skill" } // 将一张随机牌加入手牌，费用视为 0（白噪音/分心）
   | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
   | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
+  | { kind: "return_from_exhaust" } // 从消耗堆取回一张牌到手牌（掘尸；自动取最近消耗的一张）
+  | { kind: "conjure_blade" } // X 费：将一张「湮灭之刃」加入手牌，其伤害随 X 提升（铸刃）
+  | { kind: "lose_hp_per_hand_card" } // 失去 = 手牌张数的生命（悔恨，回合末在手时触发）
+  | { kind: "play_top_card_twice" } // 打出抽牌堆顶的牌两次，随后消耗（全知）
+  | { kind: "schedule_phantasmal" } // 下个回合你的攻击造成双倍伤害（幻杀）
   | { kind: "end_turn" } // 打出结算后立即结束本回合（终局；在 playCard 收尾处检测）
   | { kind: "bonus_if_target_vulnerable"; energy: number; draw: number } // 若目标易伤：+energy 能量并抽 draw 张（飞踢）
   | { kind: "weaken_enemy_strength"; amount: number } // 使目标临时失去 amount 力量，其行动后归还（黑暗枷锁）
@@ -289,6 +297,8 @@ export type CardDef = {
   upgradedOnDiscard?: Effect[];
   /** 被消耗（进消耗堆）时，以玩家为行动者结算这些效果（哨戒回能量）。 */
   onExhaust?: Effect[];
+  /** 被抽到手牌时，以玩家为行动者结算这些效果（无尽痛楚：加一张自身副本）。 */
+  onDraw?: Effect[];
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
@@ -415,6 +425,8 @@ export type CombatState = {
   nextTurnStance: PlayerStance | null;
   /** 亵渎：为真则下个回合开始时角色死亡。默认 false。 */
   doomedNextTurn: boolean;
+  /** 幻杀：为真则下个回合开始时获得「幻杀」（当回合攻击双倍）。默认 false。 */
+  nextTurnPhantasmal: boolean;
   /** 本回合已打出的攻击牌数（终结技按此结算；每回合开始清零）。 */
   attacksThisTurn: number;
   /** 本回合已（由牌效果）弃掉的手牌数（剖体斩降费 / 声东击西给能量按此；回合开始清零）。 */
