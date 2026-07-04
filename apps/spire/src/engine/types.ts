@@ -96,7 +96,8 @@ export type PowerId =
   | "flame_barrier" // 火焰屏障：本回合每当被攻击，对攻击者反弹 = 层数的伤害（回合末清除，铁甲）
   | "like_water" // 静如止水：回合结束若处于平静姿态，获得 = 层数的格挡（观者）
   | "burst" // 爆发：接下来的 = 层数张技能牌各额外结算一次（每消耗一次 -1 层，静默）
-  | "phantasmal"; // 幻杀：本回合你的攻击造成双倍伤害（回合末清除，静默）
+  | "phantasmal" // 幻杀：本回合你的攻击造成双倍伤害（回合末清除，静默）
+  | "collect"; // 采集：接下来 = 层数个回合，回合开始各将一张 0 费「洞悉」加入手牌（每回合 -1，观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -193,12 +194,19 @@ export type Effect =
   | { kind: "lose_hp_per_hand_card" } // 失去 = 手牌张数的生命（悔恨，回合末在手时触发）
   | { kind: "play_top_card_twice" } // 打出抽牌堆顶的牌两次，随后消耗（全知）
   | { kind: "schedule_phantasmal" } // 下个回合你的攻击造成双倍伤害（幻杀）
+  | { kind: "return_zero_cost_from_discard" } // 把弃牌堆里所有 0 费牌收回手牌（一心一意）
+  | { kind: "put_hand_card_on_draw_free" } // 把一张手牌置于抽牌堆顶，本场费用视为 0（布置；自动取最贵的一张）
+  | { kind: "scrape_draw"; count: number } // 抽 count 张，随后弃掉其中费用 >0 的（削刮）
+  | { kind: "schedule_card_copies"; count: number } // 把一张手牌（自动取当前费用最高）预约到下回合加 count 张副本（噩梦）
+  | { kind: "schedule_extra_turn" } // 本次结束回合后跳过敌人行动，直接再获得一个回合（宝库）
+  | { kind: "collect_charge" } // X 费：接下来 X 个回合，回合开始各将一张 0 费「洞悉」加入手牌（采集）
   | { kind: "end_turn" } // 打出结算后立即结束本回合（终局；在 playCard 收尾处检测）
   | { kind: "bonus_if_target_vulnerable"; energy: number; draw: number } // 若目标易伤：+energy 能量并抽 draw 张（飞踢）
   | { kind: "weaken_enemy_strength"; amount: number } // 使目标临时失去 amount 力量，其行动后归还（黑暗枷锁）
   | { kind: "weaken_all_enemies_strength"; amount: number } // 使所有敌人临时失去 amount 力量，各自行动后归还（穿刺尖啸）
   | { kind: "deal_damage_plus_mantra_gained"; base: number } // 对目标造成 base + 本场累计法力（璀璨光辉）
   | { kind: "deal_damage_all_per_frost_channeled"; per: number } // 对所有敌人造成 per×本场充能冰霜数（暴风雪）
+  | { kind: "deal_damage_random_per_lightning_channeled"; amount: number } // 对随机敌人造成 amount，重复=本场充能闪电数（雷霆一击）
   // —— 下回合预约 / 弃牌 / 随机毒 / 抽到指定张数 ——
   | { kind: "gain_block_next_turn"; amount: number } // 下个回合开始获得 amount 格挡（闪转腾挪）
   | { kind: "gain_energy_next_turn"; amount: number } // 下个回合开始获得 amount 能量（飞膝/战略欺骗）
@@ -423,6 +431,10 @@ export type CombatState = {
   nextTurnDraw: number;
   /** 预约到下个回合开始进入的姿态（烈怒渐起）；null=不预约。 */
   nextTurnStance: PlayerStance | null;
+  /** 噩梦：预约下个回合开始加入手牌的牌副本；null=不预约。 */
+  nightmarePending: { cardId: string; count: number } | null;
+  /** 宝库：为真则本次结束回合后不让敌人行动，直接再获得一个玩家回合。默认 false。 */
+  extraTurnPending: boolean;
   /** 亵渎：为真则下个回合开始时角色死亡。默认 false。 */
   doomedNextTurn: boolean;
   /** 幻杀：为真则下个回合开始时获得「幻杀」（当回合攻击双倍）。默认 false。 */
@@ -437,6 +449,8 @@ export type CombatState = {
   mantraGainedThisCombat: number;
   /** 本场战斗累计充能的冰霜球数（暴风雪按此结算；整场不清零）。 */
   frostChanneledThisCombat: number;
+  /** 本场战斗累计充能的闪电球数（雷霆一击按此结算；整场不清零）。 */
+  lightningChanneledThisCombat: number;
   /** 本场战斗累计打出的能力牌数（力场按此降费；整场不清零）。 */
   powersPlayedThisCombat: number;
   /** 本场战斗玩家失血的次数（血债血偿按此降费；整场不清零）。 */

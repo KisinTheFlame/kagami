@@ -47,6 +47,8 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "nextTurnEnergy", 0);
     backfill(combat, "nextTurnDraw", 0);
     backfill(combat, "nextTurnStance", null); // 烈怒渐起——老档没有。
+    backfill(combat, "nightmarePending", null); // 噩梦——老档没有。
+    backfill(combat, "extraTurnPending", false); // 宝库——老档没有。
     backfill(combat, "doomedNextTurn", false); // 亵渎——老档没有。
     backfill(combat, "nextTurnPhantasmal", false); // 幻杀——老档没有。
     backfill(combat, "attacksThisTurn", 0);
@@ -54,6 +56,7 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "cardsPlayedThisTurn", 0); // 出牌计数——老档没有。
     backfill(combat, "mantraGainedThisCombat", 0); // 璀璨光辉——老档没有。
     backfill(combat, "frostChanneledThisCombat", 0); // 暴风雪——老档没有。
+    backfill(combat, "lightningChanneledThisCombat", 0); // 雷霆一击——老档没有。
     backfill(combat, "powersPlayedThisCombat", 0); // 力场——老档没有。
     backfill(combat, "timesLostHpThisCombat", 0); // 血债血偿——老档没有。
     backfill(combat, "lastCardType", null);
