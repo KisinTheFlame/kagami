@@ -4832,6 +4832,35 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "战斗结束时，回复 10 点生命。",
   },
 
+  {
+    id: "weave",
+    name: "编织",
+    type: "attack",
+    rarity: "common",
+    color: "purple",
+    cost: 0,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage", amount: 4 }],
+    upgradedEffects: [{ kind: "deal_damage", amount: 6 }],
+    description: "造成 4 点伤害。每当你预知，将本牌从弃牌堆收回手牌。",
+    upgradedDescription: "造成 6 点伤害。每当你预知，将本牌从弃牌堆收回手牌。",
+  },
+  {
+    id: "wish",
+    name: "祈愿",
+    type: "skill",
+    rarity: "rare",
+    color: "purple",
+    cost: 3,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "apply_power", power: "strength", amount: 3, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "strength", amount: 4, on: "self" }],
+    description: "获得 3 点力量。消耗。",
+    upgradedDescription: "获得 4 点力量。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

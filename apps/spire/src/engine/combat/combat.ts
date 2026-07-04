@@ -1811,6 +1811,12 @@ function doScry(state: GameState, amount: number): void {
   if (nirvana > 0) {
     combat.playerBlock += nirvana;
   }
+  // 编织：每次预知，把弃牌堆里的所有「编织」收回手牌（手满则留在弃牌堆）。
+  for (let i = combat.discardPile.length - 1; i >= 0; i -= 1) {
+    if (combat.discardPile[i]!.defId === "weave" && combat.hand.length < MAX_HAND_SIZE) {
+      combat.hand.push(combat.discardPile.splice(i, 1)[0]!);
+    }
+  }
 }
 
 // —— 充能球（机器人）——
