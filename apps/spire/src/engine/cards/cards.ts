@@ -3214,6 +3214,71 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "本回合内，你每打出一张攻击牌获得 5 点格挡。",
   },
 
+  // —— 单卡实例自我成长批次 ——
+  {
+    id: "rampage",
+    name: "暴走",
+    type: "attack",
+    rarity: "uncommon",
+    color: "red",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage_scaling", base: 8 },
+      { kind: "grow_self", amount: 5 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage_scaling", base: 8 },
+      { kind: "grow_self", amount: 8 },
+    ],
+    description: "造成 8 点伤害。本场战斗内每次打出，本牌伤害 +5。",
+    upgradedDescription: "造成 8 点伤害。本场战斗内每次打出，本牌伤害 +8。",
+  },
+  {
+    id: "glass_knife",
+    name: "玻璃刀",
+    type: "attack",
+    rarity: "uncommon",
+    color: "green",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage_scaling", base: 8 },
+      { kind: "deal_damage_scaling", base: 8 },
+      { kind: "grow_self", amount: -2 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage_scaling", base: 12 },
+      { kind: "deal_damage_scaling", base: 12 },
+      { kind: "grow_self", amount: -2 },
+    ],
+    description: "造成 8 点伤害两次。本场战斗内每次打出，本牌伤害 -2。",
+    upgradedDescription: "造成 12 点伤害两次。本场战斗内每次打出，本牌伤害 -2。",
+  },
+  {
+    id: "perseverance",
+    name: "坚韧",
+    type: "skill",
+    rarity: "common",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    retain: true,
+    effects: [
+      { kind: "gain_block_scaling", base: 5 },
+      { kind: "grow_self", amount: 2 },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block_scaling", base: 7 },
+      { kind: "grow_self", amount: 3 },
+    ],
+    description: "保留。获得 5 点格挡。本场战斗内每次打出，本牌格挡 +2。",
+    upgradedDescription: "保留。获得 7 点格挡。本场战斗内每次打出，本牌格挡 +3。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

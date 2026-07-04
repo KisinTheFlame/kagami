@@ -168,7 +168,11 @@ export type Effect =
   | { kind: "change_max_energy"; delta: number } // 增减每回合最大能量（苦修 -1）
   | { kind: "gain_block_if_wrath"; base: number; bonus: number } // 获得 base 格挡；若处于愤怒姿态再 +bonus（止）
   | { kind: "execute_if_below"; threshold: number } // 若目标当前生命 ≤ threshold 则直接击杀（审判）
-  | { kind: "apply_strength_temp"; amount: number }; // 立即 +amount 力量，本回合结束时失去（屈伸）
+  | { kind: "apply_strength_temp"; amount: number } // 立即 +amount 力量，本回合结束时失去（屈伸）
+  // —— 单卡实例自我成长（读写打出的这张牌的 bonus，本场战斗内有效）——
+  | { kind: "deal_damage_scaling"; base: number } // 对目标造成 base + 本牌 bonus 的伤害（暴走/玻璃刀）
+  | { kind: "gain_block_scaling"; base: number } // 获得 base + 本牌 bonus 的格挡（坚韧）
+  | { kind: "grow_self"; amount: number }; // 本牌 bonus += amount（可负，玻璃刀 -2）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -199,8 +203,8 @@ export type CardDef = {
   upgradedDescription: string;
 };
 
-/** 牌组里的一张牌实例（追踪是否已升级）。 */
-export type CardInstance = { uid: number; defId: string; upgraded: boolean };
+/** 牌组里的一张牌实例（追踪是否已升级）。bonus 是本场战斗内自我成长的数值（暴走/玻璃刀），省略=0。 */
+export type CardInstance = { uid: number; defId: string; upgraded: boolean; bonus?: number };
 
 export type PowerInstance = { id: PowerId; amount: number };
 

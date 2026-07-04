@@ -333,9 +333,10 @@ function applyEffects(
   actor: ActorRef,
   targetEnemyIndex: number | null,
   xValue = 0,
+  sourceCard?: CardInstance,
 ): void {
   for (const effect of effects) {
-    applyEffect(state, effect, actor, targetEnemyIndex, xValue);
+    applyEffect(state, effect, actor, targetEnemyIndex, xValue, sourceCard);
   }
 }
 
@@ -345,6 +346,7 @@ function applyEffect(
   actor: ActorRef,
   targetEnemyIndex: number | null,
   xValue = 0,
+  sourceCard?: CardInstance,
 ): void {
   const combat = state.combat!;
   const powers = actorPowers(state, actor);
@@ -969,6 +971,29 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_scaling": {
+      // 暴走/玻璃刀：对目标造成 base + 本牌 bonus 的伤害。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const dmg = Math.max(0, effect.base + (sourceCard?.bonus ?? 0));
+        dealDamageToEnemy(state, targetEnemyIndex, dmg, powers);
+      }
+      break;
+    }
+    case "gain_block_scaling": {
+      // 坚韧：获得 base + 本牌 bonus 的格挡。
+      if (actor.side === "player") {
+        const amount = Math.max(0, effect.base + (sourceCard?.bonus ?? 0));
+        applyEffect(state, { kind: "gain_block", amount }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "grow_self": {
+      // 本牌 bonus += amount（本场战斗内持续；下场战斗从牌组复制重置）。
+      if (sourceCard) {
+        sourceCard.bonus = (sourceCard.bonus ?? 0) + effect.amount;
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1413,6 +1438,7 @@ export function playCard(
     { side: "player" },
     resolvedTarget,
     xValue,
+    instance,
   );
   // 终结技计数：本回合已打出的攻击牌 +1（在效果结算后，故本张攻击不计入自身）。
   if (def.type === "attack") {
