@@ -25,7 +25,7 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 | 包                      | 角色                                                                                                                                                                                                                                                                                                                 |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@kagami/agent`         | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / auth / scheduler / LLM playground / QQ 发送）                                                                                                                                                                                              |
-| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message），经 @kagami/persistence 共享 DAO 直读 SQLite                                                                                                                                                      |
+| `@kagami/console`       | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / napcat-event / napcat-group-message / todo），经 @kagami/persistence 共享 DAO 直读 SQLite                                                                                                                                               |
 | `@kagami/gateway`       | 前门网关进程（独立进程，仅依赖 `@kagami/config` / `@kagami/http`）：托管 `apps/web/dist` 静态资源 + 按前缀把 `/api/*` 反代分流到 console / agent，`/auth/*` 到 llm、`/metric-chart` 到 metric                                                                                                                        |
 | `@kagami/llm-service`   | LLM 网关 + OAuth 凭据中心进程（`apps/llm`，仅 localhost）：持有全部 provider + OAuth callback server + 刷新 timer，落 `llm_chat_call` / `embedding_cache`；agent 经 HTTP 直连                                                                                                                                        |
 | `@kagami/metric`        | metric 领域独立进程（Fastify，仅 localhost）：一手包办 metric 摄取（`POST /metric/record`，agent HTTP 上报）+ metric-chart 查询，经 @kagami/persistence 共享 DAO 直读 SQLite                                                                                                                                         |
@@ -44,7 +44,7 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 | `@kagami/spire-api`     | kagami-spire 进程契约包：run/start、run/action、run/state、reference 四条逐字段 schema；服务端 state-view 与 agent 门面类型同源派生（#279 PR2）                                                                                                                                                                      |
 | `@kagami/metric-api`    | kagami-metric 进程契约包：`/metric/record` 摄取 + `/metric-chart/*` 四条（web 消费）；agent 侧上报客户端见 `@kagami/metric-client`                                                                                                                                                                                   |
 | `@kagami/metric-client` | metric 上报 SDK（消费端）：基于 metric-api 契约在 `createClient` 之上包一层 fire-and-forget（永不抛、失败只记日志、2s 超时）；`HttpMetricClient` / `NOOP_METRIC_CLIENT`，agent 装配                                                                                                                                  |
-| `@kagami/console-api`   | kagami-console 进程契约包：app-log / llm-chat-call（含 `:id` 路径参数）/ napcat-event / napcat-group-message 五条管理台查询路由（web 消费）                                                                                                                                                                          |
+| `@kagami/console-api`   | kagami-console 进程契约包：app-log / llm-chat-call（含 `:id` 路径参数）/ napcat-event / napcat-group-message / todo 六条管理台查询路由（web 消费）                                                                                                                                                                   |
 | `@kagami/agent-api`     | kagami-agent 进程面向管理台的契约包：napcat 发送 ×2、playground ×3、scheduler ×2（`:name` 路径参数）、main-agent-context ×2（web 消费）                                                                                                                                                                              |
 | `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                                                                                                                                              |
 | `@kagami/oss-api`       | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                                                                                                                                               |
@@ -140,6 +140,7 @@ apps/web/src/
 │   ├── auth/                    OAuth 与配额
 │   ├── control-panel/           控制面板（上下文压缩等操作）
 │   ├── scheduler-tasks/         后台任务面板
+│   ├── todos/                   待办（只读，含历史）
 │   ├── llm-playground/          手工触发 LLM 调用
 │   ├── llm-history/             LLM 调用历史
 │   ├── app-log-history/         应用日志
@@ -204,14 +205,14 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 
 ## HTTP 接口入口
 
-| 类别            | 路径                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 健康检查        | `/health`                                                                                                            |
-| OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits` \| `usage-trend`                  |
-| LLM Playground  | `/llm/providers`、`/llm/playground-tools`、`/llm/chat`                                                               |
-| NapCat 主动发送 | `/napcat/group/send`、`/napcat/private/send`                                                                         |
-| 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query` |
-| Agent / 指标    | `/main-agent-context/recent`、`/main-agent-context/compact`、`/metric-chart/*`、`/scheduler/*`                       |
+| 类别            | 路径                                                                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 健康检查        | `/health`                                                                                                                           |
+| OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits` \| `usage-trend`                                 |
+| LLM Playground  | `/llm/providers`、`/llm/playground-tools`、`/llm/chat`                                                                              |
+| NapCat 主动发送 | `/napcat/group/send`、`/napcat/private/send`                                                                                        |
+| 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/napcat-event/query`、`/napcat-group-message/query`、`/todo/query` |
+| Agent / 指标    | `/main-agent-context/recent`、`/main-agent-context/compact`、`/metric-chart/*`、`/scheduler/*`                                      |
 
 > `apps/oss` 另起独立 HTTP 服务（`POST /objects` 上传、`GET` / `HEAD` / `DELETE /objects/:key`，另有 `GET /health`），仅 localhost 监听，Fastify + `@kagami/oss-api` 契约（putObject 信封路由 / 其余 raw 路由，上行字节流透传不缓冲）。
 
