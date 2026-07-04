@@ -59,6 +59,8 @@ const POWER_LABELS: Record<string, string> = {
   infinite_blades: "无尽之刃",
   intangible: "虚无缥缈",
   blur: "疾影",
+  biased_cognition: "偏置认知",
+  buffer: "缓冲",
 };
 
 const ORB_LABELS: Record<string, string> = {

@@ -896,6 +896,45 @@ function applyEffect(
       }
       break;
     }
+    case "gain_block_if_none": {
+      // 自动护盾：仅当前无格挡时获得格挡。
+      if (actor.side === "player" && combat.playerBlock === 0) {
+        applyEffect(state, { kind: "gain_block", amount: effect.amount }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "channel_random_orb": {
+      // 混沌：随机充能 count 颗球。
+      if (actor.side === "player") {
+        const types: OrbType[] = ["lightning", "frost", "dark", "plasma"];
+        for (let n = 0; n < effect.count; n += 1) {
+          channelOrb(state, types[nextInt(state.rng, types.length)]!);
+        }
+      }
+      break;
+    }
+    case "gain_block_discard_count": {
+      // 堆叠：每张弃牌堆的牌获得 perCard 格挡。
+      if (actor.side === "player") {
+        const total = effect.perCard * combat.discardPile.length;
+        applyEffect(state, { kind: "gain_block", amount: total }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "gain_energy_per_draw_pile": {
+      // 聚合：抽牌堆每 divisor 张给 1 能量。
+      if (actor.side === "player" && effect.divisor > 0) {
+        combat.energy += Math.floor(combat.drawPile.length / effect.divisor);
+      }
+      break;
+    }
+    case "remove_target_block": {
+      // 熔化：移除目标全部格挡。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        combat.enemies[targetEnemyIndex]!.block = 0;
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1097,8 +1136,13 @@ function dealDamageToPlayer(
   if (getPower(combat.playerPowers, "intangible") > 0) {
     dmg = Math.min(dmg, 1);
   }
-  const afterBlock = Math.max(0, dmg - combat.playerBlock);
+  let afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
+  // 缓冲：抵消这次会让你失去生命的穿透伤害（消耗 1 层）。
+  if (afterBlock > 0 && getPower(combat.playerPowers, "buffer") > 0) {
+    addPower(combat.playerPowers, "buffer", -1);
+    afterBlock = 0;
+  }
   state.hp = Math.max(0, state.hp - afterBlock);
   // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
@@ -1632,6 +1676,10 @@ export function endTurn(state: GameState): void {
   const infiniteBlades = getPower(combat.playerPowers, "infinite_blades");
   if (infiniteBlades > 0) {
     addCards(state, "shiv", "hand", infiniteBlades);
+  }
+  // 偏置认知：回合开始失去 1 点集中。
+  if (getPower(combat.playerPowers, "biased_cognition") > 0) {
+    addPower(combat.playerPowers, "focus", -1);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
