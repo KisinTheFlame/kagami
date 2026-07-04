@@ -85,6 +85,7 @@ function toCombatView(state: GameState): CombatView {
     orbs: combat.orbs.map(orb => orb.type),
     orbSlots: combat.orbSlots,
     stance: combat.playerStance,
+    mantra: combat.mantra,
   };
 }
 

@@ -48,7 +48,10 @@ export type PowerId =
   | "rupture" // 破裂：每当你因打出的牌失去生命，获得 = 层数的力量
   | "thousand_cuts" // 千刃：每打出一张牌，对所有敌人造成 = 层数的伤害
   | "after_image" // 残影：每打出一张牌，获得 = 层数的格挡
-  | "noxious_fumes"; // 毒雾：每个玩家回合开始，令所有敌人获得 = 层数的中毒
+  | "noxious_fumes" // 毒雾：每个玩家回合开始，令所有敌人获得 = 层数的中毒
+  | "devotion" // 虔诚：每个玩家回合开始，获得 = 层数的法力（观者）
+  | "mental_fortress" // 心之堡垒：每次姿态改变，获得 = 层数的格挡（观者）
+  | "rushdown"; // 疾攻：每次进入愤怒姿态，抽 = 层数的牌（观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -115,7 +118,9 @@ export type Effect =
   | { kind: "deal_damage_perfected"; amount: number; per: number } // 基础 amount + per×(各区「打击」名牌数)（完美打击）
   | { kind: "deal_damage_bane"; amount: number } // 对目标造成 amount；若目标中毒则再造成 amount（剧毒之刃）
   // 玩家用：增减球槽数（吞噬 -1、电容器 +2）；下限 0。
-  | { kind: "change_orb_slots"; delta: number };
+  | { kind: "change_orb_slots"; delta: number }
+  // 玩家用：获得法力（观者；累积到 10 自动进入神性姿态）。
+  | { kind: "gain_mantra"; amount: number };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -224,8 +229,8 @@ export type OrbType = "lightning" | "frost" | "dark" | "plasma";
 /** 一颗充能球实例（占一个球槽）。value 供暗球累积的伤害用（其它球恒为 0/省略）。 */
 export type Orb = { type: OrbType; value?: number };
 
-/** 玩家姿态（观者专属）：平静 / 愤怒 / 无。 */
-export type PlayerStance = "none" | "calm" | "wrath";
+/** 玩家姿态（观者专属）：平静 / 愤怒 / 神性 / 无。神性下攻击 ×3，回合结束退出。 */
+export type PlayerStance = "none" | "calm" | "wrath" | "divinity";
 
 export type CombatState = {
   turn: number;
@@ -244,6 +249,8 @@ export type CombatState = {
   orbSlots: number;
   /** 玩家姿态（观者）：愤怒下攻击/受击双倍；离开平静 +2 能量。默认 none。 */
   playerStance: PlayerStance;
+  /** 观者法力：累积到 10 自动进入神性姿态并清空。默认 0（非观者恒为 0）。 */
+  mantra: number;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
