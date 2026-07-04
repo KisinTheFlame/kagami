@@ -2216,6 +2216,11 @@ export function endTurn(state: GameState): void {
   if (state.combat === null || state.screen !== "combat") {
     return;
   }
+  // 未卜先知：回合开始预知 = 层数张（在抽牌前看牌堆顶）。
+  const foresight = getPower(combat.playerPowers, "foresight");
+  if (foresight > 0) {
+    doScry(state, foresight);
+  }
   // 机器学习：每回合多抽 = 层数的牌；叠加下回合预约抽牌（掠食者）。
   const machineLearning = getPower(combat.playerPowers, "machine_learning");
   drawCards(state, STARTING_HAND_SIZE + machineLearning + scheduledDraw);
