@@ -197,7 +197,11 @@ export type Effect =
   | { kind: "put_hand_card_on_top" } // 将一张手牌（随机非本牌）置于抽牌堆顶（未雨绸缪）
   | { kind: "return_discard_to_hand" } // 将弃牌堆最近一张牌收回手牌（全息影像）
   | { kind: "recursion" } // 唤醒最左侧球，再把同类型球重新充能到末位（递归）
-  | { kind: "discard_hand_for_shivs" }; // 弃掉全部手牌，每弃一张将 1 张飞刀加入手牌（钢铁风暴）
+  | { kind: "discard_hand_for_shivs" } // 弃掉全部手牌，每弃一张将 1 张飞刀加入手牌（钢铁风暴）
+  // —— 观者条件牌 ——
+  | { kind: "gain_block_draw_if_last_skill"; block: number; draw: number } // 获得 block 格挡；若上一张打出的是技能牌则抽 draw 张（神圣）
+  | { kind: "deal_or_enter_wrath"; vuln: number } // 若处于愤怒则令所有敌人获得 vuln 易伤，否则进入愤怒（义愤）
+  | { kind: "draw_or_enter_calm"; draw: number }; // 若处于平静则抽 draw 张，否则进入平静（内心平静）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -344,6 +348,8 @@ export type CombatState = {
   nextTurnDraw: number;
   /** 本回合已打出的攻击牌数（终结技按此结算；每回合开始清零）。 */
   attacksThisTurn: number;
+  /** 上一张打出的牌的类型（神圣「若上一张是技能」判据）；null=本回合还没打过。 */
+  lastCardType: CardType | null;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
