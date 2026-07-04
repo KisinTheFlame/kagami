@@ -71,6 +71,7 @@ const POWER_LABELS: Record<string, string> = {
   wave_of_the_hand: "挥手",
   deva_form: "提婆形态",
   vigor: "活力",
+  no_draw: "无法抽牌",
 };
 
 const ORB_LABELS: Record<string, string> = {

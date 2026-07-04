@@ -73,7 +73,8 @@ export type PowerId =
   | "tools_of_the_trade" // 行业工具：每个玩家回合开始，抽 = 层数的牌并随机弃 = 层数的牌（静默）
   | "wave_of_the_hand" // 挥手：本回合每当你获得格挡，令所有敌人获得 = 层数的虚弱（观者，回合末清零）
   | "deva_form" // 提婆形态：每个玩家回合开始获得 = 层数的能量，然后层数 +1（观者，能量递增）
-  | "vigor"; // 活力：下一张攻击牌额外造成 = 层数的伤害（打出后清零，烈焰花环）
+  | "vigor" // 活力：下一张攻击牌额外造成 = 层数的伤害（打出后清零，烈焰花环）
+  | "no_draw"; // 本回合无法再抽牌（战意；回合开始清除）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -204,7 +205,8 @@ export type Effect =
   | { kind: "gain_block_draw_if_last_skill"; block: number; draw: number } // 获得 block 格挡；若上一张打出的是技能牌则抽 draw 张（神圣）
   | { kind: "deal_or_enter_wrath"; vuln: number } // 若处于愤怒则令所有敌人获得 vuln 易伤，否则进入愤怒（义愤）
   | { kind: "draw_or_enter_calm"; draw: number } // 若处于平静则抽 draw 张，否则进入平静（内心平静）
-  | { kind: "deal_damage_if_hand_all_attacks"; amount: number }; // 若手牌其余全为攻击牌，对目标造成 amount（招牌动作）
+  | { kind: "deal_damage_if_hand_all_attacks"; amount: number } // 若手牌其余全为攻击牌，对目标造成 amount（招牌动作）
+  | { kind: "exhaust_random"; count: number }; // 随机消耗 count 张手牌（坚毅）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

@@ -310,6 +310,10 @@ function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
 
 function drawCards(state: GameState, count: number): void {
   const combat = state.combat!;
+  // 战意：本回合无法再抽牌。
+  if (getPower(combat.playerPowers, "no_draw") > 0) {
+    return;
+  }
   for (let drawn = 0; drawn < count; drawn += 1) {
     if (combat.drawPile.length === 0) {
       if (combat.discardPile.length === 0) {
@@ -1260,6 +1264,16 @@ function applyEffect(
       }
       break;
     }
+    case "exhaust_random": {
+      // 坚毅：随机消耗 count 张手牌（走 exhaustCard 触发无痛/暗黑拥抱）。
+      if (actor.side === "player") {
+        for (let n = 0; n < effect.count && combat.hand.length > 0; n += 1) {
+          const idx = nextInt(state.rng, combat.hand.length);
+          exhaustCard(state, combat.hand.splice(idx, 1)[0]!);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1990,6 +2004,10 @@ export function endTurn(state: GameState): void {
   combat.turn += 1;
   combat.lastCardType = null;
   combat.attacksThisTurn = 0;
+  // 战意：新回合解除「无法抽牌」。
+  if (getPower(combat.playerPowers, "no_draw") > 0) {
+    removePower(combat.playerPowers, "no_draw");
+  }
   // 壁垒 / 疾影：格挡不在回合开始清空（否则清零）。判定后疾影 -1（只保留一回合）。
   const blur = getPower(combat.playerPowers, "blur");
   if (getPower(combat.playerPowers, "barricade") === 0 && blur === 0) {
