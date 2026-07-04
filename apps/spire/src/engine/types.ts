@@ -180,7 +180,10 @@ export type Effect =
   | { kind: "deal_damage_kill_gold"; base: number; gold: number } // 造成 base；若击杀目标，获得 gold 金币（贪婪之手）
   | { kind: "deal_damage_ritual"; base: number; grow: number } // 造成 base+本牌bonus；若击杀，本牌 bonus += grow（仪式匕首）
   | { kind: "gain_strength_if_target_attacking"; amount: number } // 若目标意图为攻击，获得 amount 力量（觅敌之弱）
-  | { kind: "deal_damage_weak_if_attacking"; base: number; weak: number }; // 造成 base；若目标意图为攻击，施加 weak 虚弱（瞄准眼睛）
+  | { kind: "deal_damage_weak_if_attacking"; base: number; weak: number } // 造成 base；若目标意图为攻击，施加 weak 虚弱（瞄准眼睛）
+  | { kind: "put_discard_card_on_top" } // 将弃牌堆最近一张牌置于抽牌堆顶（头槌）
+  | { kind: "fetch_from_draw"; cardType?: CardType } // 从抽牌堆检索一张（指定类型则限该类型）到手牌（秘密武器/技巧/搜寻）
+  | { kind: "add_random_colorless"; count: number }; // 将 count 张随机无色卡加入手牌（全能）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
