@@ -11,6 +11,7 @@ import {
   NapcatQqMessageListQuerySchema,
   NapcatQqMessageListResponseSchema,
 } from "./napcat-group-message.js";
+import { TodoListQuerySchema, TodoListResponseSchema } from "./todo.js";
 
 // === @kagami/console-api：kagami-console 服务的 HTTP 契约（issue #279 PR4） ===
 //
@@ -53,5 +54,11 @@ export const consoleApiContract = {
     path: "/napcat-group-message/query",
     input: NapcatQqMessageListQuerySchema,
     output: NapcatQqMessageListResponseSchema,
+  }),
+  queryTodos: defineJsonRoute({
+    method: "GET",
+    path: "/todo/query",
+    input: TodoListQuerySchema,
+    output: TodoListResponseSchema,
   }),
 } as const;

@@ -7,6 +7,7 @@ import {
   History,
   type LucideIcon,
   KeyRound,
+  ListTodo,
   MessagesSquare,
   SlidersHorizontal,
   Webhook,
@@ -23,6 +24,7 @@ export const navItems: readonly NavItem[] = [
   { to: "/main-agent-context", label: "主 Agent 上下文", icon: Bot },
   { to: "/control-panel", label: "控制面板", icon: SlidersHorizontal },
   { to: "/scheduler-tasks", label: "调度任务", icon: CalendarClock },
+  { to: "/todos", label: "待办", icon: ListTodo },
   {
     to: "/auth/claude-code",
     label: "内置登录",

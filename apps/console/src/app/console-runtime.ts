@@ -5,6 +5,7 @@ import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
 import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
+import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -12,10 +13,12 @@ import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
 import { NapcatQqMessageHandler } from "../ops/http/napcat-group-message.handler.js";
+import { TodoHandler } from "../ops/http/todo.handler.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
+import { DefaultTodoQueryService } from "../ops/application/todo-query.impl.service.js";
 
 const logger = new AppLogger({ source: "console-bootstrap" });
 
@@ -43,6 +46,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
+  const todoItemDao = new PrismaTodoItemDao({ database });
 
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
@@ -54,6 +58,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const napcatQqMessageQueryService = new DefaultNapcatQqMessageQueryService({
     napcatQqMessageDao,
   });
+  const todoQueryService = new DefaultTodoQueryService({ todoItemDao });
 
   // 面向前端查询服务：traceId / 默认错误三分支（ZodError→400、BizError→toHttpErrorResponse、
   // 其余→500）都由公共装配壳提供。
@@ -65,6 +70,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
       new LlmChatCallHandler({ llmChatCallQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatQqMessageHandler({ napcatQqMessageQueryService }),
+      new TodoHandler({ todoQueryService }),
     ],
   });
 

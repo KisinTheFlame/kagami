@@ -40,6 +40,9 @@ export const queryKeys = {
   napcatGroupMessage: {
     historyList: (params: QueryParams) => ["napcat-group-message", "list", params] as const,
   },
+  todo: {
+    historyList: (params: QueryParams) => ["todo", "list", params] as const,
+  },
   metricChart: {
     root: () => ["metric-chart"] as const,
     list: () => ["metric-chart", "list"] as const,
