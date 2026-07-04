@@ -47,6 +47,7 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "nextTurnEnergy", 0);
     backfill(combat, "nextTurnDraw", 0);
     backfill(combat, "attacksThisTurn", 0);
+    backfill(combat, "lastCardType", null);
     const enemies = Array.isArray(combat["enemies"]) ? combat["enemies"] : [];
     for (const entry of enemies) {
       const enemy = asRecord(entry);

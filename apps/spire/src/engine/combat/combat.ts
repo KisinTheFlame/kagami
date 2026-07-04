@@ -183,6 +183,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnEnergy: 0,
     nextTurnDraw: 0,
     attacksThisTurn: 0,
+    lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -1208,6 +1209,42 @@ function applyEffect(
       }
       break;
     }
+    case "gain_block_draw_if_last_skill": {
+      // 神圣：获得格挡；若上一张打出的是技能牌则抽牌。
+      if (actor.side === "player") {
+        applyEffect(state, { kind: "gain_block", amount: effect.block }, actor, targetEnemyIndex);
+        if (combat.lastCardType === "skill") {
+          drawCards(state, effect.draw);
+        }
+      }
+      break;
+    }
+    case "deal_or_enter_wrath": {
+      // 义愤：处于愤怒则令所有敌人易伤，否则进入愤怒。
+      if (actor.side === "player") {
+        if (combat.playerStance === "wrath") {
+          for (const enemy of combat.enemies) {
+            if (enemy.hp > 0) {
+              applyPowerToEnemy(enemy, "vulnerable", effect.vuln);
+            }
+          }
+        } else {
+          enterStance(state, "wrath");
+        }
+      }
+      break;
+    }
+    case "draw_or_enter_calm": {
+      // 内心平静：处于平静则抽牌，否则进入平静。
+      if (actor.side === "player") {
+        if (combat.playerStance === "calm") {
+          drawCards(state, effect.draw);
+        } else {
+          enterStance(state, "calm");
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1700,6 +1737,8 @@ export function playCard(
     combat.discardPile.push(instance);
   }
   state.log.push(`你打出「${def.name}」。`);
+  // 记录本张类型供下一张牌判据（神圣「上一张是技能」）用。
+  combat.lastCardType = def.type;
   // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
   triggerRelicCardPlayed(state, def.type);
   // 打牌触发型玩家能力（千刃对全体、残影加格挡）。
@@ -1934,6 +1973,7 @@ export function endTurn(state: GameState): void {
 
   // 下个玩家回合开始。
   combat.turn += 1;
+  combat.lastCardType = null;
   combat.attacksThisTurn = 0;
   // 壁垒 / 疾影：格挡不在回合开始清空（否则清零）。判定后疾影 -1（只保留一回合）。
   const blur = getPower(combat.playerPowers, "blur");
