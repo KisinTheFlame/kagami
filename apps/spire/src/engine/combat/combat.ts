@@ -404,13 +404,14 @@ function applyEffect(
           // 敏锐：飞刀（shiv）额外 +层数伤害。
           const accuracyBonus =
             sourceCard?.defId === "shiv" ? getPower(combat.playerPowers, "accuracy") : 0;
-          dealDamageToEnemy(
+          const unblocked = dealDamageToEnemy(
             state,
             targetEnemyIndex,
             effect.amount + vigor + accuracyBonus,
             powers,
             effect.strengthMultiplier,
           );
+          onPlayerAttackHit(state, targetEnemyIndex, unblocked);
           if (vigor > 0) {
             removePower(combat.playerPowers, "vigor");
           }
@@ -459,7 +460,8 @@ function applyEffect(
       for (let hit = 0; hit < effect.times; hit += 1) {
         if (actor.side === "player") {
           if (targetEnemyIndex !== null && combat.enemies[targetEnemyIndex]!.hp > 0) {
-            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+            const unblocked = dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+            onPlayerAttackHit(state, targetEnemyIndex, unblocked);
           }
         } else {
           dealDamageToPlayer(state, effect.amount, powers, actor.index);
@@ -1501,16 +1503,35 @@ function addCards(
 
 // —— 伤害落地 ——
 
+/** 玩家攻击命中敌人后的通用触发：以手言心（mark→格挡）、淬毒（穿透→中毒）。 */
+function onPlayerAttackHit(state: GameState, enemyIndex: number, unblocked: number): void {
+  const combat = state.combat!;
+  const enemy = combat.enemies[enemyIndex];
+  if (!enemy) {
+    return;
+  }
+  // 以手言心：攻击带标记的敌人 → 获得 = 标记层数的格挡。
+  const mark = getPower(enemy.powers, "mark");
+  if (mark > 0) {
+    combat.playerBlock += mark;
+  }
+  // 淬毒：攻击造成穿透格挡的伤害 → 给该敌人施加 = 层数的中毒。
+  const envenom = getPower(combat.playerPowers, "envenom");
+  if (envenom > 0 && unblocked > 0 && enemy.hp > 0) {
+    applyPowerToEnemy(enemy, "poison", envenom);
+  }
+}
+
 function dealDamageToEnemy(
   state: GameState,
   enemyIndex: number,
   base: number,
   attackerPowers: readonly PowerInstance[],
   strengthMultiplier = 1,
-): void {
+): number {
   const enemy = state.combat!.enemies[enemyIndex]!;
   if (enemy.hp <= 0) {
-    return;
+    return 0;
   }
   // 蜷缩：首次被攻击**在结算前**获得格挡，能挡住这一击的一部分（issue #234 C5）。
   if (!enemy.curlUpConsumed && getPower(enemy.powers, "curl_up") > 0) {
@@ -1581,6 +1602,7 @@ function dealDamageToEnemy(
   ) {
     triggerModeShift(enemy);
   }
+  return afterBlock;
 }
 
 function triggerModeShift(enemy: EnemyState): void {
