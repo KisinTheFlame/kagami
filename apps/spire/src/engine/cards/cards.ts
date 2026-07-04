@@ -4766,6 +4766,35 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 13 点伤害。若因此击杀目标，永久升级你牌组中一张随机牌。消耗。",
   },
 
+  {
+    id: "conclude",
+    name: "终局",
+    type: "attack",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "deal_damage_all", amount: 12 }, { kind: "end_turn" }],
+    upgradedEffects: [{ kind: "deal_damage_all", amount: 16 }, { kind: "end_turn" }],
+    description: "对所有敌人造成 12 点伤害。结束你的回合。",
+    upgradedDescription: "对所有敌人造成 16 点伤害。结束你的回合。",
+  },
+  {
+    id: "flurry_of_blows",
+    name: "连绵拳",
+    type: "attack",
+    rarity: "common",
+    color: "purple",
+    cost: 0,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage", amount: 4 }],
+    upgradedEffects: [{ kind: "deal_damage", amount: 6 }],
+    description: "造成 4 点伤害。每当你切换姿态，将本牌从弃牌堆收回手牌。",
+    upgradedDescription: "造成 6 点伤害。每当你切换姿态，将本牌从弃牌堆收回手牌。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
