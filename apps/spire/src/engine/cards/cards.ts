@@ -4324,6 +4324,41 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "无法打出。当它被弃掉时，抽 3 张牌。",
   },
 
+  {
+    id: "quick_slash",
+    name: "急袭斩",
+    type: "attack",
+    rarity: "common",
+    color: "green",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 8 },
+      { kind: "draw", amount: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 12 },
+      { kind: "draw", amount: 1 },
+    ],
+    description: "造成 8 点伤害。抽 1 张牌。",
+    upgradedDescription: "造成 12 点伤害。抽 1 张牌。",
+  },
+  {
+    id: "foresight",
+    name: "未卜先知",
+    type: "power",
+    rarity: "rare",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "foresight", amount: 3, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "foresight", amount: 4, on: "self" }],
+    description: "每个回合开始时，预知 3 张牌。",
+    upgradedDescription: "每个回合开始时，预知 4 张牌。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
