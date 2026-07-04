@@ -777,6 +777,36 @@ function applyEffect(
       }
       break;
     }
+    case "multiply_target_poison": {
+      // 催化剂：将目标当前中毒层数乘以 factor。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const target = combat.enemies[targetEnemyIndex]!;
+        const poison = getPower(target.powers, "poison");
+        if (poison > 0) {
+          addPower(target.powers, "poison", poison * (effect.factor - 1));
+        }
+      }
+      break;
+    }
+    case "deal_damage_per_orb": {
+      // 弹幕：场上每颗充能球对目标造成 amount 伤害。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        for (let n = 0; n < combat.orbs.length; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_per_enemy": {
+      // 保龄冲击：对目标造成 amount×(存活敌人数) 伤害（单次结算）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const count = livingEnemies(combat).length;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount * count, powers);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1484,6 +1514,11 @@ export function endTurn(state: GameState): void {
   const devotion = getPower(combat.playerPowers, "devotion");
   if (devotion > 0) {
     gainMantra(state, devotion);
+  }
+  // 无尽之刃：回合开始将 = 层数的飞刀加入手牌。
+  const infiniteBlades = getPower(combat.playerPowers, "infinite_blades");
+  if (infiniteBlades > 0) {
+    addCards(state, "shiv", "hand", infiniteBlades);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
