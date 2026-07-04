@@ -84,7 +84,8 @@ export type PowerId =
   | "well_laid_plans" // 深谋远虑：回合结束可额外保留至多 = 层数张牌（静默）
   | "mark" // 标记：玩家每次攻击此敌人，获得 = 层数的格挡（观者·以手言心，敌人身上）
   | "envenom" // 淬毒：玩家攻击造成穿透格挡的伤害时，给该敌人施加 = 层数的中毒（静默）
-  | "shackled"; // 枷锁：此敌人被临时削弱的力量，将在其行动过后归还（内部记账，黑暗枷锁）
+  | "shackled" // 枷锁：此敌人被临时削弱的力量，将在其行动过后归还（内部记账，黑暗枷锁）
+  | "sadistic_nature"; // 虐念：玩家每给敌人施加一个减益，对其造成 = 层数的伤害（静默）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -251,6 +252,8 @@ export type CardDef = {
   costMinusPowersPlayedThisCombat?: boolean;
   /** 打出时费用按本场失血次数下调（下限 0）（血债血偿）。 */
   costMinusHpLossCountThisCombat?: boolean;
+  /** 每打出一次，本实例本场永久 -1 费（下限 0）（流水线）。 */
+  costReducesOnPlay?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -280,6 +283,8 @@ export type CardInstance = {
   upgraded: boolean;
   bonus?: number;
   costZero?: boolean;
+  /** 本实例本场累计的永久降费（流水线：每打出一次 +1，playCard 时从费用扣除，下限 0）。 */
+  costReduction?: number;
 };
 
 export type PowerInstance = { id: PowerId; amount: number };

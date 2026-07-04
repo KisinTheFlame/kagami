@@ -82,6 +82,7 @@ const POWER_LABELS: Record<string, string> = {
   mark: "标记",
   envenom: "淬毒",
   shackled: "枷锁",
+  sadistic_nature: "虐念",
 };
 
 const ORB_LABELS: Record<string, string> = {

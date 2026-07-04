@@ -4632,6 +4632,36 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "本回合内，使目标失去 15 点力量（其行动过后归还）。消耗。",
   },
 
+  {
+    id: "sadistic_nature",
+    name: "虐念",
+    type: "power",
+    rarity: "uncommon",
+    color: "green",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "sadistic_nature", amount: 5, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "sadistic_nature", amount: 7, on: "self" }],
+    description: "你每给一个敌人施加一个减益，对其造成 5 点伤害。",
+    upgradedDescription: "你每给一个敌人施加一个减益，对其造成 7 点伤害。",
+  },
+  {
+    id: "streamline",
+    name: "流水线",
+    type: "attack",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 2,
+    costReducesOnPlay: true,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage", amount: 15 }],
+    upgradedEffects: [{ kind: "deal_damage", amount: 20 }],
+    description: "造成 15 点伤害。每打出一次，本牌本场费用永久 -1。",
+    upgradedDescription: "造成 20 点伤害。每打出一次，本牌本场费用永久 -1。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
