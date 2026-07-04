@@ -48,6 +48,16 @@ export interface PixelClient {
 
 type FetchLike = typeof fetch;
 
+// render 的 binary-raw 路由不走契约的 timeoutMs（raw 客户端只做裸 fetch）。服务能连上但
+// /render 迟迟不回时，若无超时会把整个 root agent round 挂死，故这里给 raw fetch 注入
+// AbortSignal.timeout——超时即 abort，render() 捕获后映射成 PIXEL_NOT_READY。
+const RENDER_TIMEOUT_MS = 10_000;
+
+function withTimeout(baseFetch: FetchLike): FetchLike {
+  return (input, init) =>
+    baseFetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(RENDER_TIMEOUT_MS) });
+}
+
 // createClient 只吃 JSON 路由；render 是 binary-raw，单独交给 createBinaryClient。
 const jsonContract = {
   newCanvas: pixelApiContract.newCanvas,
@@ -79,7 +89,7 @@ export class HttpPixelClient implements PixelClient {
     });
     this.binary = createBinaryClient(
       { render: pixelApiContract.render },
-      { baseUrl, ...fetchOption },
+      { baseUrl, fetch: withTimeout(fetchImpl ?? fetch) },
     );
   }
 

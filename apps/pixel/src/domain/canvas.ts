@@ -198,19 +198,26 @@ export class PixelCanvas {
     const right = Math.max(x1, x2);
     const top = Math.min(y1, y2);
     const bottom = Math.max(y1, y2);
+    // 迭代范围先裁到画布内：契约允许坐标到 COORD_MAX(4096)，若不裁，64×64 上一个
+    // filled 大矩形会跑 O(coord²) 次全被 plot 丢弃的空转，阻塞单进程事件循环（DoS）。
+    const xa = Math.max(0, left);
+    const xb = Math.min(this.width - 1, right);
+    const ya = Math.max(0, top);
+    const yb = Math.min(this.height - 1, bottom);
     if (filled) {
-      for (let y = top; y <= bottom; y += 1) {
-        for (let x = left; x <= right; x += 1) {
-          this.plot(x, y, glyph);
+      for (let y = ya; y <= yb; y += 1) {
+        for (let x = xa; x <= xb; x += 1) {
+          this.cells[y][x] = glyph;
         }
       }
       return;
     }
-    for (let x = left; x <= right; x += 1) {
+    // 描边：横边只在 y 在界内时画、竖边只在 x 在界内时画；span 用裁剪后的范围。
+    for (let x = xa; x <= xb; x += 1) {
       this.plot(x, top, glyph);
       this.plot(x, bottom, glyph);
     }
-    for (let y = top; y <= bottom; y += 1) {
+    for (let y = ya; y <= yb; y += 1) {
       this.plot(left, y, glyph);
       this.plot(right, y, glyph);
     }
@@ -327,10 +334,14 @@ export class PixelCanvas {
   }
 
   private hLine(x1: number, x2: number, y: number, glyph: string): void {
-    const left = Math.min(x1, x2);
-    const right = Math.max(x1, x2);
+    if (y < 0 || y >= this.height) {
+      return;
+    }
+    // 先把 span 裁到 [0, width)，避免 filled 圆/椭圆用大半径时逐点空转（见 rect 里的 DoS 说明）。
+    const left = Math.max(0, Math.min(x1, x2));
+    const right = Math.min(this.width - 1, Math.max(x1, x2));
     for (let x = left; x <= right; x += 1) {
-      this.plot(x, y, glyph);
+      this.cells[y][x] = glyph;
     }
   }
 

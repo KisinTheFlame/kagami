@@ -128,6 +128,23 @@ describe("PixelCanvas — 几何算子（超出画布裁掉）", () => {
     expect(rows(canvas)).toEqual(["rrr", "...", "..."]);
   });
 
+  it("大坐标 filled 形状裁到画布、不空转（DoS 回归）", () => {
+    // 契约允许坐标到 4096；若不裁范围，64×64 上会跑 O(coord²) 次空 plot 阻塞事件循环。
+    const rectC = PixelCanvas.create(4, 4);
+    const t0 = performance.now();
+    rectC.rect(0, 0, 4096, 4096, "red", true);
+    expect(performance.now() - t0).toBeLessThan(50); // 裁剪后是 O(画布)，远快于 50ms。
+    expect(rows(rectC)).toEqual(["rrrr", "rrrr", "rrrr", "rrrr"]);
+
+    const circleC = PixelCanvas.create(4, 4);
+    circleC.circle(2, 2, 4096, "black", true); // 大半径 filled，hLine 裁到画布宽。
+    expect(rows(circleC).every(row => row === "kkkk")).toBe(true);
+
+    const ellipseC = PixelCanvas.create(4, 4);
+    ellipseC.ellipse(2, 2, 4096, 4096, "blue", true);
+    expect(rows(ellipseC).every(row => row === "bbbb")).toBe(true);
+  });
+
   it("几何算子无效颜色仍抛错", () => {
     const canvas = PixelCanvas.create(3, 3);
     expect(() => canvas.rect(0, 0, 2, 2, "bad", true)).toThrow(CanvasRejectError);
