@@ -20,6 +20,7 @@ const metricTarget = config.metricTarget;
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
   "/llm-chat-call",
+  "/inner-thought",
   "/napcat-event",
   "/napcat-group-message",
   "/todo",

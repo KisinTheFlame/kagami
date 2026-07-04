@@ -3,6 +3,7 @@ import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
+import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
 import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
 import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
@@ -11,11 +12,13 @@ import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { AppLogHandler } from "../ops/http/app-log.handler.js";
 import { LlmChatCallHandler } from "../ops/http/llm-chat-call.handler.js";
+import { InnerThoughtHandler } from "../ops/http/inner-thought.handler.js";
 import { NapcatEventHandler } from "../ops/http/napcat-event.handler.js";
 import { NapcatQqMessageHandler } from "../ops/http/napcat-group-message.handler.js";
 import { TodoHandler } from "../ops/http/todo.handler.js";
 import { DefaultAppLogQueryService } from "../ops/application/app-log-query.impl.service.js";
 import { DefaultLlmChatCallQueryService } from "../ops/application/llm-chat-call-query.impl.service.js";
+import { DefaultInnerThoughtQueryService } from "../ops/application/inner-thought-query.impl.service.js";
 import { DefaultNapcatEventQueryService } from "../ops/application/napcat-event-query.impl.service.js";
 import { DefaultNapcatQqMessageQueryService } from "../ops/application/napcat-group-message-query.impl.service.js";
 import { DefaultTodoQueryService } from "../ops/application/todo-query.impl.service.js";
@@ -44,6 +47,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
 
   const logDao = new PrismaLogDao({ database });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
+  const innerThoughtDao = new PrismaInnerThoughtDao({ database });
   const napcatEventDao = new PrismaNapcatEventDao({ database });
   const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
   const todoItemDao = new PrismaTodoItemDao({ database });
@@ -51,6 +55,9 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmChatCallDao,
+  });
+  const innerThoughtQueryService = new DefaultInnerThoughtQueryService({
+    innerThoughtDao,
   });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
     napcatEventDao,
@@ -68,6 +75,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
       new HealthHandler(),
       new AppLogHandler({ appLogQueryService }),
       new LlmChatCallHandler({ llmChatCallQueryService }),
+      new InnerThoughtHandler({ innerThoughtQueryService }),
       new NapcatEventHandler({ napcatEventQueryService }),
       new NapcatQqMessageHandler({ napcatQqMessageQueryService }),
       new TodoHandler({ todoQueryService }),

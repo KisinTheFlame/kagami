@@ -7,6 +7,10 @@ import type { InnerVoiceOperation } from "../../../capabilities/inner-voice/oper
 import type { AgentEventQueue } from "../../event/event.queue.js";
 import { NOOP_METRIC_CLIENT, type MetricClient } from "@kagami/metric-client/client";
 import type {
+  InnerThoughtDao,
+  InnerThoughtOutcome,
+} from "@kagami/persistence/dao/inner-thought.dao";
+import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
   RootLoopExtensionContext,
@@ -48,6 +52,8 @@ export class InnerVoiceExtension implements LoopAgentExtension<
   private readonly operation: InnerVoiceOperationLike;
   private readonly eventQueue: AgentEventQueue;
   private readonly metricService: MetricClient;
+  private readonly innerThoughtDao: Pick<InnerThoughtDao, "insert">;
+  private readonly runtimeKey: string;
   private readonly now: () => Date;
 
   public constructor({
@@ -55,18 +61,24 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     operation,
     eventQueue,
     metricService,
+    innerThoughtDao,
+    runtimeKey,
     now,
   }: {
     tracker: InnerVoiceIdleTracker;
     operation: InnerVoiceOperationLike;
     eventQueue: AgentEventQueue;
     metricService?: MetricClient;
+    innerThoughtDao: Pick<InnerThoughtDao, "insert">;
+    runtimeKey: string;
     now?: () => Date;
   }) {
     this.tracker = tracker;
     this.operation = operation;
     this.eventQueue = eventQueue;
     this.metricService = metricService ?? NOOP_METRIC_CLIENT;
+    this.innerThoughtDao = innerThoughtDao;
+    this.runtimeKey = runtimeKey;
     this.now = now ?? (() => new Date());
   }
 
@@ -74,8 +86,8 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     context: RootLoopExtensionContext;
     result: ReActRoundResult<RootAgentCompletion, RootAgentToolExecutionData>;
   }): Promise<void> {
+    const committedAt = this.now();
     try {
-      const committedAt = this.now();
       for (const execution of input.result.toolExecutions) {
         if (isWaitToolCall(execution.toolCall.name)) {
           this.tracker.recordWait(committedAt);
@@ -85,32 +97,74 @@ export class InnerVoiceExtension implements LoopAgentExtension<
       if (!this.tracker.shouldTrigger(committedAt)) {
         return;
       }
-      this.recordMetric(INNER_VOICE_METRIC_TRIGGERED);
-      this.tracker.recordAttempt(committedAt);
+    } catch (error) {
+      // 触发判定前的异常（wait 记录 / shouldTrigger，理论上纯内存不会抛）：不构成一次触发，
+      // 故不落行、不记 failed metric，只留诊断。
+      logger.errorWithCause("Inner voice idle evaluation failed; skipping", error, {
+        event: "agent.inner_voice.evaluation_failed",
+      });
+      return;
+    }
 
+    // 到这里 = 一次触发已成立：打 triggered、消耗配额，无论后续产不产出念头都落一行（issue #359）。
+    this.recordMetric(INNER_VOICE_METRIC_TRIGGERED);
+    this.tracker.recordAttempt(committedAt);
+
+    let outcome: InnerThoughtOutcome;
+    let thought = "";
+    try {
       const snapshot = await input.context.host.getContextSnapshot();
-      const { thought } = await this.operation.execute({
+      const result = await this.operation.execute({
         systemPrompt: snapshot.systemPrompt,
         messages: sliceRecentBalancedMessages(snapshot.messages, RECENT_CONTEXT_SLICE_SIZE),
       });
-      if (thought === null) {
+      if (result.thought === null) {
+        outcome = "empty";
         this.recordMetric(INNER_VOICE_METRIC_EMPTY);
         logger.info("Inner voice produced no thought this time", {
           event: "agent.inner_voice.empty_thought",
         });
-        return;
+      } else {
+        thought = result.thought;
+        outcome = "injected";
+        this.eventQueue.enqueue({ type: "inner_thought", data: { thought } });
+        this.recordMetric(INNER_VOICE_METRIC_INJECTED);
+        logger.info("Inner thought enqueued", {
+          event: "agent.inner_voice.thought_enqueued",
+          thoughtLength: thought.length,
+        });
       }
-
-      this.eventQueue.enqueue({ type: "inner_thought", data: { thought } });
-      this.recordMetric(INNER_VOICE_METRIC_INJECTED);
-      logger.info("Inner thought enqueued", {
-        event: "agent.inner_voice.thought_enqueued",
-        thoughtLength: thought.length,
-      });
     } catch (error) {
+      outcome = "failed";
       this.recordMetric(INNER_VOICE_METRIC_FAILED);
       logger.errorWithCause("Inner voice extension failed; skipping this attempt", error, {
         event: "agent.inner_voice.attempt_failed",
+      });
+    }
+
+    await this.persistThought({ triggeredAt: committedAt, outcome, thought });
+  }
+
+  /**
+   * 念头落库（issue #359）。一行一次触发，best-effort：DB 异常只记日志、绝不外抛——
+   * 落库是事后账本，不能反过来拖垮主循环或影响念头注入上下文。
+   */
+  private async persistThought(input: {
+    triggeredAt: Date;
+    outcome: InnerThoughtOutcome;
+    thought: string;
+  }): Promise<void> {
+    try {
+      await this.innerThoughtDao.insert({
+        triggeredAt: input.triggeredAt,
+        outcome: input.outcome,
+        thought: input.thought,
+        runtimeKey: this.runtimeKey,
+      });
+    } catch (error) {
+      logger.errorWithCause("Failed to persist inner thought", error, {
+        event: "agent.inner_voice.persist_failed",
+        outcome: input.outcome,
       });
     }
   }

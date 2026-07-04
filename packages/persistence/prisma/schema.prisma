@@ -300,3 +300,19 @@ model BrowserCredential {
 
   @@map("browser_credential")
 }
+
+// inner-voice 念头落库（issue #359）：一行 = 一次摸鱼触发。outcome 三态覆盖「所有触发」——
+// injected（产出并注入上下文）/ empty（触发但没憋出念头）/ failed（Operation 抛异常）。
+// 正文在 operation 出口已按码点截到 ≤120，故 thought 物理不超长；empty / failed 存空串。
+model InnerThought {
+  id          Int      @id @default(autoincrement())
+  triggeredAt DateTime @map("triggered_at")
+  outcome     String
+  thought     String
+  runtimeKey  String   @map("runtime_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([outcome, createdAt, id], map: "inner_thought_outcome_created_at_id_idx")
+  @@index([createdAt], map: "inner_thought_created_at_idx")
+  @@map("inner_thought")
+}

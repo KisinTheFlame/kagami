@@ -191,6 +191,7 @@ The frontend is a React admin console used to observe the Agent's "life state" (
 - `/todos`
 - `/llm-playground`
 - `/llm-history`
+- `/inner-thought`
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`
