@@ -10,7 +10,7 @@ import type {
   PowerInstance,
   RelicState,
 } from "../types.js";
-import { getCardDef, costOf, effectsOf } from "../cards/cards.js";
+import { getCardDef, costOf, effectsOf, rewardCardPoolOf } from "../cards/cards.js";
 import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
@@ -1063,6 +1063,36 @@ function applyEffect(
         const enemy = combat.enemies[targetEnemyIndex]!;
         if (attacking && enemy.hp > 0) {
           applyPowerToEnemy(enemy, "weak", effect.weak);
+        }
+      }
+      break;
+    }
+    case "put_discard_card_on_top": {
+      // 头槌：把弃牌堆最近一张牌置于抽牌堆顶（drawPile 末端为顶）。
+      if (actor.side === "player" && combat.discardPile.length > 0) {
+        combat.drawPile.push(combat.discardPile.pop()!);
+      }
+      break;
+    }
+    case "fetch_from_draw": {
+      // 秘密武器/技巧/搜寻：从抽牌堆检索一张（指定类型则限该类型）到手牌。
+      if (actor.side === "player") {
+        const idx = combat.drawPile.findIndex(
+          c => effect.cardType === undefined || getCardDef(c.defId).type === effect.cardType,
+        );
+        if (idx >= 0 && combat.hand.length < MAX_HAND_SIZE) {
+          combat.hand.push(combat.drawPile.splice(idx, 1)[0]!);
+        }
+      }
+      break;
+    }
+    case "add_random_colorless": {
+      // 全能：将随机无色卡加入手牌。
+      if (actor.side === "player") {
+        const pool = rewardCardPoolOf("colorless");
+        for (let n = 0; n < effect.count && pool.length > 0; n += 1) {
+          const defId = pool[nextInt(state.rng, pool.length)]!;
+          combat.hand.push({ uid: state.nextUid++, defId, upgraded: false });
         }
       }
       break;
