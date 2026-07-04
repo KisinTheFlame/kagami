@@ -866,6 +866,31 @@ function applyEffect(
       }
       break;
     }
+    case "schedule_next_turn_x": {
+      // 镜影分身：下个回合开始多抽 X 张、多得 X 能量。
+      if (actor.side === "player") {
+        combat.nextTurnDraw += xValue;
+        combat.nextTurnEnergy += xValue;
+      }
+      break;
+    }
+    case "draw_then_block_if_skill": {
+      // 脱身之策：抽 1 张，若抽到的是技能则获得格挡。
+      if (actor.side === "player") {
+        const before = combat.hand.length;
+        drawCards(state, 1);
+        const drawn = combat.hand.length > before ? combat.hand[combat.hand.length - 1] : undefined;
+        if (drawn && getCardDef(drawn.defId).type === "skill") {
+          applyEffect(
+            state,
+            { kind: "gain_block", amount: effect.amount },
+            actor,
+            targetEnemyIndex,
+          );
+        }
+      }
+      break;
+    }
     case "discard_random": {
       // 随机弃牌（优先弃状态牌）：把选中的牌从手牌移入弃牌堆。
       if (actor.side === "player") {
