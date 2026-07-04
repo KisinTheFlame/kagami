@@ -44,6 +44,7 @@ const FROST_EVOKE = 5;
 const DARK_PASSIVE = 6; // 暗球每回合结束累积的伤害（+集中）。
 const PLASMA_PASSIVE_ENERGY = 1; // 等离子球每回合结束给 1 能量（不受集中影响）。
 const PLASMA_EVOKE_ENERGY = 2; // 等离子球唤醒给 2 能量。
+const OMEGA_DAMAGE = 50; // 奥米加每层每回合结束对全体的伤害（对齐 StS）。
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
@@ -2172,6 +2173,16 @@ export function endTurn(state: GameState): void {
   const study = getPower(combat.playerPowers, "study");
   if (study > 0) {
     addCards(state, "insight", "draw", study);
+  }
+  // 奥米加：回合结束对所有敌人造成 50×层数 的伤害。
+  const omega = getPower(combat.playerPowers, "omega");
+  if (omega > 0) {
+    applyEffects(
+      state,
+      [{ kind: "deal_damage_all", amount: OMEGA_DAMAGE * omega }],
+      { side: "player" },
+      null,
+    );
   }
   // 神性姿态（观者）：回合结束退出（回到无姿态）。
   if (combat.playerStance === "divinity") {
