@@ -934,6 +934,10 @@ function applyEffect(
       }
       break;
     }
+    case "end_turn": {
+      // 终局：实际的结束回合在 playCard 收尾处检测本效果后触发，这里不做事。
+      break;
+    }
     case "bonus_if_target_vulnerable": {
       // 飞踢：目标处于易伤时，获得能量并抽牌。
       if (actor.side === "player" && targetEnemyIndex !== null) {
@@ -1746,6 +1750,12 @@ function enterStance(state: GameState, stance: PlayerStance): void {
       drawCards(state, rushdown);
     }
   }
+  // 连绵拳：每次姿态改变，将弃牌堆里的所有「连绵拳」收回手牌（手满则留在弃牌堆）。
+  for (let i = combat.discardPile.length - 1; i >= 0; i -= 1) {
+    if (combat.discardPile[i]!.defId === "flurry_of_blows" && combat.hand.length < MAX_HAND_SIZE) {
+      combat.hand.push(combat.discardPile.splice(i, 1)[0]!);
+    }
+  }
 }
 
 /** 累积法力：达到 10 层自动进入神性姿态（清空法力、+3 能量）。 */
@@ -2035,6 +2045,14 @@ export function playCard(
   if (state.combat !== null && state.hp <= 0) {
     state.screen = "gameover";
     state.log.push("你倒下了。");
+  }
+  // 终局：带「结束回合」效果的牌，打出结算后若战斗仍在进行则立即结束本回合。
+  if (
+    state.combat !== null &&
+    state.screen === "combat" &&
+    effectsOf(def, instance.upgraded).some(candidate => candidate.kind === "end_turn")
+  ) {
+    endTurn(state);
   }
   return { ok: true };
 }
