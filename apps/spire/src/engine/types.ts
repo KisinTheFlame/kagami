@@ -69,7 +69,9 @@ export type PowerId =
   | "rage" // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡（回合末清零）
   | "double_tap" // 连击：接下来的 = 层数张攻击牌各额外结算一次（每消耗一次 -1 层）
   | "berserk" // 狂暴：每个玩家回合开始，获得 = 层数的能量（代价是自身易伤，狂暴）
-  | "loop"; // 循环：每个玩家回合开始，额外触发最左侧球的被动 = 层数次（机器人）
+  | "loop" // 循环：每个玩家回合开始，额外触发最左侧球的被动 = 层数次（机器人）
+  | "tools_of_the_trade" // 行业工具：每个玩家回合开始，抽 = 层数的牌并随机弃 = 层数的牌（静默）
+  | "wave_of_the_hand"; // 挥手：本回合每当你获得格挡，令所有敌人获得 = 层数的虚弱（观者，回合末清零）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -194,7 +196,8 @@ export type Effect =
   | { kind: "make_random_hand_card_free" } // 随机使一张手牌本场费用变 0（疯狂）
   | { kind: "put_hand_card_on_top" } // 将一张手牌（随机非本牌）置于抽牌堆顶（未雨绸缪）
   | { kind: "return_discard_to_hand" } // 将弃牌堆最近一张牌收回手牌（全息影像）
-  | { kind: "recursion" }; // 唤醒最左侧球，再把同类型球重新充能到末位（递归）
+  | { kind: "recursion" } // 唤醒最左侧球，再把同类型球重新充能到末位（递归）
+  | { kind: "discard_hand_for_shivs" }; // 弃掉全部手牌，每弃一张将 1 张飞刀加入手牌（钢铁风暴）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
