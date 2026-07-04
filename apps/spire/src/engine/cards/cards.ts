@@ -4499,6 +4499,38 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 12 点伤害。本回合你每打出一张牌，目标损失 5 点生命。",
   },
 
+  {
+    id: "force_field",
+    name: "力场",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 4,
+    costMinusPowersPlayedThisCombat: true,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "gain_block", amount: 12 }],
+    upgradedEffects: [{ kind: "gain_block", amount: 16 }],
+    description: "本场战斗每打出一张能力牌，本牌费用 -1。获得 12 点格挡。",
+    upgradedDescription: "本场战斗每打出一张能力牌，本牌费用 -1。获得 16 点格挡。",
+  },
+  {
+    id: "blood_for_blood",
+    name: "血债血偿",
+    type: "attack",
+    rarity: "uncommon",
+    color: "red",
+    cost: 4,
+    upgradedCost: 3,
+    costMinusHpLossCountThisCombat: true,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage", amount: 18 }],
+    upgradedEffects: [{ kind: "deal_damage", amount: 22 }],
+    description: "本场战斗你每失血一次，本牌费用 -1。造成 18 点伤害。",
+    upgradedDescription: "本场战斗你每失血一次，本牌费用 -1。造成 22 点伤害。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

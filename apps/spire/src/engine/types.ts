@@ -241,6 +241,10 @@ export type CardDef = {
   innate?: boolean;
   /** 打出时费用按本回合已弃牌数下调（下限 0）（剖体斩）。 */
   costMinusDiscardThisTurn?: boolean;
+  /** 打出时费用按本场已打出的能力牌数下调（下限 0）（力场）。 */
+  costMinusPowersPlayedThisCombat?: boolean;
+  /** 打出时费用按本场失血次数下调（下限 0）（血债血偿）。 */
+  costMinusHpLossCountThisCombat?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -387,6 +391,10 @@ export type CombatState = {
   mantraGainedThisCombat: number;
   /** 本场战斗累计充能的冰霜球数（暴风雪按此结算；整场不清零）。 */
   frostChanneledThisCombat: number;
+  /** 本场战斗累计打出的能力牌数（力场按此降费；整场不清零）。 */
+  powersPlayedThisCombat: number;
+  /** 本场战斗玩家失血的次数（血债血偿按此降费；整场不清零）。 */
+  timesLostHpThisCombat: number;
   /** 上一张打出的牌的类型（神圣「若上一张是技能」判据）；null=本回合还没打过。 */
   lastCardType: CardType | null;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
