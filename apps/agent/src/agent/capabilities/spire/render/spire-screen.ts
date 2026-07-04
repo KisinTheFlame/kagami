@@ -73,6 +73,7 @@ const POWER_LABELS: Record<string, string> = {
   vigor: "活力",
   no_draw: "无法抽牌",
   foresight: "未卜先知",
+  panache: "华彩",
 };
 
 const ORB_LABELS: Record<string, string> = {
