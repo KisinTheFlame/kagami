@@ -570,6 +570,21 @@ function applyEffect(
     }
     case "apply_power": {
       applyPowerEffect(state, effect.power, effect.amount, effect.on, actor, targetEnemyIndex);
+      // 虐念：玩家给敌人施加减益时，对受影响的敌人造成 = 层数的伤害。
+      if (actor.side === "player" && effect.on !== "self" && DEBUFF_POWERS.has(effect.power)) {
+        const sadistic = getPower(combat.playerPowers, "sadistic_nature");
+        if (sadistic > 0) {
+          if (effect.on === "target" && targetEnemyIndex !== null) {
+            dealDamageToEnemy(state, targetEnemyIndex, sadistic, []);
+          } else if (effect.on === "all_enemies") {
+            for (let i = 0; i < combat.enemies.length; i += 1) {
+              if (combat.enemies[i]!.hp > 0) {
+                dealDamageToEnemy(state, i, sadistic, []);
+              }
+            }
+          }
+        }
+      }
       break;
     }
     case "draw": {
@@ -1891,6 +1906,8 @@ export function playCard(
   if (def.costMinusHpLossCountThisCombat) {
     costReduction += combat.timesLostHpThisCombat;
   }
+  // 流水线：本实例本场累计的永久降费。
+  costReduction += instance.costReduction ?? 0;
   const discountedRawCost = Math.max(0, rawCost - costReduction);
   // 回身步：下一张攻击牌费用视为 0（打出后消耗一层）。
   const freeAttack = def.type === "attack" && getPower(combat.playerPowers, "free_attack") > 0;
@@ -1976,6 +1993,10 @@ export function playCard(
     combat.discardPile.push(instance);
   }
   state.log.push(`你打出「${def.name}」。`);
+  // 流水线：每打出一次，本实例本场永久 -1 费。
+  if (def.costReducesOnPlay) {
+    instance.costReduction = (instance.costReduction ?? 0) + 1;
+  }
   // 记录本张类型供下一张牌判据（神圣「上一张是技能」）用。
   combat.lastCardType = def.type;
   // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
