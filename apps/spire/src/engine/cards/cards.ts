@@ -4458,6 +4458,47 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "飞刀额外造成 5 点伤害。",
   },
 
+  {
+    id: "bullseye",
+    name: "靶心",
+    type: "attack",
+    rarity: "common",
+    color: "blue",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 8 },
+      { kind: "apply_power", power: "lock_on", amount: 2, on: "target" },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 11 },
+      { kind: "apply_power", power: "lock_on", amount: 3, on: "target" },
+    ],
+    description: "造成 8 点伤害。使目标获得 2 层锁定（受闪电/暗球伤害提高 50%）。",
+    upgradedDescription: "造成 11 点伤害。使目标获得 3 层锁定（受闪电/暗球伤害提高 50%）。",
+  },
+  {
+    id: "choke",
+    name: "扼喉",
+    type: "attack",
+    rarity: "uncommon",
+    color: "green",
+    cost: 2,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 12 },
+      { kind: "apply_power", power: "choked", amount: 3, on: "target" },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 12 },
+      { kind: "apply_power", power: "choked", amount: 5, on: "target" },
+    ],
+    description: "造成 12 点伤害。本回合你每打出一张牌，目标损失 3 点生命。",
+    upgradedDescription: "造成 12 点伤害。本回合你每打出一张牌，目标损失 5 点生命。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

@@ -76,6 +76,8 @@ const POWER_LABELS: Record<string, string> = {
   panache: "华彩",
   free_attack: "免费攻击",
   accuracy: "敏锐",
+  lock_on: "锁定",
+  choked: "扼喉",
 };
 
 const ORB_LABELS: Record<string, string> = {
