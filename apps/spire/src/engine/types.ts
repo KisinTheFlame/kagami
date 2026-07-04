@@ -66,7 +66,8 @@ export type PowerId =
   | "buffer" // 缓冲：抵消下一次会让你失去生命的伤害（每抵消一次 -1 层）
   | "battle_hymn" // 战歌：每个玩家回合开始，将 = 层数的痛斩加入手牌（观者）
   | "strength_temp" // 临时力量：回合结束时失去 = 层数的力量（屈伸），随后本 power 清零
-  | "rage"; // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡（回合末清零）
+  | "rage" // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡（回合末清零）
+  | "double_tap"; // 连击：接下来的 = 层数张攻击牌各额外结算一次（每消耗一次 -1 层）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -173,7 +174,13 @@ export type Effect =
   | { kind: "deal_damage_scaling"; base: number } // 对目标造成 base + 本牌 bonus 的伤害（暴走/玻璃刀）
   | { kind: "gain_block_scaling"; base: number } // 获得 base + 本牌 bonus 的格挡（坚韧）
   | { kind: "grow_self"; amount: number } // 本牌 bonus += amount（可负，玻璃刀 -2）
-  | { kind: "shuffle_discard_into_draw" }; // 将弃牌堆洗入抽牌堆（深呼吸）
+  | { kind: "shuffle_discard_into_draw" } // 将弃牌堆洗入抽牌堆（深呼吸）
+  // —— 击杀触发 / 意图条件 ——
+  | { kind: "deal_damage_kill_maxhp"; base: number; maxhp: number } // 造成 base；若击杀目标，永久 +maxhp 最大生命（喂养）
+  | { kind: "deal_damage_kill_gold"; base: number; gold: number } // 造成 base；若击杀目标，获得 gold 金币（贪婪之手）
+  | { kind: "deal_damage_ritual"; base: number; grow: number } // 造成 base+本牌bonus；若击杀，本牌 bonus += grow（仪式匕首）
+  | { kind: "gain_strength_if_target_attacking"; amount: number } // 若目标意图为攻击，获得 amount 力量（觅敌之弱）
+  | { kind: "deal_damage_weak_if_attacking"; base: number; weak: number }; // 造成 base；若目标意图为攻击，施加 weak 虚弱（瞄准眼睛）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

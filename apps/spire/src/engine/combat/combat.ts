@@ -81,6 +81,12 @@ function actorPowers(state: GameState, actor: ActorRef): PowerInstance[] {
   return actor.side === "player" ? combat.playerPowers : combat.enemies[actor.index]!.powers;
 }
 
+/** 敌人当前 telegraph 的出招是否为攻击意图（觅敌之弱 / 瞄准眼睛用）。 */
+function enemyIntentIsAttack(enemy: EnemyState): boolean {
+  const move = getEnemyDef(enemy.defId).moves.find(m => m.id === enemy.currentMove);
+  return move?.intent === "attack";
+}
+
 // —— 开局 ——
 
 /** 造一个敌人实例。hpOverride 用于分裂出的敌人（HP = 分裂瞬间当前值）。 */
@@ -1003,6 +1009,64 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_kill_maxhp": {
+      // 喂养：造成 base；若击杀目标，永久提升最大生命并回复等量。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        const wasAlive = enemy.hp > 0;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base, powers);
+        if (wasAlive && enemy.hp <= 0) {
+          state.maxHp += effect.maxhp;
+          state.hp += effect.maxhp;
+        }
+      }
+      break;
+    }
+    case "deal_damage_kill_gold": {
+      // 贪婪之手：造成 base；若击杀目标，获得金币。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        const wasAlive = enemy.hp > 0;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base, powers);
+        if (wasAlive && enemy.hp <= 0) {
+          state.gold += effect.gold;
+        }
+      }
+      break;
+    }
+    case "deal_damage_ritual": {
+      // 仪式匕首：造成 base+本牌 bonus；若击杀，本牌 bonus += grow。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        const wasAlive = enemy.hp > 0;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base + (sourceCard?.bonus ?? 0), powers);
+        if (wasAlive && enemy.hp <= 0 && sourceCard) {
+          sourceCard.bonus = (sourceCard.bonus ?? 0) + effect.grow;
+        }
+      }
+      break;
+    }
+    case "gain_strength_if_target_attacking": {
+      // 觅敌之弱：若目标意图为攻击，获得力量。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        if (enemyIntentIsAttack(combat.enemies[targetEnemyIndex]!)) {
+          addPower(combat.playerPowers, "strength", effect.amount);
+        }
+      }
+      break;
+    }
+    case "deal_damage_weak_if_attacking": {
+      // 瞄准眼睛：造成 base；若目标意图为攻击，施加虚弱。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const attacking = enemyIntentIsAttack(combat.enemies[targetEnemyIndex]!);
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base, powers);
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        if (attacking && enemy.hp > 0) {
+          applyPowerToEnemy(enemy, "weak", effect.weak);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1449,6 +1513,18 @@ export function playCard(
     xValue,
     instance,
   );
+  // 连击：接下来的攻击各额外结算一次（消耗 1 层）。
+  if (def.type === "attack" && getPower(combat.playerPowers, "double_tap") > 0) {
+    addPower(combat.playerPowers, "double_tap", -1);
+    applyEffects(
+      state,
+      effectsOf(def, instance.upgraded),
+      { side: "player" },
+      resolvedTarget,
+      xValue,
+      instance,
+    );
+  }
   // 终结技计数：本回合已打出的攻击牌 +1（在效果结算后，故本张攻击不计入自身）。
   if (def.type === "attack") {
     combat.attacksThisTurn += 1;
