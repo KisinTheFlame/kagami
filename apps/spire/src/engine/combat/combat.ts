@@ -310,6 +310,13 @@ function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
       drawCards(state, heatsinks);
     }
   }
+  // 扼喉：本回合每打出一张牌，被扼喉的敌人直接损失 = 层数的生命（无视格挡）。
+  for (const enemy of combat.enemies) {
+    const choked = getPower(enemy.powers, "choked");
+    if (enemy.hp > 0 && choked > 0) {
+      enemy.hp = Math.max(0, enemy.hp - choked);
+    }
+  }
 }
 
 // —— 抽牌 ——
@@ -1438,6 +1445,8 @@ const DEBUFF_POWERS: ReadonlySet<PowerInstance["id"]> = new Set([
   "frail",
   "entangled",
   "poison",
+  "lock_on",
+  "choked",
 ]);
 
 /** 给敌人加 power；若是减益且敌人有神器，则消耗一层神器抵消（哨卫）。 */
@@ -1706,7 +1715,10 @@ function dealOrbDamage(state: GameState, amount: number): void {
     return;
   }
   const pick = living[nextInt(state.rng, living.length)]!.index;
-  dealDamageToEnemy(state, pick, amount, []);
+  // 靶心：带锁定的敌人受到闪电/暗球伤害 ×1.5。
+  const lockOn = getPower(combat.enemies[pick]!.powers, "lock_on");
+  const finalAmount = lockOn > 0 ? Math.floor(amount * 1.5) : amount;
+  dealDamageToEnemy(state, pick, finalAmount, []);
 }
 
 /** 充能一颗球：球槽满则先唤醒最左侧的球，再把新球放到末位（机器人）。 */
@@ -2029,6 +2041,12 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = retained;
+  // 扼喉「本回合」限定：玩家回合结束时清除所有敌人的扼喉层数。
+  for (const enemy of combat.enemies) {
+    if (getPower(enemy.powers, "choked") > 0) {
+      removePower(enemy.powers, "choked");
+    }
+  }
   // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
   const playerMetallicize = getPower(combat.playerPowers, "metallicize");
   if (playerMetallicize > 0) {

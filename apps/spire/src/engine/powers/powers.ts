@@ -60,6 +60,9 @@ export function decayDebuffs(powers: PowerInstance[]): void {
   if (getPower(powers, "entangled") > 0) {
     addPower(powers, "entangled", -1);
   }
+  if (getPower(powers, "lock_on") > 0) {
+    addPower(powers, "lock_on", -1);
+  }
 }
 
 /**
