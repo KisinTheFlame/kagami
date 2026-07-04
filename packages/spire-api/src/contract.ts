@@ -137,9 +137,24 @@ export const SpireGlossaryEntrySchema = z.object({
   definition: z.string(),
 });
 
+export const SpireRelicRefSchema = z.object({
+  name: z.string(),
+  rarity: z.string(),
+  description: z.string(),
+});
+
+export const SpirePotionRefSchema = z.object({
+  name: z.string(),
+  rarity: z.string(),
+  targeted: z.boolean(),
+  description: z.string(),
+});
+
 export const SpireReferenceSchema = z.object({
   query: z.string(),
   cards: z.array(SpireCardRefSchema),
+  relics: z.array(SpireRelicRefSchema),
+  potions: z.array(SpirePotionRefSchema),
   terms: z.array(SpireGlossaryEntrySchema),
 });
 

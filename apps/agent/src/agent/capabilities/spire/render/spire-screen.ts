@@ -155,13 +155,28 @@ const CARD_TYPE_LABELS: Record<string, string> = {
   status: "状态牌",
 };
 
+const SPIRE_RARITY_LABELS: Record<string, string> = {
+  starter: "起始",
+  common: "普通",
+  uncommon: "罕见",
+  rare: "稀有",
+  boss: "首领",
+  special: "特殊",
+};
+
 /** lookup 结果 → 文字（卡牌信息 + 术语定义）。框架文案在 .hbs，游戏数据插值。 */
 export function renderSpireReference(ref: SpireReference): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-reference.hbs", {
     query: ref.query,
     hasQuery: ref.query.trim().length > 0,
-    hasResults: ref.cards.length > 0 || ref.terms.length > 0,
+    hasResults:
+      ref.cards.length > 0 ||
+      ref.relics.length > 0 ||
+      ref.potions.length > 0 ||
+      ref.terms.length > 0,
     hasCards: ref.cards.length > 0,
+    hasRelics: ref.relics.length > 0,
+    hasPotions: ref.potions.length > 0,
     hasTerms: ref.terms.length > 0,
     cards: ref.cards.map(card => ({
       name: card.name,
@@ -173,6 +188,17 @@ export function renderSpireReference(ref: SpireReference): string {
       targeted: card.targeted,
       description: card.description,
       upgradedDescription: card.upgradedDescription,
+    })),
+    relics: ref.relics.map(relic => ({
+      name: relic.name,
+      rarityLabel: SPIRE_RARITY_LABELS[relic.rarity] ?? relic.rarity,
+      description: relic.description,
+    })),
+    potions: ref.potions.map(potion => ({
+      name: potion.name,
+      rarityLabel: SPIRE_RARITY_LABELS[potion.rarity] ?? potion.rarity,
+      targeted: potion.targeted,
+      description: potion.description,
     })),
     terms: ref.terms,
   });

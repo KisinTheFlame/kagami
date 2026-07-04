@@ -8,6 +8,20 @@
 　升级：{{upgradedDescription}}
 {{/each}}
 {{/if}}
+{{#if hasRelics}}
+————遗物————
+{{#each relics}}
+「{{name}}」（{{rarityLabel}}）
+　效果：{{description}}
+{{/each}}
+{{/if}}
+{{#if hasPotions}}
+————药水————
+{{#each potions}}
+「{{name}}」（{{rarityLabel}}）{{#if targeted}}　需指定敌人{{/if}}
+　效果：{{description}}
+{{/each}}
+{{/if}}
 {{#if hasTerms}}
 ————术语————
 {{#each terms}}
@@ -15,6 +29,6 @@
 {{/each}}
 {{/if}}
 {{else}}
-没查到「{{query}}」。可以查卡名（如 打击、防御）或术语（如 易伤、虚弱、格挡）。不带查询词调用 lookup 会列出全部卡牌与术语。
+没查到「{{query}}」。可以查卡名（如 打击）、遗物名（如 燃烧之血）、药水名（如 火焰药水）或术语（如 易伤、虚弱、格挡）。不带查询词调用 lookup 会列出全部内容。
 {{/if}}
 </spire_reference>
