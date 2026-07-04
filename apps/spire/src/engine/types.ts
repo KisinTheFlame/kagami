@@ -189,7 +189,9 @@ export type Effect =
   | { kind: "deal_damage_all_if_draw_empty"; amount: number } // 若抽牌堆为空，对所有敌人造成 amount（大结局）
   | { kind: "deal_damage_kill_energy"; base: number; energy: number } // 造成 base；若击杀目标，获得 energy 能量（分裂）
   | { kind: "deal_damage_gain_block_dealt"; base: number } // 造成 base，获得等同于实际造成伤害的格挡（痛打）
-  | { kind: "reboot"; draw: number }; // 将手牌与弃牌堆全部洗回抽牌堆，然后抽 draw 张（重启）
+  | { kind: "reboot"; draw: number } // 将手牌与弃牌堆全部洗回抽牌堆，然后抽 draw 张（重启）
+  | { kind: "make_random_hand_card_free" } // 随机使一张手牌本场费用变 0（疯狂）
+  | { kind: "put_hand_card_on_top" }; // 将一张手牌（随机非本牌）置于抽牌堆顶（未雨绸缪）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -222,8 +224,14 @@ export type CardDef = {
   upgradedDescription: string;
 };
 
-/** 牌组里的一张牌实例（追踪是否已升级）。bonus 是本场战斗内自我成长的数值（暴走/玻璃刀），省略=0。 */
-export type CardInstance = { uid: number; defId: string; upgraded: boolean; bonus?: number };
+/** 牌组里的一张牌实例。bonus=本场自我成长数值（暴走/玻璃刀）；costZero=本实例本场费用视为 0（疯狂）。 */
+export type CardInstance = {
+  uid: number;
+  defId: string;
+  upgraded: boolean;
+  bonus?: number;
+  costZero?: boolean;
+};
 
 export type PowerInstance = { id: PowerId; amount: number };
 

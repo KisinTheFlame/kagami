@@ -1144,6 +1144,28 @@ function applyEffect(
       }
       break;
     }
+    case "make_random_hand_card_free": {
+      // 疯狂：随机使一张可打出的手牌本场费用变 0。
+      if (actor.side === "player") {
+        const candidates = combat.hand.filter(
+          c => getCardDef(c.defId).cost !== null && !c.costZero,
+        );
+        if (candidates.length > 0) {
+          candidates[nextInt(state.rng, candidates.length)]!.costZero = true;
+        }
+      }
+      break;
+    }
+    case "put_hand_card_on_top": {
+      // 未雨绸缪：将一张手牌（非本牌）置于抽牌堆顶。
+      if (actor.side === "player") {
+        const idx = combat.hand.findIndex(c => c !== sourceCard);
+        if (idx >= 0) {
+          combat.drawPile.push(combat.hand.splice(idx, 1)[0]!);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1555,7 +1577,8 @@ export function playCard(
   }
   // 腐化：技能牌费用变 0（打出后消耗，见下方入堆处理）。
   const corrupted = def.type === "skill" && getPower(combat.playerPowers, "corruption") > 0;
-  const cost = corrupted ? 0 : rawCost;
+  // costZero（疯狂使其免费）或腐化时费用视为 0。
+  const cost = corrupted || instance.costZero ? 0 : rawCost;
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
