@@ -51,6 +51,8 @@ const POWER_LABELS: Record<string, string> = {
 const ORB_LABELS: Record<string, string> = {
   lightning: "闪电",
   frost: "冰霜",
+  dark: "暗",
+  plasma: "等离子",
 };
 
 const STANCE_LABELS: Record<string, string> = {
