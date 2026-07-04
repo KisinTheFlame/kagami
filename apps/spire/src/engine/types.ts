@@ -186,7 +186,14 @@ export type Effect =
   | { kind: "drain_marked_enemies" } // 所有敌人损失 = 各自标记层数的生命（点穴）
   | { kind: "play_top_card_exhaust" } // 打出抽牌堆顶的牌并消耗之（浩劫）
   | { kind: "cap_hand_cost"; cap: number } // 本回合把手牌费用压到不超过 cap（顿悟）
-  | { kind: "add_random_card_free"; pool: "power" | "skill" } // 将一张随机牌加入手牌，费用视为 0（白噪音/分心）
+  | { kind: "add_random_card_free"; pool: "power" | "skill" | "attack" } // 将一张随机牌加入手牌，费用视为 0（白噪音/分心/地狱之刃）
+  | { kind: "discard_hand_draw_same" } // 弃掉整手，然后抽等量的牌（精算赌注）
+  | { kind: "bonus_if_target_weak"; energy: number; draw: number } // 若目标虚弱：+energy 能量并抽 draw 张（勾拳）
+  | { kind: "put_hand_card_on_draw_bottom_free" } // 把一张手牌置于抽牌堆底，本场费用视为 0（深谋；自动取最贵）
+  | { kind: "draw_if_no_attacks"; amount: number } // 若手牌中没有攻击牌，抽 amount 张（急躁）
+  | { kind: "exhaust_hand_up_to"; count: number } // 消耗手牌中至多 count 张（净化；自动取费用最低的）
+  | { kind: "exhaust_one_draw"; draw: number } // 消耗一张手牌，然后抽 draw 张（焚誓；自动取费用最低）
+  | { kind: "copy_hand_card"; count: number } // 复制手牌中的一张攻击/能力牌 count 份加入手牌（双持；自动取费用最高）
   | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
   | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
   | { kind: "return_from_exhaust" } // 从消耗堆取回一张牌到手牌（掘尸；自动取最近消耗的一张）

@@ -1028,11 +1028,127 @@ function applyEffect(
       break;
     }
     case "add_random_card_free": {
-      // 白噪音 / 分心：将一张随机牌加入手牌，费用视为 0。
+      // 白噪音 / 分心 / 地狱之刃：将一张随机牌加入手牌，费用视为 0。
       if (actor.side === "player" && combat.hand.length < MAX_HAND_SIZE) {
-        const pool = effect.pool === "power" ? WHITE_NOISE_POOL : DISTRACTION_POOL;
+        const pool =
+          effect.pool === "power"
+            ? WHITE_NOISE_POOL
+            : effect.pool === "attack"
+              ? METAMORPH_POOL
+              : DISTRACTION_POOL;
         const id = pool[nextInt(state.rng, pool.length)]!;
         combat.hand.push({ uid: state.nextUid++, defId: id, upgraded: false, costZero: true });
+      }
+      break;
+    }
+    case "discard_hand_draw_same": {
+      // 精算赌注：弃掉整手，然后抽等量的牌。
+      if (actor.side === "player") {
+        const count = combat.hand.length;
+        const discarded = [...combat.hand];
+        combat.hand = [];
+        for (const card of discarded) {
+          discardFromHand(state, card);
+        }
+        drawCards(state, count);
+      }
+      break;
+    }
+    case "bonus_if_target_weak": {
+      // 勾拳：目标虚弱时，获得能量并抽牌。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        if (getPower(combat.enemies[targetEnemyIndex]!.powers, "weak") > 0) {
+          combat.energy += effect.energy;
+          drawCards(state, effect.draw);
+        }
+      }
+      break;
+    }
+    case "put_hand_card_on_draw_bottom_free": {
+      // 深谋：把一张手牌（自动取当前费用最高）置于抽牌堆底，本场费用视为 0。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let idx = 0;
+        let high = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > high) {
+            high = c;
+            idx = i;
+          }
+        }
+        const picked = combat.hand.splice(idx, 1)[0]!;
+        picked.costZero = true;
+        combat.drawPile.unshift(picked); // 底部 = 数组头（pop 从尾取）。
+      }
+      break;
+    }
+    case "draw_if_no_attacks": {
+      // 急躁：手牌中没有攻击牌时抽牌。
+      if (actor.side === "player") {
+        const hasAttack = combat.hand.some(card => getCardDef(card.defId).type === "attack");
+        if (!hasAttack) {
+          drawCards(state, effect.amount);
+        }
+      }
+      break;
+    }
+    case "exhaust_hand_up_to": {
+      // 净化：消耗手牌中至多 count 张（自动取费用最低的）。
+      if (actor.side === "player") {
+        const sorted = [...combat.hand].sort(
+          (a, b) =>
+            (costOf(getCardDef(a.defId), a.upgraded) ?? 99) -
+            (costOf(getCardDef(b.defId), b.upgraded) ?? 99),
+        );
+        const toExhaust = sorted.slice(0, effect.count);
+        for (const card of toExhaust) {
+          const at = combat.hand.indexOf(card);
+          if (at >= 0) {
+            combat.hand.splice(at, 1);
+            exhaustCard(state, card);
+          }
+        }
+      }
+      break;
+    }
+    case "exhaust_one_draw": {
+      // 焚誓：消耗一张手牌（自动取费用最低），然后抽 draw 张。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let idx = 0;
+        let low = 99;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 99;
+          if (c < low) {
+            low = c;
+            idx = i;
+          }
+        }
+        exhaustCard(state, combat.hand.splice(idx, 1)[0]!);
+        drawCards(state, effect.draw);
+      }
+      break;
+    }
+    case "copy_hand_card": {
+      // 双持：复制手牌中的一张攻击/能力牌（自动取费用最高）count 份加入手牌。
+      if (actor.side === "player") {
+        let idx = -1;
+        let high = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const t = getCardDef(combat.hand[i]!.defId).type;
+          if (t === "attack" || t === "power") {
+            const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+            if (c > high) {
+              high = c;
+              idx = i;
+            }
+          }
+        }
+        if (idx >= 0) {
+          const src = combat.hand[idx]!;
+          for (let n = 0; n < effect.count && combat.hand.length < MAX_HAND_SIZE; n += 1) {
+            combat.hand.push({ uid: state.nextUid++, defId: src.defId, upgraded: src.upgraded });
+          }
+        }
       }
       break;
     }
