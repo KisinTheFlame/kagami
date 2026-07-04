@@ -45,6 +45,38 @@ const DARK_PASSIVE = 6; // 暗球每回合结束累积的伤害（+集中）。
 const PLASMA_PASSIVE_ENERGY = 1; // 等离子球每回合结束给 1 能量（不受集中影响）。
 const PLASMA_EVOKE_ENERGY = 2; // 等离子球唤醒给 2 能量。
 const OMEGA_DAMAGE = 50; // 奥米加每层每回合结束对全体的伤害（对齐 StS）。
+// 磁力：每回合开始随机加入手牌的无色牌池（均为已实现的无色牌 id）。
+const MAGNETISM_POOL = [
+  "blind",
+  "trip",
+  "finesse",
+  "good_instincts",
+  "swift_strike",
+  "flash_of_steel",
+  "dramatic_entrance",
+  "mind_blast",
+  "madness",
+  "dark_shackles",
+];
+// 白噪音：随机加入手牌的能力牌池（费用视为 0）。
+const WHITE_NOISE_POOL = ["inflame", "feel_no_pain", "metallicize", "combust", "rupture"];
+// 声东击西（分心）：随机加入手牌的技能牌池（费用视为 0）。
+const DISTRACTION_POOL = [
+  "blind",
+  "trip",
+  "finesse",
+  "dark_shackles",
+  "ghostly_armor",
+  "bandage_up",
+];
+// 变形：随机洗入抽牌堆的攻击牌池（费用视为 0）。
+const METAMORPH_POOL = [
+  "swift_strike",
+  "flash_of_steel",
+  "mind_blast",
+  "dramatic_entrance",
+  "bite",
+];
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
@@ -969,6 +1001,53 @@ function applyEffect(
       }
       break;
     }
+    case "cap_hand_cost": {
+      // 顿悟：本回合把当前手牌的费用压到不超过 cap（回合结束清除）。
+      if (actor.side === "player") {
+        for (const card of combat.hand) {
+          card.costCapThisTurn = effect.cap;
+        }
+      }
+      break;
+    }
+    case "add_random_card_free": {
+      // 白噪音 / 分心：将一张随机牌加入手牌，费用视为 0。
+      if (actor.side === "player" && combat.hand.length < MAX_HAND_SIZE) {
+        const pool = effect.pool === "power" ? WHITE_NOISE_POOL : DISTRACTION_POOL;
+        const id = pool[nextInt(state.rng, pool.length)]!;
+        combat.hand.push({ uid: state.nextUid++, defId: id, upgraded: false, costZero: true });
+      }
+      break;
+    }
+    case "add_random_cards_to_draw": {
+      // 蜕变 / 变形：将 count 张随机牌洗入抽牌堆的随机位置，费用视为 0。
+      if (actor.side === "player") {
+        const pool = effect.pool === "skill" ? DISTRACTION_POOL : METAMORPH_POOL;
+        for (let n = 0; n < effect.count; n += 1) {
+          const id = pool[nextInt(state.rng, pool.length)]!;
+          const at = nextInt(state.rng, combat.drawPile.length + 1);
+          combat.drawPile.splice(at, 0, {
+            uid: state.nextUid++,
+            defId: id,
+            upgraded: false,
+            costZero: true,
+          });
+        }
+      }
+      break;
+    }
+    case "fission": {
+      // 裂变：唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张。
+      if (actor.side === "player") {
+        const evoked = combat.orbs.length;
+        for (let n = 0; n < evoked; n += 1) {
+          evokeOrb(state, 0);
+        }
+        combat.energy += evoked;
+        drawCards(state, evoked);
+      }
+      break;
+    }
     case "bonus_if_target_vulnerable": {
       // 飞踢：目标处于易伤时，获得能量并抽牌。
       if (actor.side === "player" && targetEnemyIndex !== null) {
@@ -986,6 +1065,18 @@ function applyEffect(
         if (enemy.hp > 0) {
           addPower(enemy.powers, "strength", -effect.amount);
           addPower(enemy.powers, "shackled", effect.amount);
+        }
+      }
+      break;
+    }
+    case "weaken_all_enemies_strength": {
+      // 穿刺尖啸：所有敌人临时失去力量，各自行动过后归还。
+      if (actor.side === "player") {
+        for (const enemy of combat.enemies) {
+          if (enemy.hp > 0) {
+            addPower(enemy.powers, "strength", -effect.amount);
+            addPower(enemy.powers, "shackled", effect.amount);
+          }
         }
       }
       break;
@@ -1758,12 +1849,13 @@ function dealDamageToPlayer(
       channelOrb(state, "lightning");
     }
   }
-  // 荆棘：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
-  const thorns = getPower(combat.playerPowers, "thorns");
-  if (thorns > 0 && attackerIndex !== undefined) {
+  // 荆棘 + 火焰屏障：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
+  const reflect =
+    getPower(combat.playerPowers, "thorns") + getPower(combat.playerPowers, "flame_barrier");
+  if (reflect > 0 && attackerIndex !== undefined) {
     const attacker = combat.enemies[attackerIndex];
     if (attacker && attacker.hp > 0) {
-      attacker.hp = Math.max(0, attacker.hp - thorns);
+      attacker.hp = Math.max(0, attacker.hp - reflect);
     }
   }
 }
@@ -1987,11 +2079,19 @@ export function playCard(
   }
   // 流水线：本实例本场累计的永久降费。
   costReduction += instance.costReduction ?? 0;
+  // 巧计一击：费用按本场失血次数上调（负降费）。
+  if (def.costPlusHpLossCountThisCombat) {
+    costReduction -= combat.timesLostHpThisCombat;
+  }
   const discountedRawCost = Math.max(0, rawCost - costReduction);
   // 回身步：下一张攻击牌费用视为 0（打出后消耗一层）。
   const freeAttack = def.type === "attack" && getPower(combat.playerPowers, "free_attack") > 0;
   // costZero（疯狂使其免费）或腐化时费用视为 0。
-  const cost = corrupted || instance.costZero || freeAttack ? 0 : discountedRawCost;
+  let cost = corrupted || instance.costZero || freeAttack ? 0 : discountedRawCost;
+  // 顿悟：本回合费用上限（把费用压到不超过 costCapThisTurn）。
+  if (instance.costCapThisTurn !== undefined) {
+    cost = Math.min(cost, instance.costCapThisTurn);
+  }
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
@@ -2203,6 +2303,7 @@ export function endTurn(state: GameState): void {
   // 深谋远虑：回合结束可额外保留至多 N 张本应弃掉的牌。
   let wellLaidPlans = getPower(combat.playerPowers, "well_laid_plans");
   for (const instance of combat.hand) {
+    instance.costCapThisTurn = undefined; // 顿悟「本回合」限定：回合结束清除费用上限。
     const cardDef = getCardDef(instance.defId);
     if (cardDef.retain) {
       retained.push(instance);
@@ -2375,6 +2476,10 @@ export function endTurn(state: GameState): void {
       removePower(enemy.powers, "shackled");
     }
   }
+  // 火焰屏障「本回合」限定：作用到敌人回合结束（覆盖被攻击反弹），新玩家回合开始清除。
+  if (getPower(combat.playerPowers, "flame_barrier") > 0) {
+    removePower(combat.playerPowers, "flame_barrier");
+  }
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
     state.hp = 0;
@@ -2507,6 +2612,11 @@ export function endTurn(state: GameState): void {
   // 机器学习：每回合多抽 = 层数的牌；叠加下回合预约抽牌（掠食者）。
   const machineLearning = getPower(combat.playerPowers, "machine_learning");
   drawCards(state, STARTING_HAND_SIZE + machineLearning + scheduledDraw);
+  // 磁力：每回合开始将 = 层数张随机无色牌加入手牌。
+  const magnetism = getPower(combat.playerPowers, "magnetism");
+  for (let n = 0; n < magnetism; n += 1) {
+    addCards(state, MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!, "hand", 1);
+  }
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
 
