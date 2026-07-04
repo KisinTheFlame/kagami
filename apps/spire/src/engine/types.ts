@@ -91,7 +91,12 @@ export type PowerId =
   | "omega" // 奥米加：每个玩家回合结束，对所有敌人造成 50×层数 的伤害（观者）
   | "master_reality" // 掌控现实：战斗中生成的牌进场即升级（观者）
   | "corpse_bomb" // 尸爆：此敌人死亡时，把它的中毒施加给其余所有敌人（静默，敌人身上）
-  | "self_repair"; // 自我修复：战斗结束时回复 = 层数的生命（机器人）
+  | "self_repair" // 自我修复：战斗结束时回复 = 层数的生命（机器人）
+  | "magnetism" // 磁力：每个玩家回合开始，将 = 层数张随机无色牌加入手牌（机器人）
+  | "flame_barrier" // 火焰屏障：本回合每当被攻击，对攻击者反弹 = 层数的伤害（回合末清除，铁甲）
+  | "like_water" // 静如止水：回合结束若处于平静姿态，获得 = 层数的格挡（观者）
+  | "burst" // 爆发：接下来的 = 层数张技能牌各额外结算一次（每消耗一次 -1 层，静默）
+  | "phantasmal"; // 幻杀：本回合你的攻击造成双倍伤害（回合末清除，静默）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -179,9 +184,19 @@ export type Effect =
   | { kind: "deal_damage_lesson"; amount: number } // 对目标造成 amount；若因此击杀，永久升级牌组中一张随机牌（研学有成）
   | { kind: "drain_marked_enemies" } // 所有敌人损失 = 各自标记层数的生命（点穴）
   | { kind: "play_top_card_exhaust" } // 打出抽牌堆顶的牌并消耗之（浩劫）
+  | { kind: "cap_hand_cost"; cap: number } // 本回合把手牌费用压到不超过 cap（顿悟）
+  | { kind: "add_random_card_free"; pool: "power" | "skill" } // 将一张随机牌加入手牌，费用视为 0（白噪音/分心）
+  | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
+  | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
+  | { kind: "return_from_exhaust" } // 从消耗堆取回一张牌到手牌（掘尸；自动取最近消耗的一张）
+  | { kind: "conjure_blade" } // X 费：将一张「湮灭之刃」加入手牌，其伤害随 X 提升（铸刃）
+  | { kind: "lose_hp_per_hand_card" } // 失去 = 手牌张数的生命（悔恨，回合末在手时触发）
+  | { kind: "play_top_card_twice" } // 打出抽牌堆顶的牌两次，随后消耗（全知）
+  | { kind: "schedule_phantasmal" } // 下个回合你的攻击造成双倍伤害（幻杀）
   | { kind: "end_turn" } // 打出结算后立即结束本回合（终局；在 playCard 收尾处检测）
   | { kind: "bonus_if_target_vulnerable"; energy: number; draw: number } // 若目标易伤：+energy 能量并抽 draw 张（飞踢）
   | { kind: "weaken_enemy_strength"; amount: number } // 使目标临时失去 amount 力量，其行动后归还（黑暗枷锁）
+  | { kind: "weaken_all_enemies_strength"; amount: number } // 使所有敌人临时失去 amount 力量，各自行动后归还（穿刺尖啸）
   | { kind: "deal_damage_plus_mantra_gained"; base: number } // 对目标造成 base + 本场累计法力（璀璨光辉）
   | { kind: "deal_damage_all_per_frost_channeled"; per: number } // 对所有敌人造成 per×本场充能冰霜数（暴风雪）
   // —— 下回合预约 / 弃牌 / 随机毒 / 抽到指定张数 ——
@@ -264,6 +279,8 @@ export type CardDef = {
   costMinusHpLossCountThisCombat?: boolean;
   /** 每打出一次，本实例本场永久 -1 费（下限 0）（流水线）。 */
   costReducesOnPlay?: boolean;
+  /** 打出时费用按本场失血次数上调（巧计一击）。 */
+  costPlusHpLossCountThisCombat?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -280,6 +297,8 @@ export type CardDef = {
   upgradedOnDiscard?: Effect[];
   /** 被消耗（进消耗堆）时，以玩家为行动者结算这些效果（哨戒回能量）。 */
   onExhaust?: Effect[];
+  /** 被抽到手牌时，以玩家为行动者结算这些效果（无尽痛楚：加一张自身副本）。 */
+  onDraw?: Effect[];
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
@@ -295,6 +314,8 @@ export type CardInstance = {
   costZero?: boolean;
   /** 本实例本场累计的永久降费（流水线：每打出一次 +1，playCard 时从费用扣除，下限 0）。 */
   costReduction?: number;
+  /** 本回合费用上限（顿悟：把手牌费用压到不超过此值；回合结束清除）。 */
+  costCapThisTurn?: number;
 };
 
 export type PowerInstance = { id: PowerId; amount: number };
@@ -404,6 +425,8 @@ export type CombatState = {
   nextTurnStance: PlayerStance | null;
   /** 亵渎：为真则下个回合开始时角色死亡。默认 false。 */
   doomedNextTurn: boolean;
+  /** 幻杀：为真则下个回合开始时获得「幻杀」（当回合攻击双倍）。默认 false。 */
+  nextTurnPhantasmal: boolean;
   /** 本回合已打出的攻击牌数（终结技按此结算；每回合开始清零）。 */
   attacksThisTurn: number;
   /** 本回合已（由牌效果）弃掉的手牌数（剖体斩降费 / 声东击西给能量按此；回合开始清零）。 */

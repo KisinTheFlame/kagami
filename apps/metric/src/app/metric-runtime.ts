@@ -2,16 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaMetricDao } from "@kagami/persistence/dao/impl/prisma-metric.impl.dao";
-import { PrismaLlmObservabilityDao } from "@kagami/persistence/dao/impl/prisma-llm-observability.impl.dao";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 import { MetricRecordHandler } from "../metric/http/metric-record.handler.js";
-import { ObservabilityHandler } from "../metric/http/observability.handler.js";
 import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
 import { DefaultMetricRecordService } from "../metric/application/metric-record.impl.service.js";
-import { DefaultLlmObservabilityService } from "../metric/application/llm-observability.impl.service.js";
 import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
 
 const logger = new AppLogger({ source: "metric-bootstrap" });
@@ -38,14 +35,12 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
 
   const metricDao = new PrismaMetricDao({ database });
   const metricChartDao = new PrismaMetricChartDao({ database });
-  const llmObservabilityDao = new PrismaLlmObservabilityDao({ database });
 
   const metricRecordService = new DefaultMetricRecordService({ metricDao });
   const metricChartService = new DefaultMetricChartService({
     metricDao,
     metricChartDao,
   });
-  const llmObservabilityService = new DefaultLlmObservabilityService({ llmObservabilityDao });
 
   // 面向前端查询 + agent 摄取：traceId / 默认错误三分支由公共装配壳提供。
   const app = createServiceApp({
@@ -54,7 +49,6 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
       new HealthHandler(),
       new MetricRecordHandler({ metricRecordService }),
       new MetricChartHandler({ metricChartService }),
-      new ObservabilityHandler({ llmObservabilityService }),
     ],
   });
 
