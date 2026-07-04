@@ -138,15 +138,11 @@ The backend has been reorganized into a "flat modules + in-module layering" stru
 
 Main modules:
 
-- `common/`: shared contracts, error handling, HTTP helpers, runtime utilities
-- `config/`: configuration schema, loading, and runtime config management
-- `db/`: Prisma client and database infrastructure
-- `logger/`: log runtime, serializer, sink, log DAO
-- `auth/`: OAuth, callback service, secret store, usage cache, usage trend, unified auth HTTP endpoints
-- `llm/`: providers, chat client, embedding, playground, related DAOs
+- `acl/`: anti-corruption HTTP client façades for each standalone peer process (llm / browser / spire / oss) — wire goes through the contract client, plus each service's domain semantics
+- `common/`: cross-cutting, business-agnostic runtime utilities (currently `detect-mime`, byte-sniffing MIME detection)
+- `llm/`: LLM playground service + HTTP handler (provider / credentials / chat moved out to the kagami-llm process; the reporting client lives in `acl/`)
 - `napcat/`: NapCat protocol adapter (gateway transport, inbound normalization, image analysis, persistence) — the gateway instance is owned by the QQ App, just one of the Agent's event sources
 - `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
-- `oss/`: server-side object storage HTTP client that PUTs images into the self-hosted `apps/oss`
 - `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction
 - `ops/`: query endpoints for App Log, LLM Chat Call, main Agent context, NapCat history, etc.
 - `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / gateway lifecycle

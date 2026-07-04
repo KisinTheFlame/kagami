@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HttpBrowserClient } from "../../src/browser/browser-client.js";
+import { HttpBrowserClient } from "../../src/acl/browser-client.js";
 import {
   BrowserError,
   serializeBrowserError,

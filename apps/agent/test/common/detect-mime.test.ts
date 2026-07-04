@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectMime } from "../../src/oss/detect-mime.js";
+import { detectMime } from "../../src/common/detect-mime.js";
 
 /** 拼一个以指定字节开头、后面补零的 buffer，模拟真实文件头。 */
 function withMagic(...head: number[]): Buffer {

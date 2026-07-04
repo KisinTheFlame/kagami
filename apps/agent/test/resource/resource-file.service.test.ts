@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResourceFileService } from "../../src/agent/capabilities/resource/application/resource-file.service.js";
-import type { OssClient } from "../../src/oss/oss-client.js";
+import type { OssClient } from "../../src/acl/oss-client.js";
 
 function ossStub(overrides: Partial<OssClient> = {}): OssClient {
   return {

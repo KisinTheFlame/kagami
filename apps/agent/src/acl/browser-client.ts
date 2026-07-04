@@ -20,7 +20,7 @@ type TypeValue = z.infer<typeof TypeValueSchema>;
 /**
  * 浏览器客户端门面：方法签名**逐一镜像** BrowserService 公有方法，8 个工具从返回对象的具名字段
  * 重新 JSON.stringify——tool_result 字节因此与进程拆分前完全一致（KV 缓存契约，issue #173，由
- * apps/agent/test/browser/browser-client-wire.test.ts 的字节基线钉死）。
+ * apps/agent/test/acl/browser-client-wire.test.ts 的字节基线钉死）。
  *
  * wire 层走 @kagami/browser-api 契约驱动的 createClient（issue #230）：请求/响应形状与服务端
  * handler 共享同一份 Zod schema，改契约两端同时编译报错。门面只保留两处变换：screenshot 的

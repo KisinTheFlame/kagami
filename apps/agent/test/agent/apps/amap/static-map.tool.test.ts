@@ -5,7 +5,7 @@ import { StaticMapTool } from "../../../../src/agent/apps/amap/tools/static-map.
 // OSS 降级路径会 logger.warn，需要先初始化日志 runtime（否则 getLoggerRuntime 抛）。
 initTestLoggerRuntime();
 import type { AmapClient } from "../../../../src/agent/apps/amap/client/amap-client.js";
-import type { OssClient } from "../../../../src/oss/oss-client.js";
+import type { OssClient } from "../../../../src/acl/oss-client.js";
 import type { AppendMessageEffect } from "../../../../src/agent/runtime/effect/root-agent-effect.js";
 
 function fakeClient(): AmapClient {

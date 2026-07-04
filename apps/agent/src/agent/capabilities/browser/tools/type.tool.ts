@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import { BrowserError } from "../domain/errors.js";
-import type { BrowserClient } from "../../../../browser/browser-client.js";
+import type { BrowserClient } from "../../../../acl/browser-client.js";
 
 export const BROWSER_TYPE_TOOL_NAME = "browser_type";
 

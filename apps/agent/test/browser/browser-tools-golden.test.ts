@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BrowserClient } from "../../src/browser/browser-client.js";
+import type { BrowserClient } from "../../src/acl/browser-client.js";
 import { BrowserError } from "../../src/agent/capabilities/browser/domain/errors.js";
 import { BrowserNavigateTool } from "../../src/agent/capabilities/browser/tools/navigate.tool.js";
 import { BrowserObserveTool } from "../../src/agent/capabilities/browser/tools/observe.tool.js";

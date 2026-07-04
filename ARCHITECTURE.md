@@ -82,19 +82,16 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 
 ### 关键模块速览
 
-| 模块        | 职责                                                                                            |
-| ----------- | ----------------------------------------------------------------------------------------------- |
-| `common`    | `BizError`、`toHttpErrorResponse`、路由 helper、`prisma-json` 等跨模块公共契约                  |
-| `config`    | `config.yaml` 加载、Zod 校验、运行时配置管理                                                    |
-| `db`        | Prisma client（better-sqlite3 adapter）、事务封装                                               |
-| `auth`      | OAuth（Claude Code / Codex 等）回调、secret store、usage cache / trend                          |
-| `llm`       | LLM provider 封装、chat client、embedding、playground、调用历史 DAO                             |
-| `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有 |
-| `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                          |
-| `oss`       | `apps/oss` 内部的 HTTP 客户端（server 侧 `oss/oss-client.ts`），把图片 PUT 进自建对象存储       |
-| `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩    |
-| `ops`       | 后台观测接口：app-log、llm-chat-call、embedding-cache、main-agent-context、napcat history       |
-| `app`       | 模块装配、Fastify 路由注册、健康检查、Agent / 网关生命周期编排                                  |
+| 模块        | 职责                                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `acl`       | 各独立对端进程（llm / browser / spire / oss）的 HTTP 客户端门面（防腐层）：wire 走契约 `createClient` / `createBinaryClient`，另加各服务领域语义（重试匹配 / 版本幂等 / 错误归一 / maxBytes 等） |
+| `common`    | 跨切面、无业务语义的运行时工具（当前：`detect-mime` 按字节嗅探 MIME）                                                                                                                            |
+| `llm`       | LLM playground service + HTTP handler（provider / 凭据 / chat 已外移 kagami-llm 进程；上报 client 在 `acl/`）                                                                                    |
+| `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有                                                                                                  |
+| `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                                                                                                                           |
+| `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩                                                                                                     |
+| `ops`       | 后台观测接口：app-log、llm-chat-call、embedding-cache、main-agent-context、napcat history                                                                                                        |
+| `app`       | 模块装配、Fastify 路由注册、健康检查、Agent / 网关生命周期编排                                                                                                                                   |
 
 ### Agent 子结构（手机 OS 模型）
 
@@ -113,7 +110,7 @@ apps/agent/src/agent/
 │   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
 │   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
-│   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/browser/HttpBrowserClient` 驱动（#173）
+│   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/acl/browser-client.ts` 驱动（#173）
 │   ├── context-summary/ 上下文压缩 task agent（唯一允许 replaceMessages 的路径）
 │   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
 │   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）

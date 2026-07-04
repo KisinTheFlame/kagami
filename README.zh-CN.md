@@ -133,15 +133,11 @@ pnpm db:migrate:resolve -- --applied <migration_id>
 
 当前主要模块包括：
 
-- `common/`：公共契约、错误处理、HTTP 辅助、运行时工具
-- `config/`：配置 schema、配置加载与运行时配置管理
-- `db/`：Prisma 客户端与数据库基础设施
-- `logger/`：日志 runtime、serializer、sink、日志 DAO
-- `auth/`：OAuth、回调服务、secret store、usage cache、usage trend、统一认证 HTTP 接口
-- `llm/`：provider、chat client、embedding、playground、相关 DAO
+- `acl/`：各独立对端进程（llm / browser / spire / oss）的 HTTP 客户端门面（防腐层），wire 走契约 client、另加各服务领域语义
+- `common/`：跨切面、无业务语义的运行时工具（当前 `detect-mime` 按字节嗅探 MIME）
+- `llm/`：LLM playground service + HTTP handler（provider / 凭据 / chat 已外移 kagami-llm 进程；上报 client 在 `acl/`）
 - `napcat/`：NapCat 协议适配（gateway transport、入站归一化、图片分析、持久化写入）；网关实例由 QQ App 持有，只是 Agent 的一种事件源
 - `scheduler/`：后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）
-- `oss/`：server 侧对象存储 HTTP 客户端，把图片 PUT 进自建 `apps/oss`
 - `agent/`：Kagami 的 Agent 业务层——手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩
 - `ops/`：App Log、LLM Chat Call、embedding-cache、主 Agent 上下文、NapCat 历史等查询接口
 - `app/`：最高层运行时装配——模块 wiring、Fastify 路由注册、健康检查、Agent / 网关生命周期编排
