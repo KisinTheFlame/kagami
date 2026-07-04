@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import { detectMime } from "../../../../oss/detect-mime.js";
-import type { OssClient } from "../../../../oss/oss-client.js";
+import { detectMime } from "../../../../common/detect-mime.js";
+import type { OssClient } from "../../../../acl/oss-client.js";
 import type {
   NapcatChatTarget,
   NapcatGatewayService,

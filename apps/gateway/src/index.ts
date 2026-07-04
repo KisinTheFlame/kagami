@@ -22,6 +22,7 @@ const CONSOLE_PATH_PREFIXES = [
   "/llm-chat-call",
   "/napcat-event",
   "/napcat-group-message",
+  "/todo",
 ];
 // 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
 const LLM_PATH_PREFIXES = ["/auth"];

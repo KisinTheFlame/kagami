@@ -5,7 +5,7 @@ import type {
   SpirePower,
   SpireReference,
   SpireScreen,
-} from "../../../../spire/spire-client.js";
+} from "../../../../acl/spire-client.js";
 
 // === ScreenView → 文字屏幕（走 .hbs 模板）===
 //
@@ -36,17 +36,40 @@ const POWER_LABELS: Record<string, string> = {
   regen: "再生",
   plated_armor: "镀甲",
   mode_shift: "模式",
+  combust: "燃烧",
+  feel_no_pain: "无痛",
+  dark_embrace: "暗黑拥抱",
+  juggernaut: "主宰",
+  brutality: "残暴",
+  barricade: "壁垒",
+  rupture: "破裂",
+  thousand_cuts: "千刃",
+  after_image: "残影",
+  noxious_fumes: "毒雾",
+  devotion: "虔诚",
+  mental_fortress: "心之堡垒",
+  rushdown: "疾攻",
+  storm: "风暴",
+  heatsinks: "散热",
+  static_discharge: "静电放电",
+  machine_learning: "机器学习",
+  evolve: "进化",
+  corruption: "腐化",
+  nirvana: "涅槃",
 };
 
 const ORB_LABELS: Record<string, string> = {
   lightning: "闪电",
   frost: "冰霜",
+  dark: "暗",
+  plasma: "等离子",
 };
 
 const STANCE_LABELS: Record<string, string> = {
   none: "无",
   calm: "平静",
   wrath: "愤怒",
+  divinity: "神性",
 };
 
 function labelPowers(powers: readonly SpirePower[]): { label: string; amount: number }[] {
@@ -131,6 +154,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
           orbSlots: combat.orbSlots,
           hasStance: combat.stance !== "none",
           stance: STANCE_LABELS[combat.stance] ?? combat.stance,
+          hasMantra: combat.mantra > 0,
+          mantra: combat.mantra,
         }
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),
@@ -155,13 +180,28 @@ const CARD_TYPE_LABELS: Record<string, string> = {
   status: "状态牌",
 };
 
+const SPIRE_RARITY_LABELS: Record<string, string> = {
+  starter: "起始",
+  common: "普通",
+  uncommon: "罕见",
+  rare: "稀有",
+  boss: "首领",
+  special: "特殊",
+};
+
 /** lookup 结果 → 文字（卡牌信息 + 术语定义）。框架文案在 .hbs，游戏数据插值。 */
 export function renderSpireReference(ref: SpireReference): string {
   return renderServerStaticTemplate(import.meta.url, "context/spire-reference.hbs", {
     query: ref.query,
     hasQuery: ref.query.trim().length > 0,
-    hasResults: ref.cards.length > 0 || ref.terms.length > 0,
+    hasResults:
+      ref.cards.length > 0 ||
+      ref.relics.length > 0 ||
+      ref.potions.length > 0 ||
+      ref.terms.length > 0,
     hasCards: ref.cards.length > 0,
+    hasRelics: ref.relics.length > 0,
+    hasPotions: ref.potions.length > 0,
     hasTerms: ref.terms.length > 0,
     cards: ref.cards.map(card => ({
       name: card.name,
@@ -173,6 +213,17 @@ export function renderSpireReference(ref: SpireReference): string {
       targeted: card.targeted,
       description: card.description,
       upgradedDescription: card.upgradedDescription,
+    })),
+    relics: ref.relics.map(relic => ({
+      name: relic.name,
+      rarityLabel: SPIRE_RARITY_LABELS[relic.rarity] ?? relic.rarity,
+      description: relic.description,
+    })),
+    potions: ref.potions.map(potion => ({
+      name: potion.name,
+      rarityLabel: SPIRE_RARITY_LABELS[potion.rarity] ?? potion.rarity,
+      targeted: potion.targeted,
+      description: potion.description,
     })),
     terms: ref.terms,
   });

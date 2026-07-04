@@ -2,9 +2,9 @@ import { z } from "zod";
 import { type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BrowserToolComponent } from "./browser-tool-component.js";
-import type { BrowserClient } from "../../../../browser/browser-client.js";
+import type { BrowserClient } from "../../../../acl/browser-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
-import type { OssClient } from "../../../../oss/oss-client.js";
+import type { OssClient } from "../../../../acl/oss-client.js";
 
 export const BROWSER_SCREENSHOT_TOOL_NAME = "browser_screenshot";
 

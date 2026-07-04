@@ -37,7 +37,28 @@ export type PowerId =
   | "plated_armor" // 镀甲：每回合结束获得 = 层数的格挡；受到穿透格挡的攻击伤害时 -1 层
   | "angry" // 狂怒：每次受到攻击伤害，获得 = 层数的力量（狂暴地精）
   | "spore_cloud" // 孢子云：死亡时给玩家施加易伤（真菌兽，显示用；实际死亡效果在 deathEffects）
-  | "mode_shift"; // 模式切换累计（守卫者，内部计数用）
+  | "mode_shift" // 模式切换累计（守卫者，内部计数用）
+  // —— 玩家能力牌触发型 power（在对应触发点由 combat 结算，玩家专属）——
+  | "combust" // 燃烧：每个玩家回合结束，失 1 生命并对所有敌人造成 = 层数的伤害
+  | "feel_no_pain" // 无痛：每消耗一张牌，获得 = 层数的格挡
+  | "dark_embrace" // 暗黑拥抱：每消耗一张牌，抽 = 层数的牌
+  | "juggernaut" // 主宰：每当你获得格挡，对随机敌人造成 = 层数的伤害
+  | "brutality" // 残暴：每个玩家回合开始，失 = 层数的生命并抽 = 层数的牌
+  | "barricade" // 壁垒：格挡不再于回合开始清空（层数只作存在标记）
+  | "rupture" // 破裂：每当你因打出的牌失去生命，获得 = 层数的力量
+  | "thousand_cuts" // 千刃：每打出一张牌，对所有敌人造成 = 层数的伤害
+  | "after_image" // 残影：每打出一张牌，获得 = 层数的格挡
+  | "noxious_fumes" // 毒雾：每个玩家回合开始，令所有敌人获得 = 层数的中毒
+  | "devotion" // 虔诚：每个玩家回合开始，获得 = 层数的法力（观者）
+  | "mental_fortress" // 心之堡垒：每次姿态改变，获得 = 层数的格挡（观者）
+  | "rushdown" // 疾攻：每次进入愤怒姿态，抽 = 层数的牌（观者）
+  | "storm" // 风暴：每打出一张能力牌，充能 = 层数的闪电球（机器人）
+  | "heatsinks" // 散热：每打出一张能力牌，抽 = 层数的牌（机器人）
+  | "static_discharge" // 静电放电：每受到穿透格挡的攻击伤害，充能 = 层数的闪电球（机器人）
+  | "machine_learning" // 机器学习：每个玩家回合开始，多抽 = 层数的牌（机器人）
+  | "evolve" // 进化：每抽到一张状态牌，额外抽 = 层数的牌
+  | "corruption" // 腐化：技能牌费用变 0，且打出后消耗（铁甲）
+  | "nirvana"; // 涅槃：每次预知，获得 = 层数的格挡（观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -69,6 +90,12 @@ export type Effect =
   | { kind: "lose_hp"; amount: number }
   // 玩家回复最大生命的百分比（血之药水 40%）。
   | { kind: "heal_percent"; percent: number }
+  // 玩家回复固定生命（包扎等）。
+  | { kind: "heal"; amount: number }
+  // 玩家用：当前力量翻倍（极限爆发）。
+  | { kind: "double_strength" }
+  // 玩家永久提升最大生命并回复等量（果汁药水）。
+  | { kind: "gain_max_hp"; amount: number }
   // 敌人用：偷取玩家金币（拾荒者，最多偷 amount，玩家金币不足则偷光）。
   | { kind: "steal_gold"; amount: number }
   // 敌人用：本敌人逃离战斗（拾荒者烟雾弹后逃跑）。
@@ -79,7 +106,32 @@ export type Effect =
   | { kind: "heal_ally"; amount: number }
   // 敌人用：召唤若干敌人加入战斗（地精首领召唤地精；新生者本回合不行动）。
   | { kind: "summon"; defIds: string[] }
-  | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
+  | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number }
+  // —— X 费牌：xValue = 打出时的能量，以下效果按 X 次 / X 倍结算 ——
+  | { kind: "deal_damage_all_x"; amount: number } // 对所有敌人造成 amount 伤害，X 次（旋风斩）
+  | { kind: "deal_damage_x"; amount: number } // 对目标造成 amount 伤害，X 次（穿刺）
+  | { kind: "gain_block_x"; amount: number } // 获得 amount 格挡，X 次（强化机体）
+  | { kind: "evoke_x" } // 唤醒 X 颗球（多重施法）
+  | {
+      kind: "apply_power_x";
+      power: PowerId;
+      amount: number;
+      on: "self" | "target" | "all_enemies";
+    } // 施加 amount×X 层
+  // —— 按数量结算：伤害 / 格挡随牌堆 / 手牌 / 状态动态计算 ——
+  | { kind: "deal_damage_draw_pile_count" } // 对目标造成 = 抽牌堆张数的伤害（心灵冲击）
+  | { kind: "gain_block_per_hand_card"; amount: number } // 每张手牌获得 amount 格挡（灵盾）
+  | { kind: "deal_damage_per_hand_type"; cardType: CardType; amount: number } // 手牌中每张该类型牌，对目标造成 amount 伤害（飞镖：每张技能）
+  | { kind: "deal_damage_perfected"; amount: number; per: number } // 基础 amount + per×(各区「打击」名牌数)（完美打击）
+  | { kind: "deal_damage_bane"; amount: number } // 对目标造成 amount；若目标中毒则再造成 amount（剧毒之刃）
+  // 玩家用：增减球槽数（吞噬 -1、电容器 +2）；下限 0。
+  | { kind: "change_orb_slots"; delta: number }
+  // 玩家用：获得法力（观者；累积到 10 自动进入神性姿态）。
+  | { kind: "gain_mantra"; amount: number }
+  // 玩家用：预知——看抽牌堆顶 amount 张，自动弃掉其中的状态牌，其余留在顶端（观者）。
+  | { kind: "scry"; amount: number }
+  // 玩家用：抽到手牌上限（疾书）。
+  | { kind: "draw_to_full" };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -92,6 +144,8 @@ export type CardDef = {
   cost: number | null;
   /** 升级后的费用（省略=不变）；用于力压/见红等升级降费卡。 */
   upgradedCost?: number;
+  /** X 费牌：打出时消耗全部能量，X = 消耗的能量，effects 里的 *_x 效果按 X 结算（旋风斩等）。 */
+  xCost?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -180,14 +234,14 @@ export type EnemyState = {
   stance: "offensive" | "defensive" | null;
 };
 
-/** 充能球类型（机器人专属）。 */
-export type OrbType = "lightning" | "frost";
+/** 充能球类型（机器人专属）：闪电/冰霜/暗/等离子。 */
+export type OrbType = "lightning" | "frost" | "dark" | "plasma";
 
-/** 一颗充能球实例（占一个球槽）。 */
-export type Orb = { type: OrbType };
+/** 一颗充能球实例（占一个球槽）。value 供暗球累积的伤害用（其它球恒为 0/省略）。 */
+export type Orb = { type: OrbType; value?: number };
 
-/** 玩家姿态（观者专属）：平静 / 愤怒 / 无。 */
-export type PlayerStance = "none" | "calm" | "wrath";
+/** 玩家姿态（观者专属）：平静 / 愤怒 / 神性 / 无。神性下攻击 ×3，回合结束退出。 */
+export type PlayerStance = "none" | "calm" | "wrath" | "divinity";
 
 export type CombatState = {
   turn: number;
@@ -206,6 +260,8 @@ export type CombatState = {
   orbSlots: number;
   /** 玩家姿态（观者）：愤怒下攻击/受击双倍；离开平静 +2 能量。默认 none。 */
   playerStance: PlayerStance;
+  /** 观者法力：累积到 10 自动进入神性姿态并清空。默认 0（非观者恒为 0）。 */
+  mantra: number;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;

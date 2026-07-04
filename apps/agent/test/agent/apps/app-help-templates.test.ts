@@ -5,8 +5,8 @@ import { HnApp } from "../../../src/agent/apps/hn/hn.app.js";
 import { AmapApp } from "../../../src/agent/apps/amap/amap.app.js";
 import { BrowserApp } from "../../../src/agent/apps/browser/browser.app.js";
 import { SpireApp } from "../../../src/agent/apps/spire/spire.app.js";
-import type { BrowserClient } from "../../../src/browser/browser-client.js";
-import type { SpireClient } from "../../../src/spire/spire-client.js";
+import type { BrowserClient } from "../../../src/acl/browser-client.js";
+import type { SpireClient } from "../../../src/acl/spire-client.js";
 import type { RootAgentEffect } from "../../../src/agent/runtime/effect/root-agent-effect.js";
 
 /**

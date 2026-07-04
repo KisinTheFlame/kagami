@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpOssClient } from "../../src/oss/oss-client.js";
+import { HttpOssClient } from "../../src/acl/oss-client.js";
 
 describe("HttpOssClient", () => {
   it("PUTs bytes to /objects and returns the key", async () => {

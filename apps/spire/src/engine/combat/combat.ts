@@ -40,6 +40,9 @@ const LIGHTNING_PASSIVE = 3;
 const LIGHTNING_EVOKE = 8;
 const FROST_PASSIVE = 2;
 const FROST_EVOKE = 5;
+const DARK_PASSIVE = 6; // 暗球每回合结束累积的伤害（+集中）。
+const PLASMA_PASSIVE_ENERGY = 1; // 等离子球每回合结束给 1 能量（不受集中影响）。
+const PLASMA_EVOKE_ENERGY = 2; // 等离子球唤醒给 2 能量。
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
@@ -168,6 +171,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     orbs: [],
     orbSlots: state.character === "defect" ? DEFECT_ORB_SLOTS : 0,
     playerStance: "none",
+    mantra: 0,
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -205,27 +209,79 @@ function fireRelics(
   }
 }
 
-function triggerRelicCombatStart(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onCombatStart?.(state, self));
-}
-function triggerRelicCombatEnd(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onCombatEnd?.(state, self));
-}
-function triggerRelicTurnStart(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onTurnStart?.(state, self));
-}
-function triggerRelicTurnEnd(state: GameState): void {
-  fireRelics(state, (hooks, self) => hooks.onTurnEnd?.(state, self));
-}
-function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
-  // 遗物可通过 emit 发射战斗 Effect（信封等发伤遗物）；收集后以玩家为行动者统一结算。
+// 遗物可通过 emit 发射战斗 Effect（发伤 / AoE 遗物）；收集后以玩家为行动者统一结算。
+function fireRelicsCollectingEmits(
+  state: GameState,
+  invoke: (hooks: RelicDef["hooks"], self: RelicState, emit: (effect: Effect) => void) => void,
+): void {
   const emitted: Effect[] = [];
   const emit = (effect: Effect): void => {
     emitted.push(effect);
   };
-  fireRelics(state, (hooks, self) => hooks.onCardPlayed?.(state, self, cardType, emit));
+  fireRelics(state, (hooks, self) => invoke(hooks, self, emit));
   if (emitted.length > 0) {
     applyEffects(state, emitted, { side: "player" }, null);
+  }
+}
+
+function triggerRelicCombatStart(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onCombatStart?.(state, self, emit));
+}
+function triggerRelicCombatEnd(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onCombatEnd?.(state, self, emit));
+}
+function triggerRelicTurnStart(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnStart?.(state, self, emit));
+}
+function triggerRelicTurnEnd(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
+}
+function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) =>
+    hooks.onCardPlayed?.(state, self, cardType, emit),
+  );
+}
+
+/** 消耗一张牌进消耗堆，并触发消耗型玩家能力（无痛加格挡 / 暗黑拥抱抽牌）。 */
+function exhaustCard(state: GameState, instance: CardInstance): void {
+  const combat = state.combat!;
+  combat.exhaustPile.push(instance);
+  const feelNoPain = getPower(combat.playerPowers, "feel_no_pain");
+  if (feelNoPain > 0) {
+    combat.playerBlock += feelNoPain; // 直接加，不再触发主宰（避免连锁）。
+  }
+  const darkEmbrace = getPower(combat.playerPowers, "dark_embrace");
+  if (darkEmbrace > 0) {
+    drawCards(state, darkEmbrace);
+  }
+}
+
+/** 打出一张牌后触发的玩家能力（千刃对全体发伤 / 残影加格挡）。 */
+function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
+  const combat = state.combat!;
+  const thousandCuts = getPower(combat.playerPowers, "thousand_cuts");
+  if (thousandCuts > 0) {
+    applyEffects(
+      state,
+      [{ kind: "deal_damage_all", amount: thousandCuts }],
+      { side: "player" },
+      null,
+    );
+  }
+  const afterImage = getPower(combat.playerPowers, "after_image");
+  if (afterImage > 0) {
+    combat.playerBlock += afterImage; // 直接加，不触发主宰。
+  }
+  // 打出能力牌触发（机器人）：风暴充能闪电、散热抽牌。
+  if (cardType === "power") {
+    const storm = getPower(combat.playerPowers, "storm");
+    for (let n = 0; n < storm; n += 1) {
+      channelOrb(state, "lightning");
+    }
+    const heatsinks = getPower(combat.playerPowers, "heatsinks");
+    if (heatsinks > 0) {
+      drawCards(state, heatsinks);
+    }
   }
 }
 
@@ -248,6 +304,11 @@ function drawCards(state: GameState, count: number): void {
     } else {
       combat.hand.push(card);
     }
+    // 进化：抽到状态牌 → 额外抽 = 层数的牌（递归有牌堆张数上限，不会无限）。
+    const evolve = getPower(combat.playerPowers, "evolve");
+    if (evolve > 0 && getCardDef(card.defId).type === "status") {
+      drawCards(state, evolve);
+    }
   }
 }
 
@@ -258,9 +319,10 @@ function applyEffects(
   effects: readonly Effect[],
   actor: ActorRef,
   targetEnemyIndex: number | null,
+  xValue = 0,
 ): void {
   for (const effect of effects) {
-    applyEffect(state, effect, actor, targetEnemyIndex);
+    applyEffect(state, effect, actor, targetEnemyIndex, xValue);
   }
 }
 
@@ -269,6 +331,7 @@ function applyEffect(
   effect: Effect,
   actor: ActorRef,
   targetEnemyIndex: number | null,
+  xValue = 0,
 ): void {
   const combat = state.combat!;
   const powers = actorPowers(state, actor);
@@ -358,6 +421,11 @@ function applyEffect(
       const gained = computeBlockGain(effect.amount, powers);
       if (actor.side === "player") {
         combat.playerBlock += gained;
+        // 主宰：每当玩家获得格挡，对随机敌人造成 = 层数的伤害。
+        const juggernaut = getPower(combat.playerPowers, "juggernaut");
+        if (juggernaut > 0) {
+          dealOrbDamage(state, juggernaut);
+        }
       } else {
         combat.enemies[actor.index]!.block += gained;
       }
@@ -422,6 +490,11 @@ function applyEffect(
     case "lose_hp": {
       if (actor.side === "player") {
         state.hp = Math.max(0, state.hp - effect.amount);
+        // 破裂：因打出的牌失去生命 → 获得 = 层数的力量。
+        const rupture = getPower(combat.playerPowers, "rupture");
+        if (rupture > 0) {
+          addPower(combat.playerPowers, "strength", rupture);
+        }
       }
       break;
     }
@@ -429,6 +502,30 @@ function applyEffect(
       if (actor.side === "player") {
         const heal = Math.floor((state.maxHp * effect.percent) / 100);
         state.hp = Math.min(state.maxHp, state.hp + heal);
+      }
+      break;
+    }
+    case "heal": {
+      if (actor.side === "player") {
+        state.hp = Math.min(state.maxHp, state.hp + effect.amount);
+      }
+      break;
+    }
+    case "gain_max_hp": {
+      // 玩家永久 +最大生命并回复等量（果汁药水）。
+      if (actor.side === "player") {
+        state.maxHp += effect.amount;
+        state.hp += effect.amount;
+      }
+      break;
+    }
+    case "double_strength": {
+      // 玩家当前力量翻倍（极限爆发）；负力量同样翻倍。
+      if (actor.side === "player") {
+        const cur = getPower(combat.playerPowers, "strength");
+        if (cur !== 0) {
+          addPower(combat.playerPowers, "strength", cur);
+        }
       }
       break;
     }
@@ -481,6 +578,148 @@ function applyEffect(
     }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
+      break;
+    }
+    case "deal_damage_all_x": {
+      // X 费：对所有敌人造成 amount 伤害，重复 X 次（旋风斩）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue; n += 1) {
+          for (let i = 0; i < combat.enemies.length; i += 1) {
+            if (combat.enemies[i]!.hp > 0) {
+              dealDamageToEnemy(state, i, effect.amount, powers);
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_x": {
+      // X 费：对目标造成 amount 伤害，重复 X 次（穿刺）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        for (let n = 0; n < xValue; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "gain_block_x": {
+      // X 费：获得 amount 格挡，重复 X 次（强化机体）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue; n += 1) {
+          applyEffect(
+            state,
+            { kind: "gain_block", amount: effect.amount },
+            actor,
+            targetEnemyIndex,
+          );
+        }
+      }
+      break;
+    }
+    case "evoke_x": {
+      // X 费：唤醒 X 颗球（多重施法）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue && combat.orbs.length > 0; n += 1) {
+          evokeOrb(state, 0);
+        }
+      }
+      break;
+    }
+    case "apply_power_x": {
+      // X 费：施加 amount×X 层（萎靡：-X 力量 / +X 虚弱）。
+      applyPowerEffect(
+        state,
+        effect.power,
+        effect.amount * xValue,
+        effect.on,
+        actor,
+        targetEnemyIndex,
+      );
+      break;
+    }
+    case "deal_damage_draw_pile_count": {
+      // 心灵冲击：对目标造成 = 抽牌堆张数的伤害。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        dealDamageToEnemy(state, targetEnemyIndex, combat.drawPile.length, powers);
+      }
+      break;
+    }
+    case "gain_block_per_hand_card": {
+      // 灵盾：每张手牌获得 amount 格挡（本牌已离手，不计自身）。
+      if (actor.side === "player") {
+        const total = effect.amount * combat.hand.length;
+        applyEffect(state, { kind: "gain_block", amount: total }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "deal_damage_per_hand_type": {
+      // 飞镖：手牌中每张指定类型牌，对目标造成 amount 伤害（本牌已离手）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const count = combat.hand.filter(
+          card => getCardDef(card.defId).type === effect.cardType,
+        ).length;
+        for (let n = 0; n < count; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_perfected": {
+      // 完美打击：基础 amount + per×(各牌堆 / 手牌中 id 含 "strike" 的牌数)。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const zones = [combat.hand, combat.drawPile, combat.discardPile, combat.exhaustPile];
+        let strikes = 0;
+        for (const zone of zones) {
+          strikes += zone.filter(card => card.defId.includes("strike")).length;
+        }
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount + effect.per * strikes, powers);
+      }
+      break;
+    }
+    case "deal_damage_bane": {
+      // 剧毒之刃：对目标造成 amount；若目标中毒则再造成 amount。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        const target = combat.enemies[targetEnemyIndex]!;
+        if (target.hp > 0 && getPower(target.powers, "poison") > 0) {
+          dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        }
+      }
+      break;
+    }
+    case "change_orb_slots": {
+      // 吞噬 -1 / 电容器 +2：增减球槽数，下限 0。
+      if (actor.side === "player") {
+        combat.orbSlots = Math.max(0, combat.orbSlots + effect.delta);
+        // 槽数减到比现有球少时，从最左唤醒溢出的球。
+        while (combat.orbs.length > combat.orbSlots) {
+          evokeOrb(state, 0);
+        }
+      }
+      break;
+    }
+    case "gain_mantra": {
+      // 观者：累积法力，达到 10 自动进入神性姿态。
+      if (actor.side === "player") {
+        gainMantra(state, effect.amount);
+      }
+      break;
+    }
+    case "scry": {
+      if (actor.side === "player") {
+        doScry(state, effect.amount);
+      }
+      break;
+    }
+    case "draw_to_full": {
+      // 疾书：抽到手牌上限。
+      if (actor.side === "player") {
+        drawCards(state, Math.max(0, MAX_HAND_SIZE - combat.hand.length));
+      }
       break;
     }
     default: {
@@ -597,9 +836,11 @@ function dealDamageToEnemy(
     state.hp = Math.max(0, state.hp - sharpHide);
   }
   let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
-  // 愤怒姿态（观者）：玩家造成的伤害翻倍。
+  // 观者姿态对玩家造成伤害的加成：愤怒 ×2，神性 ×3。
   if (state.combat!.playerStance === "wrath") {
     dmg *= 2;
+  } else if (state.combat!.playerStance === "divinity") {
+    dmg *= 3;
   }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
@@ -685,6 +926,13 @@ function dealDamageToPlayer(
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
     addPower(combat.playerPowers, "plated_armor", -1);
   }
+  // 静电放电：受到穿透格挡的攻击伤害 → 充能 = 层数的闪电球（机器人）。
+  const staticDischarge = getPower(combat.playerPowers, "static_discharge");
+  if (afterBlock > 0 && staticDischarge > 0) {
+    for (let n = 0; n < staticDischarge; n += 1) {
+      channelOrb(state, "lightning");
+    }
+  }
   // 荆棘：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
   const thorns = getPower(combat.playerPowers, "thorns");
   if (thorns > 0 && attackerIndex !== undefined) {
@@ -698,6 +946,8 @@ function dealDamageToPlayer(
 // —— 姿态（观者）——
 
 const CALM_EXIT_ENERGY = 2; // 离开平静姿态回复的能量。
+const MANTRA_THRESHOLD = 10; // 法力达到即进入神性姿态。
+const DIVINITY_ENTER_ENERGY = 3; // 进入神性姿态获得的能量。
 
 /** 进入某姿态：离开平静时 +2 能量；同姿态则无事发生。 */
 function enterStance(state: GameState, stance: PlayerStance): void {
@@ -709,6 +959,57 @@ function enterStance(state: GameState, stance: PlayerStance): void {
     combat.energy += CALM_EXIT_ENERGY;
   }
   combat.playerStance = stance;
+  // 心之堡垒：每次姿态改变获得 = 层数的格挡。
+  const mentalFortress = getPower(combat.playerPowers, "mental_fortress");
+  if (mentalFortress > 0) {
+    combat.playerBlock += mentalFortress;
+  }
+  // 疾攻：进入愤怒姿态时抽 = 层数的牌。
+  if (stance === "wrath") {
+    const rushdown = getPower(combat.playerPowers, "rushdown");
+    if (rushdown > 0) {
+      drawCards(state, rushdown);
+    }
+  }
+}
+
+/** 累积法力：达到 10 层自动进入神性姿态（清空法力、+3 能量）。 */
+function gainMantra(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  combat.mantra += amount;
+  if (combat.mantra >= MANTRA_THRESHOLD) {
+    combat.mantra -= MANTRA_THRESHOLD;
+    enterStance(state, "divinity");
+    combat.energy += DIVINITY_ENTER_ENERGY;
+  }
+}
+
+/**
+ * 预知（观者）：看抽牌堆顶 amount 张（drawPile 末端为顶），自动弃掉其中的状态牌、
+ * 其余保持原序留在顶端（自动解算，不开交互选牌子界面）。发生一次预知触发涅槃格挡。
+ */
+function doScry(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  const n = Math.min(amount, combat.drawPile.length);
+  if (n <= 0) {
+    return;
+  }
+  const topStart = combat.drawPile.length - n;
+  const looked = combat.drawPile.splice(topStart, n); // 取出顶部 n 张
+  const kept: CardInstance[] = [];
+  for (const card of looked) {
+    if (getCardDef(card.defId).type === "status") {
+      combat.discardPile.push(card); // 状态牌自动弃掉
+    } else {
+      kept.push(card);
+    }
+  }
+  combat.drawPile.push(...kept); // 其余按原序放回顶端
+  // 涅槃：每次预知获得 = 层数的格挡。
+  const nirvana = getPower(combat.playerPowers, "nirvana");
+  if (nirvana > 0) {
+    combat.playerBlock += nirvana;
+  }
 }
 
 // —— 充能球（机器人）——
@@ -735,7 +1036,8 @@ function channelOrb(state: GameState, type: OrbType): void {
   if (combat.orbs.length >= combat.orbSlots) {
     evokeOrb(state, 0);
   }
-  combat.orbs.push({ type });
+  // 暗球带累积伤害容器（初始 0）；其它球不用 value。
+  combat.orbs.push(type === "dark" ? { type, value: 0 } : { type });
 }
 
 /** 唤醒指定槽位的球：触发唤醒效果后移除。 */
@@ -746,23 +1048,43 @@ function evokeOrb(state: GameState, index: number): void {
     return;
   }
   const focus = getPower(combat.playerPowers, "focus");
-  if (orb.type === "lightning") {
-    dealOrbDamage(state, LIGHTNING_EVOKE + focus);
-  } else {
-    combat.playerBlock += Math.max(0, FROST_EVOKE + focus);
+  switch (orb.type) {
+    case "lightning":
+      dealOrbDamage(state, LIGHTNING_EVOKE + focus);
+      break;
+    case "frost":
+      combat.playerBlock += Math.max(0, FROST_EVOKE + focus);
+      break;
+    case "dark":
+      // 暗球唤醒：把累积的伤害打给一个随机敌人。
+      dealOrbDamage(state, Math.max(0, orb.value ?? 0));
+      break;
+    case "plasma":
+      combat.energy += PLASMA_EVOKE_ENERGY;
+      break;
   }
   combat.orbs.splice(index, 1);
 }
 
-/** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡）。 */
+/** 回合结束时所有球触发被动（闪电随机伤害 / 冰霜格挡 / 暗球累积 / 等离子给能量）。 */
 function triggerOrbPassives(state: GameState): void {
   const combat = state.combat!;
   const focus = getPower(combat.playerPowers, "focus");
   for (const orb of combat.orbs) {
-    if (orb.type === "lightning") {
-      dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
-    } else {
-      combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+    switch (orb.type) {
+      case "lightning":
+        dealOrbDamage(state, LIGHTNING_PASSIVE + focus);
+        break;
+      case "frost":
+        combat.playerBlock += Math.max(0, FROST_PASSIVE + focus);
+        break;
+      case "dark":
+        // 暗球被动：累积 = 6+集中 的伤害（存到自身 value，唤醒时一次打出）。
+        orb.value = (orb.value ?? 0) + Math.max(0, DARK_PASSIVE + focus);
+        break;
+      case "plasma":
+        combat.energy += PLASMA_PASSIVE_ENERGY;
+        break;
     }
   }
 }
@@ -796,10 +1118,13 @@ export function playCard(
   if (def.type === "attack" && getPower(combat.playerPowers, "entangled") > 0) {
     return { ok: false, reason: "你被缠绕了，本回合无法打出攻击牌。" };
   }
-  const cost = costOf(def, instance.upgraded);
-  if (cost === null) {
+  const rawCost = costOf(def, instance.upgraded);
+  if (rawCost === null) {
     return { ok: false, reason: `「${def.name}」无法打出。` };
   }
+  // 腐化：技能牌费用变 0（打出后消耗，见下方入堆处理）。
+  const corrupted = def.type === "skill" && getPower(combat.playerPowers, "corruption") > 0;
+  const cost = corrupted ? 0 : rawCost;
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
@@ -822,9 +1147,17 @@ export function playCard(
     }
   }
 
-  combat.energy -= cost;
+  // X 费牌：X = 当前全部能量，消耗全部能量，effects 里的 *_x 按 X 结算。
+  const xValue = def.xCost ? combat.energy : 0;
+  combat.energy -= def.xCost ? combat.energy : cost;
   combat.hand.splice(handIndex, 1);
-  applyEffects(state, effectsOf(def, instance.upgraded), { side: "player" }, resolvedTarget);
+  applyEffects(
+    state,
+    effectsOf(def, instance.upgraded),
+    { side: "player" },
+    resolvedTarget,
+    xValue,
+  );
   // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
   if (def.type === "skill") {
     for (const enemy of combat.enemies) {
@@ -836,14 +1169,17 @@ export function playCard(
   }
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
-  } else if (def.exhausts) {
-    combat.exhaustPile.push(instance);
+  } else if (def.exhausts || corrupted) {
+    // 腐化下技能牌也消耗。
+    exhaustCard(state, instance);
   } else {
     combat.discardPile.push(instance);
   }
   state.log.push(`你打出「${def.name}」。`);
   // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
   triggerRelicCardPlayed(state, def.type);
+  // 打牌触发型玩家能力（千刃对全体、残影加格挡）。
+  triggerPlayerCardPlayed(state, def.type);
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
@@ -966,6 +1302,21 @@ export function endTurn(state: GameState): void {
     state.hp = Math.min(state.maxHp, state.hp + regen);
     addPower(combat.playerPowers, "regen", -1);
   }
+  // 燃烧：回合结束失 1 生命，并对所有敌人造成 = 层数的伤害。
+  const combust = getPower(combat.playerPowers, "combust");
+  if (combust > 0) {
+    state.hp = Math.max(0, state.hp - 1);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你倒下了。");
+      return;
+    }
+    applyEffects(state, [{ kind: "deal_damage_all", amount: combust }], { side: "player" }, null);
+  }
+  // 神性姿态（观者）：回合结束退出（回到无姿态）。
+  if (combat.playerStance === "divinity") {
+    combat.playerStance = "none";
+  }
   // 充能球被动（机器人）：回合结束时每颗球触发（闪电随机伤害 / 冰霜格挡）。
   triggerOrbPassives(state);
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
@@ -1028,7 +1379,10 @@ export function endTurn(state: GameState): void {
 
   // 下个玩家回合开始。
   combat.turn += 1;
-  combat.playerBlock = 0;
+  // 壁垒：格挡不再于回合开始清空（否则清零）。
+  if (getPower(combat.playerPowers, "barricade") === 0) {
+    combat.playerBlock = 0;
+  }
   combat.energy = combat.maxEnergy;
   // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
   const demonForm = getPower(combat.playerPowers, "demon_form");
@@ -1051,9 +1405,41 @@ export function endTurn(state: GameState): void {
       return;
     }
   }
-  // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡）。
+  // 残暴：回合开始失 = 层数生命、抽 = 层数牌。
+  const brutality = getPower(combat.playerPowers, "brutality");
+  if (brutality > 0) {
+    state.hp = Math.max(0, state.hp - brutality);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你倒下了。");
+      return;
+    }
+    drawCards(state, brutality);
+  }
+  // 毒雾：回合开始令所有敌人获得 = 层数的中毒。
+  const noxiousFumes = getPower(combat.playerPowers, "noxious_fumes");
+  if (noxiousFumes > 0) {
+    for (const enemy of combat.enemies) {
+      if (enemy.hp > 0) {
+        applyPowerToEnemy(enemy, "poison", noxiousFumes);
+      }
+    }
+  }
+  // 虔诚：回合开始获得 = 层数的法力（可能触发神性）。
+  const devotion = getPower(combat.playerPowers, "devotion");
+  if (devotion > 0) {
+    gainMantra(state, devotion);
+  }
+  // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
-  drawCards(state, STARTING_HAND_SIZE);
+  // 回合始遗物可能（如水银沙漏 AoE）打死全部残敌 → 结算胜利，不再发牌。
+  resolveCombatIfEnded(state);
+  if (state.combat === null || state.screen !== "combat") {
+    return;
+  }
+  // 机器学习：每回合多抽 = 层数的牌。
+  const machineLearning = getPower(combat.playerPowers, "machine_learning");
+  drawCards(state, STARTING_HAND_SIZE + machineLearning);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
 

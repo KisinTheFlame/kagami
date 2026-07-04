@@ -11,9 +11,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # typecheck / lint / test 各发一台独立的 4 核 runner 并行跑：这三者都经包间
+  # exports 解析到 build 产出的 dist，故每条 leg 先自建 dist 再跑自己的检查。
+  # 关键是「独立 runner」——vitest 自身就 maxWorkers=4 吃满整机，若与 typecheck /
+  # lint 挤在同一 runner 会互相抢核 thrash（实测同机并行只从 125s 压到 113s）。
+  # 分机后各检查独占 4 核，墙钟 ≈ 单条 leg 的 build + check。build 在各 leg 重复，
+  # 但都并行、走公共仓库免费额度，用冗余计算换零耦合拓扑与达标墙钟。
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false # 一条检查失败不取消其它，一次看全所有结果
+      matrix:
+        task: [typecheck, lint, test]
     steps:
       - uses: actions/checkout@v7
 
@@ -30,19 +40,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # build / typecheck / lint / format / test 全部 config-free：
+      # build / typecheck / lint / test 全部 config-free：
       # prisma generate 用占位 DATABASE_URL（见 scripts/prisma.sh），测试不读运行时 config。
       - name: Build
         run: pnpm build
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: ${{ matrix.task }}
+        run: pnpm ${{ matrix.task }}
 
-      - name: Lint
-        run: pnpm lint
+  # format（prettier）不依赖 dist，单独一台轻量 runner，不 build，与上面并行。
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Format check
         run: pnpm format
-
-      - name: Test
-        run: pnpm test

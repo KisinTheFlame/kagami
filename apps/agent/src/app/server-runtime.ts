@@ -15,7 +15,7 @@ import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { NapcatHandler } from "../napcat/http/napcat.handler.js";
-import { HttpLlmClient } from "../llm/http-llm-client.js";
+import { HttpLlmClient } from "../acl/http-llm-client.js";
 import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
@@ -29,9 +29,9 @@ import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-
 import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
 import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
 import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
-import { HttpOssClient } from "../oss/oss-client.js";
-import { HttpBrowserClient } from "../browser/browser-client.js";
-import { HttpSpireClient } from "../spire/spire-client.js";
+import { HttpOssClient } from "../acl/oss-client.js";
+import { HttpBrowserClient } from "../acl/browser-client.js";
+import { HttpSpireClient } from "../acl/spire-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpBrowserClient } from "../../src/browser/browser-client.js";
+import { HttpBrowserClient } from "../../src/acl/browser-client.js";
 import { BrowserError } from "../../src/agent/capabilities/browser/domain/errors.js";
 
 function clientWith(fetchImpl: typeof fetch): HttpBrowserClient {

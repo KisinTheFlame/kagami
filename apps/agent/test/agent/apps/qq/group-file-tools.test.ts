@@ -6,7 +6,7 @@ import type {
   NapcatChatTarget,
   NapcatGatewayService,
 } from "../../../../src/napcat/application/napcat-gateway.service.js";
-import type { OssClient } from "../../../../src/oss/oss-client.js";
+import type { OssClient } from "../../../../src/acl/oss-client.js";
 import { initTestLogger } from "../../../napcat/napcat-gateway.test-helper.js";
 
 const GROUP: NapcatChatTarget = { chatType: "group", groupId: "1" };

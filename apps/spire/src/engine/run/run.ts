@@ -2,7 +2,7 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOf, getCardDef, costOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
-import { REWARD_RELIC_POOL, getRelicDef, hasRelic } from "../relics/relics.js";
+import { rewardRelicPool, getRelicDef, hasRelic } from "../relics/relics.js";
 import {
   BASE_POTION_DROP_CHANCE,
   POTION_DROP_POOL,
@@ -128,7 +128,7 @@ function resolveNode(state: GameState, node: MapNode): void {
 
 /** 宝箱：优先给一个未持有的遗物，遗物都齐了则给金币兜底（复刻 StS 宝箱给遗物）。 */
 function grantTreasure(state: GameState): void {
-  const available = REWARD_RELIC_POOL.filter(id => !hasRelic(state, id));
+  const available = rewardRelicPool(state.character).filter(id => !hasRelic(state, id));
   if (available.length > 0) {
     const id = available[nextInt(state.rng, available.length)]!;
     state.relics.push({ id, counter: 0 });
@@ -161,7 +161,7 @@ function rollPotionDrop(state: GameState): void {
     // 掷稀有度（稀有 5% / 罕见 30% / 普通 65%），再从该档抽一瓶。
     const roll = nextInt(state.rng, 100);
     const rarity = roll < 5 ? "rare" : roll < 35 ? "uncommon" : "common";
-    const pool = potionPoolOfRarity(rarity);
+    const pool = potionPoolOfRarity(rarity, state.character);
     const id = pool[nextInt(state.rng, pool.length)]!;
     state.potions[emptySlot] = id;
     state.potionDropBonus -= 10;

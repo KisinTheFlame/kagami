@@ -9,7 +9,7 @@ import { SpireLookTool } from "../../capabilities/spire/tools/look.tool.js";
 import { SpireLookupTool } from "../../capabilities/spire/tools/lookup.tool.js";
 import { renderSpirePortal } from "../../capabilities/spire/render/spire-screen.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
-import type { SpireClient } from "../../../spire/spire-client.js";
+import type { SpireClient } from "../../../acl/spire-client.js";
 
 export const SPIRE_APP_ID = "spire";
 

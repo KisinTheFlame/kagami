@@ -1,8 +1,8 @@
 import type { GameState, ShopItem, ShopState } from "../types.js";
 import { rewardCardPoolOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
-import { SHOP_RELIC_POOL, hasRelic } from "../relics/relics.js";
-import { POTION_DROP_POOL } from "../potions/potions.js";
+import { shopRelicPool, hasRelic } from "../relics/relics.js";
+import { shopPotionPool } from "../potions/potions.js";
 import { nextInt, nextRange } from "../rng.js";
 
 // === 商店库存生成 ===
@@ -11,11 +11,14 @@ import { nextInt, nextRange } from "../rng.js";
 // 卡 ~45-65、遗物 ~140-180、药水 ~50-70。稀有度分档待卡池/遗物全量里程碑细化。
 
 const SHOP_CARD_COUNT = 5;
+const SHOP_COLORLESS_COUNT = 1;
 const SHOP_RELIC_COUNT = 2;
 const SHOP_POTION_COUNT = 3;
 
 const CARD_PRICE_MIN = 45;
 const CARD_PRICE_MAX = 65;
+const COLORLESS_PRICE_MIN = 60;
+const COLORLESS_PRICE_MAX = 90;
 const RELIC_PRICE_MIN = 140;
 const RELIC_PRICE_MAX = 180;
 const POTION_PRICE_MIN = 50;
@@ -46,7 +49,17 @@ export function generateShop(state: GameState): void {
     });
   }
 
-  const relicPool = SHOP_RELIC_POOL.filter(id => !hasRelic(state, id));
+  const colorlessPool = rewardCardPoolOf("colorless");
+  for (const defId of sampleUnique(state.rng, colorlessPool, SHOP_COLORLESS_COUNT)) {
+    items.push({
+      kind: "card",
+      defId,
+      cost: nextRange(state.rng, COLORLESS_PRICE_MIN, COLORLESS_PRICE_MAX),
+      sold: false,
+    });
+  }
+
+  const relicPool = shopRelicPool(state.character).filter(id => !hasRelic(state, id));
   for (const id of sampleUnique(state.rng, relicPool, SHOP_RELIC_COUNT)) {
     items.push({
       kind: "relic",
@@ -56,7 +69,7 @@ export function generateShop(state: GameState): void {
     });
   }
 
-  for (const id of sampleUnique(state.rng, POTION_DROP_POOL, SHOP_POTION_COUNT)) {
+  for (const id of sampleUnique(state.rng, shopPotionPool(state.character), SHOP_POTION_COUNT)) {
     items.push({
       kind: "potion",
       id,

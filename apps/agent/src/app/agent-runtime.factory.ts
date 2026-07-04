@@ -67,9 +67,9 @@ import { PrismaTerminalOutputDao } from "../agent/capabilities/terminal/infra/pr
 import { TerminalApp } from "../agent/apps/terminal/terminal.app.js";
 import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { BrowserApp } from "../agent/apps/browser/browser.app.js";
-import type { BrowserClient } from "../browser/browser-client.js";
+import type { BrowserClient } from "../acl/browser-client.js";
 import { SpireApp } from "../agent/apps/spire/spire.app.js";
-import type { SpireClient } from "../spire/spire-client.js";
+import type { SpireClient } from "../acl/spire-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -82,7 +82,7 @@ import {
 } from "../agent/capabilities/resource/tools/read-resource.tool.js";
 import { DownloadResourceTool } from "../agent/capabilities/resource/tools/download-resource.tool.js";
 import { UploadResourceTool } from "../agent/capabilities/resource/tools/upload-resource.tool.js";
-import type { OssClient } from "../oss/oss-client.js";
+import type { OssClient } from "../acl/oss-client.js";
 import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
