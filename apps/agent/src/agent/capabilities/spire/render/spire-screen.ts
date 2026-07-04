@@ -87,6 +87,8 @@ const POWER_LABELS: Record<string, string> = {
   study: "研习",
   omega: "奥米加",
   master_reality: "掌控现实",
+  corpse_bomb: "尸爆",
+  self_repair: "自我修复",
 };
 
 const ORB_LABELS: Record<string, string> = {

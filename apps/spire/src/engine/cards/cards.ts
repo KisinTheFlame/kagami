@@ -4795,6 +4795,43 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 6 点伤害。每当你切换姿态，将本牌从弃牌堆收回手牌。",
   },
 
+  {
+    id: "corpse_explosion",
+    name: "尸爆",
+    type: "skill",
+    rarity: "uncommon",
+    color: "green",
+    cost: 2,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+      { kind: "apply_power", power: "poison", amount: 6, on: "target" },
+      { kind: "apply_power", power: "corpse_bomb", amount: 1, on: "target" },
+    ],
+    upgradedEffects: [
+      { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+      { kind: "apply_power", power: "poison", amount: 9, on: "target" },
+      { kind: "apply_power", power: "corpse_bomb", amount: 1, on: "target" },
+    ],
+    description: "使目标获得 1 层易伤和 6 层中毒。当它死亡时，把它的中毒施加给所有敌人。",
+    upgradedDescription: "使目标获得 1 层易伤和 9 层中毒。当它死亡时，把它的中毒施加给所有敌人。",
+  },
+  {
+    id: "self_repair",
+    name: "自我修复",
+    type: "power",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "self_repair", amount: 7, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "self_repair", amount: 10, on: "self" }],
+    description: "战斗结束时，回复 7 点生命。",
+    upgradedDescription: "战斗结束时，回复 10 点生命。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

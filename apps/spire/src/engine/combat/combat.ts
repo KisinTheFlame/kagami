@@ -1560,6 +1560,20 @@ function addCards(
 
 // —— 伤害落地 ——
 
+/** 尸爆：带尸爆标记的敌人死亡时，把它的中毒（poisonAmount）施加给其余所有存活敌人。 */
+function spreadCorpseBomb(state: GameState, enemyIndex: number, poisonAmount: number): void {
+  const combat = state.combat!;
+  const dead = combat.enemies[enemyIndex]!;
+  if (getPower(dead.powers, "corpse_bomb") <= 0 || poisonAmount <= 0) {
+    return;
+  }
+  for (let i = 0; i < combat.enemies.length; i += 1) {
+    if (i !== enemyIndex && combat.enemies[i]!.hp > 0) {
+      applyPowerToEnemy(combat.enemies[i]!, "poison", poisonAmount);
+    }
+  }
+}
+
 /** 玩家攻击命中敌人后的通用触发：以手言心（mark→格挡）、淬毒（穿透→中毒）。 */
 function onPlayerAttackHit(state: GameState, enemyIndex: number, unblocked: number): void {
   const combat = state.combat!;
@@ -1618,6 +1632,7 @@ function dealDamageToEnemy(
   enemy.hp = Math.max(0, enemy.hp - afterBlock);
   // 亡语：此击致死则结算敌人的死亡效果（真菌兽孢子云给玩家易伤）。
   if (wasAlive && enemy.hp === 0) {
+    spreadCorpseBomb(state, enemyIndex, getPower(enemy.powers, "poison")); // 尸爆：被打死时扩散毒。
     const dyingDef = getEnemyDef(enemy.defId);
     if (dyingDef.deathEffects) {
       applyEffects(state, dyingDef.deathEffects, { side: "enemy", index: enemyIndex }, null);
@@ -2273,6 +2288,7 @@ export function endTurn(state: GameState): void {
       enemy.hp = Math.max(0, enemy.hp - enemyPoison);
       addPower(enemy.powers, "poison", -1);
       if (enemy.hp <= 0) {
+        spreadCorpseBomb(state, i, enemyPoison); // 尸爆：毒死时扩散毒。
         continue;
       }
     }
@@ -2696,6 +2712,11 @@ function resolveCombatIfEnded(state: GameState): void {
   state.log.push("战斗胜利！");
   // 战斗结束遗物（燃烧之血回血 / 带肉骨头低血回血…）在清 combat 前触发。
   triggerRelicCombatEnd(state);
+  // 自我修复：战斗结束时回复 = 层数的生命（在清 combat 前读取玩家能力）。
+  const selfRepair = getPower(combat.playerPowers, "self_repair");
+  if (selfRepair > 0) {
+    state.hp = Math.min(state.maxHp, state.hp + selfRepair);
+  }
   // 战斗内牌堆（含临时状态牌）随战斗消失，master deck 不受影响。
   state.combat = null;
   if (combat.isBoss) {
