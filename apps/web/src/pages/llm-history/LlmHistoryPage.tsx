@@ -26,7 +26,12 @@ import {
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
 import { formatDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
-import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
+import {
+  isoToLocalDateTime,
+  localDateTimeToIso,
+  normalizeOptionalText,
+  setIfNonEmpty,
+} from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
 import { toStatusLabel } from "./format-status";
@@ -42,6 +47,9 @@ type FilterFormState = {
   provider: string;
   model: string;
   status: "" | LlmChatCallStatus;
+  // datetime-local 墙钟串（空串=不限）。提交时经 localDateTimeToIso 转带时区 ISO 落 URL。
+  from: string;
+  to: string;
 };
 
 export function LlmHistoryPage() {
@@ -212,6 +220,28 @@ export function LlmHistoryPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">起始</span>
+              <input
+                type="datetime-local"
+                aria-label="起始时间"
+                value={formState.from}
+                onChange={event => setFormState(prev => ({ ...prev, from: event.target.value }))}
+                className="min-w-0 flex-1 rounded-none border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">截止</span>
+              <input
+                type="datetime-local"
+                aria-label="截止时间"
+                value={formState.to}
+                onChange={event => setFormState(prev => ({ ...prev, to: event.target.value }))}
+                className="min-w-0 flex-1 rounded-none border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
           </div>
 
           <div className="mt-3 flex items-center gap-2">
@@ -317,11 +347,15 @@ function parseFilters(params: URLSearchParams): {
   provider: string | undefined;
   model: string | undefined;
   status: LlmChatCallStatus | undefined;
+  from: string | undefined;
+  to: string | undefined;
 } {
   return {
     provider: normalizeOptionalText(params.get("provider")),
     model: normalizeOptionalText(params.get("model")),
     status: parseStatus(params.get("status")),
+    from: normalizeOptionalText(params.get("from")),
+    to: normalizeOptionalText(params.get("to")),
   };
 }
 
@@ -330,6 +364,8 @@ function toFormState(params: URLSearchParams): FilterFormState {
     provider: params.get("provider") ?? "",
     model: params.get("model") ?? "",
     status: parseStatus(params.get("status")) ?? "",
+    from: isoToLocalDateTime(params.get("from")),
+    to: isoToLocalDateTime(params.get("to")),
   };
 }
 
@@ -340,6 +376,14 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
   if (formState.status) {
     nextParams.set("status", formState.status);
   }
+  const fromIso = localDateTimeToIso(formState.from);
+  if (fromIso) {
+    nextParams.set("from", fromIso);
+  }
+  const toIso = localDateTimeToIso(formState.to);
+  if (toIso) {
+    nextParams.set("to", toIso);
+  }
 
   return nextParams;
 }
@@ -349,6 +393,8 @@ function createEmptyFormState(): FilterFormState {
     provider: "",
     model: "",
     status: "",
+    from: "",
+    to: "",
   };
 }
 

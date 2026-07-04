@@ -21,6 +21,8 @@ export function useLlmChatCallList(
     provider: filters.provider,
     model: filters.model,
     status: filters.status,
+    from: filters.from,
+    to: filters.to,
   } satisfies Record<string, string | undefined>;
 
   return useQuery(
