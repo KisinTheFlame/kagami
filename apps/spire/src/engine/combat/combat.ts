@@ -186,6 +186,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     doomedNextTurn: false,
     attacksThisTurn: 0,
     cardsDiscardedThisTurn: 0,
+    cardsPlayedThisTurn: 0,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
@@ -927,6 +928,13 @@ function applyEffect(
       // 声东击西：若本回合弃过牌，获得能量。
       if (actor.side === "player" && combat.cardsDiscardedThisTurn > 0) {
         combat.energy += effect.amount;
+      }
+      break;
+    }
+    case "draw_if_cards_played_le": {
+      // 超光速：若本回合出牌数（含本张）不超过 max，抽 amount 张。
+      if (actor.side === "player" && combat.cardsPlayedThisTurn <= effect.max) {
+        drawCards(state, effect.amount);
       }
       break;
     }
@@ -1806,6 +1814,8 @@ export function playCard(
   const xValue = def.xCost ? combat.energy : 0;
   combat.energy -= def.xCost ? combat.energy : cost;
   combat.hand.splice(handIndex, 1);
+  // 出牌计数（超光速见「本张已计入」故先增；华彩每 5 张触发靠它）。回合始清零。
+  combat.cardsPlayedThisTurn += 1;
   applyEffects(
     state,
     effectsOf(def, instance.upgraded),
@@ -1859,6 +1869,15 @@ export function playCard(
   triggerRelicCardPlayed(state, def.type);
   // 打牌触发型玩家能力（千刃对全体、残影加格挡）。
   triggerPlayerCardPlayed(state, def.type);
+  // 华彩：本回合每打出满 5 张牌，对所有敌人造成 = 层数的伤害。
+  const panache = getPower(combat.playerPowers, "panache");
+  if (panache > 0 && combat.cardsPlayedThisTurn % 5 === 0) {
+    for (let i = 0; i < combat.enemies.length; i += 1) {
+      if (combat.enemies[i]!.hp > 0) {
+        dealDamageToEnemy(state, i, panache, []);
+      }
+    }
+  }
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
@@ -2092,6 +2111,7 @@ export function endTurn(state: GameState): void {
   combat.lastCardType = null;
   combat.attacksThisTurn = 0;
   combat.cardsDiscardedThisTurn = 0;
+  combat.cardsPlayedThisTurn = 0;
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
     state.hp = 0;

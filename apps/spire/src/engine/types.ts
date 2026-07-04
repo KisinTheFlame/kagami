@@ -75,7 +75,8 @@ export type PowerId =
   | "deva_form" // 提婆形态：每个玩家回合开始获得 = 层数的能量，然后层数 +1（观者，能量递增）
   | "vigor" // 活力：下一张攻击牌额外造成 = 层数的伤害（打出后清零，烈焰花环）
   | "no_draw" // 本回合无法再抽牌（战意；回合开始清除）
-  | "foresight"; // 未卜先知：每个玩家回合开始预知 = 层数张（观者）
+  | "foresight" // 未卜先知：每个玩家回合开始预知 = 层数张（观者）
+  | "panache"; // 华彩：本回合每打出满 5 张牌，对所有敌人造成 = 层数的伤害（观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -168,6 +169,7 @@ export type Effect =
   | { kind: "schedule_stance_next_turn"; stance: PlayerStance; draw: number } // 下回合开始进入姿态并抽 draw 张（烈怒渐起）
   | { kind: "set_doomed" } // 下个回合开始时角色死亡（亵渎）
   | { kind: "gain_energy_if_discarded"; amount: number } // 若本回合弃过牌，获得 amount 能量（声东击西）
+  | { kind: "draw_if_cards_played_le"; max: number; amount: number } // 若本回合出牌数≤max，抽 amount（超光速）
   | { kind: "draw_then_block_if_skill"; amount: number } // 抽 1 张，若为技能则获得 amount 格挡（脱身之策）
   | { kind: "discard_random"; count: number } // 随机弃掉 count 张手牌（优先状态牌）（杂技/有备而来）
   | { kind: "discard_non_attacks" } // 弃掉手牌中所有非攻击牌（卸货）
@@ -373,6 +375,8 @@ export type CombatState = {
   attacksThisTurn: number;
   /** 本回合已（由牌效果）弃掉的手牌数（剖体斩降费 / 声东击西给能量按此；回合开始清零）。 */
   cardsDiscardedThisTurn: number;
+  /** 本回合已打出的牌数（含当前正在结算的这张）（超光速判据 / 华彩每 5 张触发；回合开始清零）。 */
+  cardsPlayedThisTurn: number;
   /** 上一张打出的牌的类型（神圣「若上一张是技能」判据）；null=本回合还没打过。 */
   lastCardType: CardType | null;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */

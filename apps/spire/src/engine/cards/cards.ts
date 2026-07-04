@@ -4359,6 +4359,41 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "每个回合开始时，预知 4 张牌。",
   },
 
+  {
+    id: "ftl",
+    name: "超光速",
+    type: "attack",
+    rarity: "common",
+    color: "blue",
+    cost: 0,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 5 },
+      { kind: "draw_if_cards_played_le", max: 3, amount: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 6 },
+      { kind: "draw_if_cards_played_le", max: 4, amount: 1 },
+    ],
+    description: "造成 5 点伤害。若本回合你打出的牌不超过 3 张，抽 1 张牌。",
+    upgradedDescription: "造成 6 点伤害。若本回合你打出的牌不超过 4 张，抽 1 张牌。",
+  },
+  {
+    id: "panache",
+    name: "华彩",
+    type: "power",
+    rarity: "rare",
+    color: "purple",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "panache", amount: 10, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "panache", amount: 14, on: "self" }],
+    description: "本回合每打出满 5 张牌，对所有敌人造成 10 点伤害。",
+    upgradedDescription: "本回合每打出满 5 张牌，对所有敌人造成 14 点伤害。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
