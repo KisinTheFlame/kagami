@@ -935,6 +935,40 @@ function applyEffect(
       }
       break;
     }
+    case "change_max_energy": {
+      // 苦修：增减每回合最大能量（同时调整本回合当前能量）。
+      if (actor.side === "player") {
+        combat.maxEnergy = Math.max(0, combat.maxEnergy + effect.delta);
+        combat.energy = Math.max(0, combat.energy + effect.delta);
+      }
+      break;
+    }
+    case "gain_block_if_wrath": {
+      // 止：获得 base 格挡；若处于愤怒姿态再 +bonus。
+      if (actor.side === "player") {
+        const total = effect.base + (combat.playerStance === "wrath" ? effect.bonus : 0);
+        applyEffect(state, { kind: "gain_block", amount: total }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "execute_if_below": {
+      // 审判：目标当前生命 ≤ threshold 则直接击杀。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const target = combat.enemies[targetEnemyIndex]!;
+        if (target.hp > 0 && target.hp <= effect.threshold) {
+          dealDamageToEnemy(state, targetEnemyIndex, target.hp, powers);
+        }
+      }
+      break;
+    }
+    case "apply_strength_temp": {
+      // 屈伸：立即 +amount 力量，并记录本回合结束时要减掉的量。
+      if (actor.side === "player") {
+        addPower(combat.playerPowers, "strength", effect.amount);
+        addPower(combat.playerPowers, "strength_temp", effect.amount);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1383,6 +1417,11 @@ export function playCard(
   // 终结技计数：本回合已打出的攻击牌 +1（在效果结算后，故本张攻击不计入自身）。
   if (def.type === "attack") {
     combat.attacksThisTurn += 1;
+    // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡。
+    const rage = getPower(combat.playerPowers, "rage");
+    if (rage > 0) {
+      combat.playerBlock += rage;
+    }
   }
   // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
   if (def.type === "skill") {
@@ -1552,6 +1591,16 @@ export function endTurn(state: GameState): void {
   if (getPower(combat.playerPowers, "intangible") > 0) {
     addPower(combat.playerPowers, "intangible", -1);
   }
+  // 临时力量（屈伸）：回合结束失去等量力量后清零本 power。
+  const strengthTemp = getPower(combat.playerPowers, "strength_temp");
+  if (strengthTemp > 0) {
+    addPower(combat.playerPowers, "strength", -strengthTemp);
+    removePower(combat.playerPowers, "strength_temp");
+  }
+  // 暴怒：只在打出它的回合生效，回合结束清除。
+  if (getPower(combat.playerPowers, "rage") > 0) {
+    removePower(combat.playerPowers, "rage");
+  }
 
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
   const enemyCount = combat.enemies.length;
@@ -1680,6 +1729,11 @@ export function endTurn(state: GameState): void {
   // 偏置认知：回合开始失去 1 点集中。
   if (getPower(combat.playerPowers, "biased_cognition") > 0) {
     addPower(combat.playerPowers, "focus", -1);
+  }
+  // 战歌：回合开始将 = 层数的痛斩加入手牌。
+  const battleHymn = getPower(combat.playerPowers, "battle_hymn");
+  if (battleHymn > 0) {
+    addCards(state, "smite", "hand", battleHymn);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
