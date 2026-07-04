@@ -4861,6 +4861,42 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "获得 4 点力量。消耗。",
   },
 
+  {
+    id: "pressure_points",
+    name: "点穴",
+    type: "attack",
+    rarity: "common",
+    color: "purple",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "apply_power", power: "mark", amount: 8, on: "target" },
+      { kind: "drain_marked_enemies" },
+    ],
+    upgradedEffects: [
+      { kind: "apply_power", power: "mark", amount: 11, on: "target" },
+      { kind: "drain_marked_enemies" },
+    ],
+    description: "使目标获得 8 层标记。随后所有敌人损失 = 各自标记层数的生命。",
+    upgradedDescription: "使目标获得 11 层标记。随后所有敌人损失 = 各自标记层数的生命。",
+  },
+  {
+    id: "havoc",
+    name: "浩劫",
+    type: "skill",
+    rarity: "common",
+    color: "red",
+    cost: 1,
+    upgradedCost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "play_top_card_exhaust" }],
+    upgradedEffects: [{ kind: "play_top_card_exhaust" }],
+    description: "打出你抽牌堆顶的那张牌，随后将其消耗。",
+    upgradedDescription: "打出你抽牌堆顶的那张牌，随后将其消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
