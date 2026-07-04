@@ -363,13 +363,18 @@ function applyEffect(
     case "deal_damage": {
       if (actor.side === "player") {
         if (targetEnemyIndex !== null) {
+          // 活力：本次攻击额外 +层数伤害，随后清零（只加持一次攻击）。
+          const vigor = getPower(combat.playerPowers, "vigor");
           dealDamageToEnemy(
             state,
             targetEnemyIndex,
-            effect.amount,
+            effect.amount + vigor,
             powers,
             effect.strengthMultiplier,
           );
+          if (vigor > 0) {
+            removePower(combat.playerPowers, "vigor");
+          }
         }
       } else {
         dealDamageToPlayer(state, effect.amount, powers, actor.index);
@@ -1245,6 +1250,16 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_if_hand_all_attacks": {
+      // 招牌动作：若手牌其余全为攻击牌，对目标造成 amount（本牌已离手，故只看剩余手牌）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const allAttacks = combat.hand.every(c => getCardDef(c.defId).type === "attack");
+        if (allAttacks) {
+          dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -2068,6 +2083,12 @@ export function endTurn(state: GameState): void {
   if (tools > 0) {
     drawCards(state, tools);
     applyEffects(state, [{ kind: "discard_random", count: tools }], { side: "player" }, null);
+  }
+  // 提婆形态：回合开始获得 = 层数的能量，然后层数 +1（能量逐回合递增）。
+  const devaForm = getPower(combat.playerPowers, "deva_form");
+  if (devaForm > 0) {
+    combat.energy += devaForm;
+    addPower(combat.playerPowers, "deva_form", 1);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
