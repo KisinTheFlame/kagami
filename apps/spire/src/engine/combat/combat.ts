@@ -340,6 +340,18 @@ function drawCards(state: GameState, count: number): void {
   }
 }
 
+/** 由牌效果把一张牌从手牌弃入弃牌堆：推进弃牌计数并触发该牌的 onDiscard（急智/应激反射）。 */
+function discardFromHand(state: GameState, card: CardInstance): void {
+  const combat = state.combat!;
+  combat.discardPile.push(card);
+  combat.cardsDiscardedThisTurn += 1;
+  const def = getCardDef(card.defId);
+  const onDiscard = card.upgraded && def.upgradedOnDiscard ? def.upgradedOnDiscard : def.onDiscard;
+  if (onDiscard && onDiscard.length > 0) {
+    applyEffects(state, onDiscard, { side: "player" }, null);
+  }
+}
+
 // —— 效果解释器 ——
 
 function applyEffects(
@@ -943,8 +955,7 @@ function applyEffect(
           if (idx < 0) {
             idx = nextInt(state.rng, combat.hand.length);
           }
-          combat.discardPile.push(combat.hand.splice(idx, 1)[0]!);
-          combat.cardsDiscardedThisTurn += 1;
+          discardFromHand(state, combat.hand.splice(idx, 1)[0]!);
         }
       }
       break;
@@ -957,8 +968,7 @@ function applyEffect(
           if (getCardDef(card.defId).type === "attack") {
             keep.push(card);
           } else {
-            combat.discardPile.push(card);
-            combat.cardsDiscardedThisTurn += 1;
+            discardFromHand(state, card);
           }
         }
         combat.hand = keep;
@@ -1280,11 +1290,12 @@ function applyEffect(
     case "discard_hand_for_shivs": {
       // 钢铁风暴：弃掉全部手牌，每弃一张将 1 张飞刀加入手牌。
       if (actor.side === "player") {
-        const count = combat.hand.length;
-        combat.discardPile.push(...combat.hand);
-        combat.cardsDiscardedThisTurn += count;
+        const discarded = [...combat.hand];
         combat.hand = [];
-        for (let n = 0; n < count; n += 1) {
+        for (const card of discarded) {
+          discardFromHand(state, card);
+        }
+        for (let n = 0; n < discarded.length; n += 1) {
           combat.hand.push({ uid: state.nextUid++, defId: "shiv", upgraded: false });
         }
       }

@@ -242,6 +242,10 @@ export type CardDef = {
   ethereal?: boolean;
   /** 回合结束时若此牌在手牌中，以玩家为行动者结算这些效果（灼烧/腐朽自伤、疑虑虚弱等）。 */
   endOfTurnInHand?: Effect[];
+  /** 被牌效果从手牌弃掉时，以玩家为行动者结算这些效果（急智回能量、应激反射抽牌）。 */
+  onDiscard?: Effect[];
+  /** 升级后的 onDiscard（省略则沿用 onDiscard）。 */
+  upgradedOnDiscard?: Effect[];
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
