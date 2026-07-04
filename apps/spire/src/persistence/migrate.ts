@@ -48,6 +48,7 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "nextTurnDraw", 0);
     backfill(combat, "nextTurnStance", null); // 烈怒渐起——老档没有。
     backfill(combat, "doomedNextTurn", false); // 亵渎——老档没有。
+    backfill(combat, "nextTurnPhantasmal", false); // 幻杀——老档没有。
     backfill(combat, "attacksThisTurn", 0);
     backfill(combat, "cardsDiscardedThisTurn", 0); // 弃牌联动——老档没有。
     backfill(combat, "cardsPlayedThisTurn", 0); // 出牌计数——老档没有。

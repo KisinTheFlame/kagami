@@ -91,6 +91,9 @@ const POWER_LABELS: Record<string, string> = {
   self_repair: "自我修复",
   magnetism: "磁力",
   flame_barrier: "火焰屏障",
+  like_water: "静如止水",
+  burst: "爆发",
+  phantasmal: "幻杀",
 };
 
 const ORB_LABELS: Record<string, string> = {
