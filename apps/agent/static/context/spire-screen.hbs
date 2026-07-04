@@ -20,7 +20,9 @@
 {{/if}}
 {{#if combat.hasOrbSystem}}充能球（{{combat.orbs.length}}/{{combat.orbSlots}}，左→右）：{{#if combat.orbs.length}}{{#each combat.orbs}}[{{this}}]{{/each}}{{else}}（空）{{/if}}　回合结束时每颗球触发被动（闪电=随机伤害、冰霜=格挡）。
 {{/if}}
-{{#if combat.hasStance}}姿态：{{combat.stance}}　（愤怒=你造成与受到的伤害都翻倍；离开平静时 +2 能量）
+{{#if combat.hasStance}}姿态：{{combat.stance}}　（愤怒=你造成与受到的伤害都翻倍；神性=你造成的伤害 ×3、回合结束退出；离开平静时 +2 能量）
+{{/if}}
+{{#if combat.hasMantra}}法力：{{combat.mantra}}/10　（累积到 10 自动进入神性姿态）
 {{/if}}
 ————敌人————
 {{#each combat.enemies}}

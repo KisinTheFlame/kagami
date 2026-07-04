@@ -34,14 +34,18 @@ function trackerAboutToTrigger(): InnerVoiceIdleTracker {
   return tracker;
 }
 
+const RUNTIME_KEY = "root-agent";
+
 function createHarness(input: {
   tracker: InnerVoiceIdleTracker;
   thought: string | null;
   operationError?: Error;
+  daoError?: Error;
 }): {
   extension: InnerVoiceExtension;
   enqueue: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
   metrics: string[];
   context: RootLoopExtensionContext;
 } {
@@ -49,6 +53,9 @@ function createHarness(input: {
   const execute = input.operationError
     ? vi.fn().mockRejectedValue(input.operationError)
     : vi.fn().mockResolvedValue({ thought: input.thought });
+  const insert = input.daoError
+    ? vi.fn().mockRejectedValue(input.daoError)
+    : vi.fn().mockResolvedValue(undefined);
   const metrics: string[] = [];
   const metricService: MetricClient = {
     record: async ({ metricName }) => {
@@ -60,6 +67,8 @@ function createHarness(input: {
     operation: { execute },
     eventQueue: { enqueue } as unknown as AgentEventQueue,
     metricService,
+    innerThoughtDao: { insert },
+    runtimeKey: RUNTIME_KEY,
     now: () => NOW,
   });
   const context = {
@@ -69,7 +78,7 @@ function createHarness(input: {
         .mockResolvedValue({ systemPrompt: "persona", messages: [{ role: "user", content: "m" }] }),
     },
   } as unknown as RootLoopExtensionContext;
-  return { extension, enqueue, execute, metrics, context };
+  return { extension, enqueue, execute, insert, metrics, context };
 }
 
 type OnAfterCommitInput = Parameters<InnerVoiceExtension["onAfterCommit"]>[0];
@@ -88,8 +97,8 @@ function waitRound(): OnAfterCommitInput["result"] {
 }
 
 describe("InnerVoiceExtension", () => {
-  it("摸鱼成立且产出念头 → enqueue inner_thought 事件 + triggered/injected metric", async () => {
-    const { extension, enqueue, execute, metrics, context } = createHarness({
+  it("摸鱼成立且产出念头 → enqueue inner_thought 事件 + triggered/injected metric + 落 injected 行", async () => {
+    const { extension, enqueue, execute, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
       thought: "想翻翻那篇文章",
     });
@@ -102,27 +111,44 @@ describe("InnerVoiceExtension", () => {
       data: { thought: "想翻翻那篇文章" },
     });
     expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_INJECTED]);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith({
+      triggeredAt: NOW,
+      outcome: "injected",
+      thought: "想翻翻那篇文章",
+      runtimeKey: RUNTIME_KEY,
+    });
   });
 
-  it("空念头 → 不 enqueue，配额已消耗，打 triggered/empty metric", async () => {
+  it("空念头 → 不 enqueue，配额已消耗，打 triggered/empty metric + 落 empty 空行", async () => {
     const tracker = trackerAboutToTrigger();
-    const { extension, enqueue, metrics, context } = createHarness({ tracker, thought: null });
+    const { extension, enqueue, insert, metrics, context } = createHarness({
+      tracker,
+      thought: null,
+    });
 
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(enqueue).not.toHaveBeenCalled();
     expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_EMPTY]);
+    expect(insert).toHaveBeenCalledWith({
+      triggeredAt: NOW,
+      outcome: "empty",
+      thought: "",
+      runtimeKey: RUNTIME_KEY,
+    });
     // 紧接着的下一轮不会再次触发（不应期生效）。
     expect(tracker.shouldTrigger(new Date(NOW.getTime() + 60_000))).toBe(false);
   });
 
-  it("摸鱼不成立 → 完全不跑 operation、不打 metric", async () => {
-    const { extension, execute, metrics, context } = createHarness({
+  it("摸鱼不成立 → 完全不跑 operation、不打 metric、不落行", async () => {
+    const { extension, execute, insert, metrics, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
       thought: "x",
     });
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(execute).not.toHaveBeenCalled();
     expect(metrics).toEqual([]);
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it("非 wait 调用不推进摸鱼判定（wait 才计数）", async () => {
@@ -142,8 +168,8 @@ describe("InnerVoiceExtension", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("operation 抛错被吞掉，不拖垮主循环，打 triggered/failed metric", async () => {
-    const { extension, enqueue, metrics, context } = createHarness({
+  it("operation 抛错被吞掉，不拖垮主循环，打 triggered/failed metric + 落 failed 空行", async () => {
+    const { extension, enqueue, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
       thought: null,
       operationError: new Error("boom"),
@@ -153,6 +179,29 @@ describe("InnerVoiceExtension", () => {
     ).resolves.toBeUndefined();
     expect(enqueue).not.toHaveBeenCalled();
     expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_FAILED]);
+    expect(insert).toHaveBeenCalledWith({
+      triggeredAt: NOW,
+      outcome: "failed",
+      thought: "",
+      runtimeKey: RUNTIME_KEY,
+    });
+  });
+
+  it("落库抛错被吞掉，不拖垮主循环，念头仍照常注入", async () => {
+    const { extension, enqueue, insert, context } = createHarness({
+      tracker: trackerAboutToTrigger(),
+      thought: "想翻翻那篇文章",
+      daoError: new Error("db down"),
+    });
+    await expect(
+      extension.onAfterCommit({ context, result: waitRound() }),
+    ).resolves.toBeUndefined();
+    // 落库失败不影响念头进上下文（enqueue 在 insert 之前，且 insert 异常被 best-effort 吞掉）。
+    expect(enqueue).toHaveBeenCalledWith({
+      type: "inner_thought",
+      data: { thought: "想翻翻那篇文章" },
+    });
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 });
 

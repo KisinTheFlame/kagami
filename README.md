@@ -174,6 +174,7 @@ Main endpoint groups:
 - `/llm-chat-call/:id`
 - `/napcat-event/query`
 - `/napcat-group-message/query`
+- `/todo/query`
 - `/main-agent-context/recent`
 - `/main-agent-context/compact`
 - `/metric-chart/*`
@@ -188,8 +189,10 @@ The frontend is a React admin console used to observe the Agent's "life state" (
 - `/auth/:provider`
 - `/control-panel`
 - `/scheduler-tasks`
+- `/todos`
 - `/llm-playground`
 - `/llm-history`
+- `/inner-thought`
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`

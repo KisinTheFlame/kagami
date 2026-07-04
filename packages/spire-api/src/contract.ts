@@ -62,8 +62,10 @@ export const SpireCombatViewSchema = z.object({
   /** 机器人充能球（左→右）；orbSlots=0 表示该角色无球系统。 */
   orbs: z.array(z.string()),
   orbSlots: z.number().int(),
-  /** 观者姿态：none/calm/wrath。 */
-  stance: z.enum(["none", "calm", "wrath"]),
+  /** 观者姿态：none/calm/wrath/divinity。 */
+  stance: z.enum(["none", "calm", "wrath", "divinity"]),
+  /** 观者法力：累积到 10 自动进入神性；非观者恒为 0。 */
+  mantra: z.number().int(),
 });
 
 export const SpireRelicViewSchema = z.object({
