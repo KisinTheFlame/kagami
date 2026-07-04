@@ -56,6 +56,10 @@ export const queryKeys = {
   mainAgentContext: {
     recent: () => ["main-agent-context", "recent"] as const,
   },
+  observability: {
+    llmOverview: (params: QueryParams) => ["observability", "llm", "overview", params] as const,
+    llmTimeseries: (params: QueryParams) => ["observability", "llm", "timeseries", params] as const,
+  },
 };
 
 export function createAppQueryClient() {

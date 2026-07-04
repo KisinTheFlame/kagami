@@ -27,8 +27,9 @@ const CONSOLE_PATH_PREFIXES = [
 ];
 // 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
 const LLM_PATH_PREFIXES = ["/auth"];
-// metric-chart 查询走独立的 metric 进程（@kagami/metric）；摄取端点 /metric/* 不经网关（agent 直连）。
-const METRIC_PATH_PREFIXES = ["/metric-chart"];
+// metric-chart 查询与 observability 观察台查询都走独立的 metric 进程（@kagami/metric）；
+// 摄取端点 /metric/* 不经网关（agent 直连）。
+const METRIC_PATH_PREFIXES = ["/metric-chart", "/observability"];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 // 上游响应超时：等待上游返回响应头的上限。命中即回 504，避免上游卡死 / 半开时前端连接
 // 永久悬挂、socket 句柄泄漏。只约束"拿到响应头"这一段——响应头一到就清除，故不会打断

@@ -19,6 +19,25 @@ export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
   provider: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
+  // 时间窗（含端点）：带时区 ISO-8601。供观察台下钻带 from/to 落地明细；单用于 llm-history 页也可。
+  // refine 兜底越界 offset（如 `+99:00`）：过 datetime() 却让 new Date 成 Invalid Date，
+  // 不拦会流到 service 的 new Date → Prisma 绑定 Invalid Date → 500。
+  from: z.preprocess(
+    parseOptionalStringInput,
+    z
+      .string()
+      .datetime({ offset: true })
+      .refine(value => !Number.isNaN(new Date(value).getTime()), { message: "不是合法时间" })
+      .optional(),
+  ),
+  to: z.preprocess(
+    parseOptionalStringInput,
+    z
+      .string()
+      .datetime({ offset: true })
+      .refine(value => !Number.isNaN(new Date(value).getTime()), { message: "不是合法时间" })
+      .optional(),
+  ),
 });
 
 export type LlmChatCallListQuery = z.infer<typeof LlmChatCallListQuerySchema>;

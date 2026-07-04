@@ -53,6 +53,11 @@ const MetricChartsPage = lazy(() =>
     default: module.MetricChartsPage,
   })),
 );
+const ObservatoryPage = lazy(() =>
+  import("@/pages/observatory/ObservatoryPage").then(module => ({
+    default: module.ObservatoryPage,
+  })),
+);
 const TodosPage = lazy(() =>
   import("@/pages/todos/TodosPage").then(module => ({
     default: module.TodosPage,
@@ -77,6 +82,7 @@ function App() {
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
           <Route path="/metric-charts" element={<MetricChartsPage />} />
+          <Route path="/observatory" element={<ObservatoryPage />} />
           <Route path="/todos" element={<TodosPage />} />
         </Route>
       </Routes>
