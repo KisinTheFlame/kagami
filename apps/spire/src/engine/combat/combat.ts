@@ -171,6 +171,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     orbs: [],
     orbSlots: state.character === "defect" ? DEFECT_ORB_SLOTS : 0,
     playerStance: "none",
+    mantra: 0,
     encounterId,
     isBoss: encounter.isBoss,
   };
@@ -685,6 +686,13 @@ function applyEffect(
       }
       break;
     }
+    case "gain_mantra": {
+      // 观者：累积法力，达到 10 自动进入神性姿态。
+      if (actor.side === "player") {
+        gainMantra(state, effect.amount);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -799,9 +807,11 @@ function dealDamageToEnemy(
     state.hp = Math.max(0, state.hp - sharpHide);
   }
   let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
-  // 愤怒姿态（观者）：玩家造成的伤害翻倍。
+  // 观者姿态对玩家造成伤害的加成：愤怒 ×2，神性 ×3。
   if (state.combat!.playerStance === "wrath") {
     dmg *= 2;
+  } else if (state.combat!.playerStance === "divinity") {
+    dmg *= 3;
   }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
@@ -900,6 +910,8 @@ function dealDamageToPlayer(
 // —— 姿态（观者）——
 
 const CALM_EXIT_ENERGY = 2; // 离开平静姿态回复的能量。
+const MANTRA_THRESHOLD = 10; // 法力达到即进入神性姿态。
+const DIVINITY_ENTER_ENERGY = 3; // 进入神性姿态获得的能量。
 
 /** 进入某姿态：离开平静时 +2 能量；同姿态则无事发生。 */
 function enterStance(state: GameState, stance: PlayerStance): void {
@@ -911,6 +923,29 @@ function enterStance(state: GameState, stance: PlayerStance): void {
     combat.energy += CALM_EXIT_ENERGY;
   }
   combat.playerStance = stance;
+  // 心之堡垒：每次姿态改变获得 = 层数的格挡。
+  const mentalFortress = getPower(combat.playerPowers, "mental_fortress");
+  if (mentalFortress > 0) {
+    combat.playerBlock += mentalFortress;
+  }
+  // 疾攻：进入愤怒姿态时抽 = 层数的牌。
+  if (stance === "wrath") {
+    const rushdown = getPower(combat.playerPowers, "rushdown");
+    if (rushdown > 0) {
+      drawCards(state, rushdown);
+    }
+  }
+}
+
+/** 累积法力：达到 10 层自动进入神性姿态（清空法力、+3 能量）。 */
+function gainMantra(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  combat.mantra += amount;
+  if (combat.mantra >= MANTRA_THRESHOLD) {
+    combat.mantra -= MANTRA_THRESHOLD;
+    enterStance(state, "divinity");
+    combat.energy += DIVINITY_ENTER_ENERGY;
+  }
 }
 
 // —— 充能球（机器人）——
@@ -1210,6 +1245,10 @@ export function endTurn(state: GameState): void {
     }
     applyEffects(state, [{ kind: "deal_damage_all", amount: combust }], { side: "player" }, null);
   }
+  // 神性姿态（观者）：回合结束退出（回到无姿态）。
+  if (combat.playerStance === "divinity") {
+    combat.playerStance = "none";
+  }
   // 充能球被动（机器人）：回合结束时每颗球触发（闪电随机伤害 / 冰霜格挡）。
   triggerOrbPassives(state);
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
@@ -1317,6 +1356,11 @@ export function endTurn(state: GameState): void {
         applyPowerToEnemy(enemy, "poison", noxiousFumes);
       }
     }
+  }
+  // 虔诚：回合开始获得 = 层数的法力（可能触发神性）。
+  const devotion = getPower(combat.playerPowers, "devotion");
+  if (devotion > 0) {
+    gainMantra(state, devotion);
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
