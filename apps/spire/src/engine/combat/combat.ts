@@ -187,6 +187,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     attacksThisTurn: 0,
     cardsDiscardedThisTurn: 0,
     cardsPlayedThisTurn: 0,
+    mantraGainedThisCombat: 0,
+    frostChanneledThisCombat: 0,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
@@ -880,6 +882,30 @@ function applyEffect(
       if (actor.side === "player" && targetEnemyIndex !== null) {
         const count = livingEnemies(combat).length;
         dealDamageToEnemy(state, targetEnemyIndex, effect.amount * count, powers);
+      }
+      break;
+    }
+    case "deal_damage_plus_mantra_gained": {
+      // 璀璨光辉：对目标造成 base + 本场累计法力。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        dealDamageToEnemy(
+          state,
+          targetEnemyIndex,
+          effect.base + combat.mantraGainedThisCombat,
+          powers,
+        );
+      }
+      break;
+    }
+    case "deal_damage_all_per_frost_channeled": {
+      // 暴风雪：对所有敌人造成 per×本场充能冰霜数。
+      if (actor.side === "player") {
+        const dmg = effect.per * combat.frostChanneledThisCombat;
+        for (let i = 0; i < combat.enemies.length; i += 1) {
+          if (combat.enemies[i]!.hp > 0) {
+            dealDamageToEnemy(state, i, dmg, powers);
+          }
+        }
       }
       break;
     }
@@ -1628,6 +1654,7 @@ function enterStance(state: GameState, stance: PlayerStance): void {
 /** 累积法力：达到 10 层自动进入神性姿态（清空法力、+3 能量）。 */
 function gainMantra(state: GameState, amount: number): void {
   const combat = state.combat!;
+  combat.mantraGainedThisCombat += amount; // 璀璨光辉按本场累计法力结算。
   combat.mantra += amount;
   if (combat.mantra >= MANTRA_THRESHOLD) {
     combat.mantra -= MANTRA_THRESHOLD;
@@ -1690,6 +1717,9 @@ function channelOrb(state: GameState, type: OrbType): void {
   }
   // 暗球带累积伤害容器（初始 0）；其它球不用 value。
   combat.orbs.push(type === "dark" ? { type, value: 0 } : { type });
+  if (type === "frost") {
+    combat.frostChanneledThisCombat += 1; // 暴风雪按本场充能冰霜数结算。
+  }
 }
 
 /** 唤醒指定槽位的球：触发唤醒效果后移除。 */
