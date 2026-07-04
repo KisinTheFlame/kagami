@@ -1097,6 +1097,42 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_all_if_draw_empty": {
+      // 大结局：仅当抽牌堆为空时，对所有敌人造成 amount。
+      if (actor.side === "player" && combat.drawPile.length === 0) {
+        for (let i = 0; i < combat.enemies.length; i += 1) {
+          if (combat.enemies[i]!.hp > 0) {
+            dealDamageToEnemy(state, i, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_kill_energy": {
+      // 分裂：造成 base；若击杀目标，获得 energy 能量。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        const wasAlive = enemy.hp > 0;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base, powers);
+        if (wasAlive && enemy.hp <= 0) {
+          combat.energy += effect.energy;
+        }
+      }
+      break;
+    }
+    case "deal_damage_gain_block_dealt": {
+      // 痛打：造成 base，获得等同于实际造成伤害的格挡。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const enemy = combat.enemies[targetEnemyIndex]!;
+        const before = enemy.hp;
+        dealDamageToEnemy(state, targetEnemyIndex, effect.base, powers);
+        const dealt = before - enemy.hp;
+        if (dealt > 0) {
+          applyEffect(state, { kind: "gain_block", amount: dealt }, actor, targetEnemyIndex);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;

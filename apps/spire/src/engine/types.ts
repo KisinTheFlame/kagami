@@ -183,7 +183,11 @@ export type Effect =
   | { kind: "deal_damage_weak_if_attacking"; base: number; weak: number } // 造成 base；若目标意图为攻击，施加 weak 虚弱（瞄准眼睛）
   | { kind: "put_discard_card_on_top" } // 将弃牌堆最近一张牌置于抽牌堆顶（头槌）
   | { kind: "fetch_from_draw"; cardType?: CardType } // 从抽牌堆检索一张（指定类型则限该类型）到手牌（秘密武器/技巧/搜寻）
-  | { kind: "add_random_colorless"; count: number }; // 将 count 张随机无色卡加入手牌（全能）
+  | { kind: "add_random_colorless"; count: number } // 将 count 张随机无色卡加入手牌（全能）
+  // —— 条件伤害 / 击杀返能 / 受击加甲 ——
+  | { kind: "deal_damage_all_if_draw_empty"; amount: number } // 若抽牌堆为空，对所有敌人造成 amount（大结局）
+  | { kind: "deal_damage_kill_energy"; base: number; energy: number } // 造成 base；若击杀目标，获得 energy 能量（分裂）
+  | { kind: "deal_damage_gain_block_dealt"; base: number }; // 造成 base，获得等同于实际造成伤害的格挡（痛打）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
