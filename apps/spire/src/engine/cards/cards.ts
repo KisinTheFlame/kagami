@@ -4394,6 +4394,35 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "本回合每打出满 5 张牌，对所有敌人造成 14 点伤害。",
   },
 
+  {
+    id: "brilliance",
+    name: "璀璨光辉",
+    type: "attack",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage_plus_mantra_gained", base: 12 }],
+    upgradedEffects: [{ kind: "deal_damage_plus_mantra_gained", base: 16 }],
+    description: "造成 12 点伤害，外加本场战斗已获得的法力总量。",
+    upgradedDescription: "造成 16 点伤害，外加本场战斗已获得的法力总量。",
+  },
+  {
+    id: "blizzard",
+    name: "暴风雪",
+    type: "attack",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "deal_damage_all_per_frost_channeled", per: 2 }],
+    upgradedEffects: [{ kind: "deal_damage_all_per_frost_channeled", per: 3 }],
+    description: "对所有敌人造成伤害，数值 = 本场战斗已充能的冰霜球数 ×2。",
+    upgradedDescription: "对所有敌人造成伤害，数值 = 本场战斗已充能的冰霜球数 ×3。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

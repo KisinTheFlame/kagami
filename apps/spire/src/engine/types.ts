@@ -161,6 +161,8 @@ export type Effect =
   | { kind: "multiply_target_poison"; factor: number } // 将目标当前中毒层数乘以 factor（催化剂）
   | { kind: "deal_damage_per_orb"; amount: number } // 场上每颗充能球对目标造成 amount 伤害（弹幕）
   | { kind: "deal_damage_per_enemy"; amount: number } // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
+  | { kind: "deal_damage_plus_mantra_gained"; base: number } // 对目标造成 base + 本场累计法力（璀璨光辉）
+  | { kind: "deal_damage_all_per_frost_channeled"; per: number } // 对所有敌人造成 per×本场充能冰霜数（暴风雪）
   // —— 下回合预约 / 弃牌 / 随机毒 / 抽到指定张数 ——
   | { kind: "gain_block_next_turn"; amount: number } // 下个回合开始获得 amount 格挡（闪转腾挪）
   | { kind: "gain_energy_next_turn"; amount: number } // 下个回合开始获得 amount 能量（飞膝/战略欺骗）
@@ -377,6 +379,10 @@ export type CombatState = {
   cardsDiscardedThisTurn: number;
   /** 本回合已打出的牌数（含当前正在结算的这张）（超光速判据 / 华彩每 5 张触发；回合开始清零）。 */
   cardsPlayedThisTurn: number;
+  /** 本场战斗累计获得的法力（璀璨光辉按此结算；整场不清零）。 */
+  mantraGainedThisCombat: number;
+  /** 本场战斗累计充能的冰霜球数（暴风雪按此结算；整场不清零）。 */
+  frostChanneledThisCombat: number;
   /** 上一张打出的牌的类型（神圣「若上一张是技能」判据）；null=本回合还没打过。 */
   lastCardType: CardType | null;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */

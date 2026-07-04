@@ -51,6 +51,8 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "attacksThisTurn", 0);
     backfill(combat, "cardsDiscardedThisTurn", 0); // 弃牌联动——老档没有。
     backfill(combat, "cardsPlayedThisTurn", 0); // 出牌计数——老档没有。
+    backfill(combat, "mantraGainedThisCombat", 0); // 璀璨光辉——老档没有。
+    backfill(combat, "frostChanneledThisCombat", 0); // 暴风雪——老档没有。
     backfill(combat, "lastCardType", null);
     const enemies = Array.isArray(combat["enemies"]) ? combat["enemies"] : [];
     for (const entry of enemies) {
