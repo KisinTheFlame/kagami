@@ -182,6 +182,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnBlock: 0,
     nextTurnEnergy: 0,
     nextTurnDraw: 0,
+    nextTurnStance: null,
+    doomedNextTurn: false,
     attacksThisTurn: 0,
     lastCardType: null,
     encounterId,
@@ -890,6 +892,21 @@ function applyEffect(
       if (actor.side === "player") {
         combat.nextTurnDraw += xValue;
         combat.nextTurnEnergy += xValue;
+      }
+      break;
+    }
+    case "schedule_stance_next_turn": {
+      // 烈怒渐起：下个回合开始进入指定姿态并多抽牌。
+      if (actor.side === "player") {
+        combat.nextTurnStance = effect.stance;
+        combat.nextTurnDraw += effect.draw;
+      }
+      break;
+    }
+    case "set_doomed": {
+      // 亵渎：下个回合开始时角色死亡。
+      if (actor.side === "player") {
+        combat.doomedNextTurn = true;
       }
       break;
     }
@@ -2048,6 +2065,13 @@ export function endTurn(state: GameState): void {
   combat.turn += 1;
   combat.lastCardType = null;
   combat.attacksThisTurn = 0;
+  // 亵渎：预约的死亡在新回合兑现。
+  if (combat.doomedNextTurn) {
+    state.hp = 0;
+    state.screen = "gameover";
+    state.log.push("你在神性燃尽后倒下了。");
+    return;
+  }
   // 战意：新回合解除「无法抽牌」。
   if (getPower(combat.playerPowers, "no_draw") > 0) {
     removePower(combat.playerPowers, "no_draw");
@@ -2068,6 +2092,12 @@ export function endTurn(state: GameState): void {
   combat.nextTurnBlock = 0;
   combat.nextTurnEnergy = 0;
   combat.nextTurnDraw = 0;
+  // 烈怒渐起：预约的姿态在新回合兑现（进入姿态会触发姿态改变类 power）。
+  if (combat.nextTurnStance !== null) {
+    const scheduled = combat.nextTurnStance;
+    combat.nextTurnStance = null;
+    enterStance(state, scheduled);
+  }
   // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
   const demonForm = getPower(combat.playerPowers, "demon_form");
   if (demonForm > 0) {

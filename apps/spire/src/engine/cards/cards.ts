@@ -4225,6 +4225,36 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "每个存活的敌人，充能 1 颗冰霜球。消耗。",
   },
 
+  {
+    id: "simmering_fury",
+    name: "烈怒渐起",
+    type: "skill",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "schedule_stance_next_turn", stance: "wrath", draw: 2 }],
+    upgradedEffects: [{ kind: "schedule_stance_next_turn", stance: "wrath", draw: 3 }],
+    description: "下个回合开始，进入愤怒姿态并抽 2 张牌。消耗。",
+    upgradedDescription: "下个回合开始，进入愤怒姿态并抽 3 张牌。消耗。",
+  },
+  {
+    id: "blasphemy",
+    name: "亵渎",
+    type: "skill",
+    rarity: "rare",
+    color: "purple",
+    cost: 1,
+    targeted: false,
+    exhausts: true,
+    retain: true,
+    effects: [{ kind: "enter_stance", stance: "divinity" }, { kind: "set_doomed" }],
+    upgradedEffects: [{ kind: "enter_stance", stance: "divinity" }, { kind: "set_doomed" }],
+    description: "进入神性姿态。你将在下个回合开始时死亡。保留。消耗。",
+    upgradedDescription: "进入神性姿态。你将在下个回合开始时死亡。保留。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
