@@ -131,7 +131,12 @@ export type Effect =
   // 玩家用：预知——看抽牌堆顶 amount 张，自动弃掉其中的状态牌，其余留在顶端（观者）。
   | { kind: "scry"; amount: number }
   // 玩家用：抽到手牌上限（疾书）。
-  | { kind: "draw_to_full" };
+  | { kind: "draw_to_full" }
+  // —— 消耗手牌联动 / 生命偷取 ——
+  | { kind: "exhaust_non_attacks" } // 消耗手牌中所有非攻击牌（断魂）
+  | { kind: "exhaust_non_attacks_gain_block"; amount: number } // 消耗所有非攻击牌，每张 +amount 格挡（二度呼吸）
+  | { kind: "exhaust_hand_damage"; amount: number } // 消耗全部手牌，每张对目标造成 amount 伤害（恶魔烈焰）
+  | { kind: "deal_damage_all_lifesteal"; amount: number }; // 对所有敌人造成 amount，回复实际造成的总伤害（收割）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

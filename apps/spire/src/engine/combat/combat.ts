@@ -722,6 +722,61 @@ function applyEffect(
       }
       break;
     }
+    case "exhaust_non_attacks": {
+      // 断魂：消耗手牌中所有非攻击牌（走 exhaustCard，触发无痛/暗黑拥抱）。
+      if (actor.side === "player") {
+        const toExhaust = combat.hand.filter(c => getCardDef(c.defId).type !== "attack");
+        combat.hand = combat.hand.filter(c => getCardDef(c.defId).type === "attack");
+        for (const card of toExhaust) {
+          exhaustCard(state, card);
+        }
+      }
+      break;
+    }
+    case "exhaust_non_attacks_gain_block": {
+      // 二度呼吸：消耗所有非攻击牌，每张 +amount 格挡。
+      if (actor.side === "player") {
+        const toExhaust = combat.hand.filter(c => getCardDef(c.defId).type !== "attack");
+        combat.hand = combat.hand.filter(c => getCardDef(c.defId).type === "attack");
+        for (const card of toExhaust) {
+          exhaustCard(state, card);
+          combat.playerBlock += effect.amount;
+        }
+      }
+      break;
+    }
+    case "exhaust_hand_damage": {
+      // 恶魔烈焰：消耗全部手牌，每张对目标造成 amount 伤害。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const cards = [...combat.hand];
+        combat.hand = [];
+        for (const card of cards) {
+          exhaustCard(state, card);
+        }
+        for (let n = 0; n < cards.length; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_all_lifesteal": {
+      // 收割：对所有敌人造成 amount，回复实际造成的总伤害。
+      if (actor.side === "player") {
+        let healed = 0;
+        for (let i = 0; i < combat.enemies.length; i += 1) {
+          const enemy = combat.enemies[i]!;
+          if (enemy.hp > 0) {
+            const before = enemy.hp;
+            dealDamageToEnemy(state, i, effect.amount, powers);
+            healed += before - enemy.hp;
+          }
+        }
+        state.hp = Math.min(state.maxHp, state.hp + healed);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
