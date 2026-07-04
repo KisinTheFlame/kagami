@@ -2129,6 +2129,13 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = retained;
+  // 既定事实：本回合被保留下来的每张牌，费用永久 -establishment（多次保留会叠加下降）。
+  const establishment = getPower(combat.playerPowers, "establishment");
+  if (establishment > 0) {
+    for (const instance of retained) {
+      instance.costReduction = (instance.costReduction ?? 0) + establishment;
+    }
+  }
   // 扼喉「本回合」限定：玩家回合结束时清除所有敌人的扼喉层数。
   for (const enemy of combat.enemies) {
     if (getPower(enemy.powers, "choked") > 0) {
@@ -2160,6 +2167,11 @@ export function endTurn(state: GameState): void {
       return;
     }
     applyEffects(state, [{ kind: "deal_damage_all", amount: combust }], { side: "player" }, null);
+  }
+  // 研习：回合结束将 = 层数张「洞悉」加入抽牌堆。
+  const study = getPower(combat.playerPowers, "study");
+  if (study > 0) {
+    addCards(state, "insight", "draw", study);
   }
   // 神性姿态（观者）：回合结束退出（回到无姿态）。
   if (combat.playerStance === "divinity") {
