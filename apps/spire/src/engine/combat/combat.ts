@@ -619,6 +619,58 @@ function applyEffect(
       );
       break;
     }
+    case "deal_damage_draw_pile_count": {
+      // 心灵冲击：对目标造成 = 抽牌堆张数的伤害。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        dealDamageToEnemy(state, targetEnemyIndex, combat.drawPile.length, powers);
+      }
+      break;
+    }
+    case "gain_block_per_hand_card": {
+      // 灵盾：每张手牌获得 amount 格挡（本牌已离手，不计自身）。
+      if (actor.side === "player") {
+        const total = effect.amount * combat.hand.length;
+        applyEffect(state, { kind: "gain_block", amount: total }, actor, targetEnemyIndex);
+      }
+      break;
+    }
+    case "deal_damage_per_hand_type": {
+      // 飞镖：手牌中每张指定类型牌，对目标造成 amount 伤害（本牌已离手）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const count = combat.hand.filter(
+          card => getCardDef(card.defId).type === effect.cardType,
+        ).length;
+        for (let n = 0; n < count; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_perfected": {
+      // 完美打击：基础 amount + per×(各牌堆 / 手牌中 id 含 "strike" 的牌数)。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const zones = [combat.hand, combat.drawPile, combat.discardPile, combat.exhaustPile];
+        let strikes = 0;
+        for (const zone of zones) {
+          strikes += zone.filter(card => card.defId.includes("strike")).length;
+        }
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount + effect.per * strikes, powers);
+      }
+      break;
+    }
+    case "deal_damage_bane": {
+      // 剧毒之刃：对目标造成 amount；若目标中毒则再造成 amount。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        const target = combat.enemies[targetEnemyIndex]!;
+        if (target.hp > 0 && getPower(target.powers, "poison") > 0) {
+          dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+        }
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;

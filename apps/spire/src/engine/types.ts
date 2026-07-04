@@ -107,7 +107,13 @@ export type Effect =
       power: PowerId;
       amount: number;
       on: "self" | "target" | "all_enemies";
-    }; // 施加 amount×X 层
+    } // 施加 amount×X 层
+  // —— 按数量结算：伤害 / 格挡随牌堆 / 手牌 / 状态动态计算 ——
+  | { kind: "deal_damage_draw_pile_count" } // 对目标造成 = 抽牌堆张数的伤害（心灵冲击）
+  | { kind: "gain_block_per_hand_card"; amount: number } // 每张手牌获得 amount 格挡（灵盾）
+  | { kind: "deal_damage_per_hand_type"; cardType: CardType; amount: number } // 手牌中每张该类型牌，对目标造成 amount 伤害（飞镖：每张技能）
+  | { kind: "deal_damage_perfected"; amount: number; per: number } // 基础 amount + per×(各区「打击」名牌数)（完美打击）
+  | { kind: "deal_damage_bane"; amount: number }; // 对目标造成 amount；若目标中毒则再造成 amount（剧毒之刃）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
