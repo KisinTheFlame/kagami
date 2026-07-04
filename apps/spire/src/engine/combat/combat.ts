@@ -299,9 +299,10 @@ function applyEffects(
   effects: readonly Effect[],
   actor: ActorRef,
   targetEnemyIndex: number | null,
+  xValue = 0,
 ): void {
   for (const effect of effects) {
-    applyEffect(state, effect, actor, targetEnemyIndex);
+    applyEffect(state, effect, actor, targetEnemyIndex, xValue);
   }
 }
 
@@ -310,6 +311,7 @@ function applyEffect(
   effect: Effect,
   actor: ActorRef,
   targetEnemyIndex: number | null,
+  xValue = 0,
 ): void {
   const combat = state.combat!;
   const powers = actorPowers(state, actor);
@@ -556,6 +558,65 @@ function applyEffect(
     }
     case "add_card": {
       addCards(state, effect.cardId, effect.pile, effect.count);
+      break;
+    }
+    case "deal_damage_all_x": {
+      // X 费：对所有敌人造成 amount 伤害，重复 X 次（旋风斩）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue; n += 1) {
+          for (let i = 0; i < combat.enemies.length; i += 1) {
+            if (combat.enemies[i]!.hp > 0) {
+              dealDamageToEnemy(state, i, effect.amount, powers);
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "deal_damage_x": {
+      // X 费：对目标造成 amount 伤害，重复 X 次（穿刺）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        for (let n = 0; n < xValue; n += 1) {
+          if (combat.enemies[targetEnemyIndex]!.hp > 0) {
+            dealDamageToEnemy(state, targetEnemyIndex, effect.amount, powers);
+          }
+        }
+      }
+      break;
+    }
+    case "gain_block_x": {
+      // X 费：获得 amount 格挡，重复 X 次（强化机体）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue; n += 1) {
+          applyEffect(
+            state,
+            { kind: "gain_block", amount: effect.amount },
+            actor,
+            targetEnemyIndex,
+          );
+        }
+      }
+      break;
+    }
+    case "evoke_x": {
+      // X 费：唤醒 X 颗球（多重施法）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue && combat.orbs.length > 0; n += 1) {
+          evokeOrb(state, 0);
+        }
+      }
+      break;
+    }
+    case "apply_power_x": {
+      // X 费：施加 amount×X 层（萎靡：-X 力量 / +X 虚弱）。
+      applyPowerEffect(
+        state,
+        effect.power,
+        effect.amount * xValue,
+        effect.on,
+        actor,
+        targetEnemyIndex,
+      );
       break;
     }
     default: {
@@ -897,9 +958,17 @@ export function playCard(
     }
   }
 
-  combat.energy -= cost;
+  // X 费牌：X = 当前全部能量，消耗全部能量，effects 里的 *_x 按 X 结算。
+  const xValue = def.xCost ? combat.energy : 0;
+  combat.energy -= def.xCost ? combat.energy : cost;
   combat.hand.splice(handIndex, 1);
-  applyEffects(state, effectsOf(def, instance.upgraded), { side: "player" }, resolvedTarget);
+  applyEffects(
+    state,
+    effectsOf(def, instance.upgraded),
+    { side: "player" },
+    resolvedTarget,
+    xValue,
+  );
   // 激怒（地精头目）：玩家每打出一张技能牌，带激怒的敌人获得 = 层数的力量。
   if (def.type === "skill") {
     for (const enemy of combat.enemies) {

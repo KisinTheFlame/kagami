@@ -96,7 +96,18 @@ export type Effect =
   | { kind: "heal_ally"; amount: number }
   // 敌人用：召唤若干敌人加入战斗（地精首领召唤地精；新生者本回合不行动）。
   | { kind: "summon"; defIds: string[] }
-  | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number };
+  | { kind: "add_card"; cardId: string; pile: "draw" | "discard" | "hand"; count: number }
+  // —— X 费牌：xValue = 打出时的能量，以下效果按 X 次 / X 倍结算 ——
+  | { kind: "deal_damage_all_x"; amount: number } // 对所有敌人造成 amount 伤害，X 次（旋风斩）
+  | { kind: "deal_damage_x"; amount: number } // 对目标造成 amount 伤害，X 次（穿刺）
+  | { kind: "gain_block_x"; amount: number } // 获得 amount 格挡，X 次（强化机体）
+  | { kind: "evoke_x" } // 唤醒 X 颗球（多重施法）
+  | {
+      kind: "apply_power_x";
+      power: PowerId;
+      amount: number;
+      on: "self" | "target" | "all_enemies";
+    }; // 施加 amount×X 层
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -109,6 +120,8 @@ export type CardDef = {
   cost: number | null;
   /** 升级后的费用（省略=不变）；用于力压/见红等升级降费卡。 */
   upgradedCost?: number;
+  /** X 费牌：打出时消耗全部能量，X = 消耗的能量，effects 里的 *_x 效果按 X 结算（旋风斩等）。 */
+  xCost?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
