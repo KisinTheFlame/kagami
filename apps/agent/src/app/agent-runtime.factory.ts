@@ -14,6 +14,7 @@ import {
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
+import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import type { LlmClient } from "@kagami/llm-client";
 import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
 import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
@@ -450,6 +451,8 @@ export async function buildAgentRuntime({
     operation: innerVoiceOperation,
     eventQueue,
     metricService,
+    innerThoughtDao: new PrismaInnerThoughtDao({ database }),
+    runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentRuntime = new RootLoopAgent({
     llmClient,

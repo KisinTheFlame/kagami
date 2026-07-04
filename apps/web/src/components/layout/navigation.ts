@@ -1,6 +1,7 @@
 import {
   Activity,
   Bot,
+  Brain,
   CalendarClock,
   FileText,
   FlaskConical,
@@ -32,6 +33,7 @@ export const navItems: readonly NavItem[] = [
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
   { to: "/metric-charts", label: "Metric 图表", icon: Activity },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
+  { to: "/inner-thought", label: "内心念头", icon: Brain },
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "QQ 消息", icon: MessagesSquare },

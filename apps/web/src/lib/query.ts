@@ -34,6 +34,9 @@ export const queryKeys = {
   appLog: {
     historyList: (params: QueryParams) => ["app-log", "list", params] as const,
   },
+  innerThought: {
+    historyList: (params: QueryParams) => ["inner-thought", "list", params] as const,
+  },
   napcatEvent: {
     historyList: (params: QueryParams) => ["napcat-event", "list", params] as const,
   },
