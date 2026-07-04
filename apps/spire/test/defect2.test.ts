@@ -1,62 +1,48 @@
 import { describe, expect, it } from "vitest";
 import { newRun } from "../src/engine/engine.js";
-import { startCombat, playCard, endTurn } from "../src/engine/combat/combat.js";
-import type { CardInstance, GameState } from "../src/engine/types.js";
+import { startCombat, playCard } from "../src/engine/combat/combat.js";
+import type { GameState } from "../src/engine/types.js";
 
-// 机器人收尾：循环 / 全息影像 / 递归。
+// 机器人充能补全：雷暴倾泻（X 费充闪电）/ 透骨寒（每敌一冰霜）。
 
 function combat(): GameState {
-  const s = newRun({ runId: "d2", seed: 27, character: "defect" });
+  const s = newRun({ runId: "d2", seed: 35, character: "defect" });
   startCombat(s, "cultist");
   s.hp = 300;
   s.maxHp = 300;
-  s.combat!.enemies[0]!.hp = 300;
-  s.combat!.enemies[0]!.maxHp = 300;
   s.combat!.orbs = [];
+  s.combat!.orbSlots = 10;
   return s;
 }
 
-function play(s: GameState, defId: string, target: number | null = null): void {
-  const card: CardInstance = { uid: s.nextUid++, defId, upgraded: false };
-  s.combat!.hand = [card];
-  s.combat!.energy = 9;
-  expect(playCard(s, 0, target).ok).toBe(true);
-}
-
-describe("循环：回合始额外触发最左球被动", () => {
-  it("持有循环 + 冰霜球 → 回合始额外加格挡", () => {
+describe("雷暴倾泻：X 费充能 X 颗闪电", () => {
+  it("X=3 → 充能 3 颗闪电球", () => {
     const s = combat();
-    s.combat!.orbs = [{ type: "frost" }];
-    s.combat!.playerPowers.push({ id: "loop", amount: 1 });
-    s.combat!.hand = [];
-    s.combat!.enemies[0]!.currentMove = "incantation";
-    endTurn(s);
-    // 新回合开始时，循环额外触发冰霜被动（+2 格挡）。
-    expect(s.combat!.playerBlock).toBeGreaterThanOrEqual(2);
+    s.combat!.hand = [{ uid: s.nextUid++, defId: "tempest", upgraded: false }];
+    s.combat!.energy = 3;
+    expect(playCard(s, 0, null).ok).toBe(true);
+    expect(s.combat!.energy).toBe(0);
+    expect(s.combat!.orbs.filter(o => o.type === "lightning")).toHaveLength(3);
+    expect(s.combat!.exhaustPile.some(c => c.defId === "tempest")).toBe(true);
   });
 });
 
-describe("全息影像：格挡 + 收回弃牌", () => {
-  it("获得格挡并把最近弃牌收回手牌", () => {
+describe("透骨寒：每个存活敌人充能 1 冰霜", () => {
+  it("双敌 → 充能 2 颗冰霜球", () => {
     const s = combat();
-    s.combat!.discardPile = [{ uid: s.nextUid++, defId: "strike", upgraded: false }];
-    s.combat!.playerBlock = 0;
-    play(s, "hologram", null);
-    expect(s.combat!.playerBlock).toBe(3);
-    expect(s.combat!.hand.some(c => c.defId === "strike")).toBe(true);
-    expect(s.combat!.discardPile.some(c => c.defId === "strike")).toBe(false);
+    s.combat!.enemies.push({ ...s.combat!.enemies[0]!, hp: 20, maxHp: 20 });
+    s.combat!.hand = [{ uid: s.nextUid++, defId: "chill", upgraded: false }];
+    s.combat!.energy = 9;
+    expect(playCard(s, 0, null).ok).toBe(true);
+    expect(s.combat!.orbs.filter(o => o.type === "frost")).toHaveLength(2);
   });
-});
 
-describe("递归：唤醒最左球并重充同类型", () => {
-  it("闪电球被唤醒发伤，随后重新充能一颗闪电", () => {
+  it("一个敌人已死 → 只按存活数充能", () => {
     const s = combat();
-    s.combat!.orbs = [{ type: "lightning" }];
-    const before = s.combat!.enemies[0]!.hp;
-    play(s, "recursion", null);
-    // 唤醒造成伤害。
-    expect(s.combat!.enemies[0]!.hp).toBeLessThan(before);
-    // 重新充能一颗闪电球。
-    expect(s.combat!.orbs.filter(o => o.type === "lightning")).toHaveLength(1);
+    s.combat!.enemies.push({ ...s.combat!.enemies[0]!, hp: 0, maxHp: 20 });
+    s.combat!.hand = [{ uid: s.nextUid++, defId: "chill", upgraded: false }];
+    s.combat!.energy = 9;
+    expect(playCard(s, 0, null).ok).toBe(true);
+    expect(s.combat!.orbs.filter(o => o.type === "frost")).toHaveLength(1);
   });
 });

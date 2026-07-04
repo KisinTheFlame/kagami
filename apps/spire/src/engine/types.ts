@@ -128,6 +128,8 @@ export type Effect =
   | { kind: "deal_damage_x"; amount: number } // 对目标造成 amount 伤害，X 次（穿刺）
   | { kind: "gain_block_x"; amount: number } // 获得 amount 格挡，X 次（强化机体）
   | { kind: "evoke_x" } // 唤醒 X 颗球（多重施法）
+  | { kind: "channel_orb_x"; orbType: OrbType } // X 费：充能 X 颗指定球（雷暴倾泻）
+  | { kind: "channel_orb_per_enemy"; orbType: OrbType } // 每个存活敌人充能 1 颗指定球（透骨寒）
   | {
       kind: "apply_power_x";
       power: PowerId;

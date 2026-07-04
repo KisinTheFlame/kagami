@@ -4192,6 +4192,39 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "抽 1 张牌。若抽到的是技能牌，获得 4 点格挡。",
   },
 
+  {
+    id: "tempest",
+    name: "雷暴倾泻",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 0,
+    xCost: true,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "channel_orb_x", orbType: "lightning" }],
+    upgradedEffects: [
+      { kind: "channel_orb_x", orbType: "lightning" },
+      { kind: "channel_orb", orbType: "lightning" },
+    ],
+    description: "消耗全部能量（X）。充能 X 颗闪电球。消耗。",
+    upgradedDescription: "消耗全部能量（X）。充能 X+1 颗闪电球。消耗。",
+  },
+  {
+    id: "chill",
+    name: "透骨寒",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 0,
+    targeted: false,
+    exhausts: true,
+    effects: [{ kind: "channel_orb_per_enemy", orbType: "frost" }],
+    upgradedEffects: [{ kind: "channel_orb_per_enemy", orbType: "frost" }],
+    description: "每个存活的敌人，充能 1 颗冰霜球。消耗。",
+    upgradedDescription: "每个存活的敌人，充能 1 颗冰霜球。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
