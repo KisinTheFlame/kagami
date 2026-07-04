@@ -36,6 +36,16 @@ const POWER_LABELS: Record<string, string> = {
   regen: "再生",
   plated_armor: "镀甲",
   mode_shift: "模式",
+  combust: "燃烧",
+  feel_no_pain: "无痛",
+  dark_embrace: "暗黑拥抱",
+  juggernaut: "主宰",
+  brutality: "残暴",
+  barricade: "壁垒",
+  rupture: "破裂",
+  thousand_cuts: "千刃",
+  after_image: "残影",
+  noxious_fumes: "毒雾",
 };
 
 const ORB_LABELS: Record<string, string> = {
