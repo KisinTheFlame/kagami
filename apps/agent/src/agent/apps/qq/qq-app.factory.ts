@@ -13,7 +13,7 @@ import { SendMessageTool } from "../../capabilities/messaging/tools/send-message
 import { SendResourceTool } from "../../capabilities/messaging/tools/send-resource.tool.js";
 import type { ResourceService } from "../../capabilities/resource/application/resource.service.js";
 import type { NotificationCenter } from "../../runtime/root-agent/notification/notification-center.js";
-import type { OssClient } from "../../../oss/oss-client.js";
+import type { OssClient } from "../../../acl/oss-client.js";
 import { ListGroupFilesTool } from "./tools/list-group-files.tool.js";
 import { DownloadGroupFileTool } from "./tools/download-group-file.tool.js";
 import { UploadGroupFileTool } from "./tools/upload-group-file.tool.js";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import type { OssClient } from "../../../../oss/oss-client.js";
+import type { OssClient } from "../../../../acl/oss-client.js";
 import type {
   NapcatChatTarget,
   NapcatGatewayService,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ResourceService } from "../../../../src/agent/capabilities/resource/application/resource.service.js";
-import type { OssClient } from "../../../../src/oss/oss-client.js";
+import type { OssClient } from "../../../../src/acl/oss-client.js";
 
 function ossClientReturning(object: { bytes: Buffer; mimeType: string; size: number }): OssClient {
   return {

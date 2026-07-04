@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { HttpLlmClient } from "../../src/llm/http-llm-client.js";
+import { HttpLlmClient } from "../../src/acl/http-llm-client.js";
 import type { LlmChatRequest } from "@kagami/llm-client";
 
 function jsonResponse(body: unknown, status = 200): Response {

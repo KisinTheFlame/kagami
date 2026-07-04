@@ -4,8 +4,8 @@ import { BrowserScreenshotTool } from "../../../../src/agent/capabilities/browse
 
 // 截图降级路径会 logger.warn，需要先初始化日志 runtime（否则 getLoggerRuntime 抛）。
 initTestLoggerRuntime();
-import type { BrowserClient } from "../../../../src/browser/browser-client.js";
-import type { OssClient } from "../../../../src/oss/oss-client.js";
+import type { BrowserClient } from "../../../../src/acl/browser-client.js";
+import type { OssClient } from "../../../../src/acl/oss-client.js";
 import type { AppendMessageEffect } from "../../../../src/agent/runtime/effect/root-agent-effect.js";
 
 function fakeBrowserClient(): BrowserClient {

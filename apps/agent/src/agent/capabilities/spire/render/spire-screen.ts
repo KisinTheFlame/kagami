@@ -5,7 +5,7 @@ import type {
   SpirePower,
   SpireReference,
   SpireScreen,
-} from "../../../../spire/spire-client.js";
+} from "../../../../acl/spire-client.js";
 
 // === ScreenView → 文字屏幕（走 .hbs 模板）===
 //

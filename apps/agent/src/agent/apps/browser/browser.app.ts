@@ -9,8 +9,8 @@ import { BrowserWaitForTool } from "../../capabilities/browser/tools/wait-for.to
 import { BrowserScreenshotTool } from "../../capabilities/browser/tools/screenshot.tool.js";
 import { BrowserEvalTool } from "../../capabilities/browser/tools/eval.tool.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
-import type { OssClient } from "../../../oss/oss-client.js";
-import type { BrowserClient } from "../../../browser/browser-client.js";
+import type { OssClient } from "../../../acl/oss-client.js";
+import type { BrowserClient } from "../../../acl/browser-client.js";
 
 export const BROWSER_APP_ID = "browser";
 

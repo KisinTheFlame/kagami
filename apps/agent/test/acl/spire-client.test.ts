@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HttpSpireClient, type SpireScreen } from "../../src/spire/spire-client.js";
+import { HttpSpireClient, type SpireScreen } from "../../src/acl/spire-client.js";
 import { SpireError } from "../../src/agent/capabilities/spire/domain/errors.js";
 
 // HttpSpireClient 的运行时行为测试（契约编译期强制见 test/spire-api-contract.test.ts）：
