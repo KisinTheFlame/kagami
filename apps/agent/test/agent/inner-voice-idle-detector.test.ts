@@ -8,7 +8,6 @@ import {
 } from "../../src/agent/capabilities/inner-voice/domain/idle-detector.js";
 import { InnerVoiceIdleTracker } from "../../src/agent/capabilities/inner-voice/domain/idle-tracker.js";
 import { collectInnerVoiceIdleSignals } from "../../src/agent/capabilities/inner-voice/domain/ledger-idle-signals.js";
-import { sliceRecentBalancedMessages } from "../../src/agent/capabilities/inner-voice/domain/recent-context-slice.js";
 import type { LlmMessage } from "@kagami/llm-client";
 
 // 北京时间 = UTC+8：Beijing 14:00 → UTC 06:00（非静默窗、正常触发时段）。
@@ -181,30 +180,5 @@ describe("collectInnerVoiceIdleSignals", () => {
     const result = collectInnerVoiceIdleSignals(records);
     expect(result.waitAt).toEqual([at(1)]);
     expect(result.attemptAt).toEqual([at(3)]);
-  });
-});
-
-describe("sliceRecentBalancedMessages", () => {
-  it("起点回退到 user 消息，保证 tool 配对完整", () => {
-    const messages: LlmMessage[] = [
-      { role: "user", content: "u1" },
-      {
-        role: "assistant",
-        content: "",
-        toolCalls: [{ id: "t1", name: "invoke", arguments: {} }],
-      },
-      { role: "tool", toolCallId: "t1", content: "r1" },
-      { role: "user", content: "u2" },
-      { role: "assistant", content: "hi", toolCalls: [] },
-    ];
-
-    const sliced = sliceRecentBalancedMessages(messages, 2);
-    expect(sliced[0]).toEqual({ role: "user", content: "u2" });
-    expect(sliced).toHaveLength(2);
-  });
-
-  it("keepRecent 覆盖全量时原样返回", () => {
-    const messages: LlmMessage[] = [{ role: "user", content: "u1" }];
-    expect(sliceRecentBalancedMessages(messages, 40)).toEqual(messages);
   });
 });

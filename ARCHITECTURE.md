@@ -116,7 +116,7 @@ apps/agent/src/agent/
 │   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体
 │   ├── todo/           待办本能力本体（到点提醒经通知中心）
-│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 Operation：空闲时以小镜口吻注入 `<inner_thought>`（#265）
+│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 TaskAgent（镜像装配命中 KV cache）：空闲时以小镜口吻注入 `<inner_thought>`（#265 / #410）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
     ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
     ├── ithome/         IThome App：RSS 未读推送
