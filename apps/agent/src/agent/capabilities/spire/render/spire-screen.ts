@@ -46,17 +46,30 @@ const POWER_LABELS: Record<string, string> = {
   thousand_cuts: "千刃",
   after_image: "残影",
   noxious_fumes: "毒雾",
+  devotion: "虔诚",
+  mental_fortress: "心之堡垒",
+  rushdown: "疾攻",
+  storm: "风暴",
+  heatsinks: "散热",
+  static_discharge: "静电放电",
+  machine_learning: "机器学习",
+  evolve: "进化",
+  corruption: "腐化",
+  nirvana: "涅槃",
 };
 
 const ORB_LABELS: Record<string, string> = {
   lightning: "闪电",
   frost: "冰霜",
+  dark: "暗",
+  plasma: "等离子",
 };
 
 const STANCE_LABELS: Record<string, string> = {
   none: "无",
   calm: "平静",
   wrath: "愤怒",
+  divinity: "神性",
 };
 
 function labelPowers(powers: readonly SpirePower[]): { label: string; amount: number }[] {
@@ -141,6 +154,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
           orbSlots: combat.orbSlots,
           hasStance: combat.stance !== "none",
           stance: STANCE_LABELS[combat.stance] ?? combat.stance,
+          hasMantra: combat.mantra > 0,
+          mantra: combat.mantra,
         }
       : null,
     options: screen.options.map((text, index) => ({ n: index, text })),
