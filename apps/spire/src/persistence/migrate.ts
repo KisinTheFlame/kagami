@@ -49,6 +49,7 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "nextTurnStance", null); // 烈怒渐起——老档没有。
     backfill(combat, "doomedNextTurn", false); // 亵渎——老档没有。
     backfill(combat, "attacksThisTurn", 0);
+    backfill(combat, "cardsDiscardedThisTurn", 0); // 弃牌联动——老档没有。
     backfill(combat, "lastCardType", null);
     const enemies = Array.isArray(combat["enemies"]) ? combat["enemies"] : [];
     for (const entry of enemies) {
