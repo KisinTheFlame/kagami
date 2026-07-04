@@ -57,7 +57,8 @@ export type PowerId =
   | "static_discharge" // 静电放电：每受到穿透格挡的攻击伤害，充能 = 层数的闪电球（机器人）
   | "machine_learning" // 机器学习：每个玩家回合开始，多抽 = 层数的牌（机器人）
   | "evolve" // 进化：每抽到一张状态牌，额外抽 = 层数的牌
-  | "corruption"; // 腐化：技能牌费用变 0，且打出后消耗（铁甲）
+  | "corruption" // 腐化：技能牌费用变 0，且打出后消耗（铁甲）
+  | "nirvana"; // 涅槃：每次预知，获得 = 层数的格挡（观者）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -126,7 +127,11 @@ export type Effect =
   // 玩家用：增减球槽数（吞噬 -1、电容器 +2）；下限 0。
   | { kind: "change_orb_slots"; delta: number }
   // 玩家用：获得法力（观者；累积到 10 自动进入神性姿态）。
-  | { kind: "gain_mantra"; amount: number };
+  | { kind: "gain_mantra"; amount: number }
+  // 玩家用：预知——看抽牌堆顶 amount 张，自动弃掉其中的状态牌，其余留在顶端（观者）。
+  | { kind: "scry"; amount: number }
+  // 玩家用：抽到手牌上限（疾书）。
+  | { kind: "draw_to_full" };
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

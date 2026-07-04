@@ -709,6 +709,19 @@ function applyEffect(
       }
       break;
     }
+    case "scry": {
+      if (actor.side === "player") {
+        doScry(state, effect.amount);
+      }
+      break;
+    }
+    case "draw_to_full": {
+      // 疾书：抽到手牌上限。
+      if (actor.side === "player") {
+        drawCards(state, Math.max(0, MAX_HAND_SIZE - combat.hand.length));
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -968,6 +981,34 @@ function gainMantra(state: GameState, amount: number): void {
     combat.mantra -= MANTRA_THRESHOLD;
     enterStance(state, "divinity");
     combat.energy += DIVINITY_ENTER_ENERGY;
+  }
+}
+
+/**
+ * 预知（观者）：看抽牌堆顶 amount 张（drawPile 末端为顶），自动弃掉其中的状态牌、
+ * 其余保持原序留在顶端（自动解算，不开交互选牌子界面）。发生一次预知触发涅槃格挡。
+ */
+function doScry(state: GameState, amount: number): void {
+  const combat = state.combat!;
+  const n = Math.min(amount, combat.drawPile.length);
+  if (n <= 0) {
+    return;
+  }
+  const topStart = combat.drawPile.length - n;
+  const looked = combat.drawPile.splice(topStart, n); // 取出顶部 n 张
+  const kept: CardInstance[] = [];
+  for (const card of looked) {
+    if (getCardDef(card.defId).type === "status") {
+      combat.discardPile.push(card); // 状态牌自动弃掉
+    } else {
+      kept.push(card);
+    }
+  }
+  combat.drawPile.push(...kept); // 其余按原序放回顶端
+  // 涅槃：每次预知获得 = 层数的格挡。
+  const nirvana = getPower(combat.playerPowers, "nirvana");
+  if (nirvana > 0) {
+    combat.playerBlock += nirvana;
   }
 }
 
