@@ -485,6 +485,25 @@ function applyEffect(
       }
       break;
     }
+    case "channel_orb_x": {
+      // 雷暴倾泻：充能 X 颗指定球（消耗全部能量）。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue; n += 1) {
+          channelOrb(state, effect.orbType);
+        }
+      }
+      break;
+    }
+    case "channel_orb_per_enemy": {
+      // 透骨寒：每个存活敌人充能 1 颗指定球。
+      if (actor.side === "player") {
+        const living = combat.enemies.filter(e => e.hp > 0).length;
+        for (let n = 0; n < living; n += 1) {
+          channelOrb(state, effect.orbType);
+        }
+      }
+      break;
+    }
     case "evoke": {
       if (actor.side === "player") {
         for (let n = 0; n < effect.count && combat.orbs.length > 0; n += 1) {
