@@ -80,7 +80,8 @@ export type PowerId =
   | "free_attack" // 回身步：下 = 层数张攻击牌费用视为 0（每打出一张攻击消耗一层）
   | "accuracy" // 敏锐：飞刀（shiv）额外造成 = 层数的伤害（静默）
   | "lock_on" // 靶心：带此的敌人受到闪电/暗球伤害 ×1.5（回合末 -1，机器人）
-  | "choked"; // 扼喉：本回合玩家每打出一张牌，此敌人损失 = 层数的生命（玩家回合末清除，静默）
+  | "choked" // 扼喉：本回合玩家每打出一张牌，此敌人损失 = 层数的生命（玩家回合末清除，静默）
+  | "well_laid_plans"; // 深谋远虑：回合结束可额外保留至多 = 层数张牌（静默）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -259,6 +260,8 @@ export type CardDef = {
   onDiscard?: Effect[];
   /** 升级后的 onDiscard（省略则沿用 onDiscard）。 */
   upgradedOnDiscard?: Effect[];
+  /** 被消耗（进消耗堆）时，以玩家为行动者结算这些效果（哨戒回能量）。 */
+  onExhaust?: Effect[];
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;

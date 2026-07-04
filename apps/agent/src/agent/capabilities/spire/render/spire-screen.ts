@@ -78,6 +78,7 @@ const POWER_LABELS: Record<string, string> = {
   accuracy: "敏锐",
   lock_on: "锁定",
   choked: "扼喉",
+  well_laid_plans: "深谋远虑",
 };
 
 const ORB_LABELS: Record<string, string> = {

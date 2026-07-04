@@ -4531,6 +4531,36 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "本场战斗你每失血一次，本牌费用 -1。造成 22 点伤害。",
   },
 
+  {
+    id: "well_laid_plans",
+    name: "深谋远虑",
+    type: "power",
+    rarity: "uncommon",
+    color: "green",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "apply_power", power: "well_laid_plans", amount: 1, on: "self" }],
+    upgradedEffects: [{ kind: "apply_power", power: "well_laid_plans", amount: 2, on: "self" }],
+    description: "每个回合结束时，你可以额外保留至多 1 张牌。",
+    upgradedDescription: "每个回合结束时，你可以额外保留至多 2 张牌。",
+  },
+  {
+    id: "sentinel",
+    name: "哨戒",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "gain_block", amount: 5 }],
+    upgradedEffects: [{ kind: "gain_block", amount: 8 }],
+    onExhaust: [{ kind: "gain_energy", amount: 2 }],
+    description: "获得 5 点格挡。若本牌被消耗，获得 2 点能量。",
+    upgradedDescription: "获得 8 点格挡。若本牌被消耗，获得 2 点能量。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

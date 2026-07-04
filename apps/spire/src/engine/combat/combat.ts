@@ -275,6 +275,11 @@ function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
 function exhaustCard(state: GameState, instance: CardInstance): void {
   const combat = state.combat!;
   combat.exhaustPile.push(instance);
+  // 哨戒：被消耗时结算该牌的 onExhaust（如回能量）。
+  const exhaustDef = getCardDef(instance.defId);
+  if (exhaustDef.onExhaust && exhaustDef.onExhaust.length > 0) {
+    applyEffects(state, exhaustDef.onExhaust, { side: "player" }, null);
+  }
   const feelNoPain = getPower(combat.playerPowers, "feel_no_pain");
   if (feelNoPain > 0) {
     combat.playerBlock += feelNoPain; // 直接加，不再触发主宰（避免连锁）。
@@ -2044,12 +2049,17 @@ export function endTurn(state: GameState): void {
   }
   // 玩家回合结束：保留牌留在手中，虚无牌被消耗，其余进弃牌堆；玩家 debuff 衰减。
   const retained: CardInstance[] = [];
+  // 深谋远虑：回合结束可额外保留至多 N 张本应弃掉的牌。
+  let wellLaidPlans = getPower(combat.playerPowers, "well_laid_plans");
   for (const instance of combat.hand) {
     const cardDef = getCardDef(instance.defId);
     if (cardDef.retain) {
       retained.push(instance);
     } else if (cardDef.ethereal) {
       combat.exhaustPile.push(instance);
+    } else if (wellLaidPlans > 0) {
+      retained.push(instance);
+      wellLaidPlans -= 1;
     } else {
       combat.discardPile.push(instance);
     }
