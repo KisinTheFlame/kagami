@@ -89,6 +89,8 @@ const POWER_LABELS: Record<string, string> = {
   master_reality: "掌控现实",
   corpse_bomb: "尸爆",
   self_repair: "自我修复",
+  magnetism: "磁力",
+  flame_barrier: "火焰屏障",
 };
 
 const ORB_LABELS: Record<string, string> = {
