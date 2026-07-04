@@ -85,6 +85,7 @@ const POWER_LABELS: Record<string, string> = {
   sadistic_nature: "虐念",
   establishment: "既定事实",
   study: "研习",
+  omega: "奥米加",
 };
 
 const ORB_LABELS: Record<string, string> = {
