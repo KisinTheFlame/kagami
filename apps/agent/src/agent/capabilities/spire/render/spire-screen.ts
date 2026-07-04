@@ -186,6 +186,7 @@ const CARD_TYPE_LABELS: Record<string, string> = {
   skill: "技能",
   power: "能力",
   status: "状态牌",
+  curse: "诅咒",
 };
 
 const SPIRE_RARITY_LABELS: Record<string, string> = {

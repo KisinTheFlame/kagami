@@ -994,6 +994,15 @@ function applyEffect(
       }
       break;
     }
+    case "shuffle_discard_into_draw": {
+      // 深呼吸：把弃牌堆洗入抽牌堆。
+      if (actor.side === "player") {
+        combat.drawPile.push(...combat.discardPile);
+        combat.discardPile = [];
+        shuffleInPlace(state.rng, combat.drawPile);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1560,6 +1569,11 @@ export function endTurn(state: GameState): void {
   for (let i = 0; i < burnCount; i += 1) {
     applyBurnDamage(state, BURN_DAMAGE);
   }
+  // 收集手牌里「回合末在手」的效果（诅咒腐朽自伤、疑虑虚弱、羞愧脆弱等）；
+  // 在玩家 debuff 衰减之后再结算，避免本回合刚施加的虚弱/脆弱立刻被衰减掉。
+  const endOfHandEffects = combat.hand.flatMap(
+    instance => getCardDef(instance.defId).endOfTurnInHand ?? [],
+  );
   if (state.hp <= 0) {
     state.screen = "gameover";
     state.log.push("你倒下了。");
@@ -1626,6 +1640,15 @@ export function endTurn(state: GameState): void {
   // 暴怒：只在打出它的回合生效，回合结束清除。
   if (getPower(combat.playerPowers, "rage") > 0) {
     removePower(combat.playerPowers, "rage");
+  }
+  // 回合末在手结算（腐朽自伤 / 疑虑虚弱 / 羞愧脆弱）：在衰减之后，让本回合施加的减益延续到敌人回合。
+  if (endOfHandEffects.length > 0) {
+    applyEffects(state, endOfHandEffects, { side: "player" }, null);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你倒下了。");
+      return;
+    }
   }
 
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
