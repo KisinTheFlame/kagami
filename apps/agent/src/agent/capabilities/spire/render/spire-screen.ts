@@ -74,6 +74,8 @@ const POWER_LABELS: Record<string, string> = {
   no_draw: "无法抽牌",
   foresight: "未卜先知",
   panache: "华彩",
+  free_attack: "免费攻击",
+  accuracy: "敏锐",
 };
 
 const ORB_LABELS: Record<string, string> = {

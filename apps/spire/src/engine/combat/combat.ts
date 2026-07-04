@@ -387,10 +387,13 @@ function applyEffect(
         if (targetEnemyIndex !== null) {
           // 活力：本次攻击额外 +层数伤害，随后清零（只加持一次攻击）。
           const vigor = getPower(combat.playerPowers, "vigor");
+          // 敏锐：飞刀（shiv）额外 +层数伤害。
+          const accuracyBonus =
+            sourceCard?.defId === "shiv" ? getPower(combat.playerPowers, "accuracy") : 0;
           dealDamageToEnemy(
             state,
             targetEnemyIndex,
-            effect.amount + vigor,
+            effect.amount + vigor + accuracyBonus,
             powers,
             effect.strengthMultiplier,
           );
@@ -1816,8 +1819,10 @@ export function playCard(
   const discountedRawCost = def.costMinusDiscardThisTurn
     ? Math.max(0, rawCost - combat.cardsDiscardedThisTurn)
     : rawCost;
+  // 回身步：下一张攻击牌费用视为 0（打出后消耗一层）。
+  const freeAttack = def.type === "attack" && getPower(combat.playerPowers, "free_attack") > 0;
   // costZero（疯狂使其免费）或腐化时费用视为 0。
-  const cost = corrupted || instance.costZero ? 0 : discountedRawCost;
+  const cost = corrupted || instance.costZero || freeAttack ? 0 : discountedRawCost;
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
@@ -1869,6 +1874,10 @@ export function playCard(
   // 终结技计数：本回合已打出的攻击牌 +1（在效果结算后，故本张攻击不计入自身）。
   if (def.type === "attack") {
     combat.attacksThisTurn += 1;
+    // 回身步：本张攻击享受免费后，消耗一层。
+    if (freeAttack) {
+      removePower(combat.playerPowers, "free_attack");
+    }
     // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡。
     const rage = getPower(combat.playerPowers, "rage");
     if (rage > 0) {
