@@ -32,6 +32,7 @@ import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-
 import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
 import { HttpSpireClient } from "../acl/spire-client.js";
+import { HttpPixelClient } from "../acl/pixel-client.js";
 import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -134,6 +135,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const spireClient = new HttpSpireClient({
     baseUrl: `http://${config.services.spire.host}:${config.services.spire.port}`,
   });
+  // 像素画拆成独立 kagami-pixel 进程（issue #365）：agent 经 HTTP client 调它，地址从顶层
+  // services.pixel 派生。服务未起时，client 把错误归一成 PIXEL_NOT_READY，工具仍回规整失败结构。
+  const pixelClient = new HttpPixelClient({
+    baseUrl: `http://${config.services.pixel.host}:${config.services.pixel.port}`,
+  });
   const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
     visionAgent,
     ossClient,
@@ -189,6 +195,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     ossClient,
     browserClient,
     spireClient,
+    pixelClient,
   });
 
   // TodoReminderPoller 构造放在 agentRuntime 之后：digest 第三段要 fork 主 Agent 上下文，

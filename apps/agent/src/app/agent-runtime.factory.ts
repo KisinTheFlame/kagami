@@ -65,6 +65,8 @@ import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import type { BrowserClient } from "../acl/browser-client.js";
 import { SpireApp } from "../agent/apps/spire/spire.app.js";
 import type { SpireClient } from "../acl/spire-client.js";
+import { PixelApp } from "../agent/apps/pixel/pixel.app.js";
+import type { PixelClient } from "../acl/pixel-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -114,6 +116,8 @@ type BuildAgentRuntimeInput = {
   browserClient: BrowserClient;
   /** 尖塔游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */
   spireClient: SpireClient;
+  /** 像素画动作客户端：打到独立的 kagami-pixel 进程（issue #365）。 */
+  pixelClient: PixelClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -183,6 +187,7 @@ export async function buildAgentRuntime({
   ossClient,
   browserClient,
   spireClient,
+  pixelClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -297,6 +302,7 @@ export async function buildAgentRuntime({
   appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(new SpireApp({ spireClient }));
+  appManager.register(new PixelApp({ pixelClient, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 

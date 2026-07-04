@@ -23,8 +23,8 @@
       "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
       "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
       "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"],
+      "@kagami/pixel-api/*": ["./../../packages/pixel-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
-      "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"],
       "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
       "@kagami/agent-api/*": ["./../../packages/agent-api/src/*"]
     }

@@ -24,8 +24,9 @@ case "$SERVICE" in
   llm) PM2_NAME="kagami-llm" ;;
   metric) PM2_NAME="kagami-metric" ;;
   spire) PM2_NAME="kagami-spire" ;;
+  pixel) PM2_NAME="kagami-pixel" ;;
   *)
-    echo "用法: pnpm app:stop [<agent|console|gateway|oss|browser|llm|metric|spire>]" >&2
+    echo "用法: pnpm app:stop [<agent|console|gateway|oss|browser|llm|metric|spire|pixel>]" >&2
     echo "  无参：停掉所有进程。" >&2
     echo "  带服务名：只停该服务。" >&2
     exit 1
