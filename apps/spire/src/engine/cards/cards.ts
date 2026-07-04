@@ -4095,6 +4095,68 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "抽 4 张牌。本回合无法再抽牌。",
   },
 
+  {
+    id: "genetic_algorithm",
+    name: "遗传演算",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_block_scaling", base: 1 },
+      { kind: "grow_self", amount: 2 },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block_scaling", base: 1 },
+      { kind: "grow_self", amount: 3 },
+    ],
+    description: "获得 1 点格挡。本场战斗内每次打出，本牌格挡 +2。",
+    upgradedDescription: "获得 1 点格挡。本场战斗内每次打出，本牌格挡 +3。",
+  },
+  {
+    id: "steam_barrier",
+    name: "泄压护罩",
+    type: "skill",
+    rarity: "common",
+    color: "blue",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_block_scaling", base: 6 },
+      { kind: "grow_self", amount: -1 },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block_scaling", base: 8 },
+      { kind: "grow_self", amount: -1 },
+    ],
+    description: "获得 6 点格挡。本场战斗内每次打出，本牌格挡 -1。",
+    upgradedDescription: "获得 8 点格挡。本场战斗内每次打出，本牌格挡 -1。",
+  },
+  {
+    id: "windmill_strike",
+    name: "风车斩",
+    type: "attack",
+    rarity: "uncommon",
+    color: "purple",
+    cost: 2,
+    targeted: true,
+    exhausts: false,
+    retain: true,
+    effects: [
+      { kind: "deal_damage_scaling", base: 7 },
+      { kind: "grow_self", amount: 4 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage_scaling", base: 10 },
+      { kind: "grow_self", amount: 5 },
+    ],
+    description: "保留。造成 7 点伤害。本场战斗内每次打出，本牌伤害 +4。",
+    upgradedDescription: "保留。造成 10 点伤害。本场战斗内每次打出，本牌伤害 +5。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
