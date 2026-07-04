@@ -57,6 +57,8 @@ const POWER_LABELS: Record<string, string> = {
   corruption: "腐化",
   nirvana: "涅槃",
   infinite_blades: "无尽之刃",
+  intangible: "虚无缥缈",
+  blur: "疾影",
 };
 
 const ORB_LABELS: Record<string, string> = {

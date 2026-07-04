@@ -59,7 +59,9 @@ export type PowerId =
   | "evolve" // 进化：每抽到一张状态牌，额外抽 = 层数的牌
   | "corruption" // 腐化：技能牌费用变 0，且打出后消耗（铁甲）
   | "nirvana" // 涅槃：每次预知，获得 = 层数的格挡（观者）
-  | "infinite_blades"; // 无尽之刃：每个玩家回合开始，将 = 层数的飞刀加入手牌（静默）
+  | "infinite_blades" // 无尽之刃：每个玩家回合开始，将 = 层数的飞刀加入手牌（静默）
+  | "intangible" // 虚无缥缈：受到的一切伤害降为 1（回合结束 -1 层）
+  | "blur"; // 疾影：格挡不在回合开始清空（层数即剩余生效回合数，回合末 -1）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -141,7 +143,16 @@ export type Effect =
   // —— 更多计数 / 状态操作 ——
   | { kind: "multiply_target_poison"; factor: number } // 将目标当前中毒层数乘以 factor（催化剂）
   | { kind: "deal_damage_per_orb"; amount: number } // 场上每颗充能球对目标造成 amount 伤害（弹幕）
-  | { kind: "deal_damage_per_enemy"; amount: number }; // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
+  | { kind: "deal_damage_per_enemy"; amount: number } // 对目标造成 amount×(存活敌人数) 伤害（保龄冲击）
+  // —— 下回合预约 / 弃牌 / 随机毒 / 抽到指定张数 ——
+  | { kind: "gain_block_next_turn"; amount: number } // 下个回合开始获得 amount 格挡（闪转腾挪）
+  | { kind: "gain_energy_next_turn"; amount: number } // 下个回合开始获得 amount 能量（飞膝/战略欺骗）
+  | { kind: "draw_next_turn"; amount: number } // 下个回合开始多抽 amount 张（掠食者）
+  | { kind: "discard_random"; count: number } // 随机弃掉 count 张手牌（优先状态牌）（杂技/有备而来）
+  | { kind: "discard_non_attacks" } // 弃掉手牌中所有非攻击牌（卸货）
+  | { kind: "apply_poison_random"; amount: number; times: number } // 对随机敌人施加 amount 中毒，重复 times 次（弹跳药瓶）
+  | { kind: "draw_up_to"; target: number } // 抽牌直到手牌达到 target 张（专精）
+  | { kind: "deal_damage_per_attack"; amount: number }; // 对目标造成 amount×(本回合此前打出的攻击牌数)（终结技）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -156,6 +167,8 @@ export type CardDef = {
   upgradedCost?: number;
   /** X 费牌：打出时消耗全部能量，X = 消耗的能量，effects 里的 *_x 效果按 X 结算（旋风斩等）。 */
   xCost?: boolean;
+  /** 固有：战斗开局必定在起手牌中（背刺等）。 */
+  innate?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -272,6 +285,12 @@ export type CombatState = {
   playerStance: PlayerStance;
   /** 观者法力：累积到 10 自动进入神性姿态并清空。默认 0（非观者恒为 0）。 */
   mantra: number;
+  /** 预约到下个玩家回合开始的格挡 / 能量 / 抽牌（闪转腾挪/飞膝/掠食者等）。用完清零。 */
+  nextTurnBlock: number;
+  nextTurnEnergy: number;
+  nextTurnDraw: number;
+  /** 本回合已打出的攻击牌数（终结技按此结算；每回合开始清零）。 */
+  attacksThisTurn: number;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;

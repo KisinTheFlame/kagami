@@ -43,6 +43,10 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "orbSlots", state["character"] === "defect" ? 3 : 0);
     backfill(combat, "playerStance", "none");
     backfill(combat, "mantra", 0); // 法力（观者神性）——老档没有。
+    backfill(combat, "nextTurnBlock", 0);
+    backfill(combat, "nextTurnEnergy", 0);
+    backfill(combat, "nextTurnDraw", 0);
+    backfill(combat, "attacksThisTurn", 0);
     const enemies = Array.isArray(combat["enemies"]) ? combat["enemies"] : [];
     for (const entry of enemies) {
       const enemy = asRecord(entry);
