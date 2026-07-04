@@ -67,7 +67,8 @@ export type PowerId =
   | "battle_hymn" // 战歌：每个玩家回合开始，将 = 层数的痛斩加入手牌（观者）
   | "strength_temp" // 临时力量：回合结束时失去 = 层数的力量（屈伸），随后本 power 清零
   | "rage" // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡（回合末清零）
-  | "double_tap"; // 连击：接下来的 = 层数张攻击牌各额外结算一次（每消耗一次 -1 层）
+  | "double_tap" // 连击：接下来的 = 层数张攻击牌各额外结算一次（每消耗一次 -1 层）
+  | "berserk"; // 狂暴：每个玩家回合开始，获得 = 层数的能量（代价是自身易伤，狂暴）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -187,7 +188,8 @@ export type Effect =
   // —— 条件伤害 / 击杀返能 / 受击加甲 ——
   | { kind: "deal_damage_all_if_draw_empty"; amount: number } // 若抽牌堆为空，对所有敌人造成 amount（大结局）
   | { kind: "deal_damage_kill_energy"; base: number; energy: number } // 造成 base；若击杀目标，获得 energy 能量（分裂）
-  | { kind: "deal_damage_gain_block_dealt"; base: number }; // 造成 base，获得等同于实际造成伤害的格挡（痛打）
+  | { kind: "deal_damage_gain_block_dealt"; base: number } // 造成 base，获得等同于实际造成伤害的格挡（痛打）
+  | { kind: "reboot"; draw: number }; // 将手牌与弃牌堆全部洗回抽牌堆，然后抽 draw 张（重启）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

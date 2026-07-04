@@ -3723,6 +3723,62 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "造成 12 点伤害。获得等同于实际造成伤害的格挡。",
   },
 
+  // —— 狂暴 / 重启 / 涡轮批次 ——
+  {
+    id: "berserk",
+    name: "狂暴",
+    type: "power",
+    rarity: "rare",
+    color: "red",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "apply_power", power: "vulnerable", amount: 2, on: "self" },
+      { kind: "apply_power", power: "berserk", amount: 1, on: "self" },
+    ],
+    upgradedEffects: [
+      { kind: "apply_power", power: "vulnerable", amount: 1, on: "self" },
+      { kind: "apply_power", power: "berserk", amount: 1, on: "self" },
+    ],
+    description: "自身获得 2 层易伤。此后每个回合开始时获得 1 点能量。",
+    upgradedDescription: "自身获得 1 层易伤。此后每个回合开始时获得 1 点能量。",
+  },
+  {
+    id: "reboot",
+    name: "重启",
+    type: "skill",
+    rarity: "common",
+    color: "blue",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [{ kind: "reboot", draw: 4 }],
+    upgradedEffects: [{ kind: "reboot", draw: 6 }],
+    description: "将手牌与弃牌堆全部洗回抽牌堆，然后抽 4 张牌。",
+    upgradedDescription: "将手牌与弃牌堆全部洗回抽牌堆，然后抽 6 张牌。",
+  },
+  {
+    id: "turbo",
+    name: "涡轮",
+    type: "skill",
+    rarity: "uncommon",
+    color: "blue",
+    cost: 0,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_energy", amount: 2 },
+      { kind: "add_card", cardId: "dazed", pile: "discard", count: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "gain_energy", amount: 3 },
+      { kind: "add_card", cardId: "dazed", pile: "discard", count: 1 },
+    ],
+    description: "获得 2 点能量。将一张「眩晕」置入弃牌堆。",
+    upgradedDescription: "获得 3 点能量。将一张「眩晕」置入弃牌堆。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

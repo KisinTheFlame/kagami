@@ -65,6 +65,7 @@ const POWER_LABELS: Record<string, string> = {
   strength_temp: "临时力量",
   rage: "暴怒",
   double_tap: "连击",
+  berserk: "狂暴",
 };
 
 const ORB_LABELS: Record<string, string> = {

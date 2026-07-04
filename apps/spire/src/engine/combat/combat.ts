@@ -1133,6 +1133,17 @@ function applyEffect(
       }
       break;
     }
+    case "reboot": {
+      // 重启：手牌与弃牌堆全部洗回抽牌堆，然后抽 draw 张。
+      if (actor.side === "player") {
+        combat.drawPile.push(...combat.hand, ...combat.discardPile);
+        combat.hand = [];
+        combat.discardPile = [];
+        shuffleInPlace(state.rng, combat.drawPile);
+        drawCards(state, effect.draw);
+      }
+      break;
+    }
     default: {
       const _exhaustive: never = effect;
       void _exhaustive;
@@ -1925,6 +1936,11 @@ export function endTurn(state: GameState): void {
   const battleHymn = getPower(combat.playerPowers, "battle_hymn");
   if (battleHymn > 0) {
     addCards(state, "smite", "hand", battleHymn);
+  }
+  // 狂暴：回合开始获得 = 层数的能量。
+  const berserk = getPower(combat.playerPowers, "berserk");
+  if (berserk > 0) {
+    combat.energy += berserk;
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
   triggerRelicTurnStart(state);
