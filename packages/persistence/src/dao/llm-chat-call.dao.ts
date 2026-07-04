@@ -29,6 +29,9 @@ export type QueryLlmChatCallListInput = {
   provider?: string;
   model?: string;
   status?: LlmChatCallStatus;
+  // 按 created_at 收窄的时间窗（含端点）。供观察台下钻「某 model + 某时间段」落地明细用。
+  from?: Date;
+  to?: Date;
 };
 
 type LlmChatCallBaseInput = {

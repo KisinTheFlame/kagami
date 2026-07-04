@@ -209,5 +209,13 @@ function toWhereInput(input: QueryLlmChatCallListInput): Prisma.LlmChatCallWhere
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.status ? { status: input.status } : {}),
+    ...(input.from || input.to
+      ? {
+          createdAt: {
+            ...(input.from ? { gte: input.from } : {}),
+            ...(input.to ? { lte: input.to } : {}),
+          },
+        }
+      : {}),
   };
 }
