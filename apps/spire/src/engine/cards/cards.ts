@@ -4597,6 +4597,41 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "你的攻击每造成一次穿透格挡的伤害，给该敌人施加 1 层中毒。",
   },
 
+  {
+    id: "dropkick",
+    name: "飞踢",
+    type: "attack",
+    rarity: "uncommon",
+    color: "red",
+    cost: 1,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 5 },
+      { kind: "bonus_if_target_vulnerable", energy: 1, draw: 1 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 8 },
+      { kind: "bonus_if_target_vulnerable", energy: 1, draw: 1 },
+    ],
+    description: "造成 5 点伤害。若目标处于易伤，获得 1 点能量并抽 1 张牌。",
+    upgradedDescription: "造成 8 点伤害。若目标处于易伤，获得 1 点能量并抽 1 张牌。",
+  },
+  {
+    id: "dark_shackles",
+    name: "黑暗枷锁",
+    type: "skill",
+    rarity: "uncommon",
+    color: "colorless",
+    cost: 0,
+    targeted: true,
+    exhausts: true,
+    effects: [{ kind: "weaken_enemy_strength", amount: 9 }],
+    upgradedEffects: [{ kind: "weaken_enemy_strength", amount: 15 }],
+    description: "本回合内，使目标失去 9 点力量（其行动过后归还）。消耗。",
+    upgradedDescription: "本回合内，使目标失去 15 点力量（其行动过后归还）。消耗。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",

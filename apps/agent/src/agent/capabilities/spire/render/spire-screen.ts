@@ -81,6 +81,7 @@ const POWER_LABELS: Record<string, string> = {
   well_laid_plans: "深谋远虑",
   mark: "标记",
   envenom: "淬毒",
+  shackled: "枷锁",
 };
 
 const ORB_LABELS: Record<string, string> = {
