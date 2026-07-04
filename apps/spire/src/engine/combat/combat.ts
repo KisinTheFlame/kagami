@@ -217,6 +217,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnEnergy: 0,
     nextTurnDraw: 0,
     nextTurnStance: null,
+    nightmarePending: null,
+    extraTurnPending: false,
     doomedNextTurn: false,
     nextTurnPhantasmal: false,
     attacksThisTurn: 0,
@@ -224,6 +226,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     cardsPlayedThisTurn: 0,
     mantraGainedThisCombat: 0,
     frostChanneledThisCombat: 0,
+    lightningChanneledThisCombat: 0,
     powersPlayedThisCombat: 0,
     timesLostHpThisCombat: 0,
     lastCardType: null,
@@ -1127,6 +1130,89 @@ function applyEffect(
       }
       break;
     }
+    case "return_zero_cost_from_discard": {
+      // 一心一意：把弃牌堆里所有 0 费牌收回手牌（含被疯狂/流水线变 0 的）。
+      if (actor.side === "player") {
+        const remaining: CardInstance[] = [];
+        for (const card of combat.discardPile) {
+          const zeroCost = card.costZero || costOf(getCardDef(card.defId), card.upgraded) === 0;
+          if (zeroCost && combat.hand.length < MAX_HAND_SIZE) {
+            combat.hand.push(card);
+          } else {
+            remaining.push(card);
+          }
+        }
+        combat.discardPile = remaining;
+      }
+      break;
+    }
+    case "put_hand_card_on_draw_free": {
+      // 布置：把一张手牌（自动取当前费用最高的一张）置于抽牌堆顶，本场费用视为 0。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let bestIdx = 0;
+        let bestCost = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > bestCost) {
+            bestCost = c;
+            bestIdx = i;
+          }
+        }
+        const picked = combat.hand.splice(bestIdx, 1)[0]!;
+        picked.costZero = true;
+        combat.drawPile.push(picked);
+      }
+      break;
+    }
+    case "scrape_draw": {
+      // 削刮：抽 count 张，随后把其中费用 >0 的弃掉（仅留 0 费）。
+      if (actor.side === "player") {
+        const before = new Set(combat.hand.map(card => card.uid));
+        drawCards(state, effect.count);
+        const keep: CardInstance[] = [];
+        for (const card of combat.hand) {
+          const isNew = !before.has(card.uid);
+          const zeroCost = card.costZero || costOf(getCardDef(card.defId), card.upgraded) === 0;
+          if (isNew && !zeroCost) {
+            combat.discardPile.push(card);
+          } else {
+            keep.push(card);
+          }
+        }
+        combat.hand = keep;
+      }
+      break;
+    }
+    case "schedule_card_copies": {
+      // 噩梦：把一张手牌（自动取当前费用最高）预约到下回合加 count 张副本。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let bestIdx = 0;
+        let bestCost = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > bestCost) {
+            bestCost = c;
+            bestIdx = i;
+          }
+        }
+        combat.nightmarePending = { cardId: combat.hand[bestIdx]!.defId, count: effect.count };
+      }
+      break;
+    }
+    case "schedule_extra_turn": {
+      // 宝库：预约一个额外回合（结束回合后跳过敌人行动）。
+      if (actor.side === "player") {
+        combat.extraTurnPending = true;
+      }
+      break;
+    }
+    case "collect_charge": {
+      // 采集：接下来 X 个回合各得一张 0 费「洞悉」（记为 collect 层数，回合始消耗一层）。
+      if (actor.side === "player") {
+        addPower(combat.playerPowers, "collect", xValue);
+      }
+      break;
+    }
     case "bonus_if_target_vulnerable": {
       // 飞踢：目标处于易伤时，获得能量并抽牌。
       if (actor.side === "player" && targetEnemyIndex !== null) {
@@ -1180,6 +1266,26 @@ function applyEffect(
           if (combat.enemies[i]!.hp > 0) {
             dealDamageToEnemy(state, i, dmg, powers);
           }
+        }
+      }
+      break;
+    }
+    case "deal_damage_random_per_lightning_channeled": {
+      // 雷霆一击：对随机存活敌人造成 amount，重复 = 本场充能闪电数。
+      if (actor.side === "player") {
+        for (let n = 0; n < combat.lightningChanneledThisCombat; n += 1) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length === 0) {
+            break;
+          }
+          dealDamageToEnemy(
+            state,
+            living[nextInt(state.rng, living.length)]!.index,
+            effect.amount,
+            powers,
+          );
         }
       }
       break;
@@ -2053,6 +2159,9 @@ function channelOrb(state: GameState, type: OrbType): void {
   if (type === "frost") {
     combat.frostChanneledThisCombat += 1; // 暴风雪按本场充能冰霜数结算。
   }
+  if (type === "lightning") {
+    combat.lightningChanneledThisCombat += 1; // 雷霆一击按本场充能闪电数结算。
+  }
 }
 
 /** 唤醒指定槽位的球：触发唤醒效果后移除。 */
@@ -2520,8 +2629,14 @@ export function endTurn(state: GameState): void {
     }
   }
 
+  // 宝库：若预约了额外回合，则本次跳过敌人行动（敌人数封顶为 0），随后直接进入新的玩家回合。
+  const skipEnemies = combat.extraTurnPending;
+  if (skipEnemies) {
+    combat.extraTurnPending = false;
+    state.log.push("你获得了一个额外回合。");
+  }
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
-  const enemyCount = combat.enemies.length;
+  const enemyCount = skipEnemies ? 0 : combat.enemies.length;
   for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
     if (enemy.hp <= 0 || enemy.escaped) {
@@ -2597,6 +2712,11 @@ export function endTurn(state: GameState): void {
   if (combat.nextTurnPhantasmal) {
     combat.nextTurnPhantasmal = false;
     addPower(combat.playerPowers, "phantasmal", 1);
+  }
+  // 噩梦：预约兑现——把牌副本加入手牌。
+  if (combat.nightmarePending) {
+    addCards(state, combat.nightmarePending.cardId, "hand", combat.nightmarePending.count);
+    combat.nightmarePending = null;
   }
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
@@ -2734,6 +2854,21 @@ export function endTurn(state: GameState): void {
   const magnetism = getPower(combat.playerPowers, "magnetism");
   for (let n = 0; n < magnetism; n += 1) {
     addCards(state, MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!, "hand", 1);
+  }
+  // 采集：接下来若干回合各将一张 0 费「洞悉」加入手牌，每回合消耗一层。
+  if (getPower(combat.playerPowers, "collect") > 0) {
+    const insight: CardInstance = {
+      uid: state.nextUid++,
+      defId: "insight",
+      upgraded: false,
+      costZero: true,
+    };
+    if (combat.hand.length < MAX_HAND_SIZE) {
+      combat.hand.push(insight);
+    } else {
+      combat.discardPile.push(insight);
+    }
+    addPower(combat.playerPowers, "collect", -1);
   }
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }

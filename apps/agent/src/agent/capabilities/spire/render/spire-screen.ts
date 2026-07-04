@@ -94,6 +94,7 @@ const POWER_LABELS: Record<string, string> = {
   like_water: "静如止水",
   burst: "爆发",
   phantasmal: "幻杀",
+  collect: "采集",
 };
 
 const ORB_LABELS: Record<string, string> = {
