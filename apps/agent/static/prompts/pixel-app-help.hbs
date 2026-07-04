@@ -9,8 +9,7 @@
   - circle(cx, cy, radius, color, filled?)：以 (cx,cy) 为心画圆。
   - ellipse(cx, cy, rx, ry, color, filled?)：画椭圆，rx/ry 是横竖半径。
   - clear()：清空画布（保留尺寸）。
-  - show_canvas()：看当前画布的完整网格（带坐标标尺）。绘图工具平时只回摘要，想看全貌用它。
-  - render()：把画布渲染成 PNG 图、进你的视野；要发到群里就 switch(qq) 后用 send_resource。
+  - render()：把画布渲染成 PNG 图、进你的视野，同时存档返回一个 resid（画布长啥样看这张图，绘图工具平时只回摘要）。
 
 坐标从 0 起、原点在左上角。line/rect/circle/ellipse 超出画布的部分会被裁掉；set_pixels/fill 的坐标越界会被拒绝。
 
