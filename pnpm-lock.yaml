@@ -86,6 +86,9 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      '@kagami/pixel-api':
+        specifier: workspace:*
+        version: link:../../packages/pixel-api
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
@@ -324,6 +327,40 @@ importers:
       '@types/node':
         specifier: ^24.10.1
         version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  apps/pixel:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@kagami/pixel-api':
+        specifier: workspace:*
+        version: link:../../packages/pixel-api
+      fastify:
+        specifier: ^5.6.2
+        version: 5.7.4
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -772,6 +809,22 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/pixel-api:
+    dependencies:
+      '@kagami/http':
+        specifier: workspace:*
+        version: link:../http
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/rpc-client:
     dependencies:
@@ -1856,6 +1909,9 @@ packages:
 
   '@types/node@24.11.0':
     resolution: {integrity: sha512-fPxQqz4VTgPI/IQ+lj9r0h+fDR66bzoeMGHp8ASee+32OSGIkeASsoZuJixsQoVef1QJbeubcPBxKk22QVoWdw==}
+
+  '@types/pngjs@6.0.5':
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -3507,6 +3563,10 @@ packages:
     resolution: {integrity: sha512-wX1FiFkzuT2H/UUEA8QNXDAA9MMHDsK/3UHj6Dkd5U7kxyigKDA5gyDw78ycTQZAuGCLWyUX5FiXEuVQWafukA==}
     engines: {node: '>=16.0.0'}
     hasBin: true
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postcss-import@15.1.0:
     resolution: {integrity: sha512-hpr+J05B2FVYUAXHeK1YyI267J/dDDhMU6B6civm8hSY1jYJnBXxzKDKDswzJmtLHryrjhnDjqqp/49t8FALew==}
@@ -5361,6 +5421,10 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/pngjs@6.0.5':
+    dependencies:
+      '@types/node': 24.11.0
+
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
       '@types/react': 19.2.14
@@ -7198,6 +7262,8 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+
+  pngjs@7.0.0: {}
 
   postcss-import@15.1.0(postcss@8.5.6):
     dependencies:

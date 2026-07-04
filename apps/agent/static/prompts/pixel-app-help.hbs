@@ -1,0 +1,19 @@
+你在像素画 App 里——一块一格一格填色的画布。先 new_canvas 起手，再用下面的工具画。
+
+可调用工具：
+  - new_canvas(width, height)：新建一块画布（1..64），会替换掉当前画布。
+  - set_pixels(pixels)：批量点一批格子，pixels 是 [{x, y, color}, ...]。任一格越界或颜色非法则整批不生效。
+  - fill(x, y, color)：油漆桶，从 (x,y) 把连成一片的同色区域填成新色。
+  - line(x1, y1, x2, y2, color)：画直线。
+  - rect(x1, y1, x2, y2, color, filled?)：画矩形；filled=true 填实，默认只描边。
+  - circle(cx, cy, radius, color, filled?)：以 (cx,cy) 为心画圆。
+  - ellipse(cx, cy, rx, ry, color, filled?)：画椭圆，rx/ry 是横竖半径。
+  - clear()：清空画布（保留尺寸）。
+  - show_canvas()：看当前画布的完整网格（带坐标标尺）。绘图工具平时只回摘要，想看全貌用它。
+  - render()：把画布渲染成 PNG 图、进你的视野；要发到群里就 switch(qq) 后用 send_resource。
+
+坐标从 0 起、原点在左上角。line/rect/circle/ellipse 超出画布的部分会被裁掉；set_pixels/fill 的坐标越界会被拒绝。
+
+颜色只能用这些名字：{{palette}}。
+
+要去别的 App，用 switch(id=...) 切过去。
