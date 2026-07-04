@@ -185,6 +185,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnStance: null,
     doomedNextTurn: false,
     attacksThisTurn: 0,
+    cardsDiscardedThisTurn: 0,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
@@ -910,6 +911,13 @@ function applyEffect(
       }
       break;
     }
+    case "gain_energy_if_discarded": {
+      // 声东击西：若本回合弃过牌，获得能量。
+      if (actor.side === "player" && combat.cardsDiscardedThisTurn > 0) {
+        combat.energy += effect.amount;
+      }
+      break;
+    }
     case "draw_then_block_if_skill": {
       // 脱身之策：抽 1 张，若抽到的是技能则获得格挡。
       if (actor.side === "player") {
@@ -936,6 +944,7 @@ function applyEffect(
             idx = nextInt(state.rng, combat.hand.length);
           }
           combat.discardPile.push(combat.hand.splice(idx, 1)[0]!);
+          combat.cardsDiscardedThisTurn += 1;
         }
       }
       break;
@@ -949,6 +958,7 @@ function applyEffect(
             keep.push(card);
           } else {
             combat.discardPile.push(card);
+            combat.cardsDiscardedThisTurn += 1;
           }
         }
         combat.hand = keep;
@@ -1272,6 +1282,7 @@ function applyEffect(
       if (actor.side === "player") {
         const count = combat.hand.length;
         combat.discardPile.push(...combat.hand);
+        combat.cardsDiscardedThisTurn += count;
         combat.hand = [];
         for (let n = 0; n < count; n += 1) {
           combat.hand.push({ uid: state.nextUid++, defId: "shiv", upgraded: false });
@@ -1752,8 +1763,12 @@ export function playCard(
   }
   // 腐化：技能牌费用变 0（打出后消耗，见下方入堆处理）。
   const corrupted = def.type === "skill" && getPower(combat.playerPowers, "corruption") > 0;
+  // 剖体斩：费用按本回合已弃牌数下调（下限 0）。
+  const discountedRawCost = def.costMinusDiscardThisTurn
+    ? Math.max(0, rawCost - combat.cardsDiscardedThisTurn)
+    : rawCost;
   // costZero（疯狂使其免费）或腐化时费用视为 0。
-  const cost = corrupted || instance.costZero ? 0 : rawCost;
+  const cost = corrupted || instance.costZero ? 0 : discountedRawCost;
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
@@ -2065,6 +2080,7 @@ export function endTurn(state: GameState): void {
   combat.turn += 1;
   combat.lastCardType = null;
   combat.attacksThisTurn = 0;
+  combat.cardsDiscardedThisTurn = 0;
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
     state.hp = 0;

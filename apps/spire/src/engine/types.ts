@@ -166,6 +166,7 @@ export type Effect =
   | { kind: "schedule_next_turn_x" } // X 费：下回合多抽 X 张并多得 X 能量（镜影分身）
   | { kind: "schedule_stance_next_turn"; stance: PlayerStance; draw: number } // 下回合开始进入姿态并抽 draw 张（烈怒渐起）
   | { kind: "set_doomed" } // 下个回合开始时角色死亡（亵渎）
+  | { kind: "gain_energy_if_discarded"; amount: number } // 若本回合弃过牌，获得 amount 能量（声东击西）
   | { kind: "draw_then_block_if_skill"; amount: number } // 抽 1 张，若为技能则获得 amount 格挡（脱身之策）
   | { kind: "discard_random"; count: number } // 随机弃掉 count 张手牌（优先状态牌）（杂技/有备而来）
   | { kind: "discard_non_attacks" } // 弃掉手牌中所有非攻击牌（卸货）
@@ -229,6 +230,8 @@ export type CardDef = {
   xCost?: boolean;
   /** 固有：战斗开局必定在起手牌中（背刺等）。 */
   innate?: boolean;
+  /** 打出时费用按本回合已弃牌数下调（下限 0）（剖体斩）。 */
+  costMinusDiscardThisTurn?: boolean;
   /** 需要选择一个敌人目标（攻击类多为 true；AoE / 自身增益为 false）。 */
   targeted: boolean;
   /** 打出后进入消耗堆而非弃牌堆。 */
@@ -363,6 +366,8 @@ export type CombatState = {
   doomedNextTurn: boolean;
   /** 本回合已打出的攻击牌数（终结技按此结算；每回合开始清零）。 */
   attacksThisTurn: number;
+  /** 本回合已（由牌效果）弃掉的手牌数（剖体斩降费 / 声东击西给能量按此；回合开始清零）。 */
+  cardsDiscardedThisTurn: number;
   /** 上一张打出的牌的类型（神圣「若上一张是技能」判据）；null=本回合还没打过。 */
   lastCardType: CardType | null;
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */

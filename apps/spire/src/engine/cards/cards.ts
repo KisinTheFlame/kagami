@@ -4255,6 +4255,42 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "进入神性姿态。你将在下个回合开始时死亡。保留。消耗。",
   },
 
+  {
+    id: "sneaky_strike",
+    name: "声东击西",
+    type: "attack",
+    rarity: "uncommon",
+    color: "green",
+    cost: 2,
+    targeted: true,
+    exhausts: false,
+    effects: [
+      { kind: "deal_damage", amount: 12 },
+      { kind: "gain_energy_if_discarded", amount: 2 },
+    ],
+    upgradedEffects: [
+      { kind: "deal_damage", amount: 16 },
+      { kind: "gain_energy_if_discarded", amount: 2 },
+    ],
+    description: "造成 12 点伤害。若本回合你弃过牌，获得 2 点能量。",
+    upgradedDescription: "造成 16 点伤害。若本回合你弃过牌，获得 2 点能量。",
+  },
+  {
+    id: "eviscerate",
+    name: "剖体斩",
+    type: "attack",
+    rarity: "uncommon",
+    color: "green",
+    cost: 3,
+    costMinusDiscardThisTurn: true,
+    targeted: true,
+    exhausts: false,
+    effects: [{ kind: "deal_damage_multi", amount: 7, times: 3 }],
+    upgradedEffects: [{ kind: "deal_damage_multi", amount: 9, times: 3 }],
+    description: "本回合每弃 1 张牌，费用 -1。造成 3 次 7 点伤害。",
+    upgradedDescription: "本回合每弃 1 张牌，费用 -1。造成 3 次 9 点伤害。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
