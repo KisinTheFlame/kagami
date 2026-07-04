@@ -257,7 +257,7 @@ function exhaustCard(state: GameState, instance: CardInstance): void {
 }
 
 /** 打出一张牌后触发的玩家能力（千刃对全体发伤 / 残影加格挡）。 */
-function triggerPlayerCardPlayed(state: GameState): void {
+function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
   const combat = state.combat!;
   const thousandCuts = getPower(combat.playerPowers, "thousand_cuts");
   if (thousandCuts > 0) {
@@ -271,6 +271,17 @@ function triggerPlayerCardPlayed(state: GameState): void {
   const afterImage = getPower(combat.playerPowers, "after_image");
   if (afterImage > 0) {
     combat.playerBlock += afterImage; // 直接加，不触发主宰。
+  }
+  // 打出能力牌触发（机器人）：风暴充能闪电、散热抽牌。
+  if (cardType === "power") {
+    const storm = getPower(combat.playerPowers, "storm");
+    for (let n = 0; n < storm; n += 1) {
+      channelOrb(state, "lightning");
+    }
+    const heatsinks = getPower(combat.playerPowers, "heatsinks");
+    if (heatsinks > 0) {
+      drawCards(state, heatsinks);
+    }
   }
 }
 
@@ -292,6 +303,11 @@ function drawCards(state: GameState, count: number): void {
       combat.discardPile.push(card); // 手牌满：抽到的牌直接进弃牌堆。
     } else {
       combat.hand.push(card);
+    }
+    // 进化：抽到状态牌 → 额外抽 = 层数的牌（递归有牌堆张数上限，不会无限）。
+    const evolve = getPower(combat.playerPowers, "evolve");
+    if (evolve > 0 && getCardDef(card.defId).type === "status") {
+      drawCards(state, evolve);
     }
   }
 }
@@ -897,6 +913,13 @@ function dealDamageToPlayer(
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
     addPower(combat.playerPowers, "plated_armor", -1);
   }
+  // 静电放电：受到穿透格挡的攻击伤害 → 充能 = 层数的闪电球（机器人）。
+  const staticDischarge = getPower(combat.playerPowers, "static_discharge");
+  if (afterBlock > 0 && staticDischarge > 0) {
+    for (let n = 0; n < staticDischarge; n += 1) {
+      channelOrb(state, "lightning");
+    }
+  }
   // 荆棘：每次被攻击对攻击者反弹固定伤害（无视其格挡，直接掉血）。
   const thorns = getPower(combat.playerPowers, "thorns");
   if (thorns > 0 && attackerIndex !== undefined) {
@@ -1054,10 +1077,13 @@ export function playCard(
   if (def.type === "attack" && getPower(combat.playerPowers, "entangled") > 0) {
     return { ok: false, reason: "你被缠绕了，本回合无法打出攻击牌。" };
   }
-  const cost = costOf(def, instance.upgraded);
-  if (cost === null) {
+  const rawCost = costOf(def, instance.upgraded);
+  if (rawCost === null) {
     return { ok: false, reason: `「${def.name}」无法打出。` };
   }
+  // 腐化：技能牌费用变 0（打出后消耗，见下方入堆处理）。
+  const corrupted = def.type === "skill" && getPower(combat.playerPowers, "corruption") > 0;
+  const cost = corrupted ? 0 : rawCost;
   if (cost > combat.energy) {
     return { ok: false, reason: `能量不足：需 ${cost}，剩 ${combat.energy}。` };
   }
@@ -1102,7 +1128,8 @@ export function playCard(
   }
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
-  } else if (def.exhausts) {
+  } else if (def.exhausts || corrupted) {
+    // 腐化下技能牌也消耗。
     exhaustCard(state, instance);
   } else {
     combat.discardPile.push(instance);
@@ -1111,7 +1138,7 @@ export function playCard(
   // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
   triggerRelicCardPlayed(state, def.type);
   // 打牌触发型玩家能力（千刃对全体、残影加格挡）。
-  triggerPlayerCardPlayed(state);
+  triggerPlayerCardPlayed(state, def.type);
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
@@ -1369,7 +1396,9 @@ export function endTurn(state: GameState): void {
   if (state.combat === null || state.screen !== "combat") {
     return;
   }
-  drawCards(state, STARTING_HAND_SIZE);
+  // 机器学习：每回合多抽 = 层数的牌。
+  const machineLearning = getPower(combat.playerPowers, "machine_learning");
+  drawCards(state, STARTING_HAND_SIZE + machineLearning);
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
 
