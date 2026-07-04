@@ -238,6 +238,38 @@ function triggerRelicCardPlayed(state: GameState, cardType: CardType): void {
   );
 }
 
+/** 消耗一张牌进消耗堆，并触发消耗型玩家能力（无痛加格挡 / 暗黑拥抱抽牌）。 */
+function exhaustCard(state: GameState, instance: CardInstance): void {
+  const combat = state.combat!;
+  combat.exhaustPile.push(instance);
+  const feelNoPain = getPower(combat.playerPowers, "feel_no_pain");
+  if (feelNoPain > 0) {
+    combat.playerBlock += feelNoPain; // 直接加，不再触发主宰（避免连锁）。
+  }
+  const darkEmbrace = getPower(combat.playerPowers, "dark_embrace");
+  if (darkEmbrace > 0) {
+    drawCards(state, darkEmbrace);
+  }
+}
+
+/** 打出一张牌后触发的玩家能力（千刃对全体发伤 / 残影加格挡）。 */
+function triggerPlayerCardPlayed(state: GameState): void {
+  const combat = state.combat!;
+  const thousandCuts = getPower(combat.playerPowers, "thousand_cuts");
+  if (thousandCuts > 0) {
+    applyEffects(
+      state,
+      [{ kind: "deal_damage_all", amount: thousandCuts }],
+      { side: "player" },
+      null,
+    );
+  }
+  const afterImage = getPower(combat.playerPowers, "after_image");
+  if (afterImage > 0) {
+    combat.playerBlock += afterImage; // 直接加，不触发主宰。
+  }
+}
+
 // —— 抽牌 ——
 
 function drawCards(state: GameState, count: number): void {
@@ -367,6 +399,11 @@ function applyEffect(
       const gained = computeBlockGain(effect.amount, powers);
       if (actor.side === "player") {
         combat.playerBlock += gained;
+        // 主宰：每当玩家获得格挡，对随机敌人造成 = 层数的伤害。
+        const juggernaut = getPower(combat.playerPowers, "juggernaut");
+        if (juggernaut > 0) {
+          dealOrbDamage(state, juggernaut);
+        }
       } else {
         combat.enemies[actor.index]!.block += gained;
       }
@@ -431,6 +468,11 @@ function applyEffect(
     case "lose_hp": {
       if (actor.side === "player") {
         state.hp = Math.max(0, state.hp - effect.amount);
+        // 破裂：因打出的牌失去生命 → 获得 = 层数的力量。
+        const rupture = getPower(combat.playerPowers, "rupture");
+        if (rupture > 0) {
+          addPower(combat.playerPowers, "strength", rupture);
+        }
       }
       break;
     }
@@ -870,13 +912,15 @@ export function playCard(
   if (def.type === "power") {
     // 能力牌打出后离场（效果转为常驻 power），不入任何牌堆，本场不再抽到。
   } else if (def.exhausts) {
-    combat.exhaustPile.push(instance);
+    exhaustCard(state, instance);
   } else {
     combat.discardPile.push(instance);
   }
   state.log.push(`你打出「${def.name}」。`);
   // 出牌计数遗物（手里剑/苦无/装饰扇按攻击计数、鸟面瓮按能力回血…）。
   triggerRelicCardPlayed(state, def.type);
+  // 打牌触发型玩家能力（千刃对全体、残影加格挡）。
+  triggerPlayerCardPlayed(state);
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
@@ -999,6 +1043,17 @@ export function endTurn(state: GameState): void {
     state.hp = Math.min(state.maxHp, state.hp + regen);
     addPower(combat.playerPowers, "regen", -1);
   }
+  // 燃烧：回合结束失 1 生命，并对所有敌人造成 = 层数的伤害。
+  const combust = getPower(combat.playerPowers, "combust");
+  if (combust > 0) {
+    state.hp = Math.max(0, state.hp - 1);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你倒下了。");
+      return;
+    }
+    applyEffects(state, [{ kind: "deal_damage_all", amount: combust }], { side: "player" }, null);
+  }
   // 充能球被动（机器人）：回合结束时每颗球触发（闪电随机伤害 / 冰霜格挡）。
   triggerOrbPassives(state);
   // 回合结束遗物（山铜：若无格挡则补格挡）——在金属化之后判定。
@@ -1061,7 +1116,10 @@ export function endTurn(state: GameState): void {
 
   // 下个玩家回合开始。
   combat.turn += 1;
-  combat.playerBlock = 0;
+  // 壁垒：格挡不再于回合开始清空（否则清零）。
+  if (getPower(combat.playerPowers, "barricade") === 0) {
+    combat.playerBlock = 0;
+  }
   combat.energy = combat.maxEnergy;
   // 恶魔形态（玩家能力牌）：每个玩家回合开始获得等量力量。
   const demonForm = getPower(combat.playerPowers, "demon_form");
@@ -1082,6 +1140,26 @@ export function endTurn(state: GameState): void {
       state.screen = "gameover";
       state.log.push("你中毒身亡。");
       return;
+    }
+  }
+  // 残暴：回合开始失 = 层数生命、抽 = 层数牌。
+  const brutality = getPower(combat.playerPowers, "brutality");
+  if (brutality > 0) {
+    state.hp = Math.max(0, state.hp - brutality);
+    if (state.hp <= 0) {
+      state.screen = "gameover";
+      state.log.push("你倒下了。");
+      return;
+    }
+    drawCards(state, brutality);
+  }
+  // 毒雾：回合开始令所有敌人获得 = 层数的中毒。
+  const noxiousFumes = getPower(combat.playerPowers, "noxious_fumes");
+  if (noxiousFumes > 0) {
+    for (const enemy of combat.enemies) {
+      if (enemy.hp > 0) {
+        applyPowerToEnemy(enemy, "poison", noxiousFumes);
+      }
     }
   }
   // 回合开始遗物（欢乐花能量 / 角锚第二回合格挡 / 水银沙漏回合始发伤）。
