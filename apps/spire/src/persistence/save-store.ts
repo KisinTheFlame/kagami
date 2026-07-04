@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { GameState } from "../engine/types.js";
+import { migrateLoadedState } from "./migrate.js";
 
 // === 存档持久化 ===
 //
@@ -27,7 +28,9 @@ export class SaveStore {
       return null; // 无存档。
     }
     try {
-      return JSON.parse(raw) as GameState;
+      // 回填老版本存档缺失的后加字段（orbs/orbSlots/playerStance/act/potions…），
+      // 否则老对局会在序列化时因缺字段 500（「orbs / stance required」）卡死。
+      return migrateLoadedState(JSON.parse(raw));
     } catch {
       // 损坏：改名备份，返回 null 让上层开新局，绝不因坏档卡死服务。
       const backup = join(this.dir, `save.corrupt-${Date.now()}.json`);
