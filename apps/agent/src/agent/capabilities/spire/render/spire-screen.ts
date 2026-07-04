@@ -61,6 +61,9 @@ const POWER_LABELS: Record<string, string> = {
   blur: "疾影",
   biased_cognition: "偏置认知",
   buffer: "缓冲",
+  battle_hymn: "战歌",
+  strength_temp: "临时力量",
+  rage: "暴怒",
 };
 
 const ORB_LABELS: Record<string, string> = {

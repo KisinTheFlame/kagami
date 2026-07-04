@@ -63,7 +63,10 @@ export type PowerId =
   | "intangible" // 虚无缥缈：受到的一切伤害降为 1（回合结束 -1 层）
   | "blur" // 疾影：格挡不在回合开始清空（层数即剩余生效回合数，回合末 -1）
   | "biased_cognition" // 偏置认知：每个玩家回合开始失去 1 点集中（机器人）
-  | "buffer"; // 缓冲：抵消下一次会让你失去生命的伤害（每抵消一次 -1 层）
+  | "buffer" // 缓冲：抵消下一次会让你失去生命的伤害（每抵消一次 -1 层）
+  | "battle_hymn" // 战歌：每个玩家回合开始，将 = 层数的痛斩加入手牌（观者）
+  | "strength_temp" // 临时力量：回合结束时失去 = 层数的力量（屈伸），随后本 power 清零
+  | "rage"; // 暴怒：本回合每打出一张攻击牌，获得 = 层数的格挡（回合末清零）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -160,7 +163,12 @@ export type Effect =
   | { kind: "channel_random_orb"; count: number } // 随机充能 count 颗球（混沌）
   | { kind: "gain_block_discard_count"; perCard: number } // 每张弃牌堆的牌获得 perCard 格挡（堆叠）
   | { kind: "gain_energy_per_draw_pile"; divisor: number } // 抽牌堆每 divisor 张给 1 能量（聚合）
-  | { kind: "remove_target_block" }; // 移除目标的全部格挡（熔化）
+  | { kind: "remove_target_block" } // 移除目标的全部格挡（熔化）
+  // —— 观者补完 / 铁甲收尾 ——
+  | { kind: "change_max_energy"; delta: number } // 增减每回合最大能量（苦修 -1）
+  | { kind: "gain_block_if_wrath"; base: number; bonus: number } // 获得 base 格挡；若处于愤怒姿态再 +bonus（止）
+  | { kind: "execute_if_below"; threshold: number } // 若目标当前生命 ≤ threshold 则直接击杀（审判）
+  | { kind: "apply_strength_temp"; amount: number }; // 立即 +amount 力量，本回合结束时失去（屈伸）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
