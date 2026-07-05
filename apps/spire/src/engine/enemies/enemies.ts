@@ -1754,6 +1754,48 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   },
   // 奴隶主小队：工头 + 蓝/红奴隶主。
   slavers: { id: "slavers", enemies: ["taskmaster", "blue_slaver", "red_slaver"], isBoss: false },
+  // —— 第二幕组合遭遇（既有敌人拼装）——
+  cultist_and_chosen: {
+    id: "cultist_and_chosen",
+    enemies: ["cultist", "chosen"],
+    isBoss: false,
+  },
+  three_cultists: {
+    id: "three_cultists",
+    enemies: ["cultist", "cultist", "cultist"],
+    isBoss: false,
+  },
+  shelled_parasite_and_fungi: {
+    id: "shelled_parasite_and_fungi",
+    enemies: ["shelled_parasite", "fungi_beast"],
+    isBoss: false,
+  },
+  sentry_and_sphere: {
+    id: "sentry_and_sphere",
+    enemies: ["sentry", "spheric_guardian", "sentry"],
+    isBoss: false,
+  },
+  // —— 第三幕组合遭遇（几何体 shapes：爆破怪/斥力球/尖刺客 + 球卫/颚虫群）——
+  three_shapes: {
+    id: "three_shapes",
+    enemies: ["spiker", "exploder", "repulsor"],
+    isBoss: false,
+  },
+  four_shapes: {
+    id: "four_shapes",
+    enemies: ["spiker", "exploder", "repulsor", "exploder"],
+    isBoss: false,
+  },
+  sphere_and_two_shapes: {
+    id: "sphere_and_two_shapes",
+    enemies: ["exploder", "spheric_guardian", "repulsor"],
+    isBoss: false,
+  },
+  jaw_worm_horde: {
+    id: "jaw_worm_horde",
+    enemies: ["jaw_worm", "jaw_worm", "jaw_worm"],
+    isBoss: false,
+  },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
   the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
@@ -1842,6 +1884,10 @@ const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "snake_plant", weight: 1 },
   { id: "two_centurions", weight: 1 },
   { id: "spheric_guardian", weight: 1 },
+  { id: "cultist_and_chosen", weight: 1 },
+  { id: "three_cultists", weight: 1 },
+  { id: "shelled_parasite_and_fungi", weight: 1 },
+  { id: "sentry_and_sphere", weight: 1 },
 ];
 
 // —— 第三幕（超越）战斗池（切片）——
@@ -1859,6 +1905,10 @@ const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "repulsor", weight: 1 },
   { id: "two_exploders", weight: 1 },
   { id: "two_orb_walkers", weight: 1 },
+  { id: "three_shapes", weight: 2 },
+  { id: "four_shapes", weight: 1 },
+  { id: "sphere_and_two_shapes", weight: 1 },
+  { id: "jaw_worm_horde", weight: 1 },
 ];
 
 function actWeakPool(act: number): readonly WeightedEncounter[] {

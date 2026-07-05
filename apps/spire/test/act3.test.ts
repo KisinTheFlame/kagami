@@ -42,6 +42,10 @@ describe("三幕", () => {
       "repulsor",
       "transient",
       "two_orb_walkers",
+      "three_shapes",
+      "four_shapes",
+      "sphere_and_two_shapes",
+      "jaw_worm_horde",
     ]);
     for (let seed = 0; seed < 40; seed += 1) {
       const rng = seedRng(seed);
