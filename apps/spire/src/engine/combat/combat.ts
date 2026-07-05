@@ -2161,6 +2161,10 @@ function applyPowerEffect(
   if (actor.side === "player") {
     if (targetEnemyIndex !== null) {
       applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
+      // 冠军腰带：对敌施加易伤时，也施加 1 层虚弱。
+      if (power === "vulnerable" && amount > 0 && hasRelic(state, "champion_belt")) {
+        applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, "weak", 1);
+      }
     }
   } else {
     applyPowerToPlayer(state, power, amount);
@@ -2937,6 +2941,10 @@ export function usePotion(
 
   state.potions[slotIndex] = null; // 药水一次性，先清槽再结算。
   applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  // 神圣树皮：药水效果翻倍（再结算一次）。
+  if (hasRelic(state, "sacred_bark")) {
+    applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  }
   state.log.push(`你使用了「${def.name}」。`);
   if (combat) {
     triggerRelicUsePotion(state); // 用药水触发型遗物（玩具扑翼机回血）。

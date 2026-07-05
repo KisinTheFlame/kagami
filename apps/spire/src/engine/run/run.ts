@@ -79,6 +79,10 @@ export function advanceToNextAct(state: GameState): void {
 /** 进入一个地图节点：按类型路由。战斗/Boss 起战斗；篝火切 rest 屏；宝箱即时给金币后回地图。 */
 function resolveNode(state: GameState, node: MapNode): void {
   state.currentNodeId = node.id;
+  // 巨口银行：进入非商店房间时 +12 金币。
+  if (node.type !== "shop" && hasRelic(state, "maw_bank")) {
+    state.gold += 12;
+  }
   switch (node.type) {
     case "combat": {
       // 前若干场抽 weak 池、其余抽 strong 池（复刻 StS Act1 战斗节奏）。
@@ -110,6 +114,10 @@ function resolveNode(state: GameState, node: MapNode): void {
       return;
     }
     case "shop": {
+      // 餐券：进入商店时回复 15 点生命。
+      if (hasRelic(state, "meal_ticket")) {
+        state.hp = Math.min(state.maxHp, state.hp + 15);
+      }
       generateShop(state);
       state.log.push("你走进一间商店。");
       return;
@@ -484,9 +492,11 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
 
   if (state.screen === "rest") {
     if (optionIndex === 0) {
-      // 富贵枕头：休息时额外回复 15 点生命。
+      // 富贵枕头：休息时额外回复 15 点生命；永恒羽毛：每 5 张牌额外回 3。
       const heal =
-        Math.floor(state.maxHp * REST_HEAL_RATIO) + (hasRelic(state, "regal_pillow") ? 15 : 0);
+        Math.floor(state.maxHp * REST_HEAL_RATIO) +
+        (hasRelic(state, "regal_pillow") ? 15 : 0) +
+        (hasRelic(state, "eternal_feather") ? Math.floor(state.deck.length / 5) * 3 : 0);
       state.hp = Math.min(state.maxHp, state.hp + heal);
       state.log.push(`你休息了一会儿，回复了 ${heal} 点生命。`);
     } else {

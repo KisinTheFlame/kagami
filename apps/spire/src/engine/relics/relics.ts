@@ -1306,6 +1306,69 @@ const RELIC_LIST: RelicDef[] = [
       onTurnStart: (_s, _self, emit) => emit({ kind: "draw", amount: 1 }),
     },
   },
+  // —— 引擎特判 / 房间钩子 遗物（不走既有钩子） ——
+  {
+    id: "sacred_bark",
+    name: "神圣树皮",
+    // 药水效果翻倍在 combat.ts 的 usePotion 按 hasRelic 处理。
+    rarity: "boss",
+    description: "你使用药水的效果翻倍。",
+    hooks: {},
+  },
+  {
+    id: "champion_belt",
+    name: "冠军腰带",
+    // 「施加易伤时也施加虚弱」在 combat.ts 的对敌施加易伤处按 hasRelic 处理。
+    rarity: "uncommon",
+    characterLock: "ironclad",
+    description: "当你对敌人施加易伤时，也对其施加 1 层虚弱。",
+    hooks: {},
+  },
+  {
+    id: "maw_bank",
+    name: "巨口银行",
+    // 进入非商店房间时 +12 金币，在 run.ts 的 resolveNode 按 hasRelic 处理。
+    rarity: "common",
+    description: "每当你进入一个非商店房间，获得 12 金币。",
+    hooks: {},
+  },
+  {
+    id: "meal_ticket",
+    name: "餐券",
+    // 进入商店时回 15 血，在 run.ts 的 resolveNode 商店分支按 hasRelic 处理。
+    rarity: "common",
+    description: "每当你进入一间商店，回复 15 点生命。",
+    hooks: {},
+  },
+  {
+    id: "eternal_feather",
+    name: "永恒羽毛",
+    // 篝火休息时按牌组张数回血，在 run.ts 的 rest 分支按 hasRelic 处理。
+    rarity: "uncommon",
+    description: "每当你在篝火休息，每有 5 张牌就额外回复 3 点生命。",
+    hooks: {},
+  },
+  {
+    id: "spirit_poop",
+    name: "精魂便便",
+    rarity: "common",
+    description: "呃……闻起来可不太妙。它似乎没有任何实际效果。",
+    hooks: {},
+  },
+  {
+    id: "circlet",
+    name: "头环",
+    rarity: "common",
+    description: "当再也没有别的遗物可拿时，你得到了它。纯属收藏。",
+    hooks: {},
+  },
+  {
+    id: "red_circlet",
+    name: "赤红头环",
+    rarity: "common",
+    description: "当再也没有别的遗物可拿、连头环都齐了时，你得到了它。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
