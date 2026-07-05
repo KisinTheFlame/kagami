@@ -15,8 +15,6 @@ type DefaultMetricChartServiceDeps = {
 
 const UNGROUPED_SERIES_KEY = "__ungrouped__";
 const DEFAULT_SINGLE_SERIES_KEY = "__default__";
-/** 分组查询最多返回的 series 数：按总量取前 N，其余丢弃，防高基数 groupByTag 撑爆响应。 */
-const MAX_SERIES = 20;
 
 export class DefaultMetricChartService implements MetricChartService {
   private readonly metricDao: MetricDao;
@@ -130,7 +128,8 @@ function buildSeries(params: {
     rowsBySeriesKey.get(key)?.set(bucketStartMs, row.value);
   }
 
-  const keptKeys = selectTopSeriesKeys(rowsBySeriesKey);
+  // series top-N 已在 DAO 的 SQL 层下推截断（≤MAX_SERIES），此处按 DAO 返回顺序原样成线。
+  const keptKeys = [...rowsBySeriesKey.keys()];
 
   return keptKeys.map(key => {
     const pointsByBucket = rowsBySeriesKey.get(key) ?? new Map<number, number | null>();
@@ -143,31 +142,6 @@ function buildSeries(params: {
       })),
     };
   });
-}
-
-/** 分组结果按各 series 总量取前 MAX_SERIES；未超限则原样返回（保持插入 / 桶排序）。 */
-function selectTopSeriesKeys(rowsBySeriesKey: Map<string, Map<number, number | null>>): string[] {
-  const keys = [...rowsBySeriesKey.keys()];
-  if (keys.length <= MAX_SERIES) {
-    return keys;
-  }
-
-  // 按各 series 的「绝对量之和」排序取前 N。用 Math.abs：min/avg 等聚合下的负值 series 也按
-  // 量级排序（而非把负值排到最后误删）；跳过非有限值防脏数据污染 comparator。
-  const magnitudeByKey = new Map<string, number>();
-  for (const [key, pointsByBucket] of rowsBySeriesKey) {
-    let magnitude = 0;
-    for (const value of pointsByBucket.values()) {
-      if (value !== null && Number.isFinite(value)) {
-        magnitude += Math.abs(value);
-      }
-    }
-    magnitudeByKey.set(key, magnitude);
-  }
-
-  return [...keys]
-    .sort((left, right) => (magnitudeByKey.get(right) ?? 0) - (magnitudeByKey.get(left) ?? 0))
-    .slice(0, MAX_SERIES);
 }
 
 function resolveSeriesIdentity(params: {
@@ -219,10 +193,14 @@ function getMissingBucketValue(aggregator: MetricChartAggregator): number | null
     case "count":
     case "sum":
       return 0;
+    // 空桶无样本 → avg/min/max/last 及百分位均无定义，记 null（前端断线，不画成 0）。
     case "avg":
     case "max":
     case "min":
     case "last":
+    case "p50":
+    case "p95":
+    case "p99":
       return null;
   }
 }

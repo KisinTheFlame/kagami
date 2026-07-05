@@ -48,7 +48,7 @@ describe("DefaultMetricChartService", () => {
       metricName: "llm.token.total",
       aggregator: "sum",
       bucket: "1m",
-      tagFilters: { provider: "openai" },
+      tagFilters: { provider: { op: "eq", value: "openai" } },
       groupByTag: "model",
       startAt: "2026-04-02T01:00:00.000Z",
       endAt: "2026-04-02T01:01:30.000Z",
@@ -57,7 +57,7 @@ describe("DefaultMetricChartService", () => {
     expect(queryChartSeries).toHaveBeenCalledWith({
       metricName: "llm.token.total",
       aggregator: "sum",
-      tagFilters: { provider: "openai" },
+      tagFilters: { provider: { op: "eq", value: "openai" } },
       groupByTag: "model",
       startAt: new Date("2026-04-02T01:00:00.000Z"),
       endAt: new Date("2026-04-02T01:01:30.000Z"),
@@ -116,13 +116,13 @@ describe("DefaultMetricChartService", () => {
     expect(response.series).toEqual([]);
   });
 
-  it("should cap grouped series to the top 20 by magnitude", async () => {
-    // 25 个分组，各占 1 个桶，总量 = 序号；期望保留总量最大的前 20 个（6..30）。
+  it("builds a series per DAO-returned key without re-trimming (top-N is the DAO's job now)", async () => {
+    // series top-N 已下推 DAO 的 SQL；service 只按 DAO 返回的 key 原样成线，不再二次裁剪。
     const bucketStart = new Date("2026-04-02T00:00:00.000Z");
-    const rows: MetricChartSeriesRow[] = Array.from({ length: 25 }, (_unused, index) => ({
+    const rows: MetricChartSeriesRow[] = Array.from({ length: 3 }, (_unused, index) => ({
       bucketStart,
       seriesKey: `series-${index + 1}`,
-      value: index + 6,
+      value: index + 1,
     }));
     const service = new DefaultMetricChartService({
       metricDao: createMetricDao({ queryChartSeries: vi.fn().mockResolvedValue(rows) }),
@@ -137,10 +137,7 @@ describe("DefaultMetricChartService", () => {
       endAt: "2026-04-02T00:00:30.000Z",
     });
 
-    expect(response.series).toHaveLength(20);
-    const totals = response.series.map(series => series.points[0]?.value ?? 0);
-    expect(Math.min(...(totals as number[]))).toBe(11); // 30..11 保留，10..6 被裁
-    expect(response.series.some(series => series.key === "series-1")).toBe(false);
+    expect(response.series.map(series => series.key)).toEqual(["series-1", "series-2", "series-3"]);
   });
 });
 

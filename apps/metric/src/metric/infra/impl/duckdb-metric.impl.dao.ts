@@ -84,40 +84,70 @@ export class DuckDbMetricDao implements MetricDao {
       : `NULL`;
     const whereClause = buildWhereClause(input, params);
 
-    const sql =
+    // 每桶每序列压成一行 (bucketStart, seriesKey, value)。last 走 row_number 取桶内最新，
+    // 其余（含百分位）走 GROUP BY 聚合。
+    const bucketedCte =
       input.aggregator === "last"
         ? `
-      SELECT "bucketStart", "seriesKey", "value" FROM (
-        SELECT
-          ${bucketExpression} AS "bucketStart",
-          ${seriesKeyExpression} AS "seriesKey",
-          "value" AS "value",
-          row_number() OVER (
-            PARTITION BY ${bucketExpression}, ${seriesKeyExpression}
-            ORDER BY "occurred_at" DESC, "id" DESC
-          ) AS rn
-        FROM "metric"
-        ${whereClause}
-      )
-      WHERE rn = 1
-      ORDER BY "bucketStart" ASC, "seriesKey" ASC NULLS FIRST
-    `
+      bucketed AS (
+        SELECT "bucketStart", "seriesKey", "value" FROM (
+          SELECT
+            ${bucketExpression} AS "bucketStart",
+            ${seriesKeyExpression} AS "seriesKey",
+            "value" AS "value",
+            row_number() OVER (
+              PARTITION BY ${bucketExpression}, ${seriesKeyExpression}
+              ORDER BY "occurred_at" DESC, "id" DESC
+            ) AS rn
+          FROM "metric"
+          ${whereClause}
+        )
+        WHERE rn = 1
+      )`
         : `
-      WITH filtered AS (
+      filtered AS (
         SELECT
           ${bucketExpression} AS "bucketStart",
           ${seriesKeyExpression} AS "seriesKey",
           "value" AS "value"
         FROM "metric"
         ${whereClause}
+      ),
+      bucketed AS (
+        SELECT
+          "bucketStart" AS "bucketStart",
+          "seriesKey" AS "seriesKey",
+          ${buildAggregateExpression(input.aggregator)} AS "value"
+        FROM filtered
+        GROUP BY "bucketStart", "seriesKey"
+      )`;
+
+    const orderBy = `ORDER BY "bucketStart" ASC, "seriesKey" ASC NULLS FIRST`;
+
+    // 分组查询时把 series top-N 下推 SQL：按各 series「绝对量之和」排名，只留前 MAX_SERIES 条，
+    // DB 不物化高基数 groupByTag 的全量 series（#444 defer 的 DoS，本阶段修）。ORDER 带 seriesKey
+    // tiebreak 保证确定性。IS NOT DISTINCT FROM 让「未命中」的 NULL series 也参与排名、不被 JOIN 丢。
+    const sql = input.groupByTag
+      ? `
+      WITH ${bucketedCte},
+      series_rank AS (
+        SELECT
+          "seriesKey",
+          row_number() OVER (ORDER BY SUM(ABS("value")) DESC NULLS LAST, "seriesKey" ASC) AS srn
+        FROM bucketed
+        GROUP BY "seriesKey"
       )
-      SELECT
-        "bucketStart" AS "bucketStart",
-        "seriesKey" AS "seriesKey",
-        ${buildAggregateExpression(input.aggregator)} AS "value"
-      FROM filtered
-      GROUP BY "bucketStart", "seriesKey"
-      ORDER BY "bucketStart" ASC, "seriesKey" ASC NULLS FIRST
+      SELECT b."bucketStart", b."seriesKey", b."value"
+      FROM bucketed b
+      JOIN series_rank s ON b."seriesKey" IS NOT DISTINCT FROM s."seriesKey"
+      WHERE s.srn <= ${MAX_SERIES}
+      ${orderBy}
+    `
+      : `
+      WITH ${bucketedCte}
+      SELECT "bucketStart", "seriesKey", "value"
+      FROM bucketed
+      ${orderBy}
     `;
 
     const prepared = await this.connection.prepare(sql);
@@ -145,6 +175,9 @@ type RawMetricChartSeriesRow = {
   value: number | bigint | null;
 };
 
+/** 分组查询最多返回的 series 数：SQL 层按总量取前 N、其余丢弃，防高基数 groupByTag 撑爆响应。 */
+const MAX_SERIES = 20;
+
 /** 顺序累加 varchar 参数，返回 `$n` 占位符；同一 `$n` 可在 SQL 里被多处引用、只绑一次。 */
 class VarcharParams {
   private readonly values: string[] = [];
@@ -152,6 +185,11 @@ class VarcharParams {
   public add(value: string): string {
     this.values.push(value);
     return `$${this.values.length}`;
+  }
+
+  /** 绑一组值，返回逗号分隔的 `$a, $b, ...`（供 `IN (...)` 用）。 */
+  public addList(values: readonly string[]): string {
+    return values.map(value => this.add(value)).join(", ");
   }
 
   public bindAll(prepared: DuckDBPreparedStatement): void {
@@ -166,9 +204,21 @@ function buildWhereClause(input: QueryMetricChartSeriesInput, params: VarcharPar
     `"occurred_at" <= ${params.add(toDuckDbTimestamp(input.endAt))}::TIMESTAMP`,
   ];
 
-  for (const [key, value] of Object.entries(input.tagFilters ?? {})) {
-    // 括号必需：DuckDB `->>` 优先级低于 `=`，不加括号会被解析成 `tags ->> (key = value)`。
-    conditions.push(`("tags" ->> ${params.add(key)}) = ${params.add(value)}`);
+  for (const [key, filter] of Object.entries(input.tagFilters ?? {})) {
+    // 括号必需：DuckDB `->>` 优先级低于比较运算，不加括号会被解析成 `tags ->> (key <op> value)`。
+    const extracted = `("tags" ->> ${params.add(key)})`;
+    switch (filter.op) {
+      case "eq":
+        conditions.push(`${extracted} = ${params.add(filter.value)}`);
+        break;
+      case "ne":
+        // 补集语义：值不等于 target 即命中，含 tag 缺失（NULL）的行。IS DISTINCT FROM 把 NULL 当可比。
+        conditions.push(`${extracted} IS DISTINCT FROM ${params.add(filter.value)}`);
+        break;
+      case "in":
+        conditions.push(`${extracted} IN (${params.addList(filter.value)})`);
+        break;
+    }
   }
 
   return `WHERE ${conditions.join(" AND ")}`;
@@ -186,6 +236,13 @@ function buildAggregateExpression(aggregator: Exclude<MetricChartAggregator, "la
       return `MAX("value")`;
     case "min":
       return `MIN("value")`;
+    // 百分位从桶内原始样本连续插值现算（不可从已聚合值再聚合）。
+    case "p50":
+      return `quantile_cont("value", 0.5)`;
+    case "p95":
+      return `quantile_cont("value", 0.95)`;
+    case "p99":
+      return `quantile_cont("value", 0.99)`;
   }
 }
 
