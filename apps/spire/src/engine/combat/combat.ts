@@ -2287,7 +2287,9 @@ function dealDamageToEnemy(
   if (sharpHide > 0) {
     state.hp = Math.max(0, state.hp - sharpHide);
   }
-  let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
+  // 纸蛙：玩家攻击易伤敌人时，易伤倍率 1.5 → 1.75。
+  const vulnMult = hasRelic(state, "paper_phrog") ? 1.75 : 1.5;
+  let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier, 0.75, vulnMult);
   // 观者姿态对玩家造成伤害的加成：愤怒 ×2，神性 ×3。
   if (state.combat!.playerStance === "wrath") {
     dmg *= 2;
@@ -2380,7 +2382,9 @@ function dealDamageToPlayer(
   attackerIndex?: number,
 ): void {
   const combat = state.combat!;
-  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
+  // 纸鹤：被你削弱的敌人对你造成的伤害更低，虚弱倍率 0.75 → 0.6。
+  const weakMult = hasRelic(state, "paper_krane") ? 0.6 : 0.75;
+  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers, 1, weakMult);
   // 愤怒姿态（观者）：玩家受到的伤害也翻倍。
   if (combat.playerStance === "wrath") {
     dmg *= 2;

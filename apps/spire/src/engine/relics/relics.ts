@@ -1177,6 +1177,21 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— 伤害修正型遗物（在 combat.ts 的伤害结算按 hasRelic 处理，不走钩子） ——
+  {
+    id: "paper_phrog",
+    name: "纸蛙",
+    rarity: "uncommon",
+    description: "易伤的敌人受到你的攻击伤害提升到 1.75 倍（原为 1.5 倍）。",
+    hooks: {},
+  },
+  {
+    id: "paper_krane",
+    name: "纸鹤",
+    rarity: "uncommon",
+    description: "被你削弱（虚弱）的敌人对你造成的伤害降到 0.6 倍（原为 0.75 倍）。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
