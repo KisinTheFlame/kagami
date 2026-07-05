@@ -144,7 +144,13 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private readonly sleep: (ms: number) => Promise<void>;
   private lastWakeReminderAt: Date | null = null;
   private initialized = false;
-  private lastPersistedSnapshotFingerprint: string | null = null;
+  /**
+   * 已落库快照对应的 context 修订号（null = 尚未落过）。持久化前先比对 `context.getRevision()`：相等就
+   * 整段跳过（不 clone、不序列化、不写库）。取代此前每轮对整条上下文做 O(n) JSON.stringify 指纹的做法。
+   * lastWakeReminderAt 的每次变更都伴随一条 wake-reminder 消息追加（见 appendWakeReminderIfNeeded），
+   * 故修订号变更能覆盖它——不必单独追踪。
+   */
+  private lastPersistedRevision: number | null = null;
   /** 摘要超轮失败后的阈值压缩冷却截止时刻（epoch ms）；null = 无冷却。 */
   private summaryCooldownUntilMs: number | null = null;
   private readonly mutationExecutor = new SerialExecutor();
@@ -202,10 +208,12 @@ export class RootAgentHost implements RootAgentExtensionHost {
   ): Promise<void> {
     await this.mutationExecutor.submit(async () => {
       await this.context.restorePersistedSnapshot(snapshot.contextSnapshot);
+      // 快照刚回灌、还没 flush 待投递效果：此刻的修订号正好对应库里那份快照。先记下作为落库基线；
+      // 随后 flushPendingIncomingEffects 若追加消息会把修订号推高，下一次 persist 便会把增量落库。
+      this.lastPersistedRevision = this.context.getRevision();
       this.session.markRestored();
       await this.session.flushPendingIncomingEffects();
       this.lastWakeReminderAt = cloneDate(snapshot.lastWakeReminderAt);
-      this.lastPersistedSnapshotFingerprint = createSnapshotFingerprint(snapshot);
     });
   }
 
@@ -534,15 +542,18 @@ export class RootAgentHost implements RootAgentExtensionHost {
       return;
     }
 
-    const snapshot = await this.createPersistedSnapshot();
-    const fingerprint = createSnapshotFingerprint(snapshot);
-    if (fingerprint === this.lastPersistedSnapshotFingerprint) {
+    // O(1) 变更判定：context 修订号未变 = 自上次落库以来没改过，整段跳过（不 clone、不序列化、不写库）。
+    // 取当前修订号作为「即将落库的下界」——即便快照装配期间又发生并发改动，也只会导致下一轮多存一次
+    // （安全冗余），绝不会漏存。
+    const revision = this.context.getRevision();
+    if (revision === this.lastPersistedRevision) {
       return;
     }
 
+    const snapshot = await this.createPersistedSnapshot();
     try {
       await this.snapshotRepository.save(snapshot);
-      this.lastPersistedSnapshotFingerprint = fingerprint;
+      this.lastPersistedRevision = revision;
     } catch (error) {
       logger.errorWithCause("Failed to persist root agent runtime snapshot", error, {
         event: "agent.root_agent_runtime_snapshot.persist_failed",
@@ -565,13 +576,13 @@ export class RootAgentHost implements RootAgentExtensionHost {
 
   private async deletePersistedSnapshot(): Promise<void> {
     if (!this.snapshotRepository) {
-      this.lastPersistedSnapshotFingerprint = null;
+      this.lastPersistedRevision = null;
       return;
     }
 
     try {
       await this.snapshotRepository.delete(this.runtimeKey);
-      this.lastPersistedSnapshotFingerprint = null;
+      this.lastPersistedRevision = null;
     } catch (error) {
       logger.errorWithCause("Failed to delete root agent runtime snapshot", error, {
         event: "agent.root_agent_runtime_snapshot.delete_failed",
@@ -584,7 +595,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private resetRuntimeState(): void {
     this.lastWakeReminderAt = null;
     this.initialized = false;
-    this.lastPersistedSnapshotFingerprint = null;
+    this.lastPersistedRevision = null;
   }
 }
 
@@ -937,13 +948,4 @@ function createWakeReminderBucketKey(now: Date): string {
 
 function cloneDate(value: Date | null): Date | null {
   return value ? new Date(value) : null;
-}
-
-function createSnapshotFingerprint(snapshot: PersistedRootAgentRuntimeSnapshot): string {
-  return JSON.stringify({
-    runtimeKey: snapshot.runtimeKey,
-    schemaVersion: snapshot.schemaVersion,
-    contextSnapshot: snapshot.contextSnapshot,
-    lastWakeReminderAt: snapshot.lastWakeReminderAt?.toISOString() ?? null,
-  });
 }
