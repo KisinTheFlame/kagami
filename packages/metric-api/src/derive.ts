@@ -5,7 +5,7 @@ import {
   MetricChartTagFiltersSchema,
   METRIC_CHART_MAX_POINTS,
   METRIC_CHART_MAX_RANGE_MS,
-  metricChartBucketToMilliseconds,
+  metricChartAlignedBucketCount,
 } from "./chart.js";
 
 // === Metric 派生查询 wire schema（#475 P3）===
@@ -78,7 +78,7 @@ export const MetricDeriveRequestSchema = z
       return;
     }
 
-    const points = Math.floor(rangeMs / metricChartBucketToMilliseconds(value.bucket)) + 1;
+    const points = metricChartAlignedBucketCount(startAt, endAt, value.bucket);
     if (points > METRIC_CHART_MAX_POINTS) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

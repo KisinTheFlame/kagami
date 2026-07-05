@@ -108,6 +108,18 @@ describe("MetricChartQueryRequestSchema guards", () => {
     }
   });
 
+  it("counts points by the aligned bucket axis, not (end-start)/bucket (off-by-one guard)", () => {
+    // start/end 都不落桶边界：对齐补桶得 2001 个，旧的 floor(range/bucket)+1 只算 2000 会误放行。
+    const result = MetricChartQueryRequestSchema.safeParse({
+      metricName: "agent.tool.call",
+      aggregator: "count",
+      bucket: "10s",
+      startAt: "2026-01-01T00:00:09.999Z",
+      endAt: "2026-01-01T05:33:28.999Z",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a custom range wider than the max span", () => {
     const result = MetricChartQueryRequestSchema.safeParse({
       metricName: "agent.tool.call",
