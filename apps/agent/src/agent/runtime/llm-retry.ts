@@ -3,8 +3,7 @@ import type {
   ReActKernelExtension,
   ReActKernelRunRoundInput,
 } from "@kagami/agent-runtime";
-import type { LlmMessage } from "@kagami/llm-client";
-import { BizError } from "@kagami/kernel/errors/biz-error";
+import { isRetryableLlmFailure, type LlmMessage } from "@kagami/llm-client";
 
 export const DEFAULT_LLM_RETRY_BACKOFF_MS = 30_000;
 
@@ -25,13 +24,6 @@ export class FixedRetryBackoffPolicy implements RetryBackoffPolicy {
   }
 
   public reset(): void {}
-}
-
-export function isRetryableLlmFailure(error: unknown): error is BizError {
-  return (
-    error instanceof BizError &&
-    (error.message === "所选 LLM provider 当前不可用" || error.message === "LLM 上游服务调用失败")
-  );
 }
 
 export class LoopLlmRetryExtension<

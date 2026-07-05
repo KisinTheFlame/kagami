@@ -22,11 +22,13 @@ import {
   type LlmClient,
 } from "@kagami/llm-client";
 import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/embedding";
+import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
+import { buildClaudeFileGcTask } from "./claude-file-gc-task.js";
 
 const logger = new AppLogger({ source: "llm-service-bootstrap" });
 
@@ -36,6 +38,7 @@ export type LlmServiceRuntime = {
   port: number;
   callbackServers: Array<{ stop(): Promise<void> }>;
   authRefreshTimers: AuthRefreshTimers;
+  schedulerClient: SchedulerClient;
 };
 
 /**
@@ -137,11 +140,31 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     cacheDao: embeddingCacheDao,
   });
 
-  // auth 刷新 + usage 刷新在本进程用自己的 timer 驱动（TaskScheduler 是 agent app 层，不引入）。
+  // auth 刷新 + usage 刷新在本进程用自己的 timer 驱动（裸 setInterval，非通用调度）。
   const authRefreshTimers = startAuthRefreshTimers({
     refreshSchedulers: authModule.authRefreshSchedulers,
     authUsageCacheManager: authModule.authUsageCacheManager,
   });
+
+  // Claude Files API 缓存的每日 GC（#433）：复用独立 kagami-scheduler 通用调度服务。llm 作为
+  // owner "llm-service" 注册 cron task，tick 回来后 handler 在本进程内跑（DAO/OAuth/HTTP 都在此）。
+  // GC 幂等 → 不需 occurrenceStore。register 是纯内存、start 是后台重连循环，均不阻塞主服务启动。
+  const schedulerClient = new SchedulerClient({
+    baseUrl: `http://${config.services.scheduler.host}:${config.services.scheduler.port}`,
+    ownerId: "llm-service",
+  });
+  if (claudeCodeConfig.fileCacheGcEnabled) {
+    schedulerClient.register(
+      buildClaudeFileGcTask({
+        fileCacheDao: claudeFileCacheDao,
+        authStore: claudeCodeAuthStore,
+        baseUrl: claudeCodeConfig.baseUrl,
+        maxIdleDays: claudeCodeConfig.fileCacheGcMaxIdleDays,
+        maxDeletionsPerRun: claudeCodeConfig.fileCacheGcMaxDeletionsPerRun,
+        timeoutMs: llmTimeoutMs,
+      }),
+    );
+  }
 
   const app = createLlmServiceApp({
     handlers: [
@@ -157,6 +180,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     port,
     callbackServers: authModule.callbackServers,
     authRefreshTimers,
+    schedulerClient,
   };
 }
 
@@ -197,7 +221,8 @@ export function createLlmServiceApp({
       url: request.url,
     });
     // 保留原始 message（localhost 内部 RPC，无泄漏顾虑），便于 agent 侧日志排查；
-    // 非 BizError 本就不在 isRetryableLlmFailure 的两条重试消息内，重试语义与原地内不变。
+    // 这里兜的是非预期错误，不盖 meta.retryable 标记，isRetryableLlmFailure 自然判 false、
+    // 不参与退避重试，语义与改动前一致。
     const wire = toBizErrorWire(
       new BizError({
         message: error instanceof Error ? error.message : "LLM 服务内部错误",

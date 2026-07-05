@@ -316,3 +316,70 @@ describe("ObjectStore", () => {
     expect(await countTmpFiles()).toBe(0);
   });
 });
+
+describe("ObjectStore 控制台只读面（list / stats）", () => {
+  it("list：按 id 倒序分页 + total", async () => {
+    const a = await putBuffer(Buffer.from("obj-a"), "text/plain");
+    const b = await putBuffer(Buffer.from("obj-b"), "image/png");
+    const c = await putBuffer(Buffer.from("obj-c"), "text/plain");
+
+    const page1 = store.list({ page: 1, pageSize: 2 });
+    expect(page1.total).toBe(3);
+    expect(page1.items.map(row => row.id)).toEqual([parseId(c.key), parseId(b.key)]);
+
+    const page2 = store.list({ page: 2, pageSize: 2 });
+    expect(page2.items.map(row => row.id)).toEqual([parseId(a.key)]);
+  });
+
+  it("list：mime 精确过滤", async () => {
+    await putBuffer(Buffer.from("t1"), "text/plain");
+    await putBuffer(Buffer.from("i1"), "image/png");
+
+    const onlyPng = store.list({ page: 1, pageSize: 20, mime: "image/png" });
+    expect(onlyPng.total).toBe(1);
+    expect(onlyPng.items).toHaveLength(1);
+    expect(onlyPng.items[0]!.mime).toBe("image/png");
+  });
+
+  it("list 行携带 size/sha256/refcount（去重共享内容 refcount>1）", async () => {
+    const bytes = Buffer.from("dup content");
+    await putBuffer(bytes, "text/plain");
+    await putBuffer(bytes, "text/plain");
+
+    const { items } = store.list({ page: 1, pageSize: 20 });
+    expect(items).toHaveLength(2);
+    for (const row of items) {
+      expect(row.size).toBe(bytes.length);
+      expect(row.sha256).toBe(sha256(bytes));
+      expect(row.refcount).toBe(2);
+    }
+  });
+
+  it("stats：去重场景 objectCount/blobCount/物理/名义/节省口径", async () => {
+    const dup = Buffer.from("same-bytes");
+    await putBuffer(dup, "text/plain"); // object#1 → blob X（refcount→1）
+    await putBuffer(dup, "text/plain"); // object#2 → blob X（refcount→2，不新增物理文件）
+    const uniq = Buffer.from("unique-bytes-xyz");
+    await putBuffer(uniq, "image/png"); // object#3 → blob Y
+
+    const s = store.stats();
+    expect(s.objectCount).toBe(3);
+    expect(s.blobCount).toBe(2);
+    expect(s.physicalBytes).toBe(dup.length + uniq.length);
+    expect(s.logicalBytes).toBe(dup.length * 2 + uniq.length);
+    expect(s.logicalBytes - s.physicalBytes).toBe(dup.length);
+  });
+
+  it("stats：空库全 0", () => {
+    expect(store.stats()).toEqual({
+      objectCount: 0,
+      blobCount: 0,
+      physicalBytes: 0,
+      logicalBytes: 0,
+    });
+  });
+});
+
+function parseId(key: string): number {
+  return Number(key.slice("res-".length));
+}

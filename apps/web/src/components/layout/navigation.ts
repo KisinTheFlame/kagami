@@ -4,6 +4,7 @@ import {
   CalendarClock,
   FileText,
   FlaskConical,
+  HardDrive,
   History,
   type LucideIcon,
   KeyRound,
@@ -37,6 +38,7 @@ export const navItems: readonly NavItem[] = [
   { to: "/app-log-history", label: "应用日志", icon: FileText },
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "QQ 消息", icon: MessagesSquare },
+  { to: "/oss-objects", label: "OSS 对象", icon: HardDrive },
 ];
 
 export function getPageTitle(pathname: string): string {

@@ -30,6 +30,10 @@ export class LinearMessageLedgerAgentContext implements AgentContext {
     this.runtimeKey = runtimeKey;
   }
 
+  public getRevision(): number {
+    return this.inner.getRevision();
+  }
+
   public async getSnapshot(): Promise<AgentContextSnapshot> {
     return await this.inner.getSnapshot();
   }

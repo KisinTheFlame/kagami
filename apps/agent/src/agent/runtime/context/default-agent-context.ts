@@ -28,6 +28,8 @@ export class DefaultAgentContext implements AgentContext {
   private readonly defaultSystemPrompt: string | (() => Promise<string> | string);
   private systemPrompt: string | (() => Promise<string> | string);
   private readonly items: ContextItem[] = [];
+  /** 单调修订号：任何改动 items 的操作 +1。持久化侧据此 O(1) 判断是否需要落库。见 AgentContext.getRevision。 */
+  private revision = 0;
 
   public constructor({ systemPrompt, systemPromptFactory }: DefaultAgentContextOptions) {
     this.defaultSystemPrompt =
@@ -38,6 +40,10 @@ export class DefaultAgentContext implements AgentContext {
         apps: [],
       });
     this.systemPrompt = this.defaultSystemPrompt;
+  }
+
+  public getRevision(): number {
+    return this.revision;
   }
 
   public async getSnapshot(): Promise<AgentContextSnapshot> {
@@ -73,11 +79,13 @@ export class DefaultAgentContext implements AgentContext {
         message => ({ kind: "llm_message", message }) as const,
       ),
     );
+    this.revision += 1;
   }
 
   public async reset(): Promise<void> {
     this.systemPrompt = this.defaultSystemPrompt;
     this.items.splice(0, this.items.length);
+    this.revision += 1;
   }
 
   public async appendEvents(events: Event[]): Promise<void> {
@@ -86,6 +94,7 @@ export class DefaultAgentContext implements AgentContext {
     }
 
     this.items.push(...events.map(createContextItemFromEvent));
+    this.revision += 1;
   }
 
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
@@ -94,10 +103,12 @@ export class DefaultAgentContext implements AgentContext {
     }
 
     this.items.push(...messages.map(createContextItemFromMessage));
+    this.revision += 1;
   }
 
   public async appendAssistantTurn(message: AssistantMessage): Promise<void> {
     this.items.push(createContextItemFromMessage(message));
+    this.revision += 1;
   }
 
   public async appendToolResult(input: { toolCallId: string; content: string }): Promise<void> {
@@ -108,11 +119,13 @@ export class DefaultAgentContext implements AgentContext {
         content: input.content,
       }),
     );
+    this.revision += 1;
   }
 
   public async replaceLeadingMessages(count: number, replacement: LlmMessage[]): Promise<void> {
     const itemCut = this.resolveLeadingItemCut(count);
     this.items.splice(0, itemCut, ...replacement.map(createContextItemFromMessage));
+    this.revision += 1;
   }
 
   /**

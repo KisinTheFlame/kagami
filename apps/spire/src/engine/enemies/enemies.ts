@@ -1275,6 +1275,93 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 第三幕 Boss：时间吞噬者（时间扭曲 + 半血加速）——
+  {
+    id: "time_eater",
+    name: "时间吞噬者",
+    hpMin: 456,
+    hpMax: 456,
+    timeWarpEvery: 12,
+    moves: [
+      {
+        id: "te_reverberate",
+        name: "混响",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "te_head_slam",
+        name: "头槌",
+        effects: [
+          { kind: "deal_damage", amount: 26 },
+          { kind: "apply_power", power: "draw_reduction", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "te_ripple",
+        name: "涟漪",
+        effects: [
+          { kind: "gain_block", amount: 20 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+          { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+        ],
+        intent: "defend",
+      },
+      {
+        id: "haste",
+        name: "加速",
+        effects: [{ kind: "boss_haste" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "te_reverberate", weight: 45, maxInARow: 2 },
+        { move: "te_head_slam", weight: 35, maxInARow: 1 },
+        { move: "te_ripple", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第三幕精英：复仇魔（隔回合虚无缥缈无敌）——
+  {
+    id: "nemesis",
+    name: "复仇魔",
+    hpMin: 185,
+    hpMax: 185,
+    intangibleAfterMove: 2,
+    moves: [
+      {
+        id: "nem_attack",
+        name: "多重打击",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "nem_scythe",
+        name: "巨镰",
+        effects: [{ kind: "deal_damage", amount: 45 }],
+        intent: "attack",
+      },
+      {
+        id: "nem_debuff",
+        name: "灼烧诅咒",
+        effects: [{ kind: "add_card", cardId: "burn", pile: "discard", count: 3 }],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "nem_attack", weight: 35, maxInARow: 2 },
+        { move: "nem_scythe", weight: 30, maxInARow: 1 },
+        { move: "nem_debuff", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -1591,6 +1678,220 @@ const ENEMY_LIST: EnemyDef[] = [
     // 出招由 combat.ts 的 slime_boss 专属分支处理（黏液→蓄力→猛砸 循环），intentRule 留空。
     intentRule: { scripted: [], weighted: [] },
   },
+
+  // —— 补全敌人：填平各幕遭遇缺口（HP/伤害对齐 sts_lightspeed asc0；飞行/反应/复生等异形机制近似为加权出招）——
+  {
+    id: "byrd",
+    name: "拜鸟",
+    hpMin: 25,
+    hpMax: 31,
+    moves: [
+      {
+        id: "byrd_peck",
+        name: "啄击",
+        effects: [{ kind: "deal_damage_multi", amount: 1, times: 5 }],
+        intent: "attack",
+      },
+      {
+        id: "byrd_swoop",
+        name: "俯冲",
+        effects: [{ kind: "deal_damage", amount: 12 }],
+        intent: "attack",
+      },
+      {
+        id: "byrd_caw",
+        name: "啼鸣",
+        effects: [{ kind: "apply_power", power: "strength", amount: 1, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "byrd_peck", weight: 50, maxInARow: 2 },
+        { move: "byrd_swoop", weight: 30, maxInARow: 1 },
+        { move: "byrd_caw", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "mugger",
+    name: "劫匪",
+    hpMin: 48,
+    hpMax: 52,
+    moves: [
+      {
+        id: "mugger_mug",
+        name: "抢劫",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "mugger_lunge",
+        name: "扑击逃窜",
+        effects: [
+          { kind: "deal_damage", amount: 16 },
+          { kind: "steal_gold", amount: 15 },
+          { kind: "escape" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: ["mugger_mug"],
+      weighted: [
+        { move: "mugger_mug", weight: 60, maxInARow: 2 },
+        { move: "mugger_lunge", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "darkling",
+    name: "暗影客",
+    hpMin: 48,
+    hpMax: 56,
+    moves: [
+      {
+        id: "darkling_nip",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+      {
+        id: "darkling_chomp",
+        name: "啃食",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+      {
+        id: "darkling_harden",
+        name: "硬化",
+        effects: [{ kind: "gain_block", amount: 12 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "darkling_nip", weight: 40, maxInARow: 2 },
+        { move: "darkling_chomp", weight: 40, maxInARow: 1 },
+        { move: "darkling_harden", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "spire_growth",
+    name: "尖塔幼体",
+    hpMin: 170,
+    hpMax: 170,
+    moves: [
+      {
+        id: "sg_quick_tackle",
+        name: "急冲",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+      {
+        id: "sg_smash",
+        name: "重砸",
+        effects: [
+          { kind: "deal_damage", amount: 22 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "sg_quick_tackle", weight: 50, maxInARow: 2 },
+        { move: "sg_smash", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "the_maw",
+    name: "巨口",
+    hpMin: 300,
+    hpMax: 300,
+    moves: [
+      {
+        id: "maw_roar",
+        name: "咆哮",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 3, on: "target" },
+        ],
+        intent: "debuff",
+      },
+      {
+        id: "maw_slam",
+        name: "重击",
+        effects: [{ kind: "deal_damage", amount: 25 }],
+        intent: "attack",
+      },
+      {
+        id: "maw_nom",
+        name: "吞噬",
+        effects: [{ kind: "deal_damage_multi", amount: 5, times: 3 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: ["maw_roar"],
+      weighted: [
+        { move: "maw_slam", weight: 50, maxInARow: 1 },
+        { move: "maw_nom", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "writhing_mass",
+    name: "蠕动之物",
+    hpMin: 160,
+    hpMax: 160,
+    moves: [
+      {
+        id: "wm_multi_strike",
+        name: "乱抽",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_strong_strike",
+        name: "重抽",
+        effects: [{ kind: "deal_damage", amount: 32 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_flail",
+        name: "挥击",
+        effects: [{ kind: "deal_damage", amount: 15 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_wither",
+        name: "萎缩",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "wm_multi_strike", weight: 30, maxInARow: 1 },
+        { move: "wm_strong_strike", weight: 20, maxInARow: 1 },
+        { move: "wm_flail", weight: 25, maxInARow: 2 },
+        { move: "wm_wither", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
 ];
 
 const ENEMY_MAP: ReadonlyMap<string, EnemyDef> = new Map(
@@ -1667,6 +1968,64 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   },
   // 奴隶主小队：工头 + 蓝/红奴隶主。
   slavers: { id: "slavers", enemies: ["taskmaster", "blue_slaver", "red_slaver"], isBoss: false },
+  // —— 第二幕组合遭遇（既有敌人拼装）——
+  cultist_and_chosen: {
+    id: "cultist_and_chosen",
+    enemies: ["cultist", "chosen"],
+    isBoss: false,
+  },
+  three_cultists: {
+    id: "three_cultists",
+    enemies: ["cultist", "cultist", "cultist"],
+    isBoss: false,
+  },
+  shelled_parasite_and_fungi: {
+    id: "shelled_parasite_and_fungi",
+    enemies: ["shelled_parasite", "fungi_beast"],
+    isBoss: false,
+  },
+  sentry_and_sphere: {
+    id: "sentry_and_sphere",
+    enemies: ["sentry", "spheric_guardian", "sentry"],
+    isBoss: false,
+  },
+  // —— 第三幕组合遭遇（几何体 shapes：爆破怪/斥力球/尖刺客 + 球卫/颚虫群）——
+  three_shapes: {
+    id: "three_shapes",
+    enemies: ["spiker", "exploder", "repulsor"],
+    isBoss: false,
+  },
+  four_shapes: {
+    id: "four_shapes",
+    enemies: ["spiker", "exploder", "repulsor", "exploder"],
+    isBoss: false,
+  },
+  sphere_and_two_shapes: {
+    id: "sphere_and_two_shapes",
+    enemies: ["exploder", "spheric_guardian", "repulsor"],
+    isBoss: false,
+  },
+  jaw_worm_horde: {
+    id: "jaw_worm_horde",
+    enemies: ["jaw_worm", "jaw_worm", "jaw_worm"],
+    isBoss: false,
+  },
+  // —— 新敌人遭遇 ——
+  three_byrds: { id: "three_byrds", enemies: ["byrd", "byrd", "byrd"], isBoss: false },
+  chosen_and_byrds: {
+    id: "chosen_and_byrds",
+    enemies: ["chosen", "byrd", "byrd"],
+    isBoss: false,
+  },
+  two_thieves: { id: "two_thieves", enemies: ["mugger", "mugger"], isBoss: false },
+  three_darklings: {
+    id: "three_darklings",
+    enemies: ["darkling", "darkling", "darkling"],
+    isBoss: false,
+  },
+  spire_growth: { id: "spire_growth", enemies: ["spire_growth"], isBoss: false },
+  the_maw: { id: "the_maw", enemies: ["the_maw"], isBoss: false },
+  writhing_mass: { id: "writhing_mass", enemies: ["writhing_mass"], isBoss: false },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
   the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
@@ -1682,6 +2041,8 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   two_orb_walkers: { id: "two_orb_walkers", enemies: ["orb_walker", "orb_walker"], isBoss: false },
   giant_head: { id: "giant_head", enemies: ["giant_head"], isBoss: false },
   awakened_one: { id: "awakened_one", enemies: ["awakened_one"], isBoss: true },
+  time_eater: { id: "time_eater", enemies: ["time_eater"], isBoss: true },
+  nemesis: { id: "nemesis", enemies: ["nemesis"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -1743,6 +2104,7 @@ const ACT2_WEAK_POOL: readonly WeightedEncounter[] = [
   { id: "centurion", weight: 1 },
   { id: "shelled_parasite", weight: 1 },
   { id: "chosen", weight: 1 },
+  { id: "three_byrds", weight: 1 },
 ];
 
 const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
@@ -1753,6 +2115,12 @@ const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "snake_plant", weight: 1 },
   { id: "two_centurions", weight: 1 },
   { id: "spheric_guardian", weight: 1 },
+  { id: "cultist_and_chosen", weight: 1 },
+  { id: "three_cultists", weight: 1 },
+  { id: "shelled_parasite_and_fungi", weight: 1 },
+  { id: "sentry_and_sphere", weight: 1 },
+  { id: "chosen_and_byrds", weight: 1 },
+  { id: "two_thieves", weight: 1 },
 ];
 
 // —— 第三幕（超越）战斗池（切片）——
@@ -1770,6 +2138,14 @@ const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "repulsor", weight: 1 },
   { id: "two_exploders", weight: 1 },
   { id: "two_orb_walkers", weight: 1 },
+  { id: "three_shapes", weight: 2 },
+  { id: "four_shapes", weight: 1 },
+  { id: "sphere_and_two_shapes", weight: 1 },
+  { id: "jaw_worm_horde", weight: 1 },
+  { id: "three_darklings", weight: 2 },
+  { id: "spire_growth", weight: 1 },
+  { id: "the_maw", weight: 1 },
+  { id: "writhing_mass", weight: 1 },
 ];
 
 function actWeakPool(act: number): readonly WeightedEncounter[] {
@@ -1816,6 +2192,7 @@ const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
 const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [
   { id: "reptomancer", weight: 1 },
   { id: "giant_head", weight: 1 },
+  { id: "nemesis", weight: 1 },
 ];
 
 /** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
@@ -1839,7 +2216,11 @@ const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [
 ];
 
 // Act3 Boss 池（切片：铎努与迪卡；后续补 觉醒者 / 时间吞噬者）。
-const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "donu_deca", weight: 1 }];
+const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [
+  { id: "donu_deca", weight: 1 },
+  { id: "time_eater", weight: 1 },
+  { id: "awakened_one", weight: 1 },
+];
 
 /** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
 export function pickBossEncounter(rng: RngState, act = 1): string {

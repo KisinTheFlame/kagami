@@ -7,6 +7,31 @@ import {
 import type { LlmMessage } from "@kagami/llm-client";
 
 describe("DefaultAgentContext", () => {
+  it("bumps revision on mutations and leaves it unchanged on reads", async () => {
+    const context = new DefaultAgentContext({ systemPromptFactory: () => "sp" });
+
+    const r0 = context.getRevision();
+    // 只读操作不改修订号。
+    await context.getSnapshot();
+    await context.getDashboardSummary();
+    expect(context.getRevision()).toBe(r0);
+
+    // 每次实际改动 items 都 +1。
+    await context.appendMessages([{ role: "user", content: "a" }]);
+    const r1 = context.getRevision();
+    expect(r1).toBeGreaterThan(r0);
+
+    // 空 append 不算改动，不 +1。
+    await context.appendMessages([]);
+    expect(context.getRevision()).toBe(r1);
+
+    await context.appendAssistantTurn({ role: "assistant", content: "", toolCalls: [] });
+    await context.appendToolResult({ toolCallId: "t1", content: "ok" });
+    await context.reset();
+    // 三次改动后修订号严格递增。
+    expect(context.getRevision()).toBeGreaterThan(r1 + 2);
+  });
+
   it("should append plain messages into the context", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",

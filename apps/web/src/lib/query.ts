@@ -46,6 +46,10 @@ export const queryKeys = {
   todo: {
     historyList: (params: QueryParams) => ["todo", "list", params] as const,
   },
+  ossObject: {
+    historyList: (params: QueryParams) => ["oss-object", "list", params] as const,
+    stats: () => ["oss-object", "stats"] as const,
+  },
   metricChart: {
     data: (request: unknown) => ["metric-chart", "data", request] as const,
   },

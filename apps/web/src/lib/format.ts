@@ -17,6 +17,23 @@ export function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("zh-CN", DATE_TIME_FORMAT_OPTIONS);
 }
 
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;
+
+/**
+ * 把字节数格式化为人类可读（1024 进制，保留至多 2 位小数，去掉尾随 0）。
+ * 负数 / 非有限值一律回退成 `0 B`。用于 OSS 对象大小与存储统计展示。
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
+  const value = bytes / 1024 ** exponent;
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded} ${BYTE_UNITS[exponent]}`;
+}
+
 /**
  * 与 {@link formatDateTime} 同样的展示格式，但容忍 null/undefined/非法时间：
  * 这些情况返回 `fallback`（默认 `"—"`）。

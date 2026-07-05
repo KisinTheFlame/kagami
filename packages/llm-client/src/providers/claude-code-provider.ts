@@ -7,6 +7,7 @@ import {
 } from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { llmProviderUnavailableError, llmUpstreamCallFailedError } from "../retryable-error.js";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { ClaudeCodeAuthProvider } from "./claude-code-auth.js";
@@ -15,7 +16,11 @@ import { mapClaudeMessageResult, parseClaudeMessageResponse } from "./claude-cod
 import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-code-wire.js";
 import type { ClaudeFileCacheDao } from "./claude-file-cache.dao.js";
 import { resolveClaudeImageFileIds } from "./claude-file-upload.js";
-import { ANTHROPIC_VERSION, CLAUDE_CODE_USER_AGENT } from "./claude-code-constants.js";
+import {
+  ANTHROPIC_VERSION,
+  ANTHROPIC_BETA,
+  CLAUDE_CODE_USER_AGENT,
+} from "./claude-code-constants.js";
 
 /**
  * Claude Code provider 装配层：HTTP 发送 / 鉴权头 / keep-alive replay / 错误上下文。
@@ -23,19 +28,18 @@ import { ANTHROPIC_VERSION, CLAUDE_CODE_USER_AGENT } from "./claude-code-constan
  * wire 类型在 claude-code-wire.ts——原 932 行单文件按此缝拆开，公共入口不变。
  */
 
-const ANTHROPIC_BETA = [
-  "claude-code-20250219",
-  "oauth-2025-04-20",
-  "interleaved-thinking-2025-05-14",
-  "context-management-2025-06-27",
-  "prompt-caching-scope-2026-01-05",
-  "effort-2025-11-24",
-  // 图片走 Files API（上传 /v1/files + 消息里 source:{type:"file"} 引用两处都吃这个 beta）。
-  // 依赖 OAuth scope 含 user:file_upload——见 packages/auth/src/claude-code/oauth.ts。
-  "files-api-2025-04-14",
-].join(",");
 const KEEP_ALIVE_REPLAY_MAX_TOKENS = 1;
 const logger = new AppLogger({ source: "claude-code-provider" });
+
+/**
+ * 从 claude-code auth store 取 access token 的访问器。上传（resolveClaudeImageFileIds）与
+ * Files API GC 删除（runClaudeFileGc）共用一份，避免各自摸 authStore.getAuth() 语义漂移。
+ */
+export function createClaudeCodeAccessTokenGetter(
+  authStore: ClaudeCodeAuthProvider,
+): () => Promise<string> {
+  return async () => (await authStore.getAuth()).accessToken;
+}
 
 type LlmProviderConfig = Config["server"]["llm"]["providers"]["claudeCode"] & {
   timeoutMs: Config["server"]["llm"]["timeoutMs"];
@@ -126,7 +130,7 @@ export function createClaudeCodeProvider(input: {
                 fileCacheDao: input.fileCacheDao,
                 baseUrl: input.config.baseUrl,
                 anthropicBeta: ANTHROPIC_BETA,
-                getAccessToken: async () => (await input.authStore.getAuth()).accessToken,
+                getAccessToken: createClaudeCodeAccessTokenGetter(input.authStore),
                 timeoutMs: input.config.timeoutMs,
               })
             : undefined;
@@ -146,13 +150,7 @@ export function createClaudeCodeProvider(input: {
         }
 
         throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: "claude-code",
-            },
-            cause: error,
-          }),
+          llmUpstreamCallFailedError({ meta: { provider: "claude-code" }, cause: error }),
           {
             nativeError: toSerializableLlmNativeRecord(error),
           },
@@ -186,13 +184,7 @@ async function sendClaudeCodeRequest(params: {
   }
 
   throw attachLlmProviderFailureContext(
-    new BizError({
-      message: "所选 LLM provider 当前不可用",
-      meta: {
-        provider: "claude-code",
-        reason: "UNAUTHORIZED",
-      },
-    }),
+    llmProviderUnavailableError({ meta: { provider: "claude-code", reason: "UNAUTHORIZED" } }),
     {
       nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
       nativeResponsePayload: toSerializableLlmNativeRecordOrNull(initialResponse.responsePayload),
@@ -244,13 +236,7 @@ async function fetchClaudeCodeResponse(params: {
     });
   } catch (error) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-        },
-        cause: error,
-      }),
+      llmUpstreamCallFailedError({ meta: { provider: "claude-code" }, cause: error }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
         nativeError: toSerializableLlmNativeRecord(error),
@@ -271,13 +257,8 @@ async function fetchClaudeCodeResponse(params: {
 
   if (!response.ok) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-          reason: "HTTP_ERROR",
-          status: response.status,
-        },
+      llmUpstreamCallFailedError({
+        meta: { provider: "claude-code", reason: "HTTP_ERROR", status: response.status },
       }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
@@ -293,13 +274,8 @@ async function fetchClaudeCodeResponse(params: {
 
   if (!responsePayload?.content) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-          reason: "INVALID_RESPONSE",
-          status: response.status,
-        },
+      llmUpstreamCallFailedError({
+        meta: { provider: "claude-code", reason: "INVALID_RESPONSE", status: response.status },
       }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),

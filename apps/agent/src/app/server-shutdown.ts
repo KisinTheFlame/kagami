@@ -71,67 +71,67 @@ export async function shutdownServerResources({
     exit(1);
   }, timeoutMs);
 
-  try {
-    if (isServerStarted && app) {
-      await app.close();
-      shutdownLogger.info("HTTP server closed", {
-        event: "server.shutdown.http_closed",
+  // 每个资源的关停都 best-effort 兜住：单步抛错**不**跳过后续步骤（尤其 DB 关闭必须执行，否则
+  // SQLite 连接泄漏 / WAL 不 checkpoint）。收集所有失败，最后据此决定 exit code。
+  const errors: unknown[] = [];
+  const step = async (
+    label: string,
+    event: string,
+    run: () => void | Promise<void>,
+  ): Promise<void> => {
+    try {
+      await run();
+      shutdownLogger.info(label, { event });
+    } catch (error) {
+      errors.push(error);
+      shutdownLogger.errorWithCause(`${label} failed`, error, {
+        event: `${event}.failed`,
+        signal,
       });
     }
+  };
 
-    if (shutdownApps) {
-      await shutdownApps();
-      shutdownLogger.info("Apps shut down (incl. Napcat gateway)", {
-        event: "server.shutdown.apps_closed",
-      });
-    }
-
-    if (schedulerClient) {
-      // 拆分后调度器在独立进程；本地只停 SDK 的订阅循环 + 中断在跑的 handler（同步，无需 await）。
-      schedulerClient.stop();
-      shutdownLogger.info("Scheduler client closed", {
-        event: "server.shutdown.scheduler_client_closed",
-      });
-    }
-
-    for (const callbackServer of callbackServers) {
-      await callbackServer.stop();
-    }
-
-    if (rootAgentRuntime) {
-      await rootAgentRuntime.stop();
-      shutdownLogger.info("Root agent runtime closed", {
-        event: "server.shutdown.root_agent_runtime_closed",
-      });
-    }
-
-    if (closeLlmProviders) {
-      await closeLlmProviders();
-      shutdownLogger.info("LLM providers closed", {
-        event: "server.shutdown.llm_providers_closed",
-      });
-    }
-
-    if (database) {
-      shutdownLogger.info("Database client closing", {
-        event: "server.shutdown.db_closing",
-      });
-    }
-
-    await closeLoggerRuntime();
-
-    if (database) {
-      await closeDatabase(database);
-    }
-
-    clearShutdownTimeout(timeoutHandle);
-    exit(0);
-  } catch (error) {
-    clearShutdownTimeout(timeoutHandle);
-    shutdownLogger.errorWithCause("Shutdown failed", error, {
-      event: "server.shutdown.failed",
-      signal,
-    });
-    exit(1);
+  if (isServerStarted && app) {
+    await step("HTTP server closed", "server.shutdown.http_closed", () => app.close());
   }
+  if (shutdownApps) {
+    await step(
+      "Apps shut down (incl. Napcat gateway)",
+      "server.shutdown.apps_closed",
+      shutdownApps,
+    );
+  }
+  if (schedulerClient) {
+    // 拆分后调度器在独立进程；本地只停 SDK 的订阅循环 + 中断在跑的 handler（同步，无需 await）。
+    await step("Scheduler client closed", "server.shutdown.scheduler_client_closed", () =>
+      schedulerClient.stop(),
+    );
+  }
+  for (const callbackServer of callbackServers) {
+    await step("Callback server closed", "server.shutdown.callback_server_closed", () =>
+      callbackServer.stop(),
+    );
+  }
+  if (rootAgentRuntime) {
+    await step("Root agent runtime closed", "server.shutdown.root_agent_runtime_closed", () =>
+      rootAgentRuntime.stop(),
+    );
+  }
+  if (closeLlmProviders) {
+    await step("LLM providers closed", "server.shutdown.llm_providers_closed", closeLlmProviders);
+  }
+  // logger runtime 与 DB 放最后关：前面各步都可能还要写日志。DB 关闭无条件执行（在 errors 里也照关）。
+  await step("Logger runtime closed", "server.shutdown.logger_closed", closeLoggerRuntime);
+  if (database) {
+    await step("Database client closed", "server.shutdown.db_closed", () =>
+      closeDatabase(database),
+    );
+  }
+
+  clearShutdownTimeout(timeoutHandle);
+  if (errors.length > 0) {
+    exit(1);
+    return;
+  }
+  exit(0);
 }

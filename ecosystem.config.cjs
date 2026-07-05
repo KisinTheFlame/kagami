@@ -9,6 +9,10 @@ module.exports = {
       interpreter: "node",
       exec_mode: "fork",
       instances: 1,
+      // 主循环崩溃时 agent 会 fail-fast 非零退出（见 apps/agent/src/index.ts fatalExit），靠 PM2
+      // 拉起干净新进程重放快照。指数退避重启：反复崩溃（如上下文被毒化的确定性 crash）时重启间隔从
+      // 100ms 逐步拉长，避免暴力 crash-loop 打满 CPU / 刷爆日志；恢复正常后自动清零。
+      exp_backoff_restart_delay: 100,
       env: {
         NODE_ENV: "production",
       },

@@ -53,6 +53,11 @@ const TodosPage = lazy(() =>
     default: module.TodosPage,
   })),
 );
+const OssObjectsPage = lazy(() =>
+  import("@/pages/oss-objects/OssObjectsPage").then(module => ({
+    default: module.OssObjectsPage,
+  })),
+);
 
 function App() {
   return (
@@ -72,6 +77,7 @@ function App() {
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
           <Route path="/todos" element={<TodosPage />} />
+          <Route path="/oss-objects" element={<OssObjectsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

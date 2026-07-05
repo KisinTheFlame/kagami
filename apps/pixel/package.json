@@ -16,8 +16,7 @@
     "@kagami/kernel": "workspace:*",
     "@kagami/pixel-api": "workspace:*",
     "fastify": "^5.6.2",
-    "pngjs": "^7.0.0",
-    "zod": "^3.24.4"
+    "pngjs": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
