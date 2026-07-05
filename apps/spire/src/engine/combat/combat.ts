@@ -661,6 +661,15 @@ function applyEffect(
       }
       break;
     }
+    case "channel_orb_per_slot": {
+      // 暗影精华：每个球槽充能 1 颗指定球。
+      if (actor.side === "player") {
+        for (let i = 0; i < combat.orbSlots; i += 1) {
+          channelOrb(state, effect.orbType);
+        }
+      }
+      break;
+    }
     case "channel_orb_x": {
       // 雷暴倾泻：充能 X 颗指定球（消耗全部能量）。
       if (actor.side === "player") {

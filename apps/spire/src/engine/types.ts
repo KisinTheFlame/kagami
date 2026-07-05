@@ -292,7 +292,8 @@ export type Effect =
   | { kind: "double_energy" } // 获得等同于当前能量的能量（双倍能量）
   | { kind: "retain_hand" } // 本回合结束时保留全部手牌（平衡）
   | { kind: "boss_haste" } // 敌人自身：回复生命到最大值的一半、清除自身减益（时间吞噬者加速）
-  | { kind: "fill_potion_slots" }; // 玩家：把所有空药水槽填满随机药水（熵酿）
+  | { kind: "fill_potion_slots" } // 玩家：把所有空药水槽填满随机药水（熵酿）
+  | { kind: "channel_orb_per_slot"; orbType: OrbType }; // 玩家：每个球槽充能 1 颗指定球（暗影精华）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
