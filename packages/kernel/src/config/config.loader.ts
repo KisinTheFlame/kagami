@@ -362,6 +362,13 @@ const ConfigSchema = z.object({
             // 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
             // 关掉即回退全 base64（rollback 无需回滚代码）。依赖 OAuth scope 含 user:file_upload。
             useFileApi: z.boolean().default(true),
+            // File API 缓存的按最近使用时间 GC（#433）。File 文件 persist-until-deleted，不清理会撞组织存储配额。
+            // kill-switch：false 则 kagami-llm 不注册每日 GC task（急停用，不影响上传/推理主路径）。
+            fileCacheGcEnabled: z.boolean().default(true),
+            // 连续多少天未被使用即回收（idle）。取保守值避 KV 红线：只删早已出活上下文的图。
+            fileCacheGcMaxIdleDays: PositiveIntSchema.default(3),
+            // 单轮 GC 最多删多少个：防首轮积压一次性猛敲 API；超出的下一天续删。
+            fileCacheGcMaxDeletionsPerRun: PositiveIntSchema.default(2000),
           })
           .default({
             models: [DEFAULT_CLAUDE_CODE_MODEL],

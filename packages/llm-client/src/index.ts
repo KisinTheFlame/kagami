@@ -36,12 +36,18 @@ import type {
 import { createDeepSeekProvider } from "./providers/deepseek-provider.js";
 import { createOpenAiProvider } from "./providers/openai-provider.js";
 import { createOpenAiCodexProvider } from "./providers/openai-codex-provider.js";
-import { createClaudeCodeProvider } from "./providers/claude-code-provider.js";
+import {
+  createClaudeCodeProvider,
+  createClaudeCodeAccessTokenGetter,
+} from "./providers/claude-code-provider.js";
+import { runClaudeFileGc, deleteClaudeFile } from "./providers/claude-file-gc.js";
+import type { ClaudeFileGcMetadata } from "./providers/claude-file-gc.js";
 import type { ClaudeCodeAuth, ClaudeCodeAuthProvider } from "./providers/claude-code-auth.js";
 import type { OpenAiCodexAuth, OpenAiCodexAuthProvider } from "./providers/openai-codex-auth.js";
 import type {
   ClaudeFileCacheDao,
   ClaudeFileCacheRecord,
+  ClaudeFileCacheSaveInput,
 } from "./providers/claude-file-cache.dao.js";
 
 export {
@@ -54,6 +60,9 @@ export {
   createOpenAiProvider,
   createOpenAiCodexProvider,
   createClaudeCodeProvider,
+  createClaudeCodeAccessTokenGetter,
+  runClaudeFileGc,
+  deleteClaudeFile,
   type LlmClient,
   type LlmChatOptions,
   type LlmChatDirectOptions,
@@ -84,4 +93,6 @@ export {
   type OpenAiCodexAuthProvider,
   type ClaudeFileCacheDao,
   type ClaudeFileCacheRecord,
+  type ClaudeFileCacheSaveInput,
+  type ClaudeFileGcMetadata,
 };

@@ -180,6 +180,9 @@ function createProviderConfig(
     timeoutMs: number;
     keepAliveReplayIntervalMinutes: number;
     useFileApi: boolean;
+    fileCacheGcEnabled: boolean;
+    fileCacheGcMaxIdleDays: number;
+    fileCacheGcMaxDeletionsPerRun: number;
   }> = {},
 ): {
   baseUrl: string;
@@ -187,6 +190,9 @@ function createProviderConfig(
   timeoutMs: number;
   keepAliveReplayIntervalMinutes: number;
   useFileApi: boolean;
+  fileCacheGcEnabled: boolean;
+  fileCacheGcMaxIdleDays: number;
+  fileCacheGcMaxDeletionsPerRun: number;
 } {
   return {
     baseUrl: "https://api.anthropic.com",
@@ -196,6 +202,10 @@ function createProviderConfig(
     // 现有黑盒测试都发文本、且不注入 fileCacheDao → File API 分支短路，逐字节走 base64 旧路。
     // 默认对齐生产（true）；图片相关行为由文件末尾的 File API 专项 describe 覆盖。
     useFileApi: true,
+    // GC 配置：provider 本身不消费（GC 在 kagami-llm 侧的 scheduler task），仅为满足 config 类型。
+    fileCacheGcEnabled: true,
+    fileCacheGcMaxIdleDays: 3,
+    fileCacheGcMaxDeletionsPerRun: 2000,
     ...overrides,
   };
 }
@@ -1086,10 +1096,18 @@ describe("createClaudeCodeProvider · 图片 File API", () => {
   function createFileCacheDao(record: {
     findByHash?: Mock;
     save?: Mock;
-  }): ClaudeFileCacheDao & { findByHash: Mock; save: Mock } {
+    touch?: Mock;
+  }): ClaudeFileCacheDao & { findByHash: Mock; save: Mock; touch: Mock } {
     const findByHash = record.findByHash ?? vi.fn().mockResolvedValue(null);
     const save = record.save ?? vi.fn().mockResolvedValue(undefined);
-    return { findByHash, save };
+    const touch = record.touch ?? vi.fn().mockResolvedValue(undefined);
+    return {
+      findByHash,
+      save,
+      touch,
+      findIdle: vi.fn().mockResolvedValue([]),
+      deleteByContentHashes: vi.fn().mockResolvedValue(0),
+    };
   }
 
   /** 路由 /v1/files（上传）与 /v1/messages（SSE）。filesStatus!=200 时模拟上传失败。 */
@@ -1139,9 +1157,11 @@ describe("createClaudeCodeProvider · 图片 File API", () => {
       fileId: "file_cached",
       mimeType: "image/png",
       sizeBytes: IMAGE_SIZE,
+      lastUsedAt: new Date(0),
     });
     const save = vi.fn();
-    const fileCacheDao = createFileCacheDao({ findByHash, save });
+    const touch = vi.fn().mockResolvedValue(undefined);
+    const fileCacheDao = createFileCacheDao({ findByHash, save, touch });
     const fetchMock = stubRoutedFetch({});
 
     const provider = createClaudeCodeProvider({
@@ -1157,6 +1177,9 @@ describe("createClaudeCodeProvider · 图片 File API", () => {
       file_id: "file_cached",
     });
     expect(save).not.toHaveBeenCalled();
+    // 命中刷新最近使用时间（GC 判据）：用与 findByHash 相同的 content sha256（内容算出的，非 mock 字段）。
+    expect(touch).toHaveBeenCalledTimes(1);
+    expect(touch).toHaveBeenCalledWith(findByHash.mock.calls[0][0]);
     expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/v1/files"))).toBe(false);
 
     vi.unstubAllGlobals();

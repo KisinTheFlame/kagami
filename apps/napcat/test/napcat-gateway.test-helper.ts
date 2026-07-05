@@ -185,6 +185,9 @@ export function createConfigManager(): ConfigManager {
             models: ["claude-sonnet-4-20250514"],
             keepAliveReplayIntervalMinutes: 30,
             useFileApi: true,
+            fileCacheGcEnabled: true,
+            fileCacheGcMaxIdleDays: 3,
+            fileCacheGcMaxDeletionsPerRun: 2000,
           },
         },
         usages: {
