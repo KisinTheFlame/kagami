@@ -104,7 +104,9 @@ export type PowerId =
   | "echo_form" // 回响形态：每回合你打出的第一张牌额外结算一次（机器人）
   | "creative_ai" // 创意 AI：每个玩家回合开始，将 = 层数张随机能力牌加入手牌（机器人）
   | "no_card_block" // 无法格挡：牌产生的格挡被抑制（层数即剩余生效回合数，回合末 -1，应急按钮）
-  | "electrodynamics"; // 电动力学：闪电球伤害命中所有敌人（机器人）
+  | "electrodynamics" // 电动力学：闪电球伤害命中所有敌人（机器人）
+  | "time_warp" // 时间扭曲：玩家每打出 timeWarpEvery 张牌，此敌人 +2 力量并立即结束玩家回合（时间吞噬者，敌人身上·计数）
+  | "draw_reduction"; // 抽牌削减：下个玩家回合少抽 = 层数张（时间吞噬者头槌，玩家身上·一次性）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -283,7 +285,8 @@ export type Effect =
   | { kind: "deal_or_enter_wrath"; vuln: number } // 若处于愤怒则令所有敌人获得 vuln 易伤，否则进入愤怒（义愤）
   | { kind: "draw_or_enter_calm"; draw: number } // 若处于平静则抽 draw 张，否则进入平静（内心平静）
   | { kind: "deal_damage_if_hand_all_attacks"; amount: number } // 若手牌其余全为攻击牌，对目标造成 amount（招牌动作）
-  | { kind: "exhaust_random"; count: number }; // 随机消耗 count 张手牌（坚毅）
+  | { kind: "exhaust_random"; count: number } // 随机消耗 count 张手牌（坚毅）
+  | { kind: "boss_haste" }; // 敌人自身：回复生命到最大值的一半、清除自身减益（时间吞噬者加速）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {
@@ -387,6 +390,10 @@ export type EnemyDef = {
   deathEffects?: Effect[];
   /** 复活：首次死亡时以此 HP 复活并获得力量（觉醒者二阶段），仅触发一次。 */
   reviveHp?: number;
+  /** 复仇魔：每次出招结束后，若自身没有虚无缥缈则叠加此层数（隔回合无敌）。省略=无。 */
+  intangibleAfterMove?: number;
+  /** 时间吞噬者：玩家每打出这么多张牌，此敌人 +2 力量并立即结束玩家回合。省略=无。 */
+  timeWarpEvery?: number;
 };
 
 export type EnemyState = {
@@ -485,6 +492,8 @@ export type CombatState = {
   /** 本场战斗奖励的敌人组标识（用于 reward 生成）。 */
   encounterId: string;
   isBoss: boolean;
+  /** 时间吞噬者：本回合触发了时间扭曲，需在当前出牌结算收尾后立即结束玩家回合。 */
+  timeWarpEndTurnPending: boolean;
 };
 
 export type RewardState = {
