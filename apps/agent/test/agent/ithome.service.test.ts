@@ -109,6 +109,36 @@ describe("IthomeService", () => {
       truncated: false,
     });
   });
+
+  it("should truncate on a code-point boundary so an emoji is never split into a lone surrogate", async () => {
+    // 8 个 emoji（每个 2 个 UTF-16 码元）；截到 5 个码点。裸 .slice(0,5) 会切在第 3 个 emoji 中间
+    // 留下半个代理项，让上游 400 掉整条请求（历史事故）。码点截断必须整段留 5 个完整 emoji。
+    const articleDao = createArticleDao({
+      findById: vi.fn().mockResolvedValueOnce({
+        ...createRecord(1, "emoji 长文"),
+        articleContent: "😀".repeat(8),
+        articleContentStatus: "succeeded",
+      } satisfies IthomeArticleRecord),
+    });
+    const service = new IthomeService({
+      articleDao,
+      cursorDao: createCursorDao(),
+      ithomeClient: createClient(),
+      recentArticleLimit: 8,
+      articleMaxChars: 5,
+    });
+
+    const result = await service.openArticle({ articleId: 1 });
+
+    expect(result?.truncated).toBe(true);
+    expect(result?.content).toBe(`${"😀".repeat(5)}……`);
+    // 无落单代理项：Array.from 按码点拆分，任何半个 emoji 都会破坏这个等式。
+    expect(
+      Array.from(result?.content ?? "").filter(
+        ch => ch.length === 1 && ch >= "\ud800" && ch <= "\udfff",
+      ),
+    ).toEqual([]);
+  });
 });
 
 function createArticleDao(overrides: Partial<IthomeArticleDao> = {}): IthomeArticleDao {

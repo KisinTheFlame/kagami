@@ -1,3 +1,4 @@
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import type {
   AmapGeocodeItem,
   AmapPoiResult,
@@ -203,8 +204,7 @@ export function escapeAttr(value: string): string {
 }
 
 function truncate(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n…（内容过长已截断）`;
+  // 按 Unicode 码点截断，绝不从代理对（emoji）中间切开——半个 emoji 会让上游 400 掉
+  // 整条请求（见「按 UTF-16 长度截断劈开代理对」事故）。
+  return truncateWithEllipsis(text, maxChars, "\n…（内容过长已截断）");
 }

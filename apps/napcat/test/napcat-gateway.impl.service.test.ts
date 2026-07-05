@@ -754,6 +754,9 @@ describe("DefaultNapcatGatewayService", () => {
     );
     await waitOneTick();
     emitActionResponse(socket, 0, []);
+    // miss 会触发一次刷新兜底（冷启动新好友救回路径）；刷新后仍空 → 确认非好友。
+    await waitOneTick();
+    emitActionResponse(socket, 1, []);
     await waitOneTick();
     await waitOneTick();
     await waitOneTick();
@@ -774,6 +777,85 @@ describe("DefaultNapcatGatewayService", () => {
         }),
       );
     });
+
+    await gateway.stop();
+  });
+
+  it("should recover a just-added friend's first DM via a refresh when the cold-start list misses", async () => {
+    // 冷启动窗口内刚加为好友：首次 get_friend_list 还没收录该用户（miss），若不刷新兜底，
+    // 这条首私聊会被静默永久丢弃。刷新后好友列表已收录 → 消息必须照常入队。
+    const sockets: FakeWebSocket[] = [];
+    const eventQueue = createAgentEventQueue();
+    const napcatGroupMessageDao = createNapcatGroupMessageDao();
+    const gateway = await DefaultNapcatGatewayService.create({
+      configManager: createConfigManager(),
+      enqueueGroupMessageEvent: eventQueue.enqueue,
+      persistenceWriter: new NapcatEventPersistenceWriter({
+        napcatQqMessageDao: napcatGroupMessageDao,
+      }),
+      imageMessageAnalyzer,
+      qqMessageDao: createNapcatGroupMessageDao(),
+      createWebSocket: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const startPromise = gateway.start();
+    const socket = sockets[0];
+    socket.emitOpen();
+    await startPromise;
+
+    socket.emitMessage(
+      JSON.stringify({
+        post_type: "message",
+        message_type: "private",
+        sub_type: "friend",
+        user_id: 123456,
+        self_id: 654321,
+        message_id: 9988,
+        raw_message: "hi",
+        message: [
+          {
+            type: "text",
+            data: {
+              text: "hi",
+            },
+          },
+        ],
+        time: 1710000000,
+        sender: {
+          nickname: "新好友",
+        },
+      }),
+    );
+    await waitOneTick();
+    // 冷启动首拉：列表还没收录这个刚加的好友。
+    emitActionResponse(socket, 0, []);
+    await waitOneTick();
+    // 刷新兜底：列表已收录 → 认定为好友。
+    emitActionResponse(socket, 1, [
+      {
+        user_id: 123456,
+        nickname: "新好友",
+        remark: null,
+      },
+    ]);
+    await waitOneTick();
+    await waitOneTick();
+
+    expect(eventQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "napcat_private_message",
+        data: expect.objectContaining({
+          userId: "123456",
+          nickname: "新好友",
+          rawMessage: "hi",
+          messageId: 9988,
+        }),
+      }),
+    );
 
     await gateway.stop();
   });
