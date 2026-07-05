@@ -11,7 +11,7 @@ import type {
   PowerInstance,
   RelicState,
 } from "../types.js";
-import { getCardDef, costOf, effectsOf, rewardCardPoolOf } from "../cards/cards.js";
+import { getCardDef, costOf, effectsOf, rewardCardPoolOf, ALL_CARDS } from "../cards/cards.js";
 import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
@@ -22,7 +22,7 @@ import {
   getPower,
   removePower,
 } from "../powers/powers.js";
-import { getRelicDef, hasRelic } from "../relics/relics.js";
+import { getRelicDef, hasRelic, THE_BOOT_MIN_DAMAGE } from "../relics/relics.js";
 import type { RelicDef } from "../relics/relics.js";
 import { getPotionDef } from "../potions/potions.js";
 
@@ -88,9 +88,14 @@ const ALCHEMIZE_POOL = [
   "weak_potion",
   "regen_potion",
 ];
+// 你好世界：每回合开始随机加入手牌的「普通」牌池——从卡表动态取全部普通牌（含各色），自动随卡池增补同步。
+const HELLO_WORLD_POOL: readonly string[] = ALL_CARDS.filter(c => c.rarity === "common").map(
+  c => c.id,
+);
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
+const TIME_WARP_STRENGTH = 2; // 时间扭曲触发时时间吞噬者获得的力量。
 const TRANSIENT_FADE_TURN = 5; // 无常连续攻击到第 5 回合消散离场。
 const GIANT_HEAD_GLARE_TURNS = 3; // 巨型头颅前 3 回合凝视蓄势，之后连续重击。
 const GUARDIAN_MODE_SHIFT_STEP = 10;
@@ -240,9 +245,12 @@ export function startCombat(state: GameState, encounterId: string): void {
     lightningChanneledThisCombat: 0,
     powersPlayedThisCombat: 0,
     timesLostHpThisCombat: 0,
+    clawDamageThisCombat: 0,
+    retainHandThisTurn: false,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
+    timeWarpEndTurnPending: false,
   };
   state.combat = combat;
   state.screen = "combat";
@@ -260,7 +268,10 @@ export function startCombat(state: GameState, encounterId: string): void {
   // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
   triggerRelicTurnStart(state);
   // 固有牌（背刺等）：开局必在起手，先从抽牌堆抽到手牌。
-  const innate = drawPile.filter(card => getCardDef(card.defId).innate);
+  const innate = drawPile.filter(card => {
+    const cardDef = getCardDef(card.defId);
+    return cardDef.innate || (card.upgraded && cardDef.upgradedInnate);
+  });
   for (const card of innate) {
     const idx = combat.drawPile.indexOf(card);
     if (idx >= 0) {
@@ -310,6 +321,9 @@ function triggerRelicCombatEnd(state: GameState): void {
 }
 function triggerRelicTurnStart(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnStart?.(state, self, emit));
+}
+function triggerRelicLoseHp(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onLoseHp?.(state, self, emit));
 }
 function triggerRelicTurnEnd(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
@@ -377,6 +391,25 @@ function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
   const painCount = combat.hand.filter(card => card.defId === "pain").length;
   if (painCount > 0) {
     state.hp = Math.max(0, state.hp - painCount);
+  }
+  // 时间扭曲（时间吞噬者）：玩家每打出 timeWarpEvery 张牌，此敌人 +2 力量并立即结束玩家回合。
+  for (const enemy of combat.enemies) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+    const every = getEnemyDef(enemy.defId).timeWarpEvery;
+    if (!every) {
+      continue;
+    }
+    const next = getPower(enemy.powers, "time_warp") + 1;
+    if (next >= every) {
+      removePower(enemy.powers, "time_warp");
+      addPower(enemy.powers, "strength", TIME_WARP_STRENGTH);
+      combat.timeWarpEndTurnPending = true;
+      state.log.push(`${enemy.name}扭曲了时间！`);
+    } else {
+      addPower(enemy.powers, "time_warp", 1);
+    }
   }
 }
 
@@ -680,7 +713,8 @@ function applyEffect(
     }
     case "gain_energy": {
       if (actor.side === "player") {
-        combat.energy += effect.amount;
+        // amount 可为负（虚无抽到时 -1 能量）；能量不低于 0。
+        combat.energy = Math.max(0, combat.energy + effect.amount);
       }
       break;
     }
@@ -746,6 +780,17 @@ function applyEffect(
       if (actor.side === "enemy") {
         const self = combat.enemies[actor.index]!;
         self.hp = Math.min(self.maxHp, self.hp + effect.amount);
+      }
+      break;
+    }
+    case "boss_haste": {
+      // 加速（时间吞噬者）：把生命拉回到最大值的一半，并清除自身减益（虚弱/易伤/脆弱）。
+      if (actor.side === "enemy") {
+        const self = combat.enemies[actor.index]!;
+        self.hp = Math.max(self.hp, Math.floor(self.maxHp / 2));
+        removePower(self.powers, "weak");
+        removePower(self.powers, "vulnerable");
+        removePower(self.powers, "frail");
       }
       break;
     }
@@ -1739,6 +1784,50 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_claw": {
+      // 爪击：造成 base + 本场爪击加成，随后本场爪击加成 +2（作用于后续所有爪击）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const dmg = Math.max(0, effect.base + combat.clawDamageThisCombat);
+        dealDamageToEnemy(state, targetEnemyIndex, dmg, powers);
+        combat.clawDamageThisCombat += 2;
+      }
+      break;
+    }
+    case "double_energy": {
+      // 双倍能量：获得等同于当前能量的能量。
+      if (actor.side === "player") {
+        combat.energy += combat.energy;
+      }
+      break;
+    }
+    case "retain_hand": {
+      // 平衡：本回合结束时保留全部手牌。
+      if (actor.side === "player") {
+        combat.retainHandThisTurn = true;
+      }
+      break;
+    }
+    case "exhaust_hand_gain_energy": {
+      // 回收：消耗手牌中费用最高的一张，获得 = 其费用的能量（自动取最贵）。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let picked: CardInstance | null = null;
+        let pickedCost = -1;
+        for (const card of combat.hand) {
+          const cardCost = card.costZero ? 0 : (costOf(getCardDef(card.defId), card.upgraded) ?? 0);
+          if (cardCost > pickedCost) {
+            pickedCost = cardCost;
+            picked = card;
+          }
+        }
+        if (picked) {
+          const idx = combat.hand.indexOf(picked);
+          combat.hand.splice(idx, 1);
+          exhaustCard(state, picked);
+          combat.energy += Math.max(0, pickedCost);
+        }
+      }
+      break;
+    }
     case "shuffle_discard_into_draw": {
       // 深呼吸：把弃牌堆洗入抽牌堆。
       if (actor.side === "player") {
@@ -2152,6 +2241,14 @@ function dealDamageToEnemy(
   } else if (state.combat!.playerStance === "divinity") {
     dmg *= 3;
   }
+  // 虚无缥缈（敌人）：受到的一切伤害降为 1（复仇魔隔回合无敌）。
+  if (getPower(enemy.powers, "intangible") > 0) {
+    dmg = Math.min(dmg, 1);
+  }
+  // 战靴：一次无格挡攻击伤害为 1~4 时，改为造成 5（对齐 StS 只在有正伤害时生效）。
+  if (dmg >= 1 && dmg <= 4 && hasRelic(state, "the_boot")) {
+    dmg = THE_BOOT_MIN_DAMAGE;
+  }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
     enemy.modeShiftAccum += dmg;
@@ -2245,6 +2342,7 @@ function dealDamageToPlayer(
   if (afterBlock > 0) {
     state.hp = Math.max(0, state.hp - afterBlock);
     combat.timesLostHpThisCombat += 1; // 血债血偿按本场失血次数降费。
+    triggerRelicLoseHp(state); // 失血遗物钩子（百年谜题首次失血抽牌）。
   }
   // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {
@@ -2660,13 +2758,16 @@ export function playCard(
     state.screen = "gameover";
     state.log.push("你倒下了。");
   }
-  // 终局：带「结束回合」效果的牌，打出结算后若战斗仍在进行则立即结束本回合。
-  if (
-    state.combat !== null &&
-    state.screen === "combat" &&
-    effectsOf(def, instance.upgraded).some(candidate => candidate.kind === "end_turn")
-  ) {
-    endTurn(state);
+  // 终局 / 时间扭曲：带「结束回合」效果的牌，或本回合触发了时间扭曲，
+  // 打出结算后若战斗仍在进行则立即结束本回合。
+  if (state.combat !== null && state.screen === "combat") {
+    const endsTurn =
+      combat.timeWarpEndTurnPending ||
+      effectsOf(def, instance.upgraded).some(candidate => candidate.kind === "end_turn");
+    combat.timeWarpEndTurnPending = false;
+    if (endsTurn) {
+      endTurn(state);
+    }
   }
   return { ok: true };
 }
@@ -2778,6 +2879,9 @@ export function endTurn(state: GameState): void {
       retained.push(instance);
     } else if (cardDef.ethereal) {
       combat.exhaustPile.push(instance);
+    } else if (combat.retainHandThisTurn) {
+      // 平衡：本回合保留全部手牌（虚无牌仍按上面消耗）。
+      retained.push(instance);
     } else if (wellLaidPlans > 0) {
       retained.push(instance);
       wellLaidPlans -= 1;
@@ -2786,6 +2890,7 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = retained;
+  combat.retainHandThisTurn = false; // 「本回合」限定：结算后清零。
   // 既定事实：本回合被保留下来的每张牌，费用永久 -establishment（多次保留会叠加下降）。
   const establishment = getPower(combat.playerPowers, "establishment");
   if (establishment > 0) {
@@ -2943,6 +3048,10 @@ export function endTurn(state: GameState): void {
       state.log.push("你倒下了。");
       return;
     }
+    // 复仇魔：每次出招后若自身没有虚无缥缈则叠加（隔回合无敌）。
+    if (def.intangibleAfterMove && getPower(enemy.powers, "intangible") === 0) {
+      addPower(enemy.powers, "intangible", def.intangibleAfterMove);
+    }
     // 金属化 / 镀甲：自己回合结束获得格挡（拉加维林金属化 8、带壳寄生虫镀甲 14）。
     const metallicize = getPower(enemy.powers, "metallicize");
     if (metallicize > 0) {
@@ -2953,6 +3062,10 @@ export function endTurn(state: GameState): void {
       enemy.block += enemyPlated;
     }
     decayDebuffs(enemy.powers);
+    // 虚无缥缈（敌人）：在自己回合结束 -1 层（隔回合无敌节奏）。
+    if (getPower(enemy.powers, "intangible") > 0) {
+      addPower(enemy.powers, "intangible", -1);
+    }
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
     selectNextMove(state, i);
   }
@@ -3122,11 +3235,24 @@ export function endTurn(state: GameState): void {
   }
   // 机器学习：每回合多抽 = 层数的牌；叠加下回合预约抽牌（掠食者）。
   const machineLearning = getPower(combat.playerPowers, "machine_learning");
-  drawCards(state, STARTING_HAND_SIZE + machineLearning + scheduledDraw);
+  // 抽牌削减（时间吞噬者头槌）：本回合少抽 = 层数张，随后清除（一次性）。
+  const drawReduction = getPower(combat.playerPowers, "draw_reduction");
+  if (drawReduction > 0) {
+    removePower(combat.playerPowers, "draw_reduction");
+  }
+  drawCards(
+    state,
+    Math.max(0, STARTING_HAND_SIZE + machineLearning + scheduledDraw - drawReduction),
+  );
   // 磁力：每回合开始将 = 层数张随机无色牌加入手牌。
   const magnetism = getPower(combat.playerPowers, "magnetism");
   for (let n = 0; n < magnetism; n += 1) {
     addCards(state, MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!, "hand", 1);
+  }
+  // 你好世界：每回合开始将 = 层数张随机普通牌加入手牌。
+  const helloWorld = getPower(combat.playerPowers, "hello_world");
+  for (let n = 0; n < helloWorld; n += 1) {
+    addCards(state, HELLO_WORLD_POOL[nextInt(state.rng, HELLO_WORLD_POOL.length)]!, "hand", 1);
   }
   // 采集：接下来若干回合各将一张 0 费「洞悉」加入手牌，每回合消耗一层。
   if (getPower(combat.playerPowers, "collect") > 0) {
@@ -3170,6 +3296,12 @@ export function endTurn(state: GameState): void {
   const creativeAi = getPower(combat.playerPowers, "creative_ai");
   for (let n = 0; n < creativeAi; n += 1) {
     addCards(state, WHITE_NOISE_POOL[nextInt(state.rng, WHITE_NOISE_POOL.length)]!, "hand", 1);
+  }
+  // 回合开始的抽牌触发效果（火焰吐息随抽到状态牌 AoE、混沌打出牌、荆棘反弹等）可能打死最后的
+  // 敌人；此时必须结算胜利，否则会留在「全灭却仍在战斗」的死局里（无合法出牌目标）。
+  resolveCombatIfEnded(state);
+  if (state.combat === null || state.screen !== "combat") {
+    return;
   }
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
@@ -3229,6 +3361,16 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     !enemy.moveHistory.includes("anger")
   ) {
     enemy.currentMove = "anger";
+    return;
+  }
+
+  // 时间吞噬者（第三幕 Boss）：血量首次降到 <半血时加速一次（回血到半血 + 清自身减益），其余走 weighted。
+  if (
+    enemy.defId === "time_eater" &&
+    enemy.hp * 2 < enemy.maxHp &&
+    !enemy.moveHistory.includes("haste")
+  ) {
+    enemy.currentMove = "haste";
     return;
   }
 

@@ -26,6 +26,8 @@
     "@kagami/persistence": "workspace:*",
     "@kagami/pixel-api": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
+    "@kagami/scheduler-api": "workspace:*",
+    "@kagami/scheduler-client": "workspace:*",
     "@kagami/spire-api": "workspace:*",
     "cloakbrowser": "^0.4.3",
     "croner": "^10.0.1",

@@ -24,8 +24,9 @@ if [ -n "$SERVICE" ]; then
     spire) PKG="@kagami/spire-service"; PM2_NAME="kagami-spire" ;;
     napcat) PKG="@kagami/napcat"; PM2_NAME="kagami-napcat" ;;
     pixel) PKG="@kagami/pixel-service"; PM2_NAME="kagami-pixel" ;;
+    scheduler) PKG="@kagami/scheduler-service"; PM2_NAME="kagami-scheduler" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser|llm|metric|spire|pixel|napcat>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser|llm|metric|spire|pixel|napcat|scheduler>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1

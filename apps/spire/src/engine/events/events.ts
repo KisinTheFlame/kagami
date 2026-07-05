@@ -12,6 +12,10 @@ export type EventOutcome =
   | { kind: "add_card"; cardId: string }
   | { kind: "gain_relic" }
   | { kind: "gain_potion" }
+  // 移除一张牌（自动优先移除诅咒/状态牌，否则随机一张非基础牌）。
+  | { kind: "remove_random_card" }
+  // 升级 count 张随机未升级的牌（攻击/技能/能力）。
+  | { kind: "upgrade_random_card"; count: number }
   | { kind: "nothing" };
 
 export type EventChoice = {
@@ -250,6 +254,257 @@ const EVENT_LIST: EventDef[] = [
         label: "一脚把它们踩碎",
         resultText: "菌盖爆开，露出几枚被菌丝裹着的硬币。",
         outcomes: [{ kind: "gain_gold", amount: 15 }],
+      },
+    ],
+  },
+  // —— 补全批次：更多 ? 节点事件（机制忠实、文案原创）——
+  {
+    id: "golden_idol",
+    description:
+      "祭坛中央供着一尊沉甸甸的金像，它的眼睛像是在盯着你看。伸手去拿，总觉得会惊动什么。",
+    choices: [
+      {
+        label: "抱走金像",
+        resultText: "金像入手的刹那，一道无形的诅咒钻进了你的牌组。",
+        outcomes: [{ kind: "gain_relic" }, { kind: "add_card", cardId: "injury" }],
+      },
+      {
+        label: "不碰，转身离开",
+        resultText: "你压下贪念，退出了这间密室。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "big_fish",
+    description: "一汪水潭里游着条通人性的大鱼。它吐出三样东西，示意你只能挑一件。",
+    choices: [
+      {
+        label: "香蕉（回复生命）",
+        resultText: "果肉香甜，倦意与伤痛都消退了不少。",
+        outcomes: [{ kind: "heal", amount: 25 }],
+      },
+      {
+        label: "甜甜圈（最大生命 +6）",
+        resultText: "一股扎实的暖流沉入身体，你比先前更耐打了。",
+        outcomes: [{ kind: "gain_max_hp", amount: 6 }],
+      },
+      {
+        label: "木盒（一件遗物，附带代价）",
+        resultText: "盒中是件古物，可打开它也松开了封在里面的悔意。",
+        outcomes: [{ kind: "gain_relic" }, { kind: "add_card", cardId: "regret" }],
+      },
+    ],
+  },
+  {
+    id: "golden_shrine",
+    description: "一座敷着金箔的神龛静立在尘埃里，隐隐透出可以被亵渎、也可以被敬奉的气息。",
+    choices: [
+      {
+        label: "虔诚祈祷",
+        resultText: "神龛回应了你的敬意，几枚金币凭空落下。",
+        outcomes: [{ kind: "gain_gold", amount: 100 }],
+      },
+      {
+        label: "撬走金箔（更多金币，招致诅咒）",
+        resultText: "你剥下所有金箔，也剥落了自己的一点体面。",
+        outcomes: [
+          { kind: "gain_gold", amount: 275 },
+          { kind: "add_card", cardId: "regret" },
+        ],
+      },
+      {
+        label: "转身离开",
+        resultText: "你向神龛行了一礼，退了出去。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "the_serpent",
+    description:
+      "阴影里盘着一条会说话的长蛇，它用尾尖挑着一袋金币，语气甜得发腻：拿去吧，不要白不要。",
+    choices: [
+      {
+        label: "接过金币（种下疑虑）",
+        resultText: "钱袋沉甸甸的，可你心里从此多了一根拔不掉的刺。",
+        outcomes: [
+          { kind: "gain_gold", amount: 175 },
+          { kind: "add_card", cardId: "doubt" },
+        ],
+      },
+      {
+        label: "不理它，走开",
+        resultText: "你没有回头，蛇的嗤笑消失在身后。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "world_of_goop",
+    description: "整个房间灌满了半凝的黏液，金币若隐若现地悬在其中。伸手去捞，代价是弄得满身狼狈。",
+    choices: [
+      {
+        label: "把手伸进黏液捞金币",
+        resultText: "你抓到了不少硬币，也被黏液啃掉了一层皮。",
+        outcomes: [
+          { kind: "gain_gold", amount: 75 },
+          { kind: "lose_hp", amount: 11 },
+        ],
+      },
+      {
+        label: "绕开这摊麻烦",
+        resultText: "你贴着墙根挪了出去，一枚金币也没沾。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "scrap_ooze",
+    description: "一团软泥裹着某样硬邦邦的东西缓缓蠕动。想拿到它，就得忍着它的腐蚀往里掏。",
+    choices: [
+      {
+        label: "忍痛掏出里面的东西",
+        resultText: "腐蚀灼着你的手，但指尖终于扣住了一件遗物。",
+        outcomes: [{ kind: "lose_hp", amount: 3 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不值得，走开",
+        resultText: "你甩了甩发麻的手，离开了。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "the_cleric",
+    description: "一位游方牧师在废墟里支起摊子，说只要付些金币，他能为你诵一段驱痛的祷文。",
+    choices: [
+      {
+        label: "付 35 金币，接受治疗",
+        resultText: "祷文低回，伤口以肉眼可见的速度合拢。",
+        outcomes: [
+          { kind: "lose_gold", amount: 35 },
+          { kind: "heal", amount: 25 },
+        ],
+      },
+      {
+        label: "囊中羞涩，谢过离开",
+        resultText: "牧师点点头，目送你远去。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "forgotten_altar",
+    description: "一座荒废已久的祭坛，凹槽里还残留着暗褐色的痕迹。它似乎渴望一份献祭。",
+    choices: [
+      {
+        label: "献上鲜血（最大生命 +7）",
+        resultText: "你割破掌心滴入凹槽，祭坛回赠你一具更坚韧的躯体。",
+        outcomes: [
+          { kind: "lose_hp", amount: 5 },
+          { kind: "gain_max_hp", amount: 7 },
+        ],
+      },
+      {
+        label: "供上金币（换一件遗物）",
+        resultText: "金币没入凹槽，祭坛深处升起一件古物。",
+        outcomes: [{ kind: "lose_gold", amount: 50 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不打扰它，离开",
+        resultText: "你退后一步，让祭坛继续沉睡。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "wing_statue",
+    description: "一尊长着翅膀的石像立在通道尽头，翼尖挂着一枚闪光的护符，触手可及。",
+    choices: [
+      {
+        label: "取下护符（一件遗物，代价是刺痛）",
+        resultText: "护符入手，石像的翅膀无声地垂了下去。",
+        outcomes: [{ kind: "gain_relic" }, { kind: "lose_hp", amount: 7 }],
+      },
+      {
+        label: "向石像祈祷（回复生命）",
+        resultText: "你合十默祷，一阵微光拂过，倦意稍解。",
+        outcomes: [{ kind: "heal", amount: 15 }],
+      },
+    ],
+  },
+  // —— 补全批次 2：涉及改牌/去牌/升级的事件 ——
+  {
+    id: "whirlpool_of_purity",
+    description:
+      "一汪静止的清池泛着奇异的洁光，凑近时，你手里最碍事的那张牌隐隐发烫，像想被它带走。",
+    choices: [
+      {
+        label: "把一张牌投进池中净化",
+        resultText: "牌落水的瞬间化作光点消散，你的牌组清爽了几分。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "不舍得，转身离开",
+        resultText: "你把牌重新收好，绕过了水池。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "shining_light",
+    description: "石室深处悬着一团刺目的白光，传说踏入者会被灼痛，却也会因此被磨砺得更利。",
+    choices: [
+      {
+        label: "走进光中（受创，但两张牌被磨砺）",
+        resultText: "白光灼过全身，退出时你发现随身的两件家伙都更趁手了。",
+        outcomes: [
+          { kind: "lose_hp", amount: 12 },
+          { kind: "upgrade_random_card", count: 2 },
+        ],
+      },
+      {
+        label: "遮住眼退开",
+        resultText: "你不愿平白受这份罪，退出了石室。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "bonfire_spirits",
+    description: "篝火里跃动着几缕通灵的火魂，它们伸出手，示意你可以投入一张牌，换取火中之物。",
+    choices: [
+      {
+        label: "投入一张牌，静待馈赠",
+        resultText: "牌在火中噼啪炸开，灰烬里凝出一件温热的器物。",
+        outcomes: [{ kind: "remove_random_card" }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不献祭，烤烤火就走",
+        resultText: "你就着火光暖了暖身子，什么也没舍得投。",
+        outcomes: [{ kind: "heal", amount: 10 }],
+      },
+    ],
+  },
+  {
+    id: "living_wall",
+    description: "一整面墙缓缓起伏，像在呼吸。它开口说话，愿意为你的牌组做一件事——添、削、或是磨。",
+    choices: [
+      {
+        label: "吸纳（获得一张随机无色牌）",
+        resultText: "墙面凸起，一张陌生的牌被推进你怀里。",
+        outcomes: [{ kind: "add_card", cardId: "apparition" }],
+      },
+      {
+        label: "遗忘（移除一张牌）",
+        resultText: "墙面凹陷，你最累赘的一张牌被吞了进去。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "深化（升级一张牌）",
+        resultText: "墙面纹路流转，你的一张牌被打磨得更加锋利。",
+        outcomes: [{ kind: "upgrade_random_card", count: 1 }],
       },
     ],
   },

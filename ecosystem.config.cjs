@@ -127,5 +127,19 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // 通用定时调度服务：独立 PM2 生命周期，agent 重启不打断计时节奏（issue #428）。通用薄时钟，
+      // 无 DB、无业务语义——使用方（agent）经 SchedulerClient 注册任务、经 SSE 收 tick，业务逻辑全在
+      // 使用方。cwd 固定仓库根，读同一 config.yaml（services.scheduler 端口）。
+      name: "kagami-scheduler",
+      cwd: __dirname,
+      script: "apps/scheduler/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
