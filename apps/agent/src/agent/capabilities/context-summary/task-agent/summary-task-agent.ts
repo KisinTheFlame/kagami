@@ -14,7 +14,7 @@ export type SummaryTaskInput = {
  * 输出：累计上下文摘要字符串；替换语义（replace_leading_messages 的 count /
  * replacement 拼装）由调用方（RootLoopAgent.attemptSummarize）负责。
  *
- * 关键设计：与 WebSearchTaskAgent 同构——复用主 Agent 的 tools / system /
+ * 关键设计：与 TodoSuggestionTaskAgent 同构——复用主 Agent 的 tools / system /
  * 消息前缀（字节相等），命中 Anthropic prompt cache。隔离手段是顶层工具集中
  * 除 invoke 之外全部走 OutOfScopeTool 软拒绝，invoke 只挂 finalize_summary
  * 终止子工具。

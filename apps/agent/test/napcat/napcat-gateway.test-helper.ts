@@ -194,9 +194,6 @@ export function createConfigManager(): ConfigManager {
           vision: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
-          webSearchAgent: {
-            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
-          },
           todoSuggestionAgent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
@@ -204,9 +201,6 @@ export function createConfigManager(): ConfigManager {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
         },
-      },
-      tavily: {
-        apiKey: "tavily-key",
       },
       bot: {
         qq: "10001",

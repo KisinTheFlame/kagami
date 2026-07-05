@@ -15,7 +15,7 @@ const ReadResourceArgumentsSchema = z.object({
  * 非图片只回元数据（v1 只有图片能真正入你的视野）。resId 形如 `res-N`，来自你看到的
  * `[resid: res-N]` 占位符或截图返回。
  *
- * **全局工具**：和 search_web 同级。结果只往尾部追加，KV 友好。
+ * **全局工具**：和 download_resource / upload_resource 同级。结果只往尾部追加，KV 友好。
  */
 export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgumentsSchema> {
   public readonly name = READ_RESOURCE_TOOL_NAME;

@@ -20,7 +20,7 @@ export type TodoSuggestionTaskInput = {
  * 输入：主 Agent system prompt + 消息历史 + 未完成待办清单。
  * 输出：候选待办标题数组（最多 5 条，可能为空）。
  *
- * 关键设计：与 WebSearchTaskAgent / SummaryTaskAgent 同构——复用主 Agent 的
+ * 关键设计：与 SummaryTaskAgent 同构——复用主 Agent 的
  * tools / system / 消息前缀（字节相等），命中 Anthropic prompt cache。隔离手段是
  * 顶层工具集中除 invoke 之外全部走 OutOfScopeTool 软拒绝，invoke 只挂
  * propose_todos 终止子工具。本 agent 不持有 AgentContext 句柄，类型上就无法改动

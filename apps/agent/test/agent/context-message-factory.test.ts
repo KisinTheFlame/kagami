@@ -6,7 +6,6 @@ import {
   createPortalReminderMessage,
   createRootContextSummaryReminderMessage,
   createWakeReminderMessage,
-  createWebSearchInstructionMessage,
 } from "../../src/agent/runtime/context/context-message-factory.js";
 
 describe("context-message-factory", () => {
@@ -73,7 +72,7 @@ describe("context-message-factory", () => {
         "忽略寒暄、纯重复内容、已经失效的瞬时界面信息和明显无关细节。",
         "不要写成冷冰冰的流程单，也不要写成长篇流水账。",
         '不要直接输出自由文本回复，必须调用 `invoke(tool="finalize_summary", summary=...)` 提交摘要并结束本次子任务；`summary` 参数应是简洁但信息完整的中文字符串。',
-        "本轮 switch / wait / search_web / help 等其他顶层工具均不可用，调用会被拒绝。",
+        "本轮 switch / wait / help 等其他顶层工具均不可用，调用会被拒绝。",
         "</system_reminder>",
       ].join("\n"),
     });
@@ -89,18 +88,5 @@ describe("context-message-factory", () => {
         "</system_reminder>",
       ].join("\n"),
     });
-  });
-
-  it("should render the web search instruction message", () => {
-    const message = createWebSearchInstructionMessage(" OpenAI 最近有什么新动态？ ");
-    expect(message.role).toBe("user");
-    expect(typeof message.content).toBe("string");
-    const content = message.content as string;
-    expect(content).toContain("<system_instruction>");
-    expect(content).toContain("当前要检索的问题：OpenAI 最近有什么新动态？");
-    // 本轮使用 invoke 调用子工具，不再用顶层 search_web_raw / finalize_web_search。
-    expect(content).toContain('invoke(tool="search_web_raw"');
-    expect(content).toContain('invoke(tool="finalize_web_search"');
-    expect(content).toContain("</system_instruction>");
   });
 });

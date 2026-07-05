@@ -15,7 +15,7 @@ const DownloadResourceArgumentsSchema = z.object({
  * 把一个 OSS 资源（res-N）落地成本地文件，交给 terminal 等能力处理。文件名由你给出，
  * 落进资源根目录（默认 ~/kagami，与 terminal 工作目录重合，落好后能直接 ls 到）。
  *
- * **全局工具**：和 read_resource / search_web 同级。结果只回尾部，KV 友好。
+ * **全局工具**：和 read_resource / upload_resource 同级。结果只回尾部，KV 友好。
  */
 export class DownloadResourceTool extends ZodToolComponent<typeof DownloadResourceArgumentsSchema> {
   public readonly name = DOWNLOAD_RESOURCE_TOOL_NAME;
