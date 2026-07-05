@@ -161,3 +161,89 @@ describe("OSS HTTP server (streaming)", () => {
     expect(typeof body.timestamp).toBe("string");
   });
 });
+
+describe("OSS HTTP 控制台只读面（/oss-object）", () => {
+  async function putObject(bytes: Buffer, mime: string): Promise<string> {
+    const res = await fetch(`${baseUrl}/objects`, {
+      method: "POST",
+      headers: { "content-type": mime },
+      body: new Uint8Array(bytes),
+    });
+    const { key } = (await res.json()) as { key: string };
+    return key;
+  }
+
+  it("GET /oss-object/query → 分页 JSON + 倒序 + ISO 时间", async () => {
+    await putObject(Buffer.from("a"), "text/plain");
+    const k2 = await putObject(Buffer.from("b"), "image/png");
+
+    const res = await fetch(`${baseUrl}/oss-object/query?page=1&pageSize=1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      pagination: { page: number; pageSize: number; total: number };
+      items: Array<{
+        key: string;
+        mime: string;
+        size: number;
+        refcount: number;
+        createdAt: string;
+      }>;
+    };
+    expect(body.pagination.total).toBe(2);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]!.key).toBe(k2); // 最新的先出
+    expect(body.items[0]!.mime).toBe("image/png");
+    expect(body.items[0]!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("GET /oss-object/query?mime= → 精确过滤", async () => {
+    await putObject(Buffer.from("t"), "text/plain");
+    await putObject(Buffer.from("i"), "image/png");
+
+    const res = await fetch(`${baseUrl}/oss-object/query?mime=${encodeURIComponent("image/png")}`);
+    const body = (await res.json()) as {
+      pagination: { total: number };
+      items: Array<{ mime: string }>;
+    };
+    expect(body.pagination.total).toBe(1);
+    expect(body.items.every(item => item.mime === "image/png")).toBe(true);
+  });
+
+  it("GET /oss-object/stats → 去重口径", async () => {
+    const dup = Buffer.from("dup-bytes");
+    await putObject(dup, "text/plain");
+    await putObject(dup, "text/plain");
+    const uniq = randomBytes(100);
+    await putObject(uniq, "application/octet-stream");
+
+    const res = await fetch(`${baseUrl}/oss-object/stats`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      objectCount: number;
+      blobCount: number;
+      physicalBytes: number;
+      logicalBytes: number;
+      dedupSavedBytes: number;
+    };
+    expect(body.objectCount).toBe(3);
+    expect(body.blobCount).toBe(2);
+    expect(body.physicalBytes).toBe(dup.length + uniq.length);
+    expect(body.logicalBytes).toBe(dup.length * 2 + uniq.length);
+    expect(body.dedupSavedBytes).toBe(dup.length);
+  });
+
+  it("GET /oss-object/:key/content → 原字节 + nosniff + attachment（复用 getObject）", async () => {
+    const bytes = randomBytes(256);
+    const key = await putObject(bytes, "image/png");
+
+    const res = await fetch(`${baseUrl}/oss-object/${key}/content`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-disposition")).toBe("attachment");
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(bytes));
+
+    const missing = await fetch(`${baseUrl}/oss-object/res-999/content`);
+    expect(missing.status).toBe(404);
+  });
+});

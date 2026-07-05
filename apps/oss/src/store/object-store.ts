@@ -85,6 +85,31 @@ interface DeleteOutcome {
   orphanSha256: string | null;
 }
 
+/** 控制台对象浏览的列表行（object ⋈ blob，size/refcount 取自权威的 blob 行）。 */
+export interface ObjectListRow {
+  /** object 表自增 id；对外 key = `res-<id>`（映射在 HTTP 层完成）。 */
+  id: number;
+  mime: string;
+  size: number;
+  sha256: string;
+  refcount: number;
+  /** Unix ms（object.created_at）。 */
+  createdAt: number;
+}
+
+export interface ObjectListPage {
+  items: ObjectListRow[];
+  total: number;
+}
+
+/** 存储统计。dedupSavedBytes 由 HTTP 层用 logical-physical 算出，此处只回原始聚合。 */
+export interface StorageStats {
+  objectCount: number;
+  blobCount: number;
+  physicalBytes: number;
+  logicalBytes: number;
+}
+
 export class ObjectStore {
   private readonly db: Database.Database;
   private readonly blobDir: string;
@@ -240,6 +265,68 @@ export class ObjectStore {
     return { mime: row.mime, size: blob?.size ?? 0, sha256: row.sha256 };
   }
 
+  /**
+   * 控制台只读：分页列出对象（object ⋈ blob），按 id 倒序（最新在前）。可选 mime 精确过滤。
+   * 读不走 writeLock（与 get/head 一致，读并发安全）。size/refcount 取自权威 blob 行。
+   */
+  public list({
+    page,
+    pageSize,
+    mime,
+  }: {
+    page: number;
+    pageSize: number;
+    mime?: string;
+  }): ObjectListPage {
+    const offset = (page - 1) * pageSize;
+    const total = mime
+      ? (
+          this.db.prepare(`SELECT COUNT(*) AS c FROM object WHERE mime = ?`).get(mime) as {
+            c: number;
+          }
+        ).c
+      : (this.db.prepare(`SELECT COUNT(*) AS c FROM object`).get() as { c: number }).c;
+
+    const selectSql = `
+      SELECT o.id AS id, o.mime AS mime, o.created_at AS createdAt,
+             b.size AS size, b.sha256 AS sha256, b.refcount AS refcount
+      FROM object o JOIN blob b ON b.sha256 = o.sha256
+      ${mime ? "WHERE o.mime = ?" : ""}
+      ORDER BY o.id DESC
+      LIMIT ? OFFSET ?
+    `;
+    const items = (
+      mime
+        ? this.db.prepare(selectSql).all(mime, pageSize, offset)
+        : this.db.prepare(selectSql).all(pageSize, offset)
+    ) as ObjectListRow[];
+
+    return { items, total };
+  }
+
+  /**
+   * 控制台只读：存储统计。全表聚合（COUNT + SUM(int)，无 json_extract，成本远低于会撞网关超时的
+   * 大表 json 聚合）；当前规模下远小于 gateway 30s 超时。读不走 writeLock。
+   */
+  public stats(): StorageStats {
+    const objectCount = (this.db.prepare(`SELECT COUNT(*) AS c FROM object`).get() as { c: number })
+      .c;
+    const blobCount = (this.db.prepare(`SELECT COUNT(*) AS c FROM blob`).get() as { c: number }).c;
+    const physicalBytes = (
+      this.db.prepare(`SELECT COALESCE(SUM(size), 0) AS s FROM blob`).get() as { s: number }
+    ).s;
+    const logicalBytes = (
+      this.db
+        .prepare(
+          `SELECT COALESCE(SUM(b.size), 0) AS s
+           FROM object o JOIN blob b ON b.sha256 = o.sha256`,
+        )
+        .get() as { s: number }
+    ).s;
+
+    return { objectCount, blobCount, physicalBytes, logicalBytes };
+  }
+
   public async delete(key: string): Promise<boolean> {
     const id = parseKey(key);
     if (id === null) {
@@ -361,6 +448,11 @@ export class ObjectStore {
       });
     }
   }
+}
+
+/** 由 object id 拼出对外 key（`res-<id>`）。与 {@link parseKey} 共享同一前缀，单一事实源。 */
+export function formatObjectKey(id: number): string {
+  return `${KEY_PREFIX}${id}`;
 }
 
 /** 解析对外 key：`res-<正整数>` → id；前缀不对 / 非正整数 / 越界 → null（视作无映射）。 */
