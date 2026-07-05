@@ -1,5 +1,14 @@
-import { defineBinaryEnvelopeRoute, defineBinaryRawRoute } from "@kagami/http/contract";
+import {
+  defineBinaryEnvelopeRoute,
+  defineBinaryRawRoute,
+  defineJsonRoute,
+} from "@kagami/http/contract";
 import { z } from "zod";
+import {
+  OssObjectListQuerySchema,
+  OssObjectListResponseSchema,
+  OssStatsResponseSchema,
+} from "./oss-object.js";
 
 const KeyParams = z.object({ key: z.string().min(1) });
 
@@ -41,3 +50,33 @@ export const ossApiContract = {
     bytesIn: false,
   }),
 };
+
+/**
+ * 控制台只读面（管理台对象浏览器）：分页列表 + 存储统计，均为 JSON 契约。挂 `/oss-object` 前缀，
+ * 与写操作的 `/objects` 前缀物理隔离——gateway 只把 `/oss-object` 分流到 OSS，浏览器够不到写路由。
+ */
+export const ossConsoleContract = {
+  queryObjects: defineJsonRoute({
+    method: "GET",
+    path: "/oss-object/query",
+    input: OssObjectListQuerySchema,
+    output: OssObjectListResponseSchema,
+  }),
+  getStats: defineJsonRoute({
+    method: "GET",
+    path: "/oss-object/stats",
+    input: z.object({}),
+    output: OssStatsResponseSchema,
+  }),
+};
+
+/**
+ * 对象字节透传（预览 / 下载）：binary-raw 路由，浏览器直接以 `<img src>` / 下载消费，不进 typed
+ * client。复用现有 getObject 的流式管道与安全头（nosniff + attachment）。同挂 `/oss-object` 前缀。
+ */
+export const getOssObjectContent = defineBinaryRawRoute({
+  method: "GET",
+  path: "/oss-object/:key/content",
+  params: KeyParams,
+  bytesIn: false,
+});
