@@ -98,6 +98,10 @@ server:
         # 依赖 OAuth scope 含 user:file_upload——加此 scope 后须重新登录 claude-code。
         # 关掉即回退全 base64。
         useFileApi: true
+        # File API 缓存按最近使用时间 GC（#433）。kagami-llm 每日 04:00 删连续 N 天未使用的图（远端 + 本地）。
+        fileCacheGcEnabled: true # kill-switch；false 则不注册 GC task（急停用）
+        fileCacheGcMaxIdleDays: 3 # 连续多少天未被使用即回收
+        fileCacheGcMaxDeletionsPerRun: 2000 # 单轮删除上限，超出的次日续删
     usages:
       agent:
         attempts:

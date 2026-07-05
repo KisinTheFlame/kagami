@@ -97,6 +97,20 @@ async function resolveSingleImage(params: {
 
     const cached = await params.fileCacheDao.findByHash(contentSha256);
     if (cached) {
+      // 刷新最近使用时间（GC 判据）。best-effort：DAO 内部已节流成"每图最多 TOUCH_THROTTLE 一次真写"，
+      // 此处再兜一层 try/catch——刷新失败绝不拖垮图片解析 / LLM 主请求（最坏 last_used_at 滞后，
+      // 该图稍早被 GC → 下轮命中 miss 自动重传，自愈）。
+      //
+      // KV 安全的关键（#433）：消息列表持久化的是 base64 原文（见 root-agent-runtime-snapshot），
+      // file_id 只在 wire 层每轮现拼。故一张图只要还在活上下文，每轮 chat 都会重新走到这里被 touch
+      // → last_used_at 恒新（≤TOUCH_THROTTLE）→ 永远到不了 idle cutoff → GC 永不删它 → 不会因重传
+      // 换 file_id 撞前缀漂移。只有连续 idleDays 天零轮次的图才会被回收，那时 provider 侧 KV cache
+      // 早已过期，冷重建重传不额外损失。
+      try {
+        await params.fileCacheDao.touch(contentSha256);
+      } catch (error) {
+        logTouchFailure(error);
+      }
       return cached.fileId;
     }
 
@@ -171,6 +185,17 @@ async function uploadClaudeFile(params: {
     throw new Error("Claude Files API upload returned no file id");
   }
   return payload.id;
+}
+
+function logTouchFailure(error: unknown): void {
+  try {
+    logger.warn("Claude 图片缓存 last_used_at 刷新失败（不影响本次请求）", {
+      event: "llm.claude_code.file_cache_touch_failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } catch {
+    // logger runtime 未初始化的上下文里忽略日志失败。
+  }
 }
 
 function logUploadFailure(error: unknown): void {

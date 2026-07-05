@@ -240,6 +240,9 @@ importers:
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      '@kagami/scheduler-client':
+        specifier: workspace:*
+        version: link:../../packages/scheduler-client
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
