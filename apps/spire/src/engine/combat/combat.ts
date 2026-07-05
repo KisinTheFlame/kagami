@@ -2146,7 +2146,7 @@ function applyPowerEffect(
       applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
     }
   } else {
-    applyPowerToPlayer(combat, power, amount);
+    applyPowerToPlayer(state, power, amount);
   }
 }
 
@@ -2170,7 +2170,15 @@ function applyPowerToEnemy(enemy: EnemyState, power: PowerInstance["id"], amount
 }
 
 /** 给玩家加 power；若是减益且玩家有神器，则消耗一层神器抵消（远古药水）。 */
-function applyPowerToPlayer(combat: CombatState, power: PowerInstance["id"], amount: number): void {
+function applyPowerToPlayer(state: GameState, power: PowerInstance["id"], amount: number): void {
+  const combat = state.combat!;
+  // 姜（ginger）免疫虚弱、萝卜（turnip）免疫脆弱。
+  if (amount > 0 && power === "weak" && hasRelic(state, "ginger")) {
+    return;
+  }
+  if (amount > 0 && power === "frail" && hasRelic(state, "turnip")) {
+    return;
+  }
   if (DEBUFF_POWERS.has(power) && amount > 0 && getPower(combat.playerPowers, "artifact") > 0) {
     addPower(combat.playerPowers, "artifact", -1);
     return;

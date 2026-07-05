@@ -914,6 +914,22 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  {
+    id: "ginger",
+    name: "姜",
+    // 免疫虚弱在 combat.ts 的 applyPowerToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "你不再受到「虚弱」。",
+    hooks: {},
+  },
+  {
+    id: "turnip",
+    name: "萝卜",
+    // 免疫脆弱在 combat.ts 的 applyPowerToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "你不再受到「脆弱」。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
