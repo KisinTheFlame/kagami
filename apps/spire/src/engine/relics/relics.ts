@@ -7,9 +7,24 @@ import type {
   RelicState,
 } from "../types.js";
 import { addPower } from "../powers/powers.js";
-import { getCardDef } from "../cards/cards.js";
+import { getCardDef, rewardCardPoolOf } from "../cards/cards.js";
 import { POTION_DROP_POOL } from "../potions/potions.js";
 import { nextInt } from "../rng.js";
+
+// 角色颜色（避免引入 characters 造成循环）；转化卡从该色奖励池里随机取。
+const CHARACTER_COLOR: Record<CharacterId, "red" | "green" | "blue" | "purple"> = {
+  ironclad: "red",
+  silent: "green",
+  defect: "blue",
+  watcher: "purple",
+};
+
+/** 把一张牌实例转化为本角色奖励池里的一张随机牌（潘多拉魔盒/星盘）。 */
+function transformCardInstance(state: GameState, card: CardInstance): void {
+  const pool = rewardCardPoolOf(CHARACTER_COLOR[state.character]);
+  card.defId = pool[nextInt(state.rng, pool.length)]!;
+  card.upgraded = false;
+}
 
 // === 遗物系统 ===
 //
@@ -1191,6 +1206,40 @@ const RELIC_LIST: RelicDef[] = [
     rarity: "uncommon",
     description: "被你削弱（虚弱）的敌人对你造成的伤害降到 0.6 倍（原为 0.75 倍）。",
     hooks: {},
+  },
+  // —— 转化牌组的 onEquip 遗物 ——
+  {
+    id: "pandoras_box",
+    name: "潘多拉魔盒",
+    rarity: "boss",
+    description: "获得时，将你所有的打击与防御转化为随机牌。",
+    hooks: {
+      onEquip: state => {
+        for (const card of state.deck) {
+          if (card.defId === "strike" || card.defId === "defend") {
+            transformCardInstance(state, card);
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "astrolabe",
+    name: "星盘",
+    rarity: "boss",
+    description: "获得时，转化并升级 3 张随机牌。",
+    hooks: {
+      onEquip: state => {
+        const pool = state.deck.slice();
+        for (let n = 0; n < 3 && pool.length > 0; n += 1) {
+          const idx = nextInt(state.rng, pool.length);
+          const card = pool[idx]!;
+          pool.splice(idx, 1);
+          transformCardInstance(state, card);
+          card.upgraded = true;
+        }
+      },
+    },
   },
 ];
 
