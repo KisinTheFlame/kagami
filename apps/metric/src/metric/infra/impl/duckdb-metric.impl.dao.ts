@@ -133,7 +133,11 @@ export class DuckDbMetricDao implements MetricDao {
       series_rank AS (
         SELECT
           "seriesKey",
-          row_number() OVER (ORDER BY SUM(ABS("value")) DESC NULLS LAST, "seriesKey" ASC) AS srn
+          -- tiebreak 显式 NULLS FIRST：magnitude 打平时让「未分组」的 NULL series 排在前、优先保留
+          -- （对齐旧 service 端 stable sort + DAO NULLS FIRST 输出的语义，避免边界处静默丢它）。
+          row_number() OVER (
+            ORDER BY SUM(ABS("value")) DESC NULLS LAST, "seriesKey" ASC NULLS FIRST
+          ) AS srn
         FROM bucketed
         GROUP BY "seriesKey"
       )
@@ -205,6 +209,13 @@ function buildWhereClause(input: QueryMetricChartSeriesInput, params: VarcharPar
   ];
 
   for (const [key, filter] of Object.entries(input.tagFilters ?? {})) {
+    // 空 in 列表 = 空集恒不命中 → 直接 FALSE，避免生成非法的 `IN ()`。wire schema 的 min(1) 已挡
+    // HTTP 入口，此为 DAO 层对未来非 HTTP caller 的防御。放在最前，避免为它多绑一个不出现在 SQL
+    // 的 key 占位符（会让 DuckDB 参数编号错位）。
+    if (filter.op === "in" && filter.value.length === 0) {
+      conditions.push(`FALSE`);
+      continue;
+    }
     // 括号必需：DuckDB `->>` 优先级低于比较运算，不加括号会被解析成 `tags ->> (key <op> value)`。
     const extracted = `("tags" ->> ${params.add(key)})`;
     switch (filter.op) {

@@ -217,6 +217,111 @@ describe("DuckDbMetricDao", () => {
     expect(keys.has("series-1")).toBe(false);
   });
 
+  it("keeps the NULL (未分组) series through top-N when grouping and some rows miss the tag", async () => {
+    // 分组查询下，tag 缺失的行汇成一条 NULL series；它必须参与排名、经 IS NOT DISTINCT FROM join 存活。
+    for (let n = 0; n < 3; n++) {
+      await dao.insert({
+        metricName: METRIC,
+        value: 1,
+        tags: { tool: "Read" },
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+    }
+    await dao.insert({
+      metricName: METRIC,
+      value: 1,
+      tags: {},
+      occurredAt: iso("2026-07-06T10:00:20.000Z"),
+    });
+
+    const rows = await dao.queryChartSeries(baseQuery({ aggregator: "count", groupByTag: "tool" }));
+
+    expect(rows).toEqual([
+      { bucketStart: iso("2026-07-06T10:00:00.000Z"), seriesKey: null, value: 1 },
+      { bucketStart: iso("2026-07-06T10:00:00.000Z"), seriesKey: "Read", value: 3 },
+    ]);
+  });
+
+  it("keeps the NULL series over a magnitude-tied named series at the top-N boundary (NULLS FIRST)", async () => {
+    // 19 条大 series(各 10) + NULL(5) + 命名 "zzz"(5)：共 21 条、截到 20。NULL 与 zzz 在边界打平，
+    // series_rank 的 NULLS FIRST tiebreak 让 NULL 排前存活、zzz 被裁（对齐旧 stable-sort 语义）。
+    for (let index = 1; index <= 19; index++) {
+      const key = `aaa-${String(index).padStart(2, "0")}`;
+      for (let n = 0; n < 10; n++) {
+        await dao.insert({
+          metricName: METRIC,
+          value: 1,
+          tags: { tool: key },
+          occurredAt: iso("2026-07-06T10:00:10.000Z"),
+        });
+      }
+    }
+    for (let n = 0; n < 5; n++) {
+      await dao.insert({
+        metricName: METRIC,
+        value: 1,
+        tags: {},
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: 1,
+        tags: { tool: "zzz" },
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+    }
+
+    const rows = await dao.queryChartSeries(baseQuery({ aggregator: "count", groupByTag: "tool" }));
+
+    const keys = new Set(rows.map(row => row.seriesKey));
+    expect(keys.size).toBe(20);
+    expect(keys.has(null)).toBe(true); // 未分组 NULL series 存活
+    expect(keys.has("zzz")).toBe(false); // 同分但字母序靠后的命名 series 被裁
+  });
+
+  it("treats an empty in list as no match (defensive: avoids illegal IN ())", async () => {
+    await dao.insert({
+      metricName: METRIC,
+      value: 1,
+      tags: { tool: "Read" },
+      occurredAt: iso("2026-07-06T10:00:10.000Z"),
+    });
+
+    const rows = await dao.queryChartSeries(
+      baseQuery({ aggregator: "count", tagFilters: { tool: { op: "in", value: [] } } }),
+    );
+
+    expect(rows).toEqual([]);
+  });
+
+  it("supports last aggregator combined with groupByTag (top-N CTE wraps the row_number pick)", async () => {
+    await dao.insert({
+      metricName: METRIC,
+      value: 10,
+      tags: { tool: "Read" },
+      occurredAt: iso("2026-07-06T10:00:10.000Z"),
+    });
+    await dao.insert({
+      metricName: METRIC,
+      value: 20,
+      tags: { tool: "Read" },
+      occurredAt: iso("2026-07-06T10:00:40.000Z"), // 桶内更晚 → last 取 20
+    });
+    await dao.insert({
+      metricName: METRIC,
+      value: 99,
+      tags: { tool: "Wait" },
+      occurredAt: iso("2026-07-06T10:00:30.000Z"),
+    });
+
+    const rows = await dao.queryChartSeries(baseQuery({ aggregator: "last", groupByTag: "tool" }));
+
+    expect(rows).toEqual([
+      { bucketStart: iso("2026-07-06T10:00:00.000Z"), seriesKey: "Read", value: 20 },
+      { bucketStart: iso("2026-07-06T10:00:00.000Z"), seriesKey: "Wait", value: 99 },
+    ]);
+  });
+
   it("computes sum / avg / max / min over value", async () => {
     for (const v of [2, 4, 6]) {
       await dao.insert({
