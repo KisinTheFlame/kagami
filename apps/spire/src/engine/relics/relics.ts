@@ -1241,6 +1241,14 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  {
+    id: "lizard_tail",
+    name: "蜥蜴之尾",
+    // 濒死复活在 combat.ts 的 isPlayerDead/reviveIfPossible 按 hasRelic 处理（counter 记一次性用尽）。
+    rarity: "rare",
+    description: "当你在战斗中濒死时，回复至一半生命（整局限一次）。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
