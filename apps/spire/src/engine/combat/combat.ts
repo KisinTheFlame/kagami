@@ -45,6 +45,7 @@ const DARK_PASSIVE = 6; // 暗球每回合结束累积的伤害（+集中）。
 const PLASMA_PASSIVE_ENERGY = 1; // 等离子球每回合结束给 1 能量（不受集中影响）。
 const PLASMA_EVOKE_ENERGY = 2; // 等离子球唤醒给 2 能量。
 const OMEGA_DAMAGE = 50; // 奥米加每层每回合结束对全体的伤害（对齐 StS）。
+const EXPUNGER_PER_CHARGE = 7; // 铸刃：湮灭之刃每点 X 充能对应的伤害。
 // 磁力：每回合开始随机加入手牌的无色牌池（均为已实现的无色牌 id）。
 const MAGNETISM_POOL = [
   "blind",
@@ -76,6 +77,16 @@ const METAMORPH_POOL = [
   "mind_blast",
   "dramatic_entrance",
   "bite",
+];
+// 炼金：随机获得的药水池（均为已实现的药水 id）。
+const ALCHEMIZE_POOL = [
+  "block_potion",
+  "strength_potion",
+  "dexterity_potion",
+  "energy_potion",
+  "fire_potion",
+  "weak_potion",
+  "regen_potion",
 ];
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
@@ -216,12 +227,17 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnEnergy: 0,
     nextTurnDraw: 0,
     nextTurnStance: null,
+    nightmarePending: null,
+    pendingBomb: null,
+    extraTurnPending: false,
     doomedNextTurn: false,
+    nextTurnPhantasmal: false,
     attacksThisTurn: 0,
     cardsDiscardedThisTurn: 0,
     cardsPlayedThisTurn: 0,
     mantraGainedThisCombat: 0,
     frostChanneledThisCombat: 0,
+    lightningChanneledThisCombat: 0,
     powersPlayedThisCombat: 0,
     timesLostHpThisCombat: 0,
     lastCardType: null,
@@ -357,6 +373,11 @@ function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
       enemy.hp = Math.max(0, enemy.hp - choked);
     }
   }
+  // 剧痛（诅咒）：手牌里每有一张剧痛，你每打出一张牌就损失 1 点生命。
+  const painCount = combat.hand.filter(card => card.defId === "pain").length;
+  if (painCount > 0) {
+    state.hp = Math.max(0, state.hp - painCount);
+  }
 }
 
 // —— 抽牌 ——
@@ -377,10 +398,35 @@ function drawCards(state: GameState, count: number): void {
       shuffleInPlace(state.rng, combat.drawPile);
     }
     const card = combat.drawPile.pop()!;
+    // 烈焰吐息：抽到状态牌或诅咒牌时，对所有敌人造成 = 层数的伤害。
+    const fireBreathing = getPower(combat.playerPowers, "fire_breathing");
+    if (fireBreathing > 0) {
+      const drawnType = getCardDef(card.defId).type;
+      if (drawnType === "status" || drawnType === "curse") {
+        for (let i = 0; i < combat.enemies.length; i += 1) {
+          if (combat.enemies[i]!.hp > 0) {
+            dealDamageToEnemy(state, i, fireBreathing, []);
+          }
+        }
+      }
+    }
     if (combat.hand.length >= MAX_HAND_SIZE) {
       combat.discardPile.push(card); // 手牌满：抽到的牌直接进弃牌堆。
     } else {
       combat.hand.push(card);
+      // 无尽痛楚：抽到时结算 onDraw（如把一张自身副本加入手牌）。
+      const drawnDef = getCardDef(card.defId);
+      if (drawnDef.onDraw && drawnDef.onDraw.length > 0) {
+        applyEffects(state, drawnDef.onDraw, { side: "player" }, null);
+      }
+      // 机械降神：抽到即消耗自身（结算 onDraw 之后从手牌移除并进消耗堆）。
+      if (drawnDef.exhaustOnDraw) {
+        const at = combat.hand.indexOf(card);
+        if (at >= 0) {
+          combat.hand.splice(at, 1);
+          exhaustCard(state, card);
+        }
+      }
     }
     // 进化：抽到状态牌 → 额外抽 = 层数的牌（递归有牌堆张数上限，不会无限）。
     const evolve = getPower(combat.playerPowers, "evolve");
@@ -437,10 +483,12 @@ function applyEffect(
           // 敏锐：飞刀（shiv）额外 +层数伤害。
           const accuracyBonus =
             sourceCard?.defId === "shiv" ? getPower(combat.playerPowers, "accuracy") : 0;
+          // 幻杀：本回合攻击造成双倍伤害。
+          const phantasmalMult = getPower(combat.playerPowers, "phantasmal") > 0 ? 2 : 1;
           const unblocked = dealDamageToEnemy(
             state,
             targetEnemyIndex,
-            effect.amount + vigor + accuracyBonus,
+            (effect.amount + vigor + accuracyBonus) * phantasmalMult,
             powers,
             effect.strengthMultiplier,
           );
@@ -521,6 +569,10 @@ function applyEffect(
     case "gain_block": {
       // 获得的格挡按「获得方」的敏捷/脆弱修正。
       const gained = computeBlockGain(effect.amount, powers);
+      // 应急按钮：牌产生的格挡被抑制（本效果由牌结算，故直接跳过）。
+      if (actor.side === "player" && getPower(combat.playerPowers, "no_card_block") > 0) {
+        break;
+      }
       if (actor.side === "player") {
         combat.playerBlock += gained;
         // 主宰：每当玩家获得格挡，对随机敌人造成 = 层数的伤害。
@@ -1011,11 +1063,199 @@ function applyEffect(
       break;
     }
     case "add_random_card_free": {
-      // 白噪音 / 分心：将一张随机牌加入手牌，费用视为 0。
+      // 白噪音 / 分心 / 地狱之刃：将一张随机牌加入手牌，费用视为 0。
       if (actor.side === "player" && combat.hand.length < MAX_HAND_SIZE) {
-        const pool = effect.pool === "power" ? WHITE_NOISE_POOL : DISTRACTION_POOL;
+        const pool =
+          effect.pool === "power"
+            ? WHITE_NOISE_POOL
+            : effect.pool === "attack"
+              ? METAMORPH_POOL
+              : DISTRACTION_POOL;
         const id = pool[nextInt(state.rng, pool.length)]!;
         combat.hand.push({ uid: state.nextUid++, defId: id, upgraded: false, costZero: true });
+      }
+      break;
+    }
+    case "discard_hand_draw_same": {
+      // 精算赌注：弃掉整手，然后抽等量的牌。
+      if (actor.side === "player") {
+        const count = combat.hand.length;
+        const discarded = [...combat.hand];
+        combat.hand = [];
+        for (const card of discarded) {
+          discardFromHand(state, card);
+        }
+        drawCards(state, count);
+      }
+      break;
+    }
+    case "bonus_if_target_weak": {
+      // 勾拳：目标虚弱时，获得能量并抽牌。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        if (getPower(combat.enemies[targetEnemyIndex]!.powers, "weak") > 0) {
+          combat.energy += effect.energy;
+          drawCards(state, effect.draw);
+        }
+      }
+      break;
+    }
+    case "put_hand_card_on_draw_bottom_free": {
+      // 深谋：把一张手牌（自动取当前费用最高）置于抽牌堆底，本场费用视为 0。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let idx = 0;
+        let high = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > high) {
+            high = c;
+            idx = i;
+          }
+        }
+        const picked = combat.hand.splice(idx, 1)[0]!;
+        picked.costZero = true;
+        combat.drawPile.unshift(picked); // 底部 = 数组头（pop 从尾取）。
+      }
+      break;
+    }
+    case "draw_if_no_attacks": {
+      // 急躁：手牌中没有攻击牌时抽牌。
+      if (actor.side === "player") {
+        const hasAttack = combat.hand.some(card => getCardDef(card.defId).type === "attack");
+        if (!hasAttack) {
+          drawCards(state, effect.amount);
+        }
+      }
+      break;
+    }
+    case "exhaust_hand_up_to": {
+      // 净化：消耗手牌中至多 count 张（自动取费用最低的）。
+      if (actor.side === "player") {
+        const sorted = [...combat.hand].sort(
+          (a, b) =>
+            (costOf(getCardDef(a.defId), a.upgraded) ?? 99) -
+            (costOf(getCardDef(b.defId), b.upgraded) ?? 99),
+        );
+        const toExhaust = sorted.slice(0, effect.count);
+        for (const card of toExhaust) {
+          const at = combat.hand.indexOf(card);
+          if (at >= 0) {
+            combat.hand.splice(at, 1);
+            exhaustCard(state, card);
+          }
+        }
+      }
+      break;
+    }
+    case "exhaust_one_draw": {
+      // 焚誓：消耗一张手牌（自动取费用最低），然后抽 draw 张。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let idx = 0;
+        let low = 99;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 99;
+          if (c < low) {
+            low = c;
+            idx = i;
+          }
+        }
+        exhaustCard(state, combat.hand.splice(idx, 1)[0]!);
+        drawCards(state, effect.draw);
+      }
+      break;
+    }
+    case "copy_hand_card": {
+      // 双持：复制手牌中的一张攻击/能力牌（自动取费用最高）count 份加入手牌。
+      if (actor.side === "player") {
+        let idx = -1;
+        let high = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const t = getCardDef(combat.hand[i]!.defId).type;
+          if (t === "attack" || t === "power") {
+            const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+            if (c > high) {
+              high = c;
+              idx = i;
+            }
+          }
+        }
+        if (idx >= 0) {
+          const src = combat.hand[idx]!;
+          for (let n = 0; n < effect.count && combat.hand.length < MAX_HAND_SIZE; n += 1) {
+            combat.hand.push({ uid: state.nextUid++, defId: src.defId, upgraded: src.upgraded });
+          }
+        }
+      }
+      break;
+    }
+    case "gain_energy_if_last_attack": {
+      // 追击：若上一张打出的是攻击牌，获得能量。
+      if (actor.side === "player" && combat.lastCardType === "attack") {
+        combat.energy += effect.amount;
+      }
+      break;
+    }
+    case "return_from_discard": {
+      // 冥想：从弃牌堆取回一张牌到手牌（自动取最近弃掉的一张）。
+      if (
+        actor.side === "player" &&
+        combat.discardPile.length > 0 &&
+        combat.hand.length < MAX_HAND_SIZE
+      ) {
+        combat.hand.push(combat.discardPile.pop()!);
+      }
+      break;
+    }
+    case "gain_random_potion": {
+      // 炼金：把一瓶随机药水放入空药水槽（无空槽则作废）。
+      if (actor.side === "player") {
+        const slot = state.potions.indexOf(null);
+        if (slot >= 0) {
+          state.potions[slot] = ALCHEMIZE_POOL[nextInt(state.rng, ALCHEMIZE_POOL.length)]!;
+        }
+      }
+      break;
+    }
+    case "transmutation": {
+      // 嬗变：将 X 张随机无色牌加入手牌，费用视为 0。
+      if (actor.side === "player") {
+        for (let n = 0; n < xValue && combat.hand.length < MAX_HAND_SIZE; n += 1) {
+          const id = MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!;
+          combat.hand.push({ uid: state.nextUid++, defId: id, upgraded: false, costZero: true });
+        }
+      }
+      break;
+    }
+    case "upgrade_all_cards": {
+      // 神化：本场剩余时间内升级你所有的牌（就地升级各堆里的牌实例）。
+      if (actor.side === "player") {
+        for (const pile of [combat.hand, combat.drawPile, combat.discardPile, combat.exhaustPile]) {
+          for (const card of pile) {
+            card.upgraded = true;
+          }
+        }
+      }
+      break;
+    }
+    case "upgrade_hand_cards": {
+      // 军备：升级手牌——all 则全部，否则升级一张未升级的牌（自动取第一张）。
+      if (actor.side === "player") {
+        if (effect.all) {
+          for (const card of combat.hand) {
+            card.upgraded = true;
+          }
+        } else {
+          const target = combat.hand.find(card => !card.upgraded);
+          if (target) {
+            target.upgraded = true;
+          }
+        }
+      }
+      break;
+    }
+    case "schedule_bomb": {
+      // 炸弹：预约在若干回合后对所有敌人造成伤害。
+      if (actor.side === "player") {
+        combat.pendingBomb = { turns: effect.turns, damage: effect.damage };
       }
       break;
     }
@@ -1045,6 +1285,154 @@ function applyEffect(
         }
         combat.energy += evoked;
         drawCards(state, evoked);
+      }
+      break;
+    }
+    case "return_from_exhaust": {
+      // 掘尸：从消耗堆取回一张牌到手牌（自动取最近消耗的一张）。
+      if (
+        actor.side === "player" &&
+        combat.exhaustPile.length > 0 &&
+        combat.hand.length < MAX_HAND_SIZE
+      ) {
+        combat.hand.push(combat.exhaustPile.pop()!);
+      }
+      break;
+    }
+    case "conjure_blade": {
+      // 铸刃：将一张「湮灭之刃」加入手牌，其伤害随 X（消耗的能量）提升。
+      if (actor.side === "player" && combat.hand.length < MAX_HAND_SIZE) {
+        combat.hand.push({
+          uid: state.nextUid++,
+          defId: "expunger",
+          upgraded: false,
+          bonus: xValue * EXPUNGER_PER_CHARGE,
+        });
+      }
+      break;
+    }
+    case "lose_hp_per_hand_card": {
+      // 悔恨：失去 = 手牌张数的生命（无视格挡）。
+      if (actor.side === "player") {
+        state.hp = Math.max(0, state.hp - combat.hand.length);
+      }
+      break;
+    }
+    case "play_top_card_twice": {
+      // 全知：打出抽牌堆顶的牌两次（自动选目标），随后消耗。
+      if (actor.side === "player" && combat.drawPile.length > 0) {
+        const top = combat.drawPile.pop()!;
+        const topDef = getCardDef(top.defId);
+        let topTarget: number | null = null;
+        if (topDef.targeted) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length > 0) {
+            topTarget = living[nextInt(state.rng, living.length)]!.index;
+          }
+        }
+        for (let n = 0; n < 2; n += 1) {
+          applyEffects(
+            state,
+            effectsOf(topDef, top.upgraded),
+            { side: "player" },
+            topTarget,
+            0,
+            top,
+          );
+        }
+        exhaustCard(state, top);
+      }
+      break;
+    }
+    case "schedule_phantasmal": {
+      // 幻杀：预约下个回合的攻击双倍。
+      if (actor.side === "player") {
+        combat.nextTurnPhantasmal = true;
+      }
+      break;
+    }
+    case "return_zero_cost_from_discard": {
+      // 一心一意：把弃牌堆里所有 0 费牌收回手牌（含被疯狂/流水线变 0 的）。
+      if (actor.side === "player") {
+        const remaining: CardInstance[] = [];
+        for (const card of combat.discardPile) {
+          const zeroCost = card.costZero || costOf(getCardDef(card.defId), card.upgraded) === 0;
+          if (zeroCost && combat.hand.length < MAX_HAND_SIZE) {
+            combat.hand.push(card);
+          } else {
+            remaining.push(card);
+          }
+        }
+        combat.discardPile = remaining;
+      }
+      break;
+    }
+    case "put_hand_card_on_draw_free": {
+      // 布置：把一张手牌（自动取当前费用最高的一张）置于抽牌堆顶，本场费用视为 0。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let bestIdx = 0;
+        let bestCost = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > bestCost) {
+            bestCost = c;
+            bestIdx = i;
+          }
+        }
+        const picked = combat.hand.splice(bestIdx, 1)[0]!;
+        picked.costZero = true;
+        combat.drawPile.push(picked);
+      }
+      break;
+    }
+    case "scrape_draw": {
+      // 削刮：抽 count 张，随后把其中费用 >0 的弃掉（仅留 0 费）。
+      if (actor.side === "player") {
+        const before = new Set(combat.hand.map(card => card.uid));
+        drawCards(state, effect.count);
+        const keep: CardInstance[] = [];
+        for (const card of combat.hand) {
+          const isNew = !before.has(card.uid);
+          const zeroCost = card.costZero || costOf(getCardDef(card.defId), card.upgraded) === 0;
+          if (isNew && !zeroCost) {
+            combat.discardPile.push(card);
+          } else {
+            keep.push(card);
+          }
+        }
+        combat.hand = keep;
+      }
+      break;
+    }
+    case "schedule_card_copies": {
+      // 噩梦：把一张手牌（自动取当前费用最高）预约到下回合加 count 张副本。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let bestIdx = 0;
+        let bestCost = -1;
+        for (let i = 0; i < combat.hand.length; i += 1) {
+          const c = costOf(getCardDef(combat.hand[i]!.defId), combat.hand[i]!.upgraded) ?? 0;
+          if (c > bestCost) {
+            bestCost = c;
+            bestIdx = i;
+          }
+        }
+        combat.nightmarePending = { cardId: combat.hand[bestIdx]!.defId, count: effect.count };
+      }
+      break;
+    }
+    case "schedule_extra_turn": {
+      // 宝库：预约一个额外回合（结束回合后跳过敌人行动）。
+      if (actor.side === "player") {
+        combat.extraTurnPending = true;
+      }
+      break;
+    }
+    case "collect_charge": {
+      // 采集：接下来 X 个回合各得一张 0 费「洞悉」（记为 collect 层数，回合始消耗一层）。
+      if (actor.side === "player") {
+        addPower(combat.playerPowers, "collect", xValue);
       }
       break;
     }
@@ -1101,6 +1489,26 @@ function applyEffect(
           if (combat.enemies[i]!.hp > 0) {
             dealDamageToEnemy(state, i, dmg, powers);
           }
+        }
+      }
+      break;
+    }
+    case "deal_damage_random_per_lightning_channeled": {
+      // 雷霆一击：对随机存活敌人造成 amount，重复 = 本场充能闪电数。
+      if (actor.side === "player") {
+        for (let n = 0; n < combat.lightningChanneledThisCombat; n += 1) {
+          const living = combat.enemies
+            .map((enemy, index) => ({ enemy, index }))
+            .filter(entry => entry.enemy.hp > 0);
+          if (living.length === 0) {
+            break;
+          }
+          dealDamageToEnemy(
+            state,
+            living[nextInt(state.rng, living.length)]!.index,
+            effect.amount,
+            powers,
+          );
         }
       }
       break;
@@ -1953,11 +2361,19 @@ function dealOrbDamage(state: GameState, amount: number): void {
   if (living.length === 0) {
     return;
   }
-  const pick = living[nextInt(state.rng, living.length)]!.index;
   // 靶心：带锁定的敌人受到闪电/暗球伤害 ×1.5。
-  const lockOn = getPower(combat.enemies[pick]!.powers, "lock_on");
-  const finalAmount = lockOn > 0 ? Math.floor(amount * 1.5) : amount;
-  dealDamageToEnemy(state, pick, finalAmount, []);
+  const hit = (index: number): void => {
+    const lockOn = getPower(combat.enemies[index]!.powers, "lock_on");
+    dealDamageToEnemy(state, index, lockOn > 0 ? Math.floor(amount * 1.5) : amount, []);
+  };
+  // 电动力学：球伤害命中所有存活敌人；否则随机一名。
+  if (getPower(combat.playerPowers, "electrodynamics") > 0) {
+    for (const entry of living) {
+      hit(entry.index);
+    }
+  } else {
+    hit(living[nextInt(state.rng, living.length)]!.index);
+  }
 }
 
 /** 充能一颗球：球槽满则先唤醒最左侧的球，再把新球放到末位（机器人）。 */
@@ -1973,6 +2389,9 @@ function channelOrb(state: GameState, type: OrbType): void {
   combat.orbs.push(type === "dark" ? { type, value: 0 } : { type });
   if (type === "frost") {
     combat.frostChanneledThisCombat += 1; // 暴风雪按本场充能冰霜数结算。
+  }
+  if (type === "lightning") {
+    combat.lightningChanneledThisCombat += 1; // 雷霆一击按本场充能闪电数结算。
   }
 }
 
@@ -2060,6 +2479,10 @@ export function playCard(
   if (def.type === "attack" && getPower(combat.playerPowers, "entangled") > 0) {
     return { ok: false, reason: "你被缠绕了，本回合无法打出攻击牌。" };
   }
+  // 常态（诅咒）：手牌里有常态时，本回合最多打出 3 张牌。
+  if (combat.cardsPlayedThisTurn >= 3 && combat.hand.some(card => card.defId === "normality")) {
+    return { ok: false, reason: "常态诅咒让你本回合无法再打出牌了。" };
+  }
   const rawCost = costOf(def, instance.upgraded);
   if (rawCost === null) {
     return { ok: false, reason: `「${def.name}」无法打出。` };
@@ -2120,6 +2543,10 @@ export function playCard(
   combat.hand.splice(handIndex, 1);
   // 出牌计数（超光速见「本张已计入」故先增；华彩每 5 张触发靠它）。回合始清零。
   combat.cardsPlayedThisTurn += 1;
+  // 爆发/增幅/回响：记下结算前的层数，避免施加这些效果的牌把自己也翻倍。
+  const burstBefore = getPower(combat.playerPowers, "burst");
+  const amplifyBefore = getPower(combat.playerPowers, "amplify");
+  const echoBefore = getPower(combat.playerPowers, "echo_form");
   applyEffects(
     state,
     effectsOf(def, instance.upgraded),
@@ -2128,6 +2555,41 @@ export function playCard(
     xValue,
     instance,
   );
+  // 爆发：接下来的技能各额外结算一次（消耗 1 层）；不作用于施加爆发的这张牌本身。
+  if (def.type === "skill" && burstBefore > 0) {
+    addPower(combat.playerPowers, "burst", -1);
+    applyEffects(
+      state,
+      effectsOf(def, instance.upgraded),
+      { side: "player" },
+      resolvedTarget,
+      xValue,
+      instance,
+    );
+  }
+  // 增幅：接下来的能力牌各额外结算一次（消耗 1 层）；不作用于施加增幅的这张牌本身。
+  if (def.type === "power" && amplifyBefore > 0) {
+    addPower(combat.playerPowers, "amplify", -1);
+    applyEffects(
+      state,
+      effectsOf(def, instance.upgraded),
+      { side: "player" },
+      resolvedTarget,
+      xValue,
+      instance,
+    );
+  }
+  // 回响形态：每回合你打出的第一张牌额外结算一次；不作用于施加回响的这张牌本身。
+  if (echoBefore > 0 && combat.cardsPlayedThisTurn === 1) {
+    applyEffects(
+      state,
+      effectsOf(def, instance.upgraded),
+      { side: "player" },
+      resolvedTarget,
+      xValue,
+      instance,
+    );
+  }
   // 连击：接下来的攻击各额外结算一次（消耗 1 层）。
   if (def.type === "attack" && getPower(combat.playerPowers, "double_tap") > 0) {
     addPower(combat.playerPowers, "double_tap", -1);
@@ -2290,8 +2752,15 @@ export function endTurn(state: GameState): void {
   }
   // 收集手牌里「回合末在手」的效果（诅咒腐朽自伤、疑虑虚弱、羞愧脆弱等）；
   // 在玩家 debuff 衰减之后再结算，避免本回合刚施加的虚弱/脆弱立刻被衰减掉。
-  const endOfHandEffects = combat.hand.flatMap(
-    instance => getCardDef(instance.defId).endOfTurnInHand ?? [],
+  // 悔恨等「按手牌张数」的效果在此刻（手牌还完整时）把张数固化，避免清手后读到 0。
+  const handSizeAtTurnEnd = combat.hand.length;
+  const endOfHandEffects = combat.hand.flatMap(instance =>
+    (getCardDef(instance.defId).endOfTurnInHand ?? []).map(
+      (candidate): Effect =>
+        candidate.kind === "lose_hp_per_hand_card"
+          ? { kind: "lose_hp", amount: handSizeAtTurnEnd }
+          : candidate,
+    ),
   );
   if (state.hp <= 0) {
     state.screen = "gameover";
@@ -2328,6 +2797,27 @@ export function endTurn(state: GameState): void {
   for (const enemy of combat.enemies) {
     if (getPower(enemy.powers, "choked") > 0) {
       removePower(enemy.powers, "choked");
+    }
+  }
+  // 幻杀「本回合」限定：回合结束清除双倍。
+  if (getPower(combat.playerPowers, "phantasmal") > 0) {
+    removePower(combat.playerPowers, "phantasmal");
+  }
+  // 应急按钮：无法从牌获得格挡的剩余回合数每回合末 -1。
+  if (getPower(combat.playerPowers, "no_card_block") > 0) {
+    addPower(combat.playerPowers, "no_card_block", -1);
+  }
+  // 炸弹：回合结束倒计时，归零时对所有敌人造成伤害。
+  if (combat.pendingBomb) {
+    combat.pendingBomb.turns -= 1;
+    if (combat.pendingBomb.turns <= 0) {
+      const dmg = combat.pendingBomb.damage;
+      combat.pendingBomb = null;
+      for (let i = 0; i < combat.enemies.length; i += 1) {
+        if (combat.enemies[i]!.hp > 0) {
+          dealDamageToEnemy(state, i, dmg, []);
+        }
+      }
     }
   }
   // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
@@ -2371,6 +2861,11 @@ export function endTurn(state: GameState): void {
       null,
     );
   }
+  // 静如止水：回合结束时若处于平静姿态，获得 = 层数的格挡。
+  const likeWater = getPower(combat.playerPowers, "like_water");
+  if (likeWater > 0 && combat.playerStance === "calm") {
+    combat.playerBlock += likeWater;
+  }
   // 神性姿态（观者）：回合结束退出（回到无姿态）。
   if (combat.playerStance === "divinity") {
     combat.playerStance = "none";
@@ -2407,8 +2902,14 @@ export function endTurn(state: GameState): void {
     }
   }
 
+  // 宝库：若预约了额外回合，则本次跳过敌人行动（敌人数封顶为 0），随后直接进入新的玩家回合。
+  const skipEnemies = combat.extraTurnPending;
+  if (skipEnemies) {
+    combat.extraTurnPending = false;
+    state.log.push("你获得了一个额外回合。");
+  }
   // 敌人回合。用回合开始时的敌人数封顶，分裂新生的敌人本回合不行动。
-  const enemyCount = combat.enemies.length;
+  const enemyCount = skipEnemies ? 0 : combat.enemies.length;
   for (let i = 0; i < enemyCount; i += 1) {
     const enemy = combat.enemies[i]!;
     if (enemy.hp <= 0 || enemy.escaped) {
@@ -2479,6 +2980,16 @@ export function endTurn(state: GameState): void {
   // 火焰屏障「本回合」限定：作用到敌人回合结束（覆盖被攻击反弹），新玩家回合开始清除。
   if (getPower(combat.playerPowers, "flame_barrier") > 0) {
     removePower(combat.playerPowers, "flame_barrier");
+  }
+  // 幻杀：预约兑现——本回合攻击双倍。
+  if (combat.nextTurnPhantasmal) {
+    combat.nextTurnPhantasmal = false;
+    addPower(combat.playerPowers, "phantasmal", 1);
+  }
+  // 噩梦：预约兑现——把牌副本加入手牌。
+  if (combat.nightmarePending) {
+    addCards(state, combat.nightmarePending.cardId, "hand", combat.nightmarePending.count);
+    combat.nightmarePending = null;
   }
   // 亵渎：预约的死亡在新回合兑现。
   if (combat.doomedNextTurn) {
@@ -2616,6 +3127,49 @@ export function endTurn(state: GameState): void {
   const magnetism = getPower(combat.playerPowers, "magnetism");
   for (let n = 0; n < magnetism; n += 1) {
     addCards(state, MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!, "hand", 1);
+  }
+  // 采集：接下来若干回合各将一张 0 费「洞悉」加入手牌，每回合消耗一层。
+  if (getPower(combat.playerPowers, "collect") > 0) {
+    const insight: CardInstance = {
+      uid: state.nextUid++,
+      defId: "insight",
+      upgraded: false,
+      costZero: true,
+    };
+    if (combat.hand.length < MAX_HAND_SIZE) {
+      combat.hand.push(insight);
+    } else {
+      combat.discardPile.push(insight);
+    }
+    addPower(combat.playerPowers, "collect", -1);
+  }
+  // 混乱：每回合开始，打出抽牌堆顶 = 层数张牌（免费结算，随后按类型正常入堆）。
+  const mayhem = getPower(combat.playerPowers, "mayhem");
+  for (let n = 0; n < mayhem && combat.drawPile.length > 0; n += 1) {
+    const top = combat.drawPile.pop()!;
+    const topDef = getCardDef(top.defId);
+    let mayhemTarget: number | null = null;
+    if (topDef.targeted) {
+      const living = combat.enemies
+        .map((enemy, index) => ({ enemy, index }))
+        .filter(entry => entry.enemy.hp > 0);
+      if (living.length > 0) {
+        mayhemTarget = living[nextInt(state.rng, living.length)]!.index;
+      }
+    }
+    applyEffects(state, effectsOf(topDef, top.upgraded), { side: "player" }, mayhemTarget, 0, top);
+    if (topDef.type === "power") {
+      // 能力牌打出后离场。
+    } else if (topDef.exhausts) {
+      exhaustCard(state, top);
+    } else {
+      combat.discardPile.push(top);
+    }
+  }
+  // 创意 AI：每回合开始，将 = 层数张随机能力牌加入手牌。
+  const creativeAi = getPower(combat.playerPowers, "creative_ai");
+  for (let n = 0; n < creativeAi; n += 1) {
+    addCards(state, WHITE_NOISE_POOL[nextInt(state.rng, WHITE_NOISE_POOL.length)]!, "hand", 1);
   }
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }

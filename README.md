@@ -25,9 +25,9 @@ Apps (`apps/*`, standalone processes):
 - `apps/agent`: Fastify backend service (`@kagami/agent`) — the Agent runtime and its live-memory interfaces
 - `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/persistence` shared DAOs against the same SQLite database)
 - `apps/web`: React frontend admin console (`@kagami/web`)
-- `apps/gateway`: front-door gateway process (`@kagami/gateway`, standalone with zero `@kagami/*` dependencies; serves the `apps/web/dist` static assets and reverse-proxies `/api/*` to console/agent, `/auth/*` to llm, `/metric-chart` and `/observability` to metric)
+- `apps/gateway`: front-door gateway process (`@kagami/gateway`, standalone with zero `@kagami/*` dependencies; serves the `apps/web/dist` static assets and reverse-proxies `/api/*` to console/agent, `/auth/*` to llm, `/metric-chart` to metric)
 - `apps/llm`: LLM gateway + OAuth credential-center process (`@kagami/llm-service`, localhost only; owns all providers + the OAuth callback server + refresh timers, writes `llm_chat_call` / `embedding_cache`; the agent connects over HTTP)
-- `apps/metric`: standalone metric-domain process (`@kagami/metric`, owns metric ingestion `POST /metric/record` — the agent reports over HTTP — plus the metric-chart query endpoints and the `/observability/*` LLM-observatory queries that aggregate `llm_chat_call` directly; reads/writes the same SQLite via `@kagami/persistence` shared DAOs, localhost only)
+- `apps/metric`: standalone metric-domain process (`@kagami/metric`, owns both metric ingestion `POST /metric/record` — the agent reports over HTTP — and the metric-chart query endpoints; reads/writes the same SQLite via `@kagami/persistence` shared DAOs, localhost only)
 - `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone Fastify process; routes go through the `@kagami/oss-api` contract, depends on `@kagami/config` / `@kagami/http` / `@kagami/kernel`)
 - `apps/browser`: standalone browser process (`@kagami/browser`, kernel/http/persistence-based Fastify, localhost-only; owns CloakBrowser and credential injection, driven by the agent over HTTP so an agent restart no longer kills the browser)
 - `apps/spire`: Slay-the-Spire-style card-game engine process (`@kagami/spire-service`, Fastify, localhost only; a pure game engine with JSON save files that never touches the shared SQLite; the agent drives it over HTTP so an agent restart does not interrupt a run)
@@ -58,7 +58,7 @@ apps/
   web/      React admin console
   gateway/  Front-door gateway (static assets + reverse proxy)
   llm/      LLM gateway + OAuth credential center (standalone process)
-  metric/   Metric ingestion + metric-chart queries + LLM observatory queries (standalone process)
+  metric/   Metric ingestion + metric-chart queries (standalone process)
   oss/      Self-hosted content-addressed object storage (standalone process)
   browser/  CloakBrowser host (standalone process)
   spire/    Slay-the-Spire-style card-game engine (standalone process)
@@ -178,7 +178,6 @@ Main endpoint groups:
 - `/main-agent-context/recent`
 - `/main-agent-context/compact`
 - `/metric-chart/*`
-- `/observability/llm/*`
 - `/scheduler/*`
 
 ### Frontend
@@ -196,7 +195,6 @@ The frontend is a React admin console used to observe the Agent's "life state" (
 - `/app-log-history`
 - `/napcat-event-history`
 - `/napcat-group-message-history`
-- `/observatory`
 - `/metric-charts`
 
 Notes:
@@ -223,7 +221,7 @@ Notes:
 - The admin-console backend `kagami-console` runs `apps/console/dist/index.js` and listens on `20006` by default.
 - The gateway service `kagami-gateway` runs `apps/gateway/dist/index.js` and listens on `20004` by default.
 - The LLM service `kagami-llm` runs `apps/llm/dist/index.js` and listens on `20009` by default (localhost only); it owns the providers + OAuth callback server + refresh timers, and the gateway routes `/auth/*` to it.
-- The metric service `kagami-metric` runs `apps/metric/dist/index.js` and listens on `20010` by default (localhost only); it owns metric ingestion (`POST /metric/record`, the agent reports fire-and-forget over HTTP) plus the metric-chart query endpoints and the `/observability/*` LLM-observatory queries, which the gateway routes to it.
+- The metric service `kagami-metric` runs `apps/metric/dist/index.js` and listens on `20010` by default (localhost only); it owns metric ingestion (`POST /metric/record`, the agent reports fire-and-forget over HTTP) plus the metric-chart query endpoints, which the gateway routes to it.
 - The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
 - The browser service `kagami-browser` runs `apps/browser/dist/index.js` and listens on `20007` by default (localhost only); it owns CloakBrowser so an agent restart does not kill the browser. `app:deploy agent` does not touch it (see issue #173).
 - The Spire service `kagami-spire` runs `apps/spire/dist/index.js` and listens on `20011` by default (localhost only); it owns the card-game engine and JSON save files under `data/spire/`, so an agent restart does not interrupt a run. `app:deploy agent` does not touch it (see issue #234).

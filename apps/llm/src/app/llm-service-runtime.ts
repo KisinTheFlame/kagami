@@ -23,6 +23,7 @@ import {
 } from "@kagami/llm-client";
 import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/embedding";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
+import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
@@ -52,6 +53,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   const authModule = await createAuthModule({ database, configManager });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
+  const claudeFileCacheDao = new PrismaClaudeFileCacheDao({ database });
 
   // auth service（OAuthAuthService）的 getAuth/hasCredentials 与 token 形态跟 llm-client 的凭据
   // 端口逐字段一致，直接作为 authStore 注入 provider 工厂（结构化满足接口）。
@@ -80,6 +82,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     "claude-code": createClaudeCodeProvider({
       config: claudeCodeConfig,
       authStore: claudeCodeAuthStore,
+      fileCacheDao: claudeFileCacheDao,
     }),
   };
 

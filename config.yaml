@@ -16,6 +16,7 @@ services:
   metric: { host: 127.0.0.1, port: 20010 } # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
   spire: { host: 127.0.0.1, port: 20011 } # kagami-spire（杀塔式卡牌游戏引擎，仅 localhost：agent 经 HttpSpireClient 驱动）
   napcat: { host: 127.0.0.1, port: 20013 } # kagami-napcat（NapCat 接入独立进程，仅 localhost：agent 经 HttpNapcatClient 出站 + SSE 订阅入站；#347。20012 留给像素画 #365）
+  pixel: { host: 127.0.0.1, port: 20012 } # kagami-pixel（像素画服务，仅 localhost：agent 经 HttpPixelClient 驱动）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
@@ -92,6 +93,10 @@ server:
           - claude-sonnet-4-6
           - claude-haiku-4-5
         keepAliveReplayIntervalMinutes: 30
+        # 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
+        # 依赖 OAuth scope 含 user:file_upload——加此 scope 后须重新登录 claude-code。
+        # 关掉即回退全 base64。
+        useFileApi: true
     usages:
       agent:
         attempts:

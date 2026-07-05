@@ -12,8 +12,18 @@ const CLAUDE_CODE_BILLING_HEADER =
 const DEFAULT_MAX_TOKENS = 4096;
 const CLAUDE_4_MAX_TOKENS = 32000;
 
-/** LlmChatRequest → Anthropic Messages 请求体（含 system 前缀块 / thinking / 工具映射）。 */
-export function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageRequestBody {
+/**
+ * LlmChatRequest → Anthropic Messages 请求体（含 system 前缀块 / thinking / 工具映射）。
+ *
+ * imageFileIds：图片 base64 内容 → 已上传的 Files API file_id 映射（key 为 `part.content`
+ * 原样，即裸 base64）。命中的图片发 `source:{type:"file",file_id}`（几十字节，请求体不再随
+ * 图片膨胀）；未命中（关闭 File API / 上传失败降级 / 非 claude-code）回退 `source:{type:"base64"}`。
+ * 不传该参数时全部走 base64——与 File API 引入前逐字节一致，钉死旧行为的黑盒测试不受影响。
+ */
+export function toClaudeCodeRequestBody(
+  request: LlmChatRequest,
+  imageFileIds?: Map<string, string>,
+): ClaudeMessageRequestBody {
   const model = requireRequestModel(request);
   const toolsEnabled = request.tools.length > 0 && request.toolChoice !== "none";
   const toolChoice = toClaudeToolChoice(request.toolChoice);
@@ -35,7 +45,7 @@ export function toClaudeCodeRequestBody(request: LlmChatRequest): ClaudeMessageR
             content:
               typeof message.content === "string"
                 ? [{ type: "text", text: message.content }]
-                : message.content.map(toClaudeUserContentPart),
+                : message.content.map(part => toClaudeUserContentPart(part, imageFileIds)),
           },
         ];
       }
@@ -121,11 +131,27 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
   return blocks;
 }
 
-function toClaudeUserContentPart(part: LlmContentPart): Record<string, unknown> {
+function toClaudeUserContentPart(
+  part: LlmContentPart,
+  imageFileIds?: Map<string, string>,
+): Record<string, unknown> {
   if (part.type === "text") {
     return {
       type: "text",
       text: part.text,
+    };
+  }
+
+  // File API 命中：以 file_id 引用，请求体不再携带 base64。key 用 part.content 原样
+  // （裸 base64），与 provider 侧预解析写入的 key 一致，builder 无需再解码/哈希。
+  const fileId = imageFileIds?.get(part.content);
+  if (fileId !== undefined) {
+    return {
+      type: "image",
+      source: {
+        type: "file",
+        file_id: fileId,
+      },
     };
   }
 

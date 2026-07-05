@@ -114,5 +114,18 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // 像素画服务：独立 PM2 生命周期，agent 重启不丢画布。cwd 固定仓库根，
+      // 让存档 data/pixel/ 落在仓库根 data/ 下，画布跨 agent / 本进程重启留存。
+      name: "kagami-pixel",
+      cwd: __dirname,
+      script: "apps/pixel/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };

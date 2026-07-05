@@ -36,10 +36,7 @@ import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
-import {
-  createInnerVoiceInstructionMessage,
-  createRootContextSummaryReminderMessage,
-} from "../agent/runtime/context/context-message-factory.js";
+import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
 import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
 import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
 import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
@@ -52,11 +49,8 @@ import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-age
 import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
 import { TodoSuggestionTaskAgent } from "../agent/capabilities/todo/task-agent/todo-suggestion-task-agent.js";
 import { ProposeTodosTool } from "../agent/capabilities/todo/task-agent/tools/propose-todos.tool.js";
-import {
-  EmitInnerThoughtTool,
-  EMIT_INNER_THOUGHT_TOOL_NAME,
-} from "../agent/capabilities/inner-voice/tools/emit-inner-thought.tool.js";
-import { InnerVoiceOperation } from "../agent/capabilities/inner-voice/operations/inner-voice.operation.js";
+import { EmitInnerThoughtTool } from "../agent/capabilities/inner-voice/tools/emit-inner-thought.tool.js";
+import { InnerVoiceTaskAgent } from "../agent/capabilities/inner-voice/task-agent/inner-voice-task-agent.js";
 import { InnerVoiceIdleTracker } from "../agent/capabilities/inner-voice/domain/idle-tracker.js";
 import { collectInnerVoiceIdleSignals } from "../agent/capabilities/inner-voice/domain/ledger-idle-signals.js";
 import { InnerVoiceExtension } from "../agent/runtime/root-agent/extensions/inner-voice.extension.js";
@@ -68,6 +62,8 @@ import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import type { BrowserClient } from "../acl/browser-client.js";
 import { SpireApp } from "../agent/apps/spire/spire.app.js";
 import type { SpireClient } from "../acl/spire-client.js";
+import { PixelApp } from "../agent/apps/pixel/pixel.app.js";
+import type { PixelClient } from "../acl/pixel-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -107,6 +103,8 @@ type BuildAgentRuntimeInput = {
   browserClient: BrowserClient;
   /** 尖塔游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */
   spireClient: SpireClient;
+  /** 像素画动作客户端：打到独立的 kagami-pixel 进程（issue #365）。 */
+  pixelClient: PixelClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -176,6 +174,7 @@ export async function buildAgentRuntime({
   ossClient,
   browserClient,
   spireClient,
+  pixelClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -287,6 +286,7 @@ export async function buildAgentRuntime({
   appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(new SpireApp({ spireClient }));
+  appManager.register(new PixelApp({ pixelClient, ossClient }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 
@@ -420,19 +420,30 @@ export async function buildAgentRuntime({
     llmClient,
     taskTools: todoAgentTools,
   });
-  // 内心独白（issue #265）：摸鱼判定 tracker + 隔离 Operation + loop extension。
-  // emit_inner_thought 只作为 Operation 的结构化出口，走独立的一元 catalog，
-  // 绝不进主 Agent 顶层工具集（mainTopLevelTools），前缀零污染。
-  const innerVoiceEmitTools = new ToolCatalog([new EmitInnerThoughtTool()]);
+  // 内心独白（issue #265 / #410）：摸鱼判定 tracker + 镜像装配 TaskAgent + loop
+  // extension。与 web-search / summary / todo 同一套镜像装配，invoke 只挂
+  // emit_inner_thought 终止子工具，其余顶层工具 OutOfScope 软拒绝——请求前缀与主
+  // Agent 字节相等，命中 Anthropic prompt cache。
   const innerVoiceIdleTracker = new InnerVoiceIdleTracker();
-  const innerVoiceOperation = new InnerVoiceOperation({
+  const innerVoiceInvokeTool = new InvokeTool({
+    owners: [createUnguardedSubtoolOwner({ tools: [new EmitInnerThoughtTool()] })],
+  });
+  const innerVoiceAgentTools = createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: innerVoiceInvokeTool,
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]:
+        '在内心独白子任务中不可调用 switch。请用 invoke(tool="emit_inner_thought", thought=...) 提交念头。',
+    },
+    defaultReason: toolName => `在内心独白子任务中不可调用 ${toolName}。`,
+  });
+  const innerVoiceTaskAgent = new InnerVoiceTaskAgent({
     llmClient,
-    emitToolExecutor: innerVoiceEmitTools.pick([EMIT_INNER_THOUGHT_TOOL_NAME]),
-    instructionMessageFactory: createInnerVoiceInstructionMessage,
+    taskTools: innerVoiceAgentTools,
   });
   const innerVoiceExtension = new InnerVoiceExtension({
     tracker: innerVoiceIdleTracker,
-    operation: innerVoiceOperation,
+    taskAgent: innerVoiceTaskAgent,
     eventQueue,
     metricService,
     innerThoughtDao: new PrismaInnerThoughtDao({ database }),

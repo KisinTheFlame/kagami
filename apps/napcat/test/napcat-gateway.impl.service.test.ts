@@ -977,6 +977,7 @@ describe("DefaultNapcatGatewayService", () => {
     expect(sentPayload.action).toBe("get_group_msg_history");
     expect(sentPayload.params).toEqual({
       group_id: "987654",
+      message_seq: 0,
       count: 2,
     });
 

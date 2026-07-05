@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { getLlmProviderFailureContext } from "../src/provider.js";
 import type { ClaudeCodeAuth, ClaudeCodeAuthProvider } from "../src/providers/claude-code-auth.js";
 import { createClaudeCodeProvider } from "../src/providers/claude-code-provider.js";
+import type { ClaudeFileCacheDao } from "../src/providers/claude-file-cache.dao.js";
 
 // 测试内桩：真正的 ClaudeCodeAuthStore 适配器已随 llm-client/auth 边界移到 agent 装配层，
 // 它只对 provider 暴露 ClaudeCodeAuthProvider 接口。此处复刻其「包住一个 auth service」的形态，
@@ -178,18 +179,23 @@ function createProviderConfig(
     models: string[];
     timeoutMs: number;
     keepAliveReplayIntervalMinutes: number;
+    useFileApi: boolean;
   }> = {},
 ): {
   baseUrl: string;
   models: string[];
   timeoutMs: number;
   keepAliveReplayIntervalMinutes: number;
+  useFileApi: boolean;
 } {
   return {
     baseUrl: "https://api.anthropic.com",
     models: ["claude-sonnet-4-6"],
     timeoutMs: 5_000,
     keepAliveReplayIntervalMinutes: 30,
+    // 现有黑盒测试都发文本、且不注入 fileCacheDao → File API 分支短路，逐字节走 base64 旧路。
+    // 默认对齐生产（true）；图片相关行为由文件末尾的 File API 专项 describe 覆盖。
+    useFileApi: true,
     ...overrides,
   };
 }
@@ -1056,5 +1062,215 @@ describe("createClaudeCodeProvider", () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createClaudeCodeProvider · 图片 File API", () => {
+  const IMAGE_B64 = Buffer.from("fake-png-bytes").toString("base64");
+  const IMAGE_SIZE = Buffer.from(IMAGE_B64, "base64").byteLength;
+
+  function imageRequest() {
+    return {
+      messages: [
+        {
+          role: "user" as const,
+          content: [{ type: "image" as const, content: IMAGE_B64, mimeType: "image/png" }],
+        },
+      ],
+      tools: [],
+      toolChoice: "auto" as const,
+      model: "claude-sonnet-4-6",
+    };
+  }
+
+  function createFileCacheDao(record: {
+    findByHash?: Mock;
+    save?: Mock;
+  }): ClaudeFileCacheDao & { findByHash: Mock; save: Mock } {
+    const findByHash = record.findByHash ?? vi.fn().mockResolvedValue(null);
+    const save = record.save ?? vi.fn().mockResolvedValue(undefined);
+    return { findByHash, save };
+  }
+
+  /** 路由 /v1/files（上传）与 /v1/messages（SSE）。filesStatus!=200 时模拟上传失败。 */
+  function stubRoutedFetch(input: { fileId?: string; filesStatus?: number }): Mock {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url).includes("/v1/files")) {
+        const status = input.filesStatus ?? 200;
+        if (status !== 200) {
+          return new Response("upload rejected", { status });
+        }
+        return new Response(JSON.stringify({ id: input.fileId ?? "file_uploaded" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(createTextMessageSse({ model: "claude-sonnet-4-6", text: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function imageSourceFromMessagesCall(fetchMock: Mock): Record<string, unknown> {
+    for (const call of fetchMock.mock.calls) {
+      if (!String(call[0]).includes("/v1/messages")) {
+        continue;
+      }
+      const body = JSON.parse((call[1] as { body: string }).body) as {
+        messages: Array<{ content: Array<{ type: string; source?: Record<string, unknown> }> }>;
+      };
+      const imagePart = body.messages
+        .flatMap(message => message.content)
+        .find(part => part.type === "image");
+      if (!imagePart?.source) {
+        throw new Error("no image part in /v1/messages body");
+      }
+      return imagePart.source;
+    }
+    throw new Error("no /v1/messages call captured");
+  }
+
+  it("缓存命中：以 file_id 引用，不上传、不写缓存", async () => {
+    const findByHash = vi.fn().mockResolvedValue({
+      contentSha256: "sha",
+      fileId: "file_cached",
+      mimeType: "image/png",
+      sizeBytes: IMAGE_SIZE,
+    });
+    const save = vi.fn();
+    const fileCacheDao = createFileCacheDao({ findByHash, save });
+    const fetchMock = stubRoutedFetch({});
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig(),
+      authStore: createAuthStore(),
+      fileCacheDao,
+    });
+
+    await provider.chat(imageRequest());
+
+    expect(imageSourceFromMessagesCall(fetchMock)).toEqual({
+      type: "file",
+      file_id: "file_cached",
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/v1/files"))).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("缓存未命中：上传一次、写缓存、以 file_id 引用", async () => {
+    const findByHash = vi.fn().mockResolvedValue(null);
+    const save = vi.fn().mockResolvedValue(undefined);
+    const fileCacheDao = createFileCacheDao({ findByHash, save });
+    const fetchMock = stubRoutedFetch({ fileId: "file_new" });
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig(),
+      authStore: createAuthStore(),
+      fileCacheDao,
+    });
+
+    await provider.chat(imageRequest());
+
+    const filesCalls = fetchMock.mock.calls.filter(call => String(call[0]).includes("/v1/files"));
+    expect(filesCalls).toHaveLength(1);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: "file_new",
+        mimeType: "image/png",
+        sizeBytes: IMAGE_SIZE,
+      }),
+    );
+    expect(imageSourceFromMessagesCall(fetchMock)).toEqual({
+      type: "file",
+      file_id: "file_new",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("上传失败：该图回退 base64 内联，请求仍成功", async () => {
+    const fileCacheDao = createFileCacheDao({});
+    const fetchMock = stubRoutedFetch({ filesStatus: 403 });
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig(),
+      authStore: createAuthStore(),
+      fileCacheDao,
+    });
+
+    await expect(provider.chat(imageRequest())).resolves.toMatchObject({
+      response: { provider: "claude-code" },
+    });
+
+    expect(imageSourceFromMessagesCall(fetchMock)).toEqual({
+      type: "base64",
+      media_type: "image/png",
+      data: IMAGE_B64,
+    });
+    expect(fileCacheDao.save).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("0 字节坏图：绝不上传/写缓存，回退 base64", async () => {
+    const fileCacheDao = createFileCacheDao({});
+    const fetchMock = stubRoutedFetch({});
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig(),
+      authStore: createAuthStore(),
+      fileCacheDao,
+    });
+
+    await provider.chat({
+      messages: [
+        {
+          role: "user" as const,
+          content: [{ type: "image" as const, content: "", mimeType: "image/png" }],
+        },
+      ],
+      tools: [],
+      toolChoice: "auto" as const,
+      model: "claude-sonnet-4-6",
+    });
+
+    expect(imageSourceFromMessagesCall(fetchMock)).toEqual({
+      type: "base64",
+      media_type: "image/png",
+      data: "",
+    });
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/v1/files"))).toBe(false);
+    expect(fileCacheDao.save).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("useFileApi=false：全走 base64，不查缓存、不上传", async () => {
+    const fileCacheDao = createFileCacheDao({});
+    const fetchMock = stubRoutedFetch({});
+
+    const provider = createClaudeCodeProvider({
+      config: createProviderConfig({ useFileApi: false }),
+      authStore: createAuthStore(),
+      fileCacheDao,
+    });
+
+    await provider.chat(imageRequest());
+
+    expect(imageSourceFromMessagesCall(fetchMock)).toEqual({
+      type: "base64",
+      media_type: "image/png",
+      data: IMAGE_B64,
+    });
+    expect(fileCacheDao.findByHash).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/v1/files"))).toBe(false);
+
+    vi.unstubAllGlobals();
   });
 });

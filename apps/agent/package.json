@@ -24,6 +24,7 @@
     "@kagami/napcat-api": "workspace:*",
     "@kagami/oss-api": "workspace:*",
     "@kagami/persistence": "workspace:*",
+    "@kagami/pixel-api": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
     "@kagami/spire-api": "workspace:*",
     "cloakbrowser": "^0.4.3",
