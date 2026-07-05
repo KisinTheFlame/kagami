@@ -955,6 +955,29 @@ const RELIC_LIST: RelicDef[] = [
       onShuffle: (_state, _self, emit) => emit({ kind: "gain_block", amount: 6 }),
     },
   },
+  {
+    id: "red_skull",
+    name: "红骷髅",
+    rarity: "common",
+    characterLock: "ironclad",
+    description: "战斗开始时若生命不高于一半，获得 3 点力量。",
+    hooks: {
+      onCombatStart: (state, _self, emit) => {
+        if (state.hp * 2 <= state.maxHp) {
+          emit({ kind: "apply_power", power: "strength", amount: 3, on: "self" });
+        }
+      },
+    },
+  },
+  {
+    id: "toolbox",
+    name: "工具箱",
+    rarity: "uncommon",
+    description: "每场战斗开始时，将一张随机无色牌加入手牌。",
+    hooks: {
+      onCombatStart: (_state, _self, emit) => emit({ kind: "add_random_colorless", count: 1 }),
+    },
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
