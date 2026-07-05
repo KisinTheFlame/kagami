@@ -312,6 +312,43 @@ const POTION_LIST: PotionDef[] = [
     characterLock: "defect",
     effects: [{ kind: "change_orb_slots", delta: 2 }],
   },
+  // —— 补全批次 3：牌堆操作 / 药水槽 ——
+  {
+    id: "liquid_memories",
+    name: "流质记忆",
+    description: "从弃牌堆取回一张牌到手牌，本回合费用视为 0（自动取最近弃掉的一张）。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "return_from_discard" }],
+  },
+  {
+    id: "gamblers_brew",
+    name: "赌徒酿",
+    description: "弃掉手牌，抽取等量的牌。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "discard_hand_draw_same" }],
+  },
+  {
+    id: "elixir_potion",
+    name: "灵丹药水",
+    description: "消耗手牌中所有非攻击牌。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "exhaust_non_attacks" }],
+  },
+  {
+    id: "entropic_brew",
+    name: "熵酿",
+    description: "把你所有的空药水槽填满随机药水。",
+    rarity: "uncommon",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "fill_potion_slots" }],
+  },
 ];
 
 const POTION_MAP: ReadonlyMap<string, PotionDef> = new Map(
