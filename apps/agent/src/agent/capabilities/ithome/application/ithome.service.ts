@@ -1,3 +1,4 @@
+import { stripLoneSurrogates } from "@kagami/kernel/utils/text";
 import type { IthomeArticleDao, IthomeArticleListItem } from "./ithome-article.dao.js";
 import type { IthomeFeedCursorDao } from "./ithome-feed-cursor.dao.js";
 import type { IthomeClient } from "./ithome-client.js";
@@ -256,15 +257,19 @@ function truncateText(
   text: string;
   truncated: boolean;
 } {
-  if (value.length <= maxChars) {
+  // 按 Unicode 码点截断，绝不从代理对（emoji）中间切开——半个 emoji 会让上游 400 掉
+  // 整条请求（见「引用预览按 UTF-16 长度截断劈开代理对」事故）。先剥落单代理项再按码点判长。
+  const clean = stripLoneSurrogates(value);
+  const codePoints = Array.from(clean);
+  if (codePoints.length <= maxChars) {
     return {
-      text: value,
+      text: clean,
       truncated: false,
     };
   }
 
   return {
-    text: `${value.slice(0, maxChars).trimEnd()}……`,
+    text: `${codePoints.slice(0, maxChars).join("").trimEnd()}……`,
     truncated: true,
   };
 }

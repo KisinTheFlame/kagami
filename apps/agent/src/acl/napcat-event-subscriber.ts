@@ -42,6 +42,7 @@ export class NapcatEventSubscriber {
   private running = false;
   private controller: AbortController | null = null;
   private lastConsumedSeq = 0;
+  private cursorLoaded = false;
 
   public constructor({
     baseUrl,
@@ -55,13 +56,14 @@ export class NapcatEventSubscriber {
     this.fetchImpl = fetchImpl ?? fetch;
   }
 
-  /** 启动后台订阅循环（不阻塞）。 */
+  /** 启动后台订阅循环（不阻塞）。绝不因启动瞬间的游标读取失败而 reject——游标加载已下沉进
+   * loop 的可重试路径。外层是 `void start()`，若这里 reject 会变成无人处理的 unhandled
+   * rejection，订阅静默死掉、QQ 入站永久断流。 */
   public async start(): Promise<void> {
     if (this.running) {
       return;
     }
     this.running = true;
-    this.lastConsumedSeq = await this.cursorStore.load();
     void this.loop();
   }
 
@@ -74,6 +76,12 @@ export class NapcatEventSubscriber {
     let backoffMs = INITIAL_BACKOFF_MS;
     while (this.running) {
       try {
+        // 首次连接前惰性加载持久游标；读取失败与连接错误一同走退避重试，绝不让「启动瞬间
+        // DB/app_state 读失败」把整个订阅打死。加载成功后置位，后续重连不再重复读游标。
+        if (!this.cursorLoaded) {
+          this.lastConsumedSeq = await this.cursorStore.load();
+          this.cursorLoaded = true;
+        }
         await this.connectOnce();
         // 服务端干净关闭（如 napcat 重启）：立即以最小退避重连。
         backoffMs = INITIAL_BACKOFF_MS;

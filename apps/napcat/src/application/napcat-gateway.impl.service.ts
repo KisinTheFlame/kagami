@@ -932,17 +932,17 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
   }
 
   private async findFriendByUserId(userId: string): Promise<NapcatFriendInfo | null> {
-    const hadCachedFriendList = this.friendInfoByUserId !== null;
     const cachedFriend = (await this.loadFriendInfoByUserId()).get(userId);
     if (cachedFriend) {
       return cachedFriend;
     }
 
-    if (!hadCachedFriendList) {
-      return null;
-    }
-
-    return (await this.loadFriendInfoByUserId({ refresh: true })).get(userId) ?? null;
+    // miss 时刷新一次再判定：缓存可能已过期（含冷启动窗口内刚加为好友的用户，其首条私聊
+    // 此前会被误当非好友静默永久丢弃）。走 refreshFriendList 复用单飞锁，让并发 miss 合并成
+    // 一次 get_friend_list、规避「读-改-写好友表」的覆盖竞态；刷新失败在其内部被吞（记日志），
+    // 此处退化为干净地按非好友处理，不把瞬时拉取失败抛成整条消息 failed。
+    await this.refreshFriendList({ force: true, reason: "friend_lookup_miss" });
+    return this.friendInfoByUserId?.get(userId) ?? null;
   }
 
   private async loadFriendInfoByUserId(input?: {
@@ -1007,7 +1007,10 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     this.friendListRefreshTimer = null;
   }
 
-  private async refreshFriendList(input?: { force?: boolean; reason?: "interval" }): Promise<void> {
+  private async refreshFriendList(input?: {
+    force?: boolean;
+    reason?: "interval" | "friend_lookup_miss";
+  }): Promise<void> {
     if (this.friendListRefreshPromise) {
       return await this.friendListRefreshPromise;
     }
