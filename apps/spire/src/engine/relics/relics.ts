@@ -7,9 +7,24 @@ import type {
   RelicState,
 } from "../types.js";
 import { addPower } from "../powers/powers.js";
-import { getCardDef } from "../cards/cards.js";
+import { getCardDef, rewardCardPoolOf } from "../cards/cards.js";
 import { POTION_DROP_POOL } from "../potions/potions.js";
 import { nextInt } from "../rng.js";
+
+// 角色颜色（避免引入 characters 造成循环）；转化卡从该色奖励池里随机取。
+const CHARACTER_COLOR: Record<CharacterId, "red" | "green" | "blue" | "purple"> = {
+  ironclad: "red",
+  silent: "green",
+  defect: "blue",
+  watcher: "purple",
+};
+
+/** 把一张牌实例转化为本角色奖励池里的一张随机牌（潘多拉魔盒/星盘）。 */
+function transformCardInstance(state: GameState, card: CardInstance): void {
+  const pool = rewardCardPoolOf(CHARACTER_COLOR[state.character]);
+  card.defId = pool[nextInt(state.rng, pool.length)]!;
+  card.upgraded = false;
+}
 
 // === 遗物系统 ===
 //
@@ -1176,6 +1191,183 @@ const RELIC_LIST: RelicDef[] = [
         }
       },
     },
+  },
+  // —— 伤害修正型遗物（在 combat.ts 的伤害结算按 hasRelic 处理，不走钩子） ——
+  {
+    id: "paper_phrog",
+    name: "纸蛙",
+    rarity: "uncommon",
+    description: "易伤的敌人受到你的攻击伤害提升到 1.75 倍（原为 1.5 倍）。",
+    hooks: {},
+  },
+  {
+    id: "paper_krane",
+    name: "纸鹤",
+    rarity: "uncommon",
+    description: "被你削弱（虚弱）的敌人对你造成的伤害降到 0.6 倍（原为 0.75 倍）。",
+    hooks: {},
+  },
+  // —— 转化牌组的 onEquip 遗物 ——
+  {
+    id: "pandoras_box",
+    name: "潘多拉魔盒",
+    rarity: "boss",
+    description: "获得时，将你所有的打击与防御转化为随机牌。",
+    hooks: {
+      onEquip: state => {
+        for (const card of state.deck) {
+          if (card.defId === "strike" || card.defId === "defend") {
+            transformCardInstance(state, card);
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "astrolabe",
+    name: "星盘",
+    rarity: "boss",
+    description: "获得时，转化并升级 3 张随机牌。",
+    hooks: {
+      onEquip: state => {
+        const pool = state.deck.slice();
+        for (let n = 0; n < 3 && pool.length > 0; n += 1) {
+          const idx = nextInt(state.rng, pool.length);
+          const card = pool[idx]!;
+          pool.splice(idx, 1);
+          transformCardInstance(state, card);
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  {
+    id: "lizard_tail",
+    name: "蜥蜴之尾",
+    // 濒死复活在 combat.ts 的 isPlayerDead/reviveIfPossible 按 hasRelic 处理（counter 记一次性用尽）。
+    rarity: "rare",
+    description: "当你在战斗中濒死时，回复至一半生命（整局限一次）。",
+    hooks: {},
+  },
+  // —— 更多遗物批次 ——
+  {
+    id: "pear",
+    name: "梨",
+    rarity: "common",
+    description: "获得时，最大生命 +10。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += 10;
+        state.hp += 10;
+      },
+    },
+  },
+  {
+    id: "odd_mushroom",
+    name: "奇异蘑菇",
+    // 易伤减伤在 combat.ts 的 dealDamageToPlayer 按 hasRelic 处理。
+    rarity: "uncommon",
+    description: "你受到的易伤伤害加成从 50% 降为 25%。",
+    hooks: {},
+  },
+  {
+    id: "gremlin_visage",
+    name: "地精面容",
+    rarity: "common",
+    description: "每场战斗开始时，你获得 1 层虚弱。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) =>
+        emit({ kind: "apply_power", power: "weak", amount: 1, on: "self" }),
+    },
+  },
+  {
+    id: "cultist_headpiece",
+    name: "邪教头饰",
+    rarity: "common",
+    description: "一件散发着不祥气息的头饰，似乎并没有什么实际用处。",
+    hooks: {},
+  },
+  {
+    id: "mutagenic_strength",
+    name: "诱变力量",
+    rarity: "rare",
+    description: "每场战斗开始时获得 3 点力量，但在本回合结束时失去。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) => emit({ kind: "apply_strength_temp", amount: 3 }),
+    },
+  },
+  {
+    id: "ring_of_the_serpent",
+    name: "蛇之指环",
+    rarity: "rare",
+    characterLock: "silent",
+    description: "每个回合开始时，多抽 1 张牌。",
+    hooks: {
+      onTurnStart: (_s, _self, emit) => emit({ kind: "draw", amount: 1 }),
+    },
+  },
+  // —— 引擎特判 / 房间钩子 遗物（不走既有钩子） ——
+  {
+    id: "sacred_bark",
+    name: "神圣树皮",
+    // 药水效果翻倍在 combat.ts 的 usePotion 按 hasRelic 处理。
+    rarity: "boss",
+    description: "你使用药水的效果翻倍。",
+    hooks: {},
+  },
+  {
+    id: "champion_belt",
+    name: "冠军腰带",
+    // 「施加易伤时也施加虚弱」在 combat.ts 的对敌施加易伤处按 hasRelic 处理。
+    rarity: "uncommon",
+    characterLock: "ironclad",
+    description: "当你对敌人施加易伤时，也对其施加 1 层虚弱。",
+    hooks: {},
+  },
+  {
+    id: "maw_bank",
+    name: "巨口银行",
+    // 进入非商店房间时 +12 金币，在 run.ts 的 resolveNode 按 hasRelic 处理。
+    rarity: "common",
+    description: "每当你进入一个非商店房间，获得 12 金币。",
+    hooks: {},
+  },
+  {
+    id: "meal_ticket",
+    name: "餐券",
+    // 进入商店时回 15 血，在 run.ts 的 resolveNode 商店分支按 hasRelic 处理。
+    rarity: "common",
+    description: "每当你进入一间商店，回复 15 点生命。",
+    hooks: {},
+  },
+  {
+    id: "eternal_feather",
+    name: "永恒羽毛",
+    // 篝火休息时按牌组张数回血，在 run.ts 的 rest 分支按 hasRelic 处理。
+    rarity: "uncommon",
+    description: "每当你在篝火休息，每有 5 张牌就额外回复 3 点生命。",
+    hooks: {},
+  },
+  {
+    id: "spirit_poop",
+    name: "精魂便便",
+    rarity: "common",
+    description: "呃……闻起来可不太妙。它似乎没有任何实际效果。",
+    hooks: {},
+  },
+  {
+    id: "circlet",
+    name: "头环",
+    rarity: "common",
+    description: "当再也没有别的遗物可拿时，你得到了它。纯属收藏。",
+    hooks: {},
+  },
+  {
+    id: "red_circlet",
+    name: "赤红头环",
+    rarity: "common",
+    description: "当再也没有别的遗物可拿、连头环都齐了时，你得到了它。",
+    hooks: {},
   },
 ];
 

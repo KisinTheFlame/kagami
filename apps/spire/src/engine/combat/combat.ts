@@ -2161,6 +2161,10 @@ function applyPowerEffect(
   if (actor.side === "player") {
     if (targetEnemyIndex !== null) {
       applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, power, amount);
+      // 冠军腰带：对敌施加易伤时，也施加 1 层虚弱。
+      if (power === "vulnerable" && amount > 0 && hasRelic(state, "champion_belt")) {
+        applyPowerToEnemy(combat.enemies[targetEnemyIndex]!, "weak", 1);
+      }
     }
   } else {
     applyPowerToPlayer(state, power, amount);
@@ -2287,7 +2291,16 @@ function dealDamageToEnemy(
   if (sharpHide > 0) {
     state.hp = Math.max(0, state.hp - sharpHide);
   }
-  let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier);
+  // 纸蛙：玩家攻击易伤敌人时，易伤倍率 1.5 → 1.75。
+  const vulnMult = hasRelic(state, "paper_phrog") ? 1.75 : 1.5;
+  let dmg = computeAttackDamage(
+    base,
+    attackerPowers,
+    enemy.powers,
+    strengthMultiplier,
+    0.75,
+    vulnMult,
+  );
   // 观者姿态对玩家造成伤害的加成：愤怒 ×2，神性 ×3。
   if (state.combat!.playerStance === "wrath") {
     dmg *= 2;
@@ -2373,6 +2386,33 @@ function triggerModeShift(enemy: EnemyState): void {
   enemy.rotationIndex = 1;
 }
 
+/** 濒死复活：蜥蜴之尾（整局一次，回到半血）或瓶中仙灵药水（消耗，回 30% 生命）。复活返回 true。 */
+function reviveIfPossible(state: GameState): boolean {
+  const lizard = state.relics.find(r => r.id === "lizard_tail" && r.counter === 0);
+  if (lizard) {
+    lizard.counter = 1;
+    state.hp = Math.max(1, Math.floor(state.maxHp / 2));
+    state.log.push("蜥蜴之尾让你起死回生。");
+    return true;
+  }
+  const fairy = state.potions.indexOf("fairy_in_a_bottle");
+  if (fairy >= 0) {
+    state.potions[fairy] = null;
+    state.hp = Math.max(1, Math.floor(state.maxHp * 0.3));
+    state.log.push("瓶中仙灵将你救活。");
+    return true;
+  }
+  return false;
+}
+
+/** 玩家是否真的死亡：生命 >0 则否；否则先尝试复活，复活成功则仍不算死。 */
+function isPlayerDead(state: GameState): boolean {
+  if (state.hp > 0) {
+    return false;
+  }
+  return !reviveIfPossible(state);
+}
+
 function dealDamageToPlayer(
   state: GameState,
   base: number,
@@ -2380,7 +2420,11 @@ function dealDamageToPlayer(
   attackerIndex?: number,
 ): void {
   const combat = state.combat!;
-  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers);
+  // 纸鹤：被你削弱的敌人对你造成的伤害更低，虚弱倍率 0.75 → 0.6。
+  const weakMult = hasRelic(state, "paper_krane") ? 0.6 : 0.75;
+  // 奇异蘑菇：你受到的易伤伤害更低，易伤倍率 1.5 → 1.25。
+  const pVulnMult = hasRelic(state, "odd_mushroom") ? 1.25 : 1.5;
+  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers, 1, weakMult, pVulnMult);
   // 愤怒姿态（观者）：玩家受到的伤害也翻倍。
   if (combat.playerStance === "wrath") {
     dmg *= 2;
@@ -2823,7 +2867,7 @@ export function playCard(
 
   resolveCombatIfEnded(state);
   // 反甲反噬等可能在自己回合内把玩家打死：战斗未结束但玩家已倒下 → 判负。
-  if (state.combat !== null && state.hp <= 0) {
+  if (state.combat !== null && isPlayerDead(state)) {
     state.screen = "gameover";
     state.log.push("你倒下了。");
   }
@@ -2904,6 +2948,10 @@ export function usePotion(
 
   state.potions[slotIndex] = null; // 药水一次性，先清槽再结算。
   applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  // 神圣树皮：药水效果翻倍（再结算一次）。
+  if (hasRelic(state, "sacred_bark")) {
+    applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
+  }
   state.log.push(`你使用了「${def.name}」。`);
   if (combat) {
     triggerRelicUsePotion(state); // 用药水触发型遗物（玩具扑翼机回血）。
@@ -2936,7 +2984,7 @@ export function endTurn(state: GameState): void {
           : candidate,
     ),
   );
-  if (state.hp <= 0) {
+  if (isPlayerDead(state)) {
     state.screen = "gameover";
     state.log.push("你倒下了。");
     return;
@@ -3017,7 +3065,7 @@ export function endTurn(state: GameState): void {
   const combust = getPower(combat.playerPowers, "combust");
   if (combust > 0) {
     state.hp = Math.max(0, state.hp - 1);
-    if (state.hp <= 0) {
+    if (isPlayerDead(state)) {
       state.screen = "gameover";
       state.log.push("你倒下了。");
       return;
@@ -3073,7 +3121,7 @@ export function endTurn(state: GameState): void {
   // 回合末在手结算（腐朽自伤 / 疑虑虚弱 / 羞愧脆弱）：在衰减之后，让本回合施加的减益延续到敌人回合。
   if (endOfHandEffects.length > 0) {
     applyEffects(state, endOfHandEffects, { side: "player" }, null);
-    if (state.hp <= 0) {
+    if (isPlayerDead(state)) {
       state.screen = "gameover";
       state.log.push("你倒下了。");
       return;
@@ -3116,7 +3164,7 @@ export function endTurn(state: GameState): void {
       applyEffects(state, move.effects, { side: "enemy", index: i }, null);
       enemy.moveHistory.push(move.id);
     }
-    if (state.hp <= 0) {
+    if (isPlayerDead(state)) {
       state.screen = "gameover";
       state.log.push("你倒下了。");
       return;
@@ -3231,7 +3279,7 @@ export function endTurn(state: GameState): void {
   if (playerPoison > 0) {
     state.hp = Math.max(0, state.hp - playerPoison);
     addPower(combat.playerPowers, "poison", -1);
-    if (state.hp <= 0) {
+    if (isPlayerDead(state)) {
       state.screen = "gameover";
       state.log.push("你中毒身亡。");
       return;
@@ -3241,7 +3289,7 @@ export function endTurn(state: GameState): void {
   const brutality = getPower(combat.playerPowers, "brutality");
   if (brutality > 0) {
     state.hp = Math.max(0, state.hp - brutality);
-    if (state.hp <= 0) {
+    if (isPlayerDead(state)) {
       state.screen = "gameover";
       state.log.push("你倒下了。");
       return;
