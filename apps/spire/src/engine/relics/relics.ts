@@ -668,6 +668,43 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— 减伤 / 失血联动遗物批次 ——
+  {
+    id: "fossilized_helix",
+    name: "化石螺壳",
+    rarity: "rare",
+    description: "每场战斗开始时，获得 1 层缓冲（抵消下一次会让你失去生命的伤害）。",
+    hooks: {
+      onCombatStart: (_state, _self, emit) =>
+        emit({ kind: "apply_power", power: "buffer", amount: 1, on: "self" }),
+    },
+  },
+  {
+    id: "runic_cube",
+    name: "符文魔方",
+    rarity: "boss",
+    characterLock: "ironclad",
+    description: "每当你失去生命，抽 1 张牌。",
+    hooks: {
+      onLoseHp: (_state, _self, emit) => emit({ kind: "draw", amount: 1 }),
+    },
+  },
+  {
+    id: "torii",
+    name: "鸟居",
+    // 减伤在 combat.ts 的 dealDamageToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "当你受到 5 点或更少的无格挡攻击伤害时，改为只受到 1 点。",
+    hooks: {},
+  },
+  {
+    id: "tungsten_rod",
+    name: "钨钢棒",
+    // 减伤在 combat.ts 的 dealDamageToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "boss",
+    description: "每当你失去生命时，少失去 1 点。",
+    hooks: {},
+  },
 ];
 
 /** 获得一件遗物：入列 + 结算 onEquip（草莓 +最大生命等一次性效果）。日志由调用方按情景补。 */

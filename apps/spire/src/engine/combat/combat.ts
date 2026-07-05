@@ -2334,6 +2334,14 @@ function dealDamageToPlayer(
   }
   let afterBlock = Math.max(0, dmg - combat.playerBlock);
   combat.playerBlock = Math.max(0, combat.playerBlock - dmg);
+  // 鸟居：受到的无格挡攻击伤害为 1~5 时降为 1。
+  if (afterBlock >= 1 && afterBlock <= 5 && hasRelic(state, "torii")) {
+    afterBlock = 1;
+  }
+  // 钨钢棒：每次失去生命都少失 1 点（下限 0）。
+  if (afterBlock > 0 && hasRelic(state, "tungsten_rod")) {
+    afterBlock = Math.max(0, afterBlock - 1);
+  }
   // 缓冲：抵消这次会让你失去生命的穿透伤害（消耗 1 层）。
   if (afterBlock > 0 && getPower(combat.playerPowers, "buffer") > 0) {
     addPower(combat.playerPowers, "buffer", -1);
