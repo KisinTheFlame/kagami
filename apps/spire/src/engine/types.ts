@@ -206,6 +206,7 @@ export type Effect =
   | { kind: "gain_random_potion" } // 获得一瓶随机药水（炼金）
   | { kind: "transmutation" } // X 费：将 X 张随机无色牌加入手牌，本场费用视为 0（嬗变）
   | { kind: "upgrade_all_cards" } // 本场剩余时间内升级你所有的牌（神化）
+  | { kind: "upgrade_hand_cards"; all: boolean } // 升级手牌：all=全部，否则升级一张（军备）
   | { kind: "schedule_bomb"; turns: number; damage: number } // turns 回合后对所有敌人造成 damage（炸弹）
   | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
   | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
