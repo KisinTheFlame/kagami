@@ -111,16 +111,21 @@ export class SchedulerEngine {
       const sorted = [...entry.pending].sort(
         (a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt),
       );
+      // 只清掉真正投递成功的；若连接在 flush 瞬间就断了（deliver 全失败），保留 pending 等下次连接，
+      // 不静默丢 tick。
+      const remaining: SchedulerTickEvent[] = [];
       let deliveredAny = false;
       for (const tick of sorted) {
         if (this.broadcaster.deliver(ownerId, tick)) {
           deliveredAny = true;
+        } else {
+          remaining.push(tick);
         }
       }
       if (deliveredAny) {
         entry.lastEmittedAt = new Date();
       }
-      entry.pending = [];
+      entry.pending = remaining;
     }
   }
 

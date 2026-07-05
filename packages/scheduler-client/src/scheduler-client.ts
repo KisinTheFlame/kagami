@@ -134,9 +134,11 @@ export class SchedulerClient {
     if (!entry) {
       return { ok: false, reason: "unknown_task" };
     }
+    // 运行中判定 + 占锁全程同步（同 onTick），保证与 SSE tick 互不并跑。
     if (entry.running) {
       return { ok: false, reason: "overlap" };
     }
+    entry.running = true;
     const now = new Date().toISOString();
     const tick: SchedulerTick = {
       taskName: name,
@@ -145,7 +147,12 @@ export class SchedulerClient {
       emittedAt: now,
       manual: true,
     };
-    await this.execute(entry, tick);
+    try {
+      await this.runClaimed(entry, tick);
+    } finally {
+      entry.running = false;
+      entry.abortController = null;
+    }
     return { ok: true };
   }
 
@@ -220,13 +227,17 @@ export class SchedulerClient {
       tasks: manifests,
     });
     if (!registered.accepted) {
-      // 有更新化身抢先注册（generation 更大）：单 agent 下不该发生；记 warn 后仍尝试订阅
-      // （同 ownerId 的 tick 仍是我们的任务、handler 也是同代码）。
-      logger.warn("scheduler register rejected as stale, a newer instance exists", {
-        event: "scheduler_client.register_stale",
-        generation: this.generation,
-        current: registered.current,
-      });
+      // 有更新化身抢先注册（generation 更大）：单 agent 下不该发生。**不订阅** SSE，否则旧化身会
+      // 与新化身同时收 tick 重复执行；退出本次连接，交给 loop 退避重试。
+      logger.warn(
+        "scheduler register rejected as stale, not subscribing (a newer instance owns it)",
+        {
+          event: "scheduler_client.register_stale",
+          generation: this.generation,
+          current: registered.current,
+        },
+      );
+      return;
     }
 
     const controller = new AbortController();
@@ -308,12 +319,19 @@ export class SchedulerClient {
       });
       return;
     }
-    await this.onTick({ ...parsed.data });
+    // 不 await：长任务 handler（如 data-retention 分块删）不能阻塞 SSE 读循环，否则读不到心跳会
+    // 触发假死重连。派发出去即返回，reader 继续喂看门狗；同任务并发由 onTick 的同步 running 锁挡住。
+    void this.onTick({ ...parsed.data }).catch(error => {
+      logger.warn("scheduler tick dispatch failed", {
+        event: "scheduler_client.dispatch_failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   // === 派发 + 本地并发/去重 ===
 
-  /** 收到一个 tick（SSE 或 triggerNow 合成）：经去重 + 本地 mutex/queue 守卫后跑 handler。 */
+  /** 收到一个 tick（SSE 或 triggerNow 合成）：经本地 mutex/queue 守卫后去重并跑 handler。 */
   public async onTick(tick: SchedulerTick): Promise<void> {
     const entry = this.registry.get(tick.taskName);
     if (!entry) {
@@ -323,30 +341,41 @@ export class SchedulerClient {
       });
       return;
     }
-    // occurrence 去重（manual 绕过）：已处理过（scheduledAt <= 已存）则丢弃。
-    if (await this.isDuplicate(entry, tick)) {
-      return;
-    }
+    // 运行中判定 + 占锁**全程同步**（无 await 间隙），杜绝并发 tick / triggerNow 对同一任务并跑。
     if (entry.running) {
       if (entry.reg.overlap === "queue") {
-        // 只留最新一个待补 tick（天然合并）。
-        entry.queuedTick = tick;
+        entry.queuedTick = tick; // 只留最新一个待补 tick（天然合并）。
         return;
       }
       entry.history.push(skippedOverlapRun());
       return;
     }
-    await this.markSeen(entry, tick);
-    await this.execute(entry, tick);
-    // 排空 queue：跑完当前后补跑最新一个待补 tick（overlap=queue）。
-    while (entry.queuedTick !== null) {
-      const queued = entry.queuedTick;
-      entry.queuedTick = null;
-      if (await this.isDuplicate(entry, queued)) {
-        continue;
+    entry.running = true;
+    try {
+      await this.runClaimed(entry, tick);
+    } finally {
+      entry.running = false;
+      entry.abortController = null;
+    }
+  }
+
+  /**
+   * 已持有 running 锁后的处理：去重（manual 绕过）→ 跑 handler → 排空 queue（overlap=queue 才有）。
+   * 占锁在调用方（onTick / triggerNow）同步完成，这里全程独占，无并发。
+   */
+  private async runClaimed(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
+    let current: SchedulerTick | null = tick;
+    while (current !== null) {
+      const next = current;
+      current = null;
+      if (!(await this.isDuplicate(entry, next))) {
+        await this.markSeen(entry, next);
+        await this.runHandler(entry, next);
       }
-      await this.markSeen(entry, queued);
-      await this.execute(entry, queued);
+      if (entry.queuedTick !== null) {
+        current = entry.queuedTick;
+        entry.queuedTick = null;
+      }
     }
   }
 
@@ -366,7 +395,8 @@ export class SchedulerClient {
     await this.occurrenceStore.saveLastProcessed(entry.reg.name, tick.scheduledAt);
   }
 
-  private async execute(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
+  /** 跑一次 handler 并记录执行历史。running 锁的占用/释放归调用方（onTick / triggerNow）。 */
+  private async runHandler(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
     const abortController = new AbortController();
     const run: TaskRun = {
       startedAt: new Date(),
@@ -374,7 +404,6 @@ export class SchedulerClient {
       durationMs: null,
       status: "running",
     };
-    entry.running = true;
     entry.abortController = abortController;
     const startedAtMs = Date.now();
     try {
@@ -394,8 +423,6 @@ export class SchedulerClient {
     } finally {
       run.finishedAt = new Date();
       run.durationMs = Date.now() - startedAtMs;
-      entry.running = false;
-      entry.abortController = null;
       entry.history.push(run);
     }
   }
