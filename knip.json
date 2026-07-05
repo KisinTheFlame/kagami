@@ -41,7 +41,7 @@
     "apps/oss": { "entry": ["src/index.ts"] },
     "apps/pixel": { "entry": ["src/index.ts"] },
     "apps/scheduler": { "entry": ["src/index.ts"] },
-    "apps/spire": { "entry": ["src/index.ts", "src/sim/cli.ts"] },
+    "apps/spire": { "entry": ["src/index.ts"] },
     "apps/web": { "entry": ["src/main.tsx", "src/components/metric/*.{ts,tsx}"] },
     "packages/*": { "entry": ["src/**/*.ts"] }
   }

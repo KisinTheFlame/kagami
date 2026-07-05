@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { GameState } from "../engine/types.js";
-import { migrateLoadedState } from "./migrate.js";
+import type { GameState } from "@kisinwen/sts-engine/engine/types";
+import { migrateLoadedState } from "@kisinwen/sts-engine/migrate";
 
 // === 存档持久化 ===
 //

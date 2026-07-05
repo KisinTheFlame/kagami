@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { SaveStore } from "../src/persistence/save-store.js";
-import type { GameState } from "../src/engine/types.js";
+import type { GameState } from "@kisinwen/sts-engine/engine/types";
 
 // SaveStore 只 JSON.stringify，不读字段：用最小对象顶 GameState 位即可。
 const fakeState = (version: number): GameState => ({ version }) as unknown as GameState;

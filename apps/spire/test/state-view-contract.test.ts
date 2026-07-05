@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SpireReferenceSchema, SpireScreenSchema } from "@kagami/spire-api/contract";
-import { newRun, applyAction } from "../src/engine/engine.js";
-import { GreedyPolicy } from "../src/sim/policy.js";
+import { newRun, applyAction } from "@kisinwen/sts-engine/engine/engine";
+import { GreedyPolicy } from "@kisinwen/sts-engine/sim/policy";
 import { toScreenView } from "../src/application/state-view.js";
 import { lookupReference } from "../src/application/reference.js";
 
