@@ -46,6 +46,10 @@ describe("三幕", () => {
       "four_shapes",
       "sphere_and_two_shapes",
       "jaw_worm_horde",
+      "three_darklings",
+      "spire_growth",
+      "the_maw",
+      "writhing_mass",
     ]);
     for (let seed = 0; seed < 40; seed += 1) {
       const rng = seedRng(seed);

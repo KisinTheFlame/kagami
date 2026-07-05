@@ -1678,6 +1678,220 @@ const ENEMY_LIST: EnemyDef[] = [
     // 出招由 combat.ts 的 slime_boss 专属分支处理（黏液→蓄力→猛砸 循环），intentRule 留空。
     intentRule: { scripted: [], weighted: [] },
   },
+
+  // —— 补全敌人：填平各幕遭遇缺口（HP/伤害对齐 sts_lightspeed asc0；飞行/反应/复生等异形机制近似为加权出招）——
+  {
+    id: "byrd",
+    name: "拜鸟",
+    hpMin: 25,
+    hpMax: 31,
+    moves: [
+      {
+        id: "byrd_peck",
+        name: "啄击",
+        effects: [{ kind: "deal_damage_multi", amount: 1, times: 5 }],
+        intent: "attack",
+      },
+      {
+        id: "byrd_swoop",
+        name: "俯冲",
+        effects: [{ kind: "deal_damage", amount: 12 }],
+        intent: "attack",
+      },
+      {
+        id: "byrd_caw",
+        name: "啼鸣",
+        effects: [{ kind: "apply_power", power: "strength", amount: 1, on: "self" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "byrd_peck", weight: 50, maxInARow: 2 },
+        { move: "byrd_swoop", weight: 30, maxInARow: 1 },
+        { move: "byrd_caw", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "mugger",
+    name: "劫匪",
+    hpMin: 48,
+    hpMax: 52,
+    moves: [
+      {
+        id: "mugger_mug",
+        name: "抢劫",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "steal_gold", amount: 15 },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "mugger_lunge",
+        name: "扑击逃窜",
+        effects: [
+          { kind: "deal_damage", amount: 16 },
+          { kind: "steal_gold", amount: 15 },
+          { kind: "escape" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: ["mugger_mug"],
+      weighted: [
+        { move: "mugger_mug", weight: 60, maxInARow: 2 },
+        { move: "mugger_lunge", weight: 40, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "darkling",
+    name: "暗影客",
+    hpMin: 48,
+    hpMax: 56,
+    moves: [
+      {
+        id: "darkling_nip",
+        name: "撕咬",
+        effects: [{ kind: "deal_damage", amount: 8 }],
+        intent: "attack",
+      },
+      {
+        id: "darkling_chomp",
+        name: "啃食",
+        effects: [{ kind: "deal_damage", amount: 9 }],
+        intent: "attack",
+      },
+      {
+        id: "darkling_harden",
+        name: "硬化",
+        effects: [{ kind: "gain_block", amount: 12 }],
+        intent: "defend",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "darkling_nip", weight: 40, maxInARow: 2 },
+        { move: "darkling_chomp", weight: 40, maxInARow: 1 },
+        { move: "darkling_harden", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "spire_growth",
+    name: "尖塔幼体",
+    hpMin: 170,
+    hpMax: 170,
+    moves: [
+      {
+        id: "sg_quick_tackle",
+        name: "急冲",
+        effects: [{ kind: "deal_damage", amount: 16 }],
+        intent: "attack",
+      },
+      {
+        id: "sg_smash",
+        name: "重砸",
+        effects: [
+          { kind: "deal_damage", amount: 22 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "sg_quick_tackle", weight: 50, maxInARow: 2 },
+        { move: "sg_smash", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "the_maw",
+    name: "巨口",
+    hpMin: 300,
+    hpMax: 300,
+    moves: [
+      {
+        id: "maw_roar",
+        name: "咆哮",
+        effects: [
+          { kind: "apply_power", power: "weak", amount: 3, on: "target" },
+          { kind: "apply_power", power: "frail", amount: 3, on: "target" },
+        ],
+        intent: "debuff",
+      },
+      {
+        id: "maw_slam",
+        name: "重击",
+        effects: [{ kind: "deal_damage", amount: 25 }],
+        intent: "attack",
+      },
+      {
+        id: "maw_nom",
+        name: "吞噬",
+        effects: [{ kind: "deal_damage_multi", amount: 5, times: 3 }],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: ["maw_roar"],
+      weighted: [
+        { move: "maw_slam", weight: 50, maxInARow: 1 },
+        { move: "maw_nom", weight: 50, maxInARow: 1 },
+      ],
+    },
+  },
+  {
+    id: "writhing_mass",
+    name: "蠕动之物",
+    hpMin: 160,
+    hpMax: 160,
+    moves: [
+      {
+        id: "wm_multi_strike",
+        name: "乱抽",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_strong_strike",
+        name: "重抽",
+        effects: [{ kind: "deal_damage", amount: 32 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_flail",
+        name: "挥击",
+        effects: [{ kind: "deal_damage", amount: 15 }],
+        intent: "attack",
+      },
+      {
+        id: "wm_wither",
+        name: "萎缩",
+        effects: [
+          { kind: "deal_damage", amount: 10 },
+          { kind: "apply_power", power: "weak", amount: 2, on: "target" },
+        ],
+        intent: "attack",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "wm_multi_strike", weight: 30, maxInARow: 1 },
+        { move: "wm_strong_strike", weight: 20, maxInARow: 1 },
+        { move: "wm_flail", weight: 25, maxInARow: 2 },
+        { move: "wm_wither", weight: 25, maxInARow: 1 },
+      ],
+    },
+  },
 ];
 
 const ENEMY_MAP: ReadonlyMap<string, EnemyDef> = new Map(
@@ -1796,6 +2010,22 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
     enemies: ["jaw_worm", "jaw_worm", "jaw_worm"],
     isBoss: false,
   },
+  // —— 新敌人遭遇 ——
+  three_byrds: { id: "three_byrds", enemies: ["byrd", "byrd", "byrd"], isBoss: false },
+  chosen_and_byrds: {
+    id: "chosen_and_byrds",
+    enemies: ["chosen", "byrd", "byrd"],
+    isBoss: false,
+  },
+  two_thieves: { id: "two_thieves", enemies: ["mugger", "mugger"], isBoss: false },
+  three_darklings: {
+    id: "three_darklings",
+    enemies: ["darkling", "darkling", "darkling"],
+    isBoss: false,
+  },
+  spire_growth: { id: "spire_growth", enemies: ["spire_growth"], isBoss: false },
+  the_maw: { id: "the_maw", enemies: ["the_maw"], isBoss: false },
+  writhing_mass: { id: "writhing_mass", enemies: ["writhing_mass"], isBoss: false },
   champ: { id: "champ", enemies: ["champ"], isBoss: true },
   bronze_automaton: { id: "bronze_automaton", enemies: ["bronze_automaton"], isBoss: true },
   the_collector: { id: "the_collector", enemies: ["the_collector"], isBoss: true },
@@ -1874,6 +2104,7 @@ const ACT2_WEAK_POOL: readonly WeightedEncounter[] = [
   { id: "centurion", weight: 1 },
   { id: "shelled_parasite", weight: 1 },
   { id: "chosen", weight: 1 },
+  { id: "three_byrds", weight: 1 },
 ];
 
 const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
@@ -1888,6 +2119,8 @@ const ACT2_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "three_cultists", weight: 1 },
   { id: "shelled_parasite_and_fungi", weight: 1 },
   { id: "sentry_and_sphere", weight: 1 },
+  { id: "chosen_and_byrds", weight: 1 },
+  { id: "two_thieves", weight: 1 },
 ];
 
 // —— 第三幕（超越）战斗池（切片）——
@@ -1909,6 +2142,10 @@ const ACT3_STRONG_POOL: readonly WeightedEncounter[] = [
   { id: "four_shapes", weight: 1 },
   { id: "sphere_and_two_shapes", weight: 1 },
   { id: "jaw_worm_horde", weight: 1 },
+  { id: "three_darklings", weight: 2 },
+  { id: "spire_growth", weight: 1 },
+  { id: "the_maw", weight: 1 },
+  { id: "writhing_mass", weight: 1 },
 ];
 
 function actWeakPool(act: number): readonly WeightedEncounter[] {
