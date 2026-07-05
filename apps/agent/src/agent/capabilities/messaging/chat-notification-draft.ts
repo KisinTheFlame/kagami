@@ -1,14 +1,8 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import type { NotificationDraft } from "../../runtime/root-agent/notification/notification-draft.js";
-import type {
-  NapcatGroupMessageData,
-  NapcatPrivateMessageData,
-} from "../../../napcat/application/napcat-gateway.service.js";
-import {
-  renderSupportedMessageSegments,
-  type NapcatReceiveMessageSegment,
-} from "../../../napcat/application/napcat-gateway/shared.js";
+import type { NapcatGroupMessageData, NapcatPrivateMessageData } from "@kagami/napcat-api/message";
+import type { NapcatReceiveMessageSegment } from "@kagami/napcat-api/segment";
 
 const MAX_DISPLAY_COUNT = 99;
 /** 预览正文截断上限（码点数）：一行通知里给正文留的空间，超出截断加省略号。 */
@@ -87,10 +81,8 @@ export function buildChatNotificationPreview(
   message: NapcatGroupMessageData | NapcatPrivateMessageData,
   kind: "group" | "private",
 ): ChatNotificationPreview | null {
-  const body =
-    message.messageSegments.length > 0
-      ? renderSupportedMessageSegments(message.messageSegments)
-      : message.rawMessage;
+  // rawMessage 已是 napcat 侧渲染好的权威文本（含图片 vision 描述）；拆分后直接用（issue #347）。
+  const body = message.rawMessage;
   const text = truncateWithEllipsis(body.replace(/\s+/g, " ").trim(), PREVIEW_MAX_CHARS);
   if (!text) {
     return null;

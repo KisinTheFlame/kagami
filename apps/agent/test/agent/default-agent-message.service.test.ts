@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DefaultAgentMessageService } from "../../src/agent/capabilities/messaging/application/default-agent-message.service.js";
 import { GroupMuteStateStore } from "../../src/agent/capabilities/messaging/application/group-mute-state.store.js";
 import { MutedSendError } from "../../src/agent/capabilities/messaging/application/muted-send-error.js";
-import type { NapcatGatewayService } from "../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatClient } from "../../src/acl/napcat-client.js";
 import { initTestLoggerRuntime } from "../helpers/logger.js";
 
 initTestLoggerRuntime();
@@ -21,7 +21,7 @@ function build(options?: {
     // 默认 groupAllShut=true：whole 拦截 probe 到「仍在全员禁言」，维持拦截语义。
     getGroupInfo:
       options?.getGroupInfo ?? vi.fn().mockResolvedValue({ groupId: "g1", groupAllShut: true }),
-  } as unknown as NapcatGatewayService & {
+  } as unknown as NapcatClient & {
     sendGroupMessage: ReturnType<typeof vi.fn>;
     getGroupMemberShutUp: ReturnType<typeof vi.fn>;
     getGroupInfo: ReturnType<typeof vi.fn>;

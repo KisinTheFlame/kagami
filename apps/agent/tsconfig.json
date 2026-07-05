@@ -26,6 +26,7 @@
       "@kagami/pixel-api/*": ["./../../packages/pixel-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
       "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
+      "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
       "@kagami/agent-api/*": ["./../../packages/agent-api/src/*"]
     }
   },

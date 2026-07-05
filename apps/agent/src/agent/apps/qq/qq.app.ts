@@ -11,16 +11,15 @@ import type {
   ForegroundInput,
   ForegroundInputSource,
 } from "../../runtime/root-agent/foreground-input.js";
+import type { NapcatAgentEvent, NapcatGroupBanData } from "@kagami/napcat-api/event";
 import type {
-  NapcatAgentEvent,
   NapcatChatTarget,
   NapcatForwardMessagePage,
   NapcatFriendInfo,
-  NapcatGatewayService,
-  NapcatGroupBanData,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/application/napcat-gateway.service.js";
+} from "@kagami/napcat-api/message";
+import type { NapcatClient } from "../../../acl/napcat-client.js";
 import {
   buildChatNotificationPreview,
   buildNoticePreview,
@@ -73,7 +72,7 @@ const FORWARD_PAGE_SIZE = 50;
 const FORWARD_NODE_MAX_CHARS = 1000;
 
 type QqAppDeps = {
-  napcatGateway: NapcatGatewayService;
+  napcatGateway: NapcatClient;
   notificationCenter: NotificationCenter;
   /**
    * 前台输入敲门端口：当前会话在前台收到新消息时调用，enqueue 一个不带内容的
@@ -123,7 +122,7 @@ export class QqApp implements App, ForegroundInputSource {
   public readonly displayName = "QQ";
   public readonly tools: readonly ToolComponent[];
 
-  private readonly napcatGateway: NapcatGatewayService;
+  private readonly napcatGateway: NapcatClient;
   private readonly notificationCenter: NotificationCenter;
   private readonly notifyForegroundInput: () => void;
   private readonly botQQ: string;
@@ -195,8 +194,8 @@ export class QqApp implements App, ForegroundInputSource {
   }
 
   public async onStartup(): Promise<void> {
-    // napcat 网关收纳进 QQ App：由这里起 WS 连接（先连上，下面拉群信息才有效）。
-    await this.napcatGateway.start();
+    // napcat 拆成独立进程（issue #347）：WS 连接归 kagami-napcat，agent 经 HttpNapcatClient 出站、
+    // NapcatEventSubscriber 订阅入站。这里只做启动上下文加载（拉群信息 / 恢复全员禁言态）。
     // 拉群信息（显示名）。私聊会话由 friend_list 事件 upsert。
     await Promise.all(
       [...this.conversations.values()]
@@ -254,10 +253,8 @@ export class QqApp implements App, ForegroundInputSource {
     return [];
   }
 
-  /** 关停：停掉网关 WS（收纳后由 QQ App 负责，经 AppManager.shutdownAll 反序触发）。 */
-  public async onShutdown(): Promise<void> {
-    await this.napcatGateway.stop();
-  }
+  /** 关停：no-op。napcat WS 生命周期归独立进程；agent 侧入站订阅由 server-runtime 停（issue #347）。 */
+  public async onShutdown(): Promise<void> {}
 
   /**
    * 交出未读红点（每会话的 count + @ 标记）给 App 状态持久化能力。只存有未读的会话，

@@ -102,6 +102,19 @@ module.exports = {
       },
     },
     {
+      // NapCat 接入：独立 PM2 生命周期，agent 重启不打断到 NapCat 的 WS 长连接（issue #347）。
+      // 持有出站 RPC + 入站 SSE + vision/OSS/落库；cwd 固定仓库根，读同一 config.yaml / SQLite。
+      name: "kagami-napcat",
+      cwd: __dirname,
+      script: "apps/napcat/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
       // 像素画服务：独立 PM2 生命周期，agent 重启不丢画布。cwd 固定仓库根，
       // 让存档 data/pixel/ 落在仓库根 data/ 下，画布跨 agent / 本进程重启留存。
       name: "kagami-pixel",

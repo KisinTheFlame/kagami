@@ -46,6 +46,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"
@@ -402,6 +403,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"
@@ -718,6 +720,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"
@@ -799,6 +802,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"
@@ -883,6 +887,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"
@@ -963,6 +968,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
+  napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
 server:
   databaseUrl: "file::memory:"

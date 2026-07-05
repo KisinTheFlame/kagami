@@ -21,6 +21,7 @@
     "@kagami/llm-client": "workspace:*",
     "@kagami/metric-api": "workspace:*",
     "@kagami/metric-client": "workspace:*",
+    "@kagami/napcat-api": "workspace:*",
     "@kagami/oss-api": "workspace:*",
     "@kagami/persistence": "workspace:*",
     "@kagami/pixel-api": "workspace:*",

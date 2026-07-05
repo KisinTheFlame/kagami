@@ -1,9 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
-import type {
-  NapcatChatTarget,
-  NapcatGatewayService,
-} from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
+import type { NapcatClient } from "../../../../acl/napcat-client.js";
 import { errorNote, errorReason, resolveGroupChatId } from "./group-file-support.js";
 
 /** 向 napcat 请求的群文件数量上限。napcat 无 total/has_more 字段，只能按 returned vs requested 推断截断。 */
@@ -34,14 +32,14 @@ export class ListGroupFilesTool extends ZodToolComponent<typeof ListGroupFilesAr
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = ListGroupFilesArgumentsSchema;
   private readonly getChatTarget: () => NapcatChatTarget | undefined;
-  private readonly napcatGateway: NapcatGatewayService;
+  private readonly napcatGateway: NapcatClient;
 
   public constructor({
     getChatTarget,
     napcatGateway,
   }: {
     getChatTarget: () => NapcatChatTarget | undefined;
-    napcatGateway: NapcatGatewayService;
+    napcatGateway: NapcatClient;
   }) {
     super();
     this.getChatTarget = getChatTarget;

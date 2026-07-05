@@ -4,10 +4,7 @@ import {
   type ConversationMessage,
   isGroupNotice,
 } from "../../src/agent/capabilities/messaging/conversation.js";
-import type {
-  NapcatGroupMessageData,
-  NapcatPrivateMessageData,
-} from "../../src/napcat/application/napcat-gateway.service.js";
+import type { NapcatGroupMessageData, NapcatPrivateMessageData } from "@kagami/napcat-api/message";
 
 /** 会话流消息取正文（notice 变体无 rawMessage）。本文件用例只压入内容消息，恒有正文。 */
 function rawOf(message: ConversationMessage | null): string | undefined {

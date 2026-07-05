@@ -1,0 +1,32 @@
+{
+  "name": "@kagami/napcat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "pretest": "pnpm --filter \"@kagami/napcat^...\" build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/llm-api": "workspace:*",
+    "@kagami/llm-client": "workspace:*",
+    "@kagami/napcat-api": "workspace:*",
+    "@kagami/oss-api": "workspace:*",
+    "@kagami/persistence": "workspace:*",
+    "@kagami/rpc-client": "workspace:*",
+    "fastify": "^5.6.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

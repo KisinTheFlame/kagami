@@ -3,7 +3,7 @@ import { mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/prom
 import os from "node:os";
 import path from "node:path";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { detectMime } from "../../../../common/detect-mime.js";
+import { detectMime } from "@kagami/kernel/utils/detect-mime";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
 /** download_resource 的结果：落地的绝对路径 + 写入字节数。 */

@@ -1,4 +1,4 @@
-import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 
 export interface AgentMessageService {
   sendGroupMessage(input: {

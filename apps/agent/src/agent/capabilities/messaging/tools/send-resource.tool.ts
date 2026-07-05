@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolKind } from "@kagami/agent-runtime";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { NapcatChatTarget } from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 import type { ResourceService } from "../../resource/application/resource.service.js";
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import { MutedSendError, formatMutedNote } from "../application/muted-send-error.js";

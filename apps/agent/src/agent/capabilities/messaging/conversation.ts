@@ -1,10 +1,10 @@
 import type {
   NapcatChatTarget,
   NapcatFriendInfo,
-  NapcatGetGroupInfoResult,
+  NapcatGetGroupInfoResponse as NapcatGetGroupInfoResult,
   NapcatGroupMessageData,
   NapcatPrivateMessageData,
-} from "../../../napcat/application/napcat-gateway.service.js";
+} from "@kagami/napcat-api/message";
 import {
   type ConversationId,
   createGroupConversationId,

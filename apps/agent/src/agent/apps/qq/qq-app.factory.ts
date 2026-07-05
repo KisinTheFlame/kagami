@@ -1,9 +1,4 @@
-import type { ConfigManager } from "@kagami/kernel/config/config.manager";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
-import { DefaultNapcatGatewayService } from "../../../napcat/application/napcat-gateway.impl.service.js";
-import type { NapcatAgentEvent } from "../../../napcat/application/napcat-gateway.service.js";
-import type { NapcatGatewayPersistenceWriter } from "../../../napcat/application/napcat-gateway/event-persistence-writer.js";
-import type { NapcatImageMessageAnalyzer } from "../../../napcat/application/napcat-gateway/image-message-analyzer.js";
+import type { NapcatClient } from "../../../acl/napcat-client.js";
 import type { AgentMessageService } from "../../capabilities/messaging/application/agent-message.service.js";
 import { DefaultAgentMessageService } from "../../capabilities/messaging/application/default-agent-message.service.js";
 import { GroupMuteStateStore } from "../../capabilities/messaging/application/group-mute-state.store.js";
@@ -20,11 +15,8 @@ import { UploadGroupFileTool } from "./tools/upload-group-file.tool.js";
 import { QqApp } from "./qq.app.js";
 
 type BuildQqAppInput = {
-  configManager: ConfigManager;
-  /** napcat 网关的协作者：抓线持久化、图片消息分析、消息历史 DAO。由组合根注入。 */
-  persistenceWriter: NapcatGatewayPersistenceWriter;
-  imageMessageAnalyzer: NapcatImageMessageAnalyzer;
-  qqMessageDao: NapcatQqMessageDao;
+  /** 出站门面：打到独立的 kagami-napcat 进程（issue #347）。入站走 NapcatEventSubscriber（server-runtime）。 */
+  napcatClient: NapcatClient;
   notificationCenter: NotificationCenter;
   /** 前台输入敲门端口（组合根组装的闭包：knock 计数 + enqueue foreground_input）。 */
   notifyForegroundInput: () => void;
@@ -44,26 +36,20 @@ type BuildQqAppInput = {
 
 export type QqAppBundle = {
   qqApp: QqApp;
-  /** QQ 出站发送端口：send_message 工具与管理台直发 HTTP 都收口到这里，没人再碰裸网关。 */
+  /** QQ 出站发送端口：send_message 工具与管理台直发 HTTP 都收口到这里（内部经 napcatClient 打 napcat）。 */
   outboundService: AgentMessageService;
 };
 
 /**
- * 装配 QQ App 这条竖切——手机 OS 模型下 napcat 网关被「收纳」进 QQ App。
+ * 装配 QQ App 这条竖切。napcat 拆成独立进程后（issue #347），网关不再由本 App 构造 / 持有：
+ * 出站经注入的 `napcatClient`（HttpNapcatClient）打到 kagami-napcat；入站由 server-runtime 的
+ * NapcatEventSubscriber 订阅 SSE 后喂 `qqApp.handleNapcatEvent`。本工厂只装配 App + 工具 + 出站门面。
  *
- * 网关在这里构造、由 QqApp 独占持有：生命周期归 QqApp（onStartup 起 / onShutdown 停），
- * 出站发送统一走 outboundService（收口），不再有第二个消费方直接拿裸网关。网关的协作者
- * （持久化 / 图片分析 / DAO）仍由组合根构造后注入——它们是跨切面基础设施，不算 QQ 内部。
- *
- * 入站回调与发送之间是环依赖（网关 onEvent → QqApp.handleNapcatEvent；QqApp.send → 网关）。
- * 这里用一个局部 forward-ref（inbound holder）就地解掉，不再跨 server-runtime / factory 边界
- * 做 late-bind。回调只在网关 start() 之后才触发，那时 QqApp 必已装配完，holder 已回填。
+ * send_message 的发送目标 = QqApp 当前打开的会话：QqApp 与工具互为引用（工具问 App 当前会话，
+ * App 持有工具），用一个局部 forward-ref 就地解环。
  */
-export async function buildQqApp({
-  configManager,
-  persistenceWriter,
-  imageMessageAnalyzer,
-  qqMessageDao,
+export function buildQqApp({
+  napcatClient,
   notificationCenter,
   notifyForegroundInput,
   botQQ,
@@ -75,29 +61,14 @@ export async function buildQqApp({
   resourceService,
   ossClient,
   fileMaxBytes,
-}: BuildQqAppInput): Promise<QqAppBundle> {
-  const inbound: { handle: (event: NapcatAgentEvent) => void } = {
-    handle: () => {},
-  };
-  const napcatGateway = await DefaultNapcatGatewayService.create({
-    configManager,
-    enqueueGroupMessageEvent: event => {
-      inbound.handle(event);
-      return 0;
-    },
-    persistenceWriter,
-    imageMessageAnalyzer,
-    qqMessageDao,
-  });
+}: BuildQqAppInput): QqAppBundle {
   // 禁言状态：QqApp（禁言事件写）与 outboundService（发送前读 + 兜底回填）共享同一实例。
   const muteStore = new GroupMuteStateStore();
   const outboundService = new DefaultAgentMessageService({
-    napcatGatewayService: napcatGateway,
+    napcatGatewayService: napcatClient,
     muteStore,
     botQQ,
   });
-  // send_message 的发送目标 = QqApp 当前打开的会话。QqApp 与工具互为引用（工具要问 App 当前
-  // 会话，App 持有工具），用一个局部 forward-ref 就地解环——和上面 inbound holder 同套路。
   const qqAppRef: { current: QqApp | undefined } = { current: undefined };
   const sendMessageTool = new SendMessageTool({
     agentMessageService: outboundService,
@@ -111,23 +82,23 @@ export async function buildQqApp({
     agentMessageService: outboundService,
     getChatTarget: () => qqAppRef.current?.getCurrentChatTarget(),
   });
-  // 群文件三件套：直接持网关 + OSS + fileMaxBytes，getChatTarget 走同一个 forward-ref。
+  // 群文件三件套：直接持 napcatClient + OSS + fileMaxBytes，getChatTarget 走同一个 forward-ref。
   const getChatTarget = () => qqAppRef.current?.getCurrentChatTarget();
-  const listGroupFilesTool = new ListGroupFilesTool({ getChatTarget, napcatGateway });
+  const listGroupFilesTool = new ListGroupFilesTool({ getChatTarget, napcatGateway: napcatClient });
   const downloadGroupFileTool = new DownloadGroupFileTool({
     getChatTarget,
-    napcatGateway,
+    napcatGateway: napcatClient,
     ossClient,
     fileMaxBytes,
   });
   const uploadGroupFileTool = new UploadGroupFileTool({
     getChatTarget,
-    napcatGateway,
+    napcatGateway: napcatClient,
     ossClient,
     fileMaxBytes,
   });
   const qqApp = new QqApp({
-    napcatGateway,
+    napcatGateway: napcatClient,
     notificationCenter,
     notifyForegroundInput,
     botQQ,
@@ -143,6 +114,5 @@ export async function buildQqApp({
     uploadGroupFileTool,
   });
   qqAppRef.current = qqApp;
-  inbound.handle = event => qqApp.handleNapcatEvent(event);
   return { qqApp, outboundService };
 }

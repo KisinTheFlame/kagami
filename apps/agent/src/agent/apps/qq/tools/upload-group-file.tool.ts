@@ -1,10 +1,8 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import type { OssClient } from "../../../../acl/oss-client.js";
-import type {
-  NapcatChatTarget,
-  NapcatGatewayService,
-} from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
+import type { NapcatClient } from "../../../../acl/napcat-client.js";
 import { errorNote, errorReason, resolveGroupChatId } from "./group-file-support.js";
 
 const UploadGroupFileArgumentsSchema = z.object({
@@ -43,7 +41,7 @@ export class UploadGroupFileTool extends ZodToolComponent<typeof UploadGroupFile
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = UploadGroupFileArgumentsSchema;
   private readonly getChatTarget: () => NapcatChatTarget | undefined;
-  private readonly napcatGateway: NapcatGatewayService;
+  private readonly napcatGateway: NapcatClient;
   private readonly ossClient: OssClient | null;
   private readonly fileMaxBytes: number;
 
@@ -54,7 +52,7 @@ export class UploadGroupFileTool extends ZodToolComponent<typeof UploadGroupFile
     fileMaxBytes,
   }: {
     getChatTarget: () => NapcatChatTarget | undefined;
-    napcatGateway: NapcatGatewayService;
+    napcatGateway: NapcatClient;
     ossClient?: OssClient;
     fileMaxBytes: number;
   }) {

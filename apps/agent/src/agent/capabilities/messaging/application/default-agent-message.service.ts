@@ -1,8 +1,6 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type {
-  NapcatChatTarget,
-  NapcatGatewayService,
-} from "../../../../napcat/application/napcat-gateway.service.js";
+import type { NapcatChatTarget } from "@kagami/napcat-api/message";
+import type { NapcatClient } from "../../../../acl/napcat-client.js";
 import type { AgentMessageService } from "./agent-message.service.js";
 import type { GroupMuteStateStore } from "./group-mute-state.store.js";
 import { MutedSendError } from "./muted-send-error.js";
@@ -20,7 +18,7 @@ const logger = new AppLogger({ source: "agent.messaging" });
  *    返回原错误，spec D4）。
  */
 export class DefaultAgentMessageService implements AgentMessageService {
-  private readonly napcatGatewayService: NapcatGatewayService;
+  private readonly napcatGatewayService: NapcatClient;
   private readonly muteStore: GroupMuteStateStore;
   private readonly botQQ: string;
 
@@ -29,7 +27,7 @@ export class DefaultAgentMessageService implements AgentMessageService {
     muteStore,
     botQQ,
   }: {
-    napcatGatewayService: NapcatGatewayService;
+    napcatGatewayService: NapcatClient;
     muteStore: GroupMuteStateStore;
     botQQ: string;
   }) {

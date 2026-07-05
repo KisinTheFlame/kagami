@@ -5,12 +5,14 @@ import {
 } from "../../../../src/agent/apps/qq/qq-message-render.js";
 
 describe("qq-message-render", () => {
-  it("should render qq messages from structured message bodies", () => {
+  // napcat 拆分后（issue #347），渲染直接用 napcat 侧渲染好的权威 rawMessage，不再 agent 侧重复
+  // 渲染段（段→文本渲染 + vision 描述 hydrate 都在 napcat）。
+  it("should render qq messages from the napcat-rendered rawMessage", () => {
     expect(
       renderGroupMessagePlainText({
         nickname: "测试昵称",
         userId: "654321",
-        rawMessage: "raw fallback",
+        rawMessage: "hello structured",
         messageSegments: [
           {
             type: "text",

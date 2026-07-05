@@ -112,6 +112,18 @@ model NapcatQqMessage {
   @@map("napcat_qq_message")
 }
 
+// napcat 服务对 agent 的入站事件 outbox（issue #347）。每条 = 一个渲染好的 agent-facing
+// NapcatAgentEvent，单调 seq 即 SSE event id。napcat 先事务落这里拿 seq 再推 SSE，agent 重连带
+// Last-Event-ID 回放 seq> 缺口、按 seq 去重（严格 at-least-once）。createdAt 索引 + 定期 prune >7d。
+model NapcatEventOutbox {
+  seq       Int      @id @default(autoincrement())
+  event     Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "napcat_event_outbox_created_at_idx")
+  @@map("napcat_event_outbox")
+}
+
 model OauthSession {
   id            Int       @id @default(autoincrement())
   provider      String

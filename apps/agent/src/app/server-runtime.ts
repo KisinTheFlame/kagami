@@ -6,16 +6,16 @@ import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager"
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
-import { PrismaImageAssetDao } from "../napcat/infra/impl/image-asset.impl.dao.js";
-import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
-import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
-import { NapcatHandler } from "../napcat/http/napcat.handler.js";
+import { QqMessageHandler } from "../agent/capabilities/messaging/http/qq-message.handler.js";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
+import { HttpNapcatClient } from "../acl/napcat-client.js";
+import { NapcatEventSubscriber, type NapcatCursorStore } from "../acl/napcat-event-subscriber.js";
+import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
 import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
@@ -27,13 +27,10 @@ import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/applicat
 import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
 import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
 import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
-import { NapcatEventPersistenceWriter } from "../napcat/application/napcat-gateway/event-persistence-writer.js";
-import { DefaultNapcatImageMessageAnalyzer } from "../napcat/application/napcat-gateway/image-message-analyzer.js";
 import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
 import { HttpSpireClient } from "../acl/spire-client.js";
 import { HttpPixelClient } from "../acl/pixel-client.js";
-import { VisionAgent } from "../agent/capabilities/vision/application/vision-agent.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
 import { DefaultIthomeClient } from "../agent/capabilities/ithome/application/ithome-client.js";
@@ -61,7 +58,7 @@ type AppRouteHandler = {
 export type ServerRuntime = {
   app: FastifyInstance;
   database: Database;
-  /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的裸 napcatGatewayService.stop。 */
+  /** 停入站 SSE 订阅后反序关停所有 App（napcat WS 生命周期已外移到 kagami-napcat 进程）。 */
   shutdownApps: () => Promise<void>;
   taskScheduler: TaskScheduler;
   callbackServers: Array<{ stop(): Promise<void> }>;
@@ -100,9 +97,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
   });
 
-  const napcatEventDao = new PrismaNapcatEventDao({ database });
-  const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
-  const imageAssetDao = new PrismaImageAssetDao({ database });
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
   const ithomeFeedCursorDao = new PrismaIthomeFeedCursorDao({ database });
   const todoDao = new PrismaTodoDao({ database });
@@ -113,8 +107,11 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 服务侧，agent 不再碰。embedding 能力也在服务侧（将来记忆系统接线时按需在 agent 侧新建 client）。
   const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
   const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
-  const visionAgent = new VisionAgent({
-    llmClient,
+  // NapCat 拆成独立 kagami-napcat 进程（issue #347）：agent 经 HttpNapcatClient 出站（发消息 /
+  // 群文件 / 群信息 / 禁言查询），地址从顶层 services.napcat 派生。入站事件走下面的 SSE 订阅者。
+  // vision / OSS 图片存档 / 落库全在 napcat 侧，agent 不再持有。
+  const napcatClient = new HttpNapcatClient({
+    baseUrl: `http://${config.services.napcat.host}:${config.services.napcat.port}`,
   });
   // server.oss 缺失/禁用即关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）。
   // 启用时地址统一从顶层 services.oss 派生（host 是 reachable host，agent 据此 PUT）。
@@ -138,15 +135,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // services.pixel 派生。服务未起时，client 把错误归一成 PIXEL_NOT_READY，工具仍回规整失败结构。
   const pixelClient = new HttpPixelClient({
     baseUrl: `http://${config.services.pixel.host}:${config.services.pixel.port}`,
-  });
-  const imageMessageAnalyzer = new DefaultNapcatImageMessageAnalyzer({
-    visionAgent,
-    ossClient,
-    imageAssetDao,
-  });
-  const napcatPersistenceWriter = new NapcatEventPersistenceWriter({
-    napcatEventDao,
-    napcatQqMessageDao,
   });
   const eventQueue = new InMemoryQueue<Event>();
   // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
@@ -173,20 +161,14 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     },
   });
   const todoService = new TodoService({ todoDao });
-  // 手机 OS 模型：napcat 网关收纳进 QQ App。这里只把网关的协作者（持久化 / 图片分析 /
-  // DAO + configManager）传进去，网关实例由 buildQqApp 构造并独占持有，入站事件直达
-  // QqApp、不再走共享事件队列（也就不再需要跨边界的 late-bind holder）。
+  // QQ App 经注入的 napcatClient 出站；入站事件由下面的 NapcatEventSubscriber 订阅后喂给
+  // qqApp.handleNapcatEvent（napcat 拆独立进程，issue #347）。
   const agentRuntime = await buildAgentRuntime({
     config,
     database,
     llmClient,
     metricService,
-    napcat: {
-      configManager,
-      persistenceWriter: napcatPersistenceWriter,
-      imageMessageAnalyzer,
-      qqMessageDao: napcatQqMessageDao,
-    },
+    napcatClient,
     ithomeService,
     todoService,
     notificationCenter,
@@ -195,6 +177,16 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     browserClient,
     spireClient,
     pixelClient,
+  });
+
+  // 入站事件订阅：长连 kagami-napcat 的 SSE 流，解析事件喂 qqApp.handleNapcatEvent，处理成功后
+  // 落持久游标（跨 agent 重启记住已消费到的 seq，重连带 Last-Event-ID 回放缺口）。游标复用
+  // app_state 表（appId=napcat.cursor 存 { lastConsumedSeq }）。
+  const napcatCursorStore = createNapcatCursorStore(new PrismaAppStateStore({ database }));
+  const napcatEventSubscriber = new NapcatEventSubscriber({
+    baseUrl: `http://${config.services.napcat.host}:${config.services.napcat.port}`,
+    onEvent: event => agentRuntime.qqApp.handleNapcatEvent(event),
+    cursorStore: napcatCursorStore,
   });
 
   // TodoReminderPoller 构造放在 agentRuntime 之后：digest 第三段要 fork 主 Agent 上下文，
@@ -251,15 +243,22 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new NapcatHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
+      new QqMessageHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
       new SchedulerHandler({ taskScheduler }),
     ],
   });
 
+  // 启动入站事件订阅（后台重连循环，不阻塞）。qqApp 已装配，handleNapcatEvent 随时可调。
+  void napcatEventSubscriber.start();
+
   return {
     app,
     database,
-    shutdownApps: agentRuntime.shutdownApps,
+    // 关停：先停入站订阅（不再有新事件进来），再反序关停各 App。
+    shutdownApps: async () => {
+      napcatEventSubscriber.stop();
+      await agentRuntime.shutdownApps();
+    },
     taskScheduler,
     // OAuth callback server 随 kagami-llm 服务外移；agent 不再持有，关停编排对空数组无害。
     callbackServers: [],
@@ -272,6 +271,28 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     closeLlmProviders: async () => {},
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
+    },
+  };
+}
+
+/** app_state 里 napcat 入站游标的 appId。存 `{ lastConsumedSeq }`。 */
+const NAPCAT_CURSOR_APP_ID = "napcat.cursor";
+
+/** 把通用 app_state 存储适配成 NapcatEventSubscriber 要的 { load, save } 游标口。 */
+function createNapcatCursorStore(appStateStore: PrismaAppStateStore): NapcatCursorStore {
+  return {
+    async load(): Promise<number> {
+      const state = await appStateStore.load(NAPCAT_CURSOR_APP_ID);
+      if (state !== null && typeof state === "object" && !Array.isArray(state)) {
+        const seq = (state as Record<string, unknown>).lastConsumedSeq;
+        if (typeof seq === "number" && Number.isInteger(seq) && seq >= 0) {
+          return seq;
+        }
+      }
+      return 0;
+    },
+    async save(seq: number): Promise<void> {
+      await appStateStore.save(NAPCAT_CURSOR_APP_ID, { lastConsumedSeq: seq });
     },
   };
 }
