@@ -19,12 +19,49 @@ import { PrismaImageAssetDao } from "../infra/impl/image-asset.impl.dao.js";
 import { PrismaNapcatEventOutboxDao } from "../infra/impl/napcat-event-outbox.impl.dao.js";
 import { NapcatHandler } from "../http/napcat.handler.js";
 import { NapcatEventsHandler } from "../http/napcat-events.handler.js";
+import type { NapcatAgentEvent } from "@kagami/napcat-api/event";
+import type { NapcatEventOutboxDao } from "../infra/napcat-event-outbox.dao.js";
 
 const logger = new AppLogger({ source: "napcat-bootstrap" });
 
 /** outbox 保留窗口（7 天）+ prune 周期（每小时）。均为代码常量，不进 config。 */
 const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const OUTBOX_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * outbox append 的重试：outbox 是入站事件的 durability 边界，append 失败 = 事件丢（replay 也救不回，
+ * 因为根本没落库）。SQLite WAL 多写进程下偶发 SQLITE_BUSY（busy_timeout 内没抢到锁），这里再补几次
+ * 重试兜底，彻底失败才让异常冒泡（调用方升级为 error 日志，不静默）。
+ */
+const OUTBOX_APPEND_MAX_ATTEMPTS = 4;
+const OUTBOX_APPEND_RETRY_DELAY_MS = 250;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function appendOutboxWithRetry(
+  outboxDao: NapcatEventOutboxDao,
+  event: NapcatAgentEvent,
+): Promise<number> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= OUTBOX_APPEND_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await outboxDao.append(event);
+    } catch (error) {
+      lastError = error;
+      if (attempt < OUTBOX_APPEND_MAX_ATTEMPTS) {
+        logger.warn("outbox append 失败，重试中", {
+          event: "napcat.outbox.append_retry",
+          attempt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await delay(OUTBOX_APPEND_RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+  throw lastError;
+}
 
 export type NapcatRuntime = {
   app: FastifyInstance;
@@ -76,15 +113,24 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
   });
 
   const broadcaster = new NapcatEventBroadcaster();
-  const gateway = await DefaultNapcatGatewayService.create({
-    configManager,
-    // 入站事件的咽喉：先事务落 outbox 拿单调 seq，再实时广播（严格 at-least-once）。返回 seq
-    // 满足网关回调签名（number）；崩溃只会发生在「已落库未广播」→ 重连回放兜底，永不丢。
-    enqueueGroupMessageEvent: async event => {
-      const seq = await outboxDao.append(event);
+  // 入站事件的咽喉：先落 outbox（单条原子 INSERT）拿单调 seq，再实时广播（严格 at-least-once）。
+  // 崩溃只会发生在「已落库未广播」→ 重连回放兜底，永不丢。
+  // 串行化（append 链）：并发入站事件（vision 时延导致处理乱序）的 append 严格按调用顺序落库，
+  // seq 单调且广播不乱序——不依赖底层驱动是否同步。这条链是「落 outbox → 广播」的原子有序边界，
+  // 上游 flush 的有序调用与它接续。
+  let outboxAppendChain: Promise<unknown> = Promise.resolve();
+  const enqueueEvent = (event: NapcatAgentEvent): Promise<number> => {
+    const task = outboxAppendChain.then(async () => {
+      const seq = await appendOutboxWithRetry(outboxDao, event);
       broadcaster.publish({ seq, event });
       return seq;
-    },
+    });
+    outboxAppendChain = task.catch(() => undefined);
+    return task;
+  };
+  const gateway = await DefaultNapcatGatewayService.create({
+    configManager,
+    enqueueGroupMessageEvent: enqueueEvent,
     persistenceWriter,
     imageMessageAnalyzer,
     qqMessageDao: napcatQqMessageDao,

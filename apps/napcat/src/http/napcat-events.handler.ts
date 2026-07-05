@@ -71,7 +71,7 @@ export class NapcatEventsHandler {
   }
 }
 
-type NapcatSseSubscriberDeps = {
+export type NapcatSseSubscriberDeps = {
   write: (chunk: string) => void;
   outboxDao: NapcatEventOutboxDao;
   lastEventId: number;
@@ -82,7 +82,7 @@ type NapcatSseSubscriberDeps = {
  * `lastWrittenSeq` 单调去重（同一 seq 只发一次）。attach 之后、start() 之前的实时事件进缓冲；
  * start() 回放缺口后 flush 缓冲、切实时。
  */
-class NapcatSseSubscriber implements NapcatEventSubscriber {
+export class NapcatSseSubscriber implements NapcatEventSubscriber {
   private readonly write: (chunk: string) => void;
   private readonly outboxDao: NapcatEventOutboxDao;
   private phase: "buffering" | "live" = "buffering";
@@ -109,13 +109,35 @@ class NapcatSseSubscriber implements NapcatEventSubscriber {
 
   /** 回放 outbox 缺口 → flush 缓冲 → 转实时。 */
   public async start(): Promise<void> {
-    let cursor = this.lastWrittenSeq;
-    for (;;) {
+    // 快照高水位：回放只到订阅建立瞬间的 latestSeq。此后的实时事件（seq > high）已在 add 之后
+    // 经 deliver 进了 buffer，flush 时补发。没有这个上界，持续入站流量会让 listAfter 永远非空、
+    // 回放追不平、buffer 无限增长（review 发现）。
+    const high = await this.outboxDao.latestSeq();
+    const requestedFrom = this.lastWrittenSeq;
+    let cursor = requestedFrom;
+    let gapChecked = false;
+    while (cursor < high) {
       const batch = await this.outboxDao.listAfter(cursor, REPLAY_BATCH_SIZE);
       if (batch.length === 0) {
         break;
       }
+      // 缺口检测：agent 请求从 requestedFrom 续，但现存最早行已 > requestedFrom+1，说明中间的
+      // seq 已被 prune 掉（agent 停机超保留窗口）。这会静默丢消息——至少要吼一声，别当没发生。
+      if (!gapChecked) {
+        gapChecked = true;
+        if (requestedFrom > 0 && batch[0]!.seq > requestedFrom + 1) {
+          logger.error("outbox 缺口：请求续传的 seq 已被 prune，中间消息丢失", {
+            event: "napcat.events.replay_gap",
+            requestedFrom,
+            firstAvailableSeq: batch[0]!.seq,
+            lostCount: batch[0]!.seq - requestedFrom - 1,
+          });
+        }
+      }
       for (const event of batch) {
+        if (event.seq > high) {
+          break;
+        }
         this.writeIfNew(event);
       }
       cursor = batch[batch.length - 1]!.seq;
