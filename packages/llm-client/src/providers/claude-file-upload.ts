@@ -75,6 +75,22 @@ function collectUniqueImageParts(request: LlmChatRequest): Map<string, LlmImageC
   return uniqueImages;
 }
 
+/**
+ * 进程内单飞：把「同一图片内容(sha256)的解析——查缓存命中 / 或上传+落缓存」在整个进程里
+ * 合并成一次，直到它 settle。
+ *
+ * 堵住的核心竞态：跨并发请求（主 Agent + task agent、或连续轮次）带同一张**新**图时，各自
+ * findByHash miss → 各自 uploadClaudeFile 拿到**不同** file_id → save 覆盖后，先落的那个
+ * file_id 成永久孤儿——它从不进 claude_file_cache，LRU GC 的 findIdle 永远扫不到它，只增不减
+ * 撞组织存储配额。把整段解析按 sha256 单飞后，同一内容的并发解析复用同一个在飞 Promise，只
+ * 上传一次。顺带也关掉「A 上传中、B 的 findByHash 恰在 A save 落库前返回 miss」这个更窄的窗口
+ * ——只要该 sha256 有在飞解析，B 直接复用、绝不第二次上传。
+ *
+ * settle 后即从表移除：失败不缓存 → 下轮重试；成功后再来的走 findByHash 命中、不再进单飞。
+ * 进程级 Map，正是我们要的合并粒度（kagami-llm 单进程、所有上传都过这里）。
+ */
+const inFlightResolutions = new Map<string, Promise<string>>();
+
 async function resolveSingleImage(params: {
   part: LlmImageContentPart;
   fileCacheDao: ClaudeFileCacheDao;
@@ -94,48 +110,91 @@ async function resolveSingleImage(params: {
     }
 
     const contentSha256 = createHash("sha256").update(bytes).digest("hex");
-
-    const cached = await params.fileCacheDao.findByHash(contentSha256);
-    if (cached) {
-      // 刷新最近使用时间（GC 判据）。best-effort：DAO 内部已节流成"每图最多 TOUCH_THROTTLE 一次真写"，
-      // 此处再兜一层 try/catch——刷新失败绝不拖垮图片解析 / LLM 主请求（最坏 last_used_at 滞后，
-      // 该图稍早被 GC → 下轮命中 miss 自动重传，自愈）。
-      //
-      // KV 安全的关键（#433）：消息列表持久化的是 base64 原文（见 root-agent-runtime-snapshot），
-      // file_id 只在 wire 层每轮现拼。故一张图只要还在活上下文，每轮 chat 都会重新走到这里被 touch
-      // → last_used_at 恒新（≤TOUCH_THROTTLE）→ 永远到不了 idle cutoff → GC 永不删它 → 不会因重传
-      // 换 file_id 撞前缀漂移。只有连续 idleDays 天零轮次的图才会被回收，那时 provider 侧 KV cache
-      // 早已过期，冷重建重传不额外损失。
-      try {
-        await params.fileCacheDao.touch(contentSha256);
-      } catch (error) {
-        logTouchFailure(error);
-      }
-      return cached.fileId;
-    }
-
-    const fileId = await uploadClaudeFile({
-      bytes,
-      mimeType: params.part.mimeType,
-      filename: params.part.filename,
-      baseUrl: params.baseUrl,
-      anthropicBeta: params.anthropicBeta,
-      accessToken: await params.getAccessToken(),
-      timeoutMs: params.timeoutMs,
-    });
-
-    await params.fileCacheDao.save({
-      contentSha256,
-      fileId,
-      mimeType: params.part.mimeType,
-      sizeBytes: bytes.byteLength,
-    });
-
-    return fileId;
+    return await resolveFileIdSingleFlight({ ...params, bytes, contentSha256 });
   } catch (error) {
     logUploadFailure(error);
     return null;
   }
+}
+
+/** 单飞入口：同一 sha256 已有在飞解析则复用它，否则起一个并登记，settle 后清表。 */
+function resolveFileIdSingleFlight(params: {
+  part: LlmImageContentPart;
+  bytes: Buffer;
+  contentSha256: string;
+  fileCacheDao: ClaudeFileCacheDao;
+  baseUrl: string;
+  anthropicBeta: string;
+  getAccessToken: () => Promise<string>;
+  timeoutMs: number;
+}): Promise<string> {
+  // 原子性铁律：get(miss) → 起 Promise → set 这三步之间**绝不能有 await**。resolveFileIdOnce
+  // 是 async，被调用时同步执行到它第一个 await（findByHash）才让出，返回一个 pending Promise；
+  // 我们在同一同步块内 set。单线程 event loop 下这是不可中断的整体，故并发两个调用不可能都 miss
+  // 都 set。任何人日后在这里插入 await 都会重新打开并发重复上传的窗口。
+  const existing = inFlightResolutions.get(params.contentSha256);
+  if (existing) {
+    return existing;
+  }
+
+  const resolution = resolveFileIdOnce(params);
+  inFlightResolutions.set(params.contentSha256, resolution);
+  // 成功/失败都清表。winner / loser 各自 await 这个 Promise（其 rejection 由它们的 try/catch
+  // 消费），这里再挂一个只做清理的消费者；两个分支都返回 void、绝不重抛，故不产生 unhandled。
+  const cleanup = (): void => {
+    inFlightResolutions.delete(params.contentSha256);
+  };
+  resolution.then(cleanup, cleanup);
+  return resolution;
+}
+
+async function resolveFileIdOnce(params: {
+  part: LlmImageContentPart;
+  bytes: Buffer;
+  contentSha256: string;
+  fileCacheDao: ClaudeFileCacheDao;
+  baseUrl: string;
+  anthropicBeta: string;
+  getAccessToken: () => Promise<string>;
+  timeoutMs: number;
+}): Promise<string> {
+  const cached = await params.fileCacheDao.findByHash(params.contentSha256);
+  if (cached) {
+    // 刷新最近使用时间（GC 判据）。best-effort：DAO 内部已节流成"每图最多 TOUCH_THROTTLE 一次真写"，
+    // 此处再兜一层 try/catch——刷新失败绝不拖垮图片解析 / LLM 主请求（最坏 last_used_at 滞后，
+    // 该图稍早被 GC → 下轮命中 miss 自动重传，自愈）。
+    //
+    // KV 安全的关键（#433）：消息列表持久化的是 base64 原文（见 root-agent-runtime-snapshot），
+    // file_id 只在 wire 层每轮现拼。故一张图只要还在活上下文，每轮 chat 都会重新走到这里被 touch
+    // → last_used_at 恒新（≤TOUCH_THROTTLE）→ 永远到不了 idle cutoff → GC 永不删它 → 不会因重传
+    // 换 file_id 撞前缀漂移。只有连续 idleDays 天零轮次的图才会被回收，那时 provider 侧 KV cache
+    // 早已过期，冷重建重传不额外损失。
+    try {
+      await params.fileCacheDao.touch(params.contentSha256);
+    } catch (error) {
+      logTouchFailure(error);
+    }
+    return cached.fileId;
+  }
+
+  const fileId = await uploadClaudeFile({
+    bytes: params.bytes,
+    mimeType: params.part.mimeType,
+    filename: params.part.filename,
+    baseUrl: params.baseUrl,
+    anthropicBeta: params.anthropicBeta,
+    accessToken: await params.getAccessToken(),
+    timeoutMs: params.timeoutMs,
+  });
+
+  await params.fileCacheDao.save({
+    contentSha256: params.contentSha256,
+    fileId,
+    mimeType: params.part.mimeType,
+    sizeBytes: params.bytes.byteLength,
+  });
+
+  return fileId;
 }
 
 async function uploadClaudeFile(params: {
