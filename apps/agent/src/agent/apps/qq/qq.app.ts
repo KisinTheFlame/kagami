@@ -652,6 +652,20 @@ export class QqApp implements App, ForegroundInputSource {
     if (this.recentMessageLimit <= 0) {
       return [];
     }
+    // 拉历史失败不该让 open_conversation 整个硬失败：NapCat 抽风（如锚点消息缺失报
+    // 「消息...不存在」）时降级为「暂无最近消息」，会话照常打开、缓冲里的未读仍会兜底展示。
+    try {
+      return await this.fetchRecentFromNapcat(conversation);
+    } catch (error) {
+      logger.errorWithCause("Failed to fetch recent messages for conversation", error, {
+        event: "agent.qq.fetch_recent_failed",
+        conversationId: conversation.id,
+      });
+      return [];
+    }
+  }
+
+  private async fetchRecentFromNapcat(conversation: Conversation): Promise<ConversationMessage[]> {
     if (conversation.kind === "group") {
       const groupId = parseConversationGroupId(conversation.id);
       return groupId

@@ -470,6 +470,9 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
 
     const data = await this.transport.request("get_group_msg_history", {
       group_id: groupIdResult.data,
+      // message_seq=0 = 从最新一条往前取（OneBot/NapCat 约定）。缺省时 NapCat 会按
+      // undefined 去定位锚点消息、报「消息undefined不存在」，故必须显式给锚点。
+      message_seq: 0,
       count: countResult.data,
     });
 
@@ -516,11 +519,13 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     const params: Record<string, unknown> = {
       user_id: userIdResult.data,
       count: countResult.data,
+      // 同 get_group_msg_history：缺省 message_seq 会让 NapCat 按 undefined 查锚点报错，
+      // 未显式指定时以 0 = 从最新一条往前取。
+      message_seq:
+        typeof input.messageSeq === "number" && Number.isFinite(input.messageSeq)
+          ? Math.trunc(input.messageSeq)
+          : 0,
     };
-
-    if (typeof input.messageSeq === "number" && Number.isFinite(input.messageSeq)) {
-      params.message_seq = Math.trunc(input.messageSeq);
-    }
 
     const data = await this.transport.request("get_friend_msg_history", params);
     const historyResult = GroupMessageHistoryResponseSchema.safeParse(data ?? {});

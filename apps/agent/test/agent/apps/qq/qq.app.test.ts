@@ -1054,7 +1054,7 @@ describe("QqApp 前台实时输入（issue #251）", () => {
     expect(input?.text).toContain("（更早 3 条未读未展示，其中有人 @ 你）");
   });
 
-  it("fetch 抛错：未读原封不动（消费只发生在成功路径）", async () => {
+  it("fetch 抛错：降级为空历史、会话照常打开、缓冲未读兜底展示（不硬失败）", async () => {
     const gateway = fakeGateway({
       getRecentGroupMessages: vi.fn().mockRejectedValue(new Error("napcat 挂了")),
     });
@@ -1067,11 +1067,11 @@ describe("QqApp 前台实时输入（issue #251）", () => {
       data: fgMessage("别丢我", { messageId: 91 }),
     });
 
-    await expect(app.openConversation("qq_group:1")).rejects.toThrow("napcat 挂了");
-
-    // 消息仍在：之后列表里未读还在（这里用退化补推间接验证——消息未被吞）。
-    const onFocusContent = (await app.onFocus())[0];
-    expect("content" in onFocusContent ? onFocusContent.content : "").toContain("未读 1");
+    // 拉历史失败不再让 open 硬抛错：降级为空历史，会话照常打开。空历史 + 有缓冲未读时走
+    // 「退化为直接展示缓冲」路径，消息不被静默吞——当场兜底展示，而非丢弃。
+    const opened = await app.openConversation("qq_group:1");
+    expect(opened.ok).toBe(true);
+    expect(opened.content).toContain("别丢我");
   });
 });
 
