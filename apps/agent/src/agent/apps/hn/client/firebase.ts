@@ -2,7 +2,7 @@ import { z } from "zod";
 import { hnFetchJson, type HnFetchOptions } from "./hn-fetch.js";
 
 /** HN 官方 Firebase API 的只读 baseURL。 */
-export const HN_FIREBASE_BASE_URL = "https://hacker-news.firebaseio.com/v0";
+const HN_FIREBASE_BASE_URL = "https://hacker-news.firebaseio.com/v0";
 
 export type HnFeed = "top" | "new" | "best" | "ask" | "show" | "job";
 

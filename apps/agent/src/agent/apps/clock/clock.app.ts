@@ -2,7 +2,7 @@ import type { App } from "@kagami/agent-runtime";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { ViewTimeTool } from "./tools/view-time.tool.js";
 
-export const CLOCK_APP_ID = "clock";
+const CLOCK_APP_ID = "clock";
 
 /**
  * Clock App。Agent 主动查询当前时间的最小 App。

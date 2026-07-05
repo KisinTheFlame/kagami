@@ -4,7 +4,7 @@ import { renderTransit } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const PLAN_TRANSIT_TOOL_NAME = "plan_transit";
+const PLAN_TRANSIT_TOOL_NAME = "plan_transit";
 
 // city1/city2 是 citycode，模型易当数字传——收下数字并转字符串（注意：带前导零的 citycode 如
 // "010" 必须由模型以字符串传，数字 10 已丢前导零，此处无法还原，只是不再硬拒）。

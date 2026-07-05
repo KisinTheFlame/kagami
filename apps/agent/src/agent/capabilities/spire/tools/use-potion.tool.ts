@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireScreen } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_USE_POTION_TOOL_NAME = "use_potion";
+const SPIRE_USE_POTION_TOOL_NAME = "use_potion";
 
 const Schema = z.object({
   slot_index: z.number().int().min(0),

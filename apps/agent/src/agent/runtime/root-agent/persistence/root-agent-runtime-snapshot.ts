@@ -55,7 +55,7 @@ const LlmMessageSchema: z.ZodType<LlmMessage> = z.union([
   }),
 ]);
 
-export const PersistedAgentContextSnapshotSchema = z.object({
+const PersistedAgentContextSnapshotSchema = z.object({
   messages: z.array(LlmMessageSchema),
 });
 

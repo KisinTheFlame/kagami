@@ -146,7 +146,7 @@ export function grantRandomRelic(state: GameState): void {
 }
 
 /** 结算完一个节点后回到地图选路屏。 */
-export function backToMap(state: GameState): void {
+function backToMap(state: GameState): void {
   state.screen = "map";
 }
 

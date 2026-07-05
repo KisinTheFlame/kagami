@@ -11,7 +11,7 @@ import { OpenHnThreadTool } from "./tools/open-hn-thread.tool.js";
 import { SearchHnTool } from "./tools/search-hn.tool.js";
 import { OpenHnUserTool } from "./tools/open-hn-user.tool.js";
 
-export const HN_APP_ID = "hn";
+const HN_APP_ID = "hn";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Kagami/1.0";

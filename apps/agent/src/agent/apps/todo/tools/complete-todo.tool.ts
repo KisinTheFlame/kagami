@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import type { TodoService } from "../../../capabilities/todo/application/todo.service.js";
 
-export const COMPLETE_TODO_TOOL_NAME = "complete_todo";
+const COMPLETE_TODO_TOOL_NAME = "complete_todo";
 
 const CompleteTodoArgumentsSchema = z.object({
   id: z.number().int().positive(),

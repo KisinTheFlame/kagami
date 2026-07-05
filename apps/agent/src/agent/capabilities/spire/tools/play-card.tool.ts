@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireScreen } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_PLAY_CARD_TOOL_NAME = "play_card";
+const SPIRE_PLAY_CARD_TOOL_NAME = "play_card";
 
 const Schema = z.object({
   hand_index: z.number().int().min(0),

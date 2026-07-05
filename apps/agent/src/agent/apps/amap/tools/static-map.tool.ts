@@ -6,7 +6,7 @@ import { escapeAttr } from "../amap-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
-export const STATIC_MAP_TOOL_NAME = "static_map";
+const STATIC_MAP_TOOL_NAME = "static_map";
 
 const logger = new AppLogger({ source: "agent.amap.static_map" });
 

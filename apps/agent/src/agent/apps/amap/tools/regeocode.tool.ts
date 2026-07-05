@@ -4,7 +4,7 @@ import { renderRegeocode } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const REGEOCODE_TOOL_NAME = "regeocode";
+const REGEOCODE_TOOL_NAME = "regeocode";
 
 const Schema = z.object({
   location: z.string().min(1),

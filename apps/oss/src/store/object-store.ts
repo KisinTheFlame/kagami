@@ -86,7 +86,7 @@ interface DeleteOutcome {
 }
 
 /** 控制台对象浏览的列表行（object ⋈ blob，size/refcount 取自权威的 blob 行）。 */
-export interface ObjectListRow {
+interface ObjectListRow {
   /** object 表自增 id；对外 key = `res-<id>`（映射在 HTTP 层完成）。 */
   id: number;
   mime: string;

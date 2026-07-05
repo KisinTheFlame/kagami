@@ -3,7 +3,7 @@ import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kaga
 import { InvalidTimeError } from "../../../capabilities/todo/application/parse-reminder-time.js";
 import type { TodoService } from "../../../capabilities/todo/application/todo.service.js";
 
-export const ADD_TODO_TOOL_NAME = "add_todo";
+const ADD_TODO_TOOL_NAME = "add_todo";
 
 const AddTodoArgumentsSchema = z.object({
   title: z.string().min(1),

@@ -5,7 +5,7 @@ import { PixelToolComponent } from "./pixel-tool-component.js";
 import { renderDrawResponse } from "../render/pixel-screen.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_NEW_CANVAS_TOOL_NAME = "new_canvas";
+const PIXEL_NEW_CANVAS_TOOL_NAME = "new_canvas";
 
 const Schema = z.object({
   width: z.number().int().min(1).max(MAX_CANVAS_SIZE),

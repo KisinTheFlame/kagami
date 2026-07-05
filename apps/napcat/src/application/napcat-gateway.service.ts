@@ -63,7 +63,7 @@ export type NapcatGroupMessageEvent = {
   data: NapcatGroupMessageData;
 };
 
-export type NapcatPrivateMessageData = {
+type NapcatPrivateMessageData = {
   userId: string;
   nickname: string;
   remark: string | null;
@@ -78,7 +78,7 @@ export type NapcatPrivateMessageEvent = {
   data: NapcatPrivateMessageData;
 };
 
-export type NapcatFriendListUpdatedEvent = {
+type NapcatFriendListUpdatedEvent = {
   type: "napcat_friend_list_updated";
   data: {
     friends: NapcatFriendInfo[];
@@ -104,7 +104,7 @@ export type NapcatGroupBanData = {
   time: number | null;
 };
 
-export type NapcatGroupBanEvent = {
+type NapcatGroupBanEvent = {
   type: "napcat_group_ban";
   data: NapcatGroupBanData;
 };
@@ -115,7 +115,7 @@ export type NapcatAgentEvent =
   | NapcatFriendListUpdatedEvent
   | NapcatGroupBanEvent;
 
-export type NapcatChatTarget =
+type NapcatChatTarget =
   | {
       chatType: "group";
       groupId: string;
@@ -158,7 +158,7 @@ export type NapcatForwardMessagePage = {
 };
 
 /** 群文件系统里的一个文件。 */
-export type NapcatGroupFileEntry = {
+type NapcatGroupFileEntry = {
   fileId: string;
   fileName: string;
   size: number;
@@ -167,7 +167,7 @@ export type NapcatGroupFileEntry = {
 };
 
 /** 群文件系统里的一个文件夹。 */
-export type NapcatGroupFolderEntry = {
+type NapcatGroupFolderEntry = {
   folderId: string;
   folderName: string;
   fileCount: number;

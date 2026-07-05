@@ -3,7 +3,7 @@ import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 
-export const BROWSER_PRESS_TOOL_NAME = "browser_press";
+const BROWSER_PRESS_TOOL_NAME = "browser_press";
 
 const Schema = z.object({ key: z.string().min(1) });
 

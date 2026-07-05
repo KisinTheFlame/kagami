@@ -12,7 +12,7 @@ import type { RngState } from "../engine/types.js";
 // 与黄金种子回归（确定性）。策略自带 RNG（与游戏 RNG 分离，不污染对局种子）。
 
 /** 枚举当前态下的合法动作。 */
-export function legalActions(state: GameState): GameAction[] {
+function legalActions(state: GameState): GameAction[] {
   if (state.screen === "combat" && state.combat) {
     const combat = state.combat;
     const target = lowestHpEnemyIndex(state);

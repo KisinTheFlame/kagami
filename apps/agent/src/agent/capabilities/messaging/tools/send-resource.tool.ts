@@ -6,7 +6,7 @@ import type { ResourceService } from "../../resource/application/resource.servic
 import type { AgentMessageService } from "../application/agent-message.service.js";
 import { MutedSendError, formatMutedNote } from "../application/muted-send-error.js";
 
-export const SEND_RESOURCE_TOOL_NAME = "send_resource";
+const SEND_RESOURCE_TOOL_NAME = "send_resource";
 
 const SendResourceArgumentsSchema = z.object({
   resid: z.string().trim().min(1),

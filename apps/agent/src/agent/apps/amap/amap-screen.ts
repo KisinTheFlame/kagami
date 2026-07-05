@@ -191,7 +191,7 @@ function formatDuration(seconds: string): string {
 }
 
 /** 转义标签正文里的动态文本：< > & 转实体，防止伪造 <amap_*> 标签注入上下文。 */
-export function esc(value: string | null | undefined): string {
+function esc(value: string | null | undefined): string {
   return (value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 

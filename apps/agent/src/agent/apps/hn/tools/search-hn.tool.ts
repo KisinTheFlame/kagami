@@ -4,7 +4,7 @@ import { renderHnSearchContent } from "../hn-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { HnReader } from "../hn-reader.js";
 
-export const SEARCH_HN_TOOL_NAME = "search_hn";
+const SEARCH_HN_TOOL_NAME = "search_hn";
 
 const SearchHnArgumentsSchema = z.object({
   query: z.string().min(1),

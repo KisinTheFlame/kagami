@@ -15,7 +15,7 @@ import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js"
 import type { OssClient } from "../../../acl/oss-client.js";
 import type { PixelClient } from "../../../acl/pixel-client.js";
 
-export const PIXEL_APP_ID = "pixel";
+const PIXEL_APP_ID = "pixel";
 
 type PixelAppDeps = {
   /** 绘图动作客户端：打到独立的 kagami-pixel 进程（issue #365）。 */

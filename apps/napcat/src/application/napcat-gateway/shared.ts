@@ -14,7 +14,6 @@ import {
   type NapcatReceiveImageSegment,
   type NapcatReceiveMessageSegment,
   type NapcatReceiveReplySegment,
-  type NapcatReceiveTextSegment,
 } from "../../domain/napcat-segment.js";
 import {
   QQ_FACE_NAMES,
@@ -23,7 +22,7 @@ import {
   FORWARD_ID_DISPLAY_PREFIX,
 } from "@kagami/napcat-api/rendering";
 
-export type { NapcatReceiveAtSegment, NapcatReceiveMessageSegment, NapcatReceiveTextSegment };
+export type { NapcatReceiveAtSegment, NapcatReceiveMessageSegment };
 
 export type WebSocketLike = {
   readonly readyState: number;
@@ -52,7 +51,7 @@ export const WS_OPEN_READY_STATE = 1;
 export const BLOCKED_NAPCAT_EVENT_POST_TYPES = new Set<string>(["meta_event"]);
 export const GROUP_MEMBER_DISPLAY_NAME_CACHE_TTL_MS = 10 * 60 * 1000;
 
-export const MessageSegmentsSchema = z.array(NapcatReceiveMessageSegmentSchema);
+const MessageSegmentsSchema = z.array(NapcatReceiveMessageSegmentSchema);
 
 export const ActionResponseSchema = z.object({
   status: z.string(),
@@ -218,7 +217,7 @@ export function renderSupportedMessageSegments(
  * 合并转发段：只渲染成带 res_id 的占位符,不内联展开内容。Kagami 想看靠 QQ App 的
  * view_forward(forward_id) 工具按需拉取——大段聊天记录绝不直接进主上下文（KV 缓存优先）。
  */
-export function formatForwardSegment(segment: NapcatReceiveForwardSegment): string {
+function formatForwardSegment(segment: NapcatReceiveForwardSegment): string {
   const id = toNullableString(segment.data.id);
   return id ? `[forward_id: ${FORWARD_ID_DISPLAY_PREFIX}${id}]` : "[合并转发]";
 }
@@ -228,7 +227,7 @@ export function formatForwardSegment(segment: NapcatReceiveForwardSegment): stri
  * 现在渲染成 `[表情: 名字]`。名字优先取 NapCat 给的 `raw.faceText`（最权威），其次查兜底字典，
  * 都没有再退化成通用 `[表情]`。和 `[图片: 描述]` / `[合并转发]` 的方括号占位约定保持一致。
  */
-export function formatFaceSegment(segment: NapcatReceiveFaceSegment): string {
+function formatFaceSegment(segment: NapcatReceiveFaceSegment): string {
   const name = resolveFaceName(segment);
   return name ? `[表情: ${name}]` : "[表情]";
 }
@@ -357,7 +356,7 @@ function createFaceSegment(name: string): NapcatSendFaceSegment | null {
   return id ? { type: "face", data: { id } } : null;
 }
 
-export function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
+function formatAtSegment(segment: NapcatReceiveAtSegment): string | null {
   const qq = segment.data.qq;
   const name = toNullableString(segment.data.name) ?? (qq === "all" ? "全体成员" : null);
   if (!name) {
@@ -395,7 +394,7 @@ export function extractDisplayNameFromGroupMemberInfo(
   return toNullableString(data.nickname);
 }
 
-export function formatReplySegment(segment: NapcatReceiveReplySegment): string {
+function formatReplySegment(segment: NapcatReceiveReplySegment): string {
   const nickname = toNullableString(segment.data.senderNickname);
   const userId = toNullableString(segment.data.senderUserId);
   const preview = toNullableString(segment.data.messagePreview);

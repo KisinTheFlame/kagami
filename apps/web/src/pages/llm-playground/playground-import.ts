@@ -11,18 +11,18 @@ import {
   type PlaygroundMessage,
 } from "@kagami/agent-api/playground";
 
-export type PlaygroundImportWarningCode =
+type PlaygroundImportWarningCode =
   | "image_omitted"
   | "provider_unavailable"
   | "model_unavailable"
   | "no_provider_available";
 
-export type PlaygroundImportWarning = {
+type PlaygroundImportWarning = {
   code: PlaygroundImportWarningCode;
   message: string;
 };
 
-export type PlaygroundImportSource = {
+type PlaygroundImportSource = {
   itemId: number;
   requestId: string;
   createdAt: string;

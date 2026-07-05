@@ -2,7 +2,7 @@ import { z } from "zod";
 import { hnFetchJson, type HnFetchOptions } from "./hn-fetch.js";
 
 /** HN 官方背书的第三方搜索 API（Algolia）只读 baseURL。 */
-export const HN_ALGOLIA_BASE_URL = "https://hn.algolia.com/api/v1";
+const HN_ALGOLIA_BASE_URL = "https://hn.algolia.com/api/v1";
 
 export type HnSearchSort = "relevance" | "date";
 export type HnSearchTag = "story" | "comment" | "ask_hn" | "show_hn";

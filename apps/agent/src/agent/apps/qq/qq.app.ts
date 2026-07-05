@@ -64,7 +64,7 @@ function toConversationId(id: string): ConversationId {
   return id as ConversationId;
 }
 
-export const QQ_APP_ID = "qq";
+const QQ_APP_ID = "qq";
 
 /** view_forward 每页条数（默认显示前 50 条，其余靠 offset 翻页）。 */
 const FORWARD_PAGE_SIZE = 50;

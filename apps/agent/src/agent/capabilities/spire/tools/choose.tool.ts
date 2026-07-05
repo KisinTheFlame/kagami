@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireScreen } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_CHOOSE_TOOL_NAME = "choose";
+const SPIRE_CHOOSE_TOOL_NAME = "choose";
 
 const Schema = z.object({ option_index: z.number().int().min(0) });
 

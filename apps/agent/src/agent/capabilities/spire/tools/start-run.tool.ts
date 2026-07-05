@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireScreen } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_START_RUN_TOOL_NAME = "start_run";
+const SPIRE_START_RUN_TOOL_NAME = "start_run";
 
 const Schema = z.object({
   character: z.enum(["ironclad", "silent", "defect", "watcher"]).optional(),

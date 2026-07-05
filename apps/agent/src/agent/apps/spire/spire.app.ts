@@ -11,7 +11,7 @@ import { renderSpirePortal } from "../../capabilities/spire/render/spire-screen.
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { SpireClient } from "../../../acl/spire-client.js";
 
-export const SPIRE_APP_ID = "spire";
+const SPIRE_APP_ID = "spire";
 
 type SpireAppDeps = {
   /** 游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */

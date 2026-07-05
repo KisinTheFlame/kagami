@@ -3,7 +3,7 @@ import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kaga
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { ResourceFileService } from "../application/resource-file.service.js";
 
-export const DOWNLOAD_RESOURCE_TOOL_NAME = "download_resource";
+const DOWNLOAD_RESOURCE_TOOL_NAME = "download_resource";
 
 const DownloadResourceArgumentsSchema = z.object({
   resid: z.string().trim().min(1),

@@ -13,7 +13,7 @@ import { PlanTransitTool } from "./tools/plan-transit.tool.js";
 import { WeatherTool } from "./tools/weather.tool.js";
 import { StaticMapTool } from "./tools/static-map.tool.js";
 
-export const AMAP_APP_ID = "amap";
+const AMAP_APP_ID = "amap";
 
 const PositiveInt = z.number().int().positive();
 

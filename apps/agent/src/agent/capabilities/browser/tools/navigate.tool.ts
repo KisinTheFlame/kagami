@@ -3,7 +3,7 @@ import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 
-export const BROWSER_NAVIGATE_TOOL_NAME = "browser_navigate";
+const BROWSER_NAVIGATE_TOOL_NAME = "browser_navigate";
 
 const Schema = z.object({ url: z.string().min(1) });
 

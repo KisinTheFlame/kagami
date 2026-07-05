@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type JsonSchema, type ToolKind } from "@kagami/agent-runtime";
 
-export const CALCULATE_TOOL_NAME = "calculate";
+const CALCULATE_TOOL_NAME = "calculate";
 
 const OPERATORS = ["+", "-", "*", "/"] as const;
 type Operator = (typeof OPERATORS)[number];

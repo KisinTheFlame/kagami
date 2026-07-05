@@ -4,7 +4,7 @@ import { TODO_LIST_RENDER_LIMIT } from "../../../capabilities/todo/application/t
 import type { TodoService } from "../../../capabilities/todo/application/todo.service.js";
 import { renderTodoListContent } from "../render-todo-list.js";
 
-export const LIST_TODOS_TOOL_NAME = "list_todos";
+const LIST_TODOS_TOOL_NAME = "list_todos";
 
 const ListTodosArgumentsSchema = z.object({
   filter: z.enum(["pending", "all", "done"]).optional(),

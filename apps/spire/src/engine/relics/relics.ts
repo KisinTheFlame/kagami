@@ -19,12 +19,12 @@ import { nextInt } from "../rng.js";
 // 直接状态改动（力量/敏捷/格挡/能量/回血）在钩子里做；需要走伤害结算的用 emit 发 Effect。
 // hooks 第二参 self 是该遗物自己的 RelicState，计数型遗物读写 self.counter。
 
-export type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss";
+type RelicRarity = "starter" | "common" | "uncommon" | "rare" | "boss";
 
 /** emit：以玩家为行动者发射一个战斗 Effect（发伤 / AoE / 加牌走 add_card）。 */
 type Emit = (effect: Effect) => void;
 
-export type RelicHooks = {
+type RelicHooks = {
   onCombatStart?: (state: GameState, self: RelicState, emit: Emit) => void;
   onCombatEnd?: (state: GameState, self: RelicState, emit: Emit) => void;
   onTurnStart?: (state: GameState, self: RelicState, emit: Emit) => void;

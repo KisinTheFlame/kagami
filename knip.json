@@ -16,7 +16,17 @@
     "duplicates": "warn"
   },
   "ignoreDependencies": ["@prisma/client", "better-sqlite3", "pm2"],
-  "ignore": ["**/prisma/generated/**", "**/prisma/schema.prisma"],
+  "ignore": [
+    "**/prisma/generated/**",
+    "**/prisma/schema.prisma",
+    "apps/napcat/src/domain/napcat-segment.ts",
+    "apps/web/src/components/ui/**",
+    "**/test/helpers/**",
+    "**/*.test-helper.ts",
+    "apps/agent/src/acl/spire-client.ts",
+    "apps/agent/src/acl/napcat-client.ts",
+    "apps/spire/src/application/state-view.ts"
+  ],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs", "ecosystem.config.cjs"]

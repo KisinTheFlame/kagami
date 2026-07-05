@@ -4,7 +4,7 @@ import { renderWeather } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const WEATHER_TOOL_NAME = "weather";
+const WEATHER_TOOL_NAME = "weather";
 
 const Schema = z.object({
   // 模型常把 adcode（如 110000）当数字传，zod 会拒成 "Expected string received number"——收下数字并转字符串。

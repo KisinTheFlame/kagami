@@ -14,11 +14,11 @@ export type AgentContextDashboardSummary = {
   recentItems: AgentContextDashboardItem[];
   recentItemsTruncated: boolean;
 };
-export type ContextEventItem = {
+type ContextEventItem = {
   kind: "event";
   event: Event;
 };
-export type ContextLlmMessageItem = {
+type ContextLlmMessageItem = {
   kind: "llm_message";
   message: LlmMessage;
 };

@@ -6,7 +6,7 @@ import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.
 import type { OssClient } from "../../../../acl/oss-client.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_RENDER_TOOL_NAME = "render";
+const PIXEL_RENDER_TOOL_NAME = "render";
 
 const logger = new AppLogger({ source: "agent.pixel.render" });
 

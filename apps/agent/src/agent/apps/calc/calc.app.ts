@@ -3,7 +3,7 @@ import type { App, AppStartupContext } from "@kagami/agent-runtime";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { CalculateTool } from "./tools/calculate.tool.js";
 
-export const CALC_APP_ID = "calc";
+const CALC_APP_ID = "calc";
 
 const CalcConfigSchema = z
   .object({

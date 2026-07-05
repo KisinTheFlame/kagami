@@ -4,7 +4,7 @@ import { BrowserToolComponent } from "./browser-tool-component.js";
 import { BrowserError } from "../domain/errors.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 
-export const BROWSER_TYPE_TOOL_NAME = "browser_type";
+const BROWSER_TYPE_TOOL_NAME = "browser_type";
 
 const Schema = z.object({
   ref: z.string().min(1),

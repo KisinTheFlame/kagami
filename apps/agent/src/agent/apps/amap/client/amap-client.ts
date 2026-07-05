@@ -99,7 +99,7 @@ const PoiResponseSchema = z.object({
   count: Str,
   pois: z.array(PoiSchema).nullish(),
 });
-export type AmapPoi = z.infer<typeof PoiSchema>;
+type AmapPoi = z.infer<typeof PoiSchema>;
 export type AmapPoiResult = { count: string | null; pois: AmapPoi[] };
 
 // === 路径规划（driving/walking/bicycling） ===
@@ -184,8 +184,8 @@ const WeatherResponseSchema = z.object({
   lives: z.array(WeatherLiveSchema).nullish(),
   forecasts: z.array(WeatherForecastSchema).nullish(),
 });
-export type AmapWeatherLive = z.infer<typeof WeatherLiveSchema>;
-export type AmapWeatherForecast = z.infer<typeof WeatherForecastSchema>;
+type AmapWeatherLive = z.infer<typeof WeatherLiveSchema>;
+type AmapWeatherForecast = z.infer<typeof WeatherForecastSchema>;
 export type AmapWeatherResult = {
   kind: "base" | "all";
   lives: AmapWeatherLive[];

@@ -99,6 +99,6 @@ export class TickBroadcaster {
 }
 
 /** 一个 tick 序列化成 SSE 帧：`data: <tick JSON>\n\n`（无 id 行——不做 Last-Event-ID 回放）。 */
-export function serializeTickFrame(tick: SchedulerTickEvent): string {
+function serializeTickFrame(tick: SchedulerTickEvent): string {
   return `data: ${JSON.stringify(tick)}\n\n`;
 }

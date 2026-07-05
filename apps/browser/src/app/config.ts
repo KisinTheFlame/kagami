@@ -18,7 +18,7 @@ const BrowserBehaviorConfigSchema = z
   })
   .default({});
 
-export type BrowserBehaviorConfig = z.infer<typeof BrowserBehaviorConfigSchema>;
+type BrowserBehaviorConfig = z.infer<typeof BrowserBehaviorConfigSchema>;
 
 export type BrowserProcessConfig = {
   /** 监听端口，来自顶层 services.browser.port（单一事实来源，见 issue #162）。 */

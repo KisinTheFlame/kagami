@@ -5,7 +5,7 @@ import { PixelToolComponent } from "./pixel-tool-component.js";
 import { renderDrawResponse } from "../render/pixel-screen.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_SET_PIXELS_TOOL_NAME = "set_pixels";
+const PIXEL_SET_PIXELS_TOOL_NAME = "set_pixels";
 
 // 与契约 setPixels 的上限一致（整幅画布的格子数）：本地就封顶，超量在 agent 侧即拒，
 // 不把巨大数组发出去撞服务端 400（那会被 mapFallbackError 误报成 PIXEL_NOT_READY）。

@@ -4,7 +4,7 @@ import { PixelToolComponent } from "./pixel-tool-component.js";
 import { renderDrawResponse } from "../render/pixel-screen.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_LINE_TOOL_NAME = "line";
+const PIXEL_LINE_TOOL_NAME = "line";
 
 const Schema = z.object({
   x1: z.number().int().min(0),

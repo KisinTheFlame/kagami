@@ -6,7 +6,7 @@ import type { BrowserClient } from "../../../../acl/browser-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
-export const BROWSER_SCREENSHOT_TOOL_NAME = "browser_screenshot";
+const BROWSER_SCREENSHOT_TOOL_NAME = "browser_screenshot";
 
 const Schema = z.object({});
 
