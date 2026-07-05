@@ -2293,7 +2293,14 @@ function dealDamageToEnemy(
   }
   // 纸蛙：玩家攻击易伤敌人时，易伤倍率 1.5 → 1.75。
   const vulnMult = hasRelic(state, "paper_phrog") ? 1.75 : 1.5;
-  let dmg = computeAttackDamage(base, attackerPowers, enemy.powers, strengthMultiplier, 0.75, vulnMult);
+  let dmg = computeAttackDamage(
+    base,
+    attackerPowers,
+    enemy.powers,
+    strengthMultiplier,
+    0.75,
+    vulnMult,
+  );
   // 观者姿态对玩家造成伤害的加成：愤怒 ×2，神性 ×3。
   if (state.combat!.playerStance === "wrath") {
     dmg *= 2;
