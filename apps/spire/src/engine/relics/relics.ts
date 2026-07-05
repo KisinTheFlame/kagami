@@ -1,4 +1,11 @@
-import type { CardType, CharacterId, Effect, GameState, RelicState } from "../types.js";
+import type {
+  CardInstance,
+  CardType,
+  CharacterId,
+  Effect,
+  GameState,
+  RelicState,
+} from "../types.js";
 import { addPower } from "../powers/powers.js";
 import { getCardDef } from "../cards/cards.js";
 import { POTION_DROP_POOL } from "../potions/potions.js";
@@ -43,6 +50,8 @@ type RelicHooks = {
   onUsePotion?: (state: GameState, self: RelicState, emit: Emit) => void;
   /** 每当抽牌堆被洗牌（弃牌堆洗回抽牌堆）后结算（日晷每 3 次 +能量、算盘 +格挡）。 */
   onShuffle?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当一张牌被加入牌组（奖励/商店/事件）后结算（陶瓷鱼 +金币、各色蛋升级加入的牌）。局外，无 emit；card 为刚加入的实例。 */
+  onAddCard?: (state: GameState, self: RelicState, card: CardInstance) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -1023,6 +1032,57 @@ const RELIC_LIST: RelicDef[] = [
     rarity: "boss",
     description: "回合结束时不再弃掉手牌。",
     hooks: {},
+  },
+  // —— onAddCard 触发型遗物（加牌进牌组时） ——
+  {
+    id: "ceramic_fish",
+    name: "陶瓷鱼",
+    rarity: "common",
+    description: "每当一张牌被加入你的牌组，获得 9 金币。",
+    hooks: {
+      onAddCard: state => {
+        state.gold += 9;
+      },
+    },
+  },
+  {
+    id: "molten_egg",
+    name: "熔岩蛋",
+    rarity: "uncommon",
+    description: "每当一张攻击牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "attack") {
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  {
+    id: "toxic_egg",
+    name: "剧毒蛋",
+    rarity: "uncommon",
+    description: "每当一张技能牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "skill") {
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  {
+    id: "frozen_egg",
+    name: "冰冻蛋",
+    rarity: "uncommon",
+    description: "每当一张能力牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "power") {
+          card.upgraded = true;
+        }
+      },
+    },
   },
 ];
 
