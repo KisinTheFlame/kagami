@@ -132,6 +132,26 @@ describe("QqApp", () => {
     expect("content" in content ? content.content : "").toContain("产品群");
   });
 
+  // issue #425：napcat 只在好友列表变化时推事件，agent 单独重启后收不到已有列表。启动时主动
+  // 拉一次 seed，让私聊会话重启后立刻可见（否则要等下次列表变化 / 收到私聊）。
+  it("seeds private conversations from the friend list on startup", async () => {
+    const napcatGateway = fakeGateway({
+      getFriendList: vi
+        .fn()
+        .mockResolvedValue([{ userId: "654321", nickname: "老王", remark: "王哥" }]),
+    });
+    const app = createApp(new FakeScheduler(), vi.fn(), { napcatGateway });
+    await app.onStartup();
+    // seed 是 fire-and-forget（不阻塞启动），waitFor 等后台拉取完成后断言。
+    await vi.waitFor(async () => {
+      const content = (await app.onFocus())[0];
+      const text = "content" in content ? content.content : "";
+      // 私聊会话现于列表：显示名取备注、id 为私聊会话 id。
+      expect(text).toContain("王哥");
+      expect(text).toContain("qq_private:654321");
+    });
+  });
+
   // napcat 拆成独立进程后（issue #347），QQ App 不再持有网关生命周期（WS 归 kagami-napcat，
   // 入站订阅 + 关停归 server-runtime）。原「owns the napcat gateway lifecycle」用例随之删除。
 
