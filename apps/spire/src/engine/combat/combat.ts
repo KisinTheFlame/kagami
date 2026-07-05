@@ -2411,7 +2411,9 @@ function dealDamageToPlayer(
   const combat = state.combat!;
   // 纸鹤：被你削弱的敌人对你造成的伤害更低，虚弱倍率 0.75 → 0.6。
   const weakMult = hasRelic(state, "paper_krane") ? 0.6 : 0.75;
-  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers, 1, weakMult);
+  // 奇异蘑菇：你受到的易伤伤害更低，易伤倍率 1.5 → 1.25。
+  const pVulnMult = hasRelic(state, "odd_mushroom") ? 1.25 : 1.5;
+  let dmg = computeAttackDamage(base, attackerPowers, combat.playerPowers, 1, weakMult, pVulnMult);
   // 愤怒姿态（观者）：玩家受到的伤害也翻倍。
   if (combat.playerStance === "wrath") {
     dmg *= 2;

@@ -1249,6 +1249,63 @@ const RELIC_LIST: RelicDef[] = [
     description: "当你在战斗中濒死时，回复至一半生命（整局限一次）。",
     hooks: {},
   },
+  // —— 更多遗物批次 ——
+  {
+    id: "pear",
+    name: "梨",
+    rarity: "common",
+    description: "获得时，最大生命 +10。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += 10;
+        state.hp += 10;
+      },
+    },
+  },
+  {
+    id: "odd_mushroom",
+    name: "奇异蘑菇",
+    // 易伤减伤在 combat.ts 的 dealDamageToPlayer 按 hasRelic 处理。
+    rarity: "uncommon",
+    description: "你受到的易伤伤害加成从 50% 降为 25%。",
+    hooks: {},
+  },
+  {
+    id: "gremlin_visage",
+    name: "地精面容",
+    rarity: "common",
+    description: "每场战斗开始时，你获得 1 层虚弱。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) =>
+        emit({ kind: "apply_power", power: "weak", amount: 1, on: "self" }),
+    },
+  },
+  {
+    id: "cultist_headpiece",
+    name: "邪教头饰",
+    rarity: "common",
+    description: "一件散发着不祥气息的头饰，似乎并没有什么实际用处。",
+    hooks: {},
+  },
+  {
+    id: "mutagenic_strength",
+    name: "诱变力量",
+    rarity: "rare",
+    description: "每场战斗开始时获得 3 点力量，但在本回合结束时失去。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) => emit({ kind: "apply_strength_temp", amount: 3 }),
+    },
+  },
+  {
+    id: "ring_of_the_serpent",
+    name: "蛇之指环",
+    rarity: "rare",
+    characterLock: "silent",
+    description: "每个回合开始时，多抽 1 张牌。",
+    hooks: {
+      onTurnStart: (_s, _self, emit) => emit({ kind: "draw", amount: 1 }),
+    },
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
