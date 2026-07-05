@@ -4,7 +4,7 @@ import { renderRoute } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const PLAN_ROUTE_TOOL_NAME = "plan_route";
+const PLAN_ROUTE_TOOL_NAME = "plan_route";
 
 const Schema = z.object({
   origin: z.string().min(1),

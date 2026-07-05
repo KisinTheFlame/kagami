@@ -7,7 +7,7 @@ import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
  * 路由时装配成一条 `<notification>` user message 追加到上下文尾部，并触发一轮 round。
  * 这条事件进队列本身就是「唤醒」——见 Queue 的 wake-up generality。
  */
-export type NotificationEvent = {
+type NotificationEvent = {
   type: "notification";
   data: {
     /** 每个源一行，已渲染好的展示文本。 */
@@ -22,7 +22,7 @@ export type NotificationEvent = {
  *
  * Session routing treats it as a no-op.
  */
-export type WakeEvent = {
+type WakeEvent = {
   type: "wake";
 };
 
@@ -31,7 +31,7 @@ export type WakeEvent = {
  * 的事件队列。Session 路由时装配成一条 `<async_tool_result>` user message 追加到上下文，
  * 并触发新一轮 round，让主 Agent 凭 task_id 对应到当初的发起。
  */
-export type AsyncToolResultCompletedEvent = {
+type AsyncToolResultCompletedEvent = {
   type: "async_tool_result_completed";
   data: AsyncTaskCompletion;
 };
@@ -43,7 +43,7 @@ export type AsyncToolResultCompletedEvent = {
  * 焦点已切走时向当前 App 拉空即 no-op，drain 的语义是「拉当前前台的未消费增量」，
  * 不存在错投。事件是通用原语，QQ 只是首个消费者。
  */
-export type ForegroundInputEvent = {
+type ForegroundInputEvent = {
   type: "foreground_input";
 };
 
@@ -52,7 +52,7 @@ export type ForegroundInputEvent = {
  * （issue #265）。Session 路由时装配成一条 `<inner_thought>` user message 追加到
  * 上下文尾部并触发一轮 round；enqueue 本身兼作唤醒（她摸鱼时多半正阻塞在 wait 里）。
  */
-export type InnerThoughtEvent = {
+type InnerThoughtEvent = {
   type: "inner_thought";
   data: {
     /** 已经以小镜口吻写好的第一人称念头文本。 */

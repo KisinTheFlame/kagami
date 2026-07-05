@@ -7,7 +7,7 @@ import { GLOSSARY, type GlossaryEntry } from "../engine/glossary.js";
 //
 // 供 agent 侧 lookup 工具消费（GET /reference?q=）。数据是游戏事实，渲染框架文案在 agent .hbs。
 
-export type CardRef = {
+type CardRef = {
   name: string;
   type: string;
   cost: number | null;
@@ -17,13 +17,13 @@ export type CardRef = {
   upgradedDescription: string;
 };
 
-export type RelicRef = {
+type RelicRef = {
   name: string;
   rarity: string;
   description: string;
 };
 
-export type PotionRef = {
+type PotionRef = {
   name: string;
   rarity: string;
   targeted: boolean;

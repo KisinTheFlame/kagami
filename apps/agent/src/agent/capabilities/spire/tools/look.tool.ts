@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireScreen, renderSpireNoRun } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_LOOK_TOOL_NAME = "look";
+const SPIRE_LOOK_TOOL_NAME = "look";
 
 const Schema = z.object({});
 

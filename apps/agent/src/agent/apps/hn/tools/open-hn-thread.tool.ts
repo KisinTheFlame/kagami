@@ -4,7 +4,7 @@ import { renderHnThreadContent } from "../hn-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { HnReader } from "../hn-reader.js";
 
-export const OPEN_HN_THREAD_TOOL_NAME = "open_hn_thread";
+const OPEN_HN_THREAD_TOOL_NAME = "open_hn_thread";
 
 const OpenHnThreadArgumentsSchema = z.object({
   id: z.number().int().positive(),

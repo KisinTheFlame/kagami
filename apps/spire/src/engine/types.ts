@@ -13,7 +13,7 @@ export type CardType = "attack" | "skill" | "power" | "status" | "curse";
 export type CardColor = "red" | "green" | "blue" | "purple" | "colorless" | "status" | "curse";
 
 /** 卡稀有度：奖励按稀有度加权抽取；starter/special 不进普通奖励池。 */
-export type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
+type CardRarity = "starter" | "common" | "uncommon" | "rare" | "special";
 
 /** 状态效果标识。切片集合：被动修正器 + 时机触发机制（见 powers/）。 */
 export type PowerId =
@@ -362,7 +362,7 @@ export type CardInstance = {
 export type PowerInstance = { id: PowerId; amount: number };
 
 /** 敌人一次出招。intent 是给玩家看的意图分类；effects 是实际结算。 */
-export type EnemyMove = {
+type EnemyMove = {
   id: string;
   name: string;
   effects: Effect[];
@@ -370,10 +370,10 @@ export type EnemyMove = {
   intent: EnemyIntentKind;
 };
 
-export type EnemyIntentKind = "attack" | "defend" | "buff" | "debuff" | "unknown";
+type EnemyIntentKind = "attack" | "defend" | "buff" | "debuff" | "unknown";
 
 /** 敌人意图选择规则：脚本开局 + 加权随机 + 连续限制（复刻 StS 手感，issue #234 C8）。 */
-export type IntentRule = {
+type IntentRule = {
   /** 按回合序号固定出招（1-based）；用尽后转 weighted。 */
   scripted: string[];
   weighted: { move: string; weight: number; maxInARow: number }[];
@@ -507,7 +507,7 @@ export type CombatState = {
   timeWarpEndTurnPending: boolean;
 };
 
-export type RewardState = {
+type RewardState = {
   /** 三选一（或跳过）的卡奖励，存 defId + 是否升级。 */
   cardChoices: { defId: string; upgraded: boolean }[];
 };
@@ -534,18 +534,10 @@ export type MapGraph = {
   bossNodeId: string;
 };
 
-export type Screen =
-  | "map"
-  | "combat"
-  | "reward"
-  | "rest"
-  | "event"
-  | "shop"
-  | "gameover"
-  | "victory";
+type Screen = "map" | "combat" | "reward" | "rest" | "event" | "shop" | "gameover" | "victory";
 
 /** 当前进行中的事件（? 节点）。 */
-export type EventState = { id: string };
+type EventState = { id: string };
 
 /** 商店一件在售商品。sold 后不可再买。 */
 export type ShopItem =

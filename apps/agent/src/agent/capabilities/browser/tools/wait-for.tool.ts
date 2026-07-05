@@ -4,7 +4,7 @@ import { BrowserToolComponent } from "./browser-tool-component.js";
 import { BrowserError } from "../domain/errors.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 
-export const BROWSER_WAIT_FOR_TOOL_NAME = "browser_wait_for";
+const BROWSER_WAIT_FOR_TOOL_NAME = "browser_wait_for";
 
 const Schema = z.object({
   selector: z.string().optional(),

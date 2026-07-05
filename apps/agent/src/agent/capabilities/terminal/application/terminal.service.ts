@@ -27,7 +27,7 @@ export type TerminalServiceDeps = {
   terminalOutputDao: TerminalOutputDao;
 };
 
-export type RunBashSuccess = {
+type RunBashSuccess = {
   ok: true;
   exitCode: number;
   outputId: string | null;
@@ -41,7 +41,7 @@ export type RunBashSuccess = {
   durationMs: number;
 };
 
-export type RunBashFailure = {
+type RunBashFailure = {
   ok: false;
   error: TerminalErrorCode;
   message: string;
@@ -57,7 +57,7 @@ export type RunBashFailure = {
 
 export type RunBashResult = RunBashSuccess | RunBashFailure;
 
-export type ReadOutputSuccess = {
+type ReadOutputSuccess = {
   ok: true;
   outputId: string;
   stream: "stdout" | "stderr";
@@ -69,7 +69,7 @@ export type ReadOutputSuccess = {
   eof: boolean;
 };
 
-export type ReadOutputFailure = {
+type ReadOutputFailure = {
   ok: false;
   error: TerminalErrorCode;
   message: string;

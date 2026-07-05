@@ -3,7 +3,7 @@ import type { ToolKind } from "@kagami/agent-runtime";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 
-export const BROWSER_OBSERVE_TOOL_NAME = "browser_observe";
+const BROWSER_OBSERVE_TOOL_NAME = "browser_observe";
 
 const Schema = z.object({});
 

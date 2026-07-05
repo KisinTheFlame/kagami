@@ -6036,7 +6036,6 @@ export function rewardCardPoolOf(color: CardDef["color"]): readonly string[] {
 export const COMMON_CARD_POOL: readonly string[] = cardPoolOf("red", "common");
 export const UNCOMMON_CARD_POOL: readonly string[] = cardPoolOf("red", "uncommon");
 export const RARE_CARD_POOL: readonly string[] = cardPoolOf("red", "rare");
-export const REWARD_CARD_POOL: readonly string[] = rewardCardPoolOf("red");
 
 /** 取一张牌当前生效的效果（升级则用升级效果）。 */
 export function effectsOf(def: CardDef, upgraded: boolean): CardDef["effects"] {

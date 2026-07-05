@@ -4,7 +4,7 @@ import { PixelToolComponent } from "./pixel-tool-component.js";
 import { renderDrawResponse } from "../render/pixel-screen.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_CLEAR_TOOL_NAME = "clear";
+const PIXEL_CLEAR_TOOL_NAME = "clear";
 
 const Schema = z.object({});
 

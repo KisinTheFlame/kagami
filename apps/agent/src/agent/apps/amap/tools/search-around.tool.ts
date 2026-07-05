@@ -4,7 +4,7 @@ import { escapeAttr, renderPoiList } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const SEARCH_AROUND_TOOL_NAME = "search_around";
+const SEARCH_AROUND_TOOL_NAME = "search_around";
 
 const Schema = z.object({
   location: z.string().min(1),

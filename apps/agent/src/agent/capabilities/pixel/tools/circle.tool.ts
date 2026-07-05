@@ -4,7 +4,7 @@ import { PixelToolComponent } from "./pixel-tool-component.js";
 import { renderDrawResponse } from "../render/pixel-screen.js";
 import type { PixelClient } from "../../../../acl/pixel-client.js";
 
-export const PIXEL_CIRCLE_TOOL_NAME = "circle";
+const PIXEL_CIRCLE_TOOL_NAME = "circle";
 
 const Schema = z.object({
   cx: z.number().int().min(0),

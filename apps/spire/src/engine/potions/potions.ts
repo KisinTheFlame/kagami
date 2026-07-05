@@ -342,7 +342,6 @@ function potionIdsForCharacter(character: CharacterId, rarity: PotionRarity): re
 }
 
 export const COMMON_POTION_POOL: readonly string[] = potionIdsOfRarity("common");
-export const UNCOMMON_POTION_POOL: readonly string[] = potionIdsOfRarity("uncommon");
 export const RARE_POTION_POOL: readonly string[] = potionIdsOfRarity("rare");
 
 /** 全部通用药水 id（不含角色专属）。 */

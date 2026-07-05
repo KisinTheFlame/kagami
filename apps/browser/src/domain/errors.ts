@@ -31,16 +31,6 @@ export type BrowserErrorContext = {
   navigating?: boolean;
 };
 
-const CONTEXT_FIELD_ORDER: readonly (keyof BrowserErrorContext)[] = [
-  "url",
-  "pageId",
-  "ref",
-  "epoch",
-  "currentEpoch",
-  "locatorState",
-  "navigating",
-];
-
 export class BrowserError extends Error {
   public readonly code: BrowserErrorCode;
   public readonly contextInfo: BrowserErrorContext;
@@ -55,34 +45,4 @@ export class BrowserError extends Error {
     this.code = code;
     this.contextInfo = contextInfo;
   }
-}
-
-/**
- * 把任意错误序列化成冻结结构的 JSON 字符串。字段顺序固定：
- * { ok:false, error:<code>, message, context:{...按 CONTEXT_FIELD_ORDER} }。
- * 非 BrowserError 归一为 BROWSER_ERROR，保证主 Agent 永远拿到同形状的失败结果。
- */
-export function serializeBrowserError(error: unknown): string {
-  if (error instanceof BrowserError) {
-    const orderedContext: Record<string, unknown> = {};
-    for (const key of CONTEXT_FIELD_ORDER) {
-      const value = error.contextInfo[key];
-      if (value !== undefined) {
-        orderedContext[key] = value;
-      }
-    }
-    return JSON.stringify({
-      ok: false,
-      error: error.code,
-      message: error.message,
-      context: orderedContext,
-    });
-  }
-
-  return JSON.stringify({
-    ok: false,
-    error: "BROWSER_ERROR" satisfies BrowserErrorCode,
-    message: error instanceof Error ? error.message : String(error),
-    context: {},
-  });
 }

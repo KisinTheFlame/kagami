@@ -12,7 +12,7 @@ import type { RootAgentSessionController } from "../session/root-agent-session.j
 export const SWITCH_TOOL_NAME = "switch";
 
 /** 自动吐出的 App 能力说明所用的结构标识伪标签（结构标识非语气文案，留 TS 常量）。 */
-export const APP_HELP_TAG = "app_help";
+const APP_HELP_TAG = "app_help";
 
 /**
  * 把一段 help 文本包进 `<app_help app="...">` 结构标签。app id 取自注册常量（可信），但

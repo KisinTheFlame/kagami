@@ -4,7 +4,7 @@ import { renderIthomeArticleDetailContent } from "../ithome-screen.js";
 import type { IthomeService } from "../../../capabilities/ithome/application/ithome.service.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const OPEN_ITHOME_ARTICLE_TOOL_NAME = "open_ithome_article";
+const OPEN_ITHOME_ARTICLE_TOOL_NAME = "open_ithome_article";
 
 const OpenIthomeArticleArgumentsSchema = z.object({
   articleId: z.number().int().positive(),

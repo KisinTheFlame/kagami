@@ -18,7 +18,7 @@ export type EventOutcome =
   | { kind: "upgrade_random_card"; count: number }
   | { kind: "nothing" };
 
-export type EventChoice = {
+type EventChoice = {
   /** 选项按钮文案（原创）。 */
   label: string;
   /** 选择后展示的结果叙述（原创）。 */

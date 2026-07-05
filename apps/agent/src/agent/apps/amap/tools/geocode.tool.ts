@@ -4,7 +4,7 @@ import { renderGeocode } from "../amap-screen.js";
 import type { AmapClient } from "../client/amap-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 
-export const GEOCODE_TOOL_NAME = "geocode";
+const GEOCODE_TOOL_NAME = "geocode";
 
 const Schema = z.object({
   address: z.string().min(1),

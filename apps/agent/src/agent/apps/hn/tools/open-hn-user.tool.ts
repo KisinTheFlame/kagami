@@ -4,7 +4,7 @@ import { renderHnUserContent } from "../hn-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { HnReader } from "../hn-reader.js";
 
-export const OPEN_HN_USER_TOOL_NAME = "open_hn_user";
+const OPEN_HN_USER_TOOL_NAME = "open_hn_user";
 
 const OpenHnUserArgumentsSchema = z.object({
   username: z.string().min(1),

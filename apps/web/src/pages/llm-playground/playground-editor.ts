@@ -34,7 +34,7 @@ export type EditorTextPart = {
   text: string;
 };
 
-export type EditorImagePart = {
+type EditorImagePart = {
   id: string;
   type: "image";
   fileName: string;
@@ -51,20 +51,20 @@ export type EditorToolCall = {
   argumentsText: string;
 };
 
-export type EditorUserMessage = {
+type EditorUserMessage = {
   id: string;
   role: "user";
   parts: EditorContentPart[];
 };
 
-export type EditorAssistantMessage = {
+type EditorAssistantMessage = {
   id: string;
   role: "assistant";
   content: string;
   toolCalls: EditorToolCall[];
 };
 
-export type EditorToolMessage = {
+type EditorToolMessage = {
   id: string;
   role: "tool";
   toolCallId: string;
@@ -170,7 +170,7 @@ export function parsePlaygroundPayload({
   };
 }
 
-export function serializeMessages(messages: EditorMessage[]):
+function serializeMessages(messages: EditorMessage[]):
   | {
       success: true;
       data: PlaygroundMessage[];
@@ -307,7 +307,7 @@ export function serializeMessages(messages: EditorMessage[]):
   };
 }
 
-export function serializeTools(tools: EditorTool[]):
+function serializeTools(tools: EditorTool[]):
   | {
       success: true;
       data: LlmToolDefinition[];
@@ -384,7 +384,7 @@ export function serializeTools(tools: EditorTool[]):
   };
 }
 
-export function serializeToolChoice({
+function serializeToolChoice({
   toolChoiceMode,
   selectedToolNameForChoice,
   currentToolNames,
@@ -601,7 +601,7 @@ export function playgroundMessageToEditor(message: PlaygroundMessage): EditorMes
   };
 }
 
-export function playgroundContentPartToEditor(part: PlaygroundContentPart): EditorContentPart {
+function playgroundContentPartToEditor(part: PlaygroundContentPart): EditorContentPart {
   if (part.type === "text") {
     return createTextPart(part.text);
   }
@@ -615,7 +615,7 @@ export function playgroundContentPartToEditor(part: PlaygroundContentPart): Edit
   };
 }
 
-export function normalizeEditorPropertyType(value: unknown): EditorPropertyType {
+function normalizeEditorPropertyType(value: unknown): EditorPropertyType {
   if (
     value === "string" ||
     value === "number" ||

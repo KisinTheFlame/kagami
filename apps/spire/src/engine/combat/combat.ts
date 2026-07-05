@@ -3579,5 +3579,3 @@ function resolveCombatIfEnded(state: GameState): void {
   }
   // 非 Boss 的奖励生成在 run 层处理（避免 combat 依赖 run）。
 }
-
-export { livingEnemies };

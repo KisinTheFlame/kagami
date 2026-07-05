@@ -4,7 +4,7 @@ import { SpireToolComponent } from "./spire-tool-component.js";
 import { renderSpireReference } from "../render/spire-screen.js";
 import type { SpireClient } from "../../../../acl/spire-client.js";
 
-export const SPIRE_LOOKUP_TOOL_NAME = "lookup";
+const SPIRE_LOOKUP_TOOL_NAME = "lookup";
 
 const Schema = z.object({ query: z.string().optional() });
 

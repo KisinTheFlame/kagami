@@ -4,7 +4,7 @@ import { renderHnFrontPageContent } from "../hn-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { HnReader } from "../hn-reader.js";
 
-export const GLANCE_HN_TOOL_NAME = "glance_hn";
+const GLANCE_HN_TOOL_NAME = "glance_hn";
 
 const GlanceHnArgumentsSchema = z.object({
   feed: z.enum(["top", "new", "best", "ask", "show", "job"]).optional(),

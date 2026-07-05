@@ -41,10 +41,6 @@ export function buildApiUrl(path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}${normalizedPath}`;
 }
 
-export function isApiError(error: unknown): error is ApiError {
-  return error instanceof ApiError;
-}
-
 export function getApiErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message;
@@ -196,4 +192,4 @@ function readApiErrorBodyMessage(body: unknown): string | null {
   return null;
 }
 
-export { apiRequest, apiRequestWithSchema, apiPost, apiGetWithSchema, apiPostWithSchema };
+export { apiPost, apiGetWithSchema, apiPostWithSchema };

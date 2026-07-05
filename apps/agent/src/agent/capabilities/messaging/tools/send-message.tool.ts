@@ -6,7 +6,7 @@ import type { AiToneScorer } from "../infra/ai-tone-scorer.js";
 import { MutedSendError, formatMutedNote } from "../application/muted-send-error.js";
 import type { NapcatChatTarget } from "@kagami/napcat-api/message";
 
-export const SEND_MESSAGE_TOOL_NAME = "send_message";
+const SEND_MESSAGE_TOOL_NAME = "send_message";
 
 const SendMessageArgumentsSchema = z.object({
   message: z.string().trim().min(1).optional(),

@@ -12,7 +12,7 @@ import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js"
 import type { OssClient } from "../../../acl/oss-client.js";
 import type { BrowserClient } from "../../../acl/browser-client.js";
 
-export const BROWSER_APP_ID = "browser";
+const BROWSER_APP_ID = "browser";
 
 type BrowserAppDeps = {
   /** 浏览器动作客户端：打到独立的 kagami-browser 进程（issue #173）。 */

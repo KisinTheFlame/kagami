@@ -2,7 +2,7 @@ import type { LlmMessage } from "@kagami/llm-client";
 import { isWaitToolCall, type InnerVoiceIdleSignals } from "./idle-detector.js";
 
 /** 注入进上下文的 `<inner_thought>` 伪标签，回扫时凭它辨识历史注入。 */
-export const INNER_THOUGHT_TAG = "<inner_thought>";
+const INNER_THOUGHT_TAG = "<inner_thought>";
 
 /**
  * 从 ledger 记录（时间升序或任意序）重建摸鱼判定信号：
