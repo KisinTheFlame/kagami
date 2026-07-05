@@ -85,7 +85,17 @@ export function MetricChartView({
   const chartConfig = useMemo(() => buildChartConfig(renderSeries), [renderSeries]);
   const rows = useMemo(() => buildChartRows(renderSeries), [renderSeries]);
   const pieData = useMemo(() => buildPieData(renderSeries), [renderSeries]);
-  const hasSeries = (data?.series.length ?? 0) > 0;
+  // 饼图图例经 chartConfig[name].label 取字（config 按 slice name 键控，非 dataKey）；颜色仍走 Cell fill。
+  const pieChartConfig = useMemo<ChartConfig>(
+    () =>
+      Object.fromEntries(
+        pieData.map(slice => [slice.name, { label: slice.name, color: slice.fill }]),
+      ),
+    [pieData],
+  );
+  const pieTotal = pieData.reduce((sum, slice) => sum + slice.value, 0);
+  // 饼图额外要求构成总量 > 0（全 0 会让 recharts 角度算成 NaN、画出空白饼图但 series 非空）。
+  const hasRenderable = chartType === "pie" ? pieTotal > 0 : (data?.series.length ?? 0) > 0;
   const placeholderClassName = "flex items-center justify-center rounded-none border border-dashed";
   const placeholderStyle = { height };
 
@@ -113,15 +123,19 @@ export function MetricChartView({
           </div>
         ) : null}
 
-        {!isLoading && !isError && !hasSeries ? (
+        {!isLoading && !isError && !hasRenderable ? (
           <div className={placeholderClassName} style={placeholderStyle}>
             <p className="text-sm text-muted-foreground">当前时间范围内没有数据。</p>
           </div>
         ) : null}
 
-        {!isLoading && !isError && hasSeries && data ? (
+        {!isLoading && !isError && hasRenderable && data ? (
           <>
-            <ChartContainer className="w-full" style={{ height }} config={chartConfig}>
+            <ChartContainer
+              className="w-full"
+              style={{ height }}
+              config={chartType === "pie" ? pieChartConfig : chartConfig}
+            >
               {chartType === "pie" ? (
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
@@ -134,12 +148,18 @@ export function MetricChartView({
                     isAnimationActive={false}
                   >
                     {pieData.map(slice => (
-                      <Cell key={slice.name} fill={slice.fill} />
+                      <Cell key={slice.dataKey} fill={slice.fill} />
                     ))}
                   </Pie>
                 </PieChart>
               ) : chartType === "bar" || chartType === "stacked" ? (
-                <BarChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <BarChart
+                  data={rows}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                  // stacked 用 sign offset：负值（min/avg/diff 派生可产生）按 0 轴上下分离，不在同一
+                  // 累计基线回退画错。grouped bar 不堆叠，offset 无影响。
+                  stackOffset={chartType === "stacked" ? "sign" : "none"}
+                >
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="bucketLabel" tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis
@@ -247,16 +267,19 @@ function buildChartConfig(series: RenderSeries[]): ChartConfig {
   );
 }
 
-type PieSlice = { name: string; value: number; fill: string };
+type PieSlice = { dataKey: string; name: string; value: number; fill: string };
 
 /**
- * pie 构成数据：每序列塌成一个切片，值 = 其各点之和（null 记 0）。饼图走「单桶查询」（bucket 覆盖
- * 整段范围）时每序列恰一个点，求和即那个值；多桶数据传进来则等价于对整段求和。
+ * pie 构成数据：每序列塌成一个切片，值 = 其各点之和的**绝对量**（null 记 0）。饼图走「单桶查询」
+ * （bucket 覆盖整段范围）时每序列恰一个点，求和即那个值。取绝对量是因为饼图表达「部分占整体」，
+ * 负值（min/avg 聚合或 P3 diff 派生可产生）无构成语义——recharts 会把负值画成负角度/反向切片、且把
+ * 负值计入分母扭曲占比。饼图应配非负 metric，这里对误用做兜底。dataKey 供稳定 React key（label 不保唯一）。
  */
 export function buildPieData(series: RenderSeries[]): PieSlice[] {
   return series.map((item, index) => ({
+    dataKey: item.dataKey,
     name: item.label,
-    value: item.points.reduce((sum, point) => sum + (point.value ?? 0), 0),
+    value: Math.abs(item.points.reduce((sum, point) => sum + (point.value ?? 0), 0)),
     fill: seriesColors[index % seriesColors.length],
   }));
 }

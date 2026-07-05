@@ -29,12 +29,28 @@ const series: RenderSeries[] = [
 ];
 
 describe("buildPieData", () => {
-  it("collapses each series to the sum of its points (null counted as 0)", () => {
+  it("collapses each series to the sum of its points (null counted as 0) with a stable dataKey", () => {
     const slices = buildPieData(series);
-    expect(slices.map(slice => ({ name: slice.name, value: slice.value }))).toEqual([
-      { name: "Read", value: 5 },
-      { name: "Wait", value: 5 },
+    expect(slices).toEqual([
+      { dataKey: "series_0", name: "Read", value: 5, fill: "hsl(var(--llm))" },
+      { dataKey: "series_1", name: "Wait", value: 5, fill: "hsl(var(--signal))" },
     ]);
+  });
+
+  it("takes the absolute magnitude so negative series still render a slice", () => {
+    const negative: RenderSeries[] = [
+      {
+        key: "delta",
+        label: "delta",
+        dataKey: "series_0",
+        points: [
+          { bucketStart: "2026-04-02T00:00:00.000Z", value: -7 },
+          { bucketStart: "2026-04-02T00:01:00.000Z", value: 2 },
+        ],
+      },
+    ];
+    // sum = -5 → 绝对量 5（饼图切片不能是负角度）。
+    expect(buildPieData(negative)[0]?.value).toBe(5);
   });
 
   it("assigns a distinct fill per slice from the series palette", () => {
