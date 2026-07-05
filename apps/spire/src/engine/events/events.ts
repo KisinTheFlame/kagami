@@ -769,6 +769,86 @@ const EVENT_LIST: EventDef[] = [
       },
     ],
   },
+  // —— 补全批次 5：交易 / 博弈 / 献祭 ——
+  {
+    id: "the_joust",
+    description: "斗技场边一名庄家招呼你下注：押上 50 金，赌你看好的骑士能赢——赢了翻倍还本。",
+    choices: [
+      {
+        label: "押注邪教骑士（稳，回报低）",
+        resultText: "骑士险胜，庄家不情愿地数出你的彩金。",
+        outcomes: [{ kind: "lose_gold", amount: 50 }, { kind: "gain_gold", amount: 100 }],
+      },
+      {
+        label: "押注黑马（险，回报高）",
+        resultText: "黑马一骑绝尘，赔率惊人，你赚得盆满钵满。",
+        outcomes: [{ kind: "lose_gold", amount: 50 }, { kind: "gain_gold", amount: 250 }],
+      },
+      {
+        label: "不赌，走人",
+        resultText: "你摇摇头，挤出了喧闹的人群。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "the_woman_in_blue",
+    description: "一位蓝衣妇人守着一箱药水，笑意不达眼底：挑一瓶吧，价钱好商量——只是别想空手离开。",
+    choices: [
+      {
+        label: "花 20 金买一瓶",
+        resultText: "你付了钱，妇人递来一瓶还温着的药水。",
+        outcomes: [{ kind: "lose_gold", amount: 20 }, { kind: "gain_potion" }],
+      },
+      {
+        label: "转身就走（她可不高兴）",
+        resultText: "妇人的脸沉了下来，你后背挨了记冷箭般的刺痛。",
+        outcomes: [{ kind: "lose_hp", amount: 6 }],
+      },
+    ],
+  },
+  {
+    id: "augmenter",
+    description: "一名炼金术士守着咕嘟冒泡的坩埚，说能把你不要的东西熔了，重铸成更趁手的家伙。",
+    choices: [
+      {
+        label: "熔炼旧物，换一件遗物",
+        resultText: "坩埚翻涌，浮起一件成色更好的器物。",
+        outcomes: [{ kind: "gain_relic" }],
+      },
+      {
+        label: "让他帮你磨砺兵刃（升 2 张牌）",
+        resultText: "两件家伙在炉火里淬得更利了。",
+        outcomes: [{ kind: "upgrade_random_card", count: 2 }],
+      },
+      {
+        label: "谢绝，离开",
+        resultText: "你不放心把东西交给他，退了出去。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "an_offering",
+    description: "一方古朴的祭坛静候供奉，石面刻着：以血、以金、或以牌相赠者，必得回响。",
+    choices: [
+      {
+        label: "以血为祭（换一件遗物）",
+        resultText: "血渗入石纹，祭坛回赠一件器物。",
+        outcomes: [{ kind: "lose_hp", amount: 8 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "以牌为祭（涤除一张牌 + 少许金币）",
+        resultText: "一张牌化作灰烬，祭坛拨还你几枚薄酬。",
+        outcomes: [{ kind: "remove_random_card" }, { kind: "gain_gold", amount: 30 }],
+      },
+      {
+        label: "不作供奉，离开",
+        resultText: "你向祭坛欠身，转身离去。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
 ];
 
 const EVENT_MAP: ReadonlyMap<string, EventDef> = new Map(
