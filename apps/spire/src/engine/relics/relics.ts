@@ -596,6 +596,78 @@ const RELIC_LIST: RelicDef[] = [
     description: "当你的一次无格挡攻击伤害为 4 或更低时，改为造成 5 点。",
     hooks: {},
   },
+  // —— 通用遗物批次 2（借既有钩子：计数 / 回合始 / 失血 / 战斗始）——
+  {
+    id: "art_of_war",
+    name: "战争艺术",
+    rarity: "common",
+    description: "若某个回合你没有打出攻击牌，下个回合开始时获得 1 点能量。",
+    hooks: {
+      onCombatStart: (_state, self) => {
+        self.counter = 0;
+      },
+      onTurnStart: (_state, self, emit) => {
+        if (self.counter === 0) {
+          emit({ kind: "gain_energy", amount: 1 });
+        }
+        self.counter = 0;
+      },
+      onCardPlayed: (_state, self, cardType) => {
+        if (cardType === "attack") {
+          self.counter = 1;
+        }
+      },
+    },
+  },
+  {
+    id: "ink_bottle",
+    name: "墨水瓶",
+    rarity: "uncommon",
+    description: "每打出 10 张牌，抽 1 张牌。",
+    hooks: {
+      onCardPlayed: (_state, self, _cardType, emit) => {
+        if (tickEvery(self, 10)) {
+          emit({ kind: "draw", amount: 1 });
+        }
+      },
+    },
+  },
+  {
+    id: "incense_burner",
+    name: "熏香炉",
+    rarity: "rare",
+    description: "每过 6 个回合，获得 1 层虚无缥缈。",
+    hooks: {
+      onTurnStart: (_state, self, emit) => {
+        if (tickEvery(self, 6)) {
+          emit({ kind: "apply_power", power: "intangible", amount: 1, on: "self" });
+        }
+      },
+    },
+  },
+  {
+    id: "self_forming_clay",
+    name: "自塑黏土",
+    rarity: "uncommon",
+    description: "每当你失去生命，下个回合开始时获得 3 点格挡。",
+    hooks: {
+      onLoseHp: (_state, _self, emit) => emit({ kind: "gain_block_next_turn", amount: 3 }),
+    },
+  },
+  {
+    id: "du_vu_doll",
+    name: "杜巫娃娃",
+    rarity: "rare",
+    description: "牌组中每有一张诅咒牌，战斗开始时获得 1 点力量。",
+    hooks: {
+      onCombatStart: (state, _self, emit) => {
+        const curses = state.deck.filter(card => getCardDef(card.defId).type === "curse").length;
+        if (curses > 0) {
+          emit({ kind: "apply_power", power: "strength", amount: curses, on: "self" });
+        }
+      },
+    },
+  },
 ];
 
 /** 获得一件遗物：入列 + 结算 onEquip（草莓 +最大生命等一次性效果）。日志由调用方按情景补。 */
