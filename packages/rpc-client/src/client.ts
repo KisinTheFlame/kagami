@@ -36,7 +36,6 @@ export type CreateClientOptions = {
   timeoutMs?: number;
   /**
    * 兜底 BizError 的 message：不可达 / 超时 / 非 2xx 无富信封 / 响应体无效时用。
-   * llm 必须传 `"LLM 上游服务调用失败"` —— isRetryableLlmFailure 精确匹配它来决定退避重试。
    * 传了 mapFallbackError 时此项不生效（兜底错误形状完全交给 mapper）。
    */
   unreachableMessage?: string;

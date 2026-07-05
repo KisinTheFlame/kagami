@@ -1,11 +1,15 @@
 import { NoopEffectInterpreter, ReActKernel, ToolCatalog } from "@kagami/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import {
   LoopLlmRetryExtension,
   type RetryBackoffPolicy,
 } from "../../src/agent/runtime/llm-retry.js";
-import type { LlmChatResponsePayload, LlmMessage } from "@kagami/llm-client";
+import {
+  llmProviderUnavailableError,
+  llmUpstreamCallFailedError,
+  type LlmChatResponsePayload,
+  type LlmMessage,
+} from "@kagami/llm-client";
 
 describe("LoopLlmRetryExtension", () => {
   it("increments retry attempts and resets backoff after a successful model call", async () => {
@@ -19,16 +23,8 @@ describe("LoopLlmRetryExtension", () => {
       model: {
         chat: vi
           .fn()
-          .mockRejectedValueOnce(
-            new BizError({
-              message: "LLM 上游服务调用失败",
-            }),
-          )
-          .mockRejectedValueOnce(
-            new BizError({
-              message: "LLM 上游服务调用失败",
-            }),
-          )
+          .mockRejectedValueOnce(llmUpstreamCallFailedError())
+          .mockRejectedValueOnce(llmUpstreamCallFailedError())
           .mockResolvedValueOnce({
             provider: "openai",
             model: "gpt-test",
@@ -38,11 +34,7 @@ describe("LoopLlmRetryExtension", () => {
               toolCalls: [],
             },
           })
-          .mockRejectedValueOnce(
-            new BizError({
-              message: "所选 LLM provider 当前不可用",
-            }),
-          ),
+          .mockRejectedValueOnce(llmProviderUnavailableError()),
       },
       interpreter: new NoopEffectInterpreter(),
       extensions: [
