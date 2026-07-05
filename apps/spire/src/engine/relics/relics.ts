@@ -34,6 +34,12 @@ export type RelicHooks = {
   onEquip?: (state: GameState, self: RelicState) => void;
   /** 玩家受到穿透格挡的伤害（失血）后结算（百年谜题首次失血抽牌）。可 emit 战斗 Effect。 */
   onLoseHp?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当一张牌被消耗（进消耗堆）后结算（卡戎之烬 AoE、枯枝加牌）。 */
+  onExhaust?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当一个敌人被击杀（经攻击伤害致死）后结算（哥布林之角 +能量+抽牌）。 */
+  onEnemyKilled?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当使用一瓶药水后结算（玩具扑翼机回血）。 */
+  onUsePotion?: (state: GameState, self: RelicState, emit: Emit) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -704,6 +710,47 @@ const RELIC_LIST: RelicDef[] = [
     rarity: "boss",
     description: "每当你失去生命时，少失去 1 点。",
     hooks: {},
+  },
+  // —— 消耗 / 击杀 / 用药水 触发型遗物批次 ——
+  {
+    id: "charons_ashes",
+    name: "卡戎之烬",
+    rarity: "rare",
+    characterLock: "ironclad",
+    description: "每当你消耗一张牌，对所有敌人造成 3 点伤害。",
+    hooks: {
+      onExhaust: (_state, _self, emit) => emit({ kind: "deal_damage_all", amount: 3 }),
+    },
+  },
+  {
+    id: "dead_branch",
+    name: "枯枝",
+    rarity: "rare",
+    description: "每当你消耗一张牌，将一张随机无色牌加入手牌。",
+    hooks: {
+      onExhaust: (_state, _self, emit) => emit({ kind: "add_random_colorless", count: 1 }),
+    },
+  },
+  {
+    id: "gremlin_horn",
+    name: "哥布林之角",
+    rarity: "uncommon",
+    description: "每当一个敌人死亡，获得 1 点能量并抽 1 张牌。",
+    hooks: {
+      onEnemyKilled: (_state, _self, emit) => {
+        emit({ kind: "gain_energy", amount: 1 });
+        emit({ kind: "draw", amount: 1 });
+      },
+    },
+  },
+  {
+    id: "toy_ornithopter",
+    name: "玩具扑翼机",
+    rarity: "common",
+    description: "每当你使用一瓶药水，回复 5 点生命。",
+    hooks: {
+      onUsePotion: (_state, _self, emit) => emit({ kind: "heal", amount: 5 }),
+    },
   },
 ];
 
