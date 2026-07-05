@@ -651,6 +651,124 @@ const EVENT_LIST: EventDef[] = [
       },
     ],
   },
+  // —— 补全批次 4：更靠后的 ? 事件（既有 outcome）——
+  {
+    id: "council_of_ghosts",
+    description: "一圈半透明的幽魂围坐着，低声邀你加入它们的低语——代价是把几缕虚影收进牌里。",
+    choices: [
+      {
+        label: "与它们低语（收下 3 张幻影）",
+        resultText: "冷意钻进指尖，三缕虚影化作牌，落进了你的牌组。",
+        outcomes: [
+          { kind: "add_card", cardId: "apparition" },
+          { kind: "add_card", cardId: "apparition" },
+          { kind: "add_card", cardId: "apparition" },
+        ],
+      },
+      {
+        label: "婉拒它们的邀请",
+        resultText: "你退出圈外，幽魂们的低语渐渐散了。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "face_trader",
+    description: "一张会浮动的石面具悬在龛中，它开口议价：拿脸上的一点血色，换你想要的东西。",
+    choices: [
+      {
+        label: "以血换财",
+        resultText: "面具吸走你几分气色，吐出一串金币。",
+        outcomes: [
+          { kind: "lose_hp", amount: 10 },
+          { kind: "gain_gold", amount: 75 },
+        ],
+      },
+      {
+        label: "戴上面具（换一件遗物）",
+        resultText: "戴上的一瞬你几乎窒息，摘下时手中已多了件古物。",
+        outcomes: [{ kind: "lose_hp", amount: 12 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不与它做交易",
+        resultText: "你别过脸，快步走开。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "mind_bloom",
+    description:
+      "空气里绽开一朵由记忆凝成的花，它许诺满足你此刻最强烈的渴望——无论是变强，还是发财。",
+    choices: [
+      {
+        label: "渴望力量（磨砺 3 张牌）",
+        resultText: "花瓣拂过，你手上几件家伙齐齐利了一截。",
+        outcomes: [{ kind: "upgrade_random_card", count: 3 }],
+      },
+      {
+        label: "渴望财富（大笔金币，附带心魔）",
+        resultText: "金币如潮涌来，可花心也塞给你一缕挥不去的心魔。",
+        outcomes: [
+          { kind: "gain_gold", amount: 150 },
+          { kind: "add_card", cardId: "doubt" },
+        ],
+      },
+      {
+        label: "无欲无求，转身离去",
+        resultText: "你没有伸手，花在身后悄然合拢。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "tomb_of_the_red_mask",
+    description: "一座猩红面具装点的陵墓横在路上，墓志铭只有一句：倾其所有者，得其所愿。",
+    choices: [
+      {
+        label: "献上身上所有金币",
+        resultText: "钱袋倾空的刹那，墓中亮起，一件赤红古物落入你手。",
+        outcomes: [{ kind: "lose_gold", amount: 9999 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不舍得，绕道而行",
+        resultText: "你捂紧钱袋，绕过了这座贪婪的陵墓。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "fountain_of_cleansing",
+    description: "一眼清泉汩汩涌着莹白的光，泉眼旁的石碑写着：涤去缠身之秽者，可轻装再上路。",
+    choices: [
+      {
+        label: "以泉水净身（涤除一张牌）",
+        resultText: "一缕污浊被泉水冲散，你的牌组清爽了些。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "只掬水润喉便走",
+        resultText: "清冽的泉水下肚，倦意也淡了几分。",
+        outcomes: [{ kind: "heal", amount: 10 }],
+      },
+    ],
+  },
+  {
+    id: "divine_fountain",
+    description: "一泓明净的圣泉在洞窟深处静静流淌，传说饮下它的人能焕然一新。",
+    choices: [
+      {
+        label: "痛饮圣泉（大幅回复）",
+        resultText: "暖流涤过全身，多日的伤痛竟一扫而空。",
+        outcomes: [{ kind: "heal", amount: 40 }],
+      },
+      {
+        label: "灌满水囊留作后用",
+        resultText: "你把圣水装进随身的瓶子，或许路上能救急。",
+        outcomes: [{ kind: "gain_potion" }],
+      },
+    ],
+  },
 ];
 
 const EVENT_MAP: ReadonlyMap<string, EventDef> = new Map(
