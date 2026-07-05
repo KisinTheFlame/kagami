@@ -508,6 +508,149 @@ const EVENT_LIST: EventDef[] = [
       },
     ],
   },
+  // —— 补全批次 3：交易 / 冒险类 ? 事件（既有 outcome）——
+  {
+    id: "knowing_skull",
+    description:
+      "墙上嵌着一颗会说话的骷髅，它咧嘴笑道：想要什么尽管开口，只是——每句回答都得拿血来换。",
+    choices: [
+      {
+        label: "问它讨要金币（付 6 生命）",
+        resultText: "骷髅嘎嘎笑着，墙缝里滚出一串金币。",
+        outcomes: [
+          { kind: "lose_hp", amount: 6 },
+          { kind: "gain_gold", amount: 90 },
+        ],
+      },
+      {
+        label: "问它讨要药水（付 6 生命）",
+        resultText: "它吐出一只还带着体温的小瓶。",
+        outcomes: [{ kind: "lose_hp", amount: 6 }, { kind: "gain_potion" }],
+      },
+      {
+        label: "捂住耳朵走开",
+        resultText: "你不想再听它废话，快步离开了。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "the_nest",
+    description: "石梁上垒着一个巨大的鸟巢，巢里既有闪光的碎金，也供着一柄祭祀用的匕首。",
+    choices: [
+      {
+        label: "掏走巢里的碎金",
+        resultText: "你抓了满满一把金屑，惊起的怪鸟扑棱着飞远了。",
+        outcomes: [{ kind: "gain_gold", amount: 50 }],
+      },
+      {
+        label: "握住祭刀，割手立誓",
+        resultText: "血顺着刀刃滴落，一股嗜血的锋锐涌入你的牌组。",
+        outcomes: [
+          { kind: "lose_hp", amount: 6 },
+          { kind: "add_card", cardId: "ritual_dagger" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "the_mausoleum",
+    description: "一具华丽的石棺横在墓室中央，缝隙里透出金光，也透出一丝说不清的阴冷。",
+    choices: [
+      {
+        label: "撬开石棺取走陪葬",
+        resultText: "金银哗啦作响，可你分明感到有什么东西缠上了你。",
+        outcomes: [
+          { kind: "gain_gold", amount: 90 },
+          { kind: "add_card", cardId: "writhe" },
+        ],
+      },
+      {
+        label: "敬而远之",
+        resultText: "你朝石棺欠了欠身，退出了墓室。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "cursed_tome",
+    description:
+      "讲台上摊着一本自行翻页的古书，每读一页都像有什么在啃食你的精神，但书末似乎压着件宝物。",
+    choices: [
+      {
+        label: "强忍着读到最后",
+        resultText: "合上书时你几乎脱力，指间却多了一件古物。",
+        outcomes: [{ kind: "lose_hp", amount: 12 }, { kind: "gain_relic" }],
+      },
+      {
+        label: "果断合上书页",
+        resultText: "你按住乱翻的书，退开了几步。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "winding_halls",
+    description: "一段扭曲反复的长廊在你面前岔开，每一条路似乎都要用不同的代价换取通行。",
+    choices: [
+      {
+        label: "抄阴森的近路（受创，但更强韧）",
+        resultText: "穿过那片阴冷时你抖了个寒战，出来却觉得皮实了几分。",
+        outcomes: [
+          { kind: "lose_hp", amount: 8 },
+          { kind: "gain_max_hp", amount: 8 },
+        ],
+      },
+      {
+        label: "走稳妥的远路（歇口气）",
+        resultText: "路虽然绕，你却难得地喘匀了气。",
+        outcomes: [{ kind: "heal", amount: 15 }],
+      },
+      {
+        label: "闯没探过的密道（有赏也有殃）",
+        resultText: "密道尽头是一小袋金币，还有一片甩不掉的晦气。",
+        outcomes: [
+          { kind: "gain_gold", amount: 50 },
+          { kind: "add_card", cardId: "decay" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "sensory_stone",
+    description: "一块半透明的感知之石悬在半空，触碰它似乎能把某些陌生的技艺直接灌进脑海。",
+    choices: [
+      {
+        label: "把手按上去（受创，换来新知）",
+        resultText: "一阵刺痛过后，你的脑中凭空多出了一套陌生的招式。",
+        outcomes: [
+          { kind: "lose_hp", amount: 5 },
+          { kind: "add_card", cardId: "apparition" },
+        ],
+      },
+      {
+        label: "不去招惹它",
+        resultText: "你收回手，绕过了那块石头。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "falling_pit",
+    description: "脚下的石板毫无征兆地塌陷，你堪堪抓住崖壁的藤蔓，可背上的行囊正一件件往深渊里掉。",
+    choices: [
+      {
+        label: "松开一只手，保住性命（丢一张牌）",
+        resultText: "你甩掉一件累赘换来平衡，稳稳落回了地面。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "死死抱住行囊硬扛（磕得不轻）",
+        resultText: "东西一件没丢，你自己却结结实实摔了一跤。",
+        outcomes: [{ kind: "lose_hp", amount: 10 }],
+      },
+    ],
+  },
 ];
 
 const EVENT_MAP: ReadonlyMap<string, EventDef> = new Map(
