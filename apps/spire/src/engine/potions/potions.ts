@@ -359,6 +359,15 @@ const POTION_LIST: PotionDef[] = [
     characterLock: "defect",
     effects: [{ kind: "channel_orb_per_slot", orbType: "dark" }],
   },
+  {
+    id: "speed_potion",
+    name: "迅捷药水",
+    description: "获得 5 点敏捷。",
+    rarity: "common",
+    targeted: false,
+    combatOnly: true,
+    effects: [{ kind: "apply_power", power: "dexterity", amount: 5, on: "self" }],
+  },
 ];
 
 const POTION_MAP: ReadonlyMap<string, PotionDef> = new Map(

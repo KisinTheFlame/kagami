@@ -1110,6 +1110,73 @@ const RELIC_LIST: RelicDef[] = [
     description: "战斗中回复生命时，多回复 50%。",
     hooks: {},
   },
+  // —— onAddCard 诅咒联动 ——
+  {
+    id: "darkstone_periapt",
+    name: "暗石护符",
+    rarity: "uncommon",
+    description: "每当你获得一张诅咒牌，最大生命 +6。",
+    hooks: {
+      onAddCard: (state, _self, card) => {
+        if (getCardDef(card.defId).type === "curse") {
+          state.maxHp += 6;
+          state.hp += 6;
+        }
+      },
+    },
+  },
+  {
+    id: "omamori",
+    name: "御守",
+    rarity: "common",
+    description: "抵消接下来加入你牌组的 2 张诅咒牌。",
+    hooks: {
+      onAddCard: (state, self, card) => {
+        if (self.counter < 2 && getCardDef(card.defId).type === "curse") {
+          const idx = state.deck.findIndex(c => c.uid === card.uid);
+          if (idx >= 0) {
+            state.deck.splice(idx, 1);
+            self.counter += 1;
+          }
+        }
+      },
+    },
+  },
+  // —— 更多 +1 能量类 boss 遗物（代价近似/略） ——
+  {
+    id: "ectoplasm",
+    name: "灵质",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法获得金币）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "cursed_key",
+    name: "诅咒之钥",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：打开宝箱时会附带一张诅咒）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "busted_crown",
+    name: "破损王冠",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：战斗奖励的卡牌选项减少）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "slavers_collar",
+    name: "奴隶主项圈",
+    rarity: "boss",
+    description: "在精英或首领战中，每回合开始时多获得 1 点能量。",
+    hooks: {
+      onCombatStart: (state, _self, emit) => {
+        if (state.combat?.isBoss) {
+          emit({ kind: "change_max_energy", delta: 1 });
+        }
+      },
+    },
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
