@@ -3,7 +3,7 @@ import type { Database } from "@kagami/persistence/db/client";
 import { closeDb as defaultCloseDb } from "@kagami/persistence/db/client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { getLoggerRuntime } from "@kagami/kernel/logger/runtime";
-import type { TaskScheduler } from "../scheduler/application/task-scheduler.js";
+import type { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 
 export type AgentRuntimeController = {
   stop(): Promise<void>;
@@ -22,7 +22,7 @@ type ShutdownServerResourcesOptions = {
   database: Database | null;
   /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的 napcatGatewayService.stop。 */
   shutdownApps: (() => Promise<void>) | null;
-  taskScheduler: TaskScheduler | null;
+  schedulerClient: SchedulerClient | null;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: AgentRuntimeController | null;
   closeLlmProviders: (() => Promise<void>) | null;
@@ -43,7 +43,7 @@ export async function shutdownServerResources({
   app,
   database,
   shutdownApps,
-  taskScheduler,
+  schedulerClient,
   callbackServers,
   rootAgentRuntime,
   closeLlmProviders,
@@ -86,10 +86,11 @@ export async function shutdownServerResources({
       });
     }
 
-    if (taskScheduler) {
-      await taskScheduler.stop();
-      shutdownLogger.info("Task scheduler closed", {
-        event: "server.shutdown.task_scheduler_closed",
+    if (schedulerClient) {
+      // 拆分后调度器在独立进程；本地只停 SDK 的订阅循环 + 中断在跑的 handler（同步，无需 await）。
+      schedulerClient.stop();
+      shutdownLogger.info("Scheduler client closed", {
+        event: "server.shutdown.scheduler_client_closed",
       });
     }
 

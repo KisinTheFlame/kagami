@@ -1,6 +1,7 @@
 import type { Database } from "@kagami/persistence/db/client";
 import type { MetricClient } from "@kagami/metric-client/client";
-import type { ScheduledTask, TaskRunMetadata } from "../../domain/scheduled-task.js";
+import type { SchedulerTaskRegistration } from "@kagami/scheduler-client/types";
+import type { TaskRunMetadata } from "@kagami/scheduler-client/task-run";
 import {
   RETENTION_TASKS,
   type PrismaRetentionDelegate,
@@ -10,20 +11,31 @@ import {
 const CHUNK_SIZE = 5_000;
 const DAY_MS = 86_400_000;
 
-type DataRetentionTaskDeps = {
+type DataRetentionRegistrationDeps = {
   db: Database;
   metricService: MetricClient;
   spec: RetentionSpec;
 };
 
-function buildTask({ db, metricService, spec }: DataRetentionTaskDeps): ScheduledTask {
+/**
+ * 一个表的数据保留定时任务注册（甲：定义在使用方，issue #428）。分块删除超保留窗口的旧行；
+ * misfire=drop（漏一次无害，次日照跑）、overlap=skip。handler 收 AbortSignal 供优雅关停（大表分块
+ * 删到一半收到关停即停）。业务（保留哪些表 / 各自窗口）仍在使用方，调度器只是到点 tick。
+ */
+function buildRegistration({
+  db,
+  metricService,
+  spec,
+}: DataRetentionRegistrationDeps): SchedulerTaskRegistration {
   const taskName = `data-retention:${spec.displayName}`;
   const expression = `${spec.offsetMinutes} 0 * * *`;
 
   return {
     name: taskName,
     schedule: { kind: "cron", expression },
-    async run(signal: AbortSignal): Promise<TaskRunMetadata> {
+    misfire: "drop",
+    overlap: "skip",
+    handler: async (signal: AbortSignal): Promise<TaskRunMetadata> => {
       const threshold = new Date(Date.now() - spec.days * DAY_MS);
       const delegate = spec.getDelegate(db) as PrismaRetentionDelegate;
 
@@ -72,8 +84,8 @@ function buildTask({ db, metricService, spec }: DataRetentionTaskDeps): Schedule
 export function buildDataRetentionTasks(deps: {
   db: Database;
   metricService: MetricClient;
-}): ScheduledTask[] {
+}): SchedulerTaskRegistration[] {
   return RETENTION_TASKS.map(spec =>
-    buildTask({ db: deps.db, metricService: deps.metricService, spec }),
+    buildRegistration({ db: deps.db, metricService: deps.metricService, spec }),
   );
 }

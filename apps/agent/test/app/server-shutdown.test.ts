@@ -41,9 +41,9 @@ describe("shutdownServerResources", () => {
     const shutdownApps = vi.fn(async () => {
       order.push("shutdownApps");
     });
-    const taskScheduler = {
-      stop: vi.fn(async () => {
-        order.push("taskScheduler.stop");
+    const schedulerClient = {
+      stop: vi.fn(() => {
+        order.push("schedulerClient.stop");
       }),
     };
     const callbackServer = {
@@ -72,7 +72,7 @@ describe("shutdownServerResources", () => {
       app,
       database: {} as never,
       shutdownApps,
-      taskScheduler: taskScheduler as never,
+      schedulerClient: schedulerClient as never,
       callbackServers: [callbackServer],
       rootAgentRuntime,
       closeLlmProviders,
@@ -87,7 +87,7 @@ describe("shutdownServerResources", () => {
     expect(order).toEqual([
       "app.close",
       "shutdownApps",
-      "taskScheduler.stop",
+      "schedulerClient.stop",
       "callbackServer.stop",
       "rootAgentRuntime.stop",
       "closeLlmProviders",
@@ -110,7 +110,7 @@ describe("shutdownServerResources", () => {
       app: null,
       database: {} as never,
       shutdownApps: null,
-      taskScheduler: null,
+      schedulerClient: null,
       callbackServers: [],
       rootAgentRuntime: null,
       closeLlmProviders: null,
@@ -140,7 +140,7 @@ describe("shutdownServerResources", () => {
       app: null,
       database: null,
       shutdownApps: null,
-      taskScheduler: null,
+      schedulerClient: null,
       callbackServers: [],
       rootAgentRuntime,
       closeLlmProviders: null,
@@ -176,7 +176,7 @@ describe("shutdownServerResources", () => {
       app: null,
       database: {} as never,
       shutdownApps: null,
-      taskScheduler: null,
+      schedulerClient: null,
       callbackServers: [],
       rootAgentRuntime,
       closeLlmProviders,

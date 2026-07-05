@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TaskRunHistory } from "../../src/scheduler/domain/task-run-history.js";
-import type { TaskRun } from "../../src/scheduler/domain/scheduled-task.js";
+import { TaskRunHistory, type TaskRun } from "../src/task-run.js";
 
 function makeRun(i: number): TaskRun {
   return {

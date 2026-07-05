@@ -48,6 +48,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
 ${extraServerBlock ? `${indent(extraServerBlock, 2)}\n` : ""}  napcat:
@@ -405,6 +406,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
   agent: {}
@@ -722,6 +724,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -804,6 +807,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -889,6 +893,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
   agent:
@@ -970,6 +975,7 @@ services:
   spire: { host: 127.0.0.1, port: 20011 }
   napcat: { host: 127.0.0.1, port: 20013 }
   pixel: { host: 127.0.0.1, port: 20012 }
+  scheduler: { host: 127.0.0.1, port: 20014 }
 server:
   databaseUrl: "file::memory:"
   agent:
