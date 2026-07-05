@@ -22,7 +22,7 @@ import {
   getPower,
   removePower,
 } from "../powers/powers.js";
-import { getRelicDef, hasRelic } from "../relics/relics.js";
+import { getRelicDef, hasRelic, THE_BOOT_MIN_DAMAGE } from "../relics/relics.js";
 import type { RelicDef } from "../relics/relics.js";
 import { getPotionDef } from "../potions/potions.js";
 
@@ -321,6 +321,9 @@ function triggerRelicCombatEnd(state: GameState): void {
 }
 function triggerRelicTurnStart(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnStart?.(state, self, emit));
+}
+function triggerRelicLoseHp(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onLoseHp?.(state, self, emit));
 }
 function triggerRelicTurnEnd(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
@@ -2242,6 +2245,10 @@ function dealDamageToEnemy(
   if (getPower(enemy.powers, "intangible") > 0) {
     dmg = Math.min(dmg, 1);
   }
+  // 战靴：一次无格挡攻击伤害为 1~4 时，改为造成 5（对齐 StS 只在有正伤害时生效）。
+  if (dmg >= 1 && dmg <= 4 && hasRelic(state, "the_boot")) {
+    dmg = THE_BOOT_MIN_DAMAGE;
+  }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
     enemy.modeShiftAccum += dmg;
@@ -2335,6 +2342,7 @@ function dealDamageToPlayer(
   if (afterBlock > 0) {
     state.hp = Math.max(0, state.hp - afterBlock);
     combat.timesLostHpThisCombat += 1; // 血债血偿按本场失血次数降费。
+    triggerRelicLoseHp(state); // 失血遗物钩子（百年谜题首次失血抽牌）。
   }
   // 镀甲：受到穿透格挡的攻击伤害时 -1 层。
   if (afterBlock > 0 && getPower(combat.playerPowers, "plated_armor") > 0) {

@@ -2,7 +2,7 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOf, getCardDef, costOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
-import { rewardRelicPool, getRelicDef, hasRelic } from "../relics/relics.js";
+import { rewardRelicPool, getRelicDef, hasRelic, grantRelic } from "../relics/relics.js";
 import {
   BASE_POTION_DROP_CHANCE,
   POTION_DROP_POOL,
@@ -131,7 +131,7 @@ function grantTreasure(state: GameState): void {
   const available = rewardRelicPool(state.character).filter(id => !hasRelic(state, id));
   if (available.length > 0) {
     const id = available[nextInt(state.rng, available.length)]!;
-    state.relics.push({ id, counter: 0 });
+    grantRelic(state, id);
     state.log.push(`你打开宝箱，获得遗物「${getRelicDef(id).name}」。`);
     return;
   }
@@ -350,7 +350,7 @@ function buyShopItem(
     state.deck.push({ uid: state.nextUid++, defId: item.defId, upgraded: false });
     state.log.push(`你买下了牌「${getCardDef(item.defId).name}」。`);
   } else if (item.kind === "relic") {
-    state.relics.push({ id: item.id, counter: 0 });
+    grantRelic(state, item.id);
     state.log.push(`你买下了遗物「${getRelicDef(item.id).name}」。`);
   } else {
     state.potions[state.potions.indexOf(null)] = item.id;
