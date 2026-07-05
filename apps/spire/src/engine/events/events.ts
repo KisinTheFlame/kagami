@@ -777,12 +777,18 @@ const EVENT_LIST: EventDef[] = [
       {
         label: "押注邪教骑士（稳，回报低）",
         resultText: "骑士险胜，庄家不情愿地数出你的彩金。",
-        outcomes: [{ kind: "lose_gold", amount: 50 }, { kind: "gain_gold", amount: 100 }],
+        outcomes: [
+          { kind: "lose_gold", amount: 50 },
+          { kind: "gain_gold", amount: 100 },
+        ],
       },
       {
         label: "押注黑马（险，回报高）",
         resultText: "黑马一骑绝尘，赔率惊人，你赚得盆满钵满。",
-        outcomes: [{ kind: "lose_gold", amount: 50 }, { kind: "gain_gold", amount: 250 }],
+        outcomes: [
+          { kind: "lose_gold", amount: 50 },
+          { kind: "gain_gold", amount: 250 },
+        ],
       },
       {
         label: "不赌，走人",
