@@ -1236,6 +1236,22 @@ function applyEffect(
       }
       break;
     }
+    case "upgrade_hand_cards": {
+      // 军备：升级手牌——all 则全部，否则升级一张未升级的牌（自动取第一张）。
+      if (actor.side === "player") {
+        if (effect.all) {
+          for (const card of combat.hand) {
+            card.upgraded = true;
+          }
+        } else {
+          const target = combat.hand.find(card => !card.upgraded);
+          if (target) {
+            target.upgraded = true;
+          }
+        }
+      }
+      break;
+    }
     case "schedule_bomb": {
       // 炸弹：预约在若干回合后对所有敌人造成伤害。
       if (actor.side === "player") {

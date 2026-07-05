@@ -5756,6 +5756,27 @@ const CARD_LIST: CardDef[] = [
     upgradedDescription: "充能 3 颗闪电球。此后你的闪电球伤害命中所有敌人。",
   },
 
+  {
+    id: "armaments",
+    name: "军备",
+    type: "skill",
+    rarity: "common",
+    color: "red",
+    cost: 1,
+    targeted: false,
+    exhausts: false,
+    effects: [
+      { kind: "gain_block", amount: 5 },
+      { kind: "upgrade_hand_cards", all: false },
+    ],
+    upgradedEffects: [
+      { kind: "gain_block", amount: 5 },
+      { kind: "upgrade_hand_cards", all: true },
+    ],
+    description: "获得 5 点格挡。升级你手牌中的一张牌，本场战斗内有效。",
+    upgradedDescription: "获得 5 点格挡。升级你手牌中的所有牌，本场战斗内有效。",
+  },
+
   // —— 敌人塞进牌组的废牌 / 伤口（不可打出）——
   {
     id: "miracle",
