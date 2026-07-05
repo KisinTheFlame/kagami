@@ -8,7 +8,7 @@ import type { OssClient } from "../../../../acl/oss-client.js";
 
 export const BROWSER_SCREENSHOT_TOOL_NAME = "browser_screenshot";
 
-const Schema = z.object({ reason: z.string().optional() });
+const Schema = z.object({});
 
 const logger = new AppLogger({ source: "agent.browser.screenshot" });
 
@@ -26,9 +26,7 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
     "截当前页视口，原图直接进你的上下文（你能直接看到图），并落 OSS 返回 resid 便于日后转发/重看。仅在需要视觉判断时用；observe 的语义树够用就别截。登录/支付页慎截（聚焦密码框会被拒）。";
   public readonly parameters = {
     type: "object",
-    properties: {
-      reason: { type: "string", description: "为什么要截这张（可选，便于你自己记录）。" },
-    },
+    properties: {},
   } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
@@ -47,15 +45,14 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
     this.ossClient = ossClient;
   }
 
-  protected async executeTyped(input: z.infer<typeof Schema>): Promise<ToolExecutionResult> {
+  protected async executeTyped(): Promise<ToolExecutionResult> {
     const shot = await this.getBrowserClient().screenshot();
     // 叠加落 OSS：失败不影响截图入上下文（降级，resid 置空）。
     const resid = await this.tryPutToOss(shot.image, shot.mimeType);
-    const reasonAttr = input.reason ? ` reason="${input.reason}"` : "";
     const residAttr = resid ? ` resid="${resid}"` : "";
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<browser_screenshot url="${shot.url}"${reasonAttr}${residAttr} />`,
+      content: `<browser_screenshot url="${shot.url}"${residAttr} />`,
       // content 用 base64 字符串：图片要进持久上下文（快照/ledger 走 JSON），Buffer 会被 JSON 毒坏。
       image: {
         content: shot.image.toString("base64"),
