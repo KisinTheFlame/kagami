@@ -156,7 +156,7 @@ describe("shutdownServerResources", () => {
     expect(exit).toHaveBeenCalledWith(0);
   });
 
-  it("root agent stop 失败时保持现有关停失败语义并退出 1", async () => {
+  it("某步关停失败时后续步骤仍 best-effort 执行，DB 照关，最终退出 1", async () => {
     const logger = createLoggerStub();
     const rootStopError = new Error("root stop failed");
     const rootAgentRuntime = {
@@ -189,13 +189,47 @@ describe("shutdownServerResources", () => {
     });
 
     expect(rootAgentRuntime.stop).toHaveBeenCalledTimes(1);
-    expect(closeLlmProviders).not.toHaveBeenCalled();
-    expect(closeLoggerRuntime).not.toHaveBeenCalled();
-    expect(closeDatabase).not.toHaveBeenCalled();
-    expect(logger.errorWithCause).toHaveBeenCalledWith("Shutdown failed", rootStopError, {
-      event: "server.shutdown.failed",
-      signal: "SIGTERM",
-    });
+    // 单步失败不再阻断后续：LLM providers / logger / DB 都仍被关闭（尤其 DB 必须关，防连接泄漏）。
+    expect(closeLlmProviders).toHaveBeenCalledTimes(1);
+    expect(closeLoggerRuntime).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+    expect(logger.errorWithCause).toHaveBeenCalledWith(
+      "Root agent runtime closed failed",
+      rootStopError,
+      {
+        event: "server.shutdown.root_agent_runtime_closed.failed",
+        signal: "SIGTERM",
+      },
+    );
+    // 有步骤失败 → 退出码 1。
     expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("全部关停成功时按顺序走完并退出 0", async () => {
+    const logger = createLoggerStub();
+    const closeDatabase = vi.fn(async () => {});
+    const exit = vi.fn();
+
+    await shutdownServerResources({
+      signal: "SIGTERM",
+      timeoutMs: 10_000,
+      isServerStarted: false,
+      app: null,
+      database: {} as never,
+      shutdownApps: null,
+      schedulerClient: null,
+      callbackServers: [],
+      rootAgentRuntime: null,
+      closeLlmProviders: null,
+      logger,
+      closeLoggerRuntime: async () => {},
+      closeDatabase,
+      exit,
+      setShutdownTimeout: () => ({}) as ReturnType<typeof setTimeout>,
+      clearShutdownTimeout: () => {},
+    });
+
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(0);
   });
 });

@@ -32,8 +32,8 @@ export interface AppStateStore {
  */
 export interface AppStateErrorInfo {
   appId: AppId;
-  /** restore = 启动时恢复失败；persist = 关停时存档失败。 */
-  phase: "restore" | "persist";
+  /** restore = 启动时恢复失败；persist = 关停时存档失败；shutdown = App 生命周期 onShutdown 失败。 */
+  phase: "restore" | "persist" | "shutdown";
   error: unknown;
 }
 
@@ -243,33 +243,66 @@ export class AppManager {
    * 校验失败的 App 会以包含 App id 的错误信息抛出，避免运行时才发现配置错误。
    */
   public async startupAll(rawAppsConfig: Record<string, unknown> = {}): Promise<void> {
-    for (const app of this.apps.values()) {
-      const raw = rawAppsConfig[app.id] ?? {};
-      let config: unknown = undefined;
-      if (app.configSchema) {
-        const parsed = app.configSchema.safeParse(raw);
-        if (!parsed.success) {
-          throw new Error(
-            `App "${app.id}" 配置不合法（config.apps.${app.id}）：${parsed.error.message}`,
-          );
+    // 记录已成功 onStartup 的 App：中途某个 App 启动失败时，反序 best-effort 关停这些已起的 App
+    // （它们的 timer / 连接已经活着），避免半启动状态泄漏资源，然后把原错抛出让宿主 fail-fast。
+    const started: App<unknown>[] = [];
+    try {
+      for (const app of this.apps.values()) {
+        const raw = rawAppsConfig[app.id] ?? {};
+        let config: unknown = undefined;
+        if (app.configSchema) {
+          const parsed = app.configSchema.safeParse(raw);
+          if (!parsed.success) {
+            throw new Error(
+              `App "${app.id}" 配置不合法（config.apps.${app.id}）：${parsed.error.message}`,
+            );
+          }
+          config = parsed.data;
         }
-        config = parsed.data;
+        // 存档先于 onStartup：让 App 在初始化前就拿回上次状态。
+        await this.restoreAppState(app);
+        // App<unknown> 的 onStartup 期望 ctx.config: unknown，cast 是必要的。
+        // 每个 App 自己的 TConfig 类型由它的实现保证（register<TConfig> 时类型已校验）。
+        await app.onStartup?.({ config });
+        started.push(app);
       }
-      // 存档先于 onStartup：让 App 在初始化前就拿回上次状态。
-      await this.restoreAppState(app);
-      // App<unknown> 的 onStartup 期望 ctx.config: unknown，cast 是必要的。
-      // 每个 App 自己的 TConfig 类型由它的实现保证（register<TConfig> 时类型已校验）。
-      await app.onStartup?.({ config });
+    } catch (error) {
+      await this.rollbackStartedApps(started);
+      throw error;
     }
   }
 
-  /** 反向调用所有 App 的 onShutdown，并在拆解前抓取各 App 的状态存档。 */
+  /** 启动失败回滚：反序对已起的 App 逐个 best-effort onShutdown（吞异常、上报），不阻断彼此。 */
+  private async rollbackStartedApps(started: App<unknown>[]): Promise<void> {
+    for (const app of [...started].reverse()) {
+      try {
+        await app.onShutdown?.();
+      } catch (shutdownError) {
+        // 回滚阶段的关停失败不能盖住触发回滚的原错——上报后继续关停其余 App。
+        this.onStateError?.({ appId: app.id, phase: "shutdown", error: shutdownError });
+      }
+    }
+  }
+
+  /**
+   * 反向调用所有 App 的 onShutdown，并在拆解前抓取各 App 的状态存档。每个 App 的 persist + onShutdown
+   * 都 best-effort 兜住：单个 App 关停抛错**不**阻断其余 App（否则一个坏 App 会让后面的 App 丢状态、
+   * 不清理），全部走完后聚合抛出，保证"关停失败可见"又"人人有机会关"。
+   */
   public async shutdownAll(): Promise<void> {
     const reversed = [...this.apps.values()].reverse();
+    const errors: unknown[] = [];
     for (const app of reversed) {
-      // 先抓状态（此时 App 仍是活的），再 onShutdown 拆解。
+      // 先抓状态（此时 App 仍是活的），再 onShutdown 拆解。persistAppState 自身已 best-effort。
       await this.persistAppState(app);
-      await app.onShutdown?.();
+      try {
+        await app.onShutdown?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `${errors.length} 个 App 的 onShutdown 失败`);
     }
   }
 

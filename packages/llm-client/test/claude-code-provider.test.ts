@@ -338,9 +338,11 @@ describe("createClaudeCodeProvider", () => {
         type: "text",
         text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
       });
+      // 最后一个 system block 钉稳定 cache 断点（tools+system 大前缀）。
       expect(system[2]).toEqual({
         type: "text",
         text: "你是一个测试助手。",
+        cache_control: { type: "ephemeral", ttl: "1h" },
       });
       expect(body.thinking).toEqual({
         type: "disabled",
@@ -418,6 +420,7 @@ describe("createClaudeCodeProvider", () => {
           {
             type: "text",
             text: "你是一个测试助手。",
+            cache_control: { type: "ephemeral", ttl: "1h" },
           },
         ],
         thinking: {

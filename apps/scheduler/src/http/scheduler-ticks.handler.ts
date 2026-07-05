@@ -1,7 +1,14 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import { createBackpressureAwareWrite } from "@kagami/http/sse";
 import { SCHEDULER_TICKS_SSE_PATH } from "@kagami/scheduler-api/event";
 import type { SchedulerEngine } from "../application/scheduler-engine.js";
 import type { TickBroadcaster, TickSubscriber } from "../application/tick-broadcaster.js";
+
+const logger = new AppLogger({ source: "scheduler.ticks-handler" });
+
+/** SSE 背压宽限期：res.write 背压后等 drain 这么久，还不 drain 就销毁连接（复刻 napcat #425）。 */
+const SSE_BACKPRESSURE_GRACE_MS = 15_000;
 
 type SchedulerTicksHandlerDeps = {
   broadcaster: TickBroadcaster;
@@ -41,9 +48,19 @@ export class SchedulerTicksHandler {
         "X-Accel-Buffering": "no",
       });
 
+      // 背压保护（复刻 napcat #425）：慢/半死消费方（agent 事件循环卡住）若不 drain，裸 res.write
+      // 续写会让 scheduler 进程内存无界增长——tick 帧虽小，但同进程内所有 owner 共享一个进程。背压即
+      // 停写、宽限期后 destroy，让对端重连（重连重新注册 + flush pending，tick 是派生事实不做回放）。
+      const write = createBackpressureAwareWrite(res, SSE_BACKPRESSURE_GRACE_MS, () => {
+        logger.warn("SSE 背压超时，销毁连接等使用方重连", {
+          event: "scheduler.sse.backpressure_timeout",
+          ownerId,
+        });
+      });
+
       const subscriber: TickSubscriber = {
-        write: chunk => res.write(chunk),
-        heartbeat: () => res.write(": keepalive\n\n"),
+        write,
+        heartbeat: () => write(": keepalive\n\n"),
       };
 
       // 先 add：此刻起 live tick 直接投递（不再进 pending）；再 flush 断连期间缓存的 pending。

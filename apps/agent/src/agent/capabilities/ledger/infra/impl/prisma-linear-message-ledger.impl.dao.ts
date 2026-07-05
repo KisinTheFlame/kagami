@@ -21,23 +21,22 @@ export class PrismaLinearMessageLedgerDao implements LinearMessageLedgerDao {
       return [];
     }
 
-    const rows = await this.database.$transaction(
-      entries.map(entry =>
-        this.database.linearMessageLedger.create({
-          data: {
-            runtimeKey: entry.runtimeKey,
-            message: serializeLlmMessage(entry.message) as Prisma.InputJsonValue,
-            createdAt: entry.createdAt ?? new Date(),
-          },
-          select: {
-            id: true,
-            runtimeKey: true,
-            message: true,
-            createdAt: true,
-          },
-        }),
-      ),
-    );
+    // 单条 INSERT ... RETURNING 批插，取代此前 `$transaction([...map(create)])` 的「N 条 create 各占一
+    // 事务/每次 append 一 BEGIN-COMMIT」写法：一轮里 assistant turn + 多条 tool_result 分别 append，逐条
+    // 开事务会在共享 WAL 上堆写事务。createManyAndReturn 一条语句落全部行、按插入序返回自增 id（=seq）。
+    const rows = await this.database.linearMessageLedger.createManyAndReturn({
+      data: entries.map(entry => ({
+        runtimeKey: entry.runtimeKey,
+        message: serializeLlmMessage(entry.message) as Prisma.InputJsonValue,
+        createdAt: entry.createdAt ?? new Date(),
+      })),
+      select: {
+        id: true,
+        runtimeKey: true,
+        message: true,
+        createdAt: true,
+      },
+    });
 
     return rows.map(mapLinearMessageLedgerRow);
   }

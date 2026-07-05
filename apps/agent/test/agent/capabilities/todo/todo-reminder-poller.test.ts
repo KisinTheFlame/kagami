@@ -114,4 +114,19 @@ describe("TodoReminderPoller.runDigest", () => {
     expect(digests).toHaveLength(1);
     expect(digestSuggestions).toEqual([[]]);
   });
+
+  it("digest 真实失败（buildDigest 抛错）→ rethrow，让调度器不推进 dedupe 游标、靠补发重试", async () => {
+    // dedupe 任务必须把真实失败抛给调度器 SDK，否则 markSeen-after-success 会误判成功、静默丢当天日报。
+    const poller = new TodoReminderPoller({
+      todoService: {
+        buildDigest: async () => {
+          throw new Error("db blip");
+        },
+      } as unknown as TodoService,
+      onDueReminder: () => {},
+      onDigest: () => {},
+      suggestTodos: async () => [],
+    });
+    await expect(poller.runDigest()).rejects.toThrow("db blip");
+  });
 });

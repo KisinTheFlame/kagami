@@ -36,20 +36,45 @@ async function startAgentLoop(runtime: {
   try {
     await runtime.rootAgentRuntime.initialize();
   } catch (error) {
-    logger.errorWithCause(
-      "Agent runtime initialization failed; backend will continue without agent loop",
-      error,
-      {
-        event: "agent.loop.init_failed",
-      },
-    );
+    // 「Agent as a life」的硬底线：主循环是小镜"活着"的唯一形态。初始化失败绝不能让进程带着一个
+    // 死循环继续在线（PM2 看进程健康、/health 照样 200、监控无感），那是"看着正常其实已经死了"。
+    // fail-fast：best-effort 关停资源后非零退出，交给 PM2 拉起一个干净新进程（快照持久化扩展会在
+    // 重启后重放历史、回填 KV 前缀）。
+    await fatalExit("agent.loop.init_failed", "Agent runtime initialization failed", error);
     return;
   }
 
   void runtime.rootAgentRuntime.run().catch(error => {
-    logger.errorWithCause("Agent loop crashed; backend will continue without agent loop", error, {
-      event: "agent.loop.crashed",
-    });
+    void fatalExit("agent.loop.crashed", "Agent loop crashed", error);
+  });
+}
+
+/**
+ * 主循环不可恢复地崩了（或初始化失败）：记致命日志 → best-effort 关停资源 → 非零退出让 PM2 重启。
+ * 复用优雅关停编排（每步 best-effort、有超时兜底），但 exit code 强制为 1，让 pm2 logs / status
+ * 明确显示这是一次崩溃而非干净停机。与 SIGINT/SIGTERM 共用 isShuttingDown 互斥，避免关停期间又崩
+ * 触发二次关停。
+ */
+async function fatalExit(event: string, message: string, error: unknown): Promise<void> {
+  logger.errorWithCause(`${message}; exiting for PM2 to restart`, error, { event });
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+  await shutdownServerResources({
+    signal: "SIGTERM",
+    timeoutMs: SHUTDOWN_TIMEOUT_MS,
+    isServerStarted,
+    app,
+    database,
+    shutdownApps,
+    schedulerClient,
+    callbackServers,
+    rootAgentRuntime,
+    closeLlmProviders,
+    closeDatabase: closeDb,
+    // 崩溃路径无论清理成功与否都以非零码退出（graceful 路径才 exit(0)）。
+    exit: () => process.exit(1),
   });
 }
 

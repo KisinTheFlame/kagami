@@ -360,8 +360,8 @@ export class SchedulerClient {
   }
 
   /**
-   * 已持有 running 锁后的处理：去重（manual 绕过）→ 跑 handler → 排空 queue（overlap=queue 才有）。
-   * 占锁在调用方（onTick / triggerNow）同步完成，这里全程独占，无并发。
+   * 已持有 running 锁后的处理：去重（manual 绕过）→ 跑 handler → 成功才推进去重游标 → 排空 queue
+   * （overlap=queue 才有）。占锁在调用方（onTick / triggerNow）同步完成，这里全程独占，无并发。
    */
   private async runClaimed(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
     let current: SchedulerTick | null = tick;
@@ -369,8 +369,13 @@ export class SchedulerClient {
       const next = current;
       current = null;
       if (!(await this.isDuplicate(entry, next))) {
-        await this.markSeen(entry, next);
-        await this.runHandler(entry, next);
+        const succeeded = await this.runHandler(entry, next);
+        // handler 成功后才落"已处理到此 scheduledAt"：失败**不**推进游标，留给重连补发重试
+        // （at-least-once）。补偿型 dedupe 任务（如 todo:daily-digest）宁可极罕见重推一次，也不能因
+        // 一次 handler 抛错就把整次派生生活输入静默吞掉。
+        if (succeeded) {
+          await this.markSeen(entry, next);
+        }
       }
       if (entry.queuedTick !== null) {
         current = entry.queuedTick;
@@ -387,7 +392,7 @@ export class SchedulerClient {
     return last !== null && tick.scheduledAt <= last;
   }
 
-  /** 去重任务：跑 handler 前先落"已处理到此 scheduledAt"，保证跨崩溃/重连不重复处理（at-most-once）。 */
+  /** 去重任务：handler 成功后落"已处理到此 scheduledAt"，跨崩溃/重连据此跳过已成功的 occurrence。 */
   private async markSeen(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
     if (tick.manual || !entry.reg.dedupe || this.occurrenceStore === undefined) {
       return;
@@ -395,8 +400,11 @@ export class SchedulerClient {
     await this.occurrenceStore.saveLastProcessed(entry.reg.name, tick.scheduledAt);
   }
 
-  /** 跑一次 handler 并记录执行历史。running 锁的占用/释放归调用方（onTick / triggerNow）。 */
-  private async runHandler(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
+  /**
+   * 跑一次 handler 并记录执行历史。返回 handler 是否成功（供 runClaimed 决定要不要推进去重游标）。
+   * running 锁的占用/释放归调用方（onTick / triggerNow）。
+   */
+  private async runHandler(entry: RegistryEntry, tick: SchedulerTick): Promise<boolean> {
     const abortController = new AbortController();
     const run: TaskRun = {
       startedAt: new Date(),
@@ -412,6 +420,7 @@ export class SchedulerClient {
       if (metadata) {
         run.metadata = metadata;
       }
+      return true;
     } catch (error) {
       run.status = "error";
       run.errorMessage = error instanceof Error ? error.message : String(error);
@@ -420,6 +429,7 @@ export class SchedulerClient {
         taskName: entry.reg.name,
         error: error instanceof Error ? error.message : String(error),
       });
+      return false;
     } finally {
       run.finishedAt = new Date();
       run.durationMs = Date.now() - startedAtMs;
