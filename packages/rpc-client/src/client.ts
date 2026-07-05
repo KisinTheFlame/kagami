@@ -149,7 +149,7 @@ async function callJsonRoute(
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
+    const body: unknown = await response.json().catch(() => null);
     const decoded = ctx.decodeError(response.status, body);
     if (decoded) {
       throw decoded;
