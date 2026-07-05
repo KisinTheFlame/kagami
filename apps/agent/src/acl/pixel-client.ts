@@ -14,7 +14,6 @@ export type PixelInput = { x: number; y: number; color: string };
 
 export interface PixelClient {
   newCanvas(width: number, height: number): Promise<CanvasResponse>;
-  getCanvas(): Promise<CanvasResponse>;
   setPixels(pixels: readonly PixelInput[]): Promise<CanvasResponse>;
   fill(x: number, y: number, color: string): Promise<CanvasResponse>;
   line(x1: number, y1: number, x2: number, y2: number, color: string): Promise<CanvasResponse>;
@@ -61,7 +60,6 @@ function withTimeout(baseFetch: FetchLike): FetchLike {
 // createClient 只吃 JSON 路由；render 是 binary-raw，单独交给 createBinaryClient。
 const jsonContract = {
   newCanvas: pixelApiContract.newCanvas,
-  getCanvas: pixelApiContract.getCanvas,
   setPixels: pixelApiContract.setPixels,
   fill: pixelApiContract.fill,
   line: pixelApiContract.line,
@@ -95,10 +93,6 @@ export class HttpPixelClient implements PixelClient {
 
   public newCanvas(width: number, height: number): Promise<CanvasResponse> {
     return this.api.newCanvas({ width, height });
-  }
-
-  public getCanvas(): Promise<CanvasResponse> {
-    return this.api.getCanvas({});
   }
 
   public setPixels(pixels: readonly PixelInput[]): Promise<CanvasResponse> {

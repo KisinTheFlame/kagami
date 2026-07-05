@@ -12,7 +12,6 @@ const PIXEL_TOOLS = [
   "circle",
   "ellipse",
   "clear",
-  "show_canvas",
   "render",
 ];
 
@@ -28,7 +27,7 @@ function appendedContent(effects: readonly RootAgentEffect[]): string {
 }
 
 describe("PixelApp", () => {
-  it("装配 10 个子工具", () => {
+  it("装配 9 个子工具", () => {
     expect(
       stubApp()
         .tools.map(t => t.name)
@@ -36,7 +35,7 @@ describe("PixelApp", () => {
     ).toEqual([...PIXEL_TOOLS].sort());
   });
 
-  it("help 披露全部 10 个工具 + 调色板 + switch 指引", async () => {
+  it("help 披露全部 9 个工具 + 调色板 + switch 指引", async () => {
     const help = await stubApp().help();
     for (const name of PIXEL_TOOLS) {
       expect(help).toContain(name);

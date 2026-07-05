@@ -39,13 +39,6 @@ export class PixelHandler {
       this.run(() => this.service.newCanvas(input.width, input.height)),
     );
 
-    registerJsonRoute(app, pixelApiContract.getCanvas, () => {
-      const canvas = this.service.currentState();
-      return canvas
-        ? { ok: true as const, canvas }
-        : { ok: false as const, reason: "还没有画布，先用 new_canvas 起手。", canvas: null };
-    });
-
     registerJsonRoute(app, pixelApiContract.setPixels, ({ input }) =>
       this.run(() => this.service.setPixels(input.pixels)),
     );

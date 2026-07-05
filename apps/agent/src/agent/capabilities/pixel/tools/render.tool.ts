@@ -25,7 +25,7 @@ type Deps = {
 export class PixelRenderTool extends ZodToolComponent<typeof Schema> {
   public readonly name = PIXEL_RENDER_TOOL_NAME;
   public readonly description =
-    "把当前画布渲染成 PNG 图、直接进你的视野。已存档的会返回 resid，想发到群里就 switch(qq) 后用 send_resource。没有画布时会提示先开画布。";
+    "把当前画布渲染成 PNG 图、直接进你的视野，同时存档返回一个 resid。没有画布时会提示先开画布。";
   public readonly parameters = { type: "object", properties: {}, required: [] } as const;
   public readonly kind: ToolKind = "business";
   protected readonly inputSchema = Schema;
@@ -61,7 +61,7 @@ export class PixelRenderTool extends ZodToolComponent<typeof Schema> {
         ok: true,
         ...(resid ? { resid } : {}),
         note: resid
-          ? "画已进入你的视野；已存档，可 switch(qq) 后用 send_resource 发出去。"
+          ? "画已进入你的视野，也存了档（resid 见上）。"
           : "画已进入你的视野（本次未落 OSS，无 resid）。",
       }),
       effects: [appendEffect],

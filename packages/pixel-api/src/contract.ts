@@ -85,13 +85,6 @@ export const pixelApiContract = {
     output: CanvasResponseSchema,
     timeoutMs: PIXEL_TIMEOUT_MS,
   }),
-  getCanvas: defineJsonRoute({
-    method: "GET",
-    path: "/canvas",
-    input: z.object({}),
-    output: CanvasResponseSchema,
-    timeoutMs: PIXEL_TIMEOUT_MS,
-  }),
   setPixels: defineJsonRoute({
     method: "POST",
     path: "/pixels",
