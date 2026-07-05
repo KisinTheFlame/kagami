@@ -1,5 +1,6 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { MetricChartQueryRequestSchema, MetricChartQueryResponseSchema } from "./chart.js";
+import { MetricDeriveRequestSchema } from "./derive.js";
 import { RecordMetricRequestSchema, RecordMetricResponseSchema } from "./record.js";
 
 // === @kagami/metric-api：kagami-metric 服务的 HTTP 契约（issue #279 PR3 / #444） ===
@@ -22,6 +23,13 @@ export const metricApiContract = {
     method: "POST",
     path: "/metric/query",
     input: MetricChartQueryRequestSchema,
+    output: MetricChartQueryResponseSchema,
+  }),
+  // 派生查询（#475 P3）：分子/分母两份规格算 ratio/diff，出单条派生线（复用 query 的整洁序列响应）。
+  derive: defineJsonRoute({
+    method: "POST",
+    path: "/metric/derive",
+    input: MetricDeriveRequestSchema,
     output: MetricChartQueryResponseSchema,
   }),
 } as const;

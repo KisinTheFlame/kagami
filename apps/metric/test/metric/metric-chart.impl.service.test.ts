@@ -145,6 +145,7 @@ function createMetricDao(overrides?: Partial<MetricDao>): MetricDao {
   return {
     insert: vi.fn().mockResolvedValue(undefined),
     queryChartSeries: vi.fn().mockResolvedValue([]),
+    queryDerivedSeries: vi.fn().mockResolvedValue([]),
     close: vi.fn(),
     ...overrides,
   };

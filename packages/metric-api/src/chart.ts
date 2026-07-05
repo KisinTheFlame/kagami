@@ -80,6 +80,11 @@ const BUCKET_MILLISECONDS: Record<MetricChartBucket, number> = {
   "1h": 60 * 60 * 1000,
 };
 
+/** bucket 枚举 → 毫秒。供派生查询（#475 P3）等复用同一份点数 guard。 */
+export function metricChartBucketToMilliseconds(bucket: MetricChartBucket): number {
+  return BUCKET_MILLISECONDS[bucket];
+}
+
 const RANGE_PRESET_MILLISECONDS: Record<MetricChartRangePreset, number> = {
   "1m": 60 * 1000,
   "10m": 10 * 60 * 1000,
