@@ -228,6 +228,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     nextTurnDraw: 0,
     nextTurnStance: null,
     nightmarePending: null,
+    pendingBomb: null,
     extraTurnPending: false,
     doomedNextTurn: false,
     nextTurnPhantasmal: false,
@@ -418,6 +419,14 @@ function drawCards(state: GameState, count: number): void {
       if (drawnDef.onDraw && drawnDef.onDraw.length > 0) {
         applyEffects(state, drawnDef.onDraw, { side: "player" }, null);
       }
+      // 机械降神：抽到即消耗自身（结算 onDraw 之后从手牌移除并进消耗堆）。
+      if (drawnDef.exhaustOnDraw) {
+        const at = combat.hand.indexOf(card);
+        if (at >= 0) {
+          combat.hand.splice(at, 1);
+          exhaustCard(state, card);
+        }
+      }
     }
     // 进化：抽到状态牌 → 额外抽 = 层数的牌（递归有牌堆张数上限，不会无限）。
     const evolve = getPower(combat.playerPowers, "evolve");
@@ -560,6 +569,10 @@ function applyEffect(
     case "gain_block": {
       // 获得的格挡按「获得方」的敏捷/脆弱修正。
       const gained = computeBlockGain(effect.amount, powers);
+      // 应急按钮：牌产生的格挡被抑制（本效果由牌结算，故直接跳过）。
+      if (actor.side === "player" && getPower(combat.playerPowers, "no_card_block") > 0) {
+        break;
+      }
       if (actor.side === "player") {
         combat.playerBlock += gained;
         // 主宰：每当玩家获得格挡，对随机敌人造成 = 层数的伤害。
@@ -1209,6 +1222,24 @@ function applyEffect(
           const id = MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!;
           combat.hand.push({ uid: state.nextUid++, defId: id, upgraded: false, costZero: true });
         }
+      }
+      break;
+    }
+    case "upgrade_all_cards": {
+      // 神化：本场剩余时间内升级你所有的牌（就地升级各堆里的牌实例）。
+      if (actor.side === "player") {
+        for (const pile of [combat.hand, combat.drawPile, combat.discardPile, combat.exhaustPile]) {
+          for (const card of pile) {
+            card.upgraded = true;
+          }
+        }
+      }
+      break;
+    }
+    case "schedule_bomb": {
+      // 炸弹：预约在若干回合后对所有敌人造成伤害。
+      if (actor.side === "player") {
+        combat.pendingBomb = { turns: effect.turns, damage: effect.damage };
       }
       break;
     }
@@ -2314,11 +2345,19 @@ function dealOrbDamage(state: GameState, amount: number): void {
   if (living.length === 0) {
     return;
   }
-  const pick = living[nextInt(state.rng, living.length)]!.index;
   // 靶心：带锁定的敌人受到闪电/暗球伤害 ×1.5。
-  const lockOn = getPower(combat.enemies[pick]!.powers, "lock_on");
-  const finalAmount = lockOn > 0 ? Math.floor(amount * 1.5) : amount;
-  dealDamageToEnemy(state, pick, finalAmount, []);
+  const hit = (index: number): void => {
+    const lockOn = getPower(combat.enemies[index]!.powers, "lock_on");
+    dealDamageToEnemy(state, index, lockOn > 0 ? Math.floor(amount * 1.5) : amount, []);
+  };
+  // 电动力学：球伤害命中所有存活敌人；否则随机一名。
+  if (getPower(combat.playerPowers, "electrodynamics") > 0) {
+    for (const entry of living) {
+      hit(entry.index);
+    }
+  } else {
+    hit(living[nextInt(state.rng, living.length)]!.index);
+  }
 }
 
 /** 充能一颗球：球槽满则先唤醒最左侧的球，再把新球放到末位（机器人）。 */
@@ -2747,6 +2786,23 @@ export function endTurn(state: GameState): void {
   // 幻杀「本回合」限定：回合结束清除双倍。
   if (getPower(combat.playerPowers, "phantasmal") > 0) {
     removePower(combat.playerPowers, "phantasmal");
+  }
+  // 应急按钮：无法从牌获得格挡的剩余回合数每回合末 -1。
+  if (getPower(combat.playerPowers, "no_card_block") > 0) {
+    addPower(combat.playerPowers, "no_card_block", -1);
+  }
+  // 炸弹：回合结束倒计时，归零时对所有敌人造成伤害。
+  if (combat.pendingBomb) {
+    combat.pendingBomb.turns -= 1;
+    if (combat.pendingBomb.turns <= 0) {
+      const dmg = combat.pendingBomb.damage;
+      combat.pendingBomb = null;
+      for (let i = 0; i < combat.enemies.length; i += 1) {
+        if (combat.enemies[i]!.hp > 0) {
+          dealDamageToEnemy(state, i, dmg, []);
+        }
+      }
+    }
   }
   // 金属化 / 镀甲（玩家）：回合结束获得等量格挡（定值），带进敌人回合防御。
   const playerMetallicize = getPower(combat.playerPowers, "metallicize");
