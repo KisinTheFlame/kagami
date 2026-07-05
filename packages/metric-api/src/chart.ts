@@ -80,6 +80,19 @@ const BUCKET_MILLISECONDS: Record<MetricChartBucket, number> = {
   "1h": 60 * 60 * 1000,
 };
 
+/**
+ * start / end 各向下对齐到桶边界后的闭区间桶数（= 服务端 listBucketStarts 的长度）。点数 guard 必须
+ * 用这个而非 `floor((end-start)/bucket)+1`：后者在 start/end 未对齐桶边界时会少算 1，放过越界请求。
+ */
+export function metricChartAlignedBucketCount(
+  startMs: number,
+  endMs: number,
+  bucket: MetricChartBucket,
+): number {
+  const bucketMs = BUCKET_MILLISECONDS[bucket];
+  return Math.floor(endMs / bucketMs) - Math.floor(startMs / bucketMs) + 1;
+}
+
 const RANGE_PRESET_MILLISECONDS: Record<MetricChartRangePreset, number> = {
   "1m": 60 * 1000,
   "10m": 10 * 60 * 1000,
@@ -137,8 +150,12 @@ export const MetricChartQueryRequestSchema = z
     }
 
     let rangeMs: number;
+    let points: number;
     if (value.rangePreset) {
       rangeMs = RANGE_PRESET_MILLISECONDS[value.rangePreset];
+      // preset 的实际 start/end 在查询时才定（now()），此处无法对齐桶边界；用 range 近似（+1 容差无害，
+      // 且会超 2000 的 preset×bucket 组合本就被拒）。
+      points = Math.floor(rangeMs / BUCKET_MILLISECONDS[value.bucket]) + 1;
     } else if (value.startAt && value.endAt) {
       const startAt = new Date(value.startAt).getTime();
       const endAt = new Date(value.endAt).getTime();
@@ -151,6 +168,7 @@ export const MetricChartQueryRequestSchema = z
         return;
       }
       rangeMs = endAt - startAt;
+      points = metricChartAlignedBucketCount(startAt, endAt, value.bucket);
     } else {
       return;
     }
@@ -164,8 +182,6 @@ export const MetricChartQueryRequestSchema = z
       return;
     }
 
-    // 与服务端 listBucketStarts 的闭区间桶数对齐（floor(range/b)+1），避免 guard 比实际桶数少算 1。
-    const points = Math.floor(rangeMs / BUCKET_MILLISECONDS[value.bucket]) + 1;
     if (points > METRIC_CHART_MAX_POINTS) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -7,6 +7,7 @@ import type {
 } from "@kagami/metric-api/chart";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { MetricChartSeriesRow, MetricDao } from "../infra/metric.dao.js";
+import { bucketToMilliseconds, listBucketStarts } from "./bucket-time.js";
 import type { MetricChartService } from "./metric-chart.service.js";
 
 type DefaultMetricChartServiceDeps = {
@@ -172,22 +173,6 @@ function resolveSeriesIdentity(params: {
   };
 }
 
-function listBucketStarts(startAt: Date, endAt: Date, bucketMs: number): Date[] {
-  const alignedStartAt = new Date(Math.floor(startAt.getTime() / bucketMs) * bucketMs);
-  const alignedEndAt = new Date(Math.floor(endAt.getTime() / bucketMs) * bucketMs);
-  const buckets: Date[] = [];
-
-  for (
-    let current = alignedStartAt.getTime();
-    current <= alignedEndAt.getTime();
-    current += bucketMs
-  ) {
-    buckets.push(new Date(current));
-  }
-
-  return buckets;
-}
-
 function getMissingBucketValue(aggregator: MetricChartAggregator): number | null {
   switch (aggregator) {
     case "count":
@@ -202,20 +187,5 @@ function getMissingBucketValue(aggregator: MetricChartAggregator): number | null
     case "p95":
     case "p99":
       return null;
-  }
-}
-
-function bucketToMilliseconds(bucket: MetricChartQueryRequest["bucket"]): number {
-  switch (bucket) {
-    case "10s":
-      return 10 * 1000;
-    case "1m":
-      return 60 * 1000;
-    case "5m":
-      return 5 * 60 * 1000;
-    case "30m":
-      return 30 * 60 * 1000;
-    case "1h":
-      return 60 * 60 * 1000;
   }
 }

@@ -8,6 +8,10 @@ import type {
   MetricChartAggregator,
   MetricChartSeriesRow,
   MetricDao,
+  MetricDeriveOperand,
+  MetricDerivedSeriesRow,
+  MetricTagFilters,
+  QueryDerivedSeriesInput,
   QueryMetricChartSeriesInput,
 } from "../metric.dao.js";
 
@@ -75,10 +79,7 @@ export class DuckDbMetricDao implements MetricDao {
   ): Promise<MetricChartSeriesRow[]> {
     const params = new VarcharParams();
     const bucketSeconds = bucketToSeconds(input.bucket);
-    // epoch(occurred_at) 得 UTC 秒（DOUBLE，带亚秒小数）；先 floor 截断到整秒——对齐旧 SQLite
-    // unixepoch 的截断语义，而非 DuckDB `CAST(DOUBLE AS BIGINT)` 的四舍五入（.5xx 秒会被顶进下一个
-    // 桶）。再整除（//）对齐桶乘回 = 桶起点 epoch 秒。
-    const bucketExpression = `(CAST(floor(epoch("occurred_at")) AS BIGINT) // ${bucketSeconds}) * ${bucketSeconds}`;
+    const bucketExpression = bucketStartExpression(bucketSeconds);
     const seriesKeyExpression = input.groupByTag
       ? `NULLIF("tags" ->> ${params.add(input.groupByTag)}, '')`
       : `NULL`;
@@ -166,6 +167,43 @@ export class DuckDbMetricDao implements MetricDao {
     }));
   }
 
+  public async queryDerivedSeries(
+    input: QueryDerivedSeriesInput,
+  ): Promise<MetricDerivedSeriesRow[]> {
+    const params = new VarcharParams();
+    const bucketSeconds = bucketToSeconds(input.bucket);
+    const range = { startAt: input.startAt, endAt: input.endAt };
+    // 分子/分母各自压成「每桶一个标量」的 CTE（无分组、无 top-N）。
+    const numeratorCte = buildOperandCte("num", input.numerator, range, bucketSeconds, params);
+    const denominatorCte = buildOperandCte("den", input.denominator, range, bucketSeconds, params);
+
+    // 缺桶 / 除零语义在这一条表达式里定死：ratio 用 NULLIF 挡除零，diff 直接相减；两者都靠 SQL 的
+    // NULL 传播——任一侧该桶无数据（FULL OUTER JOIN 补 NULL）时结果即 NULL，前端断线不臆造 0。
+    const valueExpression =
+      input.op === "ratio" ? `num."value" / NULLIF(den."value", 0)` : `num."value" - den."value"`;
+
+    const sql = `
+      WITH ${numeratorCte},
+      ${denominatorCte}
+      SELECT
+        COALESCE(num."bucketStart", den."bucketStart") AS "bucketStart",
+        ${valueExpression} AS "value"
+      FROM num
+      FULL OUTER JOIN den ON num."bucketStart" = den."bucketStart"
+      ORDER BY "bucketStart" ASC
+    `;
+
+    const prepared = await this.connection.prepare(sql);
+    params.bindAll(prepared);
+    const reader = await prepared.runAndReadAll();
+    const rows = reader.getRowObjects() as RawMetricDerivedSeriesRow[];
+
+    return rows.map(row => ({
+      bucketStart: new Date(Number(row.bucketStart) * 1000),
+      value: row.value === null ? null : Number(row.value),
+    }));
+  }
+
   public close(): void {
     this.connection.closeSync();
     this.instance.closeSync();
@@ -178,6 +216,66 @@ type RawMetricChartSeriesRow = {
   seriesKey: string | null;
   value: number | bigint | null;
 };
+
+type RawMetricDerivedSeriesRow = {
+  bucketStart: number | bigint;
+  value: number | bigint | null;
+};
+
+/**
+ * 桶起点 epoch 秒表达式。epoch(occurred_at) 得 UTC 秒（DOUBLE，带亚秒小数）；先 floor 截断到整秒
+ * ——对齐旧 SQLite unixepoch 的截断语义，而非 DuckDB `CAST(DOUBLE AS BIGINT)` 的四舍五入（.5xx 秒
+ * 会被顶进下一个桶）。再整除（//）对齐桶乘回。
+ */
+function bucketStartExpression(bucketSeconds: number): string {
+  return `(CAST(floor(epoch("occurred_at")) AS BIGINT) // ${bucketSeconds}) * ${bucketSeconds}`;
+}
+
+/** 派生查询的单个操作数 → 「每桶一个标量值」的具名 CTE（无分组、无 top-N）。 */
+function buildOperandCte(
+  name: string,
+  operand: MetricDeriveOperand,
+  range: { startAt: Date; endAt: Date },
+  bucketSeconds: number,
+  params: VarcharParams,
+): string {
+  const bucketExpression = bucketStartExpression(bucketSeconds);
+  const whereClause = buildWhereClause(
+    {
+      metricName: operand.metricName,
+      startAt: range.startAt,
+      endAt: range.endAt,
+      tagFilters: operand.tagFilters,
+    },
+    params,
+  );
+
+  if (operand.aggregator === "last") {
+    return `${name} AS (
+      SELECT "bucketStart", "value" FROM (
+        SELECT
+          ${bucketExpression} AS "bucketStart",
+          "value" AS "value",
+          row_number() OVER (
+            PARTITION BY ${bucketExpression}
+            ORDER BY "occurred_at" DESC, "id" DESC
+          ) AS rn
+        FROM "metric"
+        ${whereClause}
+      )
+      WHERE rn = 1
+    )`;
+  }
+
+  return `${name} AS (
+    SELECT
+      ${bucketExpression} AS "bucketStart",
+      ${buildAggregateExpression(operand.aggregator)} AS "value"
+    FROM "metric"
+    ${whereClause}
+    GROUP BY "bucketStart"
+  )`;
+}
 
 /** 分组查询最多返回的 series 数：SQL 层按总量取前 N、其余丢弃，防高基数 groupByTag 撑爆响应。 */
 const MAX_SERIES = 20;
@@ -201,7 +299,15 @@ class VarcharParams {
   }
 }
 
-function buildWhereClause(input: QueryMetricChartSeriesInput, params: VarcharParams): string {
+/** buildWhereClause 只需这几项：单查询与派生查询的操作数都套得上。 */
+type MetricWhereInput = {
+  metricName: string;
+  startAt: Date;
+  endAt: Date;
+  tagFilters: MetricTagFilters | null;
+};
+
+function buildWhereClause(input: MetricWhereInput, params: VarcharParams): string {
   const conditions = [
     `"metric_name" = ${params.add(input.metricName)}`,
     `"occurred_at" >= ${params.add(toDuckDbTimestamp(input.startAt))}::TIMESTAMP`,

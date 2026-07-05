@@ -44,9 +44,34 @@ export type MetricChartSeriesRow = {
   value: number | null;
 };
 
+// 派生查询（#475 P3）：分子/分母各一份「无分组」聚合规格，共享 range/bucket。
+export type MetricDeriveOp = "ratio" | "diff";
+
+export type MetricDeriveOperand = {
+  metricName: string;
+  aggregator: MetricChartAggregator;
+  tagFilters: MetricTagFilters | null;
+};
+
+export type QueryDerivedSeriesInput = {
+  numerator: MetricDeriveOperand;
+  denominator: MetricDeriveOperand;
+  op: MetricDeriveOp;
+  startAt: Date;
+  endAt: Date;
+  bucket: MetricChartBucket;
+};
+
+export type MetricDerivedSeriesRow = {
+  bucketStart: Date;
+  value: number | null;
+};
+
 export interface MetricDao {
   insert(input: InsertMetricInput): Promise<void>;
   queryChartSeries(input: QueryMetricChartSeriesInput): Promise<MetricChartSeriesRow[]>;
+  /** 派生查询：一条 SQL 按桶对齐分子/分母算 ratio/diff，出单条派生线（#475 P3）。 */
+  queryDerivedSeries(input: QueryDerivedSeriesInput): Promise<MetricDerivedSeriesRow[]>;
   /** 关停时释放 DuckDB 连接与实例。 */
   close(): void;
 }

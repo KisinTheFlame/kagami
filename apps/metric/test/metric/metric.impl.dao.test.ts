@@ -3,7 +3,10 @@ import {
   DuckDbMetricDao,
   openMetricDuckDb,
 } from "../../src/metric/infra/impl/duckdb-metric.impl.dao.js";
-import type { QueryMetricChartSeriesInput } from "../../src/metric/infra/metric.dao.js";
+import type {
+  QueryDerivedSeriesInput,
+  QueryMetricChartSeriesInput,
+} from "../../src/metric/infra/metric.dao.js";
 
 // 用真·内存 DuckDB 端到端验证 DAO：插入 → queryChartSeries → 逐点断言输出，
 // 即「从 SQLite/Prisma 迁到 DuckDB」的行为等价保证（#475 P1）。
@@ -461,5 +464,156 @@ describe("DuckDbMetricDao", () => {
     expect(rows).toEqual([
       { bucketStart: iso("2026-07-06T10:00:00.000Z"), seriesKey: null, value: 1 },
     ]);
+  });
+
+  describe("queryDerivedSeries", () => {
+    const eq = (value: string) => ({ op: "eq" as const, value });
+    function baseDerive(over: Partial<QueryDerivedSeriesInput>): QueryDerivedSeriesInput {
+      return {
+        numerator: { metricName: METRIC, aggregator: "count", tagFilters: null },
+        denominator: { metricName: METRIC, aggregator: "count", tagFilters: null },
+        op: "ratio",
+        startAt: iso("2026-07-06T10:00:00.000Z"),
+        endAt: iso("2026-07-06T10:05:00.000Z"),
+        bucket: "1m",
+        ...over,
+      };
+    }
+
+    it("computes a ratio per bucket (Wait count / total count)", async () => {
+      for (const tool of ["Wait", "Wait", "Read", "Read", "Read"]) {
+        await dao.insert({
+          metricName: METRIC,
+          value: 1,
+          tags: { tool },
+          occurredAt: iso("2026-07-06T10:00:10.000Z"),
+        });
+      }
+
+      const rows = await dao.queryDerivedSeries(
+        baseDerive({
+          numerator: { metricName: METRIC, aggregator: "count", tagFilters: { tool: eq("Wait") } },
+          denominator: { metricName: METRIC, aggregator: "count", tagFilters: null },
+          op: "ratio",
+        }),
+      );
+
+      expect(rows).toEqual([{ bucketStart: iso("2026-07-06T10:00:00.000Z"), value: 0.4 }]);
+    });
+
+    it("computes a diff per bucket (total - Wait)", async () => {
+      for (const tool of ["Wait", "Wait", "Read", "Read", "Read"]) {
+        await dao.insert({
+          metricName: METRIC,
+          value: 1,
+          tags: { tool },
+          occurredAt: iso("2026-07-06T10:00:10.000Z"),
+        });
+      }
+
+      const rows = await dao.queryDerivedSeries(
+        baseDerive({
+          numerator: { metricName: METRIC, aggregator: "count", tagFilters: null },
+          denominator: {
+            metricName: METRIC,
+            aggregator: "count",
+            tagFilters: { tool: eq("Wait") },
+          },
+          op: "diff",
+        }),
+      );
+
+      expect(rows).toEqual([{ bucketStart: iso("2026-07-06T10:00:00.000Z"), value: 3 }]);
+    });
+
+    it("yields null on division by zero (NULLIF guards the denominator)", async () => {
+      // 分母 sum = +7 + (-7) = 0；分子 count = 2。ratio 该桶应为 null，而非 Infinity / 报错。
+      await dao.insert({
+        metricName: METRIC,
+        value: 7,
+        tags: {},
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: -7,
+        tags: {},
+        occurredAt: iso("2026-07-06T10:00:20.000Z"),
+      });
+
+      const rows = await dao.queryDerivedSeries(
+        baseDerive({
+          numerator: { metricName: METRIC, aggregator: "count", tagFilters: null },
+          denominator: { metricName: METRIC, aggregator: "sum", tagFilters: null },
+          op: "ratio",
+        }),
+      );
+
+      expect(rows).toEqual([{ bucketStart: iso("2026-07-06T10:00:00.000Z"), value: null }]);
+    });
+
+    it("yields null for a bucket where only one side has data (NULL propagation)", async () => {
+      // 分子在 10:00 桶、分母在 10:02 桶：FULL OUTER JOIN 出两桶，各有一侧 NULL → 两桶都 null。
+      await dao.insert({
+        metricName: METRIC,
+        value: 1,
+        tags: { tool: "Wait" },
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: 1,
+        tags: { tool: "Read" },
+        occurredAt: iso("2026-07-06T10:02:10.000Z"),
+      });
+
+      const rows = await dao.queryDerivedSeries(
+        baseDerive({
+          numerator: { metricName: METRIC, aggregator: "count", tagFilters: { tool: eq("Wait") } },
+          denominator: {
+            metricName: METRIC,
+            aggregator: "count",
+            tagFilters: { tool: eq("Read") },
+          },
+          op: "ratio",
+        }),
+      );
+
+      expect(rows).toEqual([
+        { bucketStart: iso("2026-07-06T10:00:00.000Z"), value: null },
+        { bucketStart: iso("2026-07-06T10:02:00.000Z"), value: null },
+      ]);
+    });
+
+    it("supports last aggregator operands", async () => {
+      await dao.insert({
+        metricName: METRIC,
+        value: 8,
+        tags: { kind: "num" },
+        occurredAt: iso("2026-07-06T10:00:10.000Z"),
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: 20,
+        tags: { kind: "num" },
+        occurredAt: iso("2026-07-06T10:00:50.000Z"), // last num = 20
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: 4,
+        tags: { kind: "den" },
+        occurredAt: iso("2026-07-06T10:00:50.000Z"), // last den = 4
+      });
+
+      const rows = await dao.queryDerivedSeries(
+        baseDerive({
+          numerator: { metricName: METRIC, aggregator: "last", tagFilters: { kind: eq("num") } },
+          denominator: { metricName: METRIC, aggregator: "last", tagFilters: { kind: eq("den") } },
+          op: "ratio",
+        }),
+      );
+
+      expect(rows).toEqual([{ bucketStart: iso("2026-07-06T10:00:00.000Z"), value: 5 }]);
+    });
   });
 });

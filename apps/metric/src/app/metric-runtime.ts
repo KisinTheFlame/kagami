@@ -6,8 +6,10 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
+import { MetricDeriveHandler } from "../metric/http/metric-derive.handler.js";
 import { MetricRecordHandler } from "../metric/http/metric-record.handler.js";
 import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
+import { DefaultMetricDeriveService } from "../metric/application/metric-derive.impl.service.js";
 import { DefaultMetricRecordService } from "../metric/application/metric-record.impl.service.js";
 import { openMetricDuckDb } from "../metric/infra/impl/duckdb-metric.impl.dao.js";
 
@@ -34,6 +36,7 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
 
   const metricRecordService = new DefaultMetricRecordService({ metricDao });
   const metricChartService = new DefaultMetricChartService({ metricDao });
+  const metricDeriveService = new DefaultMetricDeriveService({ metricDao });
 
   // 面向前端查询 + agent 摄取：traceId / 默认错误三分支由公共装配壳提供。
   const app = createServiceApp({
@@ -42,6 +45,7 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
       new HealthHandler(),
       new MetricRecordHandler({ metricRecordService }),
       new MetricChartHandler({ metricChartService }),
+      new MetricDeriveHandler({ metricDeriveService }),
     ],
   });
 
