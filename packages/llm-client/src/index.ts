@@ -39,6 +39,10 @@ import { createOpenAiCodexProvider } from "./providers/openai-codex-provider.js"
 import { createClaudeCodeProvider } from "./providers/claude-code-provider.js";
 import type { ClaudeCodeAuth, ClaudeCodeAuthProvider } from "./providers/claude-code-auth.js";
 import type { OpenAiCodexAuth, OpenAiCodexAuthProvider } from "./providers/openai-codex-auth.js";
+import type {
+  ClaudeFileCacheDao,
+  ClaudeFileCacheRecord,
+} from "./providers/claude-file-cache.dao.js";
 
 export {
   createLlmClient,
@@ -78,4 +82,6 @@ export {
   type ClaudeCodeAuthProvider,
   type OpenAiCodexAuth,
   type OpenAiCodexAuthProvider,
+  type ClaudeFileCacheDao,
+  type ClaudeFileCacheRecord,
 };

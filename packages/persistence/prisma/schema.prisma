@@ -176,6 +176,20 @@ model EmbeddingCache {
   @@map("embedding_cache")
 }
 
+// claude-code 图片 File API 缓存：图片内容 sha256 → 已上传的 Anthropic file_id。
+// 让同一张图（跨轮次 / 跨 kagami-llm 重启 / 跨会话）只上传一次。Files API 文件不过期
+// （persist until deleted），映射永久有效。仅 claude-code provider 用。
+model ClaudeFileCache {
+  contentSha256 String   @id @map("content_sha256")
+  fileId        String   @map("file_id")
+  mimeType      String   @map("mime_type")
+  sizeBytes     Int      @map("size_bytes")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "claude_file_cache_created_at_idx")
+  @@map("claude_file_cache")
+}
+
 model RootAgentRuntimeSnapshot {
   id                 Int       @id @default(autoincrement())
   runtimeKey         String    @unique(map: "root_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")

@@ -92,6 +92,10 @@ server:
           - claude-sonnet-4-6
           - claude-haiku-4-5
         keepAliveReplayIntervalMinutes: 30
+        # 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
+        # 依赖 OAuth scope 含 user:file_upload——加此 scope 后须重新登录 claude-code。
+        # 关掉即回退全 base64。
+        useFileApi: true
     usages:
       agent:
         attempts:
