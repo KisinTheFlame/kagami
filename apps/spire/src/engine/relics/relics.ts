@@ -752,6 +752,49 @@ const RELIC_LIST: RelicDef[] = [
       onUsePotion: (_state, _self, emit) => emit({ kind: "heal", amount: 5 }),
     },
   },
+  // —— 计数 / 能量 触发型遗物批次 ——
+  {
+    id: "ice_cream",
+    name: "冰淇淋",
+    // 能量保留在 combat.ts 的回合开始处按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "能量在回合之间保留，不再于回合开始清零。",
+    hooks: {},
+  },
+  {
+    id: "pocketwatch",
+    name: "怀表",
+    rarity: "rare",
+    description: "若某个回合你打出的牌不超过 3 张，下个回合开始时抽 3 张牌。",
+    hooks: {
+      onCombatStart: (_state, self) => {
+        self.counter = 0;
+      },
+      onTurnStart: (_state, self, emit) => {
+        if (self.counter === 1) {
+          emit({ kind: "draw", amount: 3 });
+        }
+        self.counter = 0;
+      },
+      onTurnEnd: (state, self) => {
+        // 本回合出牌 ≤3 → 预约下回合抽 3。
+        self.counter = (state.combat?.cardsPlayedThisTurn ?? 99) <= 3 ? 1 : 0;
+      },
+    },
+  },
+  {
+    id: "mummified_hand",
+    name: "木乃伊手",
+    rarity: "uncommon",
+    description: "每当你打出一张能力牌，手牌中一张随机牌本回合费用变为 0。",
+    hooks: {
+      onCardPlayed: (_state, _self, cardType, emit) => {
+        if (cardType === "power") {
+          emit({ kind: "make_random_hand_card_free" });
+        }
+      },
+    },
+  },
 ];
 
 /** 获得一件遗物：入列 + 结算 onEquip（草莓 +最大生命等一次性效果）。日志由调用方按情景补。 */
