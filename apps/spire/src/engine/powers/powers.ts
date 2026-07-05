@@ -90,16 +90,19 @@ export function computeAttackDamage(
   attackerPowers: readonly PowerInstance[],
   defenderPowers: readonly PowerInstance[],
   strengthMultiplier = 1,
+  // weakMult / vulnMult 可被遗物调整（纸蛙让易伤 ×1.75；纸鹤让虚弱者伤害更低 ×0.6）。
+  weakMult = 0.75,
+  vulnMult = 1.5,
 ): number {
   let amount = base + getPower(attackerPowers, "strength") * strengthMultiplier;
   if (amount < 0) {
     amount = 0;
   }
   if (getPower(attackerPowers, "weak") > 0) {
-    amount = Math.floor(amount * 0.75);
+    amount = Math.floor(amount * weakMult);
   }
   if (getPower(defenderPowers, "vulnerable") > 0) {
-    amount = Math.floor(amount * 1.5);
+    amount = Math.floor(amount * vulnMult);
   }
   return amount;
 }
