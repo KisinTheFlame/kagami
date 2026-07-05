@@ -340,6 +340,9 @@ function triggerRelicEnemyKilled(state: GameState): void {
 function triggerRelicUsePotion(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onUsePotion?.(state, self, emit));
 }
+function triggerRelicShuffle(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onShuffle?.(state, self, emit));
+}
 function triggerRelicTurnEnd(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
 }
@@ -446,6 +449,7 @@ function drawCards(state: GameState, count: number): void {
       combat.drawPile = combat.discardPile;
       combat.discardPile = [];
       shuffleInPlace(state.rng, combat.drawPile);
+      triggerRelicShuffle(state); // 洗牌触发型遗物（日晷 +能量、算盘 +格挡）。
     }
     const card = combat.drawPile.pop()!;
     // 烈焰吐息：抽到状态牌或诅咒牌时，对所有敌人造成 = 层数的伤害。

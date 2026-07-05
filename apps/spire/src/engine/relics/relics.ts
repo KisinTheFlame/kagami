@@ -40,6 +40,8 @@ type RelicHooks = {
   onEnemyKilled?: (state: GameState, self: RelicState, emit: Emit) => void;
   /** 每当使用一瓶药水后结算（玩具扑翼机回血）。 */
   onUsePotion?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当抽牌堆被洗牌（弃牌堆洗回抽牌堆）后结算（日晷每 3 次 +能量、算盘 +格挡）。 */
+  onShuffle?: (state: GameState, self: RelicState, emit: Emit) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -929,6 +931,29 @@ const RELIC_LIST: RelicDef[] = [
     rarity: "rare",
     description: "你不再受到「脆弱」。",
     hooks: {},
+  },
+  // —— 洗牌触发型遗物 ——
+  {
+    id: "sundial",
+    name: "日晷",
+    rarity: "uncommon",
+    description: "每洗牌 3 次，获得 2 点能量。",
+    hooks: {
+      onShuffle: (_state, self, emit) => {
+        if (tickEvery(self, 3)) {
+          emit({ kind: "gain_energy", amount: 2 });
+        }
+      },
+    },
+  },
+  {
+    id: "the_abacus",
+    name: "算盘",
+    rarity: "uncommon",
+    description: "每当你洗牌，获得 6 点格挡。",
+    hooks: {
+      onShuffle: (_state, _self, emit) => emit({ kind: "gain_block", amount: 6 }),
+    },
   },
 ];
 
