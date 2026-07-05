@@ -17,8 +17,7 @@
     "@kagami/kernel": "workspace:*",
     "@kagami/scheduler-api": "workspace:*",
     "croner": "^10.0.1",
-    "fastify": "^5.6.2",
-    "zod": "^3.24.4"
+    "fastify": "^5.6.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
