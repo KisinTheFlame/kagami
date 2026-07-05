@@ -1,5 +1,6 @@
 import { createClient, type JsonClient } from "@kagami/rpc-client/client";
 import { llmApiContract } from "@kagami/llm-api/contract";
+import { llmUpstreamCallFailedError } from "@kagami/llm-client";
 import type {
   LlmClient,
   LlmChatOptions,
@@ -10,11 +11,6 @@ import type {
   LlmListAvailableProvidersOptions,
 } from "@kagami/llm-client";
 import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
-
-// isRetryableLlmFailure 精确匹配这个 message 决定退避重试；createClient 的兜底错误（不可达/超时/
-// 非 2xx 无富信封/响应体无效）必须沿用它。富错误信封 { error: BizErrorWire } 由 createClient 默认
-// decodeError 重建成等价 BizError，保住 retry 语义与"未知工具走 tool_result"路径。
-const LLM_UNREACHABLE_MESSAGE = "LLM 上游服务调用失败";
 
 // createClient 的默认超时（服务真挂/半开兜底）。chat/chat-direct 各自的 600s、providers 的 30s
 // 都由 llmApiContract 的 timeoutMs 逐路由覆盖，此默认只在契约未指定时兜底。
@@ -36,11 +32,21 @@ export class HttpLlmClient implements LlmClient {
   private readonly api: JsonClient<typeof llmApiContract>;
 
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
+    // 兜底错误（不可达/超时/非 2xx 无富信封/响应体无效）统一走 llmUpstreamCallFailedError 工厂，
+    // 盖 meta.retryable 标记让 isRetryableLlmFailure 判定退避重试；富错误信封 { error: BizErrorWire }
+    // 由 createClient 默认 decodeError 重建成等价 BizError（marker 随 meta 穿越 wire）。见 #435。
     this.api = createClient(llmApiContract, {
       baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       timeoutMs: DEFAULT_CLIENT_TIMEOUT_MS,
-      unreachableMessage: LLM_UNREACHABLE_MESSAGE,
+      mapFallbackError: info =>
+        llmUpstreamCallFailedError({
+          meta: {
+            reason: info.reason,
+            ...(info.reason === "bad_status" ? { status: info.status } : {}),
+          },
+          ...(info.reason === "bad_status" ? {} : { cause: info.cause }),
+        }),
     });
   }
 

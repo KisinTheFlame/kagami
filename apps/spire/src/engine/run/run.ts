@@ -2,7 +2,7 @@ import type { GameState, MapNode, MapNodeType } from "../types.js";
 import { cardPoolOf, getCardDef, costOf } from "../cards/cards.js";
 import { getCharacterConfig } from "../characters/characters.js";
 import { pickBossEncounter, pickEliteEncounter, pickNormalEncounter } from "../enemies/enemies.js";
-import { rewardRelicPool, getRelicDef, hasRelic } from "../relics/relics.js";
+import { rewardRelicPool, getRelicDef, hasRelic, grantRelic } from "../relics/relics.js";
 import {
   BASE_POTION_DROP_CHANCE,
   POTION_DROP_POOL,
@@ -131,7 +131,7 @@ function grantTreasure(state: GameState): void {
   const available = rewardRelicPool(state.character).filter(id => !hasRelic(state, id));
   if (available.length > 0) {
     const id = available[nextInt(state.rng, available.length)]!;
-    state.relics.push({ id, counter: 0 });
+    grantRelic(state, id);
     state.log.push(`你打开宝箱，获得遗物「${getRelicDef(id).name}」。`);
     return;
   }
@@ -314,6 +314,33 @@ function applyEventOutcome(state: GameState, outcome: EventOutcome): void {
       }
       break;
     }
+    case "remove_random_card": {
+      // 优先移除诅咒/状态牌，否则随机移除一张牌。
+      const junk = state.deck.filter(card => {
+        const type = getCardDef(card.defId).type;
+        return type === "curse" || type === "status";
+      });
+      const pool = junk.length > 0 ? junk : state.deck;
+      if (pool.length > 0) {
+        const victim = pool[nextInt(state.rng, pool.length)]!;
+        const idx = state.deck.findIndex(card => card.uid === victim.uid);
+        if (idx >= 0) {
+          state.deck.splice(idx, 1);
+          state.log.push(`「${getCardDef(victim.defId).name}」从牌组中移除了。`);
+        }
+      }
+      break;
+    }
+    case "upgrade_random_card": {
+      // 升级 count 张随机未升级的牌（攻击/技能/能力；status/curse cost=null 天然被 upgradableCards 排除）。
+      const candidates = upgradableCards(state);
+      for (let n = 0; n < outcome.count && candidates.length > 0; n += 1) {
+        const idx = nextInt(state.rng, candidates.length);
+        candidates[idx]!.upgraded = true;
+        candidates.splice(idx, 1);
+      }
+      break;
+    }
     case "nothing":
       break;
     default: {
@@ -350,7 +377,7 @@ function buyShopItem(
     state.deck.push({ uid: state.nextUid++, defId: item.defId, upgraded: false });
     state.log.push(`你买下了牌「${getCardDef(item.defId).name}」。`);
   } else if (item.kind === "relic") {
-    state.relics.push({ id: item.id, counter: 0 });
+    grantRelic(state, item.id);
     state.log.push(`你买下了遗物「${getRelicDef(item.id).name}」。`);
   } else {
     state.potions[state.potions.indexOf(null)] = item.id;

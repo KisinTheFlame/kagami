@@ -21,6 +21,7 @@ import type {
   LlmToolChoice,
 } from "./types.js";
 import { imageContentToBase64 } from "@kagami/llm";
+import { llmProviderUnavailableError } from "./retryable-error.js";
 
 const llmClientLogger = new AppLogger({ source: "llm.client" });
 
@@ -216,12 +217,7 @@ async function executeChatAttempt({
 
   try {
     if (!provider) {
-      throw new BizError({
-        message: "所选 LLM provider 当前不可用",
-        meta: {
-          provider: attempt.provider,
-        },
-      });
+      throw llmProviderUnavailableError({ meta: { provider: attempt.provider } });
     }
 
     providerResult = await provider.chat(requestWithModel);

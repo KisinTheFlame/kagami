@@ -49,9 +49,21 @@ import type {
   ClaudeFileCacheRecord,
   ClaudeFileCacheSaveInput,
 } from "./providers/claude-file-cache.dao.js";
+import {
+  isRetryableLlmFailure,
+  llmProviderUnavailableError,
+  llmUpstreamCallFailedError,
+  LLM_PROVIDER_UNAVAILABLE_MESSAGE,
+  LLM_UPSTREAM_CALL_FAILED_MESSAGE,
+} from "./retryable-error.js";
 
 export {
   createLlmClient,
+  isRetryableLlmFailure,
+  llmProviderUnavailableError,
+  llmUpstreamCallFailedError,
+  LLM_PROVIDER_UNAVAILABLE_MESSAGE,
+  LLM_UPSTREAM_CALL_FAILED_MESSAGE,
   attachLlmProviderFailureContext,
   getLlmProviderFailureContext,
   toSerializableLlmNativeRecord,

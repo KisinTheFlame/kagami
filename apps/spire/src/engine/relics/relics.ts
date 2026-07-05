@@ -1,5 +1,7 @@
 import type { CardType, CharacterId, Effect, GameState, RelicState } from "../types.js";
 import { addPower } from "../powers/powers.js";
+import { getCardDef } from "../cards/cards.js";
+import { nextInt } from "../rng.js";
 
 // === 遗物系统 ===
 //
@@ -28,6 +30,10 @@ export type RelicHooks = {
   onTurnStart?: (state: GameState, self: RelicState, emit: Emit) => void;
   onTurnEnd?: (state: GameState, self: RelicState, emit: Emit) => void;
   onCardPlayed?: (state: GameState, self: RelicState, cardType: CardType, emit: Emit) => void;
+  /** 获得该遗物时结算一次（草莓 +最大生命、药水腰带 +药水槽、磨刀石/战争彩绘升级牌）。局外，无 emit。 */
+  onEquip?: (state: GameState, self: RelicState) => void;
+  /** 玩家受到穿透格挡的伤害（失血）后结算（百年谜题首次失血抽牌）。可 emit 战斗 Effect。 */
+  onLoseHp?: (state: GameState, self: RelicState, emit: Emit) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -56,9 +62,26 @@ const ANCHOR_BLOCK = 10;
 const LANTERN_ENERGY = 1;
 const VAJRA_STRENGTH = 1;
 const MARBLES_VULNERABLE = 1;
+const STRAWBERRY_MAX_HP = 7;
+const AKABEKO_VIGOR = 8;
+const PUZZLE_DRAW = 3;
+const PREPARATION_DRAW = 2;
+export const THE_BOOT_MIN_DAMAGE = 5; // 战靴：无格挡攻击伤害 ≤4 时改为的下限值。
 
 function healPlayer(state: GameState, amount: number): void {
   state.hp = Math.min(state.maxHp, state.hp + amount);
+}
+
+/** 随机升级牌组中 count 张未升级的指定类型牌（磨刀石=攻击、战争彩绘=技能）。 */
+function upgradeRandomCardsOfType(state: GameState, type: CardType, count: number): void {
+  const candidates = state.deck.filter(
+    card => !card.upgraded && getCardDef(card.defId).type === type,
+  );
+  for (let n = 0; n < count && candidates.length > 0; n += 1) {
+    const idx = nextInt(state.rng, candidates.length);
+    candidates[idx]!.upgraded = true;
+    candidates.splice(idx, 1);
+  }
 }
 
 const RELIC_LIST: RelicDef[] = [
@@ -484,7 +507,212 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— 通用普通遗物批次（借新增的 onEquip / onLoseHp 钩子）——
+  {
+    id: "strawberry",
+    name: "草莓",
+    rarity: "common",
+    description: "获得时，最大生命 +7。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += STRAWBERRY_MAX_HP;
+        state.hp += STRAWBERRY_MAX_HP;
+      },
+    },
+  },
+  {
+    id: "potion_belt",
+    name: "药水腰带",
+    rarity: "common",
+    description: "获得时，额外增加 2 个药水槽。",
+    hooks: {
+      onEquip: state => {
+        state.potions.push(null, null);
+      },
+    },
+  },
+  {
+    id: "whetstone",
+    name: "磨刀石",
+    rarity: "common",
+    description: "获得时，随机升级 2 张攻击牌。",
+    hooks: {
+      onEquip: state => upgradeRandomCardsOfType(state, "attack", 2),
+    },
+  },
+  {
+    id: "war_paint",
+    name: "战争彩绘",
+    rarity: "common",
+    description: "获得时，随机升级 2 张技能牌。",
+    hooks: {
+      onEquip: state => upgradeRandomCardsOfType(state, "skill", 2),
+    },
+  },
+  {
+    id: "akabeko",
+    name: "赤红牛铃",
+    rarity: "common",
+    description: "每场战斗你的第一张攻击牌额外造成 8 点伤害。",
+    hooks: {
+      onCombatStart: state => {
+        if (state.combat) {
+          addPower(state.combat.playerPowers, "vigor", AKABEKO_VIGOR);
+        }
+      },
+    },
+  },
+  {
+    id: "bag_of_preparation",
+    name: "行囊",
+    rarity: "common",
+    description: "每场战斗第一回合额外抽 2 张牌。",
+    hooks: {
+      onCombatStart: (_state, _self, emit) => emit({ kind: "draw", amount: PREPARATION_DRAW }),
+    },
+  },
+  {
+    id: "centennial_puzzle",
+    name: "百年谜题",
+    rarity: "common",
+    description: "每场战斗中第一次失去生命时，抽 3 张牌。",
+    hooks: {
+      onCombatStart: (_state, self) => {
+        self.counter = 0;
+      },
+      onLoseHp: (_state, self, emit) => {
+        if (self.counter === 0) {
+          self.counter = 1;
+          emit({ kind: "draw", amount: PUZZLE_DRAW });
+        }
+      },
+    },
+  },
+  {
+    id: "the_boot",
+    name: "战靴",
+    // 伤害下限修正在 combat.ts 的 dealDamageToEnemy 里按 hasRelic 处理（不走钩子）。
+    rarity: "common",
+    description: "当你的一次无格挡攻击伤害为 4 或更低时，改为造成 5 点。",
+    hooks: {},
+  },
+  // —— 通用遗物批次 2（借既有钩子：计数 / 回合始 / 失血 / 战斗始）——
+  {
+    id: "art_of_war",
+    name: "战争艺术",
+    rarity: "common",
+    description: "若某个回合你没有打出攻击牌，下个回合开始时获得 1 点能量。",
+    hooks: {
+      onCombatStart: (_state, self) => {
+        self.counter = 0;
+      },
+      onTurnStart: (_state, self, emit) => {
+        if (self.counter === 0) {
+          emit({ kind: "gain_energy", amount: 1 });
+        }
+        self.counter = 0;
+      },
+      onCardPlayed: (_state, self, cardType) => {
+        if (cardType === "attack") {
+          self.counter = 1;
+        }
+      },
+    },
+  },
+  {
+    id: "ink_bottle",
+    name: "墨水瓶",
+    rarity: "uncommon",
+    description: "每打出 10 张牌，抽 1 张牌。",
+    hooks: {
+      onCardPlayed: (_state, self, _cardType, emit) => {
+        if (tickEvery(self, 10)) {
+          emit({ kind: "draw", amount: 1 });
+        }
+      },
+    },
+  },
+  {
+    id: "incense_burner",
+    name: "熏香炉",
+    rarity: "rare",
+    description: "每过 6 个回合，获得 1 层虚无缥缈。",
+    hooks: {
+      onTurnStart: (_state, self, emit) => {
+        if (tickEvery(self, 6)) {
+          emit({ kind: "apply_power", power: "intangible", amount: 1, on: "self" });
+        }
+      },
+    },
+  },
+  {
+    id: "self_forming_clay",
+    name: "自塑黏土",
+    rarity: "uncommon",
+    description: "每当你失去生命，下个回合开始时获得 3 点格挡。",
+    hooks: {
+      onLoseHp: (_state, _self, emit) => emit({ kind: "gain_block_next_turn", amount: 3 }),
+    },
+  },
+  {
+    id: "du_vu_doll",
+    name: "杜巫娃娃",
+    rarity: "rare",
+    description: "牌组中每有一张诅咒牌，战斗开始时获得 1 点力量。",
+    hooks: {
+      onCombatStart: (state, _self, emit) => {
+        const curses = state.deck.filter(card => getCardDef(card.defId).type === "curse").length;
+        if (curses > 0) {
+          emit({ kind: "apply_power", power: "strength", amount: curses, on: "self" });
+        }
+      },
+    },
+  },
+  // —— 减伤 / 失血联动遗物批次 ——
+  {
+    id: "fossilized_helix",
+    name: "化石螺壳",
+    rarity: "rare",
+    description: "每场战斗开始时，获得 1 层缓冲（抵消下一次会让你失去生命的伤害）。",
+    hooks: {
+      onCombatStart: (_state, _self, emit) =>
+        emit({ kind: "apply_power", power: "buffer", amount: 1, on: "self" }),
+    },
+  },
+  {
+    id: "runic_cube",
+    name: "符文魔方",
+    rarity: "boss",
+    characterLock: "ironclad",
+    description: "每当你失去生命，抽 1 张牌。",
+    hooks: {
+      onLoseHp: (_state, _self, emit) => emit({ kind: "draw", amount: 1 }),
+    },
+  },
+  {
+    id: "torii",
+    name: "鸟居",
+    // 减伤在 combat.ts 的 dealDamageToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "当你受到 5 点或更少的无格挡攻击伤害时，改为只受到 1 点。",
+    hooks: {},
+  },
+  {
+    id: "tungsten_rod",
+    name: "钨钢棒",
+    // 减伤在 combat.ts 的 dealDamageToPlayer 里按 hasRelic 处理（不走钩子）。
+    rarity: "boss",
+    description: "每当你失去生命时，少失去 1 点。",
+    hooks: {},
+  },
 ];
+
+/** 获得一件遗物：入列 + 结算 onEquip（草莓 +最大生命等一次性效果）。日志由调用方按情景补。 */
+export function grantRelic(state: GameState, id: string): void {
+  const self: RelicState = { id, counter: 0 };
+  state.relics.push(self);
+  getRelicDef(id).hooks.onEquip?.(state, self);
+}
 
 const RELIC_MAP: ReadonlyMap<string, RelicDef> = new Map(
   RELIC_LIST.map(relic => [relic.id, relic]),

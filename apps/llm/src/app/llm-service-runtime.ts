@@ -221,7 +221,8 @@ export function createLlmServiceApp({
       url: request.url,
     });
     // 保留原始 message（localhost 内部 RPC，无泄漏顾虑），便于 agent 侧日志排查；
-    // 非 BizError 本就不在 isRetryableLlmFailure 的两条重试消息内，重试语义与原地内不变。
+    // 这里兜的是非预期错误，不盖 meta.retryable 标记，isRetryableLlmFailure 自然判 false、
+    // 不参与退避重试，语义与改动前一致。
     const wire = toBizErrorWire(
       new BizError({
         message: error instanceof Error ? error.message : "LLM 服务内部错误",

@@ -1,4 +1,3 @@
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import { isRecord } from "@kagami/kernel/json/is-record";
 import {
   attachLlmProviderFailureContext,
@@ -6,6 +5,7 @@ import {
   toSerializableLlmNativeRecordOrNull,
   type LlmProviderChatResult,
 } from "../provider.js";
+import { llmUpstreamCallFailedError } from "../retryable-error.js";
 import type { LlmChatResponsePayload } from "../types.js";
 import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-code-wire.js";
 
@@ -30,13 +30,7 @@ export function mapClaudeMessageResult(input: {
 }): LlmProviderChatResult {
   if (!input.responsePayload?.content) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-          reason: "EMPTY_CONTENT",
-        },
-      }),
+      llmUpstreamCallFailedError({ meta: { provider: "claude-code", reason: "EMPTY_CONTENT" } }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(input.requestBody),
         nativeResponsePayload: toSerializableLlmNativeRecordOrNull(input.responsePayload),
