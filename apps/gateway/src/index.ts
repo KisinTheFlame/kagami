@@ -16,6 +16,7 @@ const apiTarget = config.agentTarget;
 const consoleTarget = config.consoleTarget;
 const llmTarget = config.llmTarget;
 const metricTarget = config.metricTarget;
+const ossTarget = config.ossTarget;
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
 const CONSOLE_PATH_PREFIXES = [
   "/app-log",
@@ -29,6 +30,9 @@ const CONSOLE_PATH_PREFIXES = [
 const LLM_PATH_PREFIXES = ["/auth"];
 // metric-chart 查询走独立的 metric 进程（@kagami/metric）；摄取端点 /metric/* 不经网关（agent 直连）。
 const METRIC_PATH_PREFIXES = ["/metric-chart"];
+// 管理台对象浏览器只读面路由到 kagami-oss 进程。仅 /oss-object（列表 / 统计 / 预览字节）过网关；
+// 写操作前缀 /objects（put/delete）刻意不在此，浏览器经网关够不到 OSS 的任何写路由。
+const OSS_PATH_PREFIXES = ["/oss-object"];
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 // 上游响应超时：等待上游返回响应头的上限。命中即回 504，避免上游卡死 / 半开时前端连接
 // 永久悬挂、socket 句柄泄漏。只约束"拿到响应头"这一段——响应头一到就清除，故不会打断
@@ -151,6 +155,10 @@ function selectUpstreamTarget(upstreamPath: string): URL {
 
   if (matchesAnyPrefix(upstreamPath, CONSOLE_PATH_PREFIXES)) {
     return consoleTarget;
+  }
+
+  if (matchesAnyPrefix(upstreamPath, OSS_PATH_PREFIXES)) {
+    return ossTarget;
   }
 
   return apiTarget;

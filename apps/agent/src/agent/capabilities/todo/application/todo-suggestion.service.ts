@@ -1,6 +1,6 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { TaskAgentMaxRoundsExceededError, type TaskAgentInvoker } from "@kagami/agent-runtime";
-import { isRetryableLlmFailure } from "../../../runtime/llm-retry.js";
+import { isRetryableLlmFailure } from "@kagami/llm-client";
 import type { TodoSuggestionTaskInput } from "../task-agent/todo-suggestion-task-agent.js";
 
 const logger = new AppLogger({ source: "todo.suggestion-service" });

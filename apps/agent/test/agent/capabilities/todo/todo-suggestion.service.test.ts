@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LlmClient } from "@kagami/llm-client";
-import { BizError } from "@kagami/kernel/errors/biz-error";
+import { llmUpstreamCallFailedError, type LlmClient } from "@kagami/llm-client";
 import { createUnguardedSubtoolOwner, ToolCatalog } from "@kagami/agent-runtime";
 import {
   InvokeTool,
@@ -79,9 +78,9 @@ function chatReturning(
   return vi.fn().mockResolvedValue(successResponse(args, overrides));
 }
 
-/** isRetryableLlmFailure 只认这两条 message，模拟一次可重试的上游抖动。 */
-function retryableFailure(): BizError {
-  return new BizError({ message: "LLM 上游服务调用失败" });
+/** isRetryableLlmFailure 认 meta.retryable 标记；用工厂造一次可重试的上游抖动。 */
+function retryableFailure() {
+  return llmUpstreamCallFailedError();
 }
 
 /** 注入即时 sleep，避免测试真的等退避。 */

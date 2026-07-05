@@ -14,6 +14,8 @@ export interface GatewayConfig {
   llmTarget: URL;
   /** metric 上游基址，由 services.metric.host/port 拼出（metric-chart 查询走它）。 */
   metricTarget: URL;
+  /** oss 上游基址，由 services.oss.host/port 拼出（管理台只读对象浏览 /oss-object 走它）。 */
+  ossTarget: URL;
   /** 静态资源目录：仓库根下的 apps/web/dist。 */
   distDir: string;
 }
@@ -30,6 +32,7 @@ interface RawConfig {
     gateway?: RawServiceEndpoint;
     llm?: RawServiceEndpoint;
     metric?: RawServiceEndpoint;
+    oss?: RawServiceEndpoint;
   };
 }
 
@@ -60,6 +63,7 @@ export function loadGatewayConfig(): GatewayConfig {
     consoleTarget: resolveEndpoint(services?.console, "console"),
     llmTarget: resolveEndpoint(services?.llm, "llm"),
     metricTarget: resolveEndpoint(services?.metric, "metric"),
+    ossTarget: resolveEndpoint(services?.oss, "oss"),
     distDir: path.join(repoRoot, "apps/web/dist"),
   };
 }

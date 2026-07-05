@@ -4,13 +4,14 @@ import type { FastifyInstance } from "fastify";
 import {
   registerBinaryEnvelopeRoute,
   registerBinaryRawRoute,
+  registerJsonRoute,
   useRawBodyPassthrough,
 } from "@kagami/http/register";
-import { ossApiContract } from "@kagami/oss-api/contract";
+import { getOssObjectContent, ossApiContract, ossConsoleContract } from "@kagami/oss-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp, type ServiceErrorHandler } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
-import { PayloadTooLargeError } from "../store/object-store.js";
+import { formatObjectKey, PayloadTooLargeError } from "../store/object-store.js";
 import type { ObjectStore } from "../store/object-store.js";
 
 const logger = new AppLogger({ source: "oss-http" });
@@ -97,6 +98,39 @@ function registerOssRoutes(app: FastifyInstance, store: ObjectStore, maxBodyByte
 
   registerBinaryRawRoute(app, ossApiContract.deleteObject, async ({ params, raw }) => {
     await handleDelete(raw, store, params.key);
+  });
+
+  // === 控制台只读面（管理台对象浏览器）===
+
+  registerJsonRoute(app, ossConsoleContract.queryObjects, ({ input }) => {
+    const { items, total } = store.list(input);
+    return {
+      pagination: { page: input.page, pageSize: input.pageSize, total },
+      items: items.map(row => ({
+        key: formatObjectKey(row.id),
+        mime: row.mime,
+        size: row.size,
+        sha256: row.sha256,
+        refcount: row.refcount,
+        createdAt: new Date(row.createdAt).toISOString(),
+      })),
+    };
+  });
+
+  registerJsonRoute(app, ossConsoleContract.getStats, () => {
+    const s = store.stats();
+    return {
+      objectCount: s.objectCount,
+      blobCount: s.blobCount,
+      physicalBytes: s.physicalBytes,
+      logicalBytes: s.logicalBytes,
+      dedupSavedBytes: s.logicalBytes - s.physicalBytes,
+    };
+  });
+
+  // 预览 / 下载：字节透传，复用 getObject 的流式管道与安全头（nosniff + attachment）。
+  registerBinaryRawRoute(app, getOssObjectContent, async ({ params, raw }) => {
+    await handleGet(raw, store, params.key);
   });
 }
 

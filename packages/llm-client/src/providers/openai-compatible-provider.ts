@@ -1,12 +1,12 @@
 import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import {
   attachLlmProviderFailureContext,
   toSerializableLlmNativeRecord,
   toSerializableLlmNativeRecordOrNull,
   type LlmProvider,
 } from "../provider.js";
+import { llmUpstreamCallFailedError } from "../retryable-error.js";
 import type { LlmChatRequest } from "../types.js";
 import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai-chat-mapper.js";
 
@@ -17,8 +17,8 @@ import { toLlmChatResponsePayload, toOpenAiChatRequest } from "../mappers/openai
  * 改一处易漏另一处（例如 #236 的 native error 保留 cause 链就要同步两份）。收敛到
  * 这一个 factory，二者退化为薄壳。
  *
- * 注意：错误 message 必须保持 "LLM 上游服务调用失败" 原文——rpc-client 的
- * isRetryableLlmFailure 依赖这个措辞判定可重试（见 #233）。
+ * 报错统一走 `llmUpstreamCallFailedError` 工厂：它盖 meta.retryable 标记供
+ * isRetryableLlmFailure 判定退避重试，message 保持原文只为 wire / 日志字节稳定（见 #435）。
  */
 export function createOpenAiCompatibleProvider({
   id,
@@ -54,13 +54,7 @@ export function createOpenAiCompatibleProvider({
         });
       } catch (error) {
         throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: id,
-            },
-            cause: error,
-          }),
+          llmUpstreamCallFailedError({ meta: { provider: id }, cause: error }),
           {
             nativeRequestPayload: toSerializableLlmNativeRecord(payload),
             nativeError: toSerializableLlmNativeRecord(error),
@@ -70,13 +64,7 @@ export function createOpenAiCompatibleProvider({
 
       if (!completion?.choices[0]?.message) {
         throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: id,
-              reason: "EMPTY_CHOICES",
-            },
-          }),
+          llmUpstreamCallFailedError({ meta: { provider: id, reason: "EMPTY_CHOICES" } }),
           {
             nativeRequestPayload: toSerializableLlmNativeRecord(payload),
             nativeResponsePayload: toSerializableLlmNativeRecordOrNull(completion),

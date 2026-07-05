@@ -29,6 +29,10 @@ describe("第二幕战斗池", () => {
     "chosen",
     "snecko",
     "centurion_mystic",
+    "cultist_and_chosen",
+    "three_cultists",
+    "shelled_parasite_and_fungi",
+    "sentry_and_sphere",
   ]);
 
   it("act=2 普通池只出第二幕怪", () => {

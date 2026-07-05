@@ -24,14 +24,13 @@ import {
 } from "../context/context-message-factory.js";
 import { createContextCompactionPlan } from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
-import type { LlmClient } from "@kagami/llm-client";
+import { isRetryableLlmFailure, type LlmClient } from "@kagami/llm-client";
 import type { LlmMessage } from "@kagami/llm-client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { NOOP_METRIC_CLIENT, type MetricClient } from "@kagami/metric-client/client";
 import {
   DEFAULT_LLM_RETRY_BACKOFF_MS,
   FixedRetryBackoffPolicy,
-  isRetryableLlmFailure,
   LoopLlmRetryExtension,
 } from "../llm-retry.js";
 import type { RootAgentRuntimeSnapshotRepository } from "./persistence/root-agent-runtime-snapshot.repository.js";
