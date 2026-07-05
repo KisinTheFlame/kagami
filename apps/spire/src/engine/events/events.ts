@@ -12,6 +12,10 @@ export type EventOutcome =
   | { kind: "add_card"; cardId: string }
   | { kind: "gain_relic" }
   | { kind: "gain_potion" }
+  // 移除一张牌（自动优先移除诅咒/状态牌，否则随机一张非基础牌）。
+  | { kind: "remove_random_card" }
+  // 升级 count 张随机未升级的牌（攻击/技能/能力）。
+  | { kind: "upgrade_random_card"; count: number }
   | { kind: "nothing" };
 
 export type EventChoice = {
@@ -427,6 +431,80 @@ const EVENT_LIST: EventDef[] = [
         label: "向石像祈祷（回复生命）",
         resultText: "你合十默祷，一阵微光拂过，倦意稍解。",
         outcomes: [{ kind: "heal", amount: 15 }],
+      },
+    ],
+  },
+  // —— 补全批次 2：涉及改牌/去牌/升级的事件 ——
+  {
+    id: "whirlpool_of_purity",
+    description:
+      "一汪静止的清池泛着奇异的洁光，凑近时，你手里最碍事的那张牌隐隐发烫，像想被它带走。",
+    choices: [
+      {
+        label: "把一张牌投进池中净化",
+        resultText: "牌落水的瞬间化作光点消散，你的牌组清爽了几分。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "不舍得，转身离开",
+        resultText: "你把牌重新收好，绕过了水池。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "shining_light",
+    description: "石室深处悬着一团刺目的白光，传说踏入者会被灼痛，却也会因此被磨砺得更利。",
+    choices: [
+      {
+        label: "走进光中（受创，但两张牌被磨砺）",
+        resultText: "白光灼过全身，退出时你发现随身的两件家伙都更趁手了。",
+        outcomes: [
+          { kind: "lose_hp", amount: 12 },
+          { kind: "upgrade_random_card", count: 2 },
+        ],
+      },
+      {
+        label: "遮住眼退开",
+        resultText: "你不愿平白受这份罪，退出了石室。",
+        outcomes: [{ kind: "nothing" }],
+      },
+    ],
+  },
+  {
+    id: "bonfire_spirits",
+    description: "篝火里跃动着几缕通灵的火魂，它们伸出手，示意你可以投入一张牌，换取火中之物。",
+    choices: [
+      {
+        label: "投入一张牌，静待馈赠",
+        resultText: "牌在火中噼啪炸开，灰烬里凝出一件温热的器物。",
+        outcomes: [{ kind: "remove_random_card" }, { kind: "gain_relic" }],
+      },
+      {
+        label: "不献祭，烤烤火就走",
+        resultText: "你就着火光暖了暖身子，什么也没舍得投。",
+        outcomes: [{ kind: "heal", amount: 10 }],
+      },
+    ],
+  },
+  {
+    id: "living_wall",
+    description: "一整面墙缓缓起伏，像在呼吸。它开口说话，愿意为你的牌组做一件事——添、削、或是磨。",
+    choices: [
+      {
+        label: "吸纳（获得一张随机无色牌）",
+        resultText: "墙面凸起，一张陌生的牌被推进你怀里。",
+        outcomes: [{ kind: "add_card", cardId: "apparition" }],
+      },
+      {
+        label: "遗忘（移除一张牌）",
+        resultText: "墙面凹陷，你最累赘的一张牌被吞了进去。",
+        outcomes: [{ kind: "remove_random_card" }],
+      },
+      {
+        label: "深化（升级一张牌）",
+        resultText: "墙面纹路流转，你的一张牌被打磨得更加锋利。",
+        outcomes: [{ kind: "upgrade_random_card", count: 1 }],
       },
     ],
   },

@@ -314,6 +314,33 @@ function applyEventOutcome(state: GameState, outcome: EventOutcome): void {
       }
       break;
     }
+    case "remove_random_card": {
+      // 优先移除诅咒/状态牌，否则随机移除一张牌。
+      const junk = state.deck.filter(card => {
+        const type = getCardDef(card.defId).type;
+        return type === "curse" || type === "status";
+      });
+      const pool = junk.length > 0 ? junk : state.deck;
+      if (pool.length > 0) {
+        const victim = pool[nextInt(state.rng, pool.length)]!;
+        const idx = state.deck.findIndex(card => card.uid === victim.uid);
+        if (idx >= 0) {
+          state.deck.splice(idx, 1);
+          state.log.push(`「${getCardDef(victim.defId).name}」从牌组中移除了。`);
+        }
+      }
+      break;
+    }
+    case "upgrade_random_card": {
+      // 升级 count 张随机未升级的牌（攻击/技能/能力；status/curse cost=null 天然被 upgradableCards 排除）。
+      const candidates = upgradableCards(state);
+      for (let n = 0; n < outcome.count && candidates.length > 0; n += 1) {
+        const idx = nextInt(state.rng, candidates.length);
+        candidates[idx]!.upgraded = true;
+        candidates.splice(idx, 1);
+      }
+      break;
+    }
     case "nothing":
       break;
     default: {
