@@ -100,13 +100,14 @@ QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-a
 - 除非任务明确要求，否则默认在仓库根目录执行命令。
 - 数据库相关命令统一读取仓库根 `config.yaml` 中的 `server.databaseUrl`。
 - **改配置 schema 必须同步三处**：`packages/kernel/src/config/config.loader.ts`、`config.yaml`（非隐私，纳入版本控制）、`config.secret.yaml.example`（隐私模板，新增隐私字段在这里补占位）。
-- **提交前至少执行**以下四项，且全部成功：
+- **提交前至少执行**以下五项，且全部成功：
 
 ```sh
 pnpm build
 pnpm typecheck
 pnpm lint
 pnpm format
+pnpm knip
 ```
 
 ## 代码放哪（边界铁律）
@@ -127,6 +128,8 @@ pnpm typecheck    # 全部包类型检查
 pnpm test         # 根级 vitest projects 单进程跑全部包的测试（新包只需自带 vitest.config.ts 即被纳入）
 pnpm lint         # ESLint 检查（lint:fix 自动修复）
 pnpm format       # Prettier 检查（format:write 自动格式化）
+pnpm knip         # 死代码/僵尸依赖审计。CI 门禁分级：孤儿文件/未用依赖/未声明依赖为 error（卡 CI），
+                  # 未用 export / type 仅 warn（进报告不卡 CI，配置见 knip.json）。需先 pnpm build（解析跨包 dist）
 
 pnpm --filter @kagami/agent <script>   # 单包命令，如 test / test:watch / db:*
 
@@ -216,7 +219,7 @@ Key routing rules:
 
 ### Custom deploy hooks
 
-- Pre-merge: pnpm build && pnpm typecheck && pnpm lint && pnpm format
+- Pre-merge: pnpm build && pnpm typecheck && pnpm lint && pnpm format && pnpm knip
 - Deploy trigger: pnpm app:deploy（= bash ./scripts/deploy.sh：build → prisma migrate deploy → PM2 reload/startOrReload → pm2 save）
 - Deploy status: pm2 status
 - Health check: curl -sf http://localhost:20003/health

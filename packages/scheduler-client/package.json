@@ -17,11 +17,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
-    "@kagami/scheduler-api": "workspace:*",
-    "zod": "^3.24.4"
+    "@kagami/scheduler-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

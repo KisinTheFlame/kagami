@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --check",
-    "format:write": "prettier . --write"
+    "format:write": "prettier . --write",
+    "knip": "DATABASE_URL=file:./.knip-db-placeholder knip"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -27,6 +28,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "knip": "^6.24.0",
     "pm2": "^6.0.14",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
