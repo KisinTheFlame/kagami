@@ -50,7 +50,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
-`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `wait` / `invoke` / `search_web` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。（App 名单本身每轮由主循环渲染进 system prompt，让 Agent 天然知道有哪些 App 可切；靠「App 集合进程内不可变」这条不变量保证每轮字节恒定、前缀不漂移，名单只在增删 App 时变、必然伴随重启。）
+`InvokeTool` 是 Kagami 工具系统不可动摇的结构性支柱。它本身是一个 meta-tool，只接 `name` 和 `args` 两个参数，但内部承载所有 capability / App 的具体工具。这样设计的关键收益是：**LLM API 的 tools 列表始终只有少数几个顶层工具**（`switch` / `wait` / `invoke` / `help` 这一类结构 / 能力级元工具），从启动到关停不变，不论项目里有多少 capability、多少 App 都不影响。（App 名单本身每轮由主循环渲染进 system prompt，让 Agent 天然知道有哪些 App 可切；靠「App 集合进程内不可变」这条不变量保证每轮字节恒定、前缀不漂移，名单只在增删 App 时变、必然伴随重启。）
 
 如果不通过 InvokeTool，每加一个工具都要在 LLM 的 tools 参数里多一个 entry，这是稳定前缀的一部分，意味着每加一个新工具都会让所有进行中的会话从零换入。InvokeTool 把"加新东西就触发一次前缀失效"的代价从"每加一个工具一次"压缩到"几乎不会发生"。
 
@@ -61,29 +61,23 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 写新 capability 或 App 时记住：**任何想暴露给 Agent 的能力，第一反应都应该是"做成 InvokeTool 的子工具"，而不是"加一个顶层工具"**。新增顶层工具需要明确的设计理由：它必须是结构性的元能力（像 switch / help 这种调度 / 导航工具），而不是某个具体业务能力。
 
-### 现有实现里的四个范例
+### 现有实现里的三个范例
 
-写新 capability 前，先读这四处代码，它们是 KV 缓存友好的参考实现：
+写新 capability 前，先读这三处代码，它们是 KV 缓存友好的参考实现。（另一条通则：任何会产生大量中间 token 的能力——搜索、抓网页、读长文件、跑代码——都应封装成 TaskAgent，通过终止工具只向主 Agent 回传摘要，原始素材留在子 Agent 上下文里用完即弃，别让它进主 Agent 的消息列表。`context-summary` / `todo` 两个 fork 型 task agent 是现存实例。）
 
-**1. Web Search —— 子 Agent 隔离，避免污染主上下文**
-
-`capabilities/web-search/` 的做法是开一个独立的 `WebSearchTaskAgent`，通过 `structuredClone` 复制主 Agent 的 snapshot，在隔离上下文里跑多轮搜索、读网页、整理，然后只把**最终摘要字符串**作为 tool result 返回给主 Agent。原始搜索结果、网页正文、中间推理全都留在子 Agent 的上下文里用完即弃，主 Agent 的前缀完全不受影响。
-
-**教训**：任何会产生大量中间 token 的能力（搜索、抓网页、读长文件、跑代码），都应该封装成 TaskAgent（终止工具返回结果），只向主 Agent 回传摘要。不要让原始素材进主 Agent 的消息列表。
-
-**2. NotificationCenter —— 追加到尾部，而非插入前缀**
+**1. NotificationCenter —— 追加到尾部，而非插入前缀**
 
 各生活输入（IThome 新文、QQ 未读、todo 提醒）经 `NotificationCenter` 窗口聚合后，作为一条 `notification` 事件进共享事件队列；`RootAgentSession` 在路由时通过 `createNotificationMessage` 装配成一条 `<notification>` user message，**追加到消息尾部**并触发一轮 round。它绝不把通知内容塞到 system prompt 或历史中段。异步工具结果（`<async_tool_result>`）走的是同一条尾部追加路径。
 
 **教训**：想给 Agent "喂"外部信息（新闻、提醒、周期状态、异步结果、以及将来的记忆召回），一律**往尾部 append**。永远不要为了"让它更显眼"而把动态内容插到 system prompt 或前缀里——那会让整个会话每轮都从零换入。
 
-**3. Context Summarizer —— 唯一允许破坏前缀的地方**
+**2. Context Summarizer —— 唯一允许破坏前缀的地方**
 
 `RootAgentRuntime.compactContextIfNeeded` 在 token 超阈值时触发压缩：计算保留边界（最近 10% 消息，扩展到 tool-call 边界），对前半部分生成摘要，然后用 `replaceMessages([summaryMessage, ...messagesToKeep])` **一次性**重建整条消息列表。这一次重建会彻底失效旧的 KV cache，但换来的是一个更短、更稳定的新前缀，后续多轮共享。压缩后通过 `notifyContextCompacted()` 通知所有扩展重置自身临时状态，让它们配合新前缀继续工作。
 
 **教训**：`replaceMessages` 是一次"受控的昂贵操作"。除了上下文压缩这种明确场景，不要再引入第二种会调用它的路径。任何新功能想"改写一下历史"，都应该先问：能不能改成 append？
 
-**4. Foreground Input —— 不带内容的敲门，drain 时现拉，仍走尾部追加**
+**3. Foreground Input —— 不带内容的敲门，drain 时现拉，仍走尾部追加**
 
 QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-agent/foreground-input.ts` 的敲门路径：App 把消息缓冲在自己内存里，只 enqueue 一个**不带内容**的 `foreground_input` 事件；session drain 时向当前前台 App（实现 `ForegroundInputSource` 的）现拉渲染好的文本，作为一条 user message **追加到尾部**。内容 drain 时才现取所以永不 stale；焦点已切走时拉空 no-op，未投递的未读退化回通知路径，绝不静默丢。
 

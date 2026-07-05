@@ -91,10 +91,6 @@ ${indent(napcatBlock, 4)}
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -103,8 +99,6 @@ ${indent(napcatBlock, 4)}
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -455,10 +449,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -467,8 +457,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -778,10 +766,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -790,8 +774,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -865,10 +847,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -877,8 +855,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -955,10 +931,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -967,8 +939,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -1043,10 +1013,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-      webSearchAgent:
-        attempts:
-          - provider: openai
-            model: gpt-4o-mini
       todoSuggestionAgent:
         attempts:
           - provider: openai
@@ -1055,8 +1021,6 @@ server:
         attempts:
           - provider: openai
             model: gpt-4o-mini
-  tavily:
-    apiKey: tavily-key
   bot:
     qq: "10001"
     creator:
@@ -1158,8 +1122,6 @@ listenGroupIds:
   - "123456"
 `),
       `server:
-  tavily:
-    apiKey: from-secret
   napcat:
     listenGroupIds:
       - "999888"
@@ -1168,7 +1130,6 @@ listenGroupIds:
 
     const config = await loadStaticConfig({ configPath });
 
-    expect(config.server.tavily.apiKey).toBe("from-secret");
     expect(config.server.napcat.listenGroupIds).toEqual(["999888"]);
   });
 });

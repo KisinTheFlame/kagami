@@ -1,6 +1,5 @@
 import {
   AppManager,
-  AsyncTaskManager,
   createAppSubtoolOwner,
   createUnguardedSubtoolOwner,
   HELP_TOOL_NAME,
@@ -40,14 +39,6 @@ import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
 import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
-import { TavilyWebSearchService } from "../agent/capabilities/web-search/application/tavily-web-search.service.js";
-import { SearchWebRawTool } from "../agent/capabilities/web-search/task-agent/tools/search-web-raw.tool.js";
-import { FinalizeWebSearchTool } from "../agent/capabilities/web-search/task-agent/tools/finalize-web-search.tool.js";
-import { WebSearchTaskAgent } from "../agent/capabilities/web-search/task-agent/web-search-task-agent.js";
-import {
-  createSearchWebTool,
-  SEARCH_WEB_TOOL_NAME,
-} from "../agent/capabilities/web-search/tools/search-web.tool.js";
 import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-agent/summary-task-agent.js";
 import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
 import { TodoSuggestionTaskAgent } from "../agent/capabilities/todo/task-agent/todo-suggestion-task-agent.js";
@@ -124,7 +115,6 @@ export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
   mainAgentContextQueryService: MainAgentContextQueryService;
   llmPlaygroundService: LlmPlaygroundService;
-  hasTavilyApiKey: boolean;
   /**
    * 「发现待办」task agent：工具装配与主 Agent 字节相等（tools / system 前缀命中
    * KV 缓存），invoke 只挂 propose_todos 终止子工具。由 wiring 层包进
@@ -142,7 +132,7 @@ export type AgentRuntimeBundle = {
 const logger = new AppLogger({ source: "agent.runtime-factory" });
 
 /**
- * fork 型 task agent（web-search / summary / todo）的镜像工具目录：与主 Agent
+ * fork 型 task agent（summary / todo）的镜像工具目录：与主 Agent
  * 顶层工具集一字不差（同样的 name / description / parameters / llmTool 与顺序），
  * 执行语义完全隔离——invoke 换成只挂该 task agent 子工具的实例，其余顶层工具用
  * OutOfScopeTool 软包，调到就返回 OUT_OF_SCOPE 错误，不会真的改主 Agent 的
@@ -194,37 +184,6 @@ export async function buildAgentRuntime({
   });
   const linearMessageLedgerDao = new PrismaLinearMessageLedgerDao({ database });
 
-  const webSearchService = new TavilyWebSearchService({
-    apiKey: config.server.tavily.apiKey,
-  });
-  // 网页搜索 task agent 自己的子工具：search_web_raw 和 finalize_web_search。
-  // 它们被一个独立的 webSearchSubtoolOwner 持有，挂在 WebSearchTaskAgent 自己
-  // 的 InvokeTool 实例上；主 Agent 视野永远看不到它们。
-  const webSearchSubtools: ToolComponent[] = [
-    new SearchWebRawTool({ webSearchService }),
-    new FinalizeWebSearchTool(),
-  ];
-  const webSearchInvokeTool = new InvokeTool({
-    owners: [createUnguardedSubtoolOwner({ tools: webSearchSubtools })],
-  });
-
-  // WebSearchTaskAgent 的 taskTools 需要等到主 Agent rootAgentTools 装配完才能
-  // 拼出来（要拿 switch / wait / search_web / help 等
-  // 主 Agent 顶层工具实例，包成 OutOfScopeTool）。这里先打一个延迟引用，等下
-  // 面真实 webSearchTaskAgent 构造好再回填。SearchWebTool 调用时通过这个 ref
-  // 转发——执行时 webSearchTaskAgent 必然已经就位。
-  const webSearchTaskAgentRef: { current: WebSearchTaskAgent | undefined } = {
-    current: undefined,
-  };
-  const webSearchTaskAgentInvoker = {
-    invoke: async (input: Parameters<WebSearchTaskAgent["invoke"]>[0]) => {
-      const taskAgent = webSearchTaskAgentRef.current;
-      if (!taskAgent) {
-        throw new Error("WebSearchTaskAgent 尚未装配完成，不能调用");
-      }
-      return await taskAgent.invoke(input);
-    },
-  };
   const terminalStateDao = new PrismaTerminalStateDao({ database });
   const terminalOutputDao = new PrismaTerminalOutputDao({ database });
 
@@ -344,25 +303,14 @@ export async function buildAgentRuntime({
     }),
   ];
 
-  // 主 Agent 的顶层工具实例。WebSearchTaskAgent 之后会复用这些实例的 llmTool
-  // 定义（通过 OutOfScopeTool 包一层），保证两个 agent 暴露给 LLM 的 tools
-  // 字段字节相等，命中 KV cache。
+  // 主 Agent 的顶层工具实例。fork 型 task agent（summary / todo）之后会复用这些
+  // 实例的 llmTool 定义（通过 OutOfScopeTool 包一层），保证各 agent 暴露给 LLM 的
+  // tools 字段字节相等，命中 KV cache。
   const switchTool = new SwitchTool({ appManager });
   const waitTool = new WaitTool({
     maxWaitMs: config.server.agent.waitToolMaxWaitMs,
   });
   const mainInvokeTool = new InvokeTool({ owners: mainSubtoolOwners });
-  // 异步工具原语：在飞任务跑完/超时通过 onComplete 把结果以事件回流给主 Agent，
-  // session 路由后追加成 <async_tool_result> 消息并触发新一轮。首个消费者是 search_web。
-  const asyncTaskManager = new AsyncTaskManager({
-    maxTaskDurationMs: config.server.agent.asyncTask.maxTaskDurationMs,
-    onComplete: completion =>
-      eventQueue.enqueue({ type: "async_tool_result_completed", data: completion }),
-  });
-  const searchWebTool = createSearchWebTool({
-    webSearchTaskAgent: webSearchTaskAgentInvoker,
-    asyncTaskManager,
-  });
   const readResourceTool = new ReadResourceTool({ resourceService });
   const downloadResourceTool = new DownloadResourceTool({ resourceFileService });
   const uploadResourceTool = new UploadResourceTool({ resourceFileService });
@@ -373,7 +321,6 @@ export async function buildAgentRuntime({
     switchTool,
     waitTool,
     mainInvokeTool,
-    searchWebTool,
     readResourceTool,
     downloadResourceTool,
     uploadResourceTool,
@@ -382,25 +329,9 @@ export async function buildAgentRuntime({
   const toolCatalog = new ToolCatalog(mainTopLevelTools);
   const rootAgentTools = toolCatalog.pick(mainTopLevelTools.map(tool => tool.name));
 
-  // 三个 fork 型 task agent（web-search / summary / todo）共用同一套镜像装配，
-  // 从主 Agent 的同一份有序顶层工具清单派生（见 createMirroredTaskAgentTools），
-  // 主 Agent 加/删/重排工具时镜像自动跟随，不会漂移出字节不等的 tools 前缀。
-  const webSearchAgentTools = createMirroredTaskAgentTools({
-    mainTopLevelTools,
-    invokeTool: webSearchInvokeTool,
-    overrideReasons: {
-      [SWITCH_TOOL_NAME]:
-        '在网页搜索子任务中不可调用 switch。请用 invoke(tool="search_web_raw", ...) 检索，必要时反复，信息足够后用 invoke(tool="finalize_web_search", summary=...) 输出最终摘要。',
-      [SEARCH_WEB_TOOL_NAME]: "网页搜索子任务内禁止再次调用 search_web，否则会无限嵌套。",
-    },
-    defaultReason: toolName => `在网页搜索子任务中不可调用 ${toolName}。`,
-  });
-
-  // 现在所有依赖都就位了，真正构造 WebSearchTaskAgent 并回填 ref。
-  webSearchTaskAgentRef.current = new WebSearchTaskAgent({
-    llmClient,
-    taskTools: webSearchAgentTools,
-  });
+  // 两个 fork 型 task agent（summary / todo）共用同一套镜像装配，从主 Agent 的
+  // 同一份有序顶层工具清单派生（见 createMirroredTaskAgentTools），主 Agent 加/删/
+  // 重排工具时镜像自动跟随，不会漂移出字节不等的 tools 前缀。
   // SummaryTaskAgent：同一套镜像装配，invoke 只挂 finalize_summary 终止子工具。
   const summaryInvokeTool = new InvokeTool({
     owners: [createUnguardedSubtoolOwner({ tools: [new FinalizeSummaryTool()] })],
@@ -437,7 +368,7 @@ export async function buildAgentRuntime({
     taskTools: todoAgentTools,
   });
   // 内心独白（issue #265 / #410）：摸鱼判定 tracker + 镜像装配 TaskAgent + loop
-  // extension。与 web-search / summary / todo 同一套镜像装配，invoke 只挂
+  // extension。与 summary / todo 同一套镜像装配，invoke 只挂
   // emit_inner_thought 终止子工具，其余顶层工具 OutOfScope 软拒绝——请求前缀与主
   // Agent 字节相等，命中 Anthropic prompt cache。
   const innerVoiceIdleTracker = new InnerVoiceIdleTracker();
@@ -515,7 +446,6 @@ export async function buildAgentRuntime({
         SWITCH_TOOL_NAME,
         WAIT_TOOL_NAME,
         INVOKE_TOOL_NAME,
-        SEARCH_WEB_TOOL_NAME,
         READ_RESOURCE_TOOL_NAME,
         HELP_TOOL_NAME,
       ])
@@ -529,7 +459,6 @@ export async function buildAgentRuntime({
     rootAgentRuntime,
     mainAgentContextQueryService,
     llmPlaygroundService,
-    hasTavilyApiKey: Boolean(config.server.tavily.apiKey),
     todoSuggestionTaskAgent,
     qqApp,
     qqOutboundService,

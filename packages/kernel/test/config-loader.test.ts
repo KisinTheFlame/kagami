@@ -12,8 +12,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
  * 的空占位过不了 schema（新 clone 照 example 起会失败），故这里给测试值。
  */
 const MINIMAL_SECRET_YAML = `server:
-  tavily:
-    apiKey: test-tavily-key
   napcat:
     wsUrl: ws://127.0.0.1:3001
     listenGroupIds:

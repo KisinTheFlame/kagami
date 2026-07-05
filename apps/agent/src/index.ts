@@ -119,7 +119,6 @@ try {
     pid: process.pid,
     providers,
     listenGroupIds: runtime.listenGroupIds,
-    hasTavilyApiKey: runtime.hasTavilyApiKey,
     traceRuntimeEnabled: true,
   });
 
