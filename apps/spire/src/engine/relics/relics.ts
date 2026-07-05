@@ -1,6 +1,7 @@
 import type { CardType, CharacterId, Effect, GameState, RelicState } from "../types.js";
 import { addPower } from "../powers/powers.js";
 import { getCardDef } from "../cards/cards.js";
+import { POTION_DROP_POOL } from "../potions/potions.js";
 import { nextInt } from "../rng.js";
 
 // === 遗物系统 ===
@@ -976,6 +977,35 @@ const RELIC_LIST: RelicDef[] = [
     description: "每场战斗开始时，将一张随机无色牌加入手牌。",
     hooks: {
       onCombatStart: (_state, _self, emit) => emit({ kind: "add_random_colorless", count: 1 }),
+    },
+  },
+  {
+    id: "cauldron",
+    name: "大锅",
+    rarity: "rare",
+    description: "获得时，把所有空药水槽填满随机药水。",
+    hooks: {
+      onEquip: state => {
+        for (let i = 0; i < state.potions.length; i += 1) {
+          if (state.potions[i] === null) {
+            state.potions[i] = POTION_DROP_POOL[nextInt(state.rng, POTION_DROP_POOL.length)]!;
+          }
+        }
+      },
+    },
+  },
+  {
+    id: "dollys_mirror",
+    name: "多莉的镜子",
+    rarity: "rare",
+    description: "获得时，复制牌组中的一张牌。",
+    hooks: {
+      onEquip: state => {
+        if (state.deck.length > 0) {
+          const src = state.deck[nextInt(state.rng, state.deck.length)]!;
+          state.deck.push({ uid: state.nextUid++, defId: src.defId, upgraded: src.upgraded });
+        }
+      },
     },
   },
 ];
