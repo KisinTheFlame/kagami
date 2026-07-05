@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/api";
-import { MetricChartView } from "./MetricChartView";
+import { MetricChartView, type MetricChartType } from "./MetricChartView";
 import { useMetricChartData } from "./useMetricChartData";
 
 // === 组合层：拥有 range / bucket 控件 + 手动刷新，调 hook 取数、渲染 View（#444）===
@@ -35,6 +35,8 @@ type MetricChartProps = {
   defaultRangePreset?: MetricChartRangePreset;
   /** 缺省按 range 自动选桶。 */
   defaultBucket?: MetricChartBucket;
+  /** 画法，默认折线（#475 P4）。饼图/堆叠构成宜配单桶（bucket 覆盖整段范围）。 */
+  chartType?: MetricChartType;
   height?: number;
 };
 
@@ -79,6 +81,7 @@ export function MetricChart({
   groupByTag,
   defaultRangePreset = "1h",
   defaultBucket,
+  chartType,
   height,
 }: MetricChartProps) {
   const [rangePreset, setRangePreset] = useState<MetricChartRangePreset>(defaultRangePreset);
@@ -123,6 +126,7 @@ export function MetricChart({
       isError={query.isError}
       errorMessage={query.isError ? getApiErrorMessage(query.error) : undefined}
       data={query.data}
+      chartType={chartType}
       height={height}
       headerRight={
         <div className="flex flex-wrap items-center gap-2">
