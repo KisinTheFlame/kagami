@@ -50,6 +50,27 @@ describe("NapcatSseSubscriber replay", () => {
     expect(writtenSeqs(chunks)).toEqual([3, 4]);
   });
 
+  it("close 后一切写短路（关停 teardown 不写已 end 的 res）", async () => {
+    const chunks: string[] = [];
+    let ended = false;
+    const sub = new NapcatSseSubscriber({
+      write: c => chunks.push(c),
+      close: () => {
+        ended = true;
+      },
+      outboxDao: new FakeOutboxDao([outbox(1), outbox(2)]),
+      lastEventId: 0,
+    });
+    await sub.start();
+    const before = chunks.length;
+    sub.close();
+    expect(ended).toBe(true);
+    // close 后 live 事件 / 心跳都不再写。
+    sub.deliver(outbox(3));
+    sub.heartbeat();
+    expect(chunks.length).toBe(before);
+  });
+
   it("高水位有界：回放只到 start 瞬间的 latestSeq，之后的实时事件走 buffer 不进回放", async () => {
     // 回放期间 deliver 进来的实时事件（seq 5、6）已在 dao 里（模拟持续入站），但快照 high=4，
     // 回放止于 4；5、6 经 buffer 补发。没有高水位就会一直 listAfter 追下去（review 发现的死循环）。

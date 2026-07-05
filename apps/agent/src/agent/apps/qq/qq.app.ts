@@ -215,6 +215,25 @@ export class QqApp implements App, ForegroundInputSource {
           }
         }),
     );
+
+    // 好友列表 seed（issue #425）：napcat 拆成独立进程后只在好友列表**变化**时推
+    // friend_list_updated，agent 单独重启（napcat 不重启）后收不到已有列表 → 私聊会话列表空到
+    // 下一次列表变化 / 收到私聊。启动时主动拉一次 seed，让重启后私聊会话尽快可见。
+    // **fire-and-forget，不阻塞启动**：getFriendList 在 napcat 未就绪时会走 HTTP 超时，不该拖住
+    // agent 起服；seed 只 upsert 私聊会话、幂等无序，后台完成即可（期间来的私聊消息也会各自
+    // ensurePrivateConversation，不依赖 seed 先到）。拉不到就等下一次 friend_list_updated 回填。
+    void this.seedPrivateConversationsFromFriendList();
+  }
+
+  private async seedPrivateConversationsFromFriendList(): Promise<void> {
+    try {
+      const friends = await this.napcatGateway.getFriendList?.();
+      if (friends) {
+        this.handleNapcatEvent({ type: "napcat_friend_list_updated", data: { friends } });
+      }
+    } catch {
+      // 好友列表拉不到（napcat 未就绪等）就退化，等下一次 friend_list_updated 事件回填。
+    }
   }
 
   /**
