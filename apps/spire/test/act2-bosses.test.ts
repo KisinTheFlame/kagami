@@ -77,7 +77,9 @@ describe("击败第二幕 Boss 掉金币 ~100", () => {
     s.combat!.energy = 9;
     playCard(s, 0, 0);
     expect(s.screen).toBe("victory");
-    expect(s.gold).toBeGreaterThanOrEqual(95);
-    expect(s.gold).toBeLessThanOrEqual(105);
+    // 首领金币掉落固定 95-105；首领遗物奖励可能另加金币（如小屋 +50），故按掉落日志校验。
+    const dropped = Number(s.log.find(l => l.includes("击败首领，获得"))?.match(/(\d+)/)?.[1]);
+    expect(dropped).toBeGreaterThanOrEqual(95);
+    expect(dropped).toBeLessThanOrEqual(105);
   });
 });
