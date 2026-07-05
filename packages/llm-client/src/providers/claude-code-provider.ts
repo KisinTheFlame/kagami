@@ -7,6 +7,7 @@ import {
 } from "../provider.js";
 import type { LlmChatRequest } from "../types.js";
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { llmProviderUnavailableError, llmUpstreamCallFailedError } from "../retryable-error.js";
 import type { Config } from "@kagami/kernel/config/config.loader";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { ClaudeCodeAuthProvider } from "./claude-code-auth.js";
@@ -146,13 +147,7 @@ export function createClaudeCodeProvider(input: {
         }
 
         throw attachLlmProviderFailureContext(
-          new BizError({
-            message: "LLM 上游服务调用失败",
-            meta: {
-              provider: "claude-code",
-            },
-            cause: error,
-          }),
+          llmUpstreamCallFailedError({ meta: { provider: "claude-code" }, cause: error }),
           {
             nativeError: toSerializableLlmNativeRecord(error),
           },
@@ -186,13 +181,7 @@ async function sendClaudeCodeRequest(params: {
   }
 
   throw attachLlmProviderFailureContext(
-    new BizError({
-      message: "所选 LLM provider 当前不可用",
-      meta: {
-        provider: "claude-code",
-        reason: "UNAUTHORIZED",
-      },
-    }),
+    llmProviderUnavailableError({ meta: { provider: "claude-code", reason: "UNAUTHORIZED" } }),
     {
       nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
       nativeResponsePayload: toSerializableLlmNativeRecordOrNull(initialResponse.responsePayload),
@@ -244,13 +233,7 @@ async function fetchClaudeCodeResponse(params: {
     });
   } catch (error) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-        },
-        cause: error,
-      }),
+      llmUpstreamCallFailedError({ meta: { provider: "claude-code" }, cause: error }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
         nativeError: toSerializableLlmNativeRecord(error),
@@ -271,13 +254,8 @@ async function fetchClaudeCodeResponse(params: {
 
   if (!response.ok) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-          reason: "HTTP_ERROR",
-          status: response.status,
-        },
+      llmUpstreamCallFailedError({
+        meta: { provider: "claude-code", reason: "HTTP_ERROR", status: response.status },
       }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
@@ -293,13 +271,8 @@ async function fetchClaudeCodeResponse(params: {
 
   if (!responsePayload?.content) {
     throw attachLlmProviderFailureContext(
-      new BizError({
-        message: "LLM 上游服务调用失败",
-        meta: {
-          provider: "claude-code",
-          reason: "INVALID_RESPONSE",
-          status: response.status,
-        },
+      llmUpstreamCallFailedError({
+        meta: { provider: "claude-code", reason: "INVALID_RESPONSE", status: response.status },
       }),
       {
         nativeRequestPayload: toSerializableLlmNativeRecord(params.requestBody),
