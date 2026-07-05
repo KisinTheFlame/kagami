@@ -44,6 +44,23 @@ describe("DefaultMetricDeriveService", () => {
     ]);
   });
 
+  it("returns an empty series list when the DAO yields no rows (no data either side)", async () => {
+    const service = new DefaultMetricDeriveService({
+      metricDao: createMetricDao({ queryDerivedSeries: vi.fn().mockResolvedValue([]) }),
+    });
+
+    const response = await service.derive({
+      numerator: { metricName: "agent.tool.call", aggregator: "count" },
+      denominator: { metricName: "agent.tool.call", aggregator: "count" },
+      op: "ratio",
+      bucket: "1m",
+      startAt: "2026-04-02T00:00:00.000Z",
+      endAt: "2026-04-02T00:10:00.000Z",
+    });
+
+    expect(response.series).toEqual([]);
+  });
+
   it("passes the inline derive spec straight to the DAO with parsed dates and null tag filters", async () => {
     const queryDerivedSeries = vi.fn().mockResolvedValue([]);
     const service = new DefaultMetricDeriveService({

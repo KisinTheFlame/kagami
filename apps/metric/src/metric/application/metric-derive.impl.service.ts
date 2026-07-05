@@ -35,6 +35,17 @@ export class DefaultMetricDeriveService implements MetricDeriveService {
       bucket: request.bucket,
     });
 
+    // 两侧在整段范围都无数据 → 空序列（与 /metric/query 的「无数据 → series: []」一致，前端出
+    // 「没有数据」占位而非一条全 null 的孤线）。有数据但某些桶除零/缺侧 → 保留序列、那些桶记 null。
+    if (rows.length === 0) {
+      return {
+        bucket: request.bucket,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        series: [],
+      };
+    }
+
     const bucketMs = bucketToMilliseconds(request.bucket);
     const bucketStarts = listBucketStarts(startAt, endAt, bucketMs);
     const valueByBucket = new Map<number, number | null>();
