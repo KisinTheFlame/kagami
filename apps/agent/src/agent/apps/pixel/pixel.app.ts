@@ -9,7 +9,6 @@ import { PixelRectTool } from "../../capabilities/pixel/tools/rect.tool.js";
 import { PixelCircleTool } from "../../capabilities/pixel/tools/circle.tool.js";
 import { PixelEllipseTool } from "../../capabilities/pixel/tools/ellipse.tool.js";
 import { PixelClearTool } from "../../capabilities/pixel/tools/clear.tool.js";
-import { PixelShowCanvasTool } from "../../capabilities/pixel/tools/show-canvas.tool.js";
 import { PixelRenderTool } from "../../capabilities/pixel/tools/render.tool.js";
 import { renderPixelPortal } from "../../capabilities/pixel/render/pixel-screen.js";
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
@@ -26,14 +25,14 @@ type PixelAppDeps = {
 };
 
 /**
- * 像素画 App：把画布的 10 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 SpireApp / BrowserApp。
+ * 像素画 App：把画布的 9 个工具包成 Kagami 桌面上的一个能力单元。结构照抄 SpireApp / BrowserApp。
  *
  * 拆进程（issue #365）：本 App 不持有画布，只持有一个打到独立 kagami-pixel 进程的 HttpPixelClient。
  * 画布状态归游戏进程独占并落 JSON 存档，agent 重启不丢画布。
  *
- * - 工具：new_canvas / set_pixels / fill / line / rect / circle / ellipse / clear / show_canvas / render。
+ * - 工具：new_canvas / set_pixels / fill / line / rect / circle / ellipse / clear / render。
  * - canInvoke 恒 true（粗门控）：颜色 / 坐标是否合法由服务权威裁定，非法回一条可读拒绝。
- * - onFocus 只给静态定位屏，不做网络 I/O（永不因服务未就绪而进不去）；看当前画布用 show_canvas。
+ * - onFocus 只给静态定位屏，不做网络 I/O（永不因服务未就绪而进不去）；要看画面就 render 出真图。
  * - 无状态持久化：画布归服务进程独占，本 App 无 exportState/restoreState。
  *
  * 设计依据：仓库根 AGENTS.md + issue #365。
@@ -50,7 +49,6 @@ export class PixelApp implements App {
     PixelCircleTool,
     PixelEllipseTool,
     PixelClearTool,
-    PixelShowCanvasTool,
     PixelRenderTool,
   ];
 
@@ -65,7 +63,6 @@ export class PixelApp implements App {
       new PixelCircleTool({ getPixelClient }),
       new PixelEllipseTool({ getPixelClient }),
       new PixelClearTool({ getPixelClient }),
-      new PixelShowCanvasTool({ getPixelClient }),
       new PixelRenderTool({ getPixelClient, ossClient }),
     ];
   }
