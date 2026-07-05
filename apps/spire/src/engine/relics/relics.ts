@@ -878,6 +878,42 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— onEquip 一次性遗物批次 ——
+  {
+    id: "old_coin",
+    name: "古钱币",
+    rarity: "rare",
+    description: "获得时，金币 +300。",
+    hooks: {
+      onEquip: state => {
+        state.gold += 300;
+      },
+    },
+  },
+  {
+    id: "mango",
+    name: "芒果",
+    rarity: "rare",
+    description: "获得时，最大生命 +14。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += 14;
+        state.hp += 14;
+      },
+    },
+  },
+  {
+    id: "lees_waffle",
+    name: "李的松饼",
+    rarity: "rare",
+    description: "获得时，最大生命 +7，并回复全部生命。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += 7;
+        state.hp = state.maxHp;
+      },
+    },
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
