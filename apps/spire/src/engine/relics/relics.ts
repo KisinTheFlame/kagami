@@ -90,6 +90,13 @@ function upgradeRandomCardsOfType(state: GameState, type: CardType, count: numbe
   }
 }
 
+/** 从牌组随机移除 count 张牌（空笼获得时净化牌组）。 */
+function removeRandomCards(state: GameState, count: number): void {
+  for (let n = 0; n < count && state.deck.length > 0; n += 1) {
+    state.deck.splice(nextInt(state.rng, state.deck.length), 1);
+  }
+}
+
 const RELIC_LIST: RelicDef[] = [
   {
     id: "burning_blood",
@@ -795,7 +802,88 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— 首领遗物批次（打首领掉落；均带「代价」，此切片以正收益为主，部分代价近似/略）——
+  {
+    id: "coffee_dripper",
+    name: "咖啡滴滤器",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法在篝火休息回血）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "fusion_hammer",
+    name: "融合锤",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法在篝火打铁升级）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "runic_dome",
+    name: "符文圆顶",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法看到敌人意图）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "sozu",
+    name: "斗笠",
+    // 「无法使用药水」由 combat.ts 的 usePotion 按 hasRelic 拦截。
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法使用药水）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "philosophers_stone",
+    name: "贤者之石",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量；所有敌人在战斗开始时获得 1 点力量。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) => {
+        emit({ kind: "change_max_energy", delta: 1 });
+        emit({ kind: "apply_power", power: "strength", amount: 1, on: "all_enemies" });
+      },
+    },
+  },
+  {
+    id: "mark_of_pain",
+    name: "痛苦烙印",
+    rarity: "boss",
+    characterLock: "ironclad",
+    description: "每回合开始时多获得 1 点能量；每场战斗开始时抽牌堆放入 2 张伤口。",
+    hooks: {
+      onCombatStart: (_s, _self, emit) => {
+        emit({ kind: "change_max_energy", delta: 1 });
+        emit({ kind: "add_card", cardId: "wound", pile: "draw", count: 2 });
+      },
+    },
+  },
+  {
+    id: "empty_cage",
+    name: "空笼",
+    rarity: "boss",
+    description: "获得时，从牌组中移除 2 张牌。",
+    hooks: { onEquip: state => removeRandomCards(state, 2) },
+  },
+  {
+    id: "tiny_house",
+    name: "小屋",
+    rarity: "boss",
+    description: "获得时，最大生命 +6、金币 +50，并升级一张随机牌。",
+    hooks: {
+      onEquip: state => {
+        state.maxHp += 6;
+        state.hp += 6;
+        state.gold += 50;
+        upgradeRandomCardsOfType(state, "attack", 1);
+      },
+    },
+  },
 ];
+
+/** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
+export function bossRelicPool(character: CharacterId): readonly string[] {
+  return [...relicIdsOfRarity("boss"), ...relicIdsForCharacter(character, "boss")];
+}
 
 /** 获得一件遗物：入列 + 结算 onEquip（草莓 +最大生命等一次性效果）。日志由调用方按情景补。 */
 export function grantRelic(state: GameState, id: string): void {

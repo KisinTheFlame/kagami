@@ -22,7 +22,13 @@ import {
   getPower,
   removePower,
 } from "../powers/powers.js";
-import { getRelicDef, hasRelic, THE_BOOT_MIN_DAMAGE } from "../relics/relics.js";
+import {
+  getRelicDef,
+  hasRelic,
+  grantRelic,
+  bossRelicPool,
+  THE_BOOT_MIN_DAMAGE,
+} from "../relics/relics.js";
 import type { RelicDef } from "../relics/relics.js";
 import { getPotionDef } from "../potions/potions.js";
 
@@ -2840,6 +2846,9 @@ export function usePotion(
   if (potionId === undefined || potionId === null) {
     return { ok: false, reason: `药水槽 ${slotIndex} 是空的。` };
   }
+  if (hasRelic(state, "sozu")) {
+    return { ok: false, reason: "斗笠让你无法使用药水。" };
+  }
   const def = getPotionDef(potionId);
   const combat = state.combat;
   if (def.combatOnly && (!combat || state.screen !== "combat")) {
@@ -3607,6 +3616,13 @@ function resolveCombatIfEnded(state: GameState): void {
     const gold = nextRange(state.rng, BOSS_GOLD_MIN, BOSS_GOLD_MAX);
     state.gold += gold;
     state.log.push(`击败首领，获得 ${gold} 金币。`);
+    // 首领遗物奖励：随机掉一件未持有的 boss 遗物。
+    const bossRelics = bossRelicPool(state.character).filter(id => !hasRelic(state, id));
+    if (bossRelics.length > 0) {
+      const id = bossRelics[nextInt(state.rng, bossRelics.length)]!;
+      grantRelic(state, id);
+      state.log.push(`首领倒下，你获得了遗物「${getRelicDef(id).name}」。`);
+    }
     state.screen = "victory";
   }
   // 非 Boss 的奖励生成在 run 层处理（避免 combat 依赖 run）。
