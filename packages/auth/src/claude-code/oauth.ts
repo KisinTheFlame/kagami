@@ -33,7 +33,7 @@ export function buildClaudeCodeAuthorizeUrl(input: {
     client_id: CLAUDE_CODE_CLIENT_ID,
     response_type: "code",
     redirect_uri: input.redirectUri,
-    scope: "org:create_api_key user:profile user:inference",
+    scope: "org:create_api_key user:profile user:inference user:file_upload",
     state: input.state,
     code_challenge: input.codeChallenge,
     code_challenge_method: "S256",

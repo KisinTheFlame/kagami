@@ -13,6 +13,9 @@ import type { ClaudeCodeAuthProvider } from "./claude-code-auth.js";
 import { toClaudeCodeRequestBody } from "./claude-code-request.js";
 import { mapClaudeMessageResult, parseClaudeMessageResponse } from "./claude-code-response.js";
 import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-code-wire.js";
+import type { ClaudeFileCacheDao } from "./claude-file-cache.dao.js";
+import { resolveClaudeImageFileIds } from "./claude-file-upload.js";
+import { ANTHROPIC_VERSION, CLAUDE_CODE_USER_AGENT } from "./claude-code-constants.js";
 
 /**
  * Claude Code provider 装配层：HTTP 发送 / 鉴权头 / keep-alive replay / 错误上下文。
@@ -20,7 +23,6 @@ import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-c
  * wire 类型在 claude-code-wire.ts——原 932 行单文件按此缝拆开，公共入口不变。
  */
 
-const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_BETA = [
   "claude-code-20250219",
   "oauth-2025-04-20",
@@ -28,8 +30,10 @@ const ANTHROPIC_BETA = [
   "context-management-2025-06-27",
   "prompt-caching-scope-2026-01-05",
   "effort-2025-11-24",
+  // 图片走 Files API（上传 /v1/files + 消息里 source:{type:"file"} 引用两处都吃这个 beta）。
+  // 依赖 OAuth scope 含 user:file_upload——见 packages/auth/src/claude-code/oauth.ts。
+  "files-api-2025-04-14",
 ].join(",");
-const CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.76 (external, sdk-cli)";
 const KEEP_ALIVE_REPLAY_MAX_TOKENS = 1;
 const logger = new AppLogger({ source: "claude-code-provider" });
 
@@ -40,6 +44,9 @@ type LlmProviderConfig = Config["server"]["llm"]["providers"]["claudeCode"] & {
 export function createClaudeCodeProvider(input: {
   config: LlmProviderConfig;
   authStore: ClaudeCodeAuthProvider;
+  // 图片 File API 缓存（sha256→file_id 持久化）。缺省 / config.useFileApi=false 时全走 base64，
+  // 与引入 File API 前逐字节一致（回滚只需翻 config，无需回滚代码）。
+  fileCacheDao?: ClaudeFileCacheDao;
 }): LlmProvider {
   let replayTimeout: NodeJS.Timeout | null = null;
   let lastSuccessfulRequestBody: ClaudeMessageRequestBody | null = null;
@@ -110,7 +117,20 @@ export function createClaudeCodeProvider(input: {
     },
     async chat(request: LlmChatRequest): Promise<LlmProviderChatResult> {
       try {
-        const requestBody = toClaudeCodeRequestBody(request);
+        // File API 预解析：图片先换 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限。
+        // 关闭 / 无缓存 DAO 时 imageFileIds 为 undefined → builder 全走 base64（旧行为）。
+        const imageFileIds =
+          input.config.useFileApi && input.fileCacheDao
+            ? await resolveClaudeImageFileIds({
+                request,
+                fileCacheDao: input.fileCacheDao,
+                baseUrl: input.config.baseUrl,
+                anthropicBeta: ANTHROPIC_BETA,
+                getAccessToken: async () => (await input.authStore.getAuth()).accessToken,
+                timeoutMs: input.config.timeoutMs,
+              })
+            : undefined;
+        const requestBody = toClaudeCodeRequestBody(request, imageFileIds);
         const result = await sendClaudeCodeRequest({
           config: input.config,
           authStore: input.authStore,

@@ -183,6 +183,7 @@ export function createConfigManager(): ConfigManager {
             baseUrl: "https://api.anthropic.com",
             models: ["claude-sonnet-4-20250514"],
             keepAliveReplayIntervalMinutes: 30,
+            useFileApi: true,
           },
         },
         usages: {
