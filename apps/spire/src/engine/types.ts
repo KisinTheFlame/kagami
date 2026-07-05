@@ -291,7 +291,8 @@ export type Effect =
   | { kind: "exhaust_hand_gain_energy" } // 消耗手牌中费用最高的一张，获得 = 其费用的能量（回收；自动取最贵）
   | { kind: "double_energy" } // 获得等同于当前能量的能量（双倍能量）
   | { kind: "retain_hand" } // 本回合结束时保留全部手牌（平衡）
-  | { kind: "boss_haste" }; // 敌人自身：回复生命到最大值的一半、清除自身减益（时间吞噬者加速）
+  | { kind: "boss_haste" } // 敌人自身：回复生命到最大值的一半、清除自身减益（时间吞噬者加速）
+  | { kind: "fill_potion_slots" }; // 玩家：把所有空药水槽填满随机药水（熵酿）
 
 /** 卡定义（静态数据表）。cost=null 表示不可打出（status/废牌）。 */
 export type CardDef = {

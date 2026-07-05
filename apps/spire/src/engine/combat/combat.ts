@@ -1260,6 +1260,17 @@ function applyEffect(
       }
       break;
     }
+    case "fill_potion_slots": {
+      // 熵酿：把所有空药水槽填满随机药水。
+      if (actor.side === "player") {
+        for (let i = 0; i < state.potions.length; i += 1) {
+          if (state.potions[i] === null) {
+            state.potions[i] = ALCHEMIZE_POOL[nextInt(state.rng, ALCHEMIZE_POOL.length)]!;
+          }
+        }
+      }
+      break;
+    }
     case "transmutation": {
       // 嬗变：将 X 张随机无色牌加入手牌，费用视为 0。
       if (actor.side === "player") {
