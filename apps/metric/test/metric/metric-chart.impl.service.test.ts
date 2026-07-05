@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DefaultMetricChartService } from "../../src/metric/application/metric-chart.impl.service.js";
-import type { MetricChartSeriesRow, MetricDao } from "@kagami/persistence/dao/metric.dao";
+import type { MetricChartSeriesRow, MetricDao } from "../../src/metric/infra/metric.dao.js";
 
 describe("DefaultMetricChartService", () => {
   it("should build single-series chart data with missing buckets filled", async () => {
@@ -148,6 +148,7 @@ function createMetricDao(overrides?: Partial<MetricDao>): MetricDao {
   return {
     insert: vi.fn().mockResolvedValue(undefined),
     queryChartSeries: vi.fn().mockResolvedValue([]),
+    close: vi.fn(),
     ...overrides,
   };
 }

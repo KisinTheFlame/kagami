@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
-import type { MetricDao } from "@kagami/persistence/dao/metric.dao";
+import type { MetricDao } from "../../src/metric/infra/metric.dao.js";
 import { DefaultMetricRecordService } from "../../src/metric/application/metric-record.impl.service.js";
 import { MetricRecordHandler } from "../../src/metric/http/metric-record.handler.js";
 

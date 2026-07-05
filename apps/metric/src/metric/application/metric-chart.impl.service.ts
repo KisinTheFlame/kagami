@@ -6,7 +6,7 @@ import type {
   MetricChartSeries,
 } from "@kagami/metric-api/chart";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { MetricChartSeriesRow, MetricDao } from "@kagami/persistence/dao/metric.dao";
+import type { MetricChartSeriesRow, MetricDao } from "../infra/metric.dao.js";
 import type { MetricChartService } from "./metric-chart.service.js";
 
 type DefaultMetricChartServiceDeps = {
