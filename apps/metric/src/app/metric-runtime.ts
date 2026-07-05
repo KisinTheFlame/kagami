@@ -50,11 +50,18 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
 
 /**
  * metric 的 DuckDB 库落在仓库根 `data/metric/metric.duckdb`。从已解析的 sqlite 库路径
- * （`<repo>/data/sqlite/kagami.db`）反推出 `<repo>/data` 目录，不依赖进程 cwd。metric 已彻底
- * 脱离共享 SQLite / Prisma（#475 P1），此处只借 databaseUrl 定位仓库 data 目录，不再连它。
+ * （`<repo>/data/sqlite/kagami.db`）反推出 `<repo>/data` 目录。metric 已彻底脱离共享 SQLite /
+ * Prisma（#475 P1），此处只借 databaseUrl 定位仓库 data 目录，不再连它。
+ *
+ * 依赖 loadStaticConfig 已把 databaseUrl 绝对化（锚 config.yaml 目录）。若收到相对路径则显式抛错，
+ * 而非按进程 cwd 静默解析——kagami-metric 的 PM2 cwd 是 `apps/metric`，相对解析会把库落到
+ * `apps/metric/data/` 造成 split-brain。
  */
 function resolveMetricDuckdbPath(databaseUrl: string): string {
   const sqlitePath = databaseUrl.replace(/^file:/, "");
+  if (!path.isAbsolute(sqlitePath)) {
+    throw new Error(`metric DuckDB 需要绝对的 databaseUrl，收到相对路径：${databaseUrl}`);
+  }
   const dataDir = path.dirname(path.dirname(sqlitePath));
   return path.join(dataDir, "metric", "metric.duckdb");
 }

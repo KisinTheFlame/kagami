@@ -33,7 +33,7 @@ export async function openMetricDuckDb(dbPath: string): Promise<DuckDbMetricDao>
       metric_name VARCHAR NOT NULL,
       value DOUBLE NOT NULL,
       tags JSON NOT NULL,
-      occurred_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+      occurred_at TIMESTAMP NOT NULL
     )
   `);
   return new DuckDbMetricDao({ instance, connection });
@@ -55,25 +55,18 @@ export class DuckDbMetricDao implements MetricDao {
 
   public async insert(input: InsertMetricInput): Promise<void> {
     const tagsJson = JSON.stringify(input.tags);
-    if (input.occurredAt) {
-      const prepared = await this.connection.prepare(
-        `INSERT INTO metric (metric_name, value, tags, occurred_at)
-         VALUES ($1, $2, $3::JSON, $4::TIMESTAMP)`,
-      );
-      prepared.bindVarchar(1, input.metricName);
-      prepared.bindDouble(2, input.value);
-      prepared.bindVarchar(3, tagsJson);
-      prepared.bindVarchar(4, toDuckDbTimestamp(input.occurredAt));
-      await prepared.run();
-      return;
-    }
-    // 未给 occurredAt：落库时刻由列默认 current_timestamp 兜底（对齐旧 Prisma @default(now())）。
+    // occurredAt 缺省时用当前 UTC 时刻兜底，绝不落到列的 DB 默认：DuckDB `current_timestamp`
+    // 按会话时区把 naive 墙钟写入 TIMESTAMP，`epoch()` 便带上机器 UTC 偏移，非 UTC 部署机上整条
+    // 时间轴静默错位（生产上报方普遍不传 occurredAt）。统一走 toDuckDbTimestamp(UTC ISO) 保证等价。
+    const occurredAt = toDuckDbTimestamp(input.occurredAt ?? new Date());
     const prepared = await this.connection.prepare(
-      `INSERT INTO metric (metric_name, value, tags) VALUES ($1, $2, $3::JSON)`,
+      `INSERT INTO metric (metric_name, value, tags, occurred_at)
+       VALUES ($1, $2, $3::JSON, $4::TIMESTAMP)`,
     );
     prepared.bindVarchar(1, input.metricName);
     prepared.bindDouble(2, input.value);
     prepared.bindVarchar(3, tagsJson);
+    prepared.bindVarchar(4, occurredAt);
     await prepared.run();
   }
 
@@ -82,8 +75,10 @@ export class DuckDbMetricDao implements MetricDao {
   ): Promise<MetricChartSeriesRow[]> {
     const params = new VarcharParams();
     const bucketSeconds = bucketToSeconds(input.bucket);
-    // epoch(occurred_at) 得 UTC 秒；整除（//）对齐桶再乘回 = 桶起点 epoch 秒（与旧 SQLite 输出等价）。
-    const bucketExpression = `(CAST(epoch("occurred_at") AS BIGINT) // ${bucketSeconds}) * ${bucketSeconds}`;
+    // epoch(occurred_at) 得 UTC 秒（DOUBLE，带亚秒小数）；先 floor 截断到整秒——对齐旧 SQLite
+    // unixepoch 的截断语义，而非 DuckDB `CAST(DOUBLE AS BIGINT)` 的四舍五入（.5xx 秒会被顶进下一个
+    // 桶）。再整除（//）对齐桶乘回 = 桶起点 epoch 秒。
+    const bucketExpression = `(CAST(floor(epoch("occurred_at")) AS BIGINT) // ${bucketSeconds}) * ${bucketSeconds}`;
     const seriesKeyExpression = input.groupByTag
       ? `NULLIF("tags" ->> ${params.add(input.groupByTag)}, '')`
       : `NULL`;

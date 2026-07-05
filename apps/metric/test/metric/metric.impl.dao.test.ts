@@ -194,6 +194,46 @@ describe("DuckDbMetricDao", () => {
     ]);
   });
 
+  it("truncates sub-second timestamps into buckets (matches SQLite unixepoch, not rounding)", async () => {
+    // 10:00:59.750 在 10s 桶里必须落 10:00:50（截断），而非 DuckDB CAST 四舍五入出的 10:01:00。
+    await dao.insert({
+      metricName: METRIC,
+      value: 1,
+      tags: {},
+      occurredAt: iso("2026-07-06T10:00:59.750Z"),
+    });
+
+    const rows = await dao.queryChartSeries(baseQuery({ aggregator: "count", bucket: "10s" }));
+
+    expect(rows).toEqual([
+      { bucketStart: iso("2026-07-06T10:00:50.000Z"), seriesKey: null, value: 1 },
+    ]);
+  });
+
+  it("defaults a missing occurredAt to now in UTC (no session-timezone drift)", async () => {
+    // 不传 occurredAt：必须落到真实的当前 UTC 时刻，而非 DuckDB current_timestamp 的会话时区墙钟。
+    // 若走了腐坏的列默认，非 UTC 运行环境下该点会偏移数小时、落到查询窗口外。
+    const before = Date.now();
+    await dao.insert({ metricName: METRIC, value: 1, tags: {} });
+    const after = Date.now();
+
+    const bucketMs = 60 * 1000;
+    const rows = await dao.queryChartSeries(
+      baseQuery({
+        aggregator: "count",
+        bucket: "1m",
+        startAt: new Date(before - 60 * 60 * 1000),
+        endAt: new Date(after + 60 * 60 * 1000),
+      }),
+    );
+
+    expect(rows).toHaveLength(1);
+    const bucketStart = rows[0]?.bucketStart.getTime() ?? 0;
+    // 桶起点应落在 [插入前对齐桶, 插入后] 之间——即点确实记在“现在”，未被时区偏移推走。
+    expect(bucketStart).toBeGreaterThanOrEqual(Math.floor(before / bucketMs) * bucketMs);
+    expect(bucketStart).toBeLessThanOrEqual(after);
+  });
+
   it("isolates by metric name", async () => {
     await dao.insert({
       metricName: METRIC,
