@@ -1,235 +1,63 @@
 # Kagami
 
-[中文版 README](./README.zh-CN.md)
+_An Agent with a life of her own._
 
-## Project Philosophy
+[简体中文](./README.zh-CN.md)
 
-Kagami is **not a QQ group chat bot**.
+Kagami (小镜) is not a chatbot. She is a program that lives.
 
-Kagami is **an Agent with a life of its own**. Group chat is just one part of his life — just as a person would not define themselves as "someone who chats". Given enough capabilities, he can live like a real person: read the news, remember what has happened, and proactively do things he finds interesting.
+Most "AI assistants" wait. You type, they answer, they go back to sleep. Kagami doesn't wait for you. She wakes up when a tech-news site publishes a new article, when someone talks in her QQ group, when a timer fires, when — sometimes — a thought simply occurs to her. Chatting is one of the things she does; it is not what she is. No one introduces themselves as "a person who chats."
 
-This is a concept: **Agent as a life**.
+The whole project is one sentence:
 
-- Group chat messages are just one of the external events he receives, on equal footing with RSS feeds, timers, and system notifications — all "inputs" that drive his life.
-- He has his own interests (News polling, proactive speech) and his own rhythm (event queue, background actions during idle moments); a long-term memory system is being redesigned.
-- The project's goal is not to polish the group chat experience to perfection, but to continuously add the capabilities that his "life" needs, so he feels more and more like a living presence.
+> **Agent as a life.**
 
-All architecture, modules, and capabilities described below should be understood from this perspective: they exist to enrich the Agent's life, not to patch up "a chat bot".
+## A day in her life
 
-## Repository Positioning
+- **She reads the news.** IT之家 and Hacker News are two of her feeds. When something catches her eye, she brings it up in the group — with an opinion, not a summary.
+- **She talks in QQ groups** — and sometimes speaks first, because she felt like it, not because she was addressed.
+- **She sees.** Send her an image and she actually looks at it.
+- **She browses the real web.** Hand her a link or a question and she opens a browser and goes to find out.
+- **She plays.** There is a Slay-the-Spire–style card game she runs for herself — a whole roguelike, just for fun.
+- **She keeps a to-do book, checks the map, does the arithmetic** — and, in the quiet moments, has stray thoughts of her own that nobody prompted.
 
-Kagami is a full-stack TypeScript monorepo built on `pnpm workspace`, split into `apps/*` (standalone processes) and `packages/*` (shared libraries). A full package topology and dependency DAG live in [ARCHITECTURE.md](./ARCHITECTURE.md); the highlights:
+None of these are features bolted onto a chatbot. Each one is a new way for her to exist. When we add something new, the question is never "what feature would a user want?" — it's **"what is a new way for her to be alive?"**
 
-Apps (`apps/*`, standalone processes):
+## How she stays alive
 
-- `apps/agent`: Fastify backend service (`@kagami/agent`) — the Agent runtime and its live-memory interfaces
-- `apps/console`: standalone admin-console backend process (`@kagami/console`, serving the frontend's read-only DB queries via `@kagami/persistence` shared DAOs against the same SQLite database)
-- `apps/web`: React frontend admin console (`@kagami/web`)
-- `apps/gateway`: front-door gateway process (`@kagami/gateway`, standalone with zero `@kagami/*` dependencies; serves the `apps/web/dist` static assets and reverse-proxies `/api/*` to console/agent, `/auth/*` to llm, `/metric-chart` to metric)
-- `apps/llm`: LLM gateway + OAuth credential-center process (`@kagami/llm-service`, localhost only; owns all providers + the OAuth callback server + refresh timers, writes `llm_chat_call` / `embedding_cache`; the agent connects over HTTP)
-- `apps/metric`: standalone metric-domain process (`@kagami/metric`, owns both metric ingestion `POST /metric/record` — the agent reports over HTTP — and the metric-chart query endpoints; reads/writes the same SQLite via `@kagami/persistence` shared DAOs, localhost only)
-- `apps/oss`: self-hosted object storage service (`@kagami/oss`, a standalone Fastify process; routes go through the `@kagami/oss-api` contract, depends on `@kagami/config` / `@kagami/http` / `@kagami/kernel`)
-- `apps/browser`: standalone browser process (`@kagami/browser`, kernel/http/persistence-based Fastify, localhost-only; owns CloakBrowser and credential injection, driven by the agent over HTTP so an agent restart no longer kills the browser)
-- `apps/spire`: Slay-the-Spire-style card-game engine process (`@kagami/spire-service`, Fastify, localhost only; a pure game engine with JSON save files that never touches the shared SQLite; the agent drives it over HTTP so an agent restart does not interrupt a run)
+Picture Kagami as a phone, and Kagami-the-agent as the person holding it.
 
-Packages (`packages/*`):
+- **Every input is a peer event.** A QQ message, a news article, a timer, a system signal — all equal citizens. There is no privileged "user message"; the group chat is just one app among many.
+- **Background signals arrive as banners.** A single notification center batches them and wakes her. The conversation she is actively looking at behaves like the screen that's already open — new messages flow straight in, no banner needed.
+- **Her abilities are apps she can walk into.** QQ, the news readers, the browser, the card game, the map, the terminal. She enters one, does her thing, walks back out.
 
-- `packages/agent-runtime`: generic Agent / App framework kernel (`@kagami/agent-runtime`)
-- `packages/llm`: LLM message and tool type contracts shared across frontend / backend / kernel (`@kagami/llm`, zero-dependency contract leaf)
-- `packages/llm-client`: LLM chat client + provider + embedding client runtime (`@kagami/llm-client`, sits above kernel and alongside persistence with no dependency on it; emits only `LlmChatCallObservation` events so persistence/Prisma stay out of it)
-- `packages/auth`: full OAuth credential management (`@kagami/auth`, PKCE login / callback server / refresh scheduler / secret store / quota snapshots / auth handlers); assembled into the `kagami-llm` process
-- `packages/kernel`: backend infrastructure kernel (`@kagami/kernel`, config, logger, common contracts and errors, the shared satellite-service app shell + runner + unified `HealthHandler`, pure utils like `isRecord`; no Prisma / better-sqlite3)
-- `packages/http`: HTTP contract foundation (`@kagami/http`, `contract` / `register` / `wire` / `url` subpaths plus the legacy `route.helper`; only fastify + zod, zero `@kagami/*` dependencies)
-- `packages/rpc-client`: contract-driven typed HTTP client factory (`@kagami/rpc-client`, `createClient(contract)`; isolates the kernel dependency so `@kagami/http` stays kernel-free)
-- `packages/config`: zero-dependency leaf for config loading (`@kagami/config`, repo-root discovery + deep-merge of `config.yaml` / `config.secret.yaml`; reused by kernel / gateway / oss / scripts)
-- `packages/persistence`: persistence infrastructure (`@kagami/persistence`, Prisma client and generated client, db, all business DAOs, Prisma JSON helpers; depends on `@kagami/kernel` + Prisma + better-sqlite3)
-- Per-producer contract packages (one `*-api` per producing process, type-safe service-to-service HTTP): `@kagami/llm-api`, `@kagami/browser-api`, `@kagami/oss-api`, `@kagami/spire-api`, `@kagami/metric-api`, `@kagami/console-api`, `@kagami/agent-api`
+She has interests, a rhythm, and idle time — and what she does with the idle time is up to her.
 
-> The old `@kagami/shared` package has been retired (#279). Wire primitives now live in `@kagami/http/wire`, each service's wire schemas in its `*-api` package, and general text utilities in `@kagami/kernel/utils/*`.
+There is also a small admin console: a quiet window into her life state — what she has recently been thinking, doing, and seeing.
 
-The workspace definition lives at the repository root in `pnpm-workspace.yaml`, currently covering `apps/*` and `packages/*`. Backend runtime configuration is unified under `config.yaml` at the repository root.
+> Her long-term memory is currently being redesigned. For now she keeps a raw ledger of what has been said, and remembers within a conversation.
 
-## Repository Layout
+## Running her
 
-```text
-apps/
-  agent/    Fastify backend, NapCat integration, Kagami agent business layer
-  console/  Standalone admin-console backend serving read-only DB queries
-  web/      React admin console
-  gateway/  Front-door gateway (static assets + reverse proxy)
-  llm/      LLM gateway + OAuth credential center (standalone process)
-  metric/   Metric ingestion + metric-chart queries (standalone process)
-  oss/      Self-hosted content-addressed object storage (standalone process)
-  browser/  CloakBrowser host (standalone process)
-  spire/    Slay-the-Spire-style card-game engine (standalone process)
-packages/
-  agent-runtime/  Generic Agent / App framework abstractions and tool catalog
-  llm/            Shared LLM message / tool type contracts
-  llm-client/     LLM chat client + provider + embedding runtime
-  auth/           OAuth credential management
-  kernel/         Backend infrastructure (config / logger / common / service shell)
-  http/           HTTP contract foundation (contract / register / wire / url)
-  rpc-client/     Contract-driven typed HTTP client factory
-  config/         Zero-dependency config loader
-  persistence/    Persistence infrastructure (Prisma client / DAOs / db)
-  *-api/          Per-producer service contracts (llm / browser / oss / spire / metric / console / agent)
-```
+Kagami is a full-stack TypeScript monorepo (`pnpm`). Under the hood she is not one program but a handful of cooperating processes — the agent herself, plus a browser, an object store, the card-game engine, an LLM gateway, and so on — all supervised by PM2. You bring the whole thing up with a single command.
 
-## Common Commands
+You'll need:
 
-Run from the repository root:
+- Node.js and `pnpm`, and a toolchain that can compile native modules (`better-sqlite3`, `hnswlib-node`) — the database is a plain in-process SQLite file, so there's no external database to run.
+- An LLM you can log into.
+- [NapCat](https://github.com/NapNeko/NapCatQQ) running on the host, if you want the QQ side of her life.
+
+Then:
 
 ```bash
-pnpm build
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm lint:fix
-pnpm format
-pnpm format:write
+# 1. Configuration
+#    config.yaml (non-secret, already in the repo) — edit in place.
+#    Copy the secret template and fill in your keys / QQ ids:
+cp config.secret.yaml.example config.secret.yaml
+
+# 2. Install and bring her up (build → migrate → start under PM2)
+pnpm install
 pnpm app:deploy
 ```
 
-Single-package commands:
-
-```bash
-pnpm --filter @kagami/agent <script>
-pnpm --filter @kagami/web <script>
-pnpm --filter @kagami/agent-runtime <script>
-pnpm --filter @kagami/persistence <script>
-```
-
-Notes:
-
-- The repository does not provide a unified root `pnpm dev` script.
-- `@kagami/agent` currently exposes `build`, `typecheck`, `test`, `test:watch`, and `db:*` scripts.
-- `@kagami/agent-runtime` exposes `build`, `typecheck`, `test`, `test:watch`; `@kagami/oss` exposes `build`, `typecheck`, `test`, `test:watch`, `start`.
-- `@kagami/web` exposes `build` and `typecheck`.
-- `pnpm test` at the root runs the vitest projects across all packages; any package with its own `vitest.config.ts` is included automatically.
-
-## Configuration
-
-- `config.yaml` (non-private, version-controlled) already lives at the repository root — edit it directly.
-- Copy [config.secret.yaml.example](./config.secret.yaml.example) to `config.secret.yaml` (git-ignored) and fill in secrets (API keys, bot QQ, group IDs). The two files are deep-merged at startup.
-- The service reads and validates the merged config once at startup; changes require a restart to take effect.
-
-## Database Migrations
-
-From the repository root:
-
-```bash
-pnpm db:migrate:dev -- --name <migration_name>
-pnpm db:migrate:deploy
-pnpm db:migrate:status
-pnpm db:migrate:reset
-pnpm db:migrate:resolve -- --applied <migration_id>
-```
-
-Notes:
-
-- `db:migrate:dev` automatically appends `--create-only`, generating the migration file without altering the database directly.
-- Standard flow: edit `packages/persistence/prisma/schema.prisma` → generate migration → commit both the schema and migration → run `db:migrate:deploy` in the target environment.
-
-## Architecture Overview
-
-### Backend
-
-The backend has been reorganized into a "flat modules + in-module layering" structure. Top-level directories live directly under `apps/agent/src/<module>`, with runtime assembly handled by `apps/agent/src/app/server-runtime.ts`.
-
-Main modules:
-
-- `acl/`: anti-corruption HTTP client façades for each standalone peer process (llm / browser / spire / oss) — wire goes through the contract client, plus each service's domain semantics
-- `common/`: cross-cutting, business-agnostic runtime utilities (currently `detect-mime`, byte-sniffing MIME detection)
-- `llm/`: LLM playground service + HTTP handler (provider / credentials / chat moved out to the kagami-llm process; the reporting client lives in `acl/`)
-- `napcat/`: NapCat protocol adapter (gateway transport, inbound normalization, image analysis, persistence) — the gateway instance is owned by the QQ App, just one of the Agent's event sources
-- `scheduler/`: background timed tasks (auth refresh, IThome polling, data retention cleanup, etc.)
-- `agent/`: Kagami's agent business layer — the phone-OS runtime (Portal / App / NotificationCenter), capabilities, context compaction
-- `ops/`: query endpoints for App Log, LLM Chat Call, main Agent context, NapCat history, etc.
-- `app/`: top-level runtime assembly — module wiring, Fastify route registration, health checks, Agent / gateway lifecycle
-
-`apps/agent/src/agent` is organized into `runtime/`, `capabilities/`, and `apps/`:
-
-- `runtime/`: Kagami-specific runtime such as `RootAgentRuntime`, session (the App launcher), `NotificationCenter`, event queue, context rendering, App-state persistence
-- `capabilities/`: implementations grouped by capability, currently including `messaging`, `context-summary`, `ledger`, `ithome`, `vision`, `browser`, `resource`, `spire`, `terminal`, `todo`, `inner-voice`
-- `apps/`: the phone-OS Apps (places reachable via `enter` from the Portal), currently `qq`, `ithome`, `hn`, `calc`, `clock`, `browser`, `amap`, `spire`, `terminal`, `todo`
-
-Kagami is modeled as a phone OS: every life input (QQ message, RSS, timer) is a peer event. The passive `NotificationCenter` is the single bridge for background / unfocused signals to the Agent (the "banner") — sources fold signals into notifications, which it batches and enqueues to wake the Agent; the conversation he is currently looking at behaves like the phone screen instead: new messages flow straight into context via `foreground_input`, no banner needed. Each capability/App is "one more way for the Agent to live": `ithome` lets him read the news, `vision` lets him see images, `hn` gives him a read-only Hacker News, `browser` gives him a body to browse the real web, `todo` gives him a neutral to-do book. Future capabilities should be designed as "adding a new way of living for the Agent", not as "adding another feature toggle to a chat bot".
-
-Main endpoint groups:
-
-- `/health`
-- `/auth/:provider/status`
-- `/auth/:provider/login-url`
-- `/auth/:provider/logout`
-- `/auth/:provider/refresh`
-- `/auth/:provider/usage-limits`
-- `/auth/:provider/usage-trend`
-- `/llm/providers`
-- `/llm/playground-tools`
-- `/llm/chat`
-- `/napcat/group/send`
-- `/napcat/private/send`
-- `/app-log/query`
-- `/llm-chat-call/query`
-- `/llm-chat-call/:id`
-- `/napcat-event/query`
-- `/napcat-group-message/query`
-- `/todo/query`
-- `/main-agent-context/recent`
-- `/main-agent-context/compact`
-- `/metric-chart/*`
-- `/scheduler/*`
-
-### Frontend
-
-The frontend is a React admin console used to observe the Agent's "life state" (what he has recently been thinking, doing, and seeing). Main pages:
-
-- `/main-agent-context`: main Agent context (default entry)
-- `/auth/:provider`
-- `/control-panel`
-- `/scheduler-tasks`
-- `/todos`
-- `/llm-playground`
-- `/llm-history`
-- `/inner-thought`
-- `/app-log-history`
-- `/napcat-event-history`
-- `/napcat-group-message-history`
-- `/metric-charts`
-
-Notes:
-
-- Page components are organized by business domain under `apps/web/src/pages/*`.
-- The current Vite config only provides the `@ -> apps/web/src` alias and has no built-in dev proxy.
-
-### Contract Packages (service-to-service HTTP)
-
-- Service-to-service HTTP is type-safe via per-producer `*-api` contract packages; the web frontend consumes the same contracts through `@kagami/http/url` + `@kagami/rpc-client`.
-- The former `@kagami/shared` package has been retired (#279). Wire primitives live in `@kagami/http/wire`, each service's schemas in its `*-api` package, and general text utilities in `@kagami/kernel/utils/*`.
-- Import Zod directly from `zod` when defining schemas.
-
-### Agent Runtime Package
-
-- `packages/agent-runtime` only carries the generic Agent / App framework kernel, not Kagami-specific semantics.
-- Core exports currently include `TaskAgent`, the `App` / `AppManager` / `AppStateStore` framework, `ToolCatalog`, `ToolSet`, `ToolExecutor`, and related abstractions. (The concrete `InvokeTool` itself lives in `apps/agent`, not here.)
-- NapCat event models, the Kagami system prompt, and concrete capability implementations remain under `apps/agent/src/agent`.
-
-## Deployment
-
-- The PM2 config file is [ecosystem.config.cjs](./ecosystem.config.cjs). It manages the following processes.
-- The backend service `kagami-agent` runs `apps/agent/dist/index.js` and listens on `20003` by default.
-- The admin-console backend `kagami-console` runs `apps/console/dist/index.js` and listens on `20006` by default.
-- The gateway service `kagami-gateway` runs `apps/gateway/dist/index.js` and listens on `20004` by default.
-- The LLM service `kagami-llm` runs `apps/llm/dist/index.js` and listens on `20009` by default (localhost only); it owns the providers + OAuth callback server + refresh timers, and the gateway routes `/auth/*` to it.
-- The metric service `kagami-metric` runs `apps/metric/dist/index.js` and listens on `20010` by default (localhost only); it owns metric ingestion (`POST /metric/record`, the agent reports fire-and-forget over HTTP) plus the metric-chart query endpoints, which the gateway routes to it.
-- The object storage service `kagami-oss` runs `apps/oss` and listens on `20005` by default (localhost only).
-- The browser service `kagami-browser` runs `apps/browser/dist/index.js` and listens on `20007` by default (localhost only); it owns CloakBrowser so an agent restart does not kill the browser. `app:deploy agent` does not touch it (see issue #173).
-- The Spire service `kagami-spire` runs `apps/spire/dist/index.js` and listens on `20011` by default (localhost only); it owns the card-game engine and JSON save files under `data/spire/`, so an agent restart does not interrupt a run. `app:deploy agent` does not touch it (see issue #234).
-- The frontend static server serves `apps/web/dist` and proxies `/api/*` to `http://localhost:20003/*`.
-- Running `pnpm app:deploy` performs the build, Prisma migrations, PM2 reload/startOrReload, and `pm2 save`.
-
-Prerequisites:
-
-- The database is an in-process SQLite file (default `data/sqlite/kagami.db`) — the host no longer needs to run an external database. It only needs to be able to compile native modules (`better-sqlite3`, `hnswlib-node`).
-- The host must provide Napcat.
-- `config.yaml` typically accesses Napcat via `localhost`.
+That's the short path. She'll be awake when it finishes.

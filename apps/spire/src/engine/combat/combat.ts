@@ -11,7 +11,7 @@ import type {
   PowerInstance,
   RelicState,
 } from "../types.js";
-import { getCardDef, costOf, effectsOf, rewardCardPoolOf } from "../cards/cards.js";
+import { getCardDef, costOf, effectsOf, rewardCardPoolOf, ALL_CARDS } from "../cards/cards.js";
 import { getEnemyDef, getEncounterDef } from "../enemies/enemies.js";
 import { nextRange, nextFloat, nextInt, shuffleInPlace } from "../rng.js";
 import {
@@ -88,6 +88,10 @@ const ALCHEMIZE_POOL = [
   "weak_potion",
   "regen_potion",
 ];
+// 你好世界：每回合开始随机加入手牌的「普通」牌池——从卡表动态取全部普通牌（含各色），自动随卡池增补同步。
+const HELLO_WORLD_POOL: readonly string[] = ALL_CARDS.filter(c => c.rarity === "common").map(
+  c => c.id,
+);
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
@@ -241,6 +245,8 @@ export function startCombat(state: GameState, encounterId: string): void {
     lightningChanneledThisCombat: 0,
     powersPlayedThisCombat: 0,
     timesLostHpThisCombat: 0,
+    clawDamageThisCombat: 0,
+    retainHandThisTurn: false,
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
@@ -262,7 +268,10 @@ export function startCombat(state: GameState, encounterId: string): void {
   // 第 1 回合开始遗物（欢乐花能量 / 角锚 / 光滑石在 onCombatStart 已处理）。
   triggerRelicTurnStart(state);
   // 固有牌（背刺等）：开局必在起手，先从抽牌堆抽到手牌。
-  const innate = drawPile.filter(card => getCardDef(card.defId).innate);
+  const innate = drawPile.filter(card => {
+    const cardDef = getCardDef(card.defId);
+    return cardDef.innate || (card.upgraded && cardDef.upgradedInnate);
+  });
   for (const card of innate) {
     const idx = combat.drawPile.indexOf(card);
     if (idx >= 0) {
@@ -701,7 +710,8 @@ function applyEffect(
     }
     case "gain_energy": {
       if (actor.side === "player") {
-        combat.energy += effect.amount;
+        // amount 可为负（虚无抽到时 -1 能量）；能量不低于 0。
+        combat.energy = Math.max(0, combat.energy + effect.amount);
       }
       break;
     }
@@ -1771,6 +1781,50 @@ function applyEffect(
       }
       break;
     }
+    case "deal_damage_claw": {
+      // 爪击：造成 base + 本场爪击加成，随后本场爪击加成 +2（作用于后续所有爪击）。
+      if (actor.side === "player" && targetEnemyIndex !== null) {
+        const dmg = Math.max(0, effect.base + combat.clawDamageThisCombat);
+        dealDamageToEnemy(state, targetEnemyIndex, dmg, powers);
+        combat.clawDamageThisCombat += 2;
+      }
+      break;
+    }
+    case "double_energy": {
+      // 双倍能量：获得等同于当前能量的能量。
+      if (actor.side === "player") {
+        combat.energy += combat.energy;
+      }
+      break;
+    }
+    case "retain_hand": {
+      // 平衡：本回合结束时保留全部手牌。
+      if (actor.side === "player") {
+        combat.retainHandThisTurn = true;
+      }
+      break;
+    }
+    case "exhaust_hand_gain_energy": {
+      // 回收：消耗手牌中费用最高的一张，获得 = 其费用的能量（自动取最贵）。
+      if (actor.side === "player" && combat.hand.length > 0) {
+        let picked: CardInstance | null = null;
+        let pickedCost = -1;
+        for (const card of combat.hand) {
+          const cardCost = card.costZero ? 0 : (costOf(getCardDef(card.defId), card.upgraded) ?? 0);
+          if (cardCost > pickedCost) {
+            pickedCost = cardCost;
+            picked = card;
+          }
+        }
+        if (picked) {
+          const idx = combat.hand.indexOf(picked);
+          combat.hand.splice(idx, 1);
+          exhaustCard(state, picked);
+          combat.energy += Math.max(0, pickedCost);
+        }
+      }
+      break;
+    }
     case "shuffle_discard_into_draw": {
       // 深呼吸：把弃牌堆洗入抽牌堆。
       if (actor.side === "player") {
@@ -2817,6 +2871,9 @@ export function endTurn(state: GameState): void {
       retained.push(instance);
     } else if (cardDef.ethereal) {
       combat.exhaustPile.push(instance);
+    } else if (combat.retainHandThisTurn) {
+      // 平衡：本回合保留全部手牌（虚无牌仍按上面消耗）。
+      retained.push(instance);
     } else if (wellLaidPlans > 0) {
       retained.push(instance);
       wellLaidPlans -= 1;
@@ -2825,6 +2882,7 @@ export function endTurn(state: GameState): void {
     }
   }
   combat.hand = retained;
+  combat.retainHandThisTurn = false; // 「本回合」限定：结算后清零。
   // 既定事实：本回合被保留下来的每张牌，费用永久 -establishment（多次保留会叠加下降）。
   const establishment = getPower(combat.playerPowers, "establishment");
   if (establishment > 0) {
@@ -3182,6 +3240,11 @@ export function endTurn(state: GameState): void {
   const magnetism = getPower(combat.playerPowers, "magnetism");
   for (let n = 0; n < magnetism; n += 1) {
     addCards(state, MAGNETISM_POOL[nextInt(state.rng, MAGNETISM_POOL.length)]!, "hand", 1);
+  }
+  // 你好世界：每回合开始将 = 层数张随机普通牌加入手牌。
+  const helloWorld = getPower(combat.playerPowers, "hello_world");
+  for (let n = 0; n < helloWorld; n += 1) {
+    addCards(state, HELLO_WORLD_POOL[nextInt(state.rng, HELLO_WORLD_POOL.length)]!, "hand", 1);
   }
   // 采集：接下来若干回合各将一张 0 费「洞悉」加入手牌，每回合消耗一层。
   if (getPower(combat.playerPowers, "collect") > 0) {
