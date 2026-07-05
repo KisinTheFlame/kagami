@@ -97,7 +97,12 @@ export type PowerId =
   | "like_water" // 静如止水：回合结束若处于平静姿态，获得 = 层数的格挡（观者）
   | "burst" // 爆发：接下来的 = 层数张技能牌各额外结算一次（每消耗一次 -1 层，静默）
   | "phantasmal" // 幻杀：本回合你的攻击造成双倍伤害（回合末清除，静默）
-  | "collect"; // 采集：接下来 = 层数个回合，回合开始各将一张 0 费「洞悉」加入手牌（每回合 -1，观者）
+  | "collect" // 采集：接下来 = 层数个回合，回合开始各将一张 0 费「洞悉」加入手牌（每回合 -1，观者）
+  | "fire_breathing" // 烈焰吐息：每当你抽到状态牌或诅咒牌，对所有敌人造成 = 层数的伤害（铁甲）
+  | "mayhem" // 混乱：每个玩家回合开始，打出抽牌堆顶 = 层数张牌（机器人）
+  | "amplify" // 增幅：接下来的 = 层数张能力牌各额外结算一次（每张 -1 层，机器人）
+  | "echo_form" // 回响形态：每回合你打出的第一张牌额外结算一次（机器人）
+  | "creative_ai"; // 创意 AI：每个玩家回合开始，将 = 层数张随机能力牌加入手牌（机器人）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -194,6 +199,10 @@ export type Effect =
   | { kind: "exhaust_hand_up_to"; count: number } // 消耗手牌中至多 count 张（净化；自动取费用最低的）
   | { kind: "exhaust_one_draw"; draw: number } // 消耗一张手牌，然后抽 draw 张（焚誓；自动取费用最低）
   | { kind: "copy_hand_card"; count: number } // 复制手牌中的一张攻击/能力牌 count 份加入手牌（双持；自动取费用最高）
+  | { kind: "gain_energy_if_last_attack"; amount: number } // 若上一张打出的是攻击牌，获得 amount 能量（追击）
+  | { kind: "return_from_discard" } // 从弃牌堆取回一张牌到手牌（冥想；自动取最近弃掉的一张）
+  | { kind: "gain_random_potion" } // 获得一瓶随机药水（炼金）
+  | { kind: "transmutation" } // X 费：将 X 张随机无色牌加入手牌，本场费用视为 0（嬗变）
   | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
   | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
   | { kind: "return_from_exhaust" } // 从消耗堆取回一张牌到手牌（掘尸；自动取最近消耗的一张）
