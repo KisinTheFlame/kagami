@@ -60,19 +60,6 @@ model Metric {
   @@map("metric")
 }
 
-model MetricChart {
-  id         Int      @id @default(autoincrement())
-  chartName  String   @unique(map: "metric_chart_chart_name_uq") @map("chart_name")
-  metricName String   @map("metric_name")
-  aggregator String
-  tagFilters Json?    @map("tag_filters")
-  groupByTag String?  @map("group_by_tag")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @map("updated_at")
-
-  @@map("metric_chart")
-}
-
 model NapcatEvent {
   id          Int       @id @default(autoincrement())
   postType    String    @map("post_type")

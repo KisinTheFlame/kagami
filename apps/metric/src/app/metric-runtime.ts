@@ -9,7 +9,6 @@ import { MetricChartHandler } from "../metric/http/metric-chart.handler.js";
 import { MetricRecordHandler } from "../metric/http/metric-record.handler.js";
 import { DefaultMetricChartService } from "../metric/application/metric-chart.impl.service.js";
 import { DefaultMetricRecordService } from "../metric/application/metric-record.impl.service.js";
-import { PrismaMetricChartDao } from "../metric/infra/impl/prisma-metric-chart.impl.dao.js";
 
 const logger = new AppLogger({ source: "metric-bootstrap" });
 
@@ -21,8 +20,9 @@ export type MetricRuntime = {
 
 /**
  * Metric 服务运行时装配。独立进程，一手包办 metric 摄取（`POST /metric/record`）与
- * metric-chart 查询（4 端点）。与 agent / console 经 `@kagami/persistence` 共享 Prisma DAO
- * 直读同一个 SQLite 库，靠库文件级 WAL 并发；不持有任何 Agent 活内存。
+ * metric 图表查询（`POST /metric/query`，内联聚合规格）。与 agent / console 经
+ * `@kagami/persistence` 共享 Prisma DAO 直读同一个 SQLite 库，靠库文件级 WAL 并发；不持有任何
+ * Agent 活内存。
  */
 export async function buildMetricRuntime(): Promise<MetricRuntime> {
   const config = await loadStaticConfig();
@@ -34,13 +34,9 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
   await configureSqlite(database);
 
   const metricDao = new PrismaMetricDao({ database });
-  const metricChartDao = new PrismaMetricChartDao({ database });
 
   const metricRecordService = new DefaultMetricRecordService({ metricDao });
-  const metricChartService = new DefaultMetricChartService({
-    metricDao,
-    metricChartDao,
-  });
+  const metricChartService = new DefaultMetricChartService({ metricDao });
 
   // 面向前端查询 + agent 摄取：traceId / 默认错误三分支由公共装配壳提供。
   const app = createServiceApp({

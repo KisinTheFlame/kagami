@@ -1,5 +1,4 @@
 import {
-  Activity,
   Bot,
   Brain,
   CalendarClock,
@@ -33,7 +32,6 @@ export const navItems: readonly NavItem[] = [
     matchPrefixes: ["/auth", "/auth/"],
   },
   { to: "/llm-playground", label: "LLM Playground", icon: FlaskConical },
-  { to: "/metric-charts", label: "Metric 图表", icon: Activity },
   { to: "/llm-history", label: "LLM 调用历史", icon: History },
   { to: "/inner-thought", label: "内心念头", icon: Brain },
   { to: "/app-log-history", label: "应用日志", icon: FileText },
