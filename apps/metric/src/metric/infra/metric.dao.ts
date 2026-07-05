@@ -1,8 +1,25 @@
 // 聚合器 / 时间桶枚举由存储层自持：与 metric-api 的 wire schema 取值一致但不共享（#279 PR0）。
-export type MetricChartAggregator = "sum" | "count" | "avg" | "min" | "max" | "last";
+export type MetricChartAggregator =
+  | "sum"
+  | "count"
+  | "avg"
+  | "min"
+  | "max"
+  | "last"
+  | "p50"
+  | "p95"
+  | "p99";
 export type MetricChartBucket = "10s" | "1m" | "5m" | "30m" | "1h";
 
 export type MetricTags = Record<string, string>;
+
+/** tag 过滤条件（#475 P2）：eq/ne 单值，in 多值。跨 key 取 AND。 */
+export type MetricTagFilter =
+  | { op: "eq"; value: string }
+  | { op: "ne"; value: string }
+  | { op: "in"; value: string[] };
+
+export type MetricTagFilters = Record<string, MetricTagFilter>;
 
 export type InsertMetricInput = {
   metricName: string;
@@ -14,7 +31,7 @@ export type InsertMetricInput = {
 export type QueryMetricChartSeriesInput = {
   metricName: string;
   aggregator: MetricChartAggregator;
-  tagFilters: MetricTags | null;
+  tagFilters: MetricTagFilters | null;
   groupByTag: string | null;
   startAt: Date;
   endAt: Date;

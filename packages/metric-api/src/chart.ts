@@ -7,7 +7,18 @@ import { z } from "zod";
 // 规格聚合。为防一次请求把 SQLite / 进程拖死，schema 层带硬边界 guard（点数 / tagFilters 数 /
 // 时间跨度）；分组 series top-N 上限在服务端 buildSeries 后处理。
 
-export const MetricChartAggregatorSchema = z.enum(["sum", "count", "avg", "max", "min", "last"]);
+export const MetricChartAggregatorSchema = z.enum([
+  "sum",
+  "count",
+  "avg",
+  "max",
+  "min",
+  "last",
+  // 百分位（p50/p95/p99）：桶内原始样本现算（DuckDB quantile_cont）。延迟看均值会骗人，观测刚需。
+  "p50",
+  "p95",
+  "p99",
+]);
 
 export type MetricChartAggregator = z.infer<typeof MetricChartAggregatorSchema>;
 
@@ -33,11 +44,28 @@ export type MetricChartRangePreset = z.infer<typeof MetricChartRangePresetSchema
 export const METRIC_CHART_MAX_POINTS = 2000;
 /** tagFilters 最多键数。 */
 export const METRIC_CHART_MAX_TAG_FILTERS = 5;
+/** 单个 `in` 过滤的取值上限（防超长 in 列表撑爆 SQL / DoS）。 */
+export const METRIC_CHART_MAX_TAG_FILTER_VALUES = 20;
 /** 时间跨度上限（2 天，与 rangePreset 上限一致）。 */
 export const METRIC_CHART_MAX_RANGE_MS = 2 * 24 * 60 * 60 * 1000;
 
+// tag 过滤从「等值 AND」扩到 op 判别联合（#475 P2）：eq/ne 单值、in 多值。同一 key 一个过滤，
+// 跨 key 取 AND。「Wait vs 非Wait」用两条查询（各带一条 eq / ne 过滤），不做派生分组 DSL。
+export const MetricChartTagFilterSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("eq"), value: z.string() }).strict(),
+  z.object({ op: z.literal("ne"), value: z.string() }).strict(),
+  z
+    .object({
+      op: z.literal("in"),
+      value: z.array(z.string().min(1)).min(1).max(METRIC_CHART_MAX_TAG_FILTER_VALUES),
+    })
+    .strict(),
+]);
+
+export type MetricChartTagFilter = z.infer<typeof MetricChartTagFilterSchema>;
+
 export const MetricChartTagFiltersSchema = z
-  .record(z.string().min(1), z.string())
+  .record(z.string().min(1), MetricChartTagFilterSchema)
   .refine(value => Object.keys(value).length <= METRIC_CHART_MAX_TAG_FILTERS, {
     message: `tagFilters 最多 ${METRIC_CHART_MAX_TAG_FILTERS} 个`,
   });

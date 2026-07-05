@@ -37,14 +37,75 @@ describe("MetricChartQueryRequestSchema guards", () => {
   });
 
   it("rejects when tagFilters exceed the max key count", () => {
+    const eq = (value: string) => ({ op: "eq" as const, value });
     const result = MetricChartQueryRequestSchema.safeParse({
       metricName: "agent.tool.call",
       aggregator: "count",
       bucket: "1m",
       rangePreset: "10m",
-      tagFilters: { a: "1", b: "2", c: "3", d: "4", e: "5", f: "6" },
+      tagFilters: { a: eq("1"), b: eq("2"), c: eq("3"), d: eq("4"), e: eq("5"), f: eq("6") },
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts eq / ne / in tag filters", () => {
+    const result = MetricChartQueryRequestSchema.safeParse({
+      metricName: "agent.tool.call",
+      aggregator: "p95",
+      bucket: "1m",
+      rangePreset: "10m",
+      tagFilters: {
+        tool: { op: "eq", value: "Wait" },
+        runtime: { op: "ne", value: "agent" },
+        model: { op: "in", value: ["gpt-4o", "sonnet"] },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an unknown tag filter op", () => {
+    const result = MetricChartQueryRequestSchema.safeParse({
+      metricName: "agent.tool.call",
+      aggregator: "count",
+      bucket: "1m",
+      rangePreset: "10m",
+      tagFilters: { tool: { op: "gt", value: "5" } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an in filter that is empty or exceeds the value cap", () => {
+    const empty = MetricChartQueryRequestSchema.safeParse({
+      metricName: "agent.tool.call",
+      aggregator: "count",
+      bucket: "1m",
+      rangePreset: "10m",
+      tagFilters: { tool: { op: "in", value: [] } },
+    });
+    expect(empty.success).toBe(false);
+
+    const tooMany = MetricChartQueryRequestSchema.safeParse({
+      metricName: "agent.tool.call",
+      aggregator: "count",
+      bucket: "1m",
+      rangePreset: "10m",
+      tagFilters: {
+        tool: { op: "in", value: Array.from({ length: 21 }, (_unused, i) => `v${i}`) },
+      },
+    });
+    expect(tooMany.success).toBe(false);
+  });
+
+  it("accepts percentile aggregators", () => {
+    for (const aggregator of ["p50", "p95", "p99"]) {
+      const result = MetricChartQueryRequestSchema.safeParse({
+        metricName: "llm.latency",
+        aggregator,
+        bucket: "1m",
+        rangePreset: "10m",
+      });
+      expect(result.success).toBe(true);
+    }
   });
 
   it("rejects a custom range wider than the max span", () => {
