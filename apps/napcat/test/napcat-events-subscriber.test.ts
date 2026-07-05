@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NapcatAgentEvent, NapcatOutboxEvent } from "@kagami/napcat-api/event";
-import { NapcatSseSubscriber } from "../src/http/napcat-events.handler.js";
+import {
+  NapcatSseSubscriber,
+  createBackpressureAwareWrite,
+} from "../src/http/napcat-events.handler.js";
 import type { NapcatEventOutboxDao } from "../src/infra/napcat-event-outbox.dao.js";
 import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
 import type { LogEvent, LogSink } from "@kagami/kernel/logger/types";
@@ -131,5 +134,54 @@ describe("NapcatSseSubscriber replay", () => {
     const gap = logs.find(l => l.metadata?.event === "napcat.events.replay_gap");
     expect(gap).toBeDefined();
     expect(gap?.metadata?.lostCount).toBe(4); // 3,4,5,6
+  });
+});
+
+describe("createBackpressureAwareWrite", () => {
+  it("write 不背压（返回 true）时永不销毁连接", () => {
+    vi.useFakeTimers();
+    const res = { write: vi.fn().mockReturnValue(true), once: vi.fn(), destroy: vi.fn() };
+    const write = createBackpressureAwareWrite(res, 15_000);
+    write("frame");
+    write("frame2");
+    vi.advanceTimersByTime(20_000);
+    expect(res.destroy).not.toHaveBeenCalled();
+    expect(res.write).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("背压后停写后续帧 + 宽限期到销毁连接（等 agent 重连回放）", () => {
+    vi.useFakeTimers();
+    const res = { write: vi.fn().mockReturnValue(false), once: vi.fn(), destroy: vi.fn() };
+    const onTimeout = vi.fn();
+    const write = createBackpressureAwareWrite(res, 15_000, onTimeout);
+    write("frame"); // 触发背压：这帧写了（Node 缓冲），dead 置位
+    write("frame2"); // dead 后不再 res.write（硬约束内存）
+    expect(res.write).toHaveBeenCalledTimes(1);
+    expect(res.destroy).not.toHaveBeenCalled(); // 宽限期内先不动
+    vi.advanceTimersByTime(15_000);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(res.destroy).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("客户端在宽限期内先断连（res close）→ 清 timer，不再 destroy / 无虚假日志", () => {
+    vi.useFakeTimers();
+    let closeCb: () => void = () => {};
+    const res = {
+      write: vi.fn().mockReturnValue(false),
+      once: vi.fn((_event: "close", cb: () => void) => {
+        closeCb = cb;
+      }),
+      destroy: vi.fn(),
+    };
+    const onTimeout = vi.fn();
+    const write = createBackpressureAwareWrite(res, 15_000, onTimeout);
+    write("frame"); // 背压，挂 timer
+    closeCb(); // 客户端断连
+    vi.advanceTimersByTime(20_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(res.destroy).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

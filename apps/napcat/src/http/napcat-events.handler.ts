@@ -13,6 +13,9 @@ const logger = new AppLogger({ source: "napcat.events-handler" });
 /** 单次回放的批大小（避免一口气把超长缺口全查进内存）。 */
 const REPLAY_BATCH_SIZE = 500;
 
+/** SSE 背压宽限期：res.write 背压后等 drain 这么久，还不 drain 就销毁连接（消费方视为真死/半开）。 */
+const SSE_BACKPRESSURE_GRACE_MS = 15_000;
+
 type NapcatEventsHandlerDeps = {
   broadcaster: NapcatEventBroadcaster;
   outboxDao: NapcatEventOutboxDao;
@@ -46,9 +49,15 @@ export class NapcatEventsHandler {
         "X-Accel-Buffering": "no",
       });
 
+      const write = createBackpressureAwareWrite(res, SSE_BACKPRESSURE_GRACE_MS, () => {
+        logger.warn("SSE 背压超时，销毁连接等 agent 重连回放", {
+          event: "napcat.sse.backpressure_timeout",
+        });
+      });
+
       const lastEventId = parseLastEventId(request);
       const subscriber = new NapcatSseSubscriber({
-        write: chunk => res.write(chunk),
+        write,
         close: () => res.end(),
         outboxDao: this.outboxDao,
         lastEventId,
@@ -185,6 +194,48 @@ export class NapcatSseSubscriber implements NapcatEventSubscriber {
     this.write(serializeEventFrame(outboxEvent));
     this.lastWrittenSeq = outboxEvent.seq;
   }
+}
+
+/** 背压写所需的 res 最小面（便于单测注入假 res）。 */
+type BackpressureWritable = {
+  write(chunk: string): boolean;
+  once(event: "close", listener: () => void): void;
+  destroy(): void;
+};
+
+/**
+ * 背压感知的写入（issue #425）：`res.write` 返回 false = 内核发送缓冲已满、消费方跟不上。慢/半死
+ * 消费方若一直不 drain，无脑续写会让 napcat 内存无界增长。
+ *
+ * 对策：一旦背压就**停止后续写**（硬约束内存——不再往缓冲堆新帧），挂宽限期后 destroy 连接。
+ * agent 侧看门狗会重连、带 Last-Event-ID 从 outbox 回放缺口（**agent 自己的持久游标**才是回放起点，
+ * outbox 是 durability 事实源，故停写期间的帧一条不丢）。destroy 后 `dead` 短路一切写，杜绝写已毁
+ * 的 res（write-after-destroy）。客户端先断连（res close）则清 timer，不留悬挂定时器 / 虚假日志。
+ * onTimeout 在 destroy 前回调（记日志用）。正常快消费方永不触发。
+ */
+export function createBackpressureAwareWrite(
+  res: BackpressureWritable,
+  graceMs: number,
+  onTimeout?: () => void,
+): (chunk: string) => void {
+  let dead = false;
+  return (chunk: string): void => {
+    if (dead) {
+      return;
+    }
+    if (res.write(chunk)) {
+      return;
+    }
+    // 触发背压：这一帧 Node 已缓冲（不丢），但立刻停写后续帧。宽限期给已缓冲数据一点 flush 时间，
+    // 到期 destroy —— agent 重连回放。若客户端在宽限期内先断连，清掉 timer 即可。
+    dead = true;
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      res.destroy();
+    }, graceMs);
+    timer.unref?.();
+    res.once("close", () => clearTimeout(timer));
+  };
 }
 
 /**
