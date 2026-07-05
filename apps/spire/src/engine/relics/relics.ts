@@ -1084,6 +1084,32 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  // —— 引擎特判型遗物（不走钩子） ——
+  {
+    id: "regal_pillow",
+    name: "富贵枕头",
+    // 篝火休息回血 +15 在 run.ts 的 rest 分支按 hasRelic 处理。
+    rarity: "common",
+    description: "在篝火休息时，额外回复 15 点生命。",
+    hooks: {},
+  },
+  {
+    id: "velvet_choker",
+    name: "天鹅绒项圈",
+    // 每回合出牌上限 6 在 combat.ts 的 playCard 按 hasRelic 拦截。
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量；但每回合最多只能打出 6 张牌。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "magic_flower",
+    name: "魔法花",
+    // 回复量 +50% 在 combat.ts 的 heal 效果按 hasRelic 处理。
+    rarity: "rare",
+    characterLock: "ironclad",
+    description: "战斗中回复生命时，多回复 50%。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */

@@ -484,7 +484,9 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
 
   if (state.screen === "rest") {
     if (optionIndex === 0) {
-      const heal = Math.floor(state.maxHp * REST_HEAL_RATIO);
+      // 富贵枕头：休息时额外回复 15 点生命。
+      const heal =
+        Math.floor(state.maxHp * REST_HEAL_RATIO) + (hasRelic(state, "regal_pillow") ? 15 : 0);
       state.hp = Math.min(state.maxHp, state.hp + heal);
       state.log.push(`你休息了一会儿，回复了 ${heal} 点生命。`);
     } else {
