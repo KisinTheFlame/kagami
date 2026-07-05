@@ -3289,6 +3289,12 @@ export function endTurn(state: GameState): void {
   for (let n = 0; n < creativeAi; n += 1) {
     addCards(state, WHITE_NOISE_POOL[nextInt(state.rng, WHITE_NOISE_POOL.length)]!, "hand", 1);
   }
+  // 回合开始的抽牌触发效果（火焰吐息随抽到状态牌 AoE、混沌打出牌、荆棘反弹等）可能打死最后的
+  // 敌人；此时必须结算胜利，否则会留在「全灭却仍在战斗」的死局里（无合法出牌目标）。
+  resolveCombatIfEnded(state);
+  if (state.combat === null || state.screen !== "combat") {
+    return;
+  }
   state.log.push(`第 ${combat.turn} 回合开始。`);
 }
 
