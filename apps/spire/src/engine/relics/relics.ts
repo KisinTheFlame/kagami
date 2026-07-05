@@ -1,4 +1,11 @@
-import type { CardType, CharacterId, Effect, GameState, RelicState } from "../types.js";
+import type {
+  CardInstance,
+  CardType,
+  CharacterId,
+  Effect,
+  GameState,
+  RelicState,
+} from "../types.js";
 import { addPower } from "../powers/powers.js";
 import { getCardDef } from "../cards/cards.js";
 import { POTION_DROP_POOL } from "../potions/potions.js";
@@ -43,6 +50,8 @@ type RelicHooks = {
   onUsePotion?: (state: GameState, self: RelicState, emit: Emit) => void;
   /** 每当抽牌堆被洗牌（弃牌堆洗回抽牌堆）后结算（日晷每 3 次 +能量、算盘 +格挡）。 */
   onShuffle?: (state: GameState, self: RelicState, emit: Emit) => void;
+  /** 每当一张牌被加入牌组（奖励/商店/事件）后结算（陶瓷鱼 +金币、各色蛋升级加入的牌）。局外，无 emit；card 为刚加入的实例。 */
+  onAddCard?: (state: GameState, self: RelicState, card: CardInstance) => void;
 };
 
 /** 计数型遗物：自增 self.counter，达到 every 则归零并返回 true（触发效果）。 */
@@ -1023,6 +1032,150 @@ const RELIC_LIST: RelicDef[] = [
     rarity: "boss",
     description: "回合结束时不再弃掉手牌。",
     hooks: {},
+  },
+  // —— onAddCard 触发型遗物（加牌进牌组时） ——
+  {
+    id: "ceramic_fish",
+    name: "陶瓷鱼",
+    rarity: "common",
+    description: "每当一张牌被加入你的牌组，获得 9 金币。",
+    hooks: {
+      onAddCard: state => {
+        state.gold += 9;
+      },
+    },
+  },
+  {
+    id: "molten_egg",
+    name: "熔岩蛋",
+    rarity: "uncommon",
+    description: "每当一张攻击牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "attack") {
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  {
+    id: "toxic_egg",
+    name: "剧毒蛋",
+    rarity: "uncommon",
+    description: "每当一张技能牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "skill") {
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  {
+    id: "frozen_egg",
+    name: "冰冻蛋",
+    rarity: "uncommon",
+    description: "每当一张能力牌被加入你的牌组，它会自动升级。",
+    hooks: {
+      onAddCard: (_state, _self, card) => {
+        if (!card.upgraded && getCardDef(card.defId).type === "power") {
+          card.upgraded = true;
+        }
+      },
+    },
+  },
+  // —— 引擎特判型遗物（不走钩子） ——
+  {
+    id: "regal_pillow",
+    name: "富贵枕头",
+    // 篝火休息回血 +15 在 run.ts 的 rest 分支按 hasRelic 处理。
+    rarity: "common",
+    description: "在篝火休息时，额外回复 15 点生命。",
+    hooks: {},
+  },
+  {
+    id: "velvet_choker",
+    name: "天鹅绒项圈",
+    // 每回合出牌上限 6 在 combat.ts 的 playCard 按 hasRelic 拦截。
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量；但每回合最多只能打出 6 张牌。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "magic_flower",
+    name: "魔法花",
+    // 回复量 +50% 在 combat.ts 的 heal 效果按 hasRelic 处理。
+    rarity: "rare",
+    characterLock: "ironclad",
+    description: "战斗中回复生命时，多回复 50%。",
+    hooks: {},
+  },
+  // —— onAddCard 诅咒联动 ——
+  {
+    id: "darkstone_periapt",
+    name: "暗石护符",
+    rarity: "uncommon",
+    description: "每当你获得一张诅咒牌，最大生命 +6。",
+    hooks: {
+      onAddCard: (state, _self, card) => {
+        if (getCardDef(card.defId).type === "curse") {
+          state.maxHp += 6;
+          state.hp += 6;
+        }
+      },
+    },
+  },
+  {
+    id: "omamori",
+    name: "御守",
+    rarity: "common",
+    description: "抵消接下来加入你牌组的 2 张诅咒牌。",
+    hooks: {
+      onAddCard: (state, self, card) => {
+        if (self.counter < 2 && getCardDef(card.defId).type === "curse") {
+          const idx = state.deck.findIndex(c => c.uid === card.uid);
+          if (idx >= 0) {
+            state.deck.splice(idx, 1);
+            self.counter += 1;
+          }
+        }
+      },
+    },
+  },
+  // —— 更多 +1 能量类 boss 遗物（代价近似/略） ——
+  {
+    id: "ectoplasm",
+    name: "灵质",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：无法获得金币）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "cursed_key",
+    name: "诅咒之钥",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：打开宝箱时会附带一张诅咒）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "busted_crown",
+    name: "破损王冠",
+    rarity: "boss",
+    description: "每回合开始时多获得 1 点能量（代价：战斗奖励的卡牌选项减少）。",
+    hooks: { onCombatStart: (_s, _self, emit) => emit({ kind: "change_max_energy", delta: 1 }) },
+  },
+  {
+    id: "slavers_collar",
+    name: "奴隶主项圈",
+    rarity: "boss",
+    description: "在精英或首领战中，每回合开始时多获得 1 点能量。",
+    hooks: {
+      onCombatStart: (state, _self, emit) => {
+        if (state.combat?.isBoss) {
+          emit({ kind: "change_max_energy", delta: 1 });
+        }
+      },
+    },
   },
 ];
 

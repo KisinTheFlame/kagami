@@ -150,6 +150,15 @@ function backToMap(state: GameState): void {
   state.screen = "map";
 }
 
+/** 把一张牌加入大牌组，并触发遗物 onAddCard（陶瓷鱼给金币、各色蛋升级加入的牌）。 */
+function addCardToDeck(state: GameState, defId: string, upgraded: boolean): void {
+  const card = { uid: state.nextUid++, defId, upgraded };
+  state.deck.push(card);
+  for (const relic of state.relics) {
+    getRelicDef(relic.id).hooks.onAddCard?.(state, relic, card);
+  }
+}
+
 /** 战斗后按概率掉药水（基础 40%，未掉逐场 +10、掉了 -10；槽满则不掉不调整）。 */
 function rollPotionDrop(state: GameState): void {
   const emptySlot = state.potions.indexOf(null);
@@ -302,7 +311,7 @@ function applyEventOutcome(state: GameState, outcome: EventOutcome): void {
       state.hp += outcome.amount;
       break;
     case "add_card":
-      state.deck.push({ uid: state.nextUid++, defId: outcome.cardId, upgraded: false });
+      addCardToDeck(state, outcome.cardId, false);
       break;
     case "gain_relic":
       grantTreasure(state);
@@ -374,7 +383,7 @@ function buyShopItem(
   state.gold -= item.cost;
   item.sold = true;
   if (item.kind === "card") {
-    state.deck.push({ uid: state.nextUid++, defId: item.defId, upgraded: false });
+    addCardToDeck(state, item.defId, false);
     state.log.push(`你买下了牌「${getCardDef(item.defId).name}」。`);
   } else if (item.kind === "relic") {
     grantRelic(state, item.id);
@@ -403,7 +412,7 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
       state.log.push("你跳过了卡奖励。");
     } else if (optionIndex >= 0 && optionIndex < choices.length) {
       const pick = choices[optionIndex]!;
-      state.deck.push({ uid: state.nextUid++, defId: pick.defId, upgraded: pick.upgraded });
+      addCardToDeck(state, pick.defId, pick.upgraded);
       state.log.push(`你获得了「${getCardDef(pick.defId).name}」。`);
     } else {
       return { ok: false, reason: `选项 ${optionIndex} 无效。` };
@@ -475,7 +484,9 @@ export function applyChoose(state: GameState, optionIndex: number): ChooseResult
 
   if (state.screen === "rest") {
     if (optionIndex === 0) {
-      const heal = Math.floor(state.maxHp * REST_HEAL_RATIO);
+      // 富贵枕头：休息时额外回复 15 点生命。
+      const heal =
+        Math.floor(state.maxHp * REST_HEAL_RATIO) + (hasRelic(state, "regal_pillow") ? 15 : 0);
       state.hp = Math.min(state.maxHp, state.hp + heal);
       state.log.push(`你休息了一会儿，回复了 ${heal} 点生命。`);
     } else {

@@ -768,7 +768,11 @@ function applyEffect(
     }
     case "heal": {
       if (actor.side === "player") {
-        state.hp = Math.min(state.maxHp, state.hp + effect.amount);
+        // 魔法花：回复生命时多回复 50%。
+        const amount = hasRelic(state, "magic_flower")
+          ? Math.floor(effect.amount * 1.5)
+          : effect.amount;
+        state.hp = Math.min(state.maxHp, state.hp + amount);
       }
       break;
     }
@@ -2641,6 +2645,10 @@ export function playCard(
   // 常态（诅咒）：手牌里有常态时，本回合最多打出 3 张牌。
   if (combat.cardsPlayedThisTurn >= 3 && combat.hand.some(card => card.defId === "normality")) {
     return { ok: false, reason: "常态诅咒让你本回合无法再打出牌了。" };
+  }
+  // 天鹅绒项圈：本回合最多打出 6 张牌。
+  if (combat.cardsPlayedThisTurn >= 6 && hasRelic(state, "velvet_choker")) {
+    return { ok: false, reason: "天鹅绒项圈让你本回合最多只能打出 6 张牌。" };
   }
   const rawCost = costOf(def, instance.upgraded);
   if (rawCost === null) {
