@@ -128,6 +128,20 @@ function toClaudeSystemBlocks(system: string | undefined): ClaudeSystemBlock[] {
     });
   }
 
+  // 在**最后一个 system block** 上钉一个稳定的 cache 断点：tools + system 段进程内字节恒定（KV 缓存
+  // 优先原则保证 system prompt / 工具集不在会话中途变），这个断点进程生命周期内不漂移，给 tools+system
+  // 这段稳定前缀一个可跨请求/跨会话复用的缓存写点。顶层 `cache_control`（见 toClaudeCodeRequestBody）是
+  // automatic caching：断点自动落在**最后一个可缓存块**（易变的 messages 尾部）且随对话向后移动，做单会话
+  // 增量缓存，并不专门 pin 住 tools+system 边界。两者互补，共用 4 个断点额度里的 2 个（渲染序 tools →
+  // system → messages，断点在 system 末块能覆盖 tools+system）。
+  // 按 Anthropic prompt caching 语义，cache_control 是「缓存到此为止」的控制指令、不参与内容前缀的 hash，
+  // 故新增这个断点不应改变顶层 automatic 已产生前缀的 key，TTL 内且内容一致的在飞缓存条目应仍能命中；新增
+  // 的只是 system 前缀这个写点本身的首次冷写 + 后续读复用。以上均为工程假设，受 TTL(1h)、最小可缓存 token
+  // 阈值（Opus 4.x 约 4096）、并发首写完成时机、模型/平台支持等约束——上线后以真实
+  // cache_creation_input_tokens / cache_read_input_tokens 与有无 400 为准（provider 走 /v1/messages?beta=true）。
+  // blocks 恒有 ≥2 个元素（billing + SDK prompt 一定 push），末元素必然存在。
+  blocks[blocks.length - 1].cache_control = { type: "ephemeral", ttl: "1h" };
+
   return blocks;
 }
 

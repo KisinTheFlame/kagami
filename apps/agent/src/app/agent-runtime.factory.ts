@@ -225,15 +225,13 @@ export async function buildAgentRuntime({
     onStateError: ({ appId, phase, error }) => {
       // 状态恢复/存档失败虽不阻断启停，但绝不静默：跨重启状态（如 QQ 未读红点）无声丢失
       // 会让运维完全无从察觉，故落结构化日志。
-      logger.errorWithCause(
-        `App "${appId}" 状态${phase === "restore" ? "恢复" : "存档"}失败`,
-        error,
-        {
-          event: "agent.app_state.persist_failed",
-          appId,
-          phase,
-        },
-      );
+      const phaseLabel =
+        phase === "restore" ? "恢复" : phase === "shutdown" ? "启动回滚关停" : "存档";
+      logger.errorWithCause(`App "${appId}" 状态${phaseLabel}失败`, error, {
+        event: "agent.app_state.persist_failed",
+        appId,
+        phase,
+      });
     },
   });
   appManager.register(new CalcApp());

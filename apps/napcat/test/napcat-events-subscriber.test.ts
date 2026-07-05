@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NapcatAgentEvent, NapcatOutboxEvent } from "@kagami/napcat-api/event";
-import {
-  NapcatSseSubscriber,
-  createBackpressureAwareWrite,
-} from "../src/http/napcat-events.handler.js";
+import { NapcatSseSubscriber } from "../src/http/napcat-events.handler.js";
+import { createBackpressureAwareWrite } from "@kagami/http/sse";
 import type { NapcatEventOutboxDao } from "../src/infra/napcat-event-outbox.dao.js";
 import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
 import type { LogEvent, LogSink } from "@kagami/kernel/logger/types";

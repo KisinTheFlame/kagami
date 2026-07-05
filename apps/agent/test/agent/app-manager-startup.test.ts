@@ -110,4 +110,52 @@ describe("AppManager.startupAll", () => {
 
     expect(app.received).toEqual({});
   });
+
+  it("rolls back already-started apps (reverse onShutdown) when a later app fails to start", async () => {
+    const shutdownOrder: string[] = [];
+
+    class LifecycleApp implements App {
+      public readonly id: string;
+      public readonly displayName: string;
+      public readonly tools = [] as const;
+      public startupCalled = false;
+      public constructor(
+        id: string,
+        private readonly failOnStartup = false,
+      ) {
+        this.id = id;
+        this.displayName = id;
+      }
+      public canInvoke(): boolean {
+        return true;
+      }
+      public async help(): Promise<string> {
+        return "";
+      }
+      public async onStartup(): Promise<void> {
+        if (this.failOnStartup) {
+          throw new Error(`${this.id} boom`);
+        }
+        this.startupCalled = true;
+      }
+      public async onShutdown(): Promise<void> {
+        shutdownOrder.push(this.id);
+      }
+    }
+
+    const manager = new AppManager();
+    const first = new LifecycleApp("first");
+    const second = new LifecycleApp("second");
+    const failing = new LifecycleApp("failing", true);
+    manager.register(first);
+    manager.register(second);
+    manager.register(failing);
+
+    await expect(manager.startupAll()).rejects.toThrow(/failing boom/);
+
+    expect(first.startupCalled).toBe(true);
+    expect(second.startupCalled).toBe(true);
+    // 反序回滚：已起的 second、first 被 onShutdown；失败的 failing 从未成功 onStartup，不回滚。
+    expect(shutdownOrder).toEqual(["second", "first"]);
+  });
 });

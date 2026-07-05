@@ -30,6 +30,12 @@ export type AgentContextSnapshot = {
 };
 
 export interface AgentContext {
+  /**
+   * 单调递增的修订号：每次改动消息列表（append / replaceLeading / reset / restore）都 +1，只读操作不变。
+   * 供持久化侧 O(1) 判断「自上次落库以来有没有变过」，替代对整条上下文做 O(n) 的 JSON.stringify 指纹。
+   * 只保证「变了就变号」，不保证语义等价的两次改动号不同——用作变更信号，不用作内容等价判据。
+   */
+  getRevision(): number;
   getSnapshot(): Promise<AgentContextSnapshot>;
   fork(): Promise<AgentContext>;
   exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot>;
