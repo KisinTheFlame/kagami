@@ -9,7 +9,7 @@ pnpm workspace 由 `apps/*`（各为独立进程）与 `packages/*` 组成，依
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
       ├────────→ packages/persistence ──→ packages/kernel
-      └────────→ packages/http + 各 *-api 契约包（llm/browser/oss/spire/metric/agent-api）
+      └────────→ packages/http + 各 *-api 契约包（llm/browser/oss/spire/metric/pixel/agent-api）
 apps/console ──→ packages/persistence ──→ packages/kernel
       └────────→ packages/http + packages/console-api
 apps/llm     ──→ packages/llm-client + packages/auth ──→ packages/kernel / persistence / llm-api  （独立进程，LLM + OAuth 网关）
@@ -18,6 +18,7 @@ apps/web     ──→ packages/http(wire/url 子路径) + console-api / agent-a
 apps/oss     ──→ packages/kernel / http  （独立进程，Fastify + @kagami/oss-api 契约）
 apps/browser ──→ packages/persistence / kernel / http  （独立进程，持有 CloakBrowser）
 apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀塔式卡牌游戏引擎；不碰 persistence，存档走 JSON）
+apps/pixel   ──→ packages/kernel / http / pixel-api  （独立进程，像素画渲染引擎；不碰 persistence，存档走 JSON）
 ```
 
 > `@kagami/config` 是零依赖叶子包（repo-root 定位 + 两文件合并），被 kernel / gateway / oss / 脚本复用。
@@ -33,6 +34,7 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 | `@kagami/oss`           | 自建对象存储服务（独立进程，Fastify + 裸 better-sqlite3；路由走 `@kagami/oss-api` 契约，get/head/delete 为 raw 路由保流式管道 / fd / 安全头语义）                                                                                                                                                                    |
 | `@kagami/browser`       | 独立浏览器进程（基于 kernel/http/persistence 的 Fastify，仅 localhost）：持有 CloakBrowser 与凭据注入，agent 经 `HttpBrowserClient` 驱动；拆成独立进程让 agent 重启不杀浏览器（#173）                                                                                                                                |
 | `@kagami/spire-service` | 杀塔式卡牌游戏引擎独立进程（`apps/spire`，Fastify，仅 localhost）：纯游戏引擎 + JSON 存档 + 自动对战模拟器，不碰共享 SQLite；agent 经 `HttpSpireClient` 驱动，拆进程让 agent 重启不打断对局（#234）                                                                                                                  |
+| `@kagami/pixel-service` | 像素画渲染引擎独立进程（`apps/pixel`，Fastify，仅 localhost）：画布算子 + pngjs 出 PNG + JSON 存档，不碰共享 SQLite；agent 经 `HttpPixelClient` 驱动，拆进程让 agent 重启不丢画布（#365）                                                                                                                            |
 | `@kagami/agent-runtime` | 与 Kagami 项目语义无关的通用 Agent 内核（TaskAgent / BaseTaskAgent / Tool / App 框架）                                                                                                                                                                                                                               |
 | `@kagami/llm`           | 前后端 / 内核共用的 LLM 消息与工具类型契约（`LlmMessage` / `LlmTool` 等，零依赖契约叶子）                                                                                                                                                                                                                            |
 | `@kagami/llm-client`    | LLM chat client + provider + embedding client 运行时；只发 observation 事件，落库 / 缓存归 agent 装配层，对 persistence 零依赖                                                                                                                                                                                       |
@@ -48,6 +50,7 @@ apps/spire   ──→ packages/kernel / http / spire-api  （独立进程，杀
 | `@kagami/agent-api`     | kagami-agent 进程面向管理台的契约包：napcat 发送 ×2、playground ×3、scheduler ×2（`:name` 路径参数）、main-agent-context ×2（web 消费）                                                                                                                                                                              |
 | `@kagami/browser-api`   | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                                                                                                                                              |
 | `@kagami/oss-api`       | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                                                                                                                                               |
+| `@kagami/pixel-api`     | kagami-pixel 进程的像素画 RPC 契约包（#365）：8 条 JSON 绘图路由回 `CanvasResponse`（领域拒绝走 `{ok:false}`）+ render binary-raw 路由回 PNG 字节；含 DB16 命名调色板（name/glyph/hex）共享常量                                                                                                                      |
 | `@kagami/persistence`   | 持久化基础设施：Prisma client / generated client / 所有业务 DAO / Prisma JSON helper（依赖 `@kagami/kernel`）                                                                                                                                                                                                        |
 | `@kagami/config`        | 零依赖叶子包：repo-root 定位 + `config.yaml` / `config.secret.yaml` 两文件深合并，被 kernel / gateway / oss / 脚本复用                                                                                                                                                                                               |
 
@@ -115,7 +118,7 @@ apps/agent/src/agent/
 │   ├── spire/          尖塔卡牌游戏工具本体（look / play_card / choose 等，经 SpireClient 打独立进程）
 │   ├── terminal/       终端能力本体
 │   ├── todo/           待办本能力本体（到点提醒经通知中心）
-│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 Operation：空闲时以小镜口吻注入 `<inner_thought>`（#265）
+│   └── inner-voice/    摸鱼判定（确定性）+ 内心独白 TaskAgent（镜像装配命中 KV cache）：空闲时以小镜口吻注入 `<inner_thought>`（#265 / #410）
 └── apps/             手机 OS 的 App（Portal 下可 enter 的地点）
     ├── qq/             QQ App：收纳 NapCat 网关，自管会话 + 入站事件 + 出站发送
     ├── ithome/         IThome App：RSS 未读推送
@@ -218,7 +221,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 
 ## 部署
 
-- PM2（`ecosystem.config.cjs`）托管以下进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent、`/auth/*` 到 llm、`/metric-chart` 到 metric，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）、`kagami-llm`（`apps/llm`，LLM + OAuth 凭据网关，默认 20009，仅 localhost；持有 provider + callback server + 刷新 timer，`app:deploy agent` 不触及它，有 DB 迁移时 `deploy.sh` 会连它一并停服再迁）、`kagami-metric`（`apps/metric`，metric 摄取 + metric-chart 查询，默认 20010，仅 localhost；agent fire-and-forget HTTP 上报，有 DB 迁移时一并停服再迁）、`kagami-spire`（`apps/spire`，杀塔式卡牌游戏引擎，默认 20011，仅 localhost；`cwd` 固定仓库根让存档 `data/spire/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不打断对局，见 #234）。后端进程并发读写同一 SQLite 库靠库文件级 WAL（`apps/spire` 不入库，存档走 JSON）。
+- PM2（`ecosystem.config.cjs`）托管以下进程：`kagami-agent`（Fastify，Agent 运行时 + 活内存接口，默认 20003）、`kagami-console`（管理台后端，服务前端纯 DB 查询，默认 20006）、`kagami-gateway`（`apps/gateway`，静态 + 按前缀把 `/api/*` 分流到 console/agent、`/auth/*` 到 llm、`/metric-chart` 到 metric，默认 20004）、`kagami-oss`（对象存储，默认 20005，仅 localhost）、`kagami-browser`（`apps/browser`，持有 CloakBrowser，默认 20007，仅 localhost；`cwd` 固定仓库根，agent 重启不杀浏览器，`app:deploy agent` 不触及它，见 #173）、`kagami-llm`（`apps/llm`，LLM + OAuth 凭据网关，默认 20009，仅 localhost；持有 provider + callback server + 刷新 timer，`app:deploy agent` 不触及它，有 DB 迁移时 `deploy.sh` 会连它一并停服再迁）、`kagami-metric`（`apps/metric`，metric 摄取 + metric-chart 查询，默认 20010，仅 localhost；agent fire-and-forget HTTP 上报，有 DB 迁移时一并停服再迁）、`kagami-spire`（`apps/spire`，杀塔式卡牌游戏引擎，默认 20011，仅 localhost；`cwd` 固定仓库根让存档 `data/spire/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不打断对局，见 #234）、`kagami-pixel`（`apps/pixel`，像素画渲染引擎，默认 20012，仅 localhost；`cwd` 固定仓库根让存档 `data/pixel/` 落仓库根，`app:deploy agent` 不触及它，agent 重启不丢画布，见 #365）。后端进程并发读写同一 SQLite 库靠库文件级 WAL（`apps/spire` / `apps/pixel` 不入库，存档走 JSON）。
 - 卫星进程（console / oss / browser / llm / metric / spire）统一经 `@kagami/kernel` 的 `runService` 启动（issue #274）：全局 `uncaughtException` / `unhandledRejection` 兜底（记日志后 exit(1) 交 PM2 重启）、信号驱动优雅关停 + 10s 强退兜底、绑定地址一律 `127.0.0.1`（绑定是代码级安全决策；config 的 `services.*.host` 语义是 reachable host）。gateway 是唯一绑 `0.0.0.0` 的前门（裸 node:http，自带同款兜底）。所有进程的 `GET /health` 统一为 shared 的 `{ status: "ok", timestamp }` 形状。
 - `pnpm app:deploy` 串起 build → Prisma migrate deploy → PM2 reload → `pm2 save`。
 - 数据库为进程内 SQLite，宿主机无需外部数据库；**NapCat** 仍作为外部依赖运行，`config.yaml` 一般用 `localhost` 访问。

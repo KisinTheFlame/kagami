@@ -68,7 +68,7 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
   {
     displayName: "llm_chat_call",
     field: "createdAt",
-    days: 3,
+    days: 1,
     offsetMinutes: 5,
     getDelegate: db => db.llmChatCall,
   },

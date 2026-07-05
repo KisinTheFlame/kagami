@@ -201,6 +201,7 @@ const ServicesSchema = z
     llm: ServiceEndpointSchema,
     metric: ServiceEndpointSchema,
     spire: ServiceEndpointSchema,
+    pixel: ServiceEndpointSchema,
   })
   .strict();
 
@@ -356,6 +357,9 @@ const ConfigSchema = z.object({
             keepAliveReplayIntervalMinutes: PositiveIntSchema.default(
               DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
             ),
+            // 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
+            // 关掉即回退全 base64（rollback 无需回滚代码）。依赖 OAuth scope 含 user:file_upload。
+            useFileApi: z.boolean().default(true),
           })
           .default({
             models: [DEFAULT_CLAUDE_CODE_MODEL],

@@ -22,8 +22,9 @@ if [ -n "$SERVICE" ]; then
     llm) PKG="@kagami/llm-service"; PM2_NAME="kagami-llm" ;;
     metric) PKG="@kagami/metric"; PM2_NAME="kagami-metric" ;;
     spire) PKG="@kagami/spire-service"; PM2_NAME="kagami-spire" ;;
+    pixel) PKG="@kagami/pixel-service"; PM2_NAME="kagami-pixel" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser|llm|metric|spire>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|oss|browser|llm|metric|spire|pixel>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1

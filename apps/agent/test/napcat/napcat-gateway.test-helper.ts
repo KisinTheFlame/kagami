@@ -100,6 +100,7 @@ export function createConfigManager(): ConfigManager {
       llm: { host: "127.0.0.1", port: 20009 },
       metric: { host: "127.0.0.1", port: 20010 },
       spire: { host: "127.0.0.1", port: 20011 },
+      pixel: { host: "127.0.0.1", port: 20012 },
     },
     server: {
       databaseUrl: "file::memory:",
@@ -182,6 +183,7 @@ export function createConfigManager(): ConfigManager {
             baseUrl: "https://api.anthropic.com",
             models: ["claude-sonnet-4-20250514"],
             keepAliveReplayIntervalMinutes: 30,
+            useFileApi: true,
           },
         },
         usages: {
