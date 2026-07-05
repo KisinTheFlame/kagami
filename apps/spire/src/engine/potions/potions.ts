@@ -349,6 +349,16 @@ const POTION_LIST: PotionDef[] = [
     combatOnly: true,
     effects: [{ kind: "fill_potion_slots" }],
   },
+  {
+    id: "essence_of_darkness",
+    name: "暗影精华",
+    description: "每个充能球槽各充能一颗暗球。",
+    rarity: "rare",
+    targeted: false,
+    combatOnly: true,
+    characterLock: "defect",
+    effects: [{ kind: "channel_orb_per_slot", orbType: "dark" }],
+  },
 ];
 
 const POTION_MAP: ReadonlyMap<string, PotionDef> = new Map(
