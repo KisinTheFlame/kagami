@@ -2944,8 +2944,8 @@ export function endTurn(state: GameState): void {
       retained.push(instance);
     } else if (cardDef.ethereal) {
       combat.exhaustPile.push(instance);
-    } else if (combat.retainHandThisTurn) {
-      // 平衡：本回合保留全部手牌（虚无牌仍按上面消耗）。
+    } else if (combat.retainHandThisTurn || hasRelic(state, "runic_pyramid")) {
+      // 平衡 / 符文金字塔：保留全部手牌（虚无牌仍按上面消耗）。
       retained.push(instance);
     } else if (wellLaidPlans > 0) {
       retained.push(instance);
@@ -3181,9 +3181,10 @@ export function endTurn(state: GameState): void {
     removePower(combat.playerPowers, "no_draw");
   }
   // 壁垒 / 疾影：格挡不在回合开始清空（否则清零）。判定后疾影 -1（只保留一回合）。
+  // 卡钳（calipers）：回合开始只失去 15 点格挡而非全部。
   const blur = getPower(combat.playerPowers, "blur");
   if (getPower(combat.playerPowers, "barricade") === 0 && blur === 0) {
-    combat.playerBlock = 0;
+    combat.playerBlock = hasRelic(state, "calipers") ? Math.max(0, combat.playerBlock - 15) : 0;
   }
   if (blur > 0) {
     addPower(combat.playerPowers, "blur", -1);

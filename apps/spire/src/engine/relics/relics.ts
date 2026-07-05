@@ -1008,6 +1008,22 @@ const RELIC_LIST: RelicDef[] = [
       },
     },
   },
+  {
+    id: "calipers",
+    name: "卡钳",
+    // 格挡保留在 combat.ts 的回合开始处按 hasRelic 处理（不走钩子）。
+    rarity: "rare",
+    description: "回合开始时只失去 15 点格挡，而非全部。",
+    hooks: {},
+  },
+  {
+    id: "runic_pyramid",
+    name: "符文金字塔",
+    // 保留手牌在 combat.ts 的 endTurn 保留循环按 hasRelic 处理（不走钩子）。
+    rarity: "boss",
+    description: "回合结束时不再弃掉手牌。",
+    hooks: {},
+  },
 ];
 
 /** 首领遗物池（rarity=boss；含该角色专属 boss 遗物）。打首领时随机掉一件未持有的。 */
