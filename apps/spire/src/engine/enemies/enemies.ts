@@ -1275,6 +1275,93 @@ const ENEMY_LIST: EnemyDef[] = [
     },
   },
 
+  // —— 第三幕 Boss：时间吞噬者（时间扭曲 + 半血加速）——
+  {
+    id: "time_eater",
+    name: "时间吞噬者",
+    hpMin: 456,
+    hpMax: 456,
+    timeWarpEvery: 12,
+    moves: [
+      {
+        id: "te_reverberate",
+        name: "混响",
+        effects: [{ kind: "deal_damage_multi", amount: 7, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "te_head_slam",
+        name: "头槌",
+        effects: [
+          { kind: "deal_damage", amount: 26 },
+          { kind: "apply_power", power: "draw_reduction", amount: 1, on: "target" },
+        ],
+        intent: "attack",
+      },
+      {
+        id: "te_ripple",
+        name: "涟漪",
+        effects: [
+          { kind: "gain_block", amount: 20 },
+          { kind: "apply_power", power: "weak", amount: 1, on: "target" },
+          { kind: "apply_power", power: "vulnerable", amount: 1, on: "target" },
+        ],
+        intent: "defend",
+      },
+      {
+        id: "haste",
+        name: "加速",
+        effects: [{ kind: "boss_haste" }],
+        intent: "buff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "te_reverberate", weight: 45, maxInARow: 2 },
+        { move: "te_head_slam", weight: 35, maxInARow: 1 },
+        { move: "te_ripple", weight: 20, maxInARow: 1 },
+      ],
+    },
+  },
+
+  // —— 第三幕精英：复仇魔（隔回合虚无缥缈无敌）——
+  {
+    id: "nemesis",
+    name: "复仇魔",
+    hpMin: 185,
+    hpMax: 185,
+    intangibleAfterMove: 2,
+    moves: [
+      {
+        id: "nem_attack",
+        name: "多重打击",
+        effects: [{ kind: "deal_damage_multi", amount: 6, times: 3 }],
+        intent: "attack",
+      },
+      {
+        id: "nem_scythe",
+        name: "巨镰",
+        effects: [{ kind: "deal_damage", amount: 45 }],
+        intent: "attack",
+      },
+      {
+        id: "nem_debuff",
+        name: "灼烧诅咒",
+        effects: [{ kind: "add_card", cardId: "burn", pile: "discard", count: 3 }],
+        intent: "debuff",
+      },
+    ],
+    intentRule: {
+      scripted: [],
+      weighted: [
+        { move: "nem_attack", weight: 35, maxInARow: 2 },
+        { move: "nem_scythe", weight: 30, maxInARow: 1 },
+        { move: "nem_debuff", weight: 35, maxInARow: 1 },
+      ],
+    },
+  },
+
   // —— 精英：地精头目（Enrage = 玩家出技能牌它加力量）——
   {
     id: "gremlin_nob",
@@ -1682,6 +1769,8 @@ const ENCOUNTERS: Record<string, EncounterDef> = {
   two_orb_walkers: { id: "two_orb_walkers", enemies: ["orb_walker", "orb_walker"], isBoss: false },
   giant_head: { id: "giant_head", enemies: ["giant_head"], isBoss: false },
   awakened_one: { id: "awakened_one", enemies: ["awakened_one"], isBoss: true },
+  time_eater: { id: "time_eater", enemies: ["time_eater"], isBoss: true },
+  nemesis: { id: "nemesis", enemies: ["nemesis"], isBoss: false },
   guardian: { id: "guardian", enemies: ["the_guardian"], isBoss: true },
   hexaghost: { id: "hexaghost", enemies: ["hexaghost"], isBoss: true },
   slime_boss: { id: "slime_boss", enemies: ["slime_boss"], isBoss: true },
@@ -1816,6 +1905,7 @@ const ACT2_ELITE_POOL: readonly WeightedEncounter[] = [
 const ACT3_ELITE_POOL: readonly WeightedEncounter[] = [
   { id: "reptomancer", weight: 1 },
   { id: "giant_head", weight: 1 },
+  { id: "nemesis", weight: 1 },
 ];
 
 /** 精英节点：从精英池挑一个 encounter id（按幕选池）。 */
@@ -1839,7 +1929,11 @@ const ACT2_BOSS_POOL: readonly WeightedEncounter[] = [
 ];
 
 // Act3 Boss 池（切片：铎努与迪卡；后续补 觉醒者 / 时间吞噬者）。
-const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [{ id: "donu_deca", weight: 1 }];
+const ACT3_BOSS_POOL: readonly WeightedEncounter[] = [
+  { id: "donu_deca", weight: 1 },
+  { id: "time_eater", weight: 1 },
+  { id: "awakened_one", weight: 1 },
+];
 
 /** Boss 节点：随机挑一个 Boss encounter id（按幕选池）。 */
 export function pickBossEncounter(rng: RngState, act = 1): string {

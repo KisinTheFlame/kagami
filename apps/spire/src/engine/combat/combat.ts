@@ -95,6 +95,7 @@ const HELLO_WORLD_POOL: readonly string[] = ALL_CARDS.filter(c => c.rarity === "
 const BOSS_GOLD_MIN = 95; // 击败首领掉金币区间（对齐 StS）。
 const BOSS_GOLD_MAX = 105;
 const AWAKENED_REVIVE_STRENGTH = 3; // 觉醒者复活时获得的力量。
+const TIME_WARP_STRENGTH = 2; // 时间扭曲触发时时间吞噬者获得的力量。
 const TRANSIENT_FADE_TURN = 5; // 无常连续攻击到第 5 回合消散离场。
 const GIANT_HEAD_GLARE_TURNS = 3; // 巨型头颅前 3 回合凝视蓄势，之后连续重击。
 const GUARDIAN_MODE_SHIFT_STEP = 10;
@@ -249,6 +250,7 @@ export function startCombat(state: GameState, encounterId: string): void {
     lastCardType: null,
     encounterId,
     isBoss: encounter.isBoss,
+    timeWarpEndTurnPending: false,
   };
   state.combat = combat;
   state.screen = "combat";
@@ -386,6 +388,25 @@ function triggerPlayerCardPlayed(state: GameState, cardType: CardType): void {
   const painCount = combat.hand.filter(card => card.defId === "pain").length;
   if (painCount > 0) {
     state.hp = Math.max(0, state.hp - painCount);
+  }
+  // 时间扭曲（时间吞噬者）：玩家每打出 timeWarpEvery 张牌，此敌人 +2 力量并立即结束玩家回合。
+  for (const enemy of combat.enemies) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+    const every = getEnemyDef(enemy.defId).timeWarpEvery;
+    if (!every) {
+      continue;
+    }
+    const next = getPower(enemy.powers, "time_warp") + 1;
+    if (next >= every) {
+      removePower(enemy.powers, "time_warp");
+      addPower(enemy.powers, "strength", TIME_WARP_STRENGTH);
+      combat.timeWarpEndTurnPending = true;
+      state.log.push(`${enemy.name}扭曲了时间！`);
+    } else {
+      addPower(enemy.powers, "time_warp", 1);
+    }
   }
 }
 
@@ -756,6 +777,17 @@ function applyEffect(
       if (actor.side === "enemy") {
         const self = combat.enemies[actor.index]!;
         self.hp = Math.min(self.maxHp, self.hp + effect.amount);
+      }
+      break;
+    }
+    case "boss_haste": {
+      // 加速（时间吞噬者）：把生命拉回到最大值的一半，并清除自身减益（虚弱/易伤/脆弱）。
+      if (actor.side === "enemy") {
+        const self = combat.enemies[actor.index]!;
+        self.hp = Math.max(self.hp, Math.floor(self.maxHp / 2));
+        removePower(self.powers, "weak");
+        removePower(self.powers, "vulnerable");
+        removePower(self.powers, "frail");
       }
       break;
     }
@@ -2206,6 +2238,10 @@ function dealDamageToEnemy(
   } else if (state.combat!.playerStance === "divinity") {
     dmg *= 3;
   }
+  // 虚无缥缈（敌人）：受到的一切伤害降为 1（复仇魔隔回合无敌）。
+  if (getPower(enemy.powers, "intangible") > 0) {
+    dmg = Math.min(dmg, 1);
+  }
   // 守卫者模式切换：进攻姿态下累计受到的伤害达阈值即切姿态（issue #234 C10）。
   if (enemy.stance === "offensive" && enemy.modeShiftThreshold !== null) {
     enemy.modeShiftAccum += dmg;
@@ -2714,13 +2750,16 @@ export function playCard(
     state.screen = "gameover";
     state.log.push("你倒下了。");
   }
-  // 终局：带「结束回合」效果的牌，打出结算后若战斗仍在进行则立即结束本回合。
-  if (
-    state.combat !== null &&
-    state.screen === "combat" &&
-    effectsOf(def, instance.upgraded).some(candidate => candidate.kind === "end_turn")
-  ) {
-    endTurn(state);
+  // 终局 / 时间扭曲：带「结束回合」效果的牌，或本回合触发了时间扭曲，
+  // 打出结算后若战斗仍在进行则立即结束本回合。
+  if (state.combat !== null && state.screen === "combat") {
+    const endsTurn =
+      combat.timeWarpEndTurnPending ||
+      effectsOf(def, instance.upgraded).some(candidate => candidate.kind === "end_turn");
+    combat.timeWarpEndTurnPending = false;
+    if (endsTurn) {
+      endTurn(state);
+    }
   }
   return { ok: true };
 }
@@ -3001,6 +3040,10 @@ export function endTurn(state: GameState): void {
       state.log.push("你倒下了。");
       return;
     }
+    // 复仇魔：每次出招后若自身没有虚无缥缈则叠加（隔回合无敌）。
+    if (def.intangibleAfterMove && getPower(enemy.powers, "intangible") === 0) {
+      addPower(enemy.powers, "intangible", def.intangibleAfterMove);
+    }
     // 金属化 / 镀甲：自己回合结束获得格挡（拉加维林金属化 8、带壳寄生虫镀甲 14）。
     const metallicize = getPower(enemy.powers, "metallicize");
     if (metallicize > 0) {
@@ -3011,6 +3054,10 @@ export function endTurn(state: GameState): void {
       enemy.block += enemyPlated;
     }
     decayDebuffs(enemy.powers);
+    // 虚无缥缈（敌人）：在自己回合结束 -1 层（隔回合无敌节奏）。
+    if (getPower(enemy.powers, "intangible") > 0) {
+      addPower(enemy.powers, "intangible", -1);
+    }
     // 下一招 telegraph（守卫者的姿态推进与防御→进攻切换在 selectNextMove 内处理）。
     selectNextMove(state, i);
   }
@@ -3180,7 +3227,15 @@ export function endTurn(state: GameState): void {
   }
   // 机器学习：每回合多抽 = 层数的牌；叠加下回合预约抽牌（掠食者）。
   const machineLearning = getPower(combat.playerPowers, "machine_learning");
-  drawCards(state, STARTING_HAND_SIZE + machineLearning + scheduledDraw);
+  // 抽牌削减（时间吞噬者头槌）：本回合少抽 = 层数张，随后清除（一次性）。
+  const drawReduction = getPower(combat.playerPowers, "draw_reduction");
+  if (drawReduction > 0) {
+    removePower(combat.playerPowers, "draw_reduction");
+  }
+  drawCards(
+    state,
+    Math.max(0, STARTING_HAND_SIZE + machineLearning + scheduledDraw - drawReduction),
+  );
   // 磁力：每回合开始将 = 层数张随机无色牌加入手牌。
   const magnetism = getPower(combat.playerPowers, "magnetism");
   for (let n = 0; n < magnetism; n += 1) {
@@ -3292,6 +3347,16 @@ function selectNextMove(state: GameState, enemyIndex: number): void {
     !enemy.moveHistory.includes("anger")
   ) {
     enemy.currentMove = "anger";
+    return;
+  }
+
+  // 时间吞噬者（第三幕 Boss）：血量首次降到 <半血时加速一次（回血到半血 + 清自身减益），其余走 weighted。
+  if (
+    enemy.defId === "time_eater" &&
+    enemy.hp * 2 < enemy.maxHp &&
+    !enemy.moveHistory.includes("haste")
+  ) {
+    enemy.currentMove = "haste";
     return;
   }
 

@@ -49,8 +49,8 @@ describe("三幕", () => {
         expect(ACT3_NORMALS.has(pickNormalEncounter(rng, entered, 3))).toBe(true);
       }
     }
-    const ACT3_ELITES = new Set(["reptomancer", "giant_head"]);
-    const ACT3_BOSSES = new Set(["donu_deca", "awakened_one"]);
+    const ACT3_ELITES = new Set(["reptomancer", "giant_head", "nemesis"]);
+    const ACT3_BOSSES = new Set(["donu_deca", "awakened_one", "time_eater"]);
     for (let seed = 0; seed < 40; seed += 1) {
       expect(ACT3_ELITES.has(pickEliteEncounter(seedRng(seed), 3))).toBe(true);
       expect(ACT3_BOSSES.has(pickBossEncounter(seedRng(seed), 3))).toBe(true);
