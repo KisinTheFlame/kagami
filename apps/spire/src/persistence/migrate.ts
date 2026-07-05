@@ -48,6 +48,7 @@ export function migrateLoadedState(raw: unknown): GameState {
     backfill(combat, "nextTurnDraw", 0);
     backfill(combat, "nextTurnStance", null); // 烈怒渐起——老档没有。
     backfill(combat, "nightmarePending", null); // 噩梦——老档没有。
+    backfill(combat, "pendingBomb", null); // 炸弹——老档没有。
     backfill(combat, "extraTurnPending", false); // 宝库——老档没有。
     backfill(combat, "doomedNextTurn", false); // 亵渎——老档没有。
     backfill(combat, "nextTurnPhantasmal", false); // 幻杀——老档没有。

@@ -100,6 +100,8 @@ const POWER_LABELS: Record<string, string> = {
   amplify: "增幅",
   echo_form: "回响形态",
   creative_ai: "创意AI",
+  no_card_block: "无法格挡",
+  electrodynamics: "电动力学",
 };
 
 const ORB_LABELS: Record<string, string> = {

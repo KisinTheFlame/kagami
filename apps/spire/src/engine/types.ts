@@ -102,7 +102,9 @@ export type PowerId =
   | "mayhem" // 混乱：每个玩家回合开始，打出抽牌堆顶 = 层数张牌（机器人）
   | "amplify" // 增幅：接下来的 = 层数张能力牌各额外结算一次（每张 -1 层，机器人）
   | "echo_form" // 回响形态：每回合你打出的第一张牌额外结算一次（机器人）
-  | "creative_ai"; // 创意 AI：每个玩家回合开始，将 = 层数张随机能力牌加入手牌（机器人）
+  | "creative_ai" // 创意 AI：每个玩家回合开始，将 = 层数张随机能力牌加入手牌（机器人）
+  | "no_card_block" // 无法格挡：牌产生的格挡被抑制（层数即剩余生效回合数，回合末 -1，应急按钮）
+  | "electrodynamics"; // 电动力学：闪电球伤害命中所有敌人（机器人）
 
 /** 玩家出牌 / 敌人出招共用的效果原语。target 相对「行动者」解析。 */
 export type Effect =
@@ -203,6 +205,8 @@ export type Effect =
   | { kind: "return_from_discard" } // 从弃牌堆取回一张牌到手牌（冥想；自动取最近弃掉的一张）
   | { kind: "gain_random_potion" } // 获得一瓶随机药水（炼金）
   | { kind: "transmutation" } // X 费：将 X 张随机无色牌加入手牌，本场费用视为 0（嬗变）
+  | { kind: "upgrade_all_cards" } // 本场剩余时间内升级你所有的牌（神化）
+  | { kind: "schedule_bomb"; turns: number; damage: number } // turns 回合后对所有敌人造成 damage（炸弹）
   | { kind: "add_random_cards_to_draw"; pool: "skill" | "attack"; count: number } // 将 count 张随机牌洗入抽牌堆，费用视为 0（蜕变/变形）
   | { kind: "fission" } // 唤醒所有充能球，每唤醒一颗获得 1 能量并抽 1 张（裂变）
   | { kind: "return_from_exhaust" } // 从消耗堆取回一张牌到手牌（掘尸；自动取最近消耗的一张）
@@ -323,6 +327,8 @@ export type CardDef = {
   onExhaust?: Effect[];
   /** 被抽到手牌时，以玩家为行动者结算这些效果（无尽痛楚：加一张自身副本）。 */
   onDraw?: Effect[];
+  /** 被抽到时立即消耗自身（机械降神：抽到即生成奇迹并消耗）。 */
+  exhaustOnDraw?: boolean;
   effects: Effect[];
   upgradedEffects: Effect[];
   description: string;
@@ -449,6 +455,8 @@ export type CombatState = {
   nextTurnStance: PlayerStance | null;
   /** 噩梦：预约下个回合开始加入手牌的牌副本；null=不预约。 */
   nightmarePending: { cardId: string; count: number } | null;
+  /** 炸弹：预约在若干回合后对所有敌人造成伤害；null=无。 */
+  pendingBomb: { turns: number; damage: number } | null;
   /** 宝库：为真则本次结束回合后不让敌人行动，直接再获得一个玩家回合。默认 false。 */
   extraTurnPending: boolean;
   /** 亵渎：为真则下个回合开始时角色死亡。默认 false。 */
