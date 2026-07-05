@@ -87,6 +87,26 @@ describe("SchedulerClient dispatch", () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
+  it("does not advance the dedupe cursor when a dedupe handler fails, so a re-delivery retries", async () => {
+    const store = memStore();
+    const client = makeClient(store);
+    let calls = 0;
+    const handler = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("digest generation blew up");
+      }
+    });
+    client.register(reg({ dedupe: true, handler }));
+
+    await client.onTick(tick("2026-07-05T00:00:00.000Z")); // handler throws → cursor NOT advanced
+    await client.onTick(tick("2026-07-05T00:00:00.000Z")); // same occurrence re-delivered → retried
+    expect(handler).toHaveBeenCalledTimes(2);
+    // second run succeeded → cursor now advanced → a third re-delivery is deduped away
+    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it("manual triggerNow bypasses dedupe and runs locally", async () => {
     const store = memStore();
     const client = makeClient(store);
