@@ -70,6 +70,8 @@ export type NapcatRuntime = {
   port: number;
   /** 停 prune 定时器。 */
   stopPrune: () => void;
+  /** 结束所有活 SSE 连接（关停 teardown，避免 app.close 挂 keep-alive 长连接）。 */
+  closeSubscribers: () => void;
 };
 
 /**
@@ -160,5 +162,6 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
     gateway,
     port: config.services.napcat.port,
     stopPrune: () => clearInterval(pruneTimer),
+    closeSubscribers: () => broadcaster.closeAll(),
   };
 }

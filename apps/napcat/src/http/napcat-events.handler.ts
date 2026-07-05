@@ -49,13 +49,18 @@ export class NapcatEventsHandler {
       const lastEventId = parseLastEventId(request);
       const subscriber = new NapcatSseSubscriber({
         write: chunk => res.write(chunk),
+        close: () => res.end(),
         outboxDao: this.outboxDao,
         lastEventId,
       });
 
       // 先 add：回放期间到达的实时事件先进订阅者缓冲，不会丢、也不会抢先推进游标。
       this.broadcaster.add(subscriber);
-      res.on("close", () => this.broadcaster.remove(subscriber));
+      // 客户端断连也置位 subscriber.closed（幂等），让在飞的 start() 回放停手、不写已关的 res。
+      res.on("close", () => {
+        subscriber.close();
+        this.broadcaster.remove(subscriber);
+      });
 
       try {
         await subscriber.start();
@@ -73,6 +78,8 @@ export class NapcatEventsHandler {
 
 export type NapcatSseSubscriberDeps = {
   write: (chunk: string) => void;
+  /** 结束底层连接（关停 teardown 用）。缺省为 no-op（单测里不必接真 res）。 */
+  close?: () => void;
   outboxDao: NapcatEventOutboxDao;
   lastEventId: number;
 };
@@ -84,18 +91,25 @@ export type NapcatSseSubscriberDeps = {
  */
 export class NapcatSseSubscriber implements NapcatEventSubscriber {
   private readonly write: (chunk: string) => void;
+  private readonly closeConnection: () => void;
   private readonly outboxDao: NapcatEventOutboxDao;
   private phase: "buffering" | "live" = "buffering";
   private readonly buffer: NapcatOutboxEvent[] = [];
   private lastWrittenSeq: number;
+  /** 连接已结束（socket close / 关停 teardown）。置位后所有写与在飞回放短路，避免写已 end 的 res。 */
+  private closed = false;
 
-  public constructor({ write, outboxDao, lastEventId }: NapcatSseSubscriberDeps) {
+  public constructor({ write, close, outboxDao, lastEventId }: NapcatSseSubscriberDeps) {
     this.write = write;
+    this.closeConnection = close ?? (() => {});
     this.outboxDao = outboxDao;
     this.lastWrittenSeq = lastEventId;
   }
 
   public deliver(outboxEvent: NapcatOutboxEvent): void {
+    if (this.closed) {
+      return;
+    }
     if (this.phase === "buffering") {
       this.buffer.push(outboxEvent);
       return;
@@ -104,7 +118,18 @@ export class NapcatSseSubscriber implements NapcatEventSubscriber {
   }
 
   public heartbeat(): void {
+    if (this.closed) {
+      return;
+    }
     this.write(": keepalive\n\n");
+  }
+
+  public close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    this.closeConnection();
   }
 
   /** 回放 outbox 缺口 → flush 缓冲 → 转实时。 */
@@ -116,7 +141,9 @@ export class NapcatSseSubscriber implements NapcatEventSubscriber {
     const requestedFrom = this.lastWrittenSeq;
     let cursor = requestedFrom;
     let gapChecked = false;
-    while (cursor < high) {
+    // 关停 teardown 可能在回放中途 close 连接：每批前检查，已关就停手，别对 end 掉的 res 再写
+    // （否则 ERR_STREAM_WRITE_AFTER_END）。writeIfNew 自身也短路，双保险。
+    while (cursor < high && !this.closed) {
       const batch = await this.outboxDao.listAfter(cursor, REPLAY_BATCH_SIZE);
       if (batch.length === 0) {
         break;
@@ -152,7 +179,7 @@ export class NapcatSseSubscriber implements NapcatEventSubscriber {
   }
 
   private writeIfNew(outboxEvent: NapcatOutboxEvent): void {
-    if (outboxEvent.seq <= this.lastWrittenSeq) {
+    if (this.closed || outboxEvent.seq <= this.lastWrittenSeq) {
       return;
     }
     this.write(serializeEventFrame(outboxEvent));

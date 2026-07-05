@@ -12,6 +12,8 @@ export type NapcatEventSubscriber = {
   deliver(outboxEvent: NapcatOutboxEvent): void;
   /** 心跳注释帧，用于对端半开检测。 */
   heartbeat(): void;
+  /** 关停时主动结束底层连接（end res），让 app.close() 不必等 keep-alive 长连接超时。 */
+  close(): void;
 };
 
 /**
@@ -39,6 +41,22 @@ export class NapcatEventBroadcaster {
   public remove(subscriber: NapcatEventSubscriber): void {
     this.subscribers.delete(subscriber);
     if (this.subscribers.size === 0 && this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * 关停时结束所有活连接：逐个 close（end res），清空订阅集、停心跳。没有这一步，hijack 的
+   * keep-alive SSE 长连接会让 `app.close()` 挂到强退超时（issue #425）。close 触发的 res "close"
+   * 事件还会各自回调 remove（幂等）。
+   */
+  public closeAll(): void {
+    for (const subscriber of [...this.subscribers]) {
+      this.safe(subscriber, () => subscriber.close());
+    }
+    this.subscribers.clear();
+    if (this.heartbeatTimer !== null) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
