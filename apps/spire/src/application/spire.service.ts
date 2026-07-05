@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { CharacterId, GameState } from "../engine/types.js";
-import { applyAction, newRun, type GameAction } from "../engine/engine.js";
+import type { CharacterId, GameState } from "@kisinwen/sts-engine/engine/types";
+import { applyAction, newRun, type GameAction } from "@kisinwen/sts-engine/engine/engine";
 import { SaveStore } from "../persistence/save-store.js";
 
 // === 尖塔游戏服务（application）===

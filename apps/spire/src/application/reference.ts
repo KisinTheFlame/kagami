@@ -1,7 +1,7 @@
-import { ALL_CARDS, costOf } from "../engine/cards/cards.js";
-import { ALL_RELICS } from "../engine/relics/relics.js";
-import { ALL_POTIONS } from "../engine/potions/potions.js";
-import { GLOSSARY, type GlossaryEntry } from "../engine/glossary.js";
+import { ALL_CARDS, costOf } from "@kisinwen/sts-engine/engine/cards/cards";
+import { ALL_RELICS } from "@kisinwen/sts-engine/engine/relics/relics";
+import { ALL_POTIONS } from "@kisinwen/sts-engine/engine/potions/potions";
+import { GLOSSARY, type GlossaryEntry } from "@kisinwen/sts-engine/engine/glossary";
 
 // === 参考查询：按 query 匹配卡牌 / 遗物 / 药水 / 术语，返回结构化数据 ===
 //

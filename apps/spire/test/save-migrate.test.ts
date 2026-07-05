@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { SpireScreenSchema } from "@kagami/spire-api/contract";
-import { newRun } from "../src/engine/engine.js";
-import { startCombat } from "../src/engine/combat/combat.js";
+import { newRun } from "@kisinwen/sts-engine/engine/engine";
+import { startCombat } from "@kisinwen/sts-engine/engine/combat/combat";
 import { toScreenView } from "../src/application/state-view.js";
 import { SaveStore } from "../src/persistence/save-store.js";
-import { migrateLoadedState } from "../src/persistence/migrate.js";
+import { migrateLoadedState } from "@kisinwen/sts-engine/migrate";
 
 // 回归（小镜「开新局报错 orbs/stance required」）：老版本存档缺 C3/C4 后加字段
 // （orbs/orbSlots/playerStance），新二进制读回后序列化会被 registerJsonRoute 的

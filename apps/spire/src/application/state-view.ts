@@ -6,14 +6,14 @@ import {
   SpireRelicViewSchema,
   SpireScreenSchema,
 } from "@kagami/spire-api/contract";
-import type { EnemyState, GameState } from "../engine/types.js";
-import { costOf, getCardDef } from "../engine/cards/cards.js";
-import { getEnemyDef } from "../engine/enemies/enemies.js";
-import { computeAttackDamage } from "../engine/powers/powers.js";
-import { getRelicDef } from "../engine/relics/relics.js";
-import { getPotionDef } from "../engine/potions/potions.js";
-import { getEventDef } from "../engine/events/events.js";
-import { currentOptions } from "../engine/run/run.js";
+import type { EnemyState, GameState } from "@kisinwen/sts-engine/engine/types";
+import { costOf, getCardDef } from "@kisinwen/sts-engine/engine/cards/cards";
+import { getEnemyDef } from "@kisinwen/sts-engine/engine/enemies/enemies";
+import { computeAttackDamage } from "@kisinwen/sts-engine/engine/powers/powers";
+import { getRelicDef } from "@kisinwen/sts-engine/engine/relics/relics";
+import { getPotionDef } from "@kisinwen/sts-engine/engine/potions/potions";
+import { getEventDef } from "@kisinwen/sts-engine/engine/events/events";
+import { currentOptions } from "@kisinwen/sts-engine/engine/run/run";
 
 // === 结构化屏幕视图（ScreenView）===
 //

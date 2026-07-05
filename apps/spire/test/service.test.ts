@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SpireService } from "../src/application/spire.service.js";
 import type { SaveStore } from "../src/persistence/save-store.js";
-import type { GameState } from "../src/engine/types.js";
+import type { GameState } from "@kisinwen/sts-engine/engine/types";
 
 // 用假存档验证服务层的乐观并发（评审 #1）与 clone-apply-save-commit（评审 #2）。
 

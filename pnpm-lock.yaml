@@ -438,6 +438,9 @@ importers:
       '@kagami/spire-api':
         specifier: workspace:*
         version: link:../../packages/spire-api
+      '@kisinwen/sts-engine':
+        specifier: 0.1.0
+        version: 0.1.0
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -1371,6 +1374,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kisinwen/sts-engine@0.1.0':
+    resolution: {integrity: sha512-uGlp/Qp7oCo9RvNBiS6PVIXeu5Yp4wZ9ZEl4D2kjUTCcoulj0Qf63FsW52odXzNcs09RsWrTcDGJmVlYLye6ag==}
+    engines: {node: '>=20'}
 
   '@kurkle/color@0.3.4':
     resolution: {integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==}
@@ -4941,6 +4948,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kisinwen/sts-engine@0.1.0': {}
 
   '@kurkle/color@0.3.4': {}
 
