@@ -325,6 +325,15 @@ function triggerRelicTurnStart(state: GameState): void {
 function triggerRelicLoseHp(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onLoseHp?.(state, self, emit));
 }
+function triggerRelicExhaust(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onExhaust?.(state, self, emit));
+}
+function triggerRelicEnemyKilled(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onEnemyKilled?.(state, self, emit));
+}
+function triggerRelicUsePotion(state: GameState): void {
+  fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onUsePotion?.(state, self, emit));
+}
 function triggerRelicTurnEnd(state: GameState): void {
   fireRelicsCollectingEmits(state, (hooks, self, emit) => hooks.onTurnEnd?.(state, self, emit));
 }
@@ -343,6 +352,8 @@ function exhaustCard(state: GameState, instance: CardInstance): void {
   if (exhaustDef.onExhaust && exhaustDef.onExhaust.length > 0) {
     applyEffects(state, exhaustDef.onExhaust, { side: "player" }, null);
   }
+  // 消耗牌触发型遗物（卡戎之烬 AoE、枯枝加牌）。
+  triggerRelicExhaust(state);
   const feelNoPain = getPower(combat.playerPowers, "feel_no_pain");
   if (feelNoPain > 0) {
     combat.playerBlock += feelNoPain; // 直接加，不再触发主宰（避免连锁）。
@@ -2283,6 +2294,10 @@ function dealDamageToEnemy(
       addPower(enemy.powers, "strength", AWAKENED_REVIVE_STRENGTH);
       state.log.push(`${enemy.name}复活了！`);
     }
+    // 击杀触发型遗物（哥布林之角 +能量+抽牌）；仅在敌人真正死亡（未复活）时。
+    if (enemy.hp === 0) {
+      triggerRelicEnemyKilled(state);
+    }
   }
   // 拉加维林：睡眠中受到穿透格挡的伤害立即苏醒，去掉金属化。
   if (enemy.asleep && afterBlock > 0 && enemy.hp > 0) {
@@ -2853,6 +2868,7 @@ export function usePotion(
   applyEffects(state, def.effects, { side: "player" }, resolvedTarget);
   state.log.push(`你使用了「${def.name}」。`);
   if (combat) {
+    triggerRelicUsePotion(state); // 用药水触发型遗物（玩具扑翼机回血）。
     resolveCombatIfEnded(state);
   }
   return { ok: true };
