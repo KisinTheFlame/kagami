@@ -43,12 +43,10 @@ export type RetentionSpec = {
  * - `root_agent_runtime_snapshot` — runtime snapshot
  * - `oauth_session` — persistent auth state
  * - `ithome_article` / `ithome_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
- * - `metric_chart` — chart definitions (meta, not data)
+ * - `metric` — 已迁到 kagami-metric 独占的 DuckDB 库（#475 P1），不在共享 SQLite 里，
+ *   其保留策略归 metric 进程自身，不在此清理面
  *
  * Field choices worth noting:
- * - `metric` uses `createdAt`, not `occurredAt`. The latter is only indexed as the
- *   trailing column of the composite `(metric_name, occurred_at)` index, so a
- *   single-column `occurred_at < x` predicate cannot seek it.
  * - `auth_usage_snapshot` keeps 30 days (not 7) so the `/auth/:provider/usage-trend`
  *   window stays usable.
  * - `embedding_cache` keeps 30 days to avoid evicting hot hash hits that would
@@ -71,13 +69,6 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     days: 1,
     offsetMinutes: 5,
     getDelegate: db => db.llmChatCall,
-  },
-  {
-    displayName: "metric",
-    field: "createdAt",
-    days: 7,
-    offsetMinutes: 10,
-    getDelegate: db => db.metric,
   },
   {
     displayName: "napcat_event",

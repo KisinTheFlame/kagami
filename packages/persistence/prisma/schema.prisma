@@ -47,19 +47,6 @@ model AppLog {
   @@map("app_log")
 }
 
-model Metric {
-  id         Int      @id @default(autoincrement())
-  metricName String   @map("metric_name")
-  value      Float
-  tags       Json
-  occurredAt DateTime @default(now()) @map("occurred_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  @@index([metricName, occurredAt], map: "metric_metric_name_occurred_at_idx")
-  @@index([createdAt], map: "metric_created_at_idx")
-  @@map("metric")
-}
-
 model NapcatEvent {
   id          Int       @id @default(autoincrement())
   postType    String    @map("post_type")
