@@ -3158,7 +3158,12 @@ export function endTurn(state: GameState): void {
   if (blur > 0) {
     addPower(combat.playerPowers, "blur", -1);
   }
-  combat.energy = combat.maxEnergy;
+  // 冰淇淋：能量在回合之间保留（不清零，只叠加本回合上限）；否则正常重置为上限。
+  if (hasRelic(state, "ice_cream")) {
+    combat.energy += combat.maxEnergy;
+  } else {
+    combat.energy = combat.maxEnergy;
+  }
   // 下回合预约结算（闪转腾挪格挡 / 飞膝能量 / 掠食者抽牌），随后清零。
   combat.playerBlock += combat.nextTurnBlock;
   combat.energy += combat.nextTurnEnergy;
