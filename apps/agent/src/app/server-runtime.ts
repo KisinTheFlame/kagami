@@ -24,9 +24,10 @@ import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
 import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
-import { TaskScheduler } from "../scheduler/application/task-scheduler.js";
-import { buildDataRetentionTasks } from "../scheduler/tasks/data-retention/data-retention-task.factory.js";
-import { SchedulerHandler } from "../scheduler/http/scheduler.handler.js";
+import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
+import { buildDataRetentionTasks } from "../agent/capabilities/data-retention/data-retention-scheduled-tasks.js";
+import { SchedulerViewHandler } from "./scheduler-view.handler.js";
+import { AppStateOccurrenceStore } from "./app-state-occurrence-store.js";
 import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
 import { HttpSpireClient } from "../acl/spire-client.js";
@@ -60,7 +61,7 @@ export type ServerRuntime = {
   database: Database;
   /** 停入站 SSE 订阅后反序关停所有 App（napcat WS 生命周期已外移到 kagami-napcat 进程）。 */
   shutdownApps: () => Promise<void>;
-  taskScheduler: TaskScheduler;
+  schedulerClient: SchedulerClient;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
   metricService: MetricClient;
@@ -223,17 +224,24 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     suggestTodos,
   });
 
-  // auth 刷新 + usage 刷新已随 kagami-llm 服务外移（在服务进程用自己的 timer 驱动）；
-  // agent 的 TaskScheduler 只剩 ithome / todo / data-retention 任务。
-  const taskScheduler = new TaskScheduler();
-  for (const task of buildIthomeScheduledTasks({ ithomePoller })) {
-    taskScheduler.register(task);
+  // 定时调度拆成独立 kagami-scheduler 进程（issue #428）：agent 经 SchedulerClient 把任务集
+  // （name+schedule+补偿策略）注册给调度器、经 SSE 收 tick，handler（ithome/todo/data-retention 的
+  // 业务）留在本进程。occurrence 去重（digest）落 app_state。auth/usage 刷新此前已随 kagami-llm 外移。
+  const schedulerClient = new SchedulerClient({
+    baseUrl: `http://${config.services.scheduler.host}:${config.services.scheduler.port}`,
+    ownerId: "agent",
+    occurrenceStore: new AppStateOccurrenceStore({
+      appStateStore: new PrismaAppStateStore({ database }),
+    }),
+  });
+  for (const registration of buildIthomeScheduledTasks({ ithomePoller })) {
+    schedulerClient.register(registration);
   }
-  for (const task of buildTodoScheduledTasks({ todoReminderPoller })) {
-    taskScheduler.register(task);
+  for (const registration of buildTodoScheduledTasks({ todoReminderPoller })) {
+    schedulerClient.register(registration);
   }
-  for (const task of buildDataRetentionTasks({ db: database, metricService })) {
-    taskScheduler.register(task);
+  for (const registration of buildDataRetentionTasks({ db: database, metricService })) {
+    schedulerClient.register(registration);
   }
 
   const app = createServerApp({
@@ -244,7 +252,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
       new QqMessageHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
-      new SchedulerHandler({ taskScheduler }),
+      new SchedulerViewHandler({ schedulerClient }),
     ],
   });
 
@@ -259,7 +267,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       napcatEventSubscriber.stop();
       await agentRuntime.shutdownApps();
     },
-    taskScheduler,
+    schedulerClient,
     // OAuth callback server 随 kagami-llm 服务外移；agent 不再持有，关停编排对空数组无害。
     callbackServers: [],
     rootAgentRuntime: agentRuntime.rootAgentRuntime,

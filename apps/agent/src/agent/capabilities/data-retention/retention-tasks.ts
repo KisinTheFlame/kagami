@@ -34,8 +34,8 @@ export type RetentionSpec = {
 };
 
 /**
- * Tables cleared by the data-retention scheduler. Edit this list to change the
- * cleanup surface — no config file, no enum, no Zod schema. Developers know
+ * Tables cleared by the data-retention scheduled tasks. Edit this list to change
+ * the cleanup surface — no config file, no enum, no Zod schema. Developers know
  * which tables are logs/metrics/caches and which are Agent memory.
  *
  * Intentionally NOT cleaned up (not in this list):

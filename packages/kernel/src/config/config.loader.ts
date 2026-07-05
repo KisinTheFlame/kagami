@@ -203,6 +203,7 @@ const ServicesSchema = z
     spire: ServiceEndpointSchema,
     napcat: ServiceEndpointSchema,
     pixel: ServiceEndpointSchema,
+    scheduler: ServiceEndpointSchema,
   })
   .strict();
 

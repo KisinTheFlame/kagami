@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@kagami/persistence/db/client";
 import type { MetricClient } from "@kagami/metric-client/client";
-import { buildDataRetentionTasks } from "../../src/scheduler/tasks/data-retention/data-retention-task.factory.js";
-import { RETENTION_TASKS } from "../../src/scheduler/tasks/data-retention/retention-tasks.js";
+import type { SchedulerTick } from "@kagami/scheduler-client/types";
+import { buildDataRetentionTasks } from "../../../../src/agent/capabilities/data-retention/data-retention-scheduled-tasks.js";
+import { RETENTION_TASKS } from "../../../../src/agent/capabilities/data-retention/retention-tasks.js";
+
+const FAKE_TICK: SchedulerTick = {
+  taskName: "data-retention:app_log",
+  occurrenceId: "data-retention:app_log@2026-07-05T00:00:00.000Z",
+  scheduledAt: "2026-07-05T00:00:00.000Z",
+  emittedAt: "2026-07-05T00:00:00.000Z",
+  manual: false,
+};
 
 function makeMetricClient(): MetricClient {
   return {
@@ -35,7 +44,7 @@ function makeDelegate(rows: number): FakeDelegate {
 }
 
 describe("buildDataRetentionTasks", () => {
-  it("registers exactly one task per retention spec", () => {
+  it("registers exactly one task per retention spec with drop/skip policy", () => {
     const metricService = makeMetricClient();
     const db = {} as Database;
     const tasks = buildDataRetentionTasks({ db, metricService });
@@ -43,6 +52,10 @@ describe("buildDataRetentionTasks", () => {
     expect(tasks.map(t => t.name)).toEqual(
       RETENTION_TASKS.map(spec => `data-retention:${spec.displayName}`),
     );
+    for (const task of tasks) {
+      expect(task.misfire).toBe("drop");
+      expect(task.overlap).toBe("skip");
+    }
   });
 
   it("each task uses a staggered cron at 00:<offset>", () => {
@@ -69,16 +82,13 @@ describe("buildDataRetentionTasks", () => {
       [toCamelProperty(spec.displayName)]: delegate,
     } as unknown as Database;
 
-    // Override getDelegate so we use our fake regardless of spec wiring.
-    const task = buildDataRetentionTasks({
-      db,
-      metricService,
-    }).find(t => t.name === `data-retention:${spec.displayName}`);
+    const task = buildDataRetentionTasks({ db, metricService }).find(
+      t => t.name === `data-retention:${spec.displayName}`,
+    );
     expect(task).toBeDefined();
 
-    // The spec's getDelegate accesses db[spec.displayName camelCase]; we patched that above.
     const abort = new AbortController();
-    const metadata = await task!.run(abort.signal);
+    const metadata = await task!.handler(abort.signal, FAKE_TICK);
 
     expect(metadata).toMatchObject({
       deletedRows: 12_000,
@@ -112,7 +122,6 @@ describe("buildDataRetentionTasks", () => {
     expect(task).toBeDefined();
 
     const abort = new AbortController();
-    // Abort after the first chunk is processed by using setImmediate inside.
     const originalDeleteMany = delegate.deleteMany.getMockImplementation()!;
     delegate.deleteMany.mockImplementation(async args => {
       const result = await originalDeleteMany(args);
@@ -120,7 +129,7 @@ describe("buildDataRetentionTasks", () => {
       return result;
     });
 
-    const metadata = await task!.run(abort.signal);
+    const metadata = await task!.handler(abort.signal, FAKE_TICK);
 
     expect(metadata).toMatchObject({
       aborted: true,

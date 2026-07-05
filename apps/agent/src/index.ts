@@ -4,7 +4,7 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import { buildServerRuntime } from "./app/server-runtime.js";
 import type { FastifyInstance } from "fastify";
-import type { TaskScheduler } from "./scheduler/application/task-scheduler.js";
+import type { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { shutdownServerResources, type AgentRuntimeController } from "./app/server-shutdown.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -18,7 +18,7 @@ const logger = new AppLogger({ source: "bootstrap" });
 let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let shutdownApps: (() => Promise<void>) | null = null;
-let taskScheduler: TaskScheduler | null = null;
+let schedulerClient: SchedulerClient | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let rootAgentRuntime: AgentRuntimeController | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
@@ -70,7 +70,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     app,
     database,
     shutdownApps,
-    taskScheduler,
+    schedulerClient,
     callbackServers,
     rootAgentRuntime,
     closeLlmProviders,
@@ -91,7 +91,7 @@ try {
   app = runtime.app;
   database = runtime.database;
   shutdownApps = runtime.shutdownApps;
-  taskScheduler = runtime.taskScheduler;
+  schedulerClient = runtime.schedulerClient;
   callbackServers = runtime.callbackServers;
   rootAgentRuntime = runtime.rootAgentRuntime;
   closeLlmProviders = runtime.closeLlmProviders;
@@ -99,7 +99,7 @@ try {
 
   // napcat 网关已收纳进 QQ App：在 buildServerRuntime 内随 App.onStartup 起好了，这里不再单独 start。
   await runtime.app.listen({ host: "0.0.0.0", port: runtime.port });
-  runtime.taskScheduler.start();
+  runtime.schedulerClient.start();
   isServerStarted = true;
 
   // provider 列表现在经 HTTP 问 kagami-llm 服务，纯启动诊断用途。best-effort：服务此刻若还没起

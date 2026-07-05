@@ -1,0 +1,31 @@
+{
+  "name": "@kagami/scheduler-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "pnpm --filter \"@kagami/scheduler-client^...\" build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kagami/http": "workspace:*",
+    "@kagami/kernel": "workspace:*",
+    "@kagami/rpc-client": "workspace:*",
+    "@kagami/scheduler-api": "workspace:*",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

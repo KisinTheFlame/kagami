@@ -1,3 +1,7 @@
+/**
+ * 固定 interval 驱动（含首次延迟）。从原 apps/agent 进程内调度器搬迁（issue #428），逻辑不变：
+ * 首次 fire 后按 intervalMs 周期 fire，不做 catch-up（漏触发的补偿是调度器 misfire 策略的事）。
+ */
 export class IntervalDriver {
   private readonly intervalMs: number;
   private readonly initialDelayMs: number;
