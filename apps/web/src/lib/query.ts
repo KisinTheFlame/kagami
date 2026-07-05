@@ -51,11 +51,7 @@ export const queryKeys = {
     stats: () => ["oss-object", "stats"] as const,
   },
   metricChart: {
-    root: () => ["metric-chart"] as const,
-    list: () => ["metric-chart", "list"] as const,
-    dataRoot: () => ["metric-chart", "data"] as const,
-    data: (chartName: string, bucket: string, appliedRange: unknown) =>
-      ["metric-chart", "data", chartName, bucket, appliedRange] as const,
+    data: (request: unknown) => ["metric-chart", "data", request] as const,
   },
   mainAgentContext: {
     recent: () => ["main-agent-context", "recent"] as const,

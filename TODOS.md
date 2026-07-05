@@ -196,7 +196,7 @@
 - **Priority:** P3
 - **Status:** open
 - **Context:** 7 个 history 页面的过滤输入框/textarea 都是手抄一长串 class（`rounded-none border bg-background px-3 py-2 …`），focus ring 靠复制维护，必然漂移（子 Agent + Codex 都点了）。抽 `components/ui/input.tsx` 统一。
-- **Notes:** 把 MetricCharts 的 inputClassName/textareaClassName 也并进去。
+- **Notes:** 统一 focus ring 与边框 token。（原 MetricCharts 页的 input/textarea class 随 #444 删页一并移除，无需再并。）
 
 ### Auth 趋势图面积渐变（待定）
 

@@ -48,11 +48,6 @@ const NapcatGroupMessageHistoryPage = lazy(() =>
     default: module.NapcatGroupMessageHistoryPage,
   })),
 );
-const MetricChartsPage = lazy(() =>
-  import("@/pages/metric-charts/MetricChartsPage").then(module => ({
-    default: module.MetricChartsPage,
-  })),
-);
 const TodosPage = lazy(() =>
   import("@/pages/todos/TodosPage").then(module => ({
     default: module.TodosPage,
@@ -81,7 +76,6 @@ function App() {
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />
           <Route path="/napcat-event-history" element={<NapcatEventHistoryPage />} />
           <Route path="/napcat-group-message-history" element={<NapcatGroupMessageHistoryPage />} />
-          <Route path="/metric-charts" element={<MetricChartsPage />} />
           <Route path="/todos" element={<TodosPage />} />
           <Route path="/oss-objects" element={<OssObjectsPage />} />
         </Route>

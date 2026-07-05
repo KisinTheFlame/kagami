@@ -7,7 +7,7 @@ type MetricChartHandlerDeps = {
   metricChartService: MetricChartService;
 };
 
-/** 图表定义 / 查数路由。路由与 schema 的单一事实源在 @kagami/metric-api（#279 PR3）。 */
+/** 图表查数路由。图表定义已迁回代码（#444），入参是内联聚合规格，无 chartName / CRUD。 */
 export class MetricChartHandler {
   private readonly metricChartService: MetricChartService;
 
@@ -16,18 +16,8 @@ export class MetricChartHandler {
   }
 
   public register(app: FastifyInstance): void {
-    registerJsonRoute(app, metricApiContract.listCharts, () => this.metricChartService.list());
-
-    registerJsonRoute(app, metricApiContract.chartData, ({ input }) =>
-      this.metricChartService.queryData(input),
-    );
-
-    registerJsonRoute(app, metricApiContract.createChart, ({ input }) =>
-      this.metricChartService.create(input),
-    );
-
-    registerJsonRoute(app, metricApiContract.deleteChart, ({ input }) =>
-      this.metricChartService.delete(input),
+    registerJsonRoute(app, metricApiContract.query, ({ input }) =>
+      this.metricChartService.query(input),
     );
   }
 }

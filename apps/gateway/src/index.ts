@@ -28,8 +28,9 @@ const CONSOLE_PATH_PREFIXES = [
 ];
 // 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
 const LLM_PATH_PREFIXES = ["/auth"];
-// metric-chart 查询走独立的 metric 进程（@kagami/metric）；摄取端点 /metric/* 不经网关（agent 直连）。
-const METRIC_PATH_PREFIXES = ["/metric-chart"];
+// metric 图表查询（POST /metric/query）走独立的 metric 进程（@kagami/metric）；摄取端点
+// /metric/record 不经网关（agent 直连），故这里只收 /metric/query 而非整个 /metric 前缀（#444）。
+const METRIC_PATH_PREFIXES = ["/metric/query"];
 // 管理台对象浏览器只读面路由到 kagami-oss 进程。仅 /oss-object（列表 / 统计 / 预览字节）过网关；
 // 写操作前缀 /objects（put/delete）刻意不在此，浏览器经网关够不到 OSS 的任何写路由。
 const OSS_PATH_PREFIXES = ["/oss-object"];

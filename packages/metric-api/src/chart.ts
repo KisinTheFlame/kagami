@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { parseOptionalStringInput } from "@kagami/http/wire";
+
+// === Metric 图表查询 wire schema（issue #444）===
+//
+// 图表定义已从 DB 迁回代码：不再有存储的图表实体、chartName、CRUD。前端在使用处内联声明整份
+// 聚合规格（metricName / aggregator / tagFilters / groupByTag / bucket / range），本端点直接按
+// 规格聚合。为防一次请求把 SQLite / 进程拖死，schema 层带硬边界 guard（点数 / tagFilters 数 /
+// 时间跨度）；分组 series top-N 上限在服务端 buildSeries 后处理。
 
 export const MetricChartAggregatorSchema = z.enum(["sum", "count", "avg", "max", "min", "last"]);
 
@@ -23,76 +29,51 @@ export const MetricChartRangePresetSchema = z.enum([
 
 export type MetricChartRangePreset = z.infer<typeof MetricChartRangePresetSchema>;
 
-export const MetricChartTagFiltersSchema = z.record(z.string().min(1), z.string());
+/** 一次查询最多返回的桶数（防超细 bucket + 长范围爆点）。 */
+export const METRIC_CHART_MAX_POINTS = 2000;
+/** tagFilters 最多键数。 */
+export const METRIC_CHART_MAX_TAG_FILTERS = 5;
+/** 时间跨度上限（2 天，与 rangePreset 上限一致）。 */
+export const METRIC_CHART_MAX_RANGE_MS = 2 * 24 * 60 * 60 * 1000;
+
+export const MetricChartTagFiltersSchema = z
+  .record(z.string().min(1), z.string())
+  .refine(value => Object.keys(value).length <= METRIC_CHART_MAX_TAG_FILTERS, {
+    message: `tagFilters 最多 ${METRIC_CHART_MAX_TAG_FILTERS} 个`,
+  });
 
 export type MetricChartTagFilters = z.infer<typeof MetricChartTagFiltersSchema>;
 
-export const MetricChartDefinitionSchema = z
+const BUCKET_MILLISECONDS: Record<MetricChartBucket, number> = {
+  "10s": 10 * 1000,
+  "1m": 60 * 1000,
+  "5m": 5 * 60 * 1000,
+  "30m": 30 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+};
+
+const RANGE_PRESET_MILLISECONDS: Record<MetricChartRangePreset, number> = {
+  "1m": 60 * 1000,
+  "10m": 10 * 60 * 1000,
+  "30m": 30 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "3h": 3 * 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "12h": 12 * 60 * 60 * 1000,
+  "1d": 24 * 60 * 60 * 1000,
+  "2d": 2 * 24 * 60 * 60 * 1000,
+};
+
+export const MetricChartQueryRequestSchema = z
   .object({
-    chartName: z.string().min(1),
-    metricName: z.string().min(1),
-    aggregator: MetricChartAggregatorSchema,
-    tagFilters: MetricChartTagFiltersSchema.nullable(),
-    groupByTag: z.string().min(1).nullable(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-  })
-  .strict();
-
-export type MetricChartDefinition = z.infer<typeof MetricChartDefinitionSchema>;
-
-export const MetricChartListResponseSchema = z
-  .object({
-    items: z.array(MetricChartDefinitionSchema),
-  })
-  .strict();
-
-export type MetricChartListResponse = z.infer<typeof MetricChartListResponseSchema>;
-
-export const MetricChartCreateRequestSchema = z
-  .object({
-    chartName: z.string().trim().min(1),
     metricName: z.string().trim().min(1),
     aggregator: MetricChartAggregatorSchema,
-    tagFilters: MetricChartTagFiltersSchema.optional(),
-    groupByTag: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
-  })
-  .strict();
-
-export type MetricChartCreateRequest = z.infer<typeof MetricChartCreateRequestSchema>;
-
-export const MetricChartCreateResponseSchema = z
-  .object({
-    chart: MetricChartDefinitionSchema,
-  })
-  .strict();
-
-export type MetricChartCreateResponse = z.infer<typeof MetricChartCreateResponseSchema>;
-
-export const MetricChartDeleteRequestSchema = z
-  .object({
-    chartName: z.string().trim().min(1),
-  })
-  .strict();
-
-export type MetricChartDeleteRequest = z.infer<typeof MetricChartDeleteRequestSchema>;
-
-export const MetricChartDeleteResponseSchema = z
-  .object({
-    chartName: z.string().min(1),
-    deleted: z.literal(true),
-  })
-  .strict();
-
-export type MetricChartDeleteResponse = z.infer<typeof MetricChartDeleteResponseSchema>;
-
-export const MetricChartDataQuerySchema = z
-  .object({
-    chartName: z.string().min(1),
     bucket: MetricChartBucketSchema,
-    rangePreset: z.preprocess(parseOptionalStringInput, MetricChartRangePresetSchema.optional()),
-    startAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
-    endAt: z.preprocess(parseOptionalStringInput, z.string().datetime().optional()),
+    tagFilters: MetricChartTagFiltersSchema.optional(),
+    groupByTag: z.string().trim().min(1).optional(),
+    rangePreset: MetricChartRangePresetSchema.optional(),
+    startAt: z.string().datetime({ offset: true }).optional(),
+    endAt: z.string().datetime({ offset: true }).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -115,6 +96,7 @@ export const MetricChartDataQuerySchema = z
         path: ["rangePreset"],
         message: "rangePreset and startAt/endAt cannot be used together",
       });
+      return;
     }
 
     if (hasCustomStart !== hasCustomEnd) {
@@ -126,7 +108,10 @@ export const MetricChartDataQuerySchema = z
       return;
     }
 
-    if (value.startAt && value.endAt) {
+    let rangeMs: number;
+    if (value.rangePreset) {
+      rangeMs = RANGE_PRESET_MILLISECONDS[value.rangePreset];
+    } else if (value.startAt && value.endAt) {
       const startAt = new Date(value.startAt).getTime();
       const endAt = new Date(value.endAt).getTime();
       if (startAt > endAt) {
@@ -135,11 +120,34 @@ export const MetricChartDataQuerySchema = z
           path: ["startAt"],
           message: "startAt must be less than or equal to endAt",
         });
+        return;
       }
+      rangeMs = endAt - startAt;
+    } else {
+      return;
+    }
+
+    if (rangeMs > METRIC_CHART_MAX_RANGE_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rangePreset"],
+        message: `时间跨度不能超过 ${METRIC_CHART_MAX_RANGE_MS / (24 * 60 * 60 * 1000)} 天`,
+      });
+      return;
+    }
+
+    // 与服务端 listBucketStarts 的闭区间桶数对齐（floor(range/b)+1），避免 guard 比实际桶数少算 1。
+    const points = Math.floor(rangeMs / BUCKET_MILLISECONDS[value.bucket]) + 1;
+    if (points > METRIC_CHART_MAX_POINTS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["bucket"],
+        message: `点数超限（${points} > ${METRIC_CHART_MAX_POINTS}），请增大 bucket 或缩短范围`,
+      });
     }
   });
 
-export type MetricChartDataQuery = z.infer<typeof MetricChartDataQuerySchema>;
+export type MetricChartQueryRequest = z.infer<typeof MetricChartQueryRequestSchema>;
 
 export const MetricChartSeriesPointSchema = z
   .object({
@@ -160,9 +168,8 @@ export const MetricChartSeriesSchema = z
 
 export type MetricChartSeries = z.infer<typeof MetricChartSeriesSchema>;
 
-export const MetricChartDataResponseSchema = z
+export const MetricChartQueryResponseSchema = z
   .object({
-    chart: MetricChartDefinitionSchema,
     bucket: MetricChartBucketSchema,
     startAt: z.string().datetime(),
     endAt: z.string().datetime(),
@@ -170,4 +177,4 @@ export const MetricChartDataResponseSchema = z
   })
   .strict();
 
-export type MetricChartDataResponse = z.infer<typeof MetricChartDataResponseSchema>;
+export type MetricChartQueryResponse = z.infer<typeof MetricChartQueryResponseSchema>;

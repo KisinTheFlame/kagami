@@ -19,7 +19,6 @@
     "@kagami/llm": "workspace:*",
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
-    "@kagami/metric-api": "workspace:*",
     "@kagami/metric-client": "workspace:*",
     "@kagami/napcat-api": "workspace:*",
     "@kagami/oss-api": "workspace:*",

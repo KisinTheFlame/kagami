@@ -1,162 +1,65 @@
 import type {
   MetricChartAggregator,
-  MetricChartCreateRequest,
-  MetricChartCreateResponse,
-  MetricChartDataQuery,
-  MetricChartDataResponse,
-  MetricChartDefinition,
-  MetricChartDeleteRequest,
-  MetricChartDeleteResponse,
-  MetricChartListResponse,
+  MetricChartQueryRequest,
+  MetricChartQueryResponse,
   MetricChartRangePreset,
   MetricChartSeries,
 } from "@kagami/metric-api/chart";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import type { MetricChartItem } from "../domain/metric.js";
-import type { MetricChartDao } from "../infra/metric-chart.dao.js";
 import type { MetricChartSeriesRow, MetricDao } from "@kagami/persistence/dao/metric.dao";
 import type { MetricChartService } from "./metric-chart.service.js";
 
 type DefaultMetricChartServiceDeps = {
   metricDao: MetricDao;
-  metricChartDao: MetricChartDao;
 };
 
 const UNGROUPED_SERIES_KEY = "__ungrouped__";
 const DEFAULT_SINGLE_SERIES_KEY = "__default__";
+/** 分组查询最多返回的 series 数：按总量取前 N，其余丢弃，防高基数 groupByTag 撑爆响应。 */
+const MAX_SERIES = 20;
 
 export class DefaultMetricChartService implements MetricChartService {
   private readonly metricDao: MetricDao;
-  private readonly metricChartDao: MetricChartDao;
 
-  public constructor({ metricDao, metricChartDao }: DefaultMetricChartServiceDeps) {
+  public constructor({ metricDao }: DefaultMetricChartServiceDeps) {
     this.metricDao = metricDao;
-    this.metricChartDao = metricChartDao;
   }
 
-  public async list(): Promise<MetricChartListResponse> {
-    const items = await this.metricChartDao.list();
-    return {
-      items: items.map(mapMetricChartDefinition),
-    };
-  }
-
-  public async create(input: MetricChartCreateRequest): Promise<MetricChartCreateResponse> {
-    const normalized = normalizeCreateInput(input);
-    const existing = await this.metricChartDao.findByChartName(normalized.chartName);
-    if (existing) {
-      throw new BizError({
-        message: "Metric 图表已存在",
-        meta: {
-          reason: "METRIC_CHART_DUPLICATED",
-          chartName: normalized.chartName,
-        },
-        statusCode: 409,
-      });
-    }
-
-    const created = await this.metricChartDao.create(normalized);
-    return {
-      chart: mapMetricChartDefinition(created),
-    };
-  }
-
-  public async delete(input: MetricChartDeleteRequest): Promise<MetricChartDeleteResponse> {
-    const chartName = input.chartName.trim();
-    const deleted = await this.metricChartDao.deleteByChartName(chartName);
-    if (!deleted) {
-      throw new BizError({
-        message: "Metric 图表不存在",
-        meta: {
-          reason: "METRIC_CHART_NOT_FOUND",
-          chartName,
-        },
-        statusCode: 404,
-      });
-    }
-
-    return {
-      chartName,
-      deleted: true,
-    };
-  }
-
-  public async queryData(query: MetricChartDataQuery): Promise<MetricChartDataResponse> {
-    const chart = await this.metricChartDao.findByChartName(query.chartName);
-    if (!chart) {
-      throw new BizError({
-        message: "Metric 图表不存在",
-        meta: {
-          reason: "METRIC_CHART_NOT_FOUND",
-          chartName: query.chartName,
-        },
-        statusCode: 404,
-      });
-    }
-
-    const { startAt, endAt } = resolveTimeRange(query);
+  public async query(request: MetricChartQueryRequest): Promise<MetricChartQueryResponse> {
+    const { startAt, endAt } = resolveTimeRange(request);
     const rows = await this.metricDao.queryChartSeries({
-      metricName: chart.metricName,
-      aggregator: chart.aggregator,
-      tagFilters: chart.tagFilters,
-      groupByTag: chart.groupByTag,
+      metricName: request.metricName,
+      aggregator: request.aggregator,
+      tagFilters: request.tagFilters ?? null,
+      groupByTag: request.groupByTag ?? null,
       startAt,
       endAt,
-      bucket: query.bucket,
+      bucket: request.bucket,
     });
 
     return {
-      chart: mapMetricChartDefinition(chart),
-      bucket: query.bucket,
+      bucket: request.bucket,
       startAt: startAt.toISOString(),
       endAt: endAt.toISOString(),
       series: buildSeries({
-        chart,
+        request,
         rows,
         startAt,
         endAt,
-        bucket: query.bucket,
+        bucket: request.bucket,
       }),
     };
   }
 }
 
-function normalizeCreateInput(input: MetricChartCreateRequest): MetricChartCreateRequest {
-  const chartName = input.chartName.trim();
-  const metricName = input.metricName.trim();
-  const groupByTag = input.groupByTag?.trim() || undefined;
-  const tagFilters =
-    input.tagFilters && Object.keys(input.tagFilters).length > 0 ? input.tagFilters : undefined;
-
-  return {
-    chartName,
-    metricName,
-    aggregator: input.aggregator,
-    tagFilters,
-    groupByTag,
-  };
-}
-
-function mapMetricChartDefinition(item: MetricChartItem): MetricChartDefinition {
-  return {
-    chartName: item.chartName,
-    metricName: item.metricName,
-    aggregator: item.aggregator,
-    tagFilters: item.tagFilters,
-    groupByTag: item.groupByTag,
-    createdAt: item.createdAt.toISOString(),
-    updatedAt: item.updatedAt.toISOString(),
-  };
-}
-
-function resolveTimeRange(query: MetricChartDataQuery): { startAt: Date; endAt: Date } {
-  if (query.rangePreset) {
+function resolveTimeRange(request: MetricChartQueryRequest): { startAt: Date; endAt: Date } {
+  if (request.rangePreset) {
     const endAt = new Date();
-    const startAt = new Date(endAt.getTime() - rangePresetToMilliseconds(query.rangePreset));
+    const startAt = new Date(endAt.getTime() - rangePresetToMilliseconds(request.rangePreset));
     return { startAt, endAt };
   }
 
-  if (!query.startAt || !query.endAt) {
+  if (!request.startAt || !request.endAt) {
     throw new BizError({
       message: "Metric 图表查询时间范围不合法",
       meta: {
@@ -167,8 +70,8 @@ function resolveTimeRange(query: MetricChartDataQuery): { startAt: Date; endAt: 
   }
 
   return {
-    startAt: new Date(query.startAt),
-    endAt: new Date(query.endAt),
+    startAt: new Date(request.startAt),
+    endAt: new Date(request.endAt),
   };
 }
 
@@ -196,11 +99,11 @@ function rangePresetToMilliseconds(rangePreset: MetricChartRangePreset): number 
 }
 
 function buildSeries(params: {
-  chart: MetricChartItem;
+  request: MetricChartQueryRequest;
   rows: MetricChartSeriesRow[];
   startAt: Date;
   endAt: Date;
-  bucket: MetricChartDataQuery["bucket"];
+  bucket: MetricChartQueryRequest["bucket"];
 }): MetricChartSeries[] {
   if (params.rows.length === 0) {
     return [];
@@ -208,13 +111,13 @@ function buildSeries(params: {
 
   const bucketMs = bucketToMilliseconds(params.bucket);
   const bucketStarts = listBucketStarts(params.startAt, params.endAt, bucketMs);
-  const defaultValue = getMissingBucketValue(params.chart.aggregator);
+  const defaultValue = getMissingBucketValue(params.request.aggregator);
   const rowsBySeriesKey = new Map<string, Map<number, number | null>>();
   const seriesLabels = new Map<string, string>();
 
   for (const row of params.rows) {
     const { key, label } = resolveSeriesIdentity({
-      chart: params.chart,
+      request: params.request,
       seriesKey: row.seriesKey,
     });
     const bucketStartMs = row.bucketStart.getTime();
@@ -227,24 +130,57 @@ function buildSeries(params: {
     rowsBySeriesKey.get(key)?.set(bucketStartMs, row.value);
   }
 
-  return [...rowsBySeriesKey.entries()].map(([key, pointsByBucket]) => ({
-    key,
-    label: seriesLabels.get(key) ?? key,
-    points: bucketStarts.map(bucketStart => ({
-      bucketStart: bucketStart.toISOString(),
-      value: pointsByBucket.get(bucketStart.getTime()) ?? defaultValue,
-    })),
-  }));
+  const keptKeys = selectTopSeriesKeys(rowsBySeriesKey);
+
+  return keptKeys.map(key => {
+    const pointsByBucket = rowsBySeriesKey.get(key) ?? new Map<number, number | null>();
+    return {
+      key,
+      label: seriesLabels.get(key) ?? key,
+      points: bucketStarts.map(bucketStart => ({
+        bucketStart: bucketStart.toISOString(),
+        value: pointsByBucket.get(bucketStart.getTime()) ?? defaultValue,
+      })),
+    };
+  });
 }
 
-function resolveSeriesIdentity(params: { chart: MetricChartItem; seriesKey: string | null }): {
+/** 分组结果按各 series 总量取前 MAX_SERIES；未超限则原样返回（保持插入 / 桶排序）。 */
+function selectTopSeriesKeys(rowsBySeriesKey: Map<string, Map<number, number | null>>): string[] {
+  const keys = [...rowsBySeriesKey.keys()];
+  if (keys.length <= MAX_SERIES) {
+    return keys;
+  }
+
+  // 按各 series 的「绝对量之和」排序取前 N。用 Math.abs：min/avg 等聚合下的负值 series 也按
+  // 量级排序（而非把负值排到最后误删）；跳过非有限值防脏数据污染 comparator。
+  const magnitudeByKey = new Map<string, number>();
+  for (const [key, pointsByBucket] of rowsBySeriesKey) {
+    let magnitude = 0;
+    for (const value of pointsByBucket.values()) {
+      if (value !== null && Number.isFinite(value)) {
+        magnitude += Math.abs(value);
+      }
+    }
+    magnitudeByKey.set(key, magnitude);
+  }
+
+  return [...keys]
+    .sort((left, right) => (magnitudeByKey.get(right) ?? 0) - (magnitudeByKey.get(left) ?? 0))
+    .slice(0, MAX_SERIES);
+}
+
+function resolveSeriesIdentity(params: {
+  request: MetricChartQueryRequest;
+  seriesKey: string | null;
+}): {
   key: string;
   label: string;
 } {
-  if (!params.chart.groupByTag) {
+  if (!params.request.groupByTag) {
     return {
       key: DEFAULT_SINGLE_SERIES_KEY,
-      label: params.chart.chartName,
+      label: params.request.metricName,
     };
   }
 
@@ -291,7 +227,7 @@ function getMissingBucketValue(aggregator: MetricChartAggregator): number | null
   }
 }
 
-function bucketToMilliseconds(bucket: MetricChartDataQuery["bucket"]): number {
+function bucketToMilliseconds(bucket: MetricChartQueryRequest["bucket"]): number {
   switch (bucket) {
     case "10s":
       return 10 * 1000;
