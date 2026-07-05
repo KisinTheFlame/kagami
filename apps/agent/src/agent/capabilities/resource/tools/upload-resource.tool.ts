@@ -13,7 +13,7 @@ const UploadResourceArgumentsSchema = z.object({
  * 把资源根目录（默认 ~/kagami）里的一个本地文件存进 OSS，得到一个 res-N，之后可被其他
  * 能力引用（如发到群、read_resource 调回）。是 download_resource 的反向操作。
  *
- * **全局工具**：和 read_resource / search_web 同级。结果只回尾部，KV 友好。
+ * **全局工具**：和 read_resource / download_resource 同级。结果只回尾部，KV 友好。
  */
 export class UploadResourceTool extends ZodToolComponent<typeof UploadResourceArgumentsSchema> {
   public readonly name = UPLOAD_RESOURCE_TOOL_NAME;

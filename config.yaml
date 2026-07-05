@@ -116,11 +116,6 @@ server:
           - provider: openai-codex
             model: gpt-5.4-mini
             times: 1
-      webSearchAgent:
-        attempts:
-          - provider: claude-code
-            model: claude-opus-4-6
-            times: 3
       todoSuggestionAgent:
         attempts:
           - provider: claude-code
@@ -131,7 +126,7 @@ server:
           - provider: claude-code
             model: claude-opus-4-6
             times: 3
-  # tavily.apiKey、bot.qq / bot.creator 是密钥 / PII，放 config.secret.yaml
+  # bot.qq / bot.creator 是密钥 / PII，放 config.secret.yaml
   # 自建对象存储（@kagami/oss）启用开关。地址不在这里——统一来自顶层 services.oss。
   # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）；
   # 写出该块即启用，enabled: false 可显式关闭。

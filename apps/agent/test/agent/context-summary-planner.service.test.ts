@@ -16,7 +16,7 @@ import {
 } from "../../src/agent/runtime/root-agent/tools/invoke.tool.js";
 
 /**
- * 与 web-search-agent.test 同构的最小装配：taskTools 只放 invokeTool（owner 只挂
+ * 最小装配：taskTools 只放 invokeTool（owner 只挂
  * finalize_summary），聚焦 invoke 调度 + 终止判定语义。
  */
 function createSummaryTaskAgent(chat: ReturnType<typeof vi.fn>) {

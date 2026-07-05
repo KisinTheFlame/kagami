@@ -89,7 +89,7 @@ export class TaskEffectInterpreter
 /**
  * TaskAgent 跑满 maxRounds 仍未收到 terminate 信号时抛出。toolChoice auto 下模型
  * 可能持续纯文本轮不调终止工具，这是防死循环的兜底；调用方按各自语义降级
- * （web-search 以错误结果回流、summary 不压缩、todo 返回空建议）。
+ * （summary 不压缩、todo 返回空建议）。
  */
 export class TaskAgentMaxRoundsExceededError extends Error {
   public readonly maxRounds: number;

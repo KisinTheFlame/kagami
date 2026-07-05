@@ -112,7 +112,6 @@ apps/agent/src/agent/
 │   ├── ledger/         root agent 消息账本（只写不读，留作将来记忆系统的原始素材）
 │   ├── ithome/         IThome RSS 抓取与文章阅读（能力本体）
 │   ├── vision/         图片理解
-│   ├── web-search/     独立子 Agent，多轮搜索结果只回传摘要
 │   ├── browser/        浏览器工具（8 个）；本体 BrowserService 已拆到独立进程 `apps/browser`，经 `apps/agent/src/acl/browser-client.ts` 驱动（#173）
 │   ├── context-summary/ 上下文压缩 task agent（唯一允许 replaceMessages 的路径）
 │   ├── resource/       资源工具（read_resource / upload_resource / download_resource，OSS 对象进出上下文）
@@ -195,7 +194,7 @@ LLM 消息列表分三段：
 
 ### 工具系统：InvokeTool 顶层壳
 
-LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`switch` / `wait` / `invoke` / `search_web` / `help` 等），从启动到关停不变，不随 App / capability 数量增长。具体 App 工具通过 `invoke(name, args)` 间接调用，并通过 `switch(<appId>)` + `help` 在运行时按需披露。App 名单（id + 名称）每轮由主循环渲染进 system prompt，让 Agent 天然知道有哪些 App 可切；靠「App 集合进程内不可变（register 集中在启动期）」这条不变量保证相同入参每轮字节恒定、前缀不漂移，名单只在增删 App 时变、必然伴随重启。
+LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`switch` / `wait` / `invoke` / `help` 等），从启动到关停不变，不随 App / capability 数量增长。具体 App 工具通过 `invoke(name, args)` 间接调用，并通过 `switch(<appId>)` + `help` 在运行时按需披露。App 名单（id + 名称）每轮由主循环渲染进 system prompt，让 Agent 天然知道有哪些 App 可切；靠「App 集合进程内不可变（register 集中在启动期）」这条不变量保证相同入参每轮字节恒定、前缀不漂移，名单只在增删 App 时变、必然伴随重启。
 
 设计目的：避免新增能力让顶层 tools 列表变化、把 KV 缓存命中率降到零。详见 AGENTS.md「开发原则：KV 缓存命中率优先」。
 

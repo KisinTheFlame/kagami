@@ -117,14 +117,6 @@ export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): U
   );
 }
 
-export function createWebSearchInstructionMessage(question: string): UserMessage {
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/web-search-instruction.hbs", {
-      question: question.trim(),
-    }),
-  );
-}
-
 /**
  * todo「发现待办」子任务的指令消息：追加到 fork 出的主上下文尾部，让子调用回顾生活上下文、
  * 结合当前未完成清单去重后，用 propose_todos 提交最多 5 条具体候选待办。

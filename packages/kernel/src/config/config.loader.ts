@@ -372,14 +372,10 @@ const ConfigSchema = z.object({
           agent: LlmUsageConfigSchema,
           contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
-          webSearchAgent: LlmUsageConfigSchema,
           todoSuggestionAgent: LlmUsageConfigSchema,
           innerVoice: LlmUsageConfigSchema,
         })
         .strict(),
-    }),
-    tavily: z.object({
-      apiKey: NonEmptyStringSchema,
     }),
     bot: z.object({
       qq: StringLikeSchema,
@@ -514,7 +510,6 @@ function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageI
     agent: normalizeUsageConfig(input.usages.agent),
     contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
-    webSearchAgent: normalizeUsageConfig(input.usages.webSearchAgent),
     todoSuggestionAgent: normalizeUsageConfig(input.usages.todoSuggestionAgent),
     innerVoice: normalizeUsageConfig(input.usages.innerVoice),
   };
