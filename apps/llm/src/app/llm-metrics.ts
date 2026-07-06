@@ -18,7 +18,6 @@ const METRIC_LATENCY = "llm.call.latency";
 const METRIC_TOKENS = "llm.call.tokens";
 
 /** 毫秒 → 秒。latency 以秒为单位打点（前端直接显示秒，单位口径在后端定死）。 */
-const MS_PER_SECOND = 1000;
 
 /** response.usage 的 token 字段 → 打点 kind。input_total = 命中 + 未命中（见 claude-code-response）。 */
 const TOKEN_KINDS: ReadonlyArray<readonly [kind: string, field: string]> = [
@@ -51,8 +50,8 @@ export function recordLlmCallMetrics(
 
   void metricService.record({
     metricName: METRIC_LATENCY,
-    // 以秒打点：LLM 调用动辄数秒，秒比毫秒更好读；p50/p95/p99 也直接是秒。
-    value: observation.latencyMs / MS_PER_SECOND,
+    // 打点存原始毫秒（无损整数）；秒是展示层的事，由前端 ÷1000 换算。
+    value: observation.latencyMs,
     tags: { ...base, status: observation.status },
   });
 

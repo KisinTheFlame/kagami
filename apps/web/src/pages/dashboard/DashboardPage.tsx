@@ -127,6 +127,7 @@ export function DashboardPage() {
             groupByTag={MODEL_TAG}
             tagFilters={SUCCESS_ONLY}
             chartType="line"
+            valueScale={0.001}
             range={range}
           />
 
@@ -138,6 +139,7 @@ export function DashboardPage() {
             groupByTag={MODEL_TAG}
             tagFilters={SUCCESS_ONLY}
             chartType="line"
+            valueScale={0.001}
             range={range}
           />
 
@@ -150,7 +152,7 @@ export function DashboardPage() {
             aggregator="sum"
             tagFilters={{ kind: { op: "eq", value: "output" } }}
             groupByTag={MODEL_TAG}
-            chartType="area"
+            chartType="line"
             range={range}
           />
         </div>
