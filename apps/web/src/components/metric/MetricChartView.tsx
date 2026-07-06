@@ -1,6 +1,8 @@
 import { type MetricChartQueryResponse, type MetricChartSeries } from "@kagami/metric-api/chart";
 import { useMemo } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -28,8 +30,8 @@ import {
 // 矩阵（x=时间），pie 走单值构成（每序列塌成一个切片，x=类别）。查询侧不变；pie/stacked 的构成语义
 // 由使用处用「单桶查询」（bucket 覆盖整段范围）喂进来，这里只负责渲染。
 
-/** 图表画法。line/bar/stacked = 时序（x=桶）；pie = 构成（每序列一片）。 */
-export type MetricChartType = "line" | "bar" | "stacked" | "pie";
+/** 图表画法。line/area/bar/stacked = 时序（x=桶）；pie = 构成（每序列一片）。 */
+export type MetricChartType = "line" | "area" | "bar" | "stacked" | "pie";
 
 type MetricChartViewProps = {
   title: string;
@@ -196,6 +198,48 @@ export function MetricChartView({
                     />
                   ))}
                 </BarChart>
+              ) : chartType === "area" ? (
+                <AreaChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="bucketLabel" tickLine={false} axisLine={false} minTickGap={24} />
+                  <YAxis
+                    width={56}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_label, payload) => {
+                          const entry = payload?.[0]?.payload as
+                            | { bucketStart?: unknown }
+                            | undefined;
+                          const bucketStart = entry?.bucketStart;
+                          return typeof bucketStart === "string"
+                            ? formatFullDateTime(bucketStart)
+                            : "未知时间";
+                        }}
+                      />
+                    }
+                  />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {renderSeries.map(series => (
+                    <Area
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.dataKey}
+                      name={series.label}
+                      stroke={`var(--color-${series.dataKey})`}
+                      fill={`var(--color-${series.dataKey})`}
+                      // 面积图默认不堆叠、半透明叠放：wait ⊆ all 这类「子集 vs 全集」直接看出占比。
+                      fillOpacity={0.25}
+                      strokeWidth={2}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </AreaChart>
               ) : (
                 <LineChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />

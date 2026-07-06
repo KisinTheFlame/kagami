@@ -10,6 +10,11 @@ const MainAgentContextPage = lazy(() =>
     default: module.MainAgentContextPage,
   })),
 );
+const DashboardPage = lazy(() =>
+  import("@/pages/dashboard/DashboardPage").then(module => ({
+    default: module.DashboardPage,
+  })),
+);
 const ControlPanelPage = lazy(() =>
   import("@/pages/control-panel/ControlPanelPage").then(module => ({
     default: module.ControlPanelPage,
@@ -68,6 +73,7 @@ function App() {
           <Route path="/auth" element={<Navigate to="/auth/claude-code" replace />} />
           <Route path="/auth/:provider" element={<AuthPage />} />
           <Route path="/main-agent-context" element={<MainAgentContextPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/control-panel" element={<ControlPanelPage />} />
           <Route path="/scheduler-tasks" element={<SchedulerTasksPage />} />
           <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
