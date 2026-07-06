@@ -31,6 +31,7 @@ import { InternalLlmHandler } from "../http/internal-llm.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
 import { buildClaudeFileGcTask } from "./claude-file-gc-task.js";
+import { persistLlmChatCall } from "./persist-llm-chat-call.js";
 
 const logger = new AppLogger({ source: "llm-service-bootstrap" });
 
@@ -97,40 +98,13 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
   });
 
-  // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call。返回 DAO 的
-  // Promise，让 client 内部 emitObservation 统一 catch（写库失败不影响 LLM 结果）。
+  // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call（策略见 persistLlmChatCall，
+  // 成功轮不落 native_request_payload 以控库体积）。返回 DAO 的 Promise，让 client 内部
+  // emitObservation 统一 catch（写库失败不影响 LLM 结果）。
   const recordLlmChatObservation = (observation: LlmChatCallObservation): Promise<void> => {
     // 每次 attempt 顺手打点（provider/model/status/latency/usage来处/token/失败原因），与落库解耦。
     recordLlmCallMetrics(metricService, observation);
-    if (observation.status === "success") {
-      return llmChatCallDao.recordSuccess({
-        provider: observation.provider,
-        model: observation.model,
-        extension: observation.extension,
-        requestId: observation.requestId,
-        seq: observation.seq,
-        latencyMs: observation.latencyMs,
-        request: observation.request,
-        response: observation.response,
-        nativeRequestPayload: observation.nativeRequestPayload,
-        nativeResponsePayload: observation.nativeResponsePayload,
-      });
-    }
-
-    return llmChatCallDao.recordError({
-      provider: observation.provider,
-      model: observation.model,
-      extension: observation.extension,
-      requestId: observation.requestId,
-      seq: observation.seq,
-      latencyMs: observation.latencyMs,
-      request: observation.request,
-      ...(observation.response ? { response: observation.response } : {}),
-      nativeRequestPayload: observation.nativeRequestPayload,
-      nativeResponsePayload: observation.nativeResponsePayload,
-      nativeError: observation.nativeError,
-      error: observation.error,
-    });
+    return persistLlmChatCall(llmChatCallDao, observation);
   };
 
   const llmClient: LlmClient = createLlmClient({

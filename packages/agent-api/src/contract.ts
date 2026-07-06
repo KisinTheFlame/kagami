@@ -6,11 +6,6 @@ import {
   MainAgentContextSnapshotSchema,
 } from "./main-agent-context.js";
 import {
-  LlmPlaygroundChatRequestSchema,
-  LlmPlaygroundChatResponseSchema,
-  LlmPlaygroundToolListResponseSchema,
-} from "./playground.js";
-import {
   SchedulerTaskListResponseSchema,
   SchedulerTriggerParamsSchema,
   SchedulerTriggerResponseSchema,
@@ -28,18 +23,6 @@ export const agentApiContract = {
     path: "/llm/providers",
     input: z.object({}),
     output: LlmProviderListResponseSchema,
-  }),
-  listPlaygroundTools: defineJsonRoute({
-    method: "GET",
-    path: "/llm/playground-tools",
-    input: z.object({}),
-    output: LlmPlaygroundToolListResponseSchema,
-  }),
-  playgroundChat: defineJsonRoute({
-    method: "POST",
-    path: "/llm/chat",
-    input: LlmPlaygroundChatRequestSchema,
-    output: LlmPlaygroundChatResponseSchema,
   }),
   listSchedulerTasks: defineJsonRoute({
     method: "GET",

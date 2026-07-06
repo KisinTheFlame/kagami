@@ -246,7 +246,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
-      new LlmHandler({ llmPlaygroundService: agentRuntime.llmPlaygroundService }),
+      new LlmHandler({ llmProviderService: agentRuntime.llmProviderService }),
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
