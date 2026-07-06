@@ -60,6 +60,13 @@ server:
       baseUrl: http://127.0.0.1:20008
       model: google/embeddinggemma-300m
       outputDimensionality: 768
+    # 生图：LLM 网关持有 image client，走 openai-codex OAuth（ChatGPT 订阅额度），无需 platform API key。
+    # model 是 responses 路由模型（gpt-5.x）；出图后端 gpt-image-2 由 provider 写死。codex 忽略尺寸/质量
+    # （固定回 1254×1254），故不在此配 size/quality。
+    image:
+      provider: openai-codex
+      baseUrl: https://chatgpt.com/backend-api/codex/responses
+      model: gpt-5.4
     codexAuth:
       enabled: true
       publicBaseUrl: http://localhost:20004

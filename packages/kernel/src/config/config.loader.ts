@@ -49,6 +49,7 @@ const DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS = 300_000;
 const DEFAULT_GEMINI_EMBEDDING_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY = 768;
+const DEFAULT_OPENAI_CODEX_IMAGE_MODEL = "gpt-5.4";
 const DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS = 10 * 60 * 1000;
 
 const UrlSchema = z.string().url();
@@ -127,6 +128,16 @@ const EmbeddingConfigSchema = z.preprocess(
   },
   z.discriminatedUnion("provider", [GoogleEmbeddingConfigSchema, TeiEmbeddingGemmaConfigSchema]),
 );
+// 生图 provider 配置。openai-codex 走 OAuth（同 chat 的 openaiCodex），故无 apiKey 字段——凭据由
+// runtime 注入 authModule.authServices.codex。判别联合当前仅一个成员，未来加 openai 平台生图再补。
+// 只配 model（responses 路由模型 gpt-5.x）；不配 size/quality——codex 忽略它们（固定 1254×1254），
+// 配了是误导性假旋钮。未来标准-API provider 才认尺寸，届时随该 provider 的 config 变体加。
+const OpenAiCodexImageConfigSchema = z.object({
+  provider: z.literal("openai-codex"),
+  baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
+  model: NonEmptyStringSchema.default(DEFAULT_OPENAI_CODEX_IMAGE_MODEL),
+});
+const ImageConfigSchema = z.discriminatedUnion("provider", [OpenAiCodexImageConfigSchema]);
 const LlmUsageAttemptConfigSchema = z.object({
   provider: LlmProviderSchema,
   model: NonEmptyStringSchema,
@@ -315,6 +326,9 @@ const ConfigSchema = z.object({
       // 文本向量化配置：LLM 网关（apps/llm）持有 embedding client，agent 经 HTTP 调用。
       // 与任何具体上层能力（记忆等）解耦，是网关的通用能力配置。
       embedding: EmbeddingConfigSchema,
+      // 生图配置：LLM 网关持有 image client，走 openai-codex OAuth（ChatGPT 订阅额度），agent 经 HTTP 调用。
+      // 给 openai-codex 默认（内层字段各有默认），省略整段也能起——不给新必填字段炸掉既有 config。
+      image: ImageConfigSchema.default({ provider: "openai-codex" }),
       codexAuth: z
         .object({
           enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),

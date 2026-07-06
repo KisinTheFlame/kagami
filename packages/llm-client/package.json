@@ -13,6 +13,10 @@
     "./embedding": {
       "types": "./dist/embedding/index.d.ts",
       "default": "./dist/embedding/index.js"
+    },
+    "./image": {
+      "types": "./dist/image/index.d.ts",
+      "default": "./dist/image/index.js"
     }
   },
   "scripts": {
