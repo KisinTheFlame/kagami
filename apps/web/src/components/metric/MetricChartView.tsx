@@ -227,12 +227,16 @@ export function MetricChartView({
                   {renderSeries.map(series => (
                     <Area
                       key={series.key}
-                      type="monotone"
+                      // linear 而非 monotone：面积图常用来叠「子集 vs 全集」（如 wait ⊆ 所有工具）。
+                      // monotone 平滑曲线各序列独立算、只在数据点上过点，点与点之间平滑段会互相超越——
+                      // 即便每个桶都满足 wait ≤ all，子集曲线也会在段间鼓包到全集之上，看着像 wait 更高。
+                      // linear 直线段逐点保序：每点 wait ≤ all → 整条线处处 ≤，绝不假性反超。
+                      type="linear"
                       dataKey={series.dataKey}
                       name={series.label}
                       stroke={`var(--color-${series.dataKey})`}
                       fill={`var(--color-${series.dataKey})`}
-                      // 面积图默认不堆叠、半透明叠放：wait ⊆ all 这类「子集 vs 全集」直接看出占比。
+                      // 默认不堆叠、半透明叠放：子集在上层，全集的多出部分从上缘露出，直接看出占比。
                       fillOpacity={0.25}
                       strokeWidth={2}
                       connectNulls={false}
