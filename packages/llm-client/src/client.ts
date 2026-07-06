@@ -82,6 +82,8 @@ export type LlmChatCallSuccessObservation = {
   status: "success";
   provider: LlmProviderId;
   model: string;
+  /** 调用来处（主循环 / 摘要 / todo / inner-voice…）；chatDirect 无来处时为 null。 */
+  usage: LlmUsageId | null;
   extension: Record<string, unknown>;
   requestId: string;
   seq: number;
@@ -96,6 +98,8 @@ export type LlmChatCallErrorObservation = {
   status: "failed";
   provider: LlmProviderId;
   model: string;
+  /** 调用来处；chatDirect 无来处时为 null。 */
+  usage: LlmUsageId | null;
   extension: Record<string, unknown> | null;
   requestId: string;
   seq: number;
@@ -147,6 +151,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               providerConfigs: options.providerConfigs,
               request,
               attempt,
+              usage,
               requestId,
               seq: (seq += 1),
               recordCall,
@@ -177,6 +182,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
           model,
           times: 1,
         },
+        usage: null,
         requestId: randomUUID(),
         seq: 1,
         recordCall: chatOptions?.recordCall ?? true,
@@ -191,6 +197,7 @@ async function executeChatAttempt({
   providerConfigs,
   request,
   attempt,
+  usage,
   requestId,
   seq,
   recordCall,
@@ -200,6 +207,7 @@ async function executeChatAttempt({
   providerConfigs: ProviderConfigs;
   request: LlmChatRequest;
   attempt: LlmUsageAttemptConfig;
+  usage: LlmUsageId | null;
   requestId: string;
   seq: number;
   recordCall: boolean;
@@ -230,6 +238,7 @@ async function executeChatAttempt({
         status: "success",
         provider: provider.id,
         model: attempt.model,
+        usage,
         extension: buildExtension({
           actualModel: response.model,
         }),
@@ -261,6 +270,7 @@ async function executeChatAttempt({
         status: "failed",
         provider: attempt.provider,
         model: attempt.model,
+        usage,
         extension:
           actualModel === undefined
             ? null

@@ -234,6 +234,9 @@ importers:
       '@kagami/llm-client':
         specifier: workspace:*
         version: link:../../packages/llm-client
+      '@kagami/metric-client':
+        specifier: workspace:*
+        version: link:../../packages/metric-client
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
