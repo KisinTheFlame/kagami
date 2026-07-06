@@ -91,6 +91,7 @@ server:
         models:
           - claude-opus-4-8
           - claude-opus-4-6
+          - claude-sonnet-5
           - claude-sonnet-4-6
           - claude-haiku-4-5
         keepAliveReplayIntervalMinutes: 30
@@ -116,11 +117,8 @@ server:
       vision:
         attempts:
           - provider: claude-code
-            model: claude-haiku-4-5
+            model: claude-sonnet-5
             times: 2
-          - provider: openai-codex
-            model: gpt-5.4-mini
-            times: 1
       todoSuggestionAgent:
         attempts:
           - provider: claude-code
