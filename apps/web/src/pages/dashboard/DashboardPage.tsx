@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DashboardCacheChart } from "./DashboardCacheChart";
 import { DashboardChart, DashboardOverlayChart, type DashboardRange } from "./dashboard-charts";
 
 // === 大盘 ===
@@ -22,8 +23,6 @@ const LLM_LATENCY = "llm.call.latency";
 const LLM_TOKENS = "llm.call.tokens";
 const MODEL_TAG = "model";
 
-// 主 Agent 主循环的调用来处（LlmUsageId），用于「主 Agent 输入 token」图过滤。
-const AGENT_USAGE = { usage: { op: "eq" as const, value: "agent" } };
 // 延迟图只算成功调用：失败（尤其超时，latency=整个超时时长）会污染 avg/P99 读数。
 const SUCCESS_ONLY = { status: { op: "eq" as const, value: "success" } };
 
@@ -122,7 +121,7 @@ export function DashboardPage() {
 
           <DashboardChart
             title="LLM 调用耗时均值"
-            subtitle="成功调用 · 按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 秒"
             metricName={LLM_LATENCY}
             aggregator="avg"
             groupByTag={MODEL_TAG}
@@ -133,7 +132,7 @@ export function DashboardPage() {
 
           <DashboardChart
             title="LLM 调用耗时 P99"
-            subtitle="成功调用 · 按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 秒"
             metricName={LLM_LATENCY}
             aggregator="p99"
             groupByTag={MODEL_TAG}
@@ -142,23 +141,7 @@ export function DashboardPage() {
             range={range}
           />
 
-          <DashboardOverlayChart
-            title="主 Agent 输入 token"
-            subtitle="缓存命中输入 vs 总输入"
-            total={{
-              label: "总输入",
-              metricName: LLM_TOKENS,
-              aggregator: "sum",
-              tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_total" } },
-            }}
-            subset={{
-              label: "缓存命中输入",
-              metricName: LLM_TOKENS,
-              aggregator: "sum",
-              tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_cache_hit" } },
-            }}
-            range={range}
-          />
+          <DashboardCacheChart range={range} />
 
           <DashboardChart
             title="LLM 输出 token"

@@ -23,6 +23,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { formatBucketLabel, formatCompactNumber, formatFullDateTime } from "./metric-format";
 
 // === 纯展示层：只吃 data / 查询状态 + 展示 props，不发请求、不持控件状态（#444）===
 //
@@ -168,7 +169,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
@@ -206,7 +207,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
@@ -252,7 +253,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
@@ -352,50 +353,4 @@ export function buildChartRows(series: RenderSeries[]): ChartRow[] {
   return [...rowsByBucketStart.values()].sort((left, right) =>
     left.bucketStart.localeCompare(right.bucketStart),
   );
-}
-
-function formatBucketLabel(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatFullDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
-}
-
-function formatMetricValue(value: number | string): string {
-  if (typeof value !== "number") {
-    return String(value);
-  }
-
-  if (Math.abs(value) >= 1000) {
-    return value.toLocaleString("zh-CN", {
-      maximumFractionDigits: 1,
-    });
-  }
-
-  return value.toLocaleString("zh-CN", {
-    maximumFractionDigits: 2,
-  });
 }
