@@ -26,7 +26,7 @@ apps/scheduler ──→ packages/kernel / http / scheduler-api  （独立进程
 
 | 包                          | 角色                                                                                                                                                                                                                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kagami/agent`             | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / auth / scheduler / LLM playground / QQ 发送）                                                                                                                                                                                                     |
+| `@kagami/agent`             | Fastify 后端、Agent 业务装配、NapCat 网关、Agent 活内存接口（实时上下文 / auth / scheduler / LLM provider 列举 / QQ 发送）                                                                                                                                                                                                  |
 | `@kagami/console`           | 管理台后端独立进程（Fastify），服务前端纯 DB 查询（app-log / llm-chat-call / inner-thought / napcat-event / napcat-group-message / todo），经 @kagami/persistence 共享 DAO 直读 SQLite                                                                                                                                      |
 | `@kagami/gateway`           | 前门网关进程（独立进程，仅依赖 `@kagami/config` / `@kagami/http`）：托管 `apps/web/dist` 静态资源 + 按前缀把 `/api/*` 反代分流到 console / agent，`/auth/*` 到 llm、`/metric/query` 到 metric                                                                                                                               |
 | `@kagami/llm-service`       | LLM 网关 + OAuth 凭据中心进程（`apps/llm`，仅 localhost）：持有全部 provider + OAuth callback server + 刷新 timer，落 `llm_chat_call` / `embedding_cache`；agent 经 HTTP 直连                                                                                                                                               |
@@ -51,7 +51,7 @@ apps/scheduler ──→ packages/kernel / http / scheduler-api  （独立进程
 | `@kagami/scheduler-api`     | kagami-scheduler 进程契约包（#428）：register（幂等 replace-all）/ status 两条 JSON 路由 + SSE tick 事件（`SchedulerTickEvent` / `SCHEDULER_TICKS_SSE_PATH`）+ 通用调度 schema（`ScheduleSpec` / misfire 策略 / TaskRun）；零业务语义                                                                                       |
 | `@kagami/scheduler-client`  | 定时调度使用方 SDK（消费端，#428）：注册任务集 + 长连 SSE tick 流自动派发到本地 handler + 本地 per-task 并发锁 + occurrence 去重 + `listStatus()` 合并 tick 侧与本地执行历史；`SchedulerClient`，agent（ithome/todo/data-retention）与 kagami-llm（Claude Files 缓存每日 GC，#433）装配                                     |
 | `@kagami/console-api`       | kagami-console 进程契约包：app-log / llm-chat-call（含 `:id` 路径参数）/ inner-thought / napcat-event / napcat-group-message / todo 七条管理台查询路由（web 消费）                                                                                                                                                          |
-| `@kagami/agent-api`         | kagami-agent 进程面向管理台的契约包：napcat 发送 ×2、playground ×3、scheduler ×2（`:name` 路径参数）、main-agent-context ×2（web 消费）                                                                                                                                                                                     |
+| `@kagami/agent-api`         | kagami-agent 进程面向管理台的契约包：napcat 发送 ×2、LLM provider 列举 ×1、scheduler ×2（`:name` 路径参数）、main-agent-context ×2（web 消费）                                                                                                                                                                              |
 | `@kagami/browser-api`       | kagami-browser 进程对 agent 暴露的动作 RPC 契约包（9 条 JSON 路由；screenshot 以 base64 over JSON，agent 门面解回 Buffer；错误通道独立于 BizErrorWire）                                                                                                                                                                     |
 | `@kagami/oss-api`           | kagami-oss 进程的对象存储 RPC 契约包（binary 两形状：putObject 信封路由共享 `{ key }` schema；get/head/delete raw 路由只钉路径与参数，字节流不进 Zod）                                                                                                                                                                      |
 | `@kagami/pixel-api`         | kagami-pixel 进程的像素画 RPC 契约包（#365）：8 条 JSON 绘图路由回 `CanvasResponse`（领域拒绝走 `{ok:false}`）+ render binary-raw 路由回 PNG 字节；含 DB16 命名调色板（name/glyph/hex）共享常量                                                                                                                             |
@@ -93,7 +93,7 @@ apps/scheduler ──→ packages/kernel / http / scheduler-api  （独立进程
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `acl`       | 各独立对端进程（llm / browser / spire / oss）的 HTTP 客户端门面（防腐层）：wire 走契约 `createClient` / `createBinaryClient`，另加各服务领域语义（重试匹配 / 版本幂等 / 错误归一 / maxBytes 等） |
 | `common`    | 跨切面、无业务语义的运行时工具（当前：`detect-mime` 按字节嗅探 MIME）                                                                                                                            |
-| `llm`       | LLM playground service + HTTP handler（provider / 凭据 / chat 已外移 kagami-llm 进程；上报 client 在 `acl/`）                                                                                    |
+| `llm`       | LLM provider 列举 service + HTTP handler（provider 凭据 / chat 在 kagami-llm 进程；上报 client 在 `acl/`）                                                                                       |
 | `napcat`    | NapCat 协议适配（gateway transport / 入站归一 / 图片分析 / 持久化写入）；网关实例由 QQ App 持有                                                                                                  |
 | `scheduler` | 后台定时任务（auth 刷新、IThome 轮询、数据保留清理等）                                                                                                                                           |
 | `agent`     | Kagami 业务层：手机 OS 运行时（Portal / App / NotificationCenter）、capabilities、上下文压缩                                                                                                     |
@@ -147,7 +147,6 @@ apps/web/src/
 │   ├── control-panel/           控制面板（上下文压缩等操作）
 │   ├── scheduler-tasks/         后台任务面板
 │   ├── todos/                   待办（只读，含历史）
-│   ├── llm-playground/          手工触发 LLM 调用
 │   ├── llm-history/             LLM 调用历史
 │   ├── inner-thought/           内心念头（inner-voice 每次触发的念头流水，#359）
 │   ├── app-log-history/         应用日志
@@ -216,7 +215,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 健康检查        | `/health`                                                                                                                                                   |
 | OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits` \| `usage-trend`                                                         |
-| LLM Playground  | `/llm/providers`、`/llm/playground-tools`、`/llm/chat`                                                                                                      |
+| LLM Provider    | `/llm/providers`                                                                                                                                            |
 | NapCat 主动发送 | `/napcat/group/send`、`/napcat/private/send`                                                                                                                |
 | 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/inner-thought/query`、`/napcat-event/query`、`/napcat-group-message/query`、`/todo/query` |
 | Agent / 指标    | `/main-agent-context/recent`、`/main-agent-context/compact`、`/metric/query`、`/scheduler/*`                                                                |

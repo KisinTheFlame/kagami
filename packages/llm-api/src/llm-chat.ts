@@ -22,7 +22,7 @@ export const LlmToolDefinitionSchema = z
     description: z.string().optional(),
     // parameters 是开放式 JSON Schema：真实工具普遍带 required / enum / $defs 等关键字，
     // 故只校验 object 顶层骨架、不加 .strict()，其余关键字按 zod 默认 strip。viewer 仅用
-    // tool.name，playground replay 也只需骨架，丢弃这些关键字无影响（与旧手搓 parser 一致）。
+    // tool.name，历史 replay 也只需骨架，丢弃这些关键字无影响（与旧手搓 parser 一致）。
     parameters: z.object({
       type: z.literal("object"),
       properties: JsonRecordSchema,

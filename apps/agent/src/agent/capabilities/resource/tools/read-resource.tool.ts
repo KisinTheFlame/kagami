@@ -4,7 +4,7 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { ResourceService } from "../application/resource.service.js";
 
-export const READ_RESOURCE_TOOL_NAME = "read_resource";
+const READ_RESOURCE_TOOL_NAME = "read_resource";
 
 const ReadResourceArgumentsSchema = z.object({
   resid: z.string().trim().min(1),
