@@ -18,7 +18,6 @@ import { DefaultLlmProviderService } from "../llm/application/llm-provider.impl.
 import type { LlmProviderService } from "../llm/application/llm-provider.service.js";
 import type { MetricClient } from "@kagami/metric-client/client";
 import type { NapcatClient } from "../acl/napcat-client.js";
-import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
 import type { MainAgentContextQueryService } from "../ops/application/main-agent-context-query.service.js";
 import { DefaultMainAgentContextQueryService } from "../ops/application/main-agent-context-query.impl.service.js";
@@ -107,8 +106,6 @@ export type AgentRuntimeBundle = {
   todoSuggestionTaskAgent: TodoSuggestionTaskAgent;
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
-  /** QQ 出站发送端口（收口）：管理台直发 HTTP 走这里，不碰裸网关。 */
-  qqOutboundService: AgentMessageService;
   /** 反序关停所有 App 的 onShutdown（含 QQ App 停网关）。由服务关停链调用。 */
   shutdownApps: () => Promise<void>;
 };
@@ -188,7 +185,7 @@ export async function buildAgentRuntime({
   // QQ App 装配：手机 OS 模型下聊天的承载者，已「收纳」napcat 网关——网关在 buildQqApp
   // 内构造并由 QqApp 独占持有，入站事件直达 handleNapcatEvent（不走共享事件队列），出站
   // 统一走 outboundService（收口）。这里不再见到裸网关。
-  const { qqApp, outboundService: qqOutboundService } = buildQqApp({
+  const { qqApp } = buildQqApp({
     napcatClient,
     notificationCenter,
     // 前台输入敲门端口：knock 计数（fire-and-forget）+ enqueue 不带内容的敲门事件。
@@ -429,7 +426,6 @@ export async function buildAgentRuntime({
     llmProviderService,
     todoSuggestionTaskAgent,
     qqApp,
-    qqOutboundService,
     shutdownApps: () => appManager.shutdownAll(),
   };
 }

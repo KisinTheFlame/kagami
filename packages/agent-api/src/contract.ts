@@ -6,12 +6,6 @@ import {
   MainAgentContextSnapshotSchema,
 } from "./main-agent-context.js";
 import {
-  NapcatSendGroupMessageRequestSchema,
-  NapcatSendGroupMessageResponseSchema,
-  NapcatSendPrivateMessageRequestSchema,
-  NapcatSendPrivateMessageResponseSchema,
-} from "./napcat-message.js";
-import {
   SchedulerTaskListResponseSchema,
   SchedulerTriggerParamsSchema,
   SchedulerTriggerResponseSchema,
@@ -24,18 +18,6 @@ import {
 // 自己的 *-api 包，这里只收 agent 自己产出的路由。
 
 export const agentApiContract = {
-  sendGroupMessage: defineJsonRoute({
-    method: "POST",
-    path: "/napcat/group/send",
-    input: NapcatSendGroupMessageRequestSchema,
-    output: NapcatSendGroupMessageResponseSchema,
-  }),
-  sendPrivateMessage: defineJsonRoute({
-    method: "POST",
-    path: "/napcat/private/send",
-    input: NapcatSendPrivateMessageRequestSchema,
-    output: NapcatSendPrivateMessageResponseSchema,
-  }),
   listProviders: defineJsonRoute({
     method: "GET",
     path: "/llm/providers",
