@@ -4,12 +4,14 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import { isBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
 import type { LlmClient } from "@kagami/llm-client";
 import type { EmbeddingClient } from "@kagami/llm-client/embedding";
+import type { ImageClient } from "@kagami/llm-client/image";
 import { createLlmServiceApp } from "../src/app/llm-service-runtime.js";
 import { InternalLlmHandler } from "../src/http/internal-llm.handler.js";
 
 function buildApp(overrides?: {
   llmClient?: Partial<LlmClient>;
   embeddingClient?: Partial<EmbeddingClient>;
+  imageClient?: Partial<ImageClient>;
 }): FastifyInstance {
   const llmClient = {
     chat: vi.fn(),
@@ -21,8 +23,12 @@ function buildApp(overrides?: {
     embed: vi.fn(),
     ...overrides?.embeddingClient,
   } as unknown as EmbeddingClient;
+  const imageClient = {
+    generate: vi.fn(),
+    ...overrides?.imageClient,
+  } as unknown as ImageClient;
   return createLlmServiceApp({
-    handlers: [new InternalLlmHandler({ llmClient, embeddingClient })],
+    handlers: [new InternalLlmHandler({ llmClient, embeddingClient, imageClient })],
   });
 }
 
@@ -99,5 +105,33 @@ describe("InternalLlmHandler", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ provider: "google", model: "e", embedding: [0.1] });
+  });
+
+  it("routes /internal/generate-image and base64-encodes the raw bytes", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      provider: "openai-codex",
+      model: "gpt-5.4",
+      image: { data: new Uint8Array([1, 2, 3]), mimeType: "image/png" },
+      revisedPrompt: "a red circle",
+      size: "1024x1024",
+    });
+    app = buildApp({ imageClient: { generate } });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/internal/generate-image",
+      payload: { request: { prompt: "a red circle" } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      provider: "openai-codex",
+      model: "gpt-5.4",
+      mimeType: "image/png",
+      imageBase64: Buffer.from([1, 2, 3]).toString("base64"),
+      revisedPrompt: "a red circle",
+      size: "1024x1024",
+    });
+    expect(generate).toHaveBeenCalledWith({ prompt: "a red circle" });
   });
 });

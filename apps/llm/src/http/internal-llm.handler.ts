@@ -5,6 +5,8 @@ import type { LlmProviderId } from "@kagami/llm";
 import type { LlmUsageId } from "@kagami/kernel/contracts/llm";
 import type { LlmClient, LlmChatRequest } from "@kagami/llm-client";
 import type { EmbeddingClient, EmbeddingRequest } from "@kagami/llm-client/embedding";
+import type { ImageClient, ImageGenerationRequest } from "@kagami/llm-client/image";
+import type { GenerateImageResult } from "@kagami/llm-api/image";
 
 // Agent-facing 内部 RPC，全量走 @kagami/llm-api 契约（单一事实源，与 agent 侧 createClient 共享 schema）。
 // chat/chat-direct/embed 的 request 是可信内部契约（agent 直连、仅 localhost）的复杂 union（LlmMessage/
@@ -13,16 +15,20 @@ import type { EmbeddingClient, EmbeddingRequest } from "@kagami/llm-client/embed
 export class InternalLlmHandler {
   private readonly llmClient: LlmClient;
   private readonly embeddingClient: EmbeddingClient;
+  private readonly imageClient: ImageClient;
 
   public constructor({
     llmClient,
     embeddingClient,
+    imageClient,
   }: {
     llmClient: LlmClient;
     embeddingClient: EmbeddingClient;
+    imageClient: ImageClient;
   }) {
     this.llmClient = llmClient;
     this.embeddingClient = embeddingClient;
+    this.imageClient = imageClient;
   }
 
   public register(app: FastifyInstance): void {
@@ -49,6 +55,20 @@ export class InternalLlmHandler {
 
     registerJsonRoute(app, llmApiContract.embed, async ({ input }) => {
       return await this.embeddingClient.embed(input.request as EmbeddingRequest);
+    });
+
+    // 生图：抽象层回原始字节，这里在 HTTP 边界 base64 化成 GenerateImageResult wire DTO。
+    registerJsonRoute(app, llmApiContract.generateImage, async ({ input }) => {
+      const result = await this.imageClient.generate(input.request as ImageGenerationRequest);
+      const wire: GenerateImageResult = {
+        provider: result.provider,
+        model: result.model,
+        mimeType: result.image.mimeType,
+        imageBase64: Buffer.from(result.image.data).toString("base64"),
+        ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
+        ...(result.size ? { size: result.size } : {}),
+      };
+      return wire;
     });
   }
 }

@@ -9,6 +9,8 @@ import { z } from "zod";
 const CHAT_TIMEOUT_MS = 600_000;
 const QUERY_TIMEOUT_MS = 30_000;
 const EMBED_TIMEOUT_MS = 60_000;
+// 生图是多秒级操作（模型思考 + 渲染），给 5 分钟兜底超时，远高于现实单次生图时长。
+const GENERATE_IMAGE_TIMEOUT_MS = 300_000;
 
 /**
  * chat / chat-direct / embed 的 `request` 是复杂 union（LlmMessage / Tool / EmbeddingRequest），刻意
@@ -64,5 +66,14 @@ export const llmApiContract = {
     input: z.object({ request: EnvelopeRequest }),
     output: z.unknown(),
     timeoutMs: EMBED_TIMEOUT_MS,
+  }),
+  // request 是 ImageGenerationRequest（信封级 z.unknown()，同 chat/embed）；output 是 base64 化的
+  // GenerateImageResult（见 llm-api/image），亦走信封级、消费端按类型断言。
+  generateImage: defineJsonRoute({
+    method: "POST",
+    path: "/internal/generate-image",
+    input: z.object({ request: EnvelopeRequest }),
+    output: z.unknown(),
+    timeoutMs: GENERATE_IMAGE_TIMEOUT_MS,
   }),
 };

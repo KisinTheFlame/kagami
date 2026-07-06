@@ -154,6 +154,11 @@ export function createConfigManager(): ConfigManager {
           model: "gemini-embedding-001",
           outputDimensionality: 768,
         },
+        image: {
+          provider: "openai-codex",
+          baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+          model: "gpt-5.4",
+        },
         codexAuth: {
           enabled: true,
           publicBaseUrl: "http://localhost:20004",

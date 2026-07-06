@@ -22,6 +22,7 @@ import {
   type LlmClient,
 } from "@kagami/llm-client";
 import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/embedding";
+import { createImageClient, type ImageClient } from "@kagami/llm-client/image";
 import { HttpMetricClient } from "@kagami/metric-client/client";
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { recordLlmCallMetrics } from "./llm-metrics.js";
@@ -124,6 +125,13 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     cacheDao: embeddingCacheDao,
   });
 
+  // 生图 client：openai-codex provider 复用 chat 侧同一 codexAuthStore（OAuth，ChatGPT 订阅额度）。
+  const imageClient: ImageClient = createImageClient({
+    config: config.server.llm.image,
+    timeoutMs: llmTimeoutMs,
+    codexAuthStore,
+  });
+
   // auth 刷新 + usage 刷新在本进程用自己的 timer 驱动（裸 setInterval，非通用调度）。
   const authRefreshTimers = startAuthRefreshTimers({
     refreshSchedulers: authModule.authRefreshSchedulers,
@@ -157,7 +165,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   const app = createLlmServiceApp({
     handlers: [
       new HealthHandler(),
-      new InternalLlmHandler({ llmClient, embeddingClient }),
+      new InternalLlmHandler({ llmClient, embeddingClient, imageClient }),
       authModule.authHandler,
     ],
   });
