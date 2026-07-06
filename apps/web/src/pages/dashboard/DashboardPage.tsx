@@ -1,8 +1,6 @@
-import type { MetricChartBucket, MetricChartQueryRequest } from "@kagami/metric-api/chart";
+import type { MetricChartBucket } from "@kagami/metric-api/chart";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { MetricChartView } from "@/components/metric/MetricChartView";
-import { useMetricChartData } from "@/components/metric/useMetricChartData";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,16 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getApiErrorMessage } from "@/lib/api";
-import { mergeToolSeries } from "./dashboard-series";
+import { DashboardChart, DashboardOverlayChart, type DashboardRange } from "./dashboard-charts";
 
-// === 大盘（#475 后续）===
+// === 大盘 ===
 //
-// 首张图：Wait 工具 vs 所有工具的调用次数（面积图）。两条各自过滤的单序列查询共享同一显式 range +
-// bucket（一次算好，避免两次 new Date() 桶轴错位），再叠成两序列。日后往这页加图即可。
+// 一个页面级共享的时间范围 + bucket，一栅格多图（工具使用 + LLM 调用量/延迟/token）。所有图对齐同一
+// range、一起刷新。查询定义就近声明在这里；图组件只吃 spec + range，不各自持控件。
 
-const TOOL_CALL_METRIC = "agent.tool.call";
-const WAIT_TOOL = "wait"; // WaitTool 的注册名（tool-call-metric 打点里 tags.tool 的取值）
+const TOOL_CALL = "agent.tool.call";
+const LLM_CALL = "llm.call";
+const LLM_LATENCY = "llm.call.latency";
+const LLM_TOKENS = "llm.call.tokens";
+const MODEL_TAG = "model";
+
+// 主 Agent 主循环的调用来处（LlmUsageId），用于「主 Agent 输入 token」图过滤。
+const AGENT_USAGE = { usage: { op: "eq" as const, value: "agent" } };
+// 延迟图只算成功调用：失败（尤其超时，latency=整个超时时长）会污染 avg/P99 读数。
+const SUCCESS_ONLY = { status: { op: "eq" as const, value: "success" } };
 
 type RangePreset = {
   key: string;
@@ -37,97 +42,135 @@ const RANGE_PRESETS: readonly RangePreset[] = [
 
 const DEFAULT_PRESET = RANGE_PRESETS[1];
 
-function computeRange(rangeMs: number): { startAt: string; endAt: string } {
+function computeRange(preset: RangePreset): DashboardRange {
   const endAt = new Date();
-  const startAt = new Date(endAt.getTime() - rangeMs);
-  return { startAt: startAt.toISOString(), endAt: endAt.toISOString() };
+  const startAt = new Date(endAt.getTime() - preset.rangeMs);
+  return { startAt: startAt.toISOString(), endAt: endAt.toISOString(), bucket: preset.bucket };
 }
 
 export function DashboardPage() {
   const [presetKey, setPresetKey] = useState(DEFAULT_PRESET.key);
   const preset = RANGE_PRESETS.find(item => item.key === presetKey) ?? DEFAULT_PRESET;
-  // range 只在初次 / 换 preset / 手动刷新时重算一次，两条查询共享，保证桶轴对齐、也避免每次渲染 refetch。
-  const [range, setRange] = useState(() => computeRange(DEFAULT_PRESET.rangeMs));
-
-  const allRequest: MetricChartQueryRequest = {
-    metricName: TOOL_CALL_METRIC,
-    aggregator: "count",
-    bucket: preset.bucket,
-    startAt: range.startAt,
-    endAt: range.endAt,
-  };
-  const waitRequest: MetricChartQueryRequest = {
-    ...allRequest,
-    tagFilters: { tool: { op: "eq", value: WAIT_TOOL } },
-  };
-
-  const allQuery = useMetricChartData(allRequest);
-  const waitQuery = useMetricChartData(waitRequest);
-
-  const data = mergeToolSeries([
-    { label: "所有工具", data: allQuery.data },
-    { label: "Wait 工具", data: waitQuery.data },
-  ]);
-
-  const isLoading = allQuery.isLoading || waitQuery.isLoading;
-  const isError = allQuery.isError || waitQuery.isError;
-  const isFetching = allQuery.isFetching || waitQuery.isFetching;
-  const errorMessage = allQuery.isError
-    ? getApiErrorMessage(allQuery.error)
-    : waitQuery.isError
-      ? getApiErrorMessage(waitQuery.error)
-      : undefined;
+  // range 只在初次 / 换 preset / 手动刷新时重算一次，所有图共享，保证桶轴对齐、也避免每次渲染 refetch。
+  const [range, setRange] = useState<DashboardRange>(() => computeRange(DEFAULT_PRESET));
 
   function handleSelectPreset(nextKey: string) {
     const next = RANGE_PRESETS.find(item => item.key === nextKey) ?? DEFAULT_PRESET;
     setPresetKey(next.key);
-    setRange(computeRange(next.rangeMs));
+    setRange(computeRange(next));
   }
 
   function handleRefresh() {
-    setRange(computeRange(preset.rangeMs));
+    // 重算 range（endAt 推到 now）→ 各图 query key 变更、自行 refetch 并显示各自 loading 态。
+    setRange(computeRange(preset));
   }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-3 md:p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">大盘</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">大盘</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={preset.key} onValueChange={handleSelectPreset}>
+            <SelectTrigger className="h-8 w-28 rounded-none text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_PRESETS.map(item => (
+                <SelectItem key={item.key} value={item.key}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-none"
+            onClick={handleRefresh}
+            aria-label="刷新"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
-        <MetricChartView
-          title="工具使用次数"
-          subtitle="Wait 工具 vs 所有工具的调用次数"
-          chartType="area"
-          isLoading={isLoading}
-          isError={isError}
-          errorMessage={errorMessage}
-          data={data}
-          height={360}
-          headerRight={
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={preset.key} onValueChange={handleSelectPreset}>
-                <SelectTrigger className="h-8 w-28 rounded-none text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RANGE_PRESETS.map(item => (
-                    <SelectItem key={item.key} value={item.key}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 rounded-none"
-                onClick={handleRefresh}
-                disabled={isFetching}
-              >
-                <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-          }
-        />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <DashboardOverlayChart
+            title="工具使用次数"
+            subtitle="Wait 工具 vs 所有工具的调用次数"
+            total={{ label: "所有工具", metricName: TOOL_CALL, aggregator: "count" }}
+            subset={{
+              label: "Wait 工具",
+              metricName: TOOL_CALL,
+              aggregator: "count",
+              tagFilters: { tool: { op: "eq", value: "wait" } },
+            }}
+            range={range}
+          />
+
+          <DashboardChart
+            title="LLM 调用次数"
+            subtitle="按模型分组"
+            metricName={LLM_CALL}
+            aggregator="count"
+            groupByTag={MODEL_TAG}
+            chartType="line"
+            range={range}
+          />
+
+          <DashboardChart
+            title="LLM 调用耗时均值"
+            subtitle="成功调用 · 按模型分组 · 毫秒"
+            metricName={LLM_LATENCY}
+            aggregator="avg"
+            groupByTag={MODEL_TAG}
+            tagFilters={SUCCESS_ONLY}
+            chartType="line"
+            range={range}
+          />
+
+          <DashboardChart
+            title="LLM 调用耗时 P99"
+            subtitle="成功调用 · 按模型分组 · 毫秒"
+            metricName={LLM_LATENCY}
+            aggregator="p99"
+            groupByTag={MODEL_TAG}
+            tagFilters={SUCCESS_ONLY}
+            chartType="line"
+            range={range}
+          />
+
+          <DashboardOverlayChart
+            title="主 Agent 输入 token"
+            subtitle="缓存命中输入 vs 总输入"
+            total={{
+              label: "总输入",
+              metricName: LLM_TOKENS,
+              aggregator: "sum",
+              tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_total" } },
+            }}
+            subset={{
+              label: "缓存命中输入",
+              metricName: LLM_TOKENS,
+              aggregator: "sum",
+              tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_cache_hit" } },
+            }}
+            range={range}
+          />
+
+          <DashboardChart
+            title="LLM 输出 token"
+            subtitle="按模型分组"
+            metricName={LLM_TOKENS}
+            aggregator="sum"
+            tagFilters={{ kind: { op: "eq", value: "output" } }}
+            groupByTag={MODEL_TAG}
+            chartType="area"
+            range={range}
+          />
+        </div>
       </div>
     </div>
   );
