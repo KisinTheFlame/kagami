@@ -128,6 +128,20 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
                         ? formatFullDateTime(bucketStart)
                         : "未知时间";
                     }}
+                    // 自定义每行：命中率带 % 单位、token 千分位；且 0 值也显示（默认 falsy 守卫会吞 0）。
+                    formatter={(value, name, item) => {
+                      const numeric = typeof value === "number" ? value : Number(value);
+                      const suffix = item?.dataKey === "ratePct" ? "%" : "";
+                      return (
+                        <div className="flex flex-1 justify-between gap-3 leading-none">
+                          <span className="text-muted-foreground">{name}</span>
+                          <span className="font-mono font-medium tabular-nums text-foreground">
+                            {formatMetricValue(numeric)}
+                            {suffix}
+                          </span>
+                        </div>
+                      );
+                    }}
                   />
                 }
               />
