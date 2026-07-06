@@ -101,7 +101,13 @@ export function createConfigManager(): ConfigManager {
       spire: { host: "127.0.0.1", port: 20011 },
       napcat: { host: "127.0.0.1", port: 20013 },
       pixel: { host: "127.0.0.1", port: 20012 },
-      scheduler: { host: "127.0.0.1", port: 20014, databaseUrl: "file::memory:" },
+      scheduler: {
+        host: "127.0.0.1",
+        port: 20014,
+        databaseUrl: "file::memory:",
+        historyRetentionCount: 200,
+        historyRetentionDays: 90,
+      },
     },
     server: {
       databaseUrl: "file::memory:",

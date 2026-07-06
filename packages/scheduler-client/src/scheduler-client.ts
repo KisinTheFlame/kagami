@@ -3,6 +3,7 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createClient, type JsonClient } from "@kagami/rpc-client/client";
 import { schedulerApiContract, type SchedulerTaskManifest } from "@kagami/scheduler-api/contract";
 import { SchedulerTickEventSchema, SCHEDULER_TICKS_SSE_PATH } from "@kagami/scheduler-api/event";
+import type { SchedulerReportRunRequest } from "@kagami/scheduler-api/run";
 import type { SchedulerTaskStatus } from "@kagami/scheduler-api/schedule";
 import { TaskRunHistory, toWireRun, type TaskRun } from "./task-run.js";
 import type {
@@ -20,6 +21,8 @@ const MAX_BACKOFF_MS = 30_000;
 // 30s 内无任何帧（含 15s 心跳）判半开：主动 abort 重连。留 2 个心跳周期裕量（复刻 napcat）。
 const DEAD_CONNECTION_TIMEOUT_MS = 30_000;
 const DEFAULT_HISTORY_SIZE = 10;
+// 未 ack 的 run 上报缓冲上限（#493 P2）：内存 at-least-once，超量丢最旧并 warn。
+const UNACKED_REPORT_BUFFER_CAP = 100;
 
 type FetchLike = typeof fetch;
 
@@ -66,6 +69,18 @@ export class SchedulerClient {
   private started = false;
   private running = false;
   private controller: AbortController | null = null;
+  /**
+   * 未 ack 的 run 上报缓冲（#493 P2）：内存 at-least-once，无磁盘 outbox。按 runId 去重合并——同一
+   * runId 的 running 后又来 terminal 只留最新那条（terminal 覆盖 running，避免重推把终态退回 running）。
+   * 上报失败留在这里，下次上报前 + register 重连后各 flush 一次；scheduler 侧幂等 upsert 保证重推安全。
+   */
+  private readonly unackedReports = new Map<string, SchedulerReportRunRequest>();
+  /**
+   * 在途的 run 上报 promise（#493 P2）：回报是**旁路遥测**，绝不能挤上 handler 的关键路径。故
+   * runHandler 只 fire-and-forget 派发上报（不 await），把 promise 记在这里；`settleReports` 供测试
+   * 与将来的 graceful drain 等待其排空。回报本身永不抛（reportRun 内部 catch + 缓冲）。
+   */
+  private readonly pendingReports = new Set<Promise<void>>();
 
   public constructor({
     baseUrl,
@@ -240,6 +255,9 @@ export class SchedulerClient {
       return;
     }
 
+    // 重连成功（SSE 即将订阅）：把断连期间攒下的未 ack 上报冲一次。
+    await this.flushUnackedReports();
+
     const controller = new AbortController();
     this.controller = controller;
 
@@ -403,17 +421,42 @@ export class SchedulerClient {
   /**
    * 跑一次 handler 并记录执行历史。返回 handler 是否成功（供 runClaimed 决定要不要推进去重游标）。
    * running 锁的占用/释放归调用方（onTick / triggerNow）。
+   *
+   * 两阶段回报（#493 P2）：开始时生成 runId 上报一次 running，结束时用**同一 runId**再上报终态
+   * （success/failure）。上报失败进未 ack 缓冲、绝不阻塞 handler 主流程结果。只有真跑了的 run 才回报——
+   * skipped_overlap 从没真跑（且 wire 无此枚举），不在这里产生。
    */
   private async runHandler(entry: RegistryEntry, tick: SchedulerTick): Promise<boolean> {
     const abortController = new AbortController();
+    const runId = randomUUID();
+    const startedAt = new Date();
     const run: TaskRun = {
-      startedAt: new Date(),
+      startedAt,
       finishedAt: null,
       durationMs: null,
       status: "running",
     };
     entry.abortController = abortController;
     const startedAtMs = Date.now();
+    const trigger: SchedulerReportRunRequest["trigger"] = tick.manual ? "manual" : "scheduled";
+    const startedAtIso = startedAt.toISOString();
+    // 开始：上报 running（scheduledAt 仅 scheduled 触发有意义，manual 为 null）。
+    // fire-and-forget：绝不 await——回报是旁路遥测，不能阻塞 handler 启动（scheduler 不可达时
+    // reportRun 会走满 30s 超时）。失败自动进未 ack 缓冲，靠状态感知 upsert 保序、幂等重推。
+    const runningReport = this.reportRun({
+      id: runId,
+      ownerId: this.ownerId,
+      taskName: entry.reg.name,
+      ownerGeneration: this.generation,
+      status: "running",
+      trigger,
+      scheduledAt: tick.manual ? null : tick.scheduledAt,
+      startedAt: startedAtIso,
+      finishedAt: null,
+      durationMs: null,
+      error: null,
+    });
+    this.trackReport(runningReport);
     try {
       const metadata = await entry.reg.handler(abortController.signal, tick);
       run.status = "success";
@@ -431,9 +474,110 @@ export class SchedulerClient {
       });
       return false;
     } finally {
-      run.finishedAt = new Date();
+      const finishedAt = new Date();
+      run.finishedAt = finishedAt;
       run.durationMs = Date.now() - startedAtMs;
+      const finishedAtIso = finishedAt.toISOString();
+      const durationMs = run.durationMs;
       entry.history.push(run);
+      // 结束：同 runId 再上报终态（本地 error → wire failure）。同样不阻塞 handler（此刻 handler 已
+      // 返回），但**chain 在 running 上报之后**——保证同一 run 的两次上报有序：running 先落库/先进缓冲，
+      // terminal 的 flush 才能带上它，否则 instant handler 下二者并发竞争会让失败的 running 滞留缓冲。
+      // running 上报永不抛，故 .then 恒执行。若进程恰在终态 POST in-flight 时 stop（既没进缓冲也没
+      // 落库），该 run 停在 running，靠下次异代重连的 markInterruptedBelow 兜底标 interrupted——这正是
+      // interrupted 自愈的设计目的。
+      const terminalStatus = run.status === "success" ? "success" : "failure";
+      this.trackReport(
+        runningReport.then(() =>
+          this.reportRun({
+            id: runId,
+            ownerId: this.ownerId,
+            taskName: entry.reg.name,
+            ownerGeneration: this.generation,
+            status: terminalStatus,
+            trigger,
+            scheduledAt: tick.manual ? null : tick.scheduledAt,
+            startedAt: startedAtIso,
+            finishedAt: finishedAtIso,
+            durationMs,
+            error: run.errorMessage ?? null,
+          }),
+        ),
+      );
+    }
+  }
+
+  // === run 上报（两阶段回报 + 未 ack 缓冲，#493 P2）===
+
+  /** 追踪一个在途上报 promise，完成即摘除。回报永不抛，故无需 catch。 */
+  private trackReport(promise: Promise<void>): void {
+    this.pendingReports.add(promise);
+    void promise.finally(() => this.pendingReports.delete(promise));
+  }
+
+  /** 等所有在途上报排空（测试与将来的 graceful drain 用）。等待期间新增的上报也一并等到。 */
+  public async settleReports(): Promise<void> {
+    while (this.pendingReports.size > 0) {
+      await Promise.all([...this.pendingReports]);
+    }
+  }
+
+  /**
+   * 上报一条 run 执行历史。上报**永不抛**（不能让上报失败搞崩 handler 主流程）：先 flush 未 ack 缓冲，
+   * 再 POST 本条；失败则进缓冲等重推。同 runId 去重合并（terminal 覆盖 running）由 buffer 保证。
+   */
+  private async reportRun(payload: SchedulerReportRunRequest): Promise<void> {
+    // 先尝试冲掉此前攒下的未 ack 上报，保序（旧的先走）。
+    await this.flushUnackedReports();
+    try {
+      await this.api.reportRun(payload);
+    } catch (error) {
+      this.bufferUnackedReport(payload);
+      logger.warn("scheduler run report failed, buffered for retry", {
+        event: "scheduler_client.report_failed",
+        taskName: payload.taskName,
+        status: payload.status,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /** 把一条上报放进未 ack 缓冲：按 runId 去重合并（后到覆盖），超量丢最旧并 warn。 */
+  private bufferUnackedReport(payload: SchedulerReportRunRequest): void {
+    // 已存在同 runId 先删再插，让它落到 Map 末尾（保持插入序 = 重推序，terminal 覆盖 running）。
+    this.unackedReports.delete(payload.id);
+    this.unackedReports.set(payload.id, payload);
+    while (this.unackedReports.size > UNACKED_REPORT_BUFFER_CAP) {
+      const oldest = this.unackedReports.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.unackedReports.delete(oldest);
+      logger.warn("scheduler unacked report buffer full, dropped oldest", {
+        event: "scheduler_client.report_buffer_overflow",
+        droppedRunId: oldest,
+      });
+    }
+  }
+
+  /** 冲一次未 ack 缓冲：逐条重推，成功的移除，失败的留下等下次；重推安全（scheduler 幂等）。 */
+  private async flushUnackedReports(): Promise<void> {
+    if (this.unackedReports.size === 0) {
+      return;
+    }
+    for (const [runId, payload] of [...this.unackedReports]) {
+      try {
+        await this.api.reportRun(payload);
+        // compare-and-delete：只在这条仍是缓冲里那一条时才删。await 期间另一个 handler 可能已把同
+        // runId 换成更新的 terminal（bufferUnackedReport 的 delete+set）——那时无条件 delete 会把
+        // terminal 误删、让 run 永远停在 running。用引用相等守住：被替换了就不删，留给下次 flush。
+        if (this.unackedReports.get(runId) === payload) {
+          this.unackedReports.delete(runId);
+        }
+      } catch {
+        // 仍失败：留在缓冲，下次再冲。中止本轮 flush（连接大概率还没恢复），避免空转。
+        return;
+      }
     }
   }
 }

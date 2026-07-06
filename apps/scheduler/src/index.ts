@@ -13,8 +13,12 @@ runService({
       // 仅绑 127.0.0.1：只有使用方（agent）在同机 reach 它，绝不对外。
       bindHost: "127.0.0.1",
       port: runtime.port,
-      // 关停：停掉所有 driver（in-flight handler 在使用方进程，与本引擎无关）+ 断开库连接。
-      cleanup: [() => runtime.engine.stop(), () => closeDb(runtime.database)],
+      // 关停：停掉所有 driver（in-flight handler 在使用方进程，与本引擎无关）+ 停历史 GC + 断库连接。
+      cleanup: [
+        () => runtime.engine.stop(),
+        () => runtime.stopHistoryGc(),
+        () => closeDb(runtime.database),
+      ],
     };
   },
 });
