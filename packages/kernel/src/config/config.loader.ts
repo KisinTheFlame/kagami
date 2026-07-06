@@ -21,6 +21,9 @@ const DEFAULT_AGENT_RESOURCE_MAX_BYTES = 4 * 1024 * 1024;
 // fileMaxBytes 32 MiB 独立于上下文 cap（4 MiB）——文件不进上下文，可更大，但压在 OSS 50MB 请求上限下。
 const DEFAULT_AGENT_RESOURCE_FILE_ROOT = "~/kagami";
 const DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES = 32 * 1024 * 1024;
+// scheduler 历史 GC 保留窗口（#493 P2）：每 (owner, task) 分组保留最近 N 条，且删除早于 M 天的行。
+const DEFAULT_SCHEDULER_HISTORY_RETENTION_COUNT = 200;
+const DEFAULT_SCHEDULER_HISTORY_RETENTION_DAYS = 90;
 const DEFAULT_ITHOME_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT = 8;
 const DEFAULT_ITHOME_ARTICLE_MAX_CHARS = 8000;
@@ -205,8 +208,11 @@ const ServicesSchema = z
     pixel: ServiceEndpointSchema,
     // scheduler 除 host/port 外还持有独立 Prisma 库（issue #493）：TaskRun 执行历史落它自己的
     // SQLite 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
+    // historyRetentionCount / historyRetentionDays 是历史 GC 的保留窗口（#493 P2，取交集=更严）。
     scheduler: ServiceEndpointSchema.extend({
       databaseUrl: DatabaseUrlSchema,
+      historyRetentionCount: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_COUNT),
+      historyRetentionDays: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_DAYS),
     }),
   })
   .strict();

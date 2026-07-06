@@ -21,6 +21,8 @@ services:
     host: 127.0.0.1
     port: 20014
     databaseUrl: file:./data/sqlite/scheduler.db # scheduler 独占 SQLite 库（TaskRun 执行历史，#493），与主库 kagami.db 同目录不同文件
+    historyRetentionCount: 200 # 历史 GC：每 (owner, task) 分组保留最近多少条（#493 P2）
+    historyRetentionDays: 90 # 历史 GC：删除早于多少天的行（与 count 取交集=更严；running 行永不删）
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径

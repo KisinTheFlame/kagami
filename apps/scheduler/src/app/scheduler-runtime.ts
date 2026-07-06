@@ -14,11 +14,16 @@ import { TaskRunStore } from "../infra/db/task-run-store.js";
 
 const logger = new AppLogger({ source: "scheduler-bootstrap" });
 
+// 历史 GC 周期（#493 P2）：启动后延迟一个周期再首跑，避免启动风暴。
+const HISTORY_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 export type SchedulerRuntime = {
   app: FastifyInstance;
   engine: SchedulerEngine;
   database: Database;
   port: number;
+  /** 关停时清掉历史 GC 定时器。 */
+  stopHistoryGc: () => void;
 };
 
 /**
@@ -43,17 +48,31 @@ export async function buildSchedulerRuntime(): Promise<SchedulerRuntime> {
     logger,
     handlers: [
       new HealthHandler(),
-      new SchedulerRegisterHandler({ engine }),
+      new SchedulerRegisterHandler({ engine, store }),
       new SchedulerTicksHandler({ broadcaster, engine }),
       new SchedulerRunsHandler({ store }),
     ],
   });
+
+  // 历史 GC（#493 P2）：进程内周期 prune TaskRun。延迟一个周期首跑避免启动风暴；unref 不挡进程退出。
+  const retentionCount = config.services.scheduler.historyRetentionCount;
+  const retentionDays = config.services.scheduler.historyRetentionDays;
+  const historyGcTimer = setInterval(() => {
+    void store.pruneHistory({ retentionCount, retentionDays }).catch(error => {
+      logger.warn("scheduler history GC failed", {
+        event: "scheduler.history_gc_failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, HISTORY_GC_INTERVAL_MS);
+  historyGcTimer.unref?.();
 
   return {
     app,
     engine,
     database,
     port: config.services.scheduler.port,
+    stopHistoryGc: () => clearInterval(historyGcTimer),
   };
 }
 

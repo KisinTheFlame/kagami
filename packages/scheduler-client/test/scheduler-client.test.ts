@@ -168,3 +168,134 @@ describe("SchedulerClient dispatch", () => {
     expect(runs.at(-1)!.errorMessage).toContain("boom");
   });
 });
+
+// === run 上报（两阶段回报 + 未 ack 缓冲，#493 P2）===
+
+type CapturedReport = Record<string, unknown>;
+
+/**
+ * 造一个只认 POST /scheduler/runs 的 fetch mock：把请求体收集起来，可控制某几次调用失败（模拟离线）。
+ * `failFirst` 让开头 N 次上报抛错，进未 ack 缓冲；其余成功返回 { ok: true }。
+ */
+function makeReportFetch(opts: { failFirst?: number } = {}): {
+  fetch: typeof fetch;
+  reports: CapturedReport[];
+} {
+  const reports: CapturedReport[] = [];
+  let calls = 0;
+  const failFirst = opts.failFirst ?? 0;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    calls += 1;
+    if (calls <= failFirst) {
+      throw new Error("offline");
+    }
+    const body = init?.body ? (JSON.parse(String(init.body)) as CapturedReport) : {};
+    reports.push(body);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    } as Response;
+  }) as unknown as typeof fetch;
+  return { fetch: fetchImpl, reports };
+}
+
+function makeReportClient(fetchImpl: typeof fetch): SchedulerClient {
+  return new SchedulerClient({ baseUrl: "http://127.0.0.1:1", ownerId: "agent", fetch: fetchImpl });
+}
+
+describe("SchedulerClient run reporting", () => {
+  it("reports running then a terminal success under the same run id (two-phase)", async () => {
+    const { fetch: f, reports } = makeReportFetch();
+    const client = makeReportClient(f);
+    client.register(reg({ handler: async () => {} }));
+
+    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
+    await client.settleReports(); // 回报是 fire-and-forget，等在途上报排空再断言。
+
+    expect(reports).toHaveLength(2);
+    expect(reports[0]!.status).toBe("running");
+    expect(reports[1]!.status).toBe("success");
+    // 同一 runId 两次上报。
+    expect(reports[0]!.id).toBe(reports[1]!.id);
+    expect(reports[1]!.finishedAt).toBeTypeOf("string");
+    expect(reports[1]!.durationMs).toBeTypeOf("number");
+    // scheduled 触发带 scheduledAt，trigger=scheduled。
+    expect(reports[0]!.trigger).toBe("scheduled");
+    expect(reports[0]!.scheduledAt).toBe("2026-07-05T00:00:00.000Z");
+  });
+
+  it("maps a thrown handler to a failure terminal report with the error message", async () => {
+    const { fetch: f, reports } = makeReportFetch();
+    const client = makeReportClient(f);
+    client.register(
+      reg({
+        handler: async () => {
+          throw new Error("kaboom");
+        },
+      }),
+    );
+
+    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
+    await client.settleReports();
+
+    expect(reports).toHaveLength(2);
+    expect(reports[0]!.status).toBe("running");
+    expect(reports[1]!.status).toBe("failure");
+    expect(reports[1]!.error).toContain("kaboom");
+  });
+
+  it("reports manual triggerNow with trigger=manual and null scheduledAt", async () => {
+    const { fetch: f, reports } = makeReportFetch();
+    const client = makeReportClient(f);
+    client.register(reg({ handler: async () => {} }));
+
+    await client.triggerNow("t");
+    await client.settleReports();
+
+    expect(reports).toHaveLength(2);
+    expect(reports[0]!.trigger).toBe("manual");
+    expect(reports[0]!.scheduledAt).toBeNull();
+  });
+
+  it("does not report skipped_overlap runs (never truly ran)", async () => {
+    const { fetch: f, reports } = makeReportFetch();
+    const client = makeReportClient(f);
+    const gate = deferred();
+    client.register(
+      reg({
+        overlap: "skip",
+        handler: async () => {
+          await gate.promise;
+        },
+      }),
+    );
+
+    const first = client.triggerNow("t"); // 占锁，阻塞在 gate
+    const second = await client.triggerNow("t"); // running → overlap，不跑不上报
+    expect(second).toEqual({ ok: false, reason: "overlap" });
+    gate.resolve();
+    await first;
+    await client.settleReports();
+
+    // 只有真跑的那次两阶段上报；skipped_overlap 不产生任何上报。
+    expect(reports.filter(r => r.status === "running")).toHaveLength(1);
+    expect(reports).toHaveLength(2);
+  });
+
+  it("buffers a failed report and re-pushes it on the next report attempt (at-least-once)", async () => {
+    // 让前 1 次上报失败（running 进缓冲），后续成功：下一次上报前会先 flush 掉缓冲里的 running。
+    const { fetch: f, reports } = makeReportFetch({ failFirst: 1 });
+    const client = makeReportClient(f);
+    client.register(reg({ handler: async () => {} }));
+
+    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
+    await client.settleReports();
+
+    // running 首发失败→缓冲；终态上报前 flush 出 running，再发终态 → 共 2 条成功落地。
+    expect(reports).toHaveLength(2);
+    const statuses = reports.map(r => r.status);
+    expect(statuses).toContain("running");
+    expect(statuses).toContain("success");
+  });
+});
