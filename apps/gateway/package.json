@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-web-dist.mjs",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js"
   },
@@ -15,6 +15,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@kagami/web": "workspace:*",
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3"
   }

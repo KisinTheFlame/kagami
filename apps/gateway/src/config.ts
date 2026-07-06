@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveConfigPath } from "@kagami/config/source";
 import { parse } from "yaml";
 
@@ -16,7 +17,7 @@ export interface GatewayConfig {
   metricTarget: URL;
   /** oss 上游基址，由 services.oss.host/port 拼出（管理台只读对象浏览 /oss-object 走它）。 */
   ossTarget: URL;
-  /** 静态资源目录：仓库根下的 apps/web/dist。 */
+  /** 静态资源目录：gateway 自身产物下的 dist/public（构建期由 @kagami/web 的 dist 拷入，见 #496）。 */
   distDir: string;
 }
 
@@ -48,7 +49,6 @@ function resolveEndpoint(endpoint: RawServiceEndpoint | undefined, name: string)
 export function loadGatewayConfig(): GatewayConfig {
   // 定位逻辑收敛到 @kagami/config；gateway 只读非隐私的 services 块，不触 config.secret.yaml。
   const configPath = resolveConfigPath(import.meta.url);
-  const repoRoot = path.dirname(configPath);
   const raw = parse(readFileSync(configPath, "utf8")) as RawConfig;
   const services = raw.services;
 
@@ -64,6 +64,7 @@ export function loadGatewayConfig(): GatewayConfig {
     llmTarget: resolveEndpoint(services?.llm, "llm"),
     metricTarget: resolveEndpoint(services?.metric, "metric"),
     ossTarget: resolveEndpoint(services?.oss, "oss"),
-    distDir: path.join(repoRoot, "apps/web/dist"),
+    // 运行时 config.js 位于 apps/gateway/dist/，前端产物在同级 public/ 下（构建期拷入）。
+    distDir: path.join(path.dirname(fileURLToPath(import.meta.url)), "public"),
   };
 }

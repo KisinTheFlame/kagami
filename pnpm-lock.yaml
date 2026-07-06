@@ -207,6 +207,9 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
     devDependencies:
+      '@kagami/web':
+        specifier: workspace:*
+        version: link:../web
       '@types/node':
         specifier: ^24.10.1
         version: 24.11.0
