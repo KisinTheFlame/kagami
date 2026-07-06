@@ -8,6 +8,7 @@ import { SchedulerEngine } from "../application/scheduler-engine.js";
 import { TickBroadcaster } from "../application/tick-broadcaster.js";
 import { SchedulerRegisterHandler } from "../http/scheduler-register.handler.js";
 import { SchedulerRunsHandler } from "../http/scheduler-runs.handler.js";
+import { SchedulerTasksViewHandler } from "../http/scheduler-tasks-view.handler.js";
 import { SchedulerTicksHandler } from "../http/scheduler-ticks.handler.js";
 import { SchedulerTriggerHandler } from "../http/scheduler-trigger.handler.js";
 import { closeDb, configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
@@ -52,6 +53,7 @@ export async function buildSchedulerRuntime(): Promise<SchedulerRuntime> {
       new SchedulerRegisterHandler({ engine, store }),
       new SchedulerTicksHandler({ broadcaster, engine }),
       new SchedulerRunsHandler({ store }),
+      new SchedulerTasksViewHandler({ engine, store }),
       new SchedulerTriggerHandler({ engine }),
     ],
   });

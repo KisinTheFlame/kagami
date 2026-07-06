@@ -3,6 +3,8 @@ import { consoleApiContract } from "@kagami/console-api/contract";
 import { authApiContract } from "@kagami/llm-api/auth-contract";
 import { metricApiContract } from "@kagami/metric-api/contract";
 import { ossConsoleContract } from "@kagami/oss-api/contract";
+import { schedulerTasksViewContract } from "@kagami/scheduler-api/tasks-view";
+import { schedulerTriggerContract } from "@kagami/scheduler-api/trigger";
 import { createClient, type CreateClientOptions } from "@kagami/rpc-client/client";
 import { resolveApiBaseUrl } from "@/lib/api";
 
@@ -71,3 +73,9 @@ export const agentClient = createClient(agentApiContract, clientOptions);
 export const authClient = createClient(authApiContract, clientOptions);
 export const metricClient = createClient(metricApiContract, clientOptions);
 export const ossConsoleClient = createClient(ossConsoleContract, clientOptions);
+
+// 调度任务面（#493 P4）：前端第一次直连 scheduler，不再经 agent 中转。两个契约拆两条路由——全局
+// 查询（GET /scheduler/tasks）与手动触发（POST /scheduler/tasks/:o/:t/trigger）——经 gateway 的
+// /scheduler/tasks 前缀分流到 kagami-scheduler。
+export const schedulerTasksClient = createClient(schedulerTasksViewContract, clientOptions);
+export const schedulerTriggerClient = createClient(schedulerTriggerContract, clientOptions);

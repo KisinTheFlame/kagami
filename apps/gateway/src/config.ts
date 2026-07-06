@@ -17,6 +17,8 @@ export interface GatewayConfig {
   metricTarget: URL;
   /** oss 上游基址，由 services.oss.host/port 拼出（管理台只读对象浏览 /oss-object 走它）。 */
   ossTarget: URL;
+  /** scheduler 上游基址，由 services.scheduler.host/port 拼出（调度任务全局查询 / 触发 /scheduler/tasks 走它）。 */
+  schedulerTarget: URL;
   /** 静态资源目录：gateway 自身产物下的 dist/public（构建期由 @kagami/web 的 dist 拷入，见 #496）。 */
   distDir: string;
 }
@@ -34,6 +36,7 @@ interface RawConfig {
     llm?: RawServiceEndpoint;
     metric?: RawServiceEndpoint;
     oss?: RawServiceEndpoint;
+    scheduler?: RawServiceEndpoint;
   };
 }
 
@@ -64,6 +67,7 @@ export function loadGatewayConfig(): GatewayConfig {
     llmTarget: resolveEndpoint(services?.llm, "llm"),
     metricTarget: resolveEndpoint(services?.metric, "metric"),
     ossTarget: resolveEndpoint(services?.oss, "oss"),
+    schedulerTarget: resolveEndpoint(services?.scheduler, "scheduler"),
     // 运行时 config.js 位于 apps/gateway/dist/，前端产物在同级 public/ 下（构建期拷入）。
     distDir: path.join(path.dirname(fileURLToPath(import.meta.url)), "public"),
   };
