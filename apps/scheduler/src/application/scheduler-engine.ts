@@ -15,6 +15,17 @@ const logger = new AppLogger({ source: "scheduler.engine" });
 
 type Driver = CronDriver | IntervalDriver;
 
+/**
+ * 一个活任务的 tick 侧状态（跨 owner 全局视图 #493 P4 用）：engine 拥有的部分——归属、名字、
+ * 周期、下次触发。执行历史（isRunning / recentRuns）在 DB 侧，由 handler 左连接补齐。
+ */
+export type SchedulerActiveTask = {
+  ownerId: string;
+  name: string;
+  schedule: SchedulerTaskSchedule;
+  nextRunAt: string | null;
+};
+
 type TaskEntry = {
   manifest: SchedulerTaskManifest;
   driver: Driver;
@@ -146,6 +157,26 @@ export class SchedulerEngine {
         lastEmittedAt: entry.lastEmittedAt ? entry.lastEmittedAt.toISOString() : null,
       })),
     };
+  }
+
+  /**
+   * 跨全部 owner 列出活任务的 tick 侧状态（全局观测视图 #493 P4）。status(ownerId) 的多 owner 版：
+   * 前端不再逐 owner 查，而是一次拿全部活任务，再由 handler 左连接执行历史。engine 是纯派生态，
+   * 只知道「谁有哪些任务、下次何时触发」，不碰 DB。
+   */
+  public listActiveTasks(): SchedulerActiveTask[] {
+    const result: SchedulerActiveTask[] = [];
+    for (const [ownerId, owner] of this.owners) {
+      for (const entry of owner.tasks.values()) {
+        result.push({
+          ownerId,
+          name: entry.manifest.name,
+          schedule: entry.manifest.schedule,
+          nextRunAt: entry.driver.peekNextRun()?.toISOString() ?? null,
+        });
+      }
+    }
+    return result;
   }
 
   /**

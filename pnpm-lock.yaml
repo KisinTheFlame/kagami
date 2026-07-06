@@ -502,6 +502,9 @@ importers:
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
+      '@kagami/scheduler-api':
+        specifier: workspace:*
+        version: link:../../packages/scheduler-api
       '@radix-ui/react-select':
         specifier: ^2.2.6
         version: 2.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
