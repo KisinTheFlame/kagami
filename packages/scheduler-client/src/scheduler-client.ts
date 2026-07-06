@@ -4,8 +4,6 @@ import { createClient, type JsonClient } from "@kagami/rpc-client/client";
 import { schedulerApiContract, type SchedulerTaskManifest } from "@kagami/scheduler-api/contract";
 import { SchedulerTickEventSchema, SCHEDULER_TICKS_SSE_PATH } from "@kagami/scheduler-api/event";
 import type { SchedulerReportRunRequest } from "@kagami/scheduler-api/run";
-import type { SchedulerTaskStatus } from "@kagami/scheduler-api/schedule";
-import { TaskRunHistory, toWireRun, type TaskRun } from "./task-run.js";
 import type {
   OccurrenceStore,
   SchedulerTaskRegistration,
@@ -20,7 +18,6 @@ const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 // 30s 内无任何帧（含 15s 心跳）判半开：主动 abort 重连。留 2 个心跳周期裕量（复刻 napcat）。
 const DEAD_CONNECTION_TIMEOUT_MS = 30_000;
-const DEFAULT_HISTORY_SIZE = 10;
 // 未 ack 的 run 上报缓冲上限（#493 P2）：内存 at-least-once，超量丢最旧并 warn。
 const UNACKED_REPORT_BUFFER_CAP = 100;
 
@@ -28,7 +25,6 @@ type FetchLike = typeof fetch;
 
 type RegistryEntry = {
   reg: SchedulerTaskRegistration;
-  history: TaskRunHistory;
   running: boolean;
   abortController: AbortController | null;
   /** overlap=queue 时暂存的最新待补 tick（只留一个，天然合并）。 */
@@ -47,14 +43,13 @@ type SchedulerClientDeps = {
   callbackBaseUrl: string;
   /** occurrence 去重持久化（仅当有 dedupe 任务时需要）。 */
   occurrenceStore?: OccurrenceStore;
-  historySize?: number;
   fetch?: FetchLike;
 };
 
 /**
  * kagami-scheduler 的使用方 SDK（issue #428）：把"名字 + 周期 + 补偿策略"注册给独立调度器进程，
  * 长连它的 SSE tick 流，收到 tick 自动派发到本地 handler。业务逻辑全在使用方——本 SDK 只负责
- * 注册、订阅、本地并发（mutex/queue）、occurrence 去重、执行历史。
+ * 注册、订阅、本地并发（mutex/queue）、occurrence 去重、执行结果两阶段回报。
  *
  * 注册即写死（甲）：任务集硬编码在使用方代码，每次（重）连重新声明同一份，无 DB、无动态增删。
  * 连接生命周期：注册（POST replace-all）→ 打开 SSE → 掉线指数退避 + 半开检测重连（重连重新注册）。
@@ -65,7 +60,6 @@ export class SchedulerClient {
   private readonly ownerId: string;
   private readonly callbackBaseUrl: string;
   private readonly occurrenceStore: OccurrenceStore | undefined;
-  private readonly historySize: number;
   private readonly fetchImpl: FetchLike;
   private readonly api: JsonClient<typeof schedulerApiContract>;
   private readonly registry = new Map<string, RegistryEntry>();
@@ -93,14 +87,12 @@ export class SchedulerClient {
     ownerId,
     callbackBaseUrl,
     occurrenceStore,
-    historySize,
     fetch: fetchImpl,
   }: SchedulerClientDeps) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.ownerId = ownerId;
     this.callbackBaseUrl = callbackBaseUrl;
     this.occurrenceStore = occurrenceStore;
-    this.historySize = historySize ?? DEFAULT_HISTORY_SIZE;
     this.fetchImpl = fetchImpl ?? fetch;
     this.api = createClient(schedulerApiContract, {
       baseUrl: this.baseUrl,
@@ -122,7 +114,6 @@ export class SchedulerClient {
     }
     this.registry.set(reg.name, {
       reg,
-      history: new TaskRunHistory({ capacity: this.historySize }),
       running: false,
       abortController: null,
       queuedTick: null,
@@ -149,45 +140,14 @@ export class SchedulerClient {
   }
 
   /**
-   * 人工触发：本地直接跑 handler（不走调度器、不走 SSE），本地 mutex 生效。manual 触发**绕过**
-   * occurrence 去重（允许人工重跑 digest），也不写去重存储。
-   */
-  public async triggerNow(name: string): Promise<TriggerNowResult> {
-    const entry = this.registry.get(name);
-    if (!entry) {
-      return { ok: false, reason: "unknown_task" };
-    }
-    // 运行中判定 + 占锁全程同步（同 onTick），保证与 SSE tick 互不并跑。
-    if (entry.running) {
-      return { ok: false, reason: "overlap" };
-    }
-    entry.running = true;
-    const now = new Date().toISOString();
-    const tick: SchedulerTick = {
-      taskName: name,
-      occurrenceId: `${name}@${now}`,
-      scheduledAt: now,
-      emittedAt: now,
-      manual: true,
-    };
-    try {
-      await this.runClaimed(entry, tick);
-    } finally {
-      entry.running = false;
-      entry.abortController = null;
-    }
-    return { ok: true };
-  }
-
-  /**
    * detached 人工触发（统一触发 #493 P3）：同步做受理判定（unknown_task / overlap）+ 占锁，**立即**
    * 返回受理结果，然后把 handler 丢到后台跑（不 await）。给统一触发的反向 callback 端点用——scheduler
    * → owner 的 callback 契约有 5s 硬超时，绝不能等 handler 跑完（data-retention 分块删可远超 5s），
    * 否则长任务会被 scheduler 误判成 owner_unreachable。后台 run 的结果照常经两阶段回报落库。
    *
-   * 与 {@link triggerNow} 的唯一区别是「不等 handler」：受理判定 + 占锁仍同步完成（保住与 SSE tick
-   * 的互斥），锁在后台 run 的 finally 释放；后台 promise 带 catch 防 unhandledRejection（runClaimed
-   * 正常不抛，但 occurrenceStore 读写可能抛）。
+   * 「不等 handler」：受理判定 + 占锁仍同步完成（保住与 SSE tick 的互斥），锁在后台 run 的 finally
+   * 释放；后台 promise 带 catch 防 unhandledRejection（runClaimed 正常不抛，但 occurrenceStore
+   * 读写可能抛）。
    */
   public triggerNowDetached(name: string): TriggerNowResult {
     const entry = this.registry.get(name);
@@ -220,32 +180,6 @@ export class SchedulerClient {
         entry.abortController = null;
       });
     return { ok: true };
-  }
-
-  /**
-   * 合成一个任务的完整状态视图：schedule / recentRuns / isRunning 来自本地，nextRunAt 查调度器
-   * status（不可达则降级 null）。web 观测页的数据源。
-   */
-  public async listStatus(): Promise<SchedulerTaskStatus[]> {
-    const nextRunByName = new Map<string, string | null>();
-    try {
-      const res = await this.api.status({ ownerId: this.ownerId });
-      for (const task of res.tasks) {
-        nextRunByName.set(task.name, task.nextRunAt);
-      }
-    } catch (error) {
-      logger.warn("scheduler status query failed, nextRunAt degraded to null", {
-        event: "scheduler_client.status_failed",
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    return [...this.registry.values()].map(entry => ({
-      name: entry.reg.name,
-      schedule: entry.reg.schedule,
-      nextRunAt: nextRunByName.get(entry.reg.name) ?? null,
-      isRunning: entry.running,
-      recentRuns: entry.history.toArray().map(toWireRun),
-    }));
   }
 
   // === 后台连接循环 ===
@@ -401,7 +335,7 @@ export class SchedulerClient {
 
   // === 派发 + 本地并发/去重 ===
 
-  /** 收到一个 tick（SSE 或 triggerNow 合成）：经本地 mutex/queue 守卫后去重并跑 handler。 */
+  /** 收到一个 tick（SSE 或 triggerNowDetached 合成）：经本地 mutex/queue 守卫后去重并跑 handler。 */
   public async onTick(tick: SchedulerTick): Promise<void> {
     const entry = this.registry.get(tick.taskName);
     if (!entry) {
@@ -411,13 +345,13 @@ export class SchedulerClient {
       });
       return;
     }
-    // 运行中判定 + 占锁**全程同步**（无 await 间隙），杜绝并发 tick / triggerNow 对同一任务并跑。
+    // 运行中判定 + 占锁**全程同步**（无 await 间隙），杜绝并发 tick / 触发对同一任务并跑。
     if (entry.running) {
       if (entry.reg.overlap === "queue") {
         entry.queuedTick = tick; // 只留最新一个待补 tick（天然合并）。
         return;
       }
-      entry.history.push(skippedOverlapRun());
+      // overlap=skip：本次 tick 直接丢弃（不跑、不回报——skipped_overlap 从没真跑）。
       return;
     }
     entry.running = true;
@@ -431,7 +365,7 @@ export class SchedulerClient {
 
   /**
    * 已持有 running 锁后的处理：去重（manual 绕过）→ 跑 handler → 成功才推进去重游标 → 排空 queue
-   * （overlap=queue 才有）。占锁在调用方（onTick / triggerNow）同步完成，这里全程独占，无并发。
+   * （overlap=queue 才有）。占锁在调用方（onTick / triggerNowDetached）同步完成，这里全程独占，无并发。
    */
   private async runClaimed(entry: RegistryEntry, tick: SchedulerTick): Promise<void> {
     let current: SchedulerTick | null = tick;
@@ -471,27 +405,23 @@ export class SchedulerClient {
   }
 
   /**
-   * 跑一次 handler 并记录执行历史。返回 handler 是否成功（供 runClaimed 决定要不要推进去重游标）。
-   * running 锁的占用/释放归调用方（onTick / triggerNow）。
+   * 跑一次 handler 并两阶段回报执行结果。返回 handler 是否成功（供 runClaimed 决定要不要推进去重游标）。
+   * running 锁的占用/释放归调用方（onTick / triggerNowDetached）。
    *
    * 两阶段回报（#493 P2）：开始时生成 runId 上报一次 running，结束时用**同一 runId**再上报终态
    * （success/failure）。上报失败进未 ack 缓冲、绝不阻塞 handler 主流程结果。只有真跑了的 run 才回报——
-   * skipped_overlap 从没真跑（且 wire 无此枚举），不在这里产生。
+   * skipped_overlap 从没真跑（且 wire 无此枚举），不在这里产生。执行历史唯一事实源在 scheduler 侧
+   * 的 TaskRun 库（由这里的回报落库），SDK 本地不再另存一份（P5 拆除 listStatus 后本地历史无读者）。
    */
   private async runHandler(entry: RegistryEntry, tick: SchedulerTick): Promise<boolean> {
     const abortController = new AbortController();
     const runId = randomUUID();
-    const startedAt = new Date();
-    const run: TaskRun = {
-      startedAt,
-      finishedAt: null,
-      durationMs: null,
-      status: "running",
-    };
     entry.abortController = abortController;
     const startedAtMs = Date.now();
     const trigger: SchedulerReportRunRequest["trigger"] = tick.manual ? "manual" : "scheduled";
-    const startedAtIso = startedAt.toISOString();
+    const startedAtIso = new Date(startedAtMs).toISOString();
+    let succeeded = false;
+    let errorMessage: string | null = null;
     // 开始：上报 running（scheduledAt 仅 scheduled 触发有意义，manual 为 null）。
     // fire-and-forget：绝不 await——回报是旁路遥测，不能阻塞 handler 启动（scheduler 不可达时
     // reportRun 会走满 30s 超时）。失败自动进未 ack 缓冲，靠状态感知 upsert 保序、幂等重推。
@@ -510,35 +440,27 @@ export class SchedulerClient {
     });
     this.trackReport(runningReport);
     try {
-      const metadata = await entry.reg.handler(abortController.signal, tick);
-      run.status = "success";
-      if (metadata) {
-        run.metadata = metadata;
-      }
+      await entry.reg.handler(abortController.signal, tick);
+      succeeded = true;
       return true;
     } catch (error) {
-      run.status = "error";
-      run.errorMessage = error instanceof Error ? error.message : String(error);
+      errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn("scheduled task handler failed", {
         event: "scheduler_client.task_failed",
         taskName: entry.reg.name,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
       return false;
     } finally {
-      const finishedAt = new Date();
-      run.finishedAt = finishedAt;
-      run.durationMs = Date.now() - startedAtMs;
-      const finishedAtIso = finishedAt.toISOString();
-      const durationMs = run.durationMs;
-      entry.history.push(run);
-      // 结束：同 runId 再上报终态（本地 error → wire failure）。同样不阻塞 handler（此刻 handler 已
+      const finishedAtIso = new Date().toISOString();
+      const durationMs = Date.now() - startedAtMs;
+      // 结束：同 runId 再上报终态（handler 抛错 → wire failure）。同样不阻塞 handler（此刻 handler 已
       // 返回），但**chain 在 running 上报之后**——保证同一 run 的两次上报有序：running 先落库/先进缓冲，
       // terminal 的 flush 才能带上它，否则 instant handler 下二者并发竞争会让失败的 running 滞留缓冲。
       // running 上报永不抛，故 .then 恒执行。若进程恰在终态 POST in-flight 时 stop（既没进缓冲也没
       // 落库），该 run 停在 running，靠下次异代重连的 markInterruptedBelow 兜底标 interrupted——这正是
       // interrupted 自愈的设计目的。
-      const terminalStatus = run.status === "success" ? "success" : "failure";
+      const terminalStatus = succeeded ? "success" : "failure";
       this.trackReport(
         runningReport.then(() =>
           this.reportRun({
@@ -552,7 +474,7 @@ export class SchedulerClient {
             startedAt: startedAtIso,
             finishedAt: finishedAtIso,
             durationMs,
-            error: run.errorMessage ?? null,
+            error: errorMessage,
           }),
         ),
       );
@@ -632,11 +554,6 @@ export class SchedulerClient {
       }
     }
   }
-}
-
-function skippedOverlapRun(): TaskRun {
-  const now = new Date();
-  return { startedAt: now, finishedAt: now, durationMs: 0, status: "skipped_overlap" };
 }
 
 function sleep(ms: number): Promise<void> {

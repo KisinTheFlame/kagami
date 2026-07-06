@@ -18,10 +18,10 @@ type SchedulerTriggerCallbackHandlerDeps = {
  * - `{ ok: true }` → `{ outcome: "accepted" }`
  * - `{ ok: false, reason }` → `{ outcome: "rejected", reason }`（unknown_task / overlap）
  *
- * 用 **detached** 触发（非 triggerNow）：callback 契约 5s 硬超时，必须**立即**回受理、handler 后台跑，
- * 否则长任务（data-retention 分块删）会被 scheduler 误判 owner_unreachable。owner 侧从不产生
- * owner_unreachable——那是 scheduler 对 callback 失败的归一。前端旧路径（agent-api
- * triggerSchedulerTask，仍用阻塞式 triggerNow）并存到 P5 才拆。
+ * 用 **detached** 触发：callback 契约 5s 硬超时，必须**立即**回受理、handler 后台跑，否则长任务
+ * （data-retention 分块删）会被 scheduler 误判 owner_unreachable。owner 侧从不产生 owner_unreachable
+ * ——那是 scheduler 对 callback 失败的归一。（P5 已拆掉 agent-api 的旧阻塞式 triggerSchedulerTask
+ * 门面，统一触发是唯一路径。）
  */
 export class SchedulerTriggerCallbackHandler {
   private readonly schedulerClient: SchedulerClient;

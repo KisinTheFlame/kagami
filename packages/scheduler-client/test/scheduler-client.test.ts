@@ -108,49 +108,27 @@ describe("SchedulerClient dispatch", () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
-  it("manual triggerNow bypasses dedupe and runs locally", async () => {
+  it("manual triggerNowDetached bypasses dedupe and runs locally", async () => {
     const store = memStore();
     const client = makeClient(store);
-    const handler = vi.fn(async () => {});
-    client.register(reg({ dedupe: true, handler }));
-
-    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
-    const result = await client.triggerNow("t"); // manual: bypasses dedupe
-    expect(result).toEqual({ ok: true });
-    expect(handler).toHaveBeenCalledTimes(2);
-  });
-
-  it("skips overlapping runs and records skipped_overlap", async () => {
-    const client = makeClient();
     const gate = deferred();
     let calls = 0;
-    client.register(
-      reg({
-        overlap: "skip",
-        handler: async () => {
-          calls += 1;
-          await gate.promise;
-        },
-      }),
-    );
+    const handler = vi.fn(async () => {
+      calls += 1;
+      // 首次（onTick）立即结束；第二次（detached）阻塞在 gate，方便断言受理即返回。
+      if (calls > 1) {
+        await gate.promise;
+      }
+    });
+    client.register(reg({ dedupe: true, handler }));
 
-    const first = client.triggerNow("t"); // starts running, blocks on gate
-    const second = await client.triggerNow("t"); // running → overlap
-    expect(second).toEqual({ ok: false, reason: "overlap" });
+    await client.onTick(tick("2026-07-05T00:00:00.000Z")); // scheduled：跑一次并推进去重游标
+    // 同一 occurrence 若走 scheduled 会被去重跳过；manual detached 绕过去重照常起跑。
+    expect(client.triggerNowDetached("t")).toEqual({ ok: true });
+    await Promise.resolve(); // 放行 microtask 让后台 handler 起跑
+    expect(handler).toHaveBeenCalledTimes(2);
     gate.resolve();
-    await first;
-    expect(calls).toBe(1);
-
-    const status = await client.listStatus();
-    // nextRunAt degrades to null (scheduler offline), recentRuns still local.
-    expect(status[0]!.nextRunAt).toBeNull();
-    expect(status[0]!.recentRuns.some(r => r.status === "success")).toBe(true);
-  });
-
-  it("triggerNow reports unknown_task for unregistered names", async () => {
-    const client = makeClient();
-    client.register(reg({ handler: async () => {} }));
-    expect(await client.triggerNow("ghost")).toEqual({ ok: false, reason: "unknown_task" });
+    await new Promise(resolve => setTimeout(resolve, 0)); // 等后台 run 收尾释放锁
   });
 
   it("triggerNowDetached returns the receipt without awaiting the handler", async () => {
@@ -189,22 +167,6 @@ describe("SchedulerClient dispatch", () => {
     const client = makeClient();
     client.register(reg({ handler: async () => {} }));
     expect(client.triggerNowDetached("ghost")).toEqual({ ok: false, reason: "unknown_task" });
-  });
-
-  it("records error runs when a handler throws", async () => {
-    const client = makeClient();
-    client.register(
-      reg({
-        handler: async () => {
-          throw new Error("boom");
-        },
-      }),
-    );
-    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
-    const status = await client.listStatus();
-    const runs = status[0]!.recentRuns;
-    expect(runs.at(-1)!.status).toBe("error");
-    expect(runs.at(-1)!.errorMessage).toContain("boom");
   });
 });
 
@@ -289,12 +251,13 @@ describe("SchedulerClient run reporting", () => {
     expect(reports[1]!.error).toContain("kaboom");
   });
 
-  it("reports manual triggerNow with trigger=manual and null scheduledAt", async () => {
+  it("reports manual triggerNowDetached with trigger=manual and null scheduledAt", async () => {
     const { fetch: f, reports } = makeReportFetch();
     const client = makeReportClient(f);
     client.register(reg({ handler: async () => {} }));
 
-    await client.triggerNow("t");
+    expect(client.triggerNowDetached("t")).toEqual({ ok: true });
+    await new Promise(resolve => setTimeout(resolve, 0)); // 等后台 run 收尾
     await client.settleReports();
 
     expect(reports).toHaveLength(2);
@@ -302,7 +265,7 @@ describe("SchedulerClient run reporting", () => {
     expect(reports[0]!.scheduledAt).toBeNull();
   });
 
-  it("does not report skipped_overlap runs (never truly ran)", async () => {
+  it("does not report overlap-skipped ticks (never truly ran)", async () => {
     const { fetch: f, reports } = makeReportFetch();
     const client = makeReportClient(f);
     const gate = deferred();
@@ -315,14 +278,15 @@ describe("SchedulerClient run reporting", () => {
       }),
     );
 
-    const first = client.triggerNow("t"); // 占锁，阻塞在 gate
-    const second = await client.triggerNow("t"); // running → overlap，不跑不上报
-    expect(second).toEqual({ ok: false, reason: "overlap" });
+    expect(client.triggerNowDetached("t")).toEqual({ ok: true }); // 占锁，后台阻塞在 gate
+    await Promise.resolve(); // 放行 microtask 让后台 handler 起跑
+    // running 中：SSE tick 撞上 overlap=skip → 直接丢弃，不跑不上报。
+    await client.onTick(tick("2026-07-05T00:00:00.000Z"));
     gate.resolve();
-    await first;
+    await new Promise(resolve => setTimeout(resolve, 0)); // 等后台 run 收尾释放锁
     await client.settleReports();
 
-    // 只有真跑的那次两阶段上报；skipped_overlap 不产生任何上报。
+    // 只有真跑的那次两阶段上报；overlap-skipped 不产生任何上报。
     expect(reports.filter(r => r.status === "running")).toHaveLength(1);
     expect(reports).toHaveLength(2);
   });

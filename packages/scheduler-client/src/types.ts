@@ -3,7 +3,7 @@ import type { TaskRunMetadata } from "./task-run.js";
 
 /**
  * 派发给 handler 的 tick。是 wire `SchedulerTickEvent` 的超集：`manual` 放宽成 boolean——SSE 到达的
- * tick 恒为 false，`triggerNow` 本地构造的 tick 为 true（人工触发不走 SSE，见 SchedulerClient）。
+ * tick 恒为 false，`triggerNowDetached` 本地构造的 tick 为 true（人工触发不走 SSE，见 SchedulerClient）。
  */
 export type SchedulerTick = {
   taskName: string;
@@ -13,7 +13,7 @@ export type SchedulerTick = {
   manual: boolean;
 };
 
-/** 使用方注册的一个任务的 handler：跑真正的业务；返回可选 metadata 进执行历史。signal 用于优雅关停。 */
+/** 使用方注册的一个任务的 handler：跑真正的业务。可选返回 metadata（当前 SDK 不转发，见 TaskRunMetadata）。signal 用于优雅关停。 */
 export type SchedulerTaskHandler = (
   signal: AbortSignal,
   tick: SchedulerTick,
@@ -30,7 +30,7 @@ export type SchedulerTaskRegistration = {
   misfire: SchedulerMisfirePolicy;
   /** 仅 misfire=catchup 有意义。 */
   maxCatchup?: number;
-  /** SDK 本地并发策略：skip=运行中丢弃并记 skipped_overlap；queue=当前跑完再补跑最新一次。 */
+  /** SDK 本地并发策略：skip=运行中丢弃本次 tick；queue=当前跑完再补跑最新一次。 */
   overlap: "skip" | "queue";
   /** 开启 occurrence 去重（防同一 occurrence 因重连补发/重叠被处理两次）。需注入 OccurrenceStore。 */
   dedupe?: boolean;

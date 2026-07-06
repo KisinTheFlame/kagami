@@ -9,7 +9,7 @@ import { z } from "zod";
  *    自报的 callbackBaseUrl，反向 POST 回它的 triggerCallback 端点，把 owner 的判别联合原样透传
  *    回前端；owner 未注册/连不上则归一为 `owner_unreachable`。
  * 2. **反向回调**（scheduler → owner，owner 实现）：`triggerCallback`。owner 收到 taskName 后
- *    本地跑对应 handler（SDK triggerNow），回 accepted / rejected。owner 侧从不产生
+ *    本地受理并后台跑对应 handler（SDK triggerNowDetached），回 accepted / rejected。owner 侧从不产生
  *    `owner_unreachable`——那是 scheduler 对 callback 失败的归一。
  *
  * 两条路由的判别联合形状**均 HTTP 200**（in-band 判别联合，沿袭 register accepted:false 风格，
