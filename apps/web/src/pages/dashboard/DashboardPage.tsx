@@ -1,6 +1,6 @@
-import type { MetricChartBucket } from "@kagami/metric-api/chart";
+import { type MetricChartBucket, METRIC_CHART_MAX_POINTS } from "@kagami/metric-api/chart";
 import { RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -30,6 +30,7 @@ type RangePreset = {
   key: string;
   label: string;
   rangeMs: number;
+  /** 该 range 下的默认桶（换 range 时重置到这个，保证总在合法点数内）。 */
   bucket: MetricChartBucket;
 };
 
@@ -41,27 +42,55 @@ const RANGE_PRESETS: readonly RangePreset[] = [
 
 const DEFAULT_PRESET = RANGE_PRESETS[1];
 
-function computeRange(preset: RangePreset): DashboardRange {
+const BUCKET_OPTIONS: readonly { key: MetricChartBucket; label: string; ms: number }[] = [
+  { key: "10s", label: "10 秒", ms: 10 * 1000 },
+  { key: "1m", label: "1 分钟", ms: 60 * 1000 },
+  { key: "5m", label: "5 分钟", ms: 5 * 60 * 1000 },
+  { key: "30m", label: "30 分钟", ms: 30 * 60 * 1000 },
+  { key: "1h", label: "1 小时", ms: 60 * 60 * 1000 },
+];
+
+type TimeWindow = { startAt: string; endAt: string };
+
+function computeWindow(preset: RangePreset): TimeWindow {
   const endAt = new Date();
   const startAt = new Date(endAt.getTime() - preset.rangeMs);
-  return { startAt: startAt.toISOString(), endAt: endAt.toISOString(), bucket: preset.bucket };
+  return { startAt: startAt.toISOString(), endAt: endAt.toISOString() };
 }
 
 export function DashboardPage() {
   const [presetKey, setPresetKey] = useState(DEFAULT_PRESET.key);
   const preset = RANGE_PRESETS.find(item => item.key === presetKey) ?? DEFAULT_PRESET;
-  // range 只在初次 / 换 preset / 手动刷新时重算一次，所有图共享，保证桶轴对齐、也避免每次渲染 refetch。
-  const [range, setRange] = useState<DashboardRange>(() => computeRange(DEFAULT_PRESET));
+  // 时间窗 + 桶都只在初次 / 换 range / 换桶 / 刷新时变一次，所有图共享 → 桶轴对齐、也避免每次渲染 refetch。
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>(() => computeWindow(DEFAULT_PRESET));
+  const [bucket, setBucket] = useState<MetricChartBucket>(DEFAULT_PRESET.bucket);
+
+  // 只提供在当前 range 下点数不超上限的桶（大 range + 小桶会被后端 2000 点 guard 拒）。
+  const bucketOptions = useMemo(
+    () =>
+      BUCKET_OPTIONS.filter(
+        option => Math.floor(preset.rangeMs / option.ms) + 1 <= METRIC_CHART_MAX_POINTS,
+      ),
+    [preset.rangeMs],
+  );
+
+  const range: DashboardRange = { ...timeWindow, bucket };
 
   function handleSelectPreset(nextKey: string) {
     const next = RANGE_PRESETS.find(item => item.key === nextKey) ?? DEFAULT_PRESET;
     setPresetKey(next.key);
-    setRange(computeRange(next));
+    setTimeWindow(computeWindow(next));
+    // 换 range 时把桶重置成该 range 的默认桶（总在合法点数内），避免残留一个对新 range 越界的桶。
+    setBucket(next.bucket);
+  }
+
+  function handleSelectBucket(nextBucket: string) {
+    setBucket(nextBucket as MetricChartBucket);
   }
 
   function handleRefresh() {
-    // 重算 range（endAt 推到 now）→ 各图 query key 变更、自行 refetch 并显示各自 loading 态。
-    setRange(computeRange(preset));
+    // 重算窗口（endAt 推到 now）→ 各图 query key 变更、自行 refetch；桶不变。
+    setTimeWindow(computeWindow(preset));
   }
 
   return (
@@ -77,6 +106,18 @@ export function DashboardPage() {
               {RANGE_PRESETS.map(item => (
                 <SelectItem key={item.key} value={item.key}>
                   {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={bucket} onValueChange={handleSelectBucket}>
+            <SelectTrigger className="h-8 w-24 rounded-none text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {bucketOptions.map(option => (
+                <SelectItem key={option.key} value={option.key}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
