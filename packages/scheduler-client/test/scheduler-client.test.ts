@@ -15,6 +15,7 @@ function makeClient(occurrenceStore?: OccurrenceStore): SchedulerClient {
   return new SchedulerClient({
     baseUrl: "http://127.0.0.1:1",
     ownerId: "agent",
+    callbackBaseUrl: "http://127.0.0.1:2",
     fetch: OFFLINE_FETCH,
     ...(occurrenceStore ? { occurrenceStore } : {}),
   });
@@ -152,6 +153,44 @@ describe("SchedulerClient dispatch", () => {
     expect(await client.triggerNow("ghost")).toEqual({ ok: false, reason: "unknown_task" });
   });
 
+  it("triggerNowDetached returns the receipt without awaiting the handler", async () => {
+    const client = makeClient();
+    const gate = deferred();
+    let started = false;
+    let finished = false;
+    client.register(
+      reg({
+        handler: async () => {
+          started = true;
+          await gate.promise;
+          finished = true;
+        },
+      }),
+    );
+
+    // 同步受理：立即回 accepted，不等 handler 跑完（P3 修复的核心——callback 5s 超时不能等长任务）。
+    expect(client.triggerNowDetached("t")).toEqual({ ok: true });
+    await Promise.resolve(); // 放行一个 microtask 让后台 handler 起跑
+    expect(started).toBe(true);
+    expect(finished).toBe(false); // handler 仍阻塞在 gate，受理已返回
+
+    // 在跑中 → 第二次 detached 触发被判 overlap（与 SSE tick 共用同一把同步锁）。
+    expect(client.triggerNowDetached("t")).toEqual({ ok: false, reason: "overlap" });
+
+    gate.resolve();
+    await gate.promise;
+    await new Promise(resolve => setTimeout(resolve, 0)); // 等后台 runClaimed 收尾 + finally 释放锁
+    expect(finished).toBe(true);
+    // 锁已释放 → 可再次触发。
+    expect(client.triggerNowDetached("t")).toEqual({ ok: true });
+  });
+
+  it("triggerNowDetached reports unknown_task for unregistered names", () => {
+    const client = makeClient();
+    client.register(reg({ handler: async () => {} }));
+    expect(client.triggerNowDetached("ghost")).toEqual({ ok: false, reason: "unknown_task" });
+  });
+
   it("records error runs when a handler throws", async () => {
     const client = makeClient();
     client.register(
@@ -201,7 +240,12 @@ function makeReportFetch(opts: { failFirst?: number } = {}): {
 }
 
 function makeReportClient(fetchImpl: typeof fetch): SchedulerClient {
-  return new SchedulerClient({ baseUrl: "http://127.0.0.1:1", ownerId: "agent", fetch: fetchImpl });
+  return new SchedulerClient({
+    baseUrl: "http://127.0.0.1:1",
+    ownerId: "agent",
+    callbackBaseUrl: "http://127.0.0.1:2",
+    fetch: fetchImpl,
+  });
 }
 
 describe("SchedulerClient run reporting", () => {
@@ -281,6 +325,42 @@ describe("SchedulerClient run reporting", () => {
     // 只有真跑的那次两阶段上报；skipped_overlap 不产生任何上报。
     expect(reports.filter(r => r.status === "running")).toHaveLength(1);
     expect(reports).toHaveLength(2);
+  });
+
+  it("reports callbackBaseUrl in the register request (#493 P3)", async () => {
+    // 造一个只认 POST /scheduler/register 的 fetch mock：捕获 register body，回 accepted，然后让
+    // 后续 SSE 打开失败（回 500）以尽快退出 connectOnce，避免真去长连。
+    let registerBody: Record<string, unknown> | undefined;
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/scheduler/register")) {
+        registerBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ accepted: true, generation: registerBody!.generation }),
+        } as Response;
+      }
+      // SSE 打开：回非 2xx 让 connectOnce 抛出、loop 退避（测试里随即 stop）。
+      return { ok: false, status: 500, body: null } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const client = new SchedulerClient({
+      baseUrl: "http://127.0.0.1:1",
+      ownerId: "agent",
+      callbackBaseUrl: "http://127.0.0.1:20003",
+      fetch: fetchImpl,
+    });
+    client.register(reg({ handler: async () => {} }));
+    client.start();
+    // 轮询等 register 发生（后台循环异步）。
+    for (let i = 0; i < 50 && registerBody === undefined; i += 1) {
+      await new Promise(r => setTimeout(r, 5));
+    }
+    client.stop();
+
+    expect(registerBody).toBeDefined();
+    expect(registerBody!.callbackBaseUrl).toBe("http://127.0.0.1:20003");
+    expect(registerBody!.ownerId).toBe("agent");
   });
 
   it("buffers a failed report and re-pushes it on the next report attempt (at-least-once)", async () => {

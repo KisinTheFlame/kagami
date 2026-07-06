@@ -36,6 +36,7 @@ function registerBody(generation: number): Record<string, unknown> {
     ownerId: "agent",
     clientInstanceId: "inst-1",
     generation,
+    callbackBaseUrl: "http://127.0.0.1:20003",
     tasks: [
       { name: "ithome-poll", schedule: { kind: "interval", intervalMs: 1000 }, misfire: "latest" },
     ],

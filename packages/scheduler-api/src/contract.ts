@@ -29,12 +29,18 @@ export type SchedulerTaskManifest = z.infer<typeof SchedulerTaskManifestSchema>;
  * - `ownerId`：使用方稳定标识（agent = "agent"）。
  * - `clientInstanceId`：本次进程启动的随机 UUID，标识化身。
  * - `generation`：进程启动时刻毫秒时间戳，天然单调；调度器只保留见过的最大 generation。
+ * - `callbackBaseUrl`：owner 自描述的反向回调根地址（如 `http://127.0.0.1:20003`）。统一触发
+ *   （#493 P3）里，前端 → scheduler 的手动触发经此地址反向 POST 回 owner 的 triggerCallback 端点，
+ *   由 owner 本地跑 handler。owner 每次（重）连自报，replace-all 时更新（进程可能换端口/重启）。
  */
 export const SchedulerRegisterRequestSchema = z
   .object({
     ownerId: z.string().min(1),
     clientInstanceId: z.string().min(1),
     generation: z.number().int().nonnegative(),
+    // url()：scheduler 会据此现构造 client 反向 POST，做个基本格式护栏（拒非 URL 垃圾）。owner 是
+    // 本机可信服务、scheduler 绑 127.0.0.1 只本机可 register，故不做更严的 host allowlist。
+    callbackBaseUrl: z.string().url(),
     tasks: z.array(SchedulerTaskManifestSchema),
   })
   .strict();

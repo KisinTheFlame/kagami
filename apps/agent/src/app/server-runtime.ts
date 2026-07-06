@@ -26,6 +26,7 @@ import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/applicat
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { buildDataRetentionTasks } from "../agent/capabilities/data-retention/data-retention-scheduled-tasks.js";
 import { SchedulerViewHandler } from "./scheduler-view.handler.js";
+import { SchedulerTriggerCallbackHandler } from "./scheduler-trigger-callback.handler.js";
 import { AppStateOccurrenceStore } from "./app-state-occurrence-store.js";
 import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
@@ -229,6 +230,10 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const schedulerClient = new SchedulerClient({
     baseUrl: `http://${config.services.scheduler.host}:${config.services.scheduler.port}`,
     ownerId: "agent",
+    // 反向回调根地址（统一触发 #493 P3）：从 services.agent 派生（host 是 reachable host，
+    // scheduler 同机据此 reach 本进程）。scheduler 收到前端手动触发后反向 POST 回这里的
+    // /internal/scheduler-trigger 端点（见 SchedulerTriggerCallbackHandler）。
+    callbackBaseUrl: `http://${config.services.agent.host}:${config.services.agent.port}`,
     occurrenceStore: new AppStateOccurrenceStore({
       appStateStore: new PrismaAppStateStore({ database }),
     }),
@@ -251,6 +256,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
       new SchedulerViewHandler({ schedulerClient }),
+      new SchedulerTriggerCallbackHandler({ schedulerClient }),
     ],
   });
 

@@ -40,6 +40,11 @@ type SchedulerClientDeps = {
   baseUrl: string;
   /** 使用方稳定标识（agent = "agent"）。 */
   ownerId: string;
+  /**
+   * 本进程的反向回调根地址（统一触发 #493 P3），如 `http://127.0.0.1:20003`。register 时上报给
+   * 调度器，前端手动触发经它反向 POST 回本进程的 triggerCallback 端点。
+   */
+  callbackBaseUrl: string;
   /** occurrence 去重持久化（仅当有 dedupe 任务时需要）。 */
   occurrenceStore?: OccurrenceStore;
   historySize?: number;
@@ -58,6 +63,7 @@ type SchedulerClientDeps = {
 export class SchedulerClient {
   private readonly baseUrl: string;
   private readonly ownerId: string;
+  private readonly callbackBaseUrl: string;
   private readonly occurrenceStore: OccurrenceStore | undefined;
   private readonly historySize: number;
   private readonly fetchImpl: FetchLike;
@@ -85,12 +91,14 @@ export class SchedulerClient {
   public constructor({
     baseUrl,
     ownerId,
+    callbackBaseUrl,
     occurrenceStore,
     historySize,
     fetch: fetchImpl,
   }: SchedulerClientDeps) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.ownerId = ownerId;
+    this.callbackBaseUrl = callbackBaseUrl;
     this.occurrenceStore = occurrenceStore;
     this.historySize = historySize ?? DEFAULT_HISTORY_SIZE;
     this.fetchImpl = fetchImpl ?? fetch;
@@ -172,6 +180,49 @@ export class SchedulerClient {
   }
 
   /**
+   * detached 人工触发（统一触发 #493 P3）：同步做受理判定（unknown_task / overlap）+ 占锁，**立即**
+   * 返回受理结果，然后把 handler 丢到后台跑（不 await）。给统一触发的反向 callback 端点用——scheduler
+   * → owner 的 callback 契约有 5s 硬超时，绝不能等 handler 跑完（data-retention 分块删可远超 5s），
+   * 否则长任务会被 scheduler 误判成 owner_unreachable。后台 run 的结果照常经两阶段回报落库。
+   *
+   * 与 {@link triggerNow} 的唯一区别是「不等 handler」：受理判定 + 占锁仍同步完成（保住与 SSE tick
+   * 的互斥），锁在后台 run 的 finally 释放；后台 promise 带 catch 防 unhandledRejection（runClaimed
+   * 正常不抛，但 occurrenceStore 读写可能抛）。
+   */
+  public triggerNowDetached(name: string): TriggerNowResult {
+    const entry = this.registry.get(name);
+    if (!entry) {
+      return { ok: false, reason: "unknown_task" };
+    }
+    // 与 triggerNow 同：运行中判定 + 占锁全程同步，杜绝并发 tick / 触发对同一任务并跑。
+    if (entry.running) {
+      return { ok: false, reason: "overlap" };
+    }
+    entry.running = true;
+    const now = new Date().toISOString();
+    const tick: SchedulerTick = {
+      taskName: name,
+      occurrenceId: `${name}@${now}`,
+      scheduledAt: now,
+      emittedAt: now,
+      manual: true,
+    };
+    void this.runClaimed(entry, tick)
+      .catch(error => {
+        logger.warn("detached manual trigger run failed", {
+          event: "scheduler_client.detached_trigger_failed",
+          taskName: name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        entry.running = false;
+        entry.abortController = null;
+      });
+    return { ok: true };
+  }
+
+  /**
    * 合成一个任务的完整状态视图：schedule / recentRuns / isRunning 来自本地，nextRunAt 查调度器
    * status（不可达则降级 null）。web 观测页的数据源。
    */
@@ -239,6 +290,7 @@ export class SchedulerClient {
       ownerId: this.ownerId,
       clientInstanceId: this.clientInstanceId,
       generation: this.generation,
+      callbackBaseUrl: this.callbackBaseUrl,
       tasks: manifests,
     });
     if (!registered.accepted) {
