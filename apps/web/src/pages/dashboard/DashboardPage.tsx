@@ -150,7 +150,7 @@ export function DashboardPage() {
             aggregator="sum"
             tagFilters={{ kind: { op: "eq", value: "output" } }}
             groupByTag={MODEL_TAG}
-            chartType="area"
+            chartType="line"
             range={range}
           />
         </div>

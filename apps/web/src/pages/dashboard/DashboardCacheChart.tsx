@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 import {
   formatCompactNumber,
   formatFullDateTime,
@@ -150,15 +150,14 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
-              <Area
+              <Line
                 yAxisId="tokens"
-                type="linear"
+                type="monotone"
                 dataKey="tokens"
                 name="总输入 token"
                 stroke="var(--color-tokens)"
-                fill="var(--color-tokens)"
-                fillOpacity={0.2}
                 strokeWidth={2}
+                dot={false}
                 connectNulls={false}
                 isAnimationActive={false}
               />
