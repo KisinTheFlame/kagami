@@ -4,6 +4,7 @@ import {
   CalendarClock,
   FileText,
   FlaskConical,
+  Gauge,
   HardDrive,
   History,
   type LucideIcon,
@@ -22,6 +23,7 @@ type NavItem = {
 };
 
 export const navItems: readonly NavItem[] = [
+  { to: "/dashboard", label: "大盘", icon: Gauge },
   { to: "/main-agent-context", label: "主 Agent 上下文", icon: Bot },
   { to: "/control-panel", label: "控制面板", icon: SlidersHorizontal },
   { to: "/scheduler-tasks", label: "调度任务", icon: CalendarClock },
