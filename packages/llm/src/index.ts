@@ -9,9 +9,9 @@
  */
 
 /**
- * Kagami 当前接入的 LLM provider 标识全集。这是 LLM 协议层的契约枚举：前端
- * playground、config schema、后端 provider 装配、auth 全部从这里派生，避免
- * 字面量在多处各写一遍而漂移。**新增 / 删除 provider 只改这一处。**
+ * Kagami 当前接入的 LLM provider 标识全集。这是 LLM 协议层的契约枚举：config
+ * schema、后端 provider 装配、auth 全部从这里派生，避免字面量在多处各写一遍而
+ * 漂移。**新增 / 删除 provider 只改这一处。**
  *
  * 刻意用 `as const` 数组而非单独写 type union：既派生出字面量联合类型，又能在
  * 运行时遍历（如 client 探测可用 provider）。本包保持零 zod 依赖，需要 zod 校验
@@ -53,7 +53,7 @@ export type LlmContentPart = LlmTextContentPart | LlmImageContentPart;
 /**
  * 把图片内容归一成 base64 字符串。防御性：兼容三种历史/运行时形态——
  * - base64 字符串（当前契约）：原样返回；
- * - Node Buffer（同进程内存中的图，如 vision/playground 同请求构造）：toString("base64")；
+ * - Node Buffer（同进程内存中的图，如 vision 同请求构造）：toString("base64")；
  * - JSON 往返后的 Buffer 残骸 `{ type:"Buffer", data:number[] }`（旧持久化数据 / 已中毒的
  *   历史消息）：Buffer.from(data) 还原后转 base64。
  *

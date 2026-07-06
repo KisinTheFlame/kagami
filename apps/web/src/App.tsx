@@ -25,11 +25,6 @@ const SchedulerTasksPage = lazy(() =>
     default: module.SchedulerTasksPage,
   })),
 );
-const LlmPlaygroundPage = lazy(() =>
-  import("@/pages/llm-playground/LlmPlaygroundPage").then(module => ({
-    default: module.LlmPlaygroundPage,
-  })),
-);
 const LlmHistoryPage = lazy(() =>
   import("@/pages/llm-history/LlmHistoryPage").then(module => ({ default: module.LlmHistoryPage })),
 );
@@ -76,7 +71,6 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/control-panel" element={<ControlPanelPage />} />
           <Route path="/scheduler-tasks" element={<SchedulerTasksPage />} />
-          <Route path="/llm-playground" element={<LlmPlaygroundPage />} />
           <Route path="/llm-history" element={<LlmHistoryPage />} />
           <Route path="/inner-thought" element={<InnerThoughtPage />} />
           <Route path="/app-log-history" element={<AppLogHistoryPage />} />

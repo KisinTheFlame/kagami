@@ -2,7 +2,6 @@ import {
   AppManager,
   createAppSubtoolOwner,
   createUnguardedSubtoolOwner,
-  HELP_TOOL_NAME,
   HelpTool,
   OutOfScopeTool,
   ToolCatalog,
@@ -15,8 +14,8 @@ import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
 import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import type { LlmClient } from "@kagami/llm-client";
-import { DefaultLlmPlaygroundService } from "../llm/application/llm-playground.impl.service.js";
-import type { LlmPlaygroundService } from "../llm/application/llm-playground.service.js";
+import { DefaultLlmProviderService } from "../llm/application/llm-provider.impl.service.js";
+import type { LlmProviderService } from "../llm/application/llm-provider.service.js";
 import type { MetricClient } from "@kagami/metric-client/client";
 import type { NapcatClient } from "../acl/napcat-client.js";
 import type { AgentMessageService } from "../agent/capabilities/messaging/application/agent-message.service.js";
@@ -34,7 +33,7 @@ import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent
 import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-input.js";
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
-import { WaitTool, WAIT_TOOL_NAME } from "../agent/runtime/root-agent/tools/wait.tool.js";
+import { WaitTool } from "../agent/runtime/root-agent/tools/wait.tool.js";
 import { createRootContextSummaryReminderMessage } from "../agent/runtime/context/context-message-factory.js";
 import { SummaryTaskAgent } from "../agent/capabilities/context-summary/task-agent/summary-task-agent.js";
 import { FinalizeSummaryTool } from "../agent/capabilities/context-summary/task-agent/tools/finalize-summary.tool.js";
@@ -61,10 +60,7 @@ import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra
 import { AppEntryResetExtension } from "../agent/runtime/root-agent/extensions/app-entry-reset.extension.js";
 import { ResourceService } from "../agent/capabilities/resource/application/resource.service.js";
 import { ResourceFileService } from "../agent/capabilities/resource/application/resource-file.service.js";
-import {
-  ReadResourceTool,
-  READ_RESOURCE_TOOL_NAME,
-} from "../agent/capabilities/resource/tools/read-resource.tool.js";
+import { ReadResourceTool } from "../agent/capabilities/resource/tools/read-resource.tool.js";
 import { DownloadResourceTool } from "../agent/capabilities/resource/tools/download-resource.tool.js";
 import { UploadResourceTool } from "../agent/capabilities/resource/tools/upload-resource.tool.js";
 import type { OssClient } from "../acl/oss-client.js";
@@ -101,7 +97,8 @@ type BuildAgentRuntimeInput = {
 export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
   mainAgentContextQueryService: MainAgentContextQueryService;
-  llmPlaygroundService: LlmPlaygroundService;
+  /** LLM provider 列举服务：管理台「LLM 调用历史」按 provider 过滤用（/llm/providers 路由）。 */
+  llmProviderService: LlmProviderService;
   /**
    * 「发现待办」task agent：工具装配与主 Agent 字节相等（tools / system 前缀命中
    * KV 缓存），invoke 只挂 propose_todos 终止子工具。由 wiring 层包进
@@ -421,18 +418,7 @@ export async function buildAgentRuntime({
     });
   }
 
-  const llmPlaygroundService = new DefaultLlmPlaygroundService({
-    llmClient,
-    playgroundToolDefinitions: toolCatalog
-      .pick([
-        SWITCH_TOOL_NAME,
-        WAIT_TOOL_NAME,
-        INVOKE_TOOL_NAME,
-        READ_RESOURCE_TOOL_NAME,
-        HELP_TOOL_NAME,
-      ])
-      .definitions(),
-  });
+  const llmProviderService = new DefaultLlmProviderService({ llmClient });
   const mainAgentContextQueryService = new DefaultMainAgentContextQueryService({
     rootAgentRuntime,
   });
@@ -440,7 +426,7 @@ export async function buildAgentRuntime({
   return {
     rootAgentRuntime,
     mainAgentContextQueryService,
-    llmPlaygroundService,
+    llmProviderService,
     todoSuggestionTaskAgent,
     qqApp,
     qqOutboundService,

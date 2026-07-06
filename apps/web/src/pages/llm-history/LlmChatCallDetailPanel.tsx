@@ -4,9 +4,7 @@ import {
   type LlmChatCallSummary,
 } from "@kagami/console-api/llm-chat-call";
 import { type LlmRequestMessage, type LlmRequestUserContentPart } from "@kagami/llm-api/llm-chat";
-import { FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +14,6 @@ import {
   type JsonPanelCopyStatus,
   type JsonPanelSectionItem,
 } from "@/components/ui/json-panel-section";
-import {
-  buildPlaygroundImportDraftFromHistory,
-  type PlaygroundImportLocationState,
-} from "@/pages/llm-playground/playground-import";
 import { toStatusLabel } from "./format-status";
 import { parseLlmChatCallDetail } from "./llm-chat-call-detail-parser";
 import { useLlmChatCallDetail } from "./useLlmChatCallDetail";
@@ -52,7 +46,6 @@ type InputEntry =
     };
 
 export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelProps) {
-  const navigate = useNavigate();
   const [inputOrder, setInputOrder] = useState<"asc" | "desc">("desc");
   const [activeCopyPanelKey, setActiveCopyPanelKey] = useState<string | null>(null);
   const [activeCopyItemId, setActiveCopyItemId] = useState<number | null>(null);
@@ -62,16 +55,6 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
   const item: LlmChatCallItem | null = detailQuery.data ?? null;
   const headerInfo: DetailHeaderInfo | null = item ?? summary;
   const parsed = useMemo(() => (item ? parseLlmChatCallDetail(item) : null), [item]);
-  const importDraft = useMemo(() => {
-    if (item === null || !parsed?.request) {
-      return null;
-    }
-
-    return buildPlaygroundImportDraftFromHistory({
-      item,
-      request: parsed.request,
-    });
-  }, [item, parsed]);
   const orderedInputEntries = useMemo(() => {
     if (!parsed?.request) {
       return [] as InputEntry[];
@@ -232,25 +215,6 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
             value={headerInfo.latencyMs === null ? "—" : `${headerInfo.latencyMs} ms`}
           />
           <MetaItem label="时间" value={formatDateTime(headerInfo.createdAt)} />
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            onClick={() =>
-              importDraft
-                ? navigate("/llm-playground", {
-                    state: {
-                      playgroundImport: importDraft,
-                    } satisfies PlaygroundImportLocationState,
-                  })
-                : undefined
-            }
-            disabled={importDraft === null}
-          >
-            <FlaskConical className="mr-2 h-4 w-4" />
-            导入到 Playground
-          </Button>
         </div>
 
         {parsed.hasSchemaError ? (

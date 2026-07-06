@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LlmPlaygroundService } from "../../src/llm/application/llm-playground.service.js";
+import type { LlmProviderService } from "../../src/llm/application/llm-provider.service.js";
 import { LlmHandler } from "../../src/llm/http/llm.handler.js";
 
 describe("LlmHandler", () => {
@@ -23,13 +23,11 @@ describe("LlmHandler", () => {
         },
       ],
     });
-    const llmPlaygroundService: LlmPlaygroundService = {
+    const llmProviderService: LlmProviderService = {
       listProviders,
-      listPlaygroundTools: vi.fn(),
-      chat: vi.fn(),
     };
 
-    const handler = new LlmHandler({ llmPlaygroundService });
+    const handler = new LlmHandler({ llmProviderService });
     handler.register(app);
 
     const response = await app.inject({
@@ -47,108 +45,5 @@ describe("LlmHandler", () => {
       ],
     });
     expect(listProviders).toHaveBeenCalledTimes(1);
-  });
-
-  it("should list playground tool definitions", async () => {
-    const listPlaygroundTools = vi.fn().mockResolvedValue({
-      tools: [
-        {
-          name: "finish",
-          description: "done",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-      ],
-    });
-    const llmPlaygroundService: LlmPlaygroundService = {
-      listProviders: vi.fn(),
-      listPlaygroundTools,
-      chat: vi.fn(),
-    };
-
-    const handler = new LlmHandler({ llmPlaygroundService });
-    handler.register(app);
-
-    const response = await app.inject({
-      method: "GET",
-      url: "/llm/playground-tools",
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      tools: [
-        {
-          name: "finish",
-          description: "done",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-        },
-      ],
-    });
-    expect(listPlaygroundTools).toHaveBeenCalledTimes(1);
-  });
-
-  it("should execute a chat playground request", async () => {
-    const chat = vi.fn().mockResolvedValue({
-      provider: "claude-code",
-      model: "claude-sonnet-4-20250514",
-      message: {
-        role: "assistant",
-        content: "pong",
-        toolCalls: [],
-      },
-      nativeRequestPayload: {
-        model: "claude-sonnet-4-20250514",
-        messages: [{ role: "user", content: "ping" }],
-      },
-      usage: {
-        totalTokens: 12,
-      },
-    });
-    const llmPlaygroundService: LlmPlaygroundService = {
-      listProviders: vi.fn(),
-      listPlaygroundTools: vi.fn(),
-      chat,
-    };
-
-    const handler = new LlmHandler({ llmPlaygroundService });
-    handler.register(app);
-
-    const payload = {
-      provider: "claude-code",
-      model: "claude-sonnet-4-20250514",
-      messages: [{ role: "user", content: "ping" }],
-      tools: [],
-      toolChoice: "none",
-    };
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/llm/chat",
-      payload,
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      provider: "claude-code",
-      model: "claude-sonnet-4-20250514",
-      message: {
-        role: "assistant",
-        content: "pong",
-        toolCalls: [],
-      },
-      nativeRequestPayload: {
-        model: "claude-sonnet-4-20250514",
-        messages: [{ role: "user", content: "ping" }],
-      },
-      usage: {
-        totalTokens: 12,
-      },
-    });
-    expect(chat).toHaveBeenCalledWith(payload);
   });
 });

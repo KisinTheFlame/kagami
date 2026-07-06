@@ -27,7 +27,6 @@ export const queryKeys = {
   },
   llm: {
     providers: () => ["llm", "providers"] as const,
-    playgroundTools: () => ["llm", "playground-tools"] as const,
     historyList: (params: QueryParams) => ["llm-chat-call", "list", params] as const,
     historyDetail: (id: number) => ["llm-chat-call", "detail", id] as const,
   },
