@@ -2,8 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Prisma schema / migrations / 生成的 client 都归属持久化包 @kagami/persistence。
-CORE_DIR="$ROOT_DIR/packages/persistence"
+# 参数化：默认指向持久化包 @kagami/persistence 及其 server.databaseUrl，保持既有调用行为不变。
+# scheduler 有独立 Prisma 库（issue #493），通过覆盖这两个环境变量复用同一脚本：
+#   PRISMA_PACKAGE_DIR：Prisma schema / migrations / 生成 client 所在包目录（相对仓库根）。
+#   PRISMA_CONFIG_KEY ：连库命令（migrate / db push 等）读取 databaseUrl 的 config.yaml dot path。
+PRISMA_PACKAGE_DIR="${PRISMA_PACKAGE_DIR:-packages/persistence}"
+PRISMA_CONFIG_KEY="${PRISMA_CONFIG_KEY:-server.databaseUrl}"
+CORE_DIR="$ROOT_DIR/$PRISMA_PACKAGE_DIR"
 
 if [ "$#" -eq 0 ]; then
   echo "Usage: scripts/prisma.sh <prisma args...>"
@@ -17,7 +22,7 @@ fi
 if [ "$1" = "generate" ]; then
   DATABASE_URL="file:./.prisma-generate-placeholder"
 else
-  DATABASE_URL="$(node "$ROOT_DIR/scripts/read-config.mjs" server.databaseUrl)"
+  DATABASE_URL="$(node "$ROOT_DIR/scripts/read-config.mjs" "$PRISMA_CONFIG_KEY")"
   # SQLite：确保库文件父目录存在，否则 prisma migrate/db push 会因目录缺失失败。
   if [[ "$DATABASE_URL" == file:* ]]; then
     db_file="${DATABASE_URL#file:}"

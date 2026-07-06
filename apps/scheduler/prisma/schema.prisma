@@ -1,0 +1,33 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// 一次任务执行的历史记录（scheduler B P1，issue #493）。
+// 反范式化：ownerId / taskName 是裸字符串，不是外键——scheduler 库里没有 tasks 表，
+// 任务定义仍由使用方（agent）在代码里写死。scheduler 只负责持久化「谁的哪个任务在何时跑了、结果如何」。
+// status：running | success | failure | interrupted；trigger：scheduled | manual（均存字符串，不用 enum）。
+model TaskRun {
+  id              String    @id
+  ownerId         String    @map("owner_id")
+  taskName        String    @map("task_name")
+  // 使用方进程启动时刻的单调 generation（毫秒时间戳），用 BigInt 承载。
+  ownerGeneration BigInt    @map("owner_generation")
+  status          String
+  trigger         String
+  scheduledAt     DateTime? @map("scheduled_at")
+  startedAt       DateTime  @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+  durationMs      Int?      @map("duration_ms")
+  error           String?
+  reportedAt      DateTime  @default(now()) @map("reported_at")
+
+  @@index([ownerId, taskName, startedAt], map: "task_run_owner_task_started_idx")
+  @@map("task_run")
+}

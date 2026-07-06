@@ -7,13 +7,17 @@ import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { SchedulerEngine } from "../application/scheduler-engine.js";
 import { TickBroadcaster } from "../application/tick-broadcaster.js";
 import { SchedulerRegisterHandler } from "../http/scheduler-register.handler.js";
+import { SchedulerRunsHandler } from "../http/scheduler-runs.handler.js";
 import { SchedulerTicksHandler } from "../http/scheduler-ticks.handler.js";
+import { closeDb, configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
+import { TaskRunStore } from "../infra/db/task-run-store.js";
 
 const logger = new AppLogger({ source: "scheduler-bootstrap" });
 
 export type SchedulerRuntime = {
   app: FastifyInstance;
   engine: SchedulerEngine;
+  database: Database;
   port: number;
 };
 
@@ -30,18 +34,27 @@ export async function buildSchedulerRuntime(): Promise<SchedulerRuntime> {
   const broadcaster = new TickBroadcaster();
   const engine = new SchedulerEngine({ broadcaster });
 
+  // scheduler 独占的 Prisma 库（issue #493）：TaskRun 执行历史。启动即建 client + 开 WAL。
+  const database = createDbClient({ databaseUrl: config.services.scheduler.databaseUrl });
+  await configureSqlite(database);
+  const store = new TaskRunStore({ database });
+
   const app = createServiceApp({
     logger,
     handlers: [
       new HealthHandler(),
       new SchedulerRegisterHandler({ engine }),
       new SchedulerTicksHandler({ broadcaster, engine }),
+      new SchedulerRunsHandler({ store }),
     ],
   });
 
   return {
     app,
     engine,
+    database,
     port: config.services.scheduler.port,
   };
 }
+
+export { closeDb };

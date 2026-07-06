@@ -73,6 +73,23 @@ else
   fi
 fi
 
+echo "[app:deploy] Step 2b/4: Applying scheduler Prisma migrations..."
+# scheduler 有独立 SQLite 库（TaskRun 执行历史，#493），只被 kagami-scheduler 单进程持有——
+# 迁移只需暂停这一个进程腾出独占锁，与主库那批多进程互不相干。无待应用迁移时（status 只读）跳过。
+if pnpm --filter @kagami/scheduler-service db:migrate:status >/dev/null 2>&1; then
+  echo "[app:deploy]   scheduler schema 已最新，跳过迁移。"
+else
+  echo "[app:deploy]   检测到 scheduler 待应用迁移，暂停 kagami-scheduler 后迁移..."
+  pnpm exec pm2 stop kagami-scheduler >/dev/null 2>&1 || true
+  if pnpm --filter @kagami/scheduler-service db:migrate:deploy; then
+    echo "[app:deploy]   scheduler 迁移完成，进程将在 Step 3 重新拉起。"
+  else
+    echo "[app:deploy]   scheduler 迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-scheduler >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
 echo "[app:deploy] Step 3/4: Reloading PM2 apps..."
 # 一次性迁移兜底：清理改名前的旧 kagami-web 进程（见单服务分支注释）。
 pnpm exec pm2 delete kagami-web >/dev/null 2>&1 || true

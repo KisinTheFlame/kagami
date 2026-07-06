@@ -11,6 +11,7 @@ coverage
 .DS_Store
 .vscode
 packages/persistence/src/generated/prisma
+apps/scheduler/src/generated/prisma
 .claude/worktrees
 .gstack
 .context/

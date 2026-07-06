@@ -17,7 +17,10 @@ services:
   spire: { host: 127.0.0.1, port: 20011 } # kagami-spire（杀塔式卡牌游戏引擎，仅 localhost：agent 经 HttpSpireClient 驱动）
   napcat: { host: 127.0.0.1, port: 20013 } # kagami-napcat（NapCat 接入独立进程，仅 localhost：agent 经 HttpNapcatClient 出站 + SSE 订阅入站；#347。20012 留给像素画 #365）
   pixel: { host: 127.0.0.1, port: 20012 } # kagami-pixel（像素画服务，仅 localhost：agent 经 HttpPixelClient 驱动）
-  scheduler: { host: 127.0.0.1, port: 20014 } # kagami-scheduler（通用定时调度服务，仅 localhost：agent 经 SchedulerClient 注册 + SSE 收 tick；#428。20013 napcat / 20012 pixel 已占）
+  scheduler: # kagami-scheduler（通用定时调度服务，仅 localhost：agent 经 SchedulerClient 注册 + SSE 收 tick；#428。20013 napcat / 20012 pixel 已占）
+    host: 127.0.0.1
+    port: 20014
+    databaseUrl: file:./data/sqlite/scheduler.db # scheduler 独占 SQLite 库（TaskRun 执行历史，#493），与主库 kagami.db 同目录不同文件
 
 server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
