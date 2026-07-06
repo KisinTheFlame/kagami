@@ -25,7 +25,6 @@ import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runti
 import { buildIthomeScheduledTasks } from "../agent/capabilities/ithome/application/ithome-scheduled-tasks.js";
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { buildDataRetentionTasks } from "../agent/capabilities/data-retention/data-retention-scheduled-tasks.js";
-import { SchedulerViewHandler } from "./scheduler-view.handler.js";
 import { SchedulerTriggerCallbackHandler } from "./scheduler-trigger-callback.handler.js";
 import { AppStateOccurrenceStore } from "./app-state-occurrence-store.js";
 import { HttpOssClient } from "../acl/oss-client.js";
@@ -255,7 +254,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new SchedulerViewHandler({ schedulerClient }),
       new SchedulerTriggerCallbackHandler({ schedulerClient }),
     ],
   });

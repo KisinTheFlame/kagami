@@ -1,60 +1,8 @@
-import type { SchedulerTaskRun } from "@kagami/scheduler-api/schedule";
-
 /**
- * 使用方本地的一条执行记录。真正跑 handler 的是使用方（agent），只有它知道成功/失败/耗时——
- * 这份历史归 SDK，调度器只拥有 tick 侧（scheduledAt / emittedAt / nextRunAt）。整块从原
- * apps/agent 进程内 TaskScheduler 的执行记录搬迁而来（issue #428）。
+ * 使用方 handler 可选返回的执行元数据（如 data-retention 的删除行数）。**当前 SDK 不转发它**：
+ * run 上报 wire（SchedulerReportRunRequest）不含 metadata 字段，scheduler 侧 TaskRun 库与全局
+ * run view（#493）也有意只收 status / 时间 / error，不收 metadata。保留此返回位作向后兼容 / 将来
+ * 扩展的挂点——handler 若要留痕诊断信息，请自行走 metric / 日志（data-retention 即另发
+ * `scheduler.retention.deleted_rows` 指标），别指望它经回报落库。
  */
-export type TaskRunStatus = "running" | "success" | "error" | "skipped_overlap";
-
 export type TaskRunMetadata = Record<string, unknown>;
-
-export type TaskRun = {
-  startedAt: Date;
-  finishedAt: Date | null;
-  durationMs: number | null;
-  status: TaskRunStatus;
-  errorMessage?: string;
-  metadata?: TaskRunMetadata;
-};
-
-/** 定长执行历史环形缓冲（超容量丢最旧）。 */
-export class TaskRunHistory {
-  private readonly capacity: number;
-  private readonly buffer: TaskRun[] = [];
-
-  public constructor({ capacity }: { capacity: number }) {
-    if (capacity <= 0) {
-      throw new Error(`TaskRunHistory capacity must be positive, got ${capacity}`);
-    }
-    this.capacity = capacity;
-  }
-
-  public push(run: TaskRun): void {
-    this.buffer.push(run);
-    while (this.buffer.length > this.capacity) {
-      this.buffer.shift();
-    }
-  }
-
-  public toArray(): TaskRun[] {
-    return [...this.buffer];
-  }
-}
-
-/** 本地 TaskRun → wire 的 SchedulerTaskRun（Date → ISO）。 */
-export function toWireRun(run: TaskRun): SchedulerTaskRun {
-  const wire: SchedulerTaskRun = {
-    startedAt: run.startedAt.toISOString(),
-    finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
-    durationMs: run.durationMs,
-    status: run.status,
-  };
-  if (run.errorMessage !== undefined) {
-    wire.errorMessage = run.errorMessage;
-  }
-  if (run.metadata !== undefined) {
-    wire.metadata = run.metadata;
-  }
-  return wire;
-}
