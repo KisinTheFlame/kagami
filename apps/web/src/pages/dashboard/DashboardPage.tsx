@@ -24,6 +24,8 @@ const MODEL_TAG = "model";
 
 // 主 Agent 主循环的调用来处（LlmUsageId），用于「主 Agent 输入 token」图过滤。
 const AGENT_USAGE = { usage: { op: "eq" as const, value: "agent" } };
+// 延迟图只算成功调用：失败（尤其超时，latency=整个超时时长）会污染 avg/P99 读数。
+const SUCCESS_ONLY = { status: { op: "eq" as const, value: "success" } };
 
 type RangePreset = {
   key: string;
@@ -120,20 +122,22 @@ export function DashboardPage() {
 
           <DashboardChart
             title="LLM 调用耗时均值"
-            subtitle="按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 毫秒"
             metricName={LLM_LATENCY}
             aggregator="avg"
             groupByTag={MODEL_TAG}
+            tagFilters={SUCCESS_ONLY}
             chartType="line"
             range={range}
           />
 
           <DashboardChart
             title="LLM 调用耗时 P99"
-            subtitle="按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 毫秒"
             metricName={LLM_LATENCY}
             aggregator="p99"
             groupByTag={MODEL_TAG}
+            tagFilters={SUCCESS_ONLY}
             chartType="line"
             range={range}
           />
