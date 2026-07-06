@@ -52,6 +52,13 @@ describe("loadStaticConfig — 配置装载", () => {
       expect(path.isAbsolute(filePath)).toBe(true);
       expect(filePath.startsWith(dir)).toBe(true);
     }
+    // scheduler 独立库（#493）必须与 server.databaseUrl 走同一绝对化——否则运行时经 new URL()
+    // 把相对 file:./... 解析到文件系统根（/data/...），与 Prisma CLI 迁移的库分叉、启动即崩。
+    const schedulerUrl = config.services.scheduler.databaseUrl;
+    expect(schedulerUrl.startsWith("file:")).toBe(true);
+    const schedulerPath = schedulerUrl.slice("file:".length);
+    expect(path.isAbsolute(schedulerPath)).toBe(true);
+    expect(schedulerPath.startsWith(dir)).toBe(true);
   });
 
   it("非法配置值抛 ConfigError（含出错字段路径）", async () => {

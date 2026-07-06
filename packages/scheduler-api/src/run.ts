@@ -29,7 +29,10 @@ export const SchedulerReportRunRequestSchema = z
     id: z.string().min(1),
     ownerId: z.string().min(1),
     taskName: z.string().min(1),
-    ownerGeneration: z.number().int().nonnegative(),
+    // generation 是使用方进程启动时刻的毫秒时间戳（Date.now()，~1.7e12）。落库转 BigInt 前，
+    // 用 safe-integer 上限兜底：若将来有人误传 ns / snowflake / DB sequence 等超 2^53 的值，
+    // JSON 解析已丢精度，这里直接 400 拒收，而不是静默持久化被截断的错误 generation。
+    ownerGeneration: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     status: SchedulerRunStatusSchema,
     trigger: SchedulerRunTriggerSchema,
     scheduledAt: z.string().datetime().nullable().optional(),
