@@ -1,9 +1,11 @@
 import type {
   MetricChartAggregator,
   MetricChartBucket,
+  MetricChartQueryResponse,
   MetricChartQueryRequest,
   MetricChartTagFilters,
 } from "@kagami/metric-api/chart";
+import { useMemo } from "react";
 import { MetricChartView, type MetricChartType } from "@/components/metric/MetricChartView";
 import { useMetricChartData } from "@/components/metric/useMetricChartData";
 import { getApiErrorMessage } from "@/lib/api";
@@ -39,6 +41,26 @@ function toRequest(
 
 const CHART_HEIGHT = 300;
 
+/** 显示前把每个点乘以 scale（如延迟 ms→秒 传 0.001）；null 保持 null。 */
+function scaleResponse(
+  data: MetricChartQueryResponse | undefined,
+  scale: number,
+): MetricChartQueryResponse | undefined {
+  if (!data) {
+    return data;
+  }
+  return {
+    ...data,
+    series: data.series.map(series => ({
+      ...series,
+      points: series.points.map(point => ({
+        ...point,
+        value: point.value === null ? null : point.value * scale,
+      })),
+    })),
+  };
+}
+
 type DashboardChartProps = {
   title: string;
   subtitle?: string;
@@ -47,6 +69,8 @@ type DashboardChartProps = {
   chartType: MetricChartType;
   groupByTag?: string;
   tagFilters?: MetricChartTagFilters;
+  /** 显示前的值缩放系数（如延迟 ms→秒 传 0.001）；缺省不缩放。存储值不变，只改展示。 */
+  valueScale?: number;
   range: DashboardRange;
 };
 
@@ -59,10 +83,15 @@ export function DashboardChart({
   chartType,
   groupByTag,
   tagFilters,
+  valueScale,
   range,
 }: DashboardChartProps) {
   const query = useMetricChartData(
     toRequest({ metricName, aggregator, groupByTag, tagFilters }, range),
+  );
+  const data = useMemo(
+    () => (valueScale === undefined ? query.data : scaleResponse(query.data, valueScale)),
+    [query.data, valueScale],
   );
 
   return (
@@ -73,7 +102,7 @@ export function DashboardChart({
       isLoading={query.isLoading}
       isError={query.isError}
       errorMessage={query.isError ? getApiErrorMessage(query.error) : undefined}
-      data={query.data}
+      data={data}
       height={CHART_HEIGHT}
     />
   );

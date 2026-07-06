@@ -63,6 +63,11 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
     () => buildCacheRows(totalQuery.data, rateQuery.data),
     [totalQuery.data, rateQuery.data],
   );
+  // 命中率 Y 轴自适应：数据全在 90-100 就放大到 [90,100] 看高区间波动；一旦有 <90 的点就回退 [0,100]。
+  const rateDomain = useMemo<[number, number]>(() => {
+    const hasBelow90 = rows.some(row => row.ratePct !== null && row.ratePct < 90);
+    return hasBelow90 ? [0, 100] : [90, 100];
+  }, [rows]);
 
   const isLoading = totalQuery.isLoading || rateQuery.isLoading;
   const isError = totalQuery.isError || rateQuery.isError;
@@ -115,7 +120,7 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
                 yAxisId="rate"
                 orientation="right"
                 width={44}
-                domain={[0, 100]}
+                domain={rateDomain}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(value: number | string) =>
