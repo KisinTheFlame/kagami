@@ -139,6 +139,8 @@ describe("recordLlmCallMetrics", () => {
     );
     expect(kindOf({ error: new Error("request timed out") })).toBe("timeout");
     expect(kindOf({ error: new Error("something odd") })).toBe("other");
+    // 「不可用」子串但非 provider 哨兵串 → 不误标 provider_unavailable。
+    expect(kindOf({ error: new Error("服务暂时不可用") })).toBe("other");
   });
 
   it("labels chatDirect (usage=null) as 'direct'", () => {

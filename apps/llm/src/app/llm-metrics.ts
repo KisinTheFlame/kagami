@@ -1,4 +1,8 @@
-import type { LlmChatCallErrorObservation, LlmChatCallObservation } from "@kagami/llm-client";
+import {
+  LLM_PROVIDER_UNAVAILABLE_MESSAGE,
+  type LlmChatCallErrorObservation,
+  type LlmChatCallObservation,
+} from "@kagami/llm-client";
 import type { MetricClient } from "@kagami/metric-client/client";
 
 // LLM 调用打点（fire-and-forget）：在 kagami-llm 的观测点把每次 attempt 记成 metric，喂给独占 DuckDB
@@ -93,8 +97,12 @@ function classifyLlmError(observation: LlmChatCallErrorObservation): string {
   }
 
   const message = extractErrorMessage(observation).toLowerCase();
-  // provider 不可用错误消息是中文（LLM_PROVIDER_UNAVAILABLE_MESSAGE = "所选 LLM provider 当前不可用"）。
-  if (message.includes("unavailable") || message.includes("不可用")) {
+  // provider 不可用错误消息是中文哨兵串（LLM_PROVIDER_UNAVAILABLE_MESSAGE）。匹配完整哨兵而非「不可用」
+  // 子串，避免把「服务暂时不可用」等普通消息误标成 provider_unavailable。
+  if (
+    message.includes("unavailable") ||
+    message.includes(LLM_PROVIDER_UNAVAILABLE_MESSAGE.toLowerCase())
+  ) {
     return "provider_unavailable";
   }
   if (message.includes("fetch failed")) {
