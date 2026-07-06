@@ -22,7 +22,9 @@ import {
   type LlmClient,
 } from "@kagami/llm-client";
 import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/embedding";
+import { HttpMetricClient } from "@kagami/metric-client/client";
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
+import { recordLlmCallMetrics } from "./llm-metrics.js";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
@@ -89,9 +91,17 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     }),
   };
 
+  // metric 打点走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
+  // record 是 fire-and-forget（永不 reject），打点失败绝不影响 LLM 结果。
+  const metricService = new HttpMetricClient({
+    baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
+  });
+
   // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call。返回 DAO 的
   // Promise，让 client 内部 emitObservation 统一 catch（写库失败不影响 LLM 结果）。
   const recordLlmChatObservation = (observation: LlmChatCallObservation): Promise<void> => {
+    // 每次 attempt 顺手打点（provider/model/status/latency/usage来处/token/失败原因），与落库解耦。
+    recordLlmCallMetrics(metricService, observation);
     if (observation.status === "success") {
       return llmChatCallDao.recordSuccess({
         provider: observation.provider,
