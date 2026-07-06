@@ -1,11 +1,6 @@
-import { contractUrl } from "@kagami/http/url";
-import { ossConsoleContract } from "@kagami/oss-api/contract";
-import {
-  type OssObjectListResponse,
-  OssObjectListResponseSchema,
-} from "@kagami/oss-api/oss-object";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
+import { ossConsoleClient } from "@/lib/rpc";
 
 export type OssObjectListFilters = {
   mime?: string;
@@ -13,20 +8,15 @@ export type OssObjectListFilters = {
 
 export function useOssObjectList(page: number, pageSize: number, filters: OssObjectListFilters) {
   const params = {
-    page: String(page),
-    pageSize: String(pageSize),
+    page,
+    pageSize,
     mime: filters.mime,
-  } satisfies Record<string, string | undefined>;
+  };
 
   return useQuery(
-    createHistoryListQueryOptions<
-      OssObjectListResponse,
-      ReturnType<typeof queryKeys.ossObject.historyList>
-    >({
+    createHistoryListQueryOptions({
       queryKey: queryKeys.ossObject.historyList(params),
-      path: contractUrl(ossConsoleContract.queryObjects),
-      schema: OssObjectListResponseSchema,
-      params,
+      queryFn: () => ossConsoleClient.queryObjects(params),
     }),
   );
 }

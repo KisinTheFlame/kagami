@@ -1,11 +1,7 @@
-import { contractUrl } from "@kagami/http/url";
-import { consoleApiContract } from "@kagami/console-api/contract";
-import {
-  InnerThoughtListResponseSchema,
-  type InnerThoughtOutcome,
-} from "@kagami/console-api/inner-thought";
+import { type InnerThoughtOutcome } from "@kagami/console-api/inner-thought";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
+import { consoleClient } from "@/lib/rpc";
 
 export function useInnerThoughtList(
   page: number,
@@ -13,17 +9,15 @@ export function useInnerThoughtList(
   outcome: InnerThoughtOutcome | undefined,
 ) {
   const params = {
-    page: String(page),
-    pageSize: String(pageSize),
+    page,
+    pageSize,
     outcome,
-  } satisfies Record<string, string | undefined>;
+  };
 
   return useQuery(
     createHistoryListQueryOptions({
       queryKey: queryKeys.innerThought.historyList(params),
-      path: contractUrl(consoleApiContract.queryInnerThoughts),
-      schema: InnerThoughtListResponseSchema,
-      params,
+      queryFn: () => consoleClient.queryInnerThoughts(params),
     }),
   );
 }

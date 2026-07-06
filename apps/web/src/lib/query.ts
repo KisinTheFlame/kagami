@@ -1,19 +1,11 @@
 import { QueryClient, keepPreviousData, queryOptions, type QueryKey } from "@tanstack/react-query";
-import { apiGetWithSchema } from "@/lib/api";
-import { buildQueryString } from "@/lib/search-params";
 
 type QueryParamValue = string | number | undefined;
 type QueryParams = Record<string, QueryParamValue>;
 
-type SchemaLike<T> = {
-  parse: (value: unknown) => T;
-};
-
 type CreateSchemaQueryOptionsParams<T, TQueryKey extends QueryKey> = {
   queryKey: TQueryKey;
-  path: string;
-  schema: SchemaLike<T>;
-  params?: QueryParams;
+  queryFn: () => Promise<T>;
   keepPrevious?: boolean;
 };
 
@@ -75,14 +67,12 @@ export function createAppQueryClient() {
 
 export function createSchemaQueryOptions<T, TQueryKey extends QueryKey>({
   queryKey,
-  path,
-  schema,
-  params,
+  queryFn,
   keepPrevious = false,
 }: CreateSchemaQueryOptionsParams<T, TQueryKey>) {
   return queryOptions({
     queryKey,
-    queryFn: () => apiGetWithSchema(buildPathWithQuery(path, params), schema),
+    queryFn,
     ...(keepPrevious ? { placeholderData: keepPreviousData } : {}),
   });
 }
@@ -94,13 +84,4 @@ export function createHistoryListQueryOptions<T, TQueryKey extends QueryKey>(
     ...params,
     keepPrevious: true,
   });
-}
-
-function buildPathWithQuery(path: string, params?: QueryParams): string {
-  if (!params) {
-    return path;
-  }
-
-  const query = buildQueryString(params);
-  return query.length > 0 ? `${path}?${query}` : path;
 }

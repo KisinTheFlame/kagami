@@ -57,25 +57,6 @@ export function areSearchParamsEqual(left: URLSearchParams, right: URLSearchPara
   return toComparableSearchParams(left) === toComparableSearchParams(right);
 }
 
-export function buildQueryString(params: Record<string, string | number | undefined>): string {
-  const searchParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined) {
-      continue;
-    }
-
-    const normalizedValue = String(value);
-    if (normalizedValue.length === 0) {
-      continue;
-    }
-
-    searchParams.set(key, normalizedValue);
-  }
-
-  return searchParams.toString();
-}
-
 function toComparableSearchParams(params: URLSearchParams): string {
   const clone = new URLSearchParams(params);
   clone.sort();
