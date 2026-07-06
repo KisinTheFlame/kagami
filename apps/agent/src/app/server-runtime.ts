@@ -11,7 +11,6 @@ import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
-import { QqMessageHandler } from "../agent/capabilities/messaging/http/qq-message.handler.js";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
 import { HttpNapcatClient } from "../acl/napcat-client.js";
 import { NapcatEventSubscriber, type NapcatCursorStore } from "../acl/napcat-event-subscriber.js";
@@ -251,7 +250,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      new QqMessageHandler({ qqMessageSender: agentRuntime.qqOutboundService }),
       new SchedulerViewHandler({ schedulerClient }),
     ],
   });
