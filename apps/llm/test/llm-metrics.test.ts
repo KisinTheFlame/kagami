@@ -79,7 +79,8 @@ describe("recordLlmCallMetrics", () => {
     expect(byMetric("llm.call.latency")).toEqual([
       {
         metricName: "llm.call.latency",
-        value: 1234,
+        // latencyMs 1234 → 以秒打点 = 1.234。
+        value: 1.234,
         tags: { provider: "claude-code", model: "claude-x", usage: "agent", status: "success" },
       },
     ]);

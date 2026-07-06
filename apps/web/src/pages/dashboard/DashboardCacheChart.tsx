@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
-import { formatFullDateTime, formatMetricValue } from "@/components/metric/metric-format";
+import {
+  formatCompactNumber,
+  formatFullDateTime,
+  formatMetricValue,
+} from "@/components/metric/metric-format";
 import { useMetricChartData } from "@/components/metric/useMetricChartData";
 import { useMetricDerivedData } from "@/components/metric/useMetricDerivedData";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,7 +109,7 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
                 width={56}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number | string) => formatMetricValue(value)}
+                tickFormatter={(value: number | string) => formatCompactNumber(value)}
               />
               <YAxis
                 yAxisId="rate"

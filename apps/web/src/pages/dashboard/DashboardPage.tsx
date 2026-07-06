@@ -121,7 +121,7 @@ export function DashboardPage() {
 
           <DashboardChart
             title="LLM 调用耗时均值"
-            subtitle="成功调用 · 按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 秒"
             metricName={LLM_LATENCY}
             aggregator="avg"
             groupByTag={MODEL_TAG}
@@ -132,7 +132,7 @@ export function DashboardPage() {
 
           <DashboardChart
             title="LLM 调用耗时 P99"
-            subtitle="成功调用 · 按模型分组 · 毫秒"
+            subtitle="成功调用 · 按模型分组 · 秒"
             metricName={LLM_LATENCY}
             aggregator="p99"
             groupByTag={MODEL_TAG}

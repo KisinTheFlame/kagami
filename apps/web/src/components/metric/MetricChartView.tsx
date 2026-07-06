@@ -23,7 +23,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { formatBucketLabel, formatFullDateTime, formatMetricValue } from "./metric-format";
+import { formatBucketLabel, formatCompactNumber, formatFullDateTime } from "./metric-format";
 
 // === 纯展示层：只吃 data / 查询状态 + 展示 props，不发请求、不持控件状态（#444）===
 //
@@ -169,7 +169,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
@@ -207,7 +207,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
@@ -253,7 +253,7 @@ export function MetricChartView({
                     width={56}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value: number | string) => formatMetricValue(value)}
+                    tickFormatter={(value: number | string) => formatCompactNumber(value)}
                   />
                   <ChartTooltip
                     content={
