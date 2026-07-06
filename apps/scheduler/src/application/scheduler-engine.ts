@@ -29,6 +29,8 @@ type TaskEntry = {
 type OwnerState = {
   generation: number;
   clientInstanceId: string;
+  /** owner 自报的反向回调根地址（统一触发 #493 P3）：scheduler 据此反向 POST 回 owner。 */
+  callbackBaseUrl: string;
   tasks: Map<string, TaskEntry>;
 };
 
@@ -86,6 +88,7 @@ export class SchedulerEngine {
     this.owners.set(request.ownerId, {
       generation: request.generation,
       clientInstanceId: request.clientInstanceId,
+      callbackBaseUrl: request.callbackBaseUrl,
       tasks: nextTasks,
     });
     logger.info("owner registered", {
@@ -143,6 +146,14 @@ export class SchedulerEngine {
         lastEmittedAt: entry.lastEmittedAt ? entry.lastEmittedAt.toISOString() : null,
       })),
     };
+  }
+
+  /**
+   * 查一个 owner 自报的反向回调根地址（统一触发 #493 P3）。未注册 / 未连过 → null，触发入口据此
+   * 直接回 owner_unreachable。
+   */
+  public getCallbackBaseUrl(ownerId: string): string | null {
+    return this.owners.get(ownerId)?.callbackBaseUrl ?? null;
   }
 
   /** 停掉所有 driver（进程关停）。in-flight 的 handler 在使用方进程，与本引擎无关。 */

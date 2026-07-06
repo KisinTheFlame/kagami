@@ -52,6 +52,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("t", 1_000, "latest")],
     });
@@ -68,6 +69,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("t", 100, "latest")],
     });
@@ -85,6 +87,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("t", 100, "drop")],
     });
@@ -102,6 +105,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("t", 100, "catchup", 2)],
     });
@@ -119,17 +123,30 @@ describe("SchedulerEngine", () => {
     const tasks = [intervalTask("t", 1_000, "latest")];
 
     expect(
-      engine.register({ ownerId: "agent", clientInstanceId: "c1", generation: 5, tasks }).accepted,
+      engine.register({
+        ownerId: "agent",
+        clientInstanceId: "c1",
+        callbackBaseUrl: "http://127.0.0.1:20003",
+        generation: 5,
+        tasks,
+      }).accepted,
     ).toBe(true);
     const stale = engine.register({
       ownerId: "agent",
       clientInstanceId: "c2",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 3,
       tasks,
     });
     expect(stale.accepted).toBe(false);
     expect(
-      engine.register({ ownerId: "agent", clientInstanceId: "c3", generation: 6, tasks }).accepted,
+      engine.register({
+        ownerId: "agent",
+        clientInstanceId: "c3",
+        callbackBaseUrl: "http://127.0.0.1:20003",
+        generation: 6,
+        tasks,
+      }).accepted,
     ).toBe(true);
   });
 
@@ -142,6 +159,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("a", 100, "latest"), intervalTask("b", 100, "latest")],
     });
@@ -149,6 +167,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 2,
       tasks: [intervalTask("a", 100, "latest")],
     });
@@ -166,6 +185,7 @@ describe("SchedulerEngine", () => {
     engine.register({
       ownerId: "agent",
       clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
       generation: 1,
       tasks: [intervalTask("t", 1_000, "latest")],
     });
@@ -174,5 +194,31 @@ describe("SchedulerEngine", () => {
     expect(status.tasks[0]!.name).toBe("t");
     expect(status.tasks[0]!.nextRunAt).not.toBeNull();
     expect(engine.status("nobody").tasks).toHaveLength(0);
+  });
+
+  it("stores and returns callbackBaseUrl per owner, updating it on replace-all (#493 P3)", () => {
+    const broadcaster = new TickBroadcaster();
+    const engine = new SchedulerEngine({ broadcaster });
+    // 未注册 → null。
+    expect(engine.getCallbackBaseUrl("agent")).toBeNull();
+
+    engine.register({
+      ownerId: "agent",
+      clientInstanceId: "c1",
+      callbackBaseUrl: "http://127.0.0.1:20003",
+      generation: 1,
+      tasks: [intervalTask("t", 1_000, "latest")],
+    });
+    expect(engine.getCallbackBaseUrl("agent")).toBe("http://127.0.0.1:20003");
+
+    // 重连换地址（进程重启换端口）：replace-all 时更新。
+    engine.register({
+      ownerId: "agent",
+      clientInstanceId: "c2",
+      callbackBaseUrl: "http://127.0.0.1:29999",
+      generation: 2,
+      tasks: [intervalTask("t", 1_000, "latest")],
+    });
+    expect(engine.getCallbackBaseUrl("agent")).toBe("http://127.0.0.1:29999");
   });
 });

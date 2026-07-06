@@ -413,6 +413,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../../packages/rpc-client
       '@kagami/scheduler-api':
         specifier: workspace:*
         version: link:../../packages/scheduler-api

@@ -136,6 +136,10 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   const schedulerClient = new SchedulerClient({
     baseUrl: `http://${config.services.scheduler.host}:${config.services.scheduler.port}`,
     ownerId: "llm-service",
+    // 统一触发（#493 P3）要求 owner 自报反向回调根地址。llm 的 GC 任务不面向前端手动触发，
+    // 这里如实上报自身地址即可（万一被触发，callback 无 /internal/scheduler-trigger 端点 →
+    // scheduler 归一 owner_unreachable，不影响 GC 的定时 tick 派发）。
+    callbackBaseUrl: `http://${config.services.llm.host}:${config.services.llm.port}`,
   });
   if (claudeCodeConfig.fileCacheGcEnabled) {
     schedulerClient.register(
