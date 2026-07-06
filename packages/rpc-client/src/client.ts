@@ -72,7 +72,10 @@ export function createClient<TContracts extends JsonContractMap>(
   options: CreateClientOptions,
 ): JsonClient<TContracts> {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
-  const fetchImpl = options.fetch ?? fetch;
+  // 默认 fetch 必须 bind 到 globalThis：下面它被存进 ctx 再以 `ctx.fetchImpl(...)` 调用，
+  // 接收者会变成 ctx。浏览器的 `fetch` 有 brand-check，`this !== Window` 时抛
+  // `TypeError: Illegal invocation`（Node/undici 无此检查，故后端与单测不受影响）。
+  const fetchImpl = options.fetch ?? fetch.bind(globalThis);
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const unreachableMessage = options.unreachableMessage ?? DEFAULT_UNREACHABLE_MESSAGE;
   const decodeError = options.decodeError ?? decodeBizErrorWire;

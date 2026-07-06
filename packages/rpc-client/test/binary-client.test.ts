@@ -140,6 +140,39 @@ describe("createBinaryClient — binary-raw", () => {
   });
 });
 
+describe("createBinaryClient — 默认 fetch 绑定 globalThis", () => {
+  // 与 client.test.ts 同理：模拟浏览器 brand-check，守住默认 fetch 路径不以 ctx 为接收者调用。
+  function installBrowserFetch(response: Response): () => void {
+    const original = globalThis.fetch;
+    const browserFetch = function (this: unknown): Promise<Response> {
+      if (this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve(response);
+    };
+    globalThis.fetch = browserFetch as unknown as typeof fetch;
+    return () => {
+      globalThis.fetch = original;
+    };
+  }
+
+  it("不传 options.fetch → 默认 fetch 以 globalThis 为接收者调用（挡住 Illegal invocation 回归）", async () => {
+    const restore = installBrowserFetch(jsonResponse({ key: "res-9" }, 201));
+    try {
+      const client = createBinaryClient(contracts, { baseUrl: "http://svc" });
+      await expect(
+        client.putObject({
+          params: {},
+          headers: { "content-type": "image/png" },
+          bytes: new Uint8Array([1, 2, 3]),
+        }),
+      ).resolves.toEqual({ key: "res-9" });
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe("notReadyFallbackMapper — 文案字节基线", () => {
   const mapper = notReadyFallbackMapper("测试服务", message => new Error(message));
 

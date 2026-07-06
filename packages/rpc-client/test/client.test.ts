@@ -127,6 +127,37 @@ describe("createClient", () => {
   });
 });
 
+describe("createClient — 默认 fetch 绑定 globalThis", () => {
+  // 复现浏览器 brand-check：`fetch` 的 this 必须是 Window/globalThis，否则抛 Illegal invocation。
+  // Node/undici 无此检查，故必须在测试里手动模拟——否则默认 fetch 路径（不传 options.fetch）
+  // 在浏览器里 `ctx.fetchImpl(...)` 以 ctx 为接收者调用会炸，而 Node 测试永远绿，bug 就此溜过。
+  function installBrowserFetch(response: Response): () => void {
+    const original = globalThis.fetch;
+    const browserFetch = function (this: unknown): Promise<Response> {
+      if (this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve(response);
+    };
+    globalThis.fetch = browserFetch as unknown as typeof fetch;
+    return () => {
+      globalThis.fetch = original;
+    };
+  }
+
+  it("不传 options.fetch → 默认 fetch 以 globalThis 为接收者调用（挡住 Illegal invocation 回归）", async () => {
+    const restore = installBrowserFetch(jsonResponse({ greeting: "hi kagami" }));
+    try {
+      const client = createClient(contracts, { baseUrl: "http://svc" });
+      await expect(client.getGreeting({ name: "kagami" })).resolves.toEqual({
+        greeting: "hi kagami",
+      });
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe("createClient — params 通道", () => {
   const paramContracts = {
     getDetail: defineJsonRoute({

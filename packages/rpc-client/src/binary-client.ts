@@ -63,7 +63,9 @@ export function createBinaryClient<TContracts extends BinaryContractMap>(
   options: CreateClientOptions,
 ): BinaryClient<TContracts> {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
-  const fetchImpl = options.fetch ?? fetch;
+  // 与 client.ts 同因：默认 fetch 会被存进 ctx 再以 `ctx.fetchImpl(...)` 调用，接收者变成 ctx，
+  // 浏览器的 `fetch` brand-check 会抛 `Illegal invocation`。bind 到 globalThis 修掉。
+  const fetchImpl = options.fetch ?? fetch.bind(globalThis);
   const unreachableMessage = options.unreachableMessage ?? DEFAULT_UNREACHABLE_MESSAGE;
   const decodeError = options.decodeError ?? decodeBizErrorWire;
   const mapFallbackError =
