@@ -275,7 +275,7 @@ export function MetricChartView({
                   {renderSeries.map(series => (
                     <Line
                       key={series.key}
-                      type="monotone"
+                      type="linear"
                       dataKey={series.dataKey}
                       name={series.label}
                       stroke={`var(--color-${series.dataKey})`}

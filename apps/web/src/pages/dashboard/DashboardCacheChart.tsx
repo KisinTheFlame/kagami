@@ -157,7 +157,7 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
               <ChartLegend content={<ChartLegendContent />} />
               <Line
                 yAxisId="tokens"
-                type="monotone"
+                type="linear"
                 dataKey="tokens"
                 name="总输入 token"
                 stroke="var(--color-tokens)"
@@ -168,7 +168,7 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
               />
               <Line
                 yAxisId="rate"
-                type="monotone"
+                type="linear"
                 dataKey="ratePct"
                 name="缓存命中率"
                 stroke="var(--color-ratePct)"

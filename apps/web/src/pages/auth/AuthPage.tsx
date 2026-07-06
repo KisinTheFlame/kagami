@@ -560,7 +560,7 @@ function UsageTrendPanel({
           />
           <ChartLegend content={<ChartLegendContent />} />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="five_hour"
             stroke="var(--color-five_hour)"
             fill={`url(#${gradientPrefix}-five-hour)`}
@@ -568,7 +568,7 @@ function UsageTrendPanel({
             connectNulls
           />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="seven_day"
             stroke="var(--color-seven_day)"
             fill={`url(#${gradientPrefix}-seven-day)`}
