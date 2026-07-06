@@ -203,7 +203,11 @@ const ServicesSchema = z
     spire: ServiceEndpointSchema,
     napcat: ServiceEndpointSchema,
     pixel: ServiceEndpointSchema,
-    scheduler: ServiceEndpointSchema,
+    // scheduler 除 host/port 外还持有独立 Prisma 库（issue #493）：TaskRun 执行历史落它自己的
+    // SQLite 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
+    scheduler: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
   })
   .strict();
 
@@ -472,6 +476,16 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
 
   return {
     ...data,
+    services: {
+      ...data.services,
+      // scheduler 独立 SQLite 库（#493）：与 server.databaseUrl 一样把相对 file: 路径解析成
+      // 仓库根锚定的绝对 URL，保证运行时（HttpScheduler 进程打开的库）与 Prisma CLI（迁移建表的库）
+      // 落在同一文件。缺了这步，相对 `file:./...` 在 client 侧经 new URL() 会解析到文件系统根。
+      scheduler: {
+        ...data.services.scheduler,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.scheduler.databaseUrl),
+      },
+    },
     server: {
       ...data.server,
       databaseUrl: resolveSqliteFileUrl(configDir, data.server.databaseUrl),

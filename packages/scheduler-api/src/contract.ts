@@ -1,5 +1,6 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { z } from "zod";
+import { SchedulerReportRunRequestSchema, SchedulerReportRunResponseSchema } from "./run.js";
 import { SchedulerMisfirePolicySchema, SchedulerTaskScheduleSchema } from "./schedule.js";
 
 /**
@@ -107,5 +108,12 @@ export const schedulerApiContract = {
     path: "/scheduler/status",
     input: SchedulerStatusRequestSchema,
     output: SchedulerStatusResponseSchema,
+  }),
+  // run 上报（issue #493 P1）：使用方 SDK 上报一次执行历史，按 runId 幂等 upsert。
+  reportRun: defineJsonRoute({
+    method: "POST",
+    path: "/scheduler/runs",
+    input: SchedulerReportRunRequestSchema,
+    output: SchedulerReportRunResponseSchema,
   }),
 } as const;
