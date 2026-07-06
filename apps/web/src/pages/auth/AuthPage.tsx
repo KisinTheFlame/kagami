@@ -1,17 +1,10 @@
-import { contractUrl } from "@kagami/http/url";
-import { authApiContract } from "@kagami/llm-api/auth-contract";
 import {
-  AuthLoginUrlResponseSchema,
-  AuthRefreshResponseSchema,
-  AuthStatusResponseSchema,
-  AuthUsageLimitsResponseSchema,
   type AuthProvider,
   type AuthStatus,
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
 } from "@kagami/llm-api/auth";
 import {
-  AuthUsageTrendResponseSchema,
   type AuthUsageTrendRange,
   type AuthUsageTrendResponse,
 } from "@kagami/llm-api/auth-usage-trend";
@@ -30,9 +23,9 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { apiPost, apiPostWithSchema } from "@/lib/api";
 import { formatOptionalDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
+import { authClient } from "@/lib/rpc";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 type PrimaryAuthStatus = Exclude<AuthStatus, "refresh_failed">;
@@ -106,49 +99,40 @@ export function AuthPage() {
   const statusQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.auth.status(providerConfig.key),
-      path: buildAuthEndpoint(providerConfig.key, "status"),
-      schema: AuthStatusResponseSchema,
+      queryFn: () =>
+        authClient.getAuthStatus({ params: { provider: providerConfig.key }, input: {} }),
     }),
   });
 
   const usageLimitsQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.auth.usageLimits(providerConfig.key),
-      path: buildAuthEndpoint(providerConfig.key, "usage-limits"),
-      schema: AuthUsageLimitsResponseSchema,
+      queryFn: () =>
+        authClient.getAuthUsageLimits({ params: { provider: providerConfig.key }, input: {} }),
     }),
   });
   const usageTrendQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.auth.usageTrend(providerConfig.key, trendRange),
-      path: buildAuthEndpoint(providerConfig.key, "usage-trend"),
-      schema: AuthUsageTrendResponseSchema,
-      params: {
-        range: trendRange,
-      },
+      queryFn: () =>
+        authClient.getAuthUsageTrend({
+          params: { provider: providerConfig.key },
+          input: { range: trendRange },
+        }),
     }),
   });
 
   const loginMutation = useMutation({
-    mutationFn: async () => {
-      return apiPostWithSchema(
-        buildAuthEndpoint(providerConfig.key, "login-url"),
-        {},
-        AuthLoginUrlResponseSchema,
-      );
-    },
+    mutationFn: () =>
+      authClient.createAuthLoginUrl({ params: { provider: providerConfig.key }, input: {} }),
     onSuccess: data => {
       window.location.assign(data.loginUrl);
     },
   });
 
   const refreshMutation = useMutation({
-    mutationFn: async () =>
-      apiPostWithSchema(
-        buildAuthEndpoint(providerConfig.key, "refresh"),
-        {},
-        AuthRefreshResponseSchema,
-      ),
+    mutationFn: () =>
+      authClient.authRefresh({ params: { provider: providerConfig.key }, input: {} }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.provider(providerConfig.key),
@@ -158,7 +142,7 @@ export function AuthPage() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiPost(buildAuthEndpoint(providerConfig.key, "logout"), {});
+      await authClient.authLogout({ params: { provider: providerConfig.key }, input: {} });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -653,22 +637,6 @@ function UsageLimitCard({
 
 function isAuthProvider(value: string): value is AuthProvider {
   return value === "codex" || value === "claude-code";
-}
-
-const AUTH_ACTION_ROUTES = {
-  status: authApiContract.getAuthStatus,
-  "login-url": authApiContract.createAuthLoginUrl,
-  logout: authApiContract.authLogout,
-  refresh: authApiContract.authRefresh,
-  "usage-limits": authApiContract.getAuthUsageLimits,
-  "usage-trend": authApiContract.getAuthUsageTrend,
-} as const;
-
-function buildAuthEndpoint(
-  provider: AuthProvider,
-  action: keyof typeof AUTH_ACTION_ROUTES,
-): string {
-  return contractUrl(AUTH_ACTION_ROUTES[action], { params: { provider } });
 }
 
 function StatusChip({ status, tone }: { status: string; tone: "success" | "warning" | "neutral" }) {

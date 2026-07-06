@@ -1,11 +1,7 @@
-import { contractUrl } from "@kagami/http/url";
-import { consoleApiContract } from "@kagami/console-api/contract";
-import {
-  NapcatEventListResponseSchema,
-  type NapcatEventListQuery,
-} from "@kagami/console-api/napcat-event";
+import { type NapcatEventListQuery } from "@kagami/console-api/napcat-event";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
+import { consoleClient } from "@/lib/rpc";
 
 type NapcatEventListFilters = Omit<NapcatEventListQuery, "page" | "pageSize">;
 
@@ -15,21 +11,19 @@ export function useNapcatEventList(
   filters: NapcatEventListFilters,
 ) {
   const params = {
-    page: String(page),
-    pageSize: String(pageSize),
+    page,
+    pageSize,
     postType: filters.postType,
     messageType: filters.messageType,
     userId: filters.userId,
     startAt: filters.startAt,
     endAt: filters.endAt,
-  } satisfies Record<string, string | undefined>;
+  };
 
   return useQuery(
     createHistoryListQueryOptions({
       queryKey: queryKeys.napcatEvent.historyList(params),
-      path: contractUrl(consoleApiContract.queryNapcatEvents),
-      schema: NapcatEventListResponseSchema,
-      params,
+      queryFn: () => consoleClient.queryNapcatEvents(params),
     }),
   );
 }

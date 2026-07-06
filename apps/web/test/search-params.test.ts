@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   areSearchParamsEqual,
-  buildQueryString,
   isoToLocalDateTime,
   localDateTimeToIso,
   normalizeOptionalText,
@@ -50,11 +49,7 @@ describe("isoToLocalDateTime / localDateTimeToIso", () => {
   });
 });
 
-describe("buildQueryString / setIfNonEmpty / areSearchParamsEqual", () => {
-  it("undefined 与空串字段跳过，数字转字符串", () => {
-    expect(buildQueryString({ a: 1, b: "x", c: undefined, d: "" })).toBe("a=1&b=x");
-  });
-
+describe("setIfNonEmpty / areSearchParamsEqual", () => {
   it("setIfNonEmpty 忽略空白值", () => {
     const params = new URLSearchParams();
     setIfNonEmpty(params, "k", "  ");

@@ -1,12 +1,7 @@
-import { contractUrl } from "@kagami/http/url";
-import { consoleApiContract } from "@kagami/console-api/contract";
-import {
-  type LlmChatCallListQuery,
-  type LlmChatCallListResponse,
-  LlmChatCallListResponseSchema,
-} from "@kagami/console-api/llm-chat-call";
+import { type LlmChatCallListQuery } from "@kagami/console-api/llm-chat-call";
 import { useQuery } from "@tanstack/react-query";
 import { createHistoryListQueryOptions, queryKeys } from "@/lib/query";
+import { consoleClient } from "@/lib/rpc";
 
 type LlmChatCallListFilters = Omit<LlmChatCallListQuery, "page" | "pageSize">;
 
@@ -16,22 +11,17 @@ export function useLlmChatCallList(
   filters: LlmChatCallListFilters,
 ) {
   const params = {
-    page: String(page),
-    pageSize: String(pageSize),
+    page,
+    pageSize,
     provider: filters.provider,
     model: filters.model,
     status: filters.status,
-  } satisfies Record<string, string | undefined>;
+  };
 
   return useQuery(
-    createHistoryListQueryOptions<
-      LlmChatCallListResponse,
-      ReturnType<typeof queryKeys.llm.historyList>
-    >({
+    createHistoryListQueryOptions({
       queryKey: queryKeys.llm.historyList(params),
-      path: contractUrl(consoleApiContract.queryLlmChatCalls),
-      schema: LlmChatCallListResponseSchema,
-      params,
+      queryFn: () => consoleClient.queryLlmChatCalls(params),
     }),
   );
 }

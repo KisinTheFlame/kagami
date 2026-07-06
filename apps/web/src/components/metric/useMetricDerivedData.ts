@@ -1,10 +1,7 @@
-import { MetricChartQueryResponseSchema } from "@kagami/metric-api/chart";
-import { metricApiContract } from "@kagami/metric-api/contract";
 import { type MetricDeriveRequest } from "@kagami/metric-api/derive";
-import { contractUrl } from "@kagami/http/url";
 import { useQuery } from "@tanstack/react-query";
-import { apiPostWithSchema } from "@/lib/api";
 import { queryKeys } from "@/lib/query";
+import { metricClient } from "@/lib/rpc";
 
 // === 派生取数层（#475 P3）===
 //
@@ -15,12 +12,7 @@ import { queryKeys } from "@/lib/query";
 export function useMetricDerivedData(request: MetricDeriveRequest, enabled = true) {
   return useQuery({
     queryKey: queryKeys.metricChart.derived(request),
-    queryFn: () =>
-      apiPostWithSchema(
-        contractUrl(metricApiContract.derive),
-        request,
-        MetricChartQueryResponseSchema,
-      ),
+    queryFn: () => metricClient.derive(request),
     enabled,
   });
 }
