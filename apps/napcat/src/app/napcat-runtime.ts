@@ -29,6 +29,14 @@ const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const OUTBOX_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
+ * Fastify 默认 bodyLimit 1 MB 远不够：send_resource 发图经 `/napcat/image/send` 以 `base64://` 内联
+ * 整图字节（自包含、不依赖 napcat 访问 OSS），一张图上限是 agent 侧 resource.maxBytes（4 MiB），base64
+ * 膨胀 ~4/3 后约 5.5 MiB，加 JSON 信封仍需 6 MiB 以上。取 16 MiB 留足头（也覆盖 resource cap 未来上调）。
+ * 不设的话 pixel/browser 小图能发、生图等大图一律 413（issue #508 上线后发现）。
+ */
+const NAPCAT_BODY_LIMIT_BYTES = 16 * 1024 * 1024;
+
+/**
  * outbox append 的重试：outbox 是入站事件的 durability 边界，append 失败 = 事件丢（replay 也救不回，
  * 因为根本没落库）。SQLite WAL 多写进程下偶发 SQLITE_BUSY（busy_timeout 内没抢到锁），这里再补几次
  * 重试兜底，彻底失败才让异常冒泡（调用方升级为 error 日志，不静默）。
@@ -145,6 +153,7 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
       new NapcatHandler({ gateway }),
       new NapcatEventsHandler({ broadcaster, outboxDao }),
     ],
+    fastifyOptions: { bodyLimit: NAPCAT_BODY_LIMIT_BYTES },
   });
 
   // outbox prune：每小时删掉超保留窗口的旧行（保留窗口 > 任何现实停机时长即可安全回放）。
