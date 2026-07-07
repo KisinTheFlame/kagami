@@ -47,8 +47,6 @@ export type RetentionSpec = {
  *   其保留策略归 metric 进程自身，不在此清理面
  *
  * Field choices worth noting:
- * - `auth_usage_snapshot` keeps 30 days (not 7) so the `/auth/:provider/usage-trend`
- *   window stays usable.
  * - `embedding_cache` keeps 30 days to avoid evicting hot hash hits that would
  *   trigger re-embed API calls.
  * - `oauth_state` uses `expiresAt` because it has a single-column index; `createdAt`
@@ -90,13 +88,6 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     days: 7,
     offsetMinutes: 25,
     getDelegate: db => db.terminalOutput,
-  },
-  {
-    displayName: "auth_usage_snapshot",
-    field: "capturedAt",
-    days: 30,
-    offsetMinutes: 30,
-    getDelegate: db => db.authUsageSnapshot,
   },
   {
     displayName: "embedding_cache",

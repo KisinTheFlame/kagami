@@ -214,7 +214,7 @@ LLM API 暴露的顶层 tools 集合是少量结构性 / 能力级元工具（`s
 | 类别            | 路径                                                                                                                                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 健康检查        | `/health`                                                                                                                                                   |
-| OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits` \| `usage-trend`                                                         |
+| OAuth / 配额    | `/auth/:provider/status` \| `login-url` \| `logout` \| `refresh` \| `usage-limits`（额度趋势已迁到 kagami-metric 的 `/metric/points`，epic #521）           |
 | LLM Provider    | `/llm/providers`                                                                                                                                            |
 | NapCat 主动发送 | `/napcat/group/send`、`/napcat/private/send`                                                                                                                |
 | 观测查询        | `/app-log/query`、`/llm-chat-call/query`、`/llm-chat-call/:id`、`/inner-thought/query`、`/napcat-event/query`、`/napcat-group-message/query`、`/todo/query` |

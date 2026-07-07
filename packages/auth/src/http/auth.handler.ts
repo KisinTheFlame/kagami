@@ -2,14 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { registerJsonRoute } from "@kagami/http/register";
 import { authApiContract } from "@kagami/llm-api/auth-contract";
 import { type AuthProvider } from "@kagami/llm-api/auth";
-import type { AuthUsageTrendQueryService } from "../application/auth-usage-trend-query.service.js";
 import type { AuthUsageCacheManager } from "../application/auth-usage-cache.impl.service.js";
-import { toInternalAuthProvider } from "../domain/auth-provider.js";
 import type { OAuthAuthService } from "../application/oauth-auth.service.js";
 
 type AuthHandlerDeps = {
   authServices: Record<AuthProvider, OAuthAuthService>;
-  authUsageTrendQueryService: AuthUsageTrendQueryService;
   authUsageCacheManager: AuthUsageCacheManager;
 };
 
@@ -20,16 +17,10 @@ type AuthHandlerDeps = {
  */
 export class AuthHandler {
   private readonly authServices: Record<AuthProvider, OAuthAuthService>;
-  private readonly authUsageTrendQueryService: AuthUsageTrendQueryService;
   private readonly authUsageCacheManager: AuthUsageCacheManager;
 
-  public constructor({
-    authServices,
-    authUsageTrendQueryService,
-    authUsageCacheManager,
-  }: AuthHandlerDeps) {
+  public constructor({ authServices, authUsageCacheManager }: AuthHandlerDeps) {
     this.authServices = authServices;
-    this.authUsageTrendQueryService = authUsageTrendQueryService;
     this.authUsageCacheManager = authUsageCacheManager;
   }
 
@@ -60,14 +51,5 @@ export class AuthHandler {
     registerJsonRoute(app, authApiContract.getAuthUsageLimits, ({ params }) =>
       this.authServices[params.provider].getUsageLimits(),
     );
-
-    registerJsonRoute(app, authApiContract.getAuthUsageTrend, async ({ params, input }) => {
-      const status = await this.authServices[params.provider].getStatus();
-      return await this.authUsageTrendQueryService.query({
-        provider: toInternalAuthProvider(params.provider),
-        accountId: status.session?.accountId ?? null,
-        range: input.range,
-      });
-    });
   }
 }

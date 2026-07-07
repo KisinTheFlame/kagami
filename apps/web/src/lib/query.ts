@@ -14,8 +14,6 @@ export const queryKeys = {
     provider: (provider: string) => ["auth", provider] as const,
     status: (provider: string) => ["auth", provider, "status"] as const,
     usageLimits: (provider: string) => ["auth", provider, "usage-limits"] as const,
-    usageTrend: (provider: string, range: string) =>
-      ["auth", provider, "usage-trend", range] as const,
   },
   llm: {
     providers: () => ["llm", "providers"] as const,
