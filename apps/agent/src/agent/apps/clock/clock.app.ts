@@ -15,6 +15,7 @@ const CLOCK_APP_ID = "clock";
 export class ClockApp implements App {
   public readonly id = CLOCK_APP_ID;
   public readonly displayName = "时钟";
+  public readonly description = "查看当前北京时间，精确到秒。";
   public readonly tools: readonly ViewTimeTool[];
 
   public constructor() {

@@ -77,6 +77,7 @@ function renderAmapHelp(configured: boolean): string {
 export class AmapApp implements App<AmapConfig> {
   public readonly id = AMAP_APP_ID;
   public readonly displayName = "高德地图";
+  public readonly description = "查地点与路线，搜周边、看天气、生成地图。";
   public readonly configSchema = AmapConfigSchema;
   public readonly tools: readonly [
     GeocodeTool,

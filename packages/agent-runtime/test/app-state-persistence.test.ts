@@ -16,6 +16,7 @@ function makeApp(id: string, opts: Partial<App> = {}): App {
   return {
     id,
     displayName: id,
+    description: id,
     tools: [],
     canInvoke: () => true,
     help: async () => "",

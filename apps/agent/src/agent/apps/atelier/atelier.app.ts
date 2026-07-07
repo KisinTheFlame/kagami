@@ -26,6 +26,7 @@ type AtelierAppDeps = {
 export class AtelierApp implements App {
   public readonly id = ATELIER_APP_ID;
   public readonly displayName = "画室";
+  public readonly description = "把文字描述异步生成一张 AI 图。";
   public readonly tools: readonly ToolComponent[];
 
   public constructor({ imageClient, ossClient, asyncTaskManager }: AtelierAppDeps) {

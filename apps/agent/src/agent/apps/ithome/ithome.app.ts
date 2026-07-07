@@ -26,6 +26,7 @@ type IthomeAppDeps = {
 export class IthomeApp implements App {
   public readonly id = ITHOME_APP_ID;
   public readonly displayName = "IT之家";
+  public readonly description = "浏览 IT 之家文章列表，打开读全文。";
   public readonly tools: readonly OpenIthomeArticleTool[];
 
   private readonly ithomeService: IthomeService;

@@ -44,6 +44,7 @@ function createTestQqApp(tools: ToolComponent[]): App {
   return {
     id: TEST_QQ_APP_ID,
     displayName: "QQ",
+    description: "收发 QQ 群聊与私聊消息，发图、传文件。",
     tools,
     canInvoke: () => true,
     help: async () => "",

@@ -29,9 +29,9 @@
 你的世界像一台手机：有一个桌面（Portal），上面摆着若干 App。每个 App 是一种能力或一处去处——聊天、看资讯、用小工具，都是某个 App。
 
 {{#if hasApps}}
-你手机上现在装着这些 App（id：名称）：
+你手机上现在装着这些 App（id：名称——功能）：
 {{#each apps}}
-- {{id}}：{{displayName}}
+- {{id}}：{{displayName}}——{{description}}
 {{/each}}
 
 {{/if}}

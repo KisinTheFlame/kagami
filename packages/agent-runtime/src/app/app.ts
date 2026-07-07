@@ -58,6 +58,13 @@ export interface App<TConfig = void> {
   readonly displayName: string;
 
   /**
+   * 给 Kagami 看的一句功能简介，平铺直叙介绍这个 App 能做什么。
+   * 每轮随 App 名单渲染进 system prompt，让她在桌面层就能判断该切进哪个 App。
+   * 静态常量、进程内不变，与 displayName 同为「稳定前缀」的一部分。
+   */
+  readonly description: string;
+
+  /**
    * 这个 App 贡献给 InvokeTool 的子工具集合。
    *
    * 固定数组，运行期不变。LLM 工具定义在 startup 时一次性确定，遵循 KV 缓存

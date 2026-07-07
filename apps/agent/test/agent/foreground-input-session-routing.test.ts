@@ -20,6 +20,7 @@ function createForegroundApp(
   return {
     id,
     displayName: id,
+    description: id,
     tools: [],
     canInvoke: () => true,
     help: async () => "",
@@ -28,7 +29,14 @@ function createForegroundApp(
 }
 
 function createPlainApp(id: string): App {
-  return { id, displayName: id, tools: [], canInvoke: () => true, help: async () => "" };
+  return {
+    id,
+    displayName: id,
+    description: id,
+    tools: [],
+    canInvoke: () => true,
+    help: async () => "",
+  };
 }
 
 function createSession(apps: App[], metrics?: RecordMetricInput[]) {

@@ -264,7 +264,9 @@ export async function buildAgentRuntime({
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
       creatorName: config.server.bot.creator.name,
-      apps: appManager.getAllApps().map(app => ({ id: app.id, displayName: app.displayName })),
+      apps: appManager
+        .getAllApps()
+        .map(app => ({ id: app.id, displayName: app.displayName, description: app.description })),
     });
   };
   // root agent 每条进上下文的消息追加到 ledger（physical table `ledger`），只写不读，

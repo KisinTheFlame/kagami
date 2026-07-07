@@ -30,6 +30,7 @@ type CalcConfig = z.infer<typeof CalcConfigSchema>;
 export class CalcApp implements App<CalcConfig> {
   public readonly id = CALC_APP_ID;
   public readonly displayName = "计算器";
+  public readonly description = "对两个数做一次加减乘除，可设小数精度。";
   public readonly configSchema = CalcConfigSchema;
   public readonly tools: readonly CalculateTool[];
 
