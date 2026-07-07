@@ -11,7 +11,7 @@ import { renderSpirePortal } from "../../capabilities/spire/render/spire-screen.
 import type { RootAgentEffect } from "../../runtime/effect/root-agent-effect.js";
 import type { SpireClient } from "../../../acl/spire-client.js";
 
-const SPIRE_APP_ID = "spire";
+const SPIRE_APP_ID = "sts";
 
 type SpireAppDeps = {
   /** 游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */
@@ -34,7 +34,7 @@ type SpireAppDeps = {
  */
 export class SpireApp implements App {
   public readonly id = SPIRE_APP_ID;
-  public readonly displayName = "尖塔";
+  public readonly displayName = "杀戮尖塔";
   public readonly description = "游玩爬塔卡牌游戏，出牌、做选择、查战况。";
   public readonly tools: readonly [
     SpireStartRunTool,
