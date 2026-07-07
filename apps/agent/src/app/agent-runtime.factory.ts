@@ -1,5 +1,6 @@
 import {
   AppManager,
+  AsyncTaskManager,
   createAppSubtoolOwner,
   createUnguardedSubtoolOwner,
   HelpTool,
@@ -67,6 +68,8 @@ import { CalcApp } from "../agent/apps/calc/calc.app.js";
 import { ClockApp } from "../agent/apps/clock/clock.app.js";
 import { HnApp } from "../agent/apps/hn/hn.app.js";
 import { AmapApp } from "../agent/apps/amap/amap.app.js";
+import { AtelierApp } from "../agent/apps/atelier/atelier.app.js";
+import type { ImageClient } from "../acl/image-client.js";
 import type { QqApp } from "../agent/apps/qq/qq.app.js";
 import { buildQqApp } from "../agent/apps/qq/qq-app.factory.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
@@ -91,6 +94,8 @@ type BuildAgentRuntimeInput = {
   spireClient: SpireClient;
   /** 像素画动作客户端：打到独立的 kagami-pixel 进程（issue #365）。 */
   pixelClient: PixelClient;
+  /** 生图客户端：打到 kagami-llm 的生图端点（走 codex 订阅额度，issue #508）。 */
+  imageClient: ImageClient;
 };
 
 export type AgentRuntimeBundle = {
@@ -159,6 +164,7 @@ export async function buildAgentRuntime({
   browserClient,
   spireClient,
   pixelClient,
+  imageClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -238,6 +244,14 @@ export async function buildAgentRuntime({
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(new SpireApp({ spireClient }));
   appManager.register(new PixelApp({ pixelClient, ossClient }));
+  // 共享异步任务原语：completion 以事件形式塞回主 Agent 事件队列，session 装配成 <async_tool_result>
+  // 尾部追加触发新轮。atelier 是首个消费者；未来其它异步工具复用同一实例（#508）。
+  const asyncTaskManager = new AsyncTaskManager({
+    onComplete: completion =>
+      eventQueue.enqueue({ type: "async_tool_result_completed", data: completion }),
+    maxTaskDurationMs: config.server.agent.asyncTask.maxTaskDurationMs,
+  });
+  appManager.register(new AtelierApp({ imageClient, ossClient, asyncTaskManager }));
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 
