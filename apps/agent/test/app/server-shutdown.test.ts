@@ -97,6 +97,48 @@ describe("shutdownServerResources", () => {
     ]);
   });
 
+  it("有状态采样器时先停它（早于 HTTP / root agent），保证关停期间不再打点", async () => {
+    const order: string[] = [];
+    const logger = createLoggerStub();
+    const app = {
+      close: vi.fn(async () => {
+        order.push("app.close");
+      }),
+    } as unknown as FastifyInstance;
+    const stateSampler = {
+      stop: vi.fn(() => {
+        order.push("stateSampler.stop");
+      }),
+    };
+    const rootAgentRuntime = createAgentRuntimeStub(order, "rootAgentRuntime.stop");
+    const exit = vi.fn();
+
+    await shutdownServerResources({
+      signal: "SIGTERM",
+      timeoutMs: 10_000,
+      isServerStarted: true,
+      app,
+      database: {} as never,
+      shutdownApps: null,
+      schedulerClient: null,
+      callbackServers: [],
+      rootAgentRuntime,
+      stateSampler,
+      closeLlmProviders: null,
+      logger,
+      closeLoggerRuntime: vi.fn(async () => {}),
+      closeDatabase: vi.fn(async () => {}),
+      exit,
+      setShutdownTimeout: () => ({}) as ReturnType<typeof setTimeout>,
+      clearShutdownTimeout: () => {},
+    });
+
+    expect(stateSampler.stop).toHaveBeenCalledTimes(1);
+    // 采样器停在最前：早于 app.close 与 rootAgentRuntime.stop。
+    expect(order[0]).toBe("stateSampler.stop");
+    expect(order.indexOf("stateSampler.stop")).toBeLessThan(order.indexOf("rootAgentRuntime.stop"));
+  });
+
   it("root agent 为空时仍能安全完成关停", async () => {
     const logger = createLoggerStub();
     const closeLoggerRuntime = vi.fn(async () => {});

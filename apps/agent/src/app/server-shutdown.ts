@@ -25,6 +25,8 @@ type ShutdownServerResourcesOptions = {
   schedulerClient: SchedulerClient | null;
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: AgentRuntimeController | null;
+  /** 状态心跳采样器：关停时停掉定时器，stop 后不再打点。同步、幂等。缺省/ null 视为无采样器。 */
+  stateSampler?: { stop(): void } | null;
   closeLlmProviders: (() => Promise<void>) | null;
   logger?: ShutdownLogger;
   closeLoggerRuntime?: () => Promise<void>;
@@ -46,6 +48,7 @@ export async function shutdownServerResources({
   schedulerClient,
   callbackServers,
   rootAgentRuntime,
+  stateSampler,
   closeLlmProviders,
   logger: shutdownLogger = logger,
   closeLoggerRuntime = async () => {
@@ -91,6 +94,12 @@ export async function shutdownServerResources({
     }
   };
 
+  // 先停状态心跳采样：同步、幂等，保证关停期间不再打无谓的状态样本点。
+  if (stateSampler) {
+    await step("State sampler stopped", "server.shutdown.state_sampler_stopped", () =>
+      stateSampler.stop(),
+    );
+  }
   if (isServerStarted && app) {
     await step("HTTP server closed", "server.shutdown.http_closed", () => app.close());
   }

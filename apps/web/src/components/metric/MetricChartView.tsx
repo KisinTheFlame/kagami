@@ -31,8 +31,22 @@ import { formatBucketLabel, formatCompactNumber, formatFullDateTime } from "./me
 // 矩阵（x=时间），pie 走单值构成（每序列塌成一个切片，x=类别）。查询侧不变；pie/stacked 的构成语义
 // 由使用处用「单桶查询」（bucket 覆盖整段范围）喂进来，这里只负责渲染。
 
-/** 图表画法。line/area/bar/stacked = 时序（x=桶）；pie = 构成（每序列一片）。 */
-export type MetricChartType = "line" | "area" | "bar" | "stacked" | "pie";
+/**
+ * 图表画法。line/area/stacked-area/bar/stacked = 时序（x=桶）；pie = 构成（每序列一片）。
+ * - `area` = 半透明叠放（overlay，各序列独立，看「子集 vs 全集」占比）。
+ * - `stacked-area` = 堆叠面积 + 每桶归一化到 100%（stackOffset="expand"），看「构成占比随时间演化」。
+ */
+export type MetricChartType = "line" | "area" | "stacked-area" | "bar" | "stacked" | "pie";
+
+/**
+ * 序列 → 展示元数据解析器：给定序列 key（= groupByTag 的 tag 值，如状态名 "qq"/"wait"）与序号，
+ * 返回稳定的 label + 颜色。用于「按语义显式配色/命名」而非 seriesColors 的 index 轮转
+ * （状态占比图必须显式映射，否则新增状态会让颜色错位）。返回 undefined 时回落到默认。
+ */
+export type SeriesMetaResolver = (
+  seriesKey: string,
+  index: number,
+) => { label: string; color: string } | undefined;
 
 type MetricChartViewProps = {
   title: string;
@@ -44,6 +58,8 @@ type MetricChartViewProps = {
   data?: MetricChartQueryResponse;
   /** 画法，默认折线。 */
   chartType?: MetricChartType;
+  /** 序列展示元数据解析器（显式配色/命名）。缺省时用 seriesColors 轮转 + 后端 label。 */
+  seriesMeta?: SeriesMetaResolver;
   /** 图表区高度（px），默认 288（h-72）。 */
   height?: number;
 };
@@ -55,6 +71,8 @@ type ChartRow = {
 
 export type RenderSeries = MetricChartSeries & {
   dataKey: string;
+  /** 已解析的展示颜色（seriesMeta 显式映射优先，否则 seriesColors 轮转）。 */
+  color: string;
 };
 
 // 鲜艳蒙德里安系列色：前 4 个饱和原色走设计 token（跟随 DESIGN.md + 暗色自适应），
@@ -79,11 +97,21 @@ export function MetricChartView({
   errorMessage,
   data,
   chartType = "line",
+  seriesMeta,
   height = 288,
 }: MetricChartViewProps) {
   const renderSeries = useMemo<RenderSeries[]>(
-    () => data?.series.map((item, index) => ({ ...item, dataKey: `series_${index}` })) ?? [],
-    [data?.series],
+    () =>
+      data?.series.map((item, index) => {
+        const meta = seriesMeta?.(item.key, index);
+        return {
+          ...item,
+          label: meta?.label ?? item.label,
+          dataKey: `series_${index}`,
+          color: meta?.color ?? seriesColors[index % seriesColors.length],
+        };
+      }) ?? [],
+    [data?.series, seriesMeta],
   );
   const chartConfig = useMemo(() => buildChartConfig(renderSeries), [renderSeries]);
   const rows = useMemo(() => buildChartRows(renderSeries), [renderSeries]);
@@ -199,6 +227,62 @@ export function MetricChartView({
                     />
                   ))}
                 </BarChart>
+              ) : chartType === "stacked-area" ? (
+                <AreaChart
+                  data={rows}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                  // expand：每个桶把各序列值归一化到 [0,1]（累计 = 100%）。这才是「构成占比随时间
+                  // 演化」——不受采样完整度（重启/丢点/卡顿导致桶总数波动）影响，高度恒为 100%。
+                  // 前提：只喂 count/sum 型 metric——其空桶被 metric 服务 0-fill 成密集网格
+                  //（getMissingBucketValue），各序列在每个桶都有值，expand 分母完整。avg/p95 型空桶是
+                  // null（无定义），不该用堆叠面积表达占比。
+                  stackOffset="expand"
+                >
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="bucketLabel" tickLine={false} axisLine={false} minTickGap={24} />
+                  <YAxis
+                    width={56}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={[0, 1]}
+                    tickFormatter={(value: number | string) =>
+                      `${Math.round(Number(value) * 100)}%`
+                    }
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_label, payload) => {
+                          const entry = payload?.[0]?.payload as
+                            | { bucketStart?: unknown }
+                            | undefined;
+                          const bucketStart = entry?.bucketStart;
+                          return typeof bucketStart === "string"
+                            ? formatFullDateTime(bucketStart)
+                            : "未知时间";
+                        }}
+                      />
+                    }
+                  />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {renderSeries.map(series => (
+                    <Area
+                      key={series.key}
+                      type="linear"
+                      dataKey={series.dataKey}
+                      name={series.label}
+                      stroke={`var(--color-${series.dataKey})`}
+                      fill={`var(--color-${series.dataKey})`}
+                      // 堆叠：所有序列共用一个 stackId 叠成构成带；不透明填充，看清各带占比。
+                      stackId="stack"
+                      fillOpacity={0.85}
+                      strokeWidth={1}
+                      // 补 0 后无 null，connectNulls 无影响；显式 true 防未来数据洞破坏堆叠。
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </AreaChart>
               ) : chartType === "area" ? (
                 <AreaChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
@@ -306,11 +390,11 @@ export function MetricChartView({
 
 function buildChartConfig(series: RenderSeries[]): ChartConfig {
   return Object.fromEntries(
-    series.map((item, index) => [
+    series.map(item => [
       item.dataKey,
       {
         label: item.label,
-        color: seriesColors[index % seriesColors.length],
+        color: item.color,
       },
     ]),
   );
@@ -325,11 +409,11 @@ type PieSlice = { dataKey: string; name: string; value: number; fill: string };
  * 负值计入分母扭曲占比。饼图应配非负 metric，这里对误用做兜底。dataKey 供稳定 React key（label 不保唯一）。
  */
 export function buildPieData(series: RenderSeries[]): PieSlice[] {
-  return series.map((item, index) => ({
+  return series.map(item => ({
     dataKey: item.dataKey,
     name: item.label,
     value: Math.abs(item.points.reduce((sum, point) => sum + (point.value ?? 0), 0)),
-    fill: seriesColors[index % seriesColors.length],
+    fill: item.color,
   }));
 }
 

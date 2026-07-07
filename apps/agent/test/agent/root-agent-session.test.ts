@@ -114,6 +114,43 @@ describe("RootAgentSession (App 启动器)", () => {
     expect(session.getCurrentApp()).toBeUndefined();
   });
 
+  it("getCurrentStateTag：挂起→wait；活跃在某 App→appId；未进任何 App→portal（互斥单轴）", () => {
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
+    });
+
+    // 初始未进任何 App = portal。
+    expect(session.getCurrentStateTag()).toBe("portal");
+
+    // 进入 App = appId。
+    session.setCurrentApp("browser");
+    expect(session.getCurrentStateTag()).toBe("browser");
+
+    // 挂起盖过所在 App = wait。
+    session.setSuspended(true);
+    expect(session.getCurrentStateTag()).toBe("wait");
+
+    // 唤醒后回到所在 App。
+    session.setSuspended(false);
+    expect(session.getCurrentStateTag()).toBe("browser");
+
+    // reset 归位：suspended 清位 + currentApp 清空 → portal。
+    session.setSuspended(true);
+    session.reset();
+    expect(session.getCurrentStateTag()).toBe("portal");
+  });
+
+  it("markRestored 归位挂起标志（重启后主循环从活跃态重放，不残留 wait）", () => {
+    const session = new RootAgentSession({
+      context: createContext(),
+      appManager: new AppManager(),
+    });
+    session.setSuspended(true);
+    session.markRestored();
+    expect(session.getCurrentStateTag()).toBe("portal");
+  });
+
   it("tracks entered apps and clears them on clearEnteredApps", () => {
     const session = new RootAgentSession({
       context: createContext(),

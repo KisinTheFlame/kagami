@@ -607,6 +607,8 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly host: RootAgentHost;
   private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
+  /** 纯文本轮隐式挂起路径要置位状态供采样归 "wait" 桶（显式 wait 工具路径走 interpreter）。 */
+  private readonly session: Pick<RootAgentSessionController, "setSuspended">;
   private readonly idleWakeMaxWaitMs: number;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
@@ -676,6 +678,7 @@ export class RootLoopAgent extends BaseLoopAgent<
     this.host = host;
     this.tools = resolvedTools;
     this.eventQueue = eventQueue;
+    this.session = session;
     this.idleWakeMaxWaitMs = idleWakeMaxWaitMs ?? DEFAULT_IDLE_WAKE_MAX_WAIT_MS;
   }
 
@@ -835,9 +838,13 @@ export class RootLoopAgent extends BaseLoopAgent<
       timerHandle.unref();
     }
 
+    // 纯文本零工具轮的隐式挂起：与 wait 工具同语义，置 suspended 供状态采样归 "wait" 桶。
+    // finally 成对清位，保证唤醒后活跃时间不被错记成 wait。
+    this.session.setSuspended(true);
     try {
       await this.eventQueue.waitNonEmpty();
     } finally {
+      this.session.setSuspended(false);
       clearTimeout(timerHandle);
     }
   }

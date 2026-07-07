@@ -21,6 +21,7 @@ let shutdownApps: (() => Promise<void>) | null = null;
 let schedulerClient: SchedulerClient | null = null;
 let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let rootAgentRuntime: AgentRuntimeController | null = null;
+let stateSampler: { start(): void; stop(): void } | null = null;
 let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
@@ -32,6 +33,7 @@ async function startAgentLoop(runtime: {
     run(): Promise<void>;
     stop(): Promise<void>;
   };
+  stateSampler: { start(): void };
 }): Promise<void> {
   try {
     await runtime.rootAgentRuntime.initialize();
@@ -43,6 +45,10 @@ async function startAgentLoop(runtime: {
     await fatalExit("agent.loop.init_failed", "Agent runtime initialization failed", error);
     return;
   }
+
+  // 主循环即将活跃：此刻起状态心跳采样才有意义（避免采到「服务起了但 loop 未活」的虚假
+  // portal 样本）。采样器 fire-and-forget，start 不抛。
+  runtime.stateSampler.start();
 
   void runtime.rootAgentRuntime.run().catch(error => {
     void fatalExit("agent.loop.crashed", "Agent loop crashed", error);
@@ -71,6 +77,7 @@ async function fatalExit(event: string, message: string, error: unknown): Promis
     schedulerClient,
     callbackServers,
     rootAgentRuntime,
+    stateSampler,
     closeLlmProviders,
     closeDatabase: closeDb,
     // 崩溃路径无论清理成功与否都以非零码退出（graceful 路径才 exit(0)）。
@@ -98,6 +105,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     schedulerClient,
     callbackServers,
     rootAgentRuntime,
+    stateSampler,
     closeLlmProviders,
     closeDatabase: closeDb,
   });
@@ -119,6 +127,7 @@ try {
   schedulerClient = runtime.schedulerClient;
   callbackServers = runtime.callbackServers;
   rootAgentRuntime = runtime.rootAgentRuntime;
+  stateSampler = runtime.stateSampler;
   closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 

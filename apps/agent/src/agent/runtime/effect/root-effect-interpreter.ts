@@ -17,7 +17,10 @@ import type {
   WaitForEventEffect,
 } from "./root-agent-effect.js";
 
-type InterpreterSession = Pick<RootAgentSessionController, "setCurrentApp" | "markAppEntered">;
+type InterpreterSession = Pick<
+  RootAgentSessionController,
+  "setCurrentApp" | "markAppEntered" | "setSuspended"
+>;
 
 function isAppendMessageEffect(effect: Effect): effect is AppendMessageEffect {
   return effect.type === "append_message";
@@ -65,7 +68,7 @@ export function createRootEffectInterpreter({
     new ReplaceLeadingMessagesHandler(context),
     new AppendMessageHandler(),
     new SwitchAppHandler(session),
-    new WaitForEventHandler(eventQueue),
+    new WaitForEventHandler(eventQueue, session),
   ]);
 }
 
@@ -129,9 +132,14 @@ class SwitchAppHandler implements EffectHandler<never> {
  */
 class WaitForEventHandler implements EffectHandler<never> {
   private readonly eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">;
+  private readonly session: Pick<InterpreterSession, "setSuspended">;
 
-  public constructor(eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">) {
+  public constructor(
+    eventQueue: Pick<AgentEventQueue, "enqueue" | "waitNonEmpty">,
+    session: Pick<InterpreterSession, "setSuspended">,
+  ) {
     this.eventQueue = eventQueue;
+    this.session = session;
   }
 
   public matches(effect: Effect): boolean {
@@ -147,9 +155,13 @@ class WaitForEventHandler implements EffectHandler<never> {
     const timerHandle = setTimeout(() => {
       this.eventQueue.enqueue(wakeEvent);
     }, wait.maxWaitMs);
+    // 显式 wait 工具的挂起：置 suspended 供状态采样归入 "wait" 桶，await 前后成对，
+    // finally 保证异常/唤醒都清位（否则会把后续活跃时间错记成 wait）。
+    this.session.setSuspended(true);
     try {
       await this.eventQueue.waitNonEmpty();
     } finally {
+      this.session.setSuspended(false);
       // 不管谁唤醒（真消息 / 别的 wake / 我们自己的 timer），都清 timer，
       // 避免 stale setTimeout 在远未来 enqueue 一个无谓的 wake。
       clearTimeout(timerHandle);
