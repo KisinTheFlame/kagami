@@ -57,6 +57,7 @@ type HnConfig = z.infer<typeof HnConfigSchema>;
 export class HnApp implements App<HnConfig> {
   public readonly id = HN_APP_ID;
   public readonly displayName = "Hacker News";
+  public readonly description = "浏览 Hacker News 榜单，搜帖、读讨论和用户主页。";
   public readonly configSchema = HnConfigSchema;
   public readonly tools: readonly (
     | GlanceHnTool

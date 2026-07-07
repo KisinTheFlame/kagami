@@ -40,6 +40,7 @@ type PixelAppDeps = {
 export class PixelApp implements App {
   public readonly id = PIXEL_APP_ID;
   public readonly displayName = "像素画";
+  public readonly description = "在画布上逐格填色作画，导出为图。";
   public readonly tools: readonly [
     PixelNewCanvasTool,
     PixelSetPixelsTool,

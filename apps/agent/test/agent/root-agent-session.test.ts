@@ -7,7 +7,14 @@ import { initTestLoggerRuntime } from "../helpers/logger.js";
 initTestLoggerRuntime();
 
 function createTestApp(id: string, displayName: string): App {
-  return { id, displayName, tools: [], canInvoke: () => true, help: async () => "" };
+  return {
+    id,
+    displayName,
+    description: displayName,
+    tools: [],
+    canInvoke: () => true,
+    help: async () => "",
+  };
 }
 
 function createContext() {

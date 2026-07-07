@@ -35,6 +35,7 @@ type SpireAppDeps = {
 export class SpireApp implements App {
   public readonly id = SPIRE_APP_ID;
   public readonly displayName = "尖塔";
+  public readonly description = "游玩爬塔卡牌游戏，出牌、做选择、查战况。";
   public readonly tools: readonly [
     SpireStartRunTool,
     SpirePlayCardTool,

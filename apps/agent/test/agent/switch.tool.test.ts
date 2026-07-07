@@ -13,6 +13,7 @@ function createFakeApp(
   return {
     id,
     displayName: id,
+    description: id,
     tools: [],
     canInvoke: () => true,
     help: hooks.help ?? (async () => `you are in ${id}`),

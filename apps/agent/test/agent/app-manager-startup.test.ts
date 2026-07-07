@@ -13,6 +13,7 @@ type CalcLikeConfig = z.infer<typeof CalcLikeConfigSchema>;
 class FakeConfiguredApp implements App<CalcLikeConfig> {
   public readonly id: string;
   public readonly displayName: string;
+  public readonly description = "测试用途";
   public readonly tools = [] as const;
   public readonly configSchema = CalcLikeConfigSchema;
 
@@ -39,6 +40,7 @@ class FakeConfiguredApp implements App<CalcLikeConfig> {
 class FakeUnconfiguredApp implements App {
   public readonly id: string;
   public readonly displayName: string;
+  public readonly description = "测试用途";
   public readonly tools = [] as const;
 
   public received: unknown = "not-called";
@@ -117,6 +119,7 @@ describe("AppManager.startupAll", () => {
     class LifecycleApp implements App {
       public readonly id: string;
       public readonly displayName: string;
+      public readonly description = "测试用途";
       public readonly tools = [] as const;
       public startupCalled = false;
       public constructor(

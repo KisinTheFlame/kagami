@@ -61,6 +61,7 @@ type TerminalAppDeps = {
 export class TerminalApp implements App<TerminalConfig> {
   public readonly id = TERMINAL_APP_ID;
   public readonly displayName = "终端";
+  public readonly description = "执行非交互 shell 命令，分页查看输出。";
   public readonly configSchema = TerminalConfigSchema;
   public readonly tools: readonly (BashTool | ReadBashOutputTool)[];
 

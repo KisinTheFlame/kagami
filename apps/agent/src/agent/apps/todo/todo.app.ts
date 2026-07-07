@@ -29,6 +29,7 @@ type TodoAppDeps = {
 export class TodoApp implements App {
   public readonly id = TODO_APP_ID;
   public readonly displayName = "待办";
+  public readonly description = "管理自己的待办，记事、改状态、设到点和周期提醒。";
   public readonly tools: readonly [
     AddTodoTool,
     ListTodosTool,

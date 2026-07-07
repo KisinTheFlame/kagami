@@ -120,6 +120,7 @@ type QqAppDeps = {
 export class QqApp implements App, ForegroundInputSource {
   public readonly id = QQ_APP_ID;
   public readonly displayName = "QQ";
+  public readonly description = "收发 QQ 群聊与私聊消息，发图、传文件。";
   public readonly tools: readonly ToolComponent[];
 
   private readonly napcatGateway: NapcatClient;

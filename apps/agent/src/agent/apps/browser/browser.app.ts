@@ -38,6 +38,7 @@ type BrowserAppDeps = {
 export class BrowserApp implements App {
   public readonly id = BROWSER_APP_ID;
   public readonly displayName = "浏览器";
+  public readonly description = "完整操作网页，导航、点按、填表、截图。";
   public readonly tools: readonly [
     BrowserNavigateTool,
     BrowserObserveTool,
