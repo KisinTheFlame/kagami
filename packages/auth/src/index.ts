@@ -5,6 +5,11 @@ import type { Database } from "@kagami/persistence/db/client";
 import { PrismaAuthUsageSnapshotDao } from "@kagami/persistence/dao/impl/auth-usage-snapshot.impl.dao";
 import { DefaultAuthUsageTrendQueryService } from "./application/auth-usage-trend-query.impl.service.js";
 import { AuthUsageCacheManager } from "./application/auth-usage-cache.impl.service.js";
+import type {
+  AuthUsageSnapshotSink,
+  AuthUsageSnapshotSinkRecord,
+  AuthUsageRefreshOutcome,
+} from "./application/auth-usage-snapshot-sink.js";
 import { OAuthAuthRefreshScheduler } from "./application/oauth-auth-refresh.scheduler.js";
 import {
   buildClaudeCodeAuthorizeUrl,
@@ -28,6 +33,8 @@ import { PrismaOAuthDao } from "./infra/prisma-oauth.dao.js";
 type AuthModuleDeps = {
   database: Database;
   configManager: ConfigManager;
+  // OAuth 额度遥测下沉端口（epic #521）。宿主（apps/llm）注入 Metric 实现；缺省 noop。
+  authUsageSnapshotSink?: AuthUsageSnapshotSink;
 };
 
 export type AuthModule = {
@@ -44,6 +51,7 @@ export type AuthModule = {
 export async function createAuthModule({
   database,
   configManager,
+  authUsageSnapshotSink,
 }: AuthModuleDeps): Promise<AuthModule> {
   const config = await configManager.config();
   const llmConfig = config.server.llm;
@@ -165,6 +173,7 @@ export async function createAuthModule({
     codexAuthService,
     codexBinaryPath: codexConfig.binaryPath,
     authUsageSnapshotDao,
+    authUsageSnapshotSink,
     refreshIntervalMs: llmConfig.authUsageRefreshIntervalMs,
   });
   codexAuthService.setUsageLimitsProvider(async () => {
@@ -199,3 +208,7 @@ export async function createAuthModule({
 // auth-scheduled-tasks（留在 agent 装配层，因它咬 agent 的 scheduler 领域类型）需要这两个
 // 类型来声明 buildAuthScheduledTasks 的入参，故从包顶层导出。
 export { AuthUsageCacheManager, OAuthAuthRefreshScheduler };
+
+// OAuth 额度遥测下沉端口：宿主（apps/llm）实现并注入 createAuthModule。本地转出（不用 re-export
+// from，仓库禁 export-from），类型在上方 import。
+export type { AuthUsageSnapshotSink, AuthUsageSnapshotSinkRecord, AuthUsageRefreshOutcome };
