@@ -45,6 +45,9 @@ export const queryKeys = {
     data: (request: unknown) => ["metric-chart", "data", request] as const,
     derived: (request: unknown) => ["metric-chart", "derived", request] as const,
   },
+  metricPoints: {
+    data: (request: unknown) => ["metric-points", "data", request] as const,
+  },
   mainAgentContext: {
     recent: () => ["main-agent-context", "recent"] as const,
   },
