@@ -29,6 +29,7 @@ import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
+import { StateSampler } from "../agent/runtime/root-agent/state-sampler.js";
 import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-input.js";
 import { SwitchTool, SWITCH_TOOL_NAME } from "../agent/runtime/root-agent/tools/switch.tool.js";
 import { InvokeTool, INVOKE_TOOL_NAME } from "../agent/runtime/root-agent/tools/invoke.tool.js";
@@ -106,6 +107,11 @@ export type AgentRuntimeBundle = {
   todoSuggestionTaskAgent: TodoSuggestionTaskAgent;
   /** QQ App：手机 OS 模型下聊天的承载者，已收纳 napcat 网关（自管生命周期 + 入站事件）。 */
   qqApp: QqApp;
+  /**
+   * 状态心跳采样器：随 run loop 生命周期 start()（不在 loop 未活时打点，避免虚假 portal 样本），
+   * 服务关停时 stop()。见 index.ts / server-shutdown.ts。
+   */
+  stateSampler: StateSampler;
   /** 反序关停所有 App 的 onShutdown（含 QQ App 停网关）。由服务关停链调用。 */
   shutdownApps: () => Promise<void>;
 };
@@ -420,12 +426,22 @@ export async function buildAgentRuntime({
     rootAgentRuntime,
   });
 
+  // 状态心跳采样器：读 session 的单一状态真相源，走注入的 metricService。启停由 wiring 层
+  // （index.ts run loop / server-shutdown）掌握，见 stateSampler 字段注释。
+  const stateSampler = new StateSampler({
+    getStateTag: () => rootAgentSession.getCurrentStateTag(),
+    metricClient: metricService,
+    now: () => new Date(),
+    intervalMs: config.server.agent.stateSampleIntervalMs,
+  });
+
   return {
     rootAgentRuntime,
     mainAgentContextQueryService,
     llmProviderService,
     todoSuggestionTaskAgent,
     qqApp,
+    stateSampler,
     shutdownApps: () => appManager.shutdownAll(),
   };
 }

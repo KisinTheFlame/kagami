@@ -40,6 +40,16 @@ export type RootAgentPostToolEffects = {
 export type RootAgentSessionController = {
   getCurrentApp(): AppId | undefined;
   setCurrentApp(appId: AppId): void;
+  /**
+   * 标记 root loop 是否已挂起（阻塞在事件队列等下一个生活输入）。由两条挂起路径
+   * （wait_for_event effect、纯文本零工具轮）在 await 前后置位，供状态心跳采样读取。
+   */
+  setSuspended(suspended: boolean): void;
+  /**
+   * 当前状态桶（互斥单轴）：挂起 → "wait"；否则当前 App id；未进任何 App → "portal"。
+   * 供 StateSampler 心跳采样打点。
+   */
+  getCurrentStateTag(): string;
   /** 本桶上下文里是否进入过该 App（决定 switch 时要不要自动吐 help）。 */
   hasEnteredApp(appId: AppId): boolean;
   /** 标记该 App 本桶已进入。由 switch_app effect 在解释期调用，保持工具无副作用。 */
@@ -80,6 +90,13 @@ export class RootAgentSession implements RootAgentSessionController {
    */
   private currentApp: AppId | undefined = undefined;
   /**
+   * root loop 是否挂起（阻塞在 eventQueue.waitNonEmpty() 等下一个生活输入 = 空闲）。仅内存
+   * 持有；不进 snapshot。两条挂起路径在 await 前后置位（见 root-effect-interpreter 的
+   * WaitForEventHandler、root-agent-runtime 的 suspendUntilNextEvent）。reset/markRestored 归位为
+   * false（重启后主循环从活跃态重放）。
+   */
+  private suspended = false;
+  /**
    * 本桶上下文里已进入过的 App 集合。仅内存持有；不进 snapshot，生命周期与 currentApp
    * 一致（reset / markRestored 清空）。压缩时由 AppEntryResetExtension 清空，让压缩后首进
    * 重新吐 help。重启后为空——首进各 App 至多重复注入一次 help（有界，见 issue #223）。
@@ -102,6 +119,17 @@ export class RootAgentSession implements RootAgentSessionController {
     this.currentApp = appId;
   }
 
+  public setSuspended(suspended: boolean): void {
+    this.suspended = suspended;
+  }
+
+  public getCurrentStateTag(): string {
+    if (this.suspended) {
+      return "wait";
+    }
+    return this.currentApp ?? "portal";
+  }
+
   public hasEnteredApp(appId: AppId): boolean {
     return this.enteredApps.has(appId);
   }
@@ -119,6 +147,7 @@ export class RootAgentSession implements RootAgentSessionController {
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = false;
     this.currentApp = undefined;
+    this.suspended = false;
     this.enteredApps.clear();
   }
 
@@ -132,6 +161,7 @@ export class RootAgentSession implements RootAgentSessionController {
     this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = true;
     this.currentApp = undefined;
+    this.suspended = false;
     this.enteredApps.clear();
   }
 

@@ -9,6 +9,7 @@ const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS = 2_000;
 const DEFAULT_AGENT_NOTIFICATION_LEADING_WINDOW_MS = 10_000;
 const DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS = 30_000;
 const DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED = true;
@@ -255,6 +256,7 @@ const ConfigSchema = z.object({
           ),
           llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
           waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+          stateSampleIntervalMs: PositiveIntSchema.default(DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS),
           notificationLeadingWindowMs: PositiveIntSchema.default(
             DEFAULT_AGENT_NOTIFICATION_LEADING_WINDOW_MS,
           ),
@@ -305,6 +307,7 @@ const ConfigSchema = z.object({
           contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
           llmRetryBackoffMs: value.llmRetryBackoffMs,
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
+          stateSampleIntervalMs: value.stateSampleIntervalMs,
           notificationLeadingWindowMs: value.notificationLeadingWindowMs,
           notificationBatchWindowMs: value.notificationBatchWindowMs,
           messaging: value.messaging,

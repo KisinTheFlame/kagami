@@ -6,7 +6,11 @@ import type {
   MetricChartTagFilters,
 } from "@kagami/metric-api/chart";
 import { useMemo } from "react";
-import { MetricChartView, type MetricChartType } from "@/components/metric/MetricChartView";
+import {
+  MetricChartView,
+  type MetricChartType,
+  type SeriesMetaResolver,
+} from "@/components/metric/MetricChartView";
 import { useMetricChartData } from "@/components/metric/useMetricChartData";
 import { getApiErrorMessage } from "@/lib/api";
 import { mergeToolSeries } from "./dashboard-series";
@@ -69,6 +73,8 @@ type DashboardChartProps = {
   chartType: MetricChartType;
   groupByTag?: string;
   tagFilters?: MetricChartTagFilters;
+  /** 序列展示元数据解析器（显式配色/命名，如状态占比图）。透传给 MetricChartView。 */
+  seriesMeta?: SeriesMetaResolver;
   /** 显示前的值缩放系数（如延迟 ms→秒 传 0.001）；缺省不缩放。存储值不变，只改展示。 */
   valueScale?: number;
   range: DashboardRange;
@@ -83,6 +89,7 @@ export function DashboardChart({
   chartType,
   groupByTag,
   tagFilters,
+  seriesMeta,
   valueScale,
   range,
 }: DashboardChartProps) {
@@ -99,6 +106,7 @@ export function DashboardChart({
       title={title}
       subtitle={subtitle}
       chartType={chartType}
+      {...(seriesMeta ? { seriesMeta } : {})}
       isLoading={query.isLoading}
       isError={query.isError}
       errorMessage={query.isError ? getApiErrorMessage(query.error) : undefined}

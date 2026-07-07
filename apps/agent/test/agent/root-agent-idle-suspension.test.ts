@@ -48,6 +48,8 @@ describe("RootLoopAgent — 纯文本轮挂起直到新事件", () => {
         }),
         flushPendingIncomingEffects: vi.fn(async () => ({ shouldTriggerRound: false })),
         flushPendingPostToolEffects: vi.fn(async () => ({ messages: [], events: [] })),
+        // 纯文本轮隐式挂起路径会调 setSuspended 置位状态供采样归 "wait" 桶。
+        setSuspended: vi.fn(),
       },
       tools: {
         definitions: () => [],

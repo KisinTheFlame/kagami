@@ -30,6 +30,7 @@ server:
     contextCompactionTotalTokenThreshold: 600000
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
+    stateSampleIntervalMs: 2000 # 状态心跳采样间隔：每这么久采一次「小镜此刻处于哪个 App / wait / portal」，打 agent.state.sample metric
     notificationLeadingWindowMs: 1000 # 空闲来第一条通知时先开这么长的前沿短窗聚合首批，窗结束才 flush（不再前沿立即发）
     notificationBatchWindowMs: 30000
     messaging:

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { DashboardCacheChart } from "./DashboardCacheChart";
 import { DashboardChart, DashboardOverlayChart, type DashboardRange } from "./dashboard-charts";
+import { stateSeriesMeta } from "@/components/metric/state-meta";
 
 // === 大盘 ===
 //
@@ -22,6 +23,9 @@ const LLM_CALL = "llm.call";
 const LLM_LATENCY = "llm.call.latency";
 const LLM_TOKENS = "llm.call.tokens";
 const MODEL_TAG = "model";
+// 状态心跳采样（sampling profiler）：每点 value=1，tags.state = 当前状态桶（app/wait/portal）。
+const STATE_SAMPLE = "agent.state.sample";
+const STATE_TAG = "state";
 
 // 延迟图只算成功调用：失败（尤其超时，latency=整个超时时长）会污染 avg/P99 读数。
 const SUCCESS_ONLY = { status: { op: "eq" as const, value: "success" } };
@@ -137,6 +141,17 @@ export function DashboardPage() {
 
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <DashboardChart
+            title="状态时间占比"
+            subtitle="各 App / 等待 / 桌面 · 每桶归一化到 100%"
+            metricName={STATE_SAMPLE}
+            aggregator="count"
+            groupByTag={STATE_TAG}
+            seriesMeta={stateSeriesMeta}
+            chartType="stacked-area"
+            range={range}
+          />
+
           <DashboardOverlayChart
             title="工具使用次数"
             subtitle="Wait 工具 vs 所有工具的调用次数"

@@ -12,6 +12,7 @@ const series: RenderSeries[] = [
     key: "Read",
     label: "Read",
     dataKey: "series_0",
+    color: "hsl(var(--llm))",
     points: [
       { bucketStart: "2026-04-02T00:00:00.000Z", value: 2 },
       { bucketStart: "2026-04-02T00:01:00.000Z", value: 3 },
@@ -21,6 +22,7 @@ const series: RenderSeries[] = [
     key: "Wait",
     label: "Wait",
     dataKey: "series_1",
+    color: "hsl(var(--signal))",
     points: [
       { bucketStart: "2026-04-02T00:00:00.000Z", value: 5 },
       { bucketStart: "2026-04-02T00:01:00.000Z", value: null },
@@ -43,6 +45,7 @@ describe("buildPieData", () => {
         key: "delta",
         label: "delta",
         dataKey: "series_0",
+        color: "hsl(var(--llm))",
         points: [
           { bucketStart: "2026-04-02T00:00:00.000Z", value: -7 },
           { bucketStart: "2026-04-02T00:01:00.000Z", value: 2 },

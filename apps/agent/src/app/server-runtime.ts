@@ -65,6 +65,8 @@ export type ServerRuntime = {
   callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
   metricService: MetricClient;
+  /** 状态心跳采样器：由 index.ts 在 run loop 启动后 start()、server-shutdown 时 stop()。 */
+  stateSampler: { start(): void; stop(): void };
   port: number;
   listenGroupIds: string[];
   startupContextRecentMessageCount: number;
@@ -276,6 +278,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     callbackServers: [],
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     metricService,
+    stateSampler: agentRuntime.stateSampler,
     port: config.services.agent.port,
     listenGroupIds: config.server.napcat.listenGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
