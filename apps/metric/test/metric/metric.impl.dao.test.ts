@@ -616,4 +616,68 @@ describe("DuckDbMetricDao", () => {
       expect(rows).toEqual([{ bucketStart: iso("2026-07-06T10:00:00.000Z"), value: 5 }]);
     });
   });
+
+  describe("queryRawPoints", () => {
+    it("returns the most recent `limit` rows in DESC order (no aggregation)", async () => {
+      for (const [minute, value] of [
+        ["00", 10],
+        ["10", 20],
+        ["20", 30],
+        ["30", 40],
+        ["40", 50],
+      ] as const) {
+        await dao.insert({
+          metricName: METRIC,
+          value,
+          tags: {},
+          occurredAt: iso(`2026-07-06T10:${minute}:00.000Z`),
+        });
+      }
+
+      const rows = await dao.queryRawPoints({
+        metricName: METRIC,
+        tagFilters: null,
+        groupByTag: null,
+        startAt: iso("2026-07-06T09:00:00.000Z"),
+        endAt: iso("2026-07-06T11:00:00.000Z"),
+        limit: 3,
+      });
+
+      // LIMIT 取最近 3 条，DESC 序（service 层再升序 + 判 truncated）。
+      expect(rows.map(row => row.value)).toEqual([50, 40, 30]);
+      expect(rows.map(row => row.occurredAt.toISOString())).toEqual([
+        "2026-07-06T10:40:00.000Z",
+        "2026-07-06T10:30:00.000Z",
+        "2026-07-06T10:20:00.000Z",
+      ]);
+    });
+
+    it("extracts groupByTag into seriesKey and honors tag filters", async () => {
+      await dao.insert({
+        metricName: METRIC,
+        value: 98,
+        tags: { provider: "claude-code", window: "five_hour" },
+        occurredAt: iso("2026-07-06T10:00:00.000Z"),
+      });
+      await dao.insert({
+        metricName: METRIC,
+        value: 28,
+        tags: { provider: "openai-codex", window: "seven_day" },
+        occurredAt: iso("2026-07-06T10:01:00.000Z"),
+      });
+
+      const rows = await dao.queryRawPoints({
+        metricName: METRIC,
+        tagFilters: { provider: { op: "eq", value: "claude-code" } },
+        groupByTag: "window",
+        startAt: iso("2026-07-06T09:00:00.000Z"),
+        endAt: iso("2026-07-06T11:00:00.000Z"),
+        limit: 100,
+      });
+
+      expect(rows).toEqual([
+        { occurredAt: iso("2026-07-06T10:00:00.000Z"), seriesKey: "five_hour", value: 98 },
+      ]);
+    });
+  });
 });
