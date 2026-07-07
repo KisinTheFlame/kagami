@@ -165,6 +165,8 @@ export function renderSpireScreen(screen: SpireScreen): string {
     isRest: screen.screen === "rest",
     isEvent: screen.screen === "event",
     eventDescription: screen.event?.description ?? "",
+    isCardSelect: screen.screen === "card_select",
+    cardSelectTitle: screen.cardSelect?.title ?? "",
     isShop: screen.screen === "shop",
     isGameover: screen.screen === "gameover",
     isVictory: screen.screen === "victory",
@@ -234,6 +236,7 @@ const SPIRE_RARITY_LABELS: Record<string, string> = {
   rare: "稀有",
   boss: "首领",
   special: "特殊",
+  shop: "商店",
 };
 
 /** lookup 结果 → 文字（卡牌信息 + 术语定义）。框架文案在 .hbs，游戏数据插值。 */

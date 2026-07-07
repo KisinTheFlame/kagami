@@ -460,8 +460,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/spire-api
       '@kisinwen/sts-engine':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.5.0
+        version: 0.5.0
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -1448,8 +1448,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kisinwen/sts-engine@0.1.0':
-    resolution: {integrity: sha512-uGlp/Qp7oCo9RvNBiS6PVIXeu5Yp4wZ9ZEl4D2kjUTCcoulj0Qf63FsW52odXzNcs09RsWrTcDGJmVlYLye6ag==}
+  '@kisinwen/sts-engine@0.5.0':
+    resolution: {integrity: sha512-7KT/7ETTbsUpFCzuVePpn/2dyhdKL5wcWBwcmAFM1CLogTiPCaA5Uo76SroiHFwTXaHrD0ByWJMlz/3753zCKA==}
     engines: {node: '>=20'}
 
   '@kurkle/color@0.3.4':
@@ -5063,7 +5063,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kisinwen/sts-engine@0.1.0': {}
+  '@kisinwen/sts-engine@0.5.0': {}
 
   '@kurkle/color@0.3.4': {}
 

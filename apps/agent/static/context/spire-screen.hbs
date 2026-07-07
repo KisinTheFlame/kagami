@@ -59,6 +59,13 @@
 [{{n}}] {{text}}
 {{/each}}
 用 invoke(tool="choose", option_index=编号) 做出选择。
+{{else if isCardSelect}}
+{{cardSelectTitle}}
+你：生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
+{{#each options}}
+[{{n}}] {{text}}
+{{/each}}
+用 invoke(tool="choose", option_index=编号) 选择。
 {{else if isShop}}
 商店。你有 {{gold}} 金币　生命 {{hp}}/{{maxHp}}　牌组 {{deckCount}} 张。
 在售（买完可继续逛，逛够了就离开）：

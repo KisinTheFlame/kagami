@@ -84,9 +84,28 @@ export const SpireEventViewSchema = z.object({
   description: z.string(),
 });
 
+/**
+ * 选牌子界面（图书馆选牌 / 复制器 / 和平烟斗去牌）。具体可选牌与「跳过」都进 options，
+ * 情境（加牌 / 复制 / 去牌）已由 title 的中文文案表达，故 view 只带 title 一项。
+ */
+export const SpireCardSelectViewSchema = z.object({
+  /** 情境标题（渲染用），如「从藏书中挑选一张带走」。 */
+  title: z.string(),
+});
+
 export const SpireScreenSchema = z.object({
   version: z.number().int(),
-  screen: z.enum(["map", "combat", "reward", "rest", "event", "shop", "gameover", "victory"]),
+  screen: z.enum([
+    "map",
+    "combat",
+    "reward",
+    "rest",
+    "event",
+    "shop",
+    "card_select",
+    "gameover",
+    "victory",
+  ]),
   act: z.number().int(),
   player: z.object({
     hp: z.number().int(),
@@ -97,6 +116,7 @@ export const SpireScreenSchema = z.object({
   relics: z.array(SpireRelicViewSchema),
   potions: z.array(SpirePotionViewSchema),
   event: SpireEventViewSchema.nullable(),
+  cardSelect: SpireCardSelectViewSchema.nullable(),
   combat: SpireCombatViewSchema.nullable(),
   options: z.array(z.string()),
   log: z.array(z.string()),

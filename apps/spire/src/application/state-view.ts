@@ -48,6 +48,7 @@ export function toScreenView(state: GameState, opts: { suppressLog?: boolean }):
       return [{ slot, name: def.name, description: def.description, targeted: def.targeted }];
     }),
     event: state.event ? { description: getEventDef(state.event.id).description } : null,
+    cardSelect: state.cardSelect ? { title: state.cardSelect.title } : null,
     combat: state.combat ? toCombatView(state) : null,
     options: currentOptions(state),
     log: opts.suppressLog ? [] : state.log,
