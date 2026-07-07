@@ -115,9 +115,6 @@ export function MetricChartView({
   );
   const chartConfig = useMemo(() => buildChartConfig(renderSeries), [renderSeries]);
   const rows = useMemo(() => buildChartRows(renderSeries), [renderSeries]);
-  // 堆叠面积（100% 归一）专用：把每桶里缺失的序列补 0，否则 stackOffset="expand" 的分母
-  // 会漏掉「该桶 0 采样」的状态、占比算错。line/area 保留 null 断点语义，不做补 0。
-  const stackedAreaRows = useMemo(() => densifyRows(rows, renderSeries), [rows, renderSeries]);
   const pieData = useMemo(() => buildPieData(renderSeries), [renderSeries]);
   // 饼图图例经 chartConfig[name].label 取字（config 按 slice name 键控，非 dataKey）；颜色仍走 Cell fill。
   const pieChartConfig = useMemo<ChartConfig>(
@@ -232,10 +229,13 @@ export function MetricChartView({
                 </BarChart>
               ) : chartType === "stacked-area" ? (
                 <AreaChart
-                  data={stackedAreaRows}
+                  data={rows}
                   margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
                   // expand：每个桶把各序列值归一化到 [0,1]（累计 = 100%）。这才是「构成占比随时间
                   // 演化」——不受采样完整度（重启/丢点/卡顿导致桶总数波动）影响，高度恒为 100%。
+                  // 前提：只喂 count/sum 型 metric——其空桶被 metric 服务 0-fill 成密集网格
+                  //（getMissingBucketValue），各序列在每个桶都有值，expand 分母完整。avg/p95 型空桶是
+                  // null（无定义），不该用堆叠面积表达占比。
                   stackOffset="expand"
                 >
                   <CartesianGrid vertical={false} />
@@ -415,23 +415,6 @@ export function buildPieData(series: RenderSeries[]): PieSlice[] {
     value: Math.abs(item.points.reduce((sum, point) => sum + (point.value ?? 0), 0)),
     fill: item.color,
   }));
-}
-
-/**
- * 把 buildChartRows 的稀疏行补密：每行里缺失的序列 dataKey 补 0。堆叠面积 100% 归一
- * （stackOffset="expand"）要求每桶知道所有序列的值，缺失（该桶 0 采样）必须记 0 而非
- * undefined——否则该状态被排除出分母、占比偏高。仅堆叠面积用；不改原 rows。
- */
-export function densifyRows(rows: ChartRow[], series: RenderSeries[]): ChartRow[] {
-  return rows.map(row => {
-    const dense: ChartRow = { ...row };
-    for (const item of series) {
-      if (dense[item.dataKey] === undefined || dense[item.dataKey] === null) {
-        dense[item.dataKey] = 0;
-      }
-    }
-    return dense;
-  });
 }
 
 export function buildChartRows(series: RenderSeries[]): ChartRow[] {
