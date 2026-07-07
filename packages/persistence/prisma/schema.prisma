@@ -131,21 +131,6 @@ model OauthState {
   @@map("oauth_state")
 }
 
-model AuthUsageSnapshot {
-  id               Int       @id @default(autoincrement())
-  provider         String
-  accountId        String    @map("account_id")
-  windowKey        String    @map("window_key")
-  remainingPercent Float     @map("remaining_percent")
-  resetAt          DateTime? @map("reset_at")
-  capturedAt       DateTime  @default(now()) @map("captured_at")
-
-  @@index([provider, accountId, capturedAt], map: "auth_usage_snapshot_provider_account_captured_at_idx")
-  @@index([provider, accountId, windowKey, capturedAt], map: "auth_usage_snapshot_provider_account_window_captured_at_idx")
-  @@index([capturedAt], map: "auth_usage_snapshot_captured_at_idx")
-  @@map("auth_usage_snapshot")
-}
-
 model EmbeddingCache {
   id                   Int      @id @default(autoincrement())
   provider             String

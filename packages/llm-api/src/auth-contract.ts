@@ -8,14 +8,13 @@ import {
   AuthStatusResponseSchema,
   AuthUsageLimitsResponseSchema,
 } from "./auth.js";
-import { AuthUsageTrendQuerySchema, AuthUsageTrendResponseSchema } from "./auth-usage-trend.js";
 
 // === OAuth 凭据管理路由契约（#279 PR6） ===
 //
 // 认证管理端点随 LLM 服务外移（gateway 把 /auth 前缀分流到 kagami-llm），handler 实现在
 // @kagami/auth，故契约归 llm-api。与 contract.ts 的内部 RPC（agent→llm）分开成图：消费者
 // 是 web 管理台（contractUrl 取 path/schema，D1），不进 createClient。
-// 六条路由共用 :provider 路径参数（PR1 params 通道）。
+// 五条路由共用 :provider 路径参数（PR1 params 通道）。
 
 const AuthProviderParamsSchema = z
   .object({
@@ -60,12 +59,5 @@ export const authApiContract = {
     params: AuthProviderParamsSchema,
     input: EmptyStrictSchema,
     output: AuthUsageLimitsResponseSchema,
-  }),
-  getAuthUsageTrend: defineJsonRoute({
-    method: "GET",
-    path: "/auth/:provider/usage-trend",
-    params: AuthProviderParamsSchema,
-    input: AuthUsageTrendQuerySchema,
-    output: AuthUsageTrendResponseSchema,
   }),
 } as const;

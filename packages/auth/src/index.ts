@@ -2,8 +2,6 @@ import { type AuthUsageLimitsResponse } from "@kagami/llm-api/auth";
 import { SharedOAuthCallbackServer } from "./shared/callback-server.js";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
 import type { Database } from "@kagami/persistence/db/client";
-import { PrismaAuthUsageSnapshotDao } from "@kagami/persistence/dao/impl/auth-usage-snapshot.impl.dao";
-import { DefaultAuthUsageTrendQueryService } from "./application/auth-usage-trend-query.impl.service.js";
 import { AuthUsageCacheManager } from "./application/auth-usage-cache.impl.service.js";
 import type {
   AuthUsageSnapshotSink,
@@ -55,10 +53,6 @@ export async function createAuthModule({
 }: AuthModuleDeps): Promise<AuthModule> {
   const config = await configManager.config();
   const llmConfig = config.server.llm;
-  const authUsageSnapshotDao = new PrismaAuthUsageSnapshotDao({ database });
-  const authUsageTrendQueryService = new DefaultAuthUsageTrendQueryService({
-    authUsageSnapshotDao,
-  });
 
   const codexConfig = {
     ...llmConfig.codexAuth,
@@ -174,7 +168,6 @@ export async function createAuthModule({
     claudeCodeAuthService,
     codexAuthService,
     codexBinaryPath: codexConfig.binaryPath,
-    authUsageSnapshotDao,
     authUsageSnapshotSink,
     refreshIntervalMs: llmConfig.authUsageRefreshIntervalMs,
   });
@@ -203,7 +196,6 @@ export async function createAuthModule({
     authRefreshSchedulers: [codexAuthRefreshScheduler, claudeCodeAuthRefreshScheduler],
     authHandler: new AuthHandler({
       authServices,
-      authUsageTrendQueryService,
       authUsageCacheManager,
     }),
     callbackServers: [codexCallbackServer, claudeCodeCallbackServer],
