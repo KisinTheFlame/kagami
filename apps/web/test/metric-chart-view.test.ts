@@ -3,7 +3,6 @@ import {
   buildChartRows,
   buildPieData,
   selectVisibleSeries,
-  toggleHiddenKey,
   type RenderSeries,
 } from "@/components/metric/MetricChartView";
 
@@ -26,25 +25,6 @@ describe("buildPieData 用解析后的 color", () => {
     const pie = buildPieData(renderSeries);
     expect(pie[0]?.fill).toBe("hsl(var(--scheduler))");
     expect(pie[0]?.value).toBe(10);
-  });
-});
-
-describe("toggleHiddenKey：不可变切换", () => {
-  it("缺则加、有则删", () => {
-    const empty = new Set<string>();
-    const added = toggleHiddenKey(empty, "wait");
-    expect(added.has("wait")).toBe(true);
-    const removed = toggleHiddenKey(added, "wait");
-    expect(removed.has("wait")).toBe(false);
-  });
-
-  it("返回新 Set，不原地改旧集（否则 React 不重渲染）", () => {
-    const prev = new Set<string>(["qq"]);
-    const next = toggleHiddenKey(prev, "wait");
-    expect(next).not.toBe(prev);
-    expect([...prev]).toEqual(["qq"]);
-    expect(next.has("qq")).toBe(true);
-    expect(next.has("wait")).toBe(true);
   });
 });
 
