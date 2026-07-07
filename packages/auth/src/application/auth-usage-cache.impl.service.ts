@@ -21,6 +21,10 @@ import type { ClaudeCodeProviderAuth } from "../claude-code/types.js";
 import type { CodexProviderAuth } from "../codex/types.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { serializeError } from "@kagami/kernel/logger/serializer";
+import {
+  NOOP_AUTH_USAGE_SNAPSHOT_SINK,
+  type AuthUsageSnapshotSink,
+} from "./auth-usage-snapshot-sink.js";
 import type { ClaudeCodeAuthService } from "./claude-code-auth.service.js";
 import type { CodexAuthService } from "./codex-auth.service.js";
 
@@ -46,6 +50,7 @@ type AuthUsageCacheManagerDeps = {
   codexAuthService: CodexAuthService;
   codexBinaryPath: string;
   authUsageSnapshotDao?: AuthUsageSnapshotDao;
+  authUsageSnapshotSink?: AuthUsageSnapshotSink;
   refreshIntervalMs?: number;
   fetchClaudeUsageLimits?: (auth: ClaudeCodeProviderAuth) => Promise<ClaudeCodeUsageLimitsResponse>;
   fetchCodexUsageLimits?: (
@@ -64,6 +69,7 @@ export class AuthUsageCacheManager {
   private readonly codexAuthService: CodexAuthService;
   private readonly codexBinaryPath: string;
   private readonly authUsageSnapshotDao: AuthUsageSnapshotDao | null;
+  private readonly authUsageSnapshotSink: AuthUsageSnapshotSink;
   public readonly refreshIntervalMs: number;
   private readonly fetchClaudeUsageLimits: (
     auth: ClaudeCodeProviderAuth,
@@ -81,6 +87,7 @@ export class AuthUsageCacheManager {
     codexAuthService,
     codexBinaryPath,
     authUsageSnapshotDao,
+    authUsageSnapshotSink,
     refreshIntervalMs,
     fetchClaudeUsageLimits,
     fetchCodexUsageLimits,
@@ -89,6 +96,7 @@ export class AuthUsageCacheManager {
     this.codexAuthService = codexAuthService;
     this.codexBinaryPath = codexBinaryPath;
     this.authUsageSnapshotDao = authUsageSnapshotDao ?? null;
+    this.authUsageSnapshotSink = authUsageSnapshotSink ?? NOOP_AUTH_USAGE_SNAPSHOT_SINK;
     this.refreshIntervalMs = refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
     this.fetchClaudeUsageLimits = fetchClaudeUsageLimits ?? fetchClaudeCodeUsageLimitsFromApi;
     this.fetchCodexUsageLimits = fetchCodexUsageLimits ?? fetchCodexUsageLimitsViaAppServer;
@@ -128,13 +136,36 @@ export class AuthUsageCacheManager {
       }
 
       const capturedAt = new Date();
-      this.claudeCodeUsageLimits = await this.fetchClaudeUsageLimits(auth);
-      await this.recordClaudeCodeSnapshots({
-        auth,
-        limits: this.claudeCodeUsageLimits,
-        capturedAt,
-      });
+      // refresh_success 的语义是「采集（fetch）成败」，不含旧 DAO 双写：只有 fetch 抛错才算失败，
+      // 区分「采集挂了」与「没数据」（非 active / 未登录已早返回不发 outcome）。
+      let limits: ClaudeCodeUsageLimitsResponse;
+      try {
+        limits = await this.fetchClaudeUsageLimits(auth);
+      } catch (error) {
+        logger.warn("Failed to refresh Claude Code usage limits", {
+          event: "auth_usage_cache.claude_code_refresh_failed",
+          error: serializeError(error),
+        });
+        this.authUsageSnapshotSink.recordRefreshOutcome({
+          provider: "claude-code",
+          success: false,
+        });
+        return;
+      }
+      this.claudeCodeUsageLimits = limits;
+      this.authUsageSnapshotSink.recordRefreshOutcome({ provider: "claude-code", success: true });
+
+      // 旧 auth_usage_snapshot 双写失败不翻转 refresh_success（额度点已进 Metric）；仅记日志。#520 删。
+      try {
+        await this.recordClaudeCodeSnapshots({ auth, limits, capturedAt });
+      } catch (error) {
+        logger.warn("Failed to persist Claude Code usage snapshot", {
+          event: "auth_usage_cache.claude_code_snapshot_persist_failed",
+          error: serializeError(error),
+        });
+      }
     } catch (error) {
+      // 兜底非预期错误（如 getStatus 抛错）：fetch 未走到，不翻转 outcome。
       logger.warn("Failed to refresh Claude Code usage limits", {
         event: "auth_usage_cache.claude_code_refresh_failed",
         error: serializeError(error),
@@ -160,16 +191,35 @@ export class AuthUsageCacheManager {
       }
 
       const capturedAt = new Date();
-      this.codexUsageLimits = await this.fetchCodexUsageLimits({
-        auth,
-        binaryPath: this.codexBinaryPath,
-      });
-      await this.recordCodexSnapshots({
-        auth,
-        limits: this.codexUsageLimits,
-        capturedAt,
-      });
+      // 同 claude：refresh_success 只反映采集（fetch）成败。codex CLI 缺失会让 fetch 抛错 → success=0。
+      let limits: CodexUsageLimitsResponse;
+      try {
+        limits = await this.fetchCodexUsageLimits({ auth, binaryPath: this.codexBinaryPath });
+      } catch (error) {
+        logger.warn("Failed to refresh Codex usage limits", {
+          event: "auth_usage_cache.codex_refresh_failed",
+          error: serializeError(error),
+        });
+        this.authUsageSnapshotSink.recordRefreshOutcome({
+          provider: "openai-codex",
+          success: false,
+        });
+        return;
+      }
+      this.codexUsageLimits = limits;
+      this.authUsageSnapshotSink.recordRefreshOutcome({ provider: "openai-codex", success: true });
+
+      // 旧 auth_usage_snapshot 双写失败不翻转 refresh_success；仅记日志。#520 删。
+      try {
+        await this.recordCodexSnapshots({ auth, limits, capturedAt });
+      } catch (error) {
+        logger.warn("Failed to persist Codex usage snapshot", {
+          event: "auth_usage_cache.codex_snapshot_persist_failed",
+          error: serializeError(error),
+        });
+      }
     } catch (error) {
+      // 兜底非预期错误：fetch 未走到，不翻转 outcome。
       logger.warn("Failed to refresh Codex usage limits", {
         event: "auth_usage_cache.codex_refresh_failed",
         error: serializeError(error),
@@ -184,6 +234,23 @@ export class AuthUsageCacheManager {
     limits: ClaudeCodeUsageLimitsResponse;
     capturedAt: Date;
   }): Promise<void> {
+    // 先发 Metric（sink）：remaining_percent 不带 account 维度，故不受 accountId 缺失影响。
+    for (const [window, limit] of [
+      ["five_hour", input.limits.five_hour],
+      ["seven_day", input.limits.seven_day],
+    ] as const) {
+      if (!limit) {
+        continue;
+      }
+      this.authUsageSnapshotSink.record({
+        provider: "claude-code",
+        window,
+        remainingPercent: toRemainingPercent(limit.utilization),
+        capturedAt: input.capturedAt,
+      });
+    }
+
+    // 旧 auth_usage_snapshot 表双写（#517 阶段保留，供趋势图回滚；epic 收尾 #520 删）。
     if (!this.authUsageSnapshotDao) {
       return;
     }
@@ -225,6 +292,24 @@ export class AuthUsageCacheManager {
     limits: CodexUsageLimitsResponse;
     capturedAt: Date;
   }): Promise<void> {
+    // 先发 Metric（sink）：按 windowDurationMins 归一到 five_hour/seven_day，不带 account 维度。
+    for (const window of [input.limits.primary, input.limits.secondary]) {
+      if (!window) {
+        continue;
+      }
+      const windowKey = mapCodexWindowKey(window.windowDurationMins);
+      if (!windowKey) {
+        continue;
+      }
+      this.authUsageSnapshotSink.record({
+        provider: "openai-codex",
+        window: windowKey,
+        remainingPercent: toRemainingPercent(window.usedPercent),
+        capturedAt: input.capturedAt,
+      });
+    }
+
+    // 旧 auth_usage_snapshot 表双写（#517 阶段保留；#520 删）。
     if (!this.authUsageSnapshotDao) {
       return;
     }

@@ -26,6 +26,7 @@ import { createImageClient, type ImageClient } from "@kagami/llm-client/image";
 import { HttpMetricClient } from "@kagami/metric-client/client";
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
 import { recordLlmCallMetrics } from "./llm-metrics.js";
+import { MetricAuthUsageSnapshotSink } from "./metric-auth-usage-snapshot-sink.js";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
@@ -57,7 +58,18 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   // 与 agent / console 并发读写同一 SQLite 文件：开 WAL（库文件级持久设置）。
   await configureSqlite(database);
 
-  const authModule = await createAuthModule({ database, configManager });
+  // metric 打点走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
+  // record 是 fire-and-forget（永不 reject），打点失败绝不影响 LLM 结果。提前到 auth 装配前建，
+  // 好把 OAuth 额度遥测 sink 注入 auth module（epic #521）。
+  const metricService = new HttpMetricClient({
+    baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
+  });
+
+  const authModule = await createAuthModule({
+    database,
+    configManager,
+    authUsageSnapshotSink: new MetricAuthUsageSnapshotSink({ metricClient: metricService }),
+  });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const claudeFileCacheDao = new PrismaClaudeFileCacheDao({ database });
@@ -92,12 +104,6 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
       fileCacheDao: claudeFileCacheDao,
     }),
   };
-
-  // metric 打点走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
-  // record 是 fire-and-forget（永不 reject），打点失败绝不影响 LLM 结果。
-  const metricService = new HttpMetricClient({
-    baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
-  });
 
   // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call（策略见 persistLlmChatCall，
   // 成功轮不落 native_request_payload 以控库体积）。返回 DAO 的 Promise，让 client 内部

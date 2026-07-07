@@ -15,6 +15,7 @@ import {
 } from "../src/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthService } from "../src/application/claude-code-auth.service.js";
 import type { CodexAuthService } from "../src/application/codex-auth.service.js";
+import type { AuthUsageSnapshotSink } from "../src/application/auth-usage-snapshot-sink.js";
 import { initTestLogger } from "./helpers/logger.js";
 
 const tempDirs: string[] = [];
@@ -590,6 +591,201 @@ process.stdin.on("data", chunk => {
       },
       secondary: null,
     });
+  });
+});
+
+describe("AuthUsageCacheManager sink emission (epic #521)", () => {
+  function createSink(): AuthUsageSnapshotSink {
+    return {
+      record: vi.fn(),
+      recordRefreshOutcome: vi.fn(),
+    };
+  }
+
+  it("emits remaining_percent per window for both providers and success outcomes", async () => {
+    const sink = createSink();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService(),
+      codexAuthService: createCodexAuthService(),
+      codexBinaryPath: "codex",
+      authUsageSnapshotSink: sink,
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: { utilization: 25, resets_at: "2026-03-25T12:00:00.000Z" },
+        seven_day: { utilization: 40, resets_at: "2026-03-31T12:00:00.000Z" },
+        extra_usage: null,
+      } satisfies ClaudeCodeUsageLimitsResponse),
+      fetchCodexUsageLimits: vi.fn().mockResolvedValue({
+        primary: { usedPercent: 44, windowDurationMins: 300, resetsAt: 1_774_400_000_000 },
+        secondary: { usedPercent: 72, windowDurationMins: 10_080, resetsAt: 1_774_400_000_000 },
+      } satisfies CodexUsageLimitsResponse),
+    });
+
+    await manager.refreshAll();
+
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "claude-code",
+        window: "five_hour",
+        remainingPercent: 75,
+      }),
+    );
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "claude-code",
+        window: "seven_day",
+        remainingPercent: 60,
+      }),
+    );
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "openai-codex",
+        window: "five_hour",
+        remainingPercent: 56,
+      }),
+    );
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "openai-codex",
+        window: "seven_day",
+        remainingPercent: 28,
+      }),
+    );
+    expect(sink.recordRefreshOutcome).toHaveBeenCalledWith({
+      provider: "claude-code",
+      success: true,
+    });
+    expect(sink.recordRefreshOutcome).toHaveBeenCalledWith({
+      provider: "openai-codex",
+      success: true,
+    });
+  });
+
+  it("reports success=false when a fetch throws, and emits no remaining_percent for it", async () => {
+    const sink = createSink();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService(),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      authUsageSnapshotSink: sink,
+      fetchClaudeUsageLimits: vi.fn().mockRejectedValue(new Error("upstream down")),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+
+    expect(sink.recordRefreshOutcome).toHaveBeenCalledWith({
+      provider: "claude-code",
+      success: false,
+    });
+    expect(sink.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "claude-code" }),
+    );
+  });
+
+  it("emits remaining_percent even when accountId is missing (metric has no account dimension)", async () => {
+    const sink = createSink();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getAuthWithoutRefresh: vi.fn().mockResolvedValue({
+          accessToken: "claude-access-token",
+          refreshToken: "claude-refresh-token",
+          accountId: undefined,
+          email: "claude@example.com",
+          lastRefresh: "2026-03-25T00:00:00.000Z",
+          expiresAt: Date.now() + 60_000,
+        }),
+      }),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      authUsageSnapshotSink: sink,
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: { utilization: 10, resets_at: "2026-03-25T12:00:00.000Z" },
+        seven_day: null,
+        extra_usage: null,
+      } satisfies ClaudeCodeUsageLimitsResponse),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "claude-code",
+        window: "five_hour",
+        remainingPercent: 90,
+      }),
+    );
+  });
+
+  it("keeps refresh_success=true when only the legacy DAO write fails (fetch succeeded)", async () => {
+    const sink = createSink();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService(),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      authUsageSnapshotSink: sink,
+      // 旧表写失败：不该被误报成「采集失败」，metric 额度点已成功进 Metric。
+      authUsageSnapshotDao: createAuthUsageSnapshotDao({
+        insertBatch: vi.fn().mockRejectedValue(new Error("db down")),
+      }),
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: { utilization: 25, resets_at: "2026-03-25T12:00:00.000Z" },
+        seven_day: null,
+        extra_usage: null,
+      } satisfies ClaudeCodeUsageLimitsResponse),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+
+    expect(sink.recordRefreshOutcome).toHaveBeenCalledWith({
+      provider: "claude-code",
+      success: true,
+    });
+    expect(sink.recordRefreshOutcome).not.toHaveBeenCalledWith({
+      provider: "claude-code",
+      success: false,
+    });
+    expect(sink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "claude-code",
+        window: "five_hour",
+        remainingPercent: 75,
+      }),
+    );
+  });
+
+  it("does not emit a refresh outcome when the provider is not logged in", async () => {
+    const sink = createSink();
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getStatus: vi.fn().mockResolvedValue({
+          provider: "claude-code",
+          status: "logged_out",
+          isLoggedIn: false,
+          session: null,
+        }),
+      }),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      authUsageSnapshotSink: sink,
+      fetchClaudeUsageLimits: vi.fn(),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+
+    expect(sink.recordRefreshOutcome).not.toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "claude-code" }),
+    );
   });
 });
 
