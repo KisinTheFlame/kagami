@@ -1,5 +1,5 @@
 import { type MetricChartQueryResponse, type MetricChartSeries } from "@kagami/metric-api/chart";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -17,8 +17,6 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -100,6 +98,11 @@ export function MetricChartView({
   seriesMeta,
   height = 288,
 }: MetricChartViewProps) {
+  // 隐藏集按 series.key（语义 tag 值，如 "wait"/"qq"）记，是纯客户端展示开关，不触发重查。
+  // 不随 data 刷新重置——跨 range/bucket 保留隐藏态（key 语义稳定）；组件卸载/刷新页面自然复位。
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set());
+  const toggleSeries = (key: string) => setHiddenKeys(prev => toggleHiddenKey(prev, key));
+
   const renderSeries = useMemo<RenderSeries[]>(
     () =>
       data?.series.map((item, index) => {
@@ -113,9 +116,16 @@ export function MetricChartView({
       }) ?? [],
     [data?.series, seriesMeta],
   );
+  // 可见集：仅在完整 renderSeries 上过滤——dataKey / color 已在 renderSeries 阶段按序号定死，
+  // 这里绝不重新编号，否则隐藏中间项会让剩余序列串色 / 串 label。
+  const visibleSeries = useMemo(
+    () => selectVisibleSeries(renderSeries, hiddenKeys),
+    [renderSeries, hiddenKeys],
+  );
+  // config 按全量建：隐藏项恢复时其颜色 / label 仍可解析。
   const chartConfig = useMemo(() => buildChartConfig(renderSeries), [renderSeries]);
-  const rows = useMemo(() => buildChartRows(renderSeries), [renderSeries]);
-  const pieData = useMemo(() => buildPieData(renderSeries), [renderSeries]);
+  const rows = useMemo(() => buildChartRows(visibleSeries), [visibleSeries]);
+  const pieData = useMemo(() => buildPieData(visibleSeries), [visibleSeries]);
   // 饼图图例经 chartConfig[name].label 取字（config 按 slice name 键控，非 dataKey）；颜色仍走 Cell fill。
   const pieChartConfig = useMemo<ChartConfig>(
     () =>
@@ -125,8 +135,13 @@ export function MetricChartView({
     [pieData],
   );
   const pieTotal = pieData.reduce((sum, slice) => sum + slice.value, 0);
+  const hasSeries = (data?.series.length ?? 0) > 0;
+  const allHidden = hasSeries && visibleSeries.length === 0;
   // 饼图额外要求构成总量 > 0（全 0 会让 recharts 角度算成 NaN、画出空白饼图但 series 非空）。
-  const hasRenderable = chartType === "pie" ? pieTotal > 0 : (data?.series.length ?? 0) > 0;
+  // 其余画法只要还有可见序列即可渲染；hasRenderable 全部改吃 visibleSeries。
+  const hasRenderable = chartType === "pie" ? pieTotal > 0 : visibleSeries.length > 0;
+  // 全部隐藏 vs 真无数据分流：前者要引导「点图例恢复」，后者是范围内没数据。
+  const emptyMessage = allHidden ? "全部序列已隐藏，点图例恢复" : "当前时间范围内没有数据。";
   const placeholderClassName = "flex items-center justify-center rounded-none border border-dashed";
   const placeholderStyle = { height };
 
@@ -156,7 +171,7 @@ export function MetricChartView({
 
         {!isLoading && !isError && !hasRenderable ? (
           <div className={placeholderClassName} style={placeholderStyle}>
-            <p className="text-sm text-muted-foreground">当前时间范围内没有数据。</p>
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           </div>
         ) : null}
 
@@ -170,7 +185,6 @@ export function MetricChartView({
               {chartType === "pie" ? (
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                  <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                   <Pie
                     data={pieData}
                     dataKey="value"
@@ -214,8 +228,7 @@ export function MetricChartView({
                       />
                     }
                   />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {renderSeries.map(series => (
+                  {visibleSeries.map(series => (
                     <Bar
                       key={series.key}
                       dataKey={series.dataKey}
@@ -264,8 +277,7 @@ export function MetricChartView({
                       />
                     }
                   />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {renderSeries.map(series => (
+                  {visibleSeries.map(series => (
                     <Area
                       key={series.key}
                       type="linear"
@@ -308,8 +320,7 @@ export function MetricChartView({
                       />
                     }
                   />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {renderSeries.map(series => (
+                  {visibleSeries.map(series => (
                     <Area
                       key={series.key}
                       // linear 而非 monotone：面积图常用来叠「子集 vs 全集」（如 wait ⊆ 所有工具）。
@@ -355,8 +366,7 @@ export function MetricChartView({
                       />
                     }
                   />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {renderSeries.map(series => (
+                  {visibleSeries.map(series => (
                     <Line
                       key={series.key}
                       type="linear"
@@ -372,20 +382,90 @@ export function MetricChartView({
                 </LineChart>
               )}
             </ChartContainer>
-
-            <div className="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
-              <p>
-                时间范围：{formatFullDateTime(data.startAt)} - {formatFullDateTime(data.endAt)}
-              </p>
-              <p>
-                序列数：{data.series.length} · bucket：{data.bucket}
-              </p>
-            </div>
           </>
+        ) : null}
+
+        {/* 图例独立于 recharts 图表树，只要有序列就常驻——全部隐藏时图表区换成占位、图例仍可点恢复。 */}
+        {!isLoading && !isError && hasSeries ? (
+          <SeriesLegend series={renderSeries} hiddenKeys={hiddenKeys} onToggle={toggleSeries} />
+        ) : null}
+
+        {!isLoading && !isError && hasRenderable && data ? (
+          <div className="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
+            <p>
+              时间范围：{formatFullDateTime(data.startAt)} - {formatFullDateTime(data.endAt)}
+            </p>
+            <p>
+              序列数：{data.series.length} · bucket：{data.bucket}
+            </p>
+          </div>
         ) : null}
       </CardContent>
     </Card>
   );
+}
+
+type SeriesLegendProps = {
+  /** 完整序列（含隐藏项，隐藏项也要在图例里才能点回来）。 */
+  series: RenderSeries[];
+  hiddenKeys: Set<string>;
+  onToggle: (key: string) => void;
+};
+
+/**
+ * 交互式图例。吃完整 renderSeries，渲染在 recharts 图表树之外——这样「全部隐藏」时图表区换成占位、
+ * 图例仍常驻可点。每项是 button（Tab 可达、Enter/Space 触发、aria-pressed 播报显隐），隐藏态灰显 +
+ * label 删除线。样式对齐原 ChartLegendContent（居中、换行、色块 h-2 w-2）。
+ */
+function SeriesLegend({ series, hiddenKeys, onToggle }: SeriesLegendProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-3">
+      {series.map(item => {
+        const hidden = hiddenKeys.has(item.key);
+        return (
+          <button
+            key={item.key}
+            type="button"
+            aria-pressed={!hidden}
+            onClick={() => onToggle(item.key)}
+            className={`flex cursor-pointer items-center gap-1.5 text-sm transition-opacity ${
+              hidden ? "opacity-40" : "opacity-100"
+            }`}
+          >
+            <span
+              className="h-2 w-2 shrink-0 rounded-[2px]"
+              style={{ backgroundColor: item.color }}
+            />
+            <span className={hidden ? "line-through" : undefined}>{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * 隐藏集切换：不可变返回新 Set（原地 add/delete 不会触发 React 重渲染）。
+ */
+export function toggleHiddenKey(prev: Set<string>, key: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(key)) {
+    next.delete(key);
+  } else {
+    next.add(key);
+  }
+  return next;
+}
+
+/**
+ * 按隐藏集过滤出可见序列。仅 filter、不重排不重编号：保留各序列原 dataKey / color / 顺序，
+ * 隐藏中间项也不会让剩余序列串色。喂给图表几何（rows / pieData / 各画法的 .map）。
+ */
+export function selectVisibleSeries(
+  series: RenderSeries[],
+  hiddenKeys: Set<string>,
+): RenderSeries[] {
+  return series.filter(item => !hiddenKeys.has(item.key));
 }
 
 function buildChartConfig(series: RenderSeries[]): ChartConfig {
