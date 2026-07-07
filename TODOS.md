@@ -80,12 +80,12 @@
 
 ## oss
 
-### OSS 上传/下载流式化 + 并发/内存上限
+### OSS 并发/内存上限 + slowloris 防护
 
 - **Priority:** P2
 - **Status:** open
-- **Context:** `apps/oss/src/http/server.ts` 当前把整个 POST body buffer 进内存（`readBody` 累积 + `Buffer.concat`，峰值约 2× body），GET 也一次性 `readFile` 整个 blob；50MB 上限只是单请求级，无并发上限。N 个并发大上传可把单进程打到 OOM。设计阶段已把"流式落临时文件 + 边写边 hash"列为下一轮项；同时应加并发上限和 `server.requestTimeout`/`headersTimeout` 防 slowloris。/ship 对抗式评审（Claude + Codex 双模型一致）发现。当前仅 localhost、单一可信消费方（server），风险可控。
-- **Notes:** 流式化后 ObjectStore.put 需接受 stream 而非 Buffer；GET 改 `createReadStream` pipe。
+- **Context:** 流式化本身已落地（PR #201）：`apps/oss/src/http/server.ts` 的 put 直接把请求体流交给 `store.put` 边流边算 sha256 落临时文件，get 走 `pipeline(result.stream, res)`，均不整块驻留内存。**仍缺**的是并发/超时护栏：`bodyLimit` 只是单请求级，无进程级并发上限，N 个并发大上传仍可堆高内存；且未配 `server.requestTimeout`/`headersTimeout`，慢连接可 slowloris。/ship 对抗式评审（Claude + Codex 双模型一致）发现。当前仅 localhost、单一可信消费方（server），风险可控。
+- **Notes:** 加进程级并发信号量（超限时排队而非全部并发），并在 Fastify server 上设 `requestTimeout`/`headersTimeout`。
 
 ### OSS 落盘 fsync 持久化
 
@@ -118,17 +118,6 @@
 - **Status:** open
 - **Context:** 提供一个全局工具 `upload_resource`，允许小镜把一个指定路径的本地文件保存进 OSS，得到一个 res。是 `download_resource` 的反向操作，把本地文件提升为可被其他能力引用的 OSS 资源。
 - **Notes:** 同样评估顶层工具 vs InvokeTool 子工具。复用 OSS 现有的 sha256 内容去重 + refcount；入参为源文件路径。
-
----
-
-## todo
-
-### 自动推荐可新增的待办事项
-
-- **Priority:** P3
-- **Status:** open
-- **Context:** 让小镜在自己的生活里自发地发现"有什么值得做的事"，并把它作为候选待办推荐进 todo App，而不是只能被动地记录别人交代的事。符合"给 Agent 的生活添一种新的存在方式"的视角——他会观察、会有兴趣、会主动给自己列计划。
-- **Notes:** 设计阶段想清楚推荐的触发时机（空闲时刻的后台动作 vs 某些事件后）、推荐内容的来源（最近对话、读到的新闻、未完成的话题），以及如何避免噪音/重复推荐。注意 KV 缓存友好：推荐过程产生的中间素材不要进主上下文，走子 Agent（TaskAgent）只回候选摘要。
 
 ---
 
