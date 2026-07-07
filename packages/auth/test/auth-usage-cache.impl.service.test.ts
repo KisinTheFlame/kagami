@@ -145,7 +145,8 @@ describe("AuthUsageCacheManager", () => {
     );
   });
 
-  it("should clear the last successful Claude cache when auth becomes expired", async () => {
+  it("keeps the last successful Claude cache when auth becomes expired but creds remain (transient)", async () => {
+    // 卡片韧性（epic #521）：expired 是 token 刷新窗口的瞬时态，凭据还在 → 保留上次好值，不清空。
     const claudeCodeAuthService = createClaudeCodeAuthService({
       getStatus: vi
         .fn()
@@ -175,6 +176,8 @@ describe("AuthUsageCacheManager", () => {
             lastError: "expired",
           },
         }),
+      // 凭据仍在 = 瞬时态。
+      hasCredentials: vi.fn().mockResolvedValue(true),
     });
     const claudeFetch = vi.fn().mockResolvedValue({
       five_hour: {
@@ -198,17 +201,20 @@ describe("AuthUsageCacheManager", () => {
     await manager.refreshAll();
     expect(await manager.getClaudeCodeUsageLimits()).toEqual(
       expect.objectContaining({
-        five_hour: expect.objectContaining({
-          utilization: 19,
-        }),
+        five_hour: expect.objectContaining({ utilization: 19 }),
       }),
     );
 
     await manager.refreshAll();
-    expect(await manager.getClaudeCodeUsageLimits()).toEqual(EMPTY_CLAUDE_CODE_USAGE_LIMITS);
+    // 保留上次好值（不再冲成 EMPTY）。
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
+      expect.objectContaining({
+        five_hour: expect.objectContaining({ utilization: 19 }),
+      }),
+    );
   });
 
-  it("should clear the Claude cache when credentials become unavailable", async () => {
+  it("clears the Claude cache on explicit logout (no credentials)", async () => {
     const claudeCodeAuthService = createClaudeCodeAuthService({
       getStatus: vi
         .fn()
@@ -231,6 +237,8 @@ describe("AuthUsageCacheManager", () => {
           isLoggedIn: false,
           session: null,
         }),
+      // 登出 = 凭据已删。
+      hasCredentials: vi.fn().mockResolvedValue(false),
     });
     const manager = new AuthUsageCacheManager({
       claudeCodeAuthService,
@@ -250,19 +258,14 @@ describe("AuthUsageCacheManager", () => {
     });
 
     await manager.refreshAll();
-    expect(await manager.getClaudeCodeUsageLimits()).toEqual(
-      expect.objectContaining({
-        five_hour: expect.objectContaining({
-          utilization: 19,
-        }),
-      }),
-    );
+    expect(manager.getClaudeCodeUsageCapturedAt()).not.toBeNull();
 
     await manager.refreshAll();
     expect(await manager.getClaudeCodeUsageLimits()).toEqual(EMPTY_CLAUDE_CODE_USAGE_LIMITS);
+    expect(manager.getClaudeCodeUsageCapturedAt()).toBeNull();
   });
 
-  it("should clear a cache when credentials become unavailable", async () => {
+  it("keeps the last successful Codex cache on a transient auth read failure (creds remain)", async () => {
     const getAuthWithoutRefresh = vi
       .fn()
       .mockResolvedValueOnce({
@@ -274,7 +277,7 @@ describe("AuthUsageCacheManager", () => {
         lastRefresh: "2026-03-25T00:00:00.000Z",
         expiresAt: Date.now() + 60_000,
       })
-      .mockRejectedValueOnce(new Error("missing auth"));
+      .mockRejectedValueOnce(new Error("transient read error"));
     const codexFetch = vi.fn().mockResolvedValue({
       primary: {
         usedPercent: 50,
@@ -290,6 +293,8 @@ describe("AuthUsageCacheManager", () => {
       }),
       codexAuthService: createCodexAuthService({
         getAuthWithoutRefresh,
+        // 凭据仍在 = 瞬时态。
+        hasCredentials: vi.fn().mockResolvedValue(true),
       }),
       codexBinaryPath: "codex",
       fetchClaudeUsageLimits: vi.fn(),
@@ -299,14 +304,84 @@ describe("AuthUsageCacheManager", () => {
     await manager.refreshAll();
     expect(await manager.getCodexUsageLimits()).toEqual(
       expect.objectContaining({
-        primary: expect.objectContaining({
-          usedPercent: 50,
-        }),
+        primary: expect.objectContaining({ usedPercent: 50 }),
       }),
     );
 
     await manager.refreshAll();
+    // 瞬时读取失败保留上次好值。
+    expect(await manager.getCodexUsageLimits()).toEqual(
+      expect.objectContaining({
+        primary: expect.objectContaining({ usedPercent: 50 }),
+      }),
+    );
+  });
+
+  it("clears the Codex cache on explicit logout (no credentials)", async () => {
+    const getAuthWithoutRefresh = vi
+      .fn()
+      .mockResolvedValueOnce({
+        accessToken: "codex-access-token",
+        refreshToken: "codex-refresh-token",
+        idToken: "codex-id-token",
+        accountId: "acct_123",
+        email: "codex@example.com",
+        lastRefresh: "2026-03-25T00:00:00.000Z",
+        expiresAt: Date.now() + 60_000,
+      })
+      .mockRejectedValueOnce(new Error("missing auth"));
+
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh,
+        hasCredentials: vi.fn().mockResolvedValue(false),
+      }),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: vi.fn(),
+      fetchCodexUsageLimits: vi.fn().mockResolvedValue({
+        primary: {
+          usedPercent: 50,
+          windowDurationMins: 300,
+          resetsAt: 1_774_400_000_000,
+        },
+        secondary: null,
+      } satisfies CodexUsageLimitsResponse),
+    });
+
+    await manager.refreshAll();
+    expect(manager.getCodexUsageCapturedAt()).not.toBeNull();
+
+    await manager.refreshAll();
     expect(await manager.getCodexUsageLimits()).toEqual(EMPTY_CODEX_USAGE_LIMITS);
+    expect(manager.getCodexUsageCapturedAt()).toBeNull();
+  });
+
+  it("clearClaudeCodeUsage empties the cache immediately (logout endpoint path)", async () => {
+    // 登出路由直调 clearClaudeCodeUsage()，不等下一轮后台刷新即撤卡。
+    const manager = new AuthUsageCacheManager({
+      claudeCodeAuthService: createClaudeCodeAuthService(),
+      codexAuthService: createCodexAuthService({
+        getAuthWithoutRefresh: vi.fn().mockRejectedValue(new Error("missing auth")),
+      }),
+      codexBinaryPath: "codex",
+      fetchClaudeUsageLimits: vi.fn().mockResolvedValue({
+        five_hour: { utilization: 19, resets_at: "2026-03-25T12:00:00.000Z" },
+        seven_day: null,
+        extra_usage: null,
+      } satisfies ClaudeCodeUsageLimitsResponse),
+      fetchCodexUsageLimits: vi.fn(),
+    });
+
+    await manager.refreshAll();
+    expect(manager.getClaudeCodeUsageCapturedAt()).not.toBeNull();
+
+    manager.clearClaudeCodeUsage();
+
+    expect(await manager.getClaudeCodeUsageLimits()).toEqual(EMPTY_CLAUDE_CODE_USAGE_LIMITS);
+    expect(manager.getClaudeCodeUsageCapturedAt()).toBeNull();
   });
 
   it("should skip snapshot writes when account id is missing", async () => {
