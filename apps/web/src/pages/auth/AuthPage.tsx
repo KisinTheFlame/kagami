@@ -4,12 +4,9 @@ import {
   type AuthStatusResponse,
   type AuthUsageLimitsResponse,
 } from "@kagami/llm-api/auth";
-import {
-  type AuthUsageTrendRange,
-  type AuthUsageTrendResponse,
-} from "@kagami/llm-api/auth-usage-trend";
 import { type ClaudeCodeUsageLimits } from "@kagami/llm-api/claude-code-auth";
 import { type CodexUsageLimits } from "@kagami/llm-api/codex-auth";
+import { type MetricPointsQueryResponse } from "@kagami/metric-api/points";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
@@ -25,15 +22,31 @@ import {
 } from "@/components/ui/chart";
 import { formatOptionalDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
-import { authClient } from "@/lib/rpc";
+import { authClient, metricClient } from "@/lib/rpc";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 type PrimaryAuthStatus = Exclude<AuthStatus, "refresh_failed">;
 
-type AuthUsageTrendData = AuthUsageTrendResponse;
+// 趋势图数据源已从旧 auth_usage_snapshot 专用管道切到通用 Metric raw 原始点端点（epic #521）：
+// 每个 10 分钟采样点照画、不聚合。metric 名 / window tag 值与 apps/llm 打点侧约定一致。
+const OAUTH_QUOTA_REMAINING_PERCENT_METRIC = "llm.oauth.quota.remaining_percent";
+const WINDOW_TAG = "window";
+
+type TrendRange = "24h" | "7d";
+
+// UI 的 24h / 7d 档映射到 raw 端点的 rangePreset（低频 gauge 无桶聚合，range 上限已放宽到 7 天）。
+const TREND_RANGE_TO_PRESET: Record<TrendRange, "1d" | "7d"> = {
+  "24h": "1d",
+  "7d": "7d",
+};
+
+// 页面 provider（codex）对应打点侧的 provider tag（openai-codex）。
+function toMetricProviderTag(provider: AuthProvider): string {
+  return provider === "codex" ? "openai-codex" : "claude-code";
+}
 
 type TrendChartRow = {
-  capturedAt: string;
+  occurredAt: string;
   five_hour: number | null;
   seven_day: number | null;
 };
@@ -88,7 +101,7 @@ export function AuthPage() {
   const { provider } = useParams<{ provider?: string }>();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [trendRange, setTrendRange] = useState<AuthUsageTrendRange>("24h");
+  const [trendRange, setTrendRange] = useState<TrendRange>("24h");
   const providerValue = provider ?? "";
   const providerKey: AuthProvider = isAuthProvider(providerValue) ? providerValue : "claude-code";
   const providerConfig = providerConfigs[providerKey];
@@ -115,11 +128,19 @@ export function AuthPage() {
   });
   const usageTrendQuery = useQuery({
     ...createSchemaQueryOptions({
-      queryKey: queryKeys.auth.usageTrend(providerConfig.key, trendRange),
+      queryKey: queryKeys.metricPoints.data({
+        metric: OAUTH_QUOTA_REMAINING_PERCENT_METRIC,
+        provider: providerConfig.key,
+        range: trendRange,
+      }),
       queryFn: () =>
-        authClient.getAuthUsageTrend({
-          params: { provider: providerConfig.key },
-          input: { range: trendRange },
+        metricClient.points({
+          metricName: OAUTH_QUOTA_REMAINING_PERCENT_METRIC,
+          tagFilters: {
+            provider: { op: "eq", value: toMetricProviderTag(providerConfig.key) },
+          },
+          groupByTag: WINDOW_TAG,
+          rangePreset: TREND_RANGE_TO_PRESET[trendRange],
         }),
     }),
   });
@@ -139,6 +160,9 @@ export function AuthPage() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.provider(providerConfig.key),
       });
+      // 趋势图已迁到 metric-points key（不再挂 auth 前缀），手动刷新后一并让它 refetch（保持旧端点
+      // 时「刷新即刷趋势」的行为一致）。
+      await queryClient.invalidateQueries({ queryKey: ["metric-points"] });
     },
   });
 
@@ -391,7 +415,11 @@ export function AuthPage() {
               <p className="mt-6 text-sm text-destructive">{usageTrendQuery.error.message}</p>
             ) : usageTrendQuery.data ? (
               <div className="mt-6">
-                <UsageTrendPanel data={usageTrendQuery.data} providerKey={providerKey} />
+                <UsageTrendPanel
+                  data={usageTrendQuery.data}
+                  providerKey={providerKey}
+                  range={trendRange}
+                />
               </div>
             ) : (
               <p className="mt-6 text-sm text-muted-foreground">
@@ -514,9 +542,11 @@ function ClaudeUsageLimitsPanel({ limits }: { limits: ClaudeCodeUsageLimits }) {
 function UsageTrendPanel({
   data,
   providerKey,
+  range,
 }: {
-  data: AuthUsageTrendData;
+  data: MetricPointsQueryResponse;
   providerKey: AuthProvider;
+  range: TrendRange;
 }) {
   const chartData = useMemo(() => buildTrendChartData(data), [data]);
   const hasPoints = chartData.some(item => item.five_hour !== null || item.seven_day !== null);
@@ -565,11 +595,11 @@ function UsageTrendPanel({
           </defs>
           <CartesianGrid vertical={false} />
           <XAxis
-            dataKey="capturedAt"
+            dataKey="occurredAt"
             tickLine={false}
             axisLine={false}
             minTickGap={24}
-            tickFormatter={(value: string) => formatTrendAxisTick(value, data.range)}
+            tickFormatter={(value: string) => formatTrendAxisTick(value, range)}
           />
           <YAxis
             domain={[0, 100]}
@@ -583,7 +613,7 @@ function UsageTrendPanel({
             content={
               <ChartTooltipContent
                 indicator="line"
-                labelFormatter={value => formatTrendTooltipLabel(String(value), data.range)}
+                labelFormatter={value => formatTrendTooltipLabel(String(value), range)}
                 formatter={(value, name, item) => (
                   <div className="flex w-full items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -876,30 +906,36 @@ function getUsageToneClass(usedPercent: number | null): string {
   return "border-2 border-foreground bg-story text-story-foreground";
 }
 
-function buildTrendChartData(data: AuthUsageTrendData): TrendChartRow[] {
+function buildTrendChartData(data: MetricPointsQueryResponse): TrendChartRow[] {
   const rows = new Map<string, TrendChartRow>();
 
   for (const series of data.series) {
+    // groupByTag=window，series.key 是 window tag 值；只认已知的两个窗口。
+    const windowKey = series.key === "five_hour" || series.key === "seven_day" ? series.key : null;
+    if (!windowKey) {
+      continue;
+    }
+
     for (const point of series.points) {
       const existing =
-        rows.get(point.capturedAt) ??
+        rows.get(point.occurredAt) ??
         ({
-          capturedAt: point.capturedAt,
+          occurredAt: point.occurredAt,
           five_hour: null,
           seven_day: null,
         } satisfies TrendChartRow);
 
-      existing[series.windowKey] = point.remainingPercent;
-      rows.set(point.capturedAt, existing);
+      existing[windowKey] = point.value;
+      rows.set(point.occurredAt, existing);
     }
   }
 
   return [...rows.values()].sort(
-    (left, right) => new Date(left.capturedAt).getTime() - new Date(right.capturedAt).getTime(),
+    (left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime(),
   );
 }
 
-function formatTrendAxisTick(value: string, range: AuthUsageTrendRange): string {
+function formatTrendAxisTick(value: string, range: TrendRange): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -919,7 +955,7 @@ function formatTrendAxisTick(value: string, range: AuthUsageTrendRange): string 
   }).format(date);
 }
 
-function formatTrendTooltipLabel(value: string, range: AuthUsageTrendRange): string {
+function formatTrendTooltipLabel(value: string, range: TrendRange): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
