@@ -1,6 +1,7 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { MetricChartQueryRequestSchema, MetricChartQueryResponseSchema } from "./chart.js";
 import { MetricDeriveRequestSchema } from "./derive.js";
+import { MetricPointsQueryRequestSchema, MetricPointsQueryResponseSchema } from "./points.js";
 import { RecordMetricRequestSchema, RecordMetricResponseSchema } from "./record.js";
 
 // === @kagami/metric-api：kagami-metric 服务的 HTTP 契约（issue #279 PR3 / #444） ===
@@ -31,5 +32,12 @@ export const metricApiContract = {
     path: "/metric/derive",
     input: MetricDeriveRequestSchema,
     output: MetricChartQueryResponseSchema,
+  }),
+  // raw 原始点查询：低频 gauge 不聚合、不分桶，按 occurred_at 返回范围内每个原始点，行数 LIMIT 兜底。
+  points: defineJsonRoute({
+    method: "POST",
+    path: "/metric/points",
+    input: MetricPointsQueryRequestSchema,
+    output: MetricPointsQueryResponseSchema,
   }),
 } as const;

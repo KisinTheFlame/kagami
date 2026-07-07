@@ -10,9 +10,11 @@ import type {
   MetricDao,
   MetricDeriveOperand,
   MetricDerivedSeriesRow,
+  MetricRawPointRow,
   MetricTagFilters,
   QueryDerivedSeriesInput,
   QueryMetricChartSeriesInput,
+  QueryMetricRawPointsInput,
 } from "../metric.dao.js";
 
 /**
@@ -204,11 +206,59 @@ export class DuckDbMetricDao implements MetricDao {
     }));
   }
 
+  public async queryRawPoints(input: QueryMetricRawPointsInput): Promise<MetricRawPointRow[]> {
+    const params = new VarcharParams();
+    const seriesKeyExpression = input.groupByTag
+      ? `NULLIF("tags" ->> ${params.add(input.groupByTag)}, '')`
+      : `NULL`;
+    const whereClause = buildWhereClause(
+      {
+        metricName: input.metricName,
+        startAt: input.startAt,
+        endAt: input.endAt,
+        tagFilters: input.tagFilters,
+      },
+      params,
+    );
+
+    // 无聚合、无分桶：直接取原始行。DESC + LIMIT 取「最近 N 条」——命中超上限时服务端据此判 truncated
+    // 并保留最近点、丢最旧点。epoch_ms 得 UTC 毫秒整数（occurred_at 是 naive UTC TIMESTAMP，与
+    // queryChartSeries 的 epoch() 语义一致，非 UTC 部署机也不错位）。limit 是受信整数，内联安全。
+    const limit = Math.max(0, Math.floor(input.limit));
+    const sql = `
+      SELECT
+        epoch_ms("occurred_at") AS "occurredAtMs",
+        ${seriesKeyExpression} AS "seriesKey",
+        "value" AS "value"
+      FROM "metric"
+      ${whereClause}
+      ORDER BY "occurred_at" DESC, "id" DESC
+      LIMIT ${limit}
+    `;
+
+    const prepared = await this.connection.prepare(sql);
+    params.bindAll(prepared);
+    const reader = await prepared.runAndReadAll();
+    const rows = reader.getRowObjects() as RawMetricRawPointRow[];
+
+    return rows.map(row => ({
+      occurredAt: new Date(Number(row.occurredAtMs)),
+      seriesKey: row.seriesKey === null ? null : String(row.seriesKey),
+      value: Number(row.value),
+    }));
+  }
+
   public close(): void {
     this.connection.closeSync();
     this.instance.closeSync();
   }
 }
+
+type RawMetricRawPointRow = {
+  occurredAtMs: number | bigint;
+  seriesKey: string | null;
+  value: number | bigint;
+};
 
 type RawMetricChartSeriesRow = {
   // DuckDB 返回 bucketStart（epoch 秒）与 count 为 bigint，value（sum/avg 等）为 number；映射处统一转。

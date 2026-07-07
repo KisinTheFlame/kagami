@@ -67,11 +67,30 @@ export type MetricDerivedSeriesRow = {
   value: number | null;
 };
 
+// raw 原始点查询：无聚合、无分桶，按 occurred_at 直接取范围内每个原始点。行数 LIMIT 兜底
+// （raw 点数由数据密度决定，不能用 range×bucket 预算）；DAO 按 occurred_at DESC 取最近 limit 条。
+export type QueryMetricRawPointsInput = {
+  metricName: string;
+  tagFilters: MetricTagFilters | null;
+  groupByTag: string | null;
+  startAt: Date;
+  endAt: Date;
+  limit: number;
+};
+
+export type MetricRawPointRow = {
+  occurredAt: Date;
+  seriesKey: string | null;
+  value: number;
+};
+
 export interface MetricDao {
   insert(input: InsertMetricInput): Promise<void>;
   queryChartSeries(input: QueryMetricChartSeriesInput): Promise<MetricChartSeriesRow[]>;
   /** 派生查询：一条 SQL 按桶对齐分子/分母算 ratio/diff，出单条派生线（#475 P3）。 */
   queryDerivedSeries(input: QueryDerivedSeriesInput): Promise<MetricDerivedSeriesRow[]>;
+  /** raw 原始点查询：按 occurred_at DESC 取最近 `limit` 条原始点（不聚合、不分桶）。 */
+  queryRawPoints(input: QueryMetricRawPointsInput): Promise<MetricRawPointRow[]>;
   /** 关停时释放 DuckDB 连接与实例。 */
   close(): void;
 }
