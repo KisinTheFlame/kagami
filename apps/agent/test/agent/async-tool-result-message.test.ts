@@ -39,4 +39,38 @@ describe("createAsyncToolResultMessage", () => {
         '<async_tool_result task_id="t3" tool="search_web" status="timeout">\n任务超时未完成\n</async_tool_result>',
     });
   });
+
+  it("success 带 images：拼成多模态消息（文本 part + 图片 part）", () => {
+    const m = createAsyncToolResultMessage({
+      taskId: "t4",
+      toolName: "generate",
+      outcome: {
+        status: "success",
+        content: '{"ok":true}',
+        images: [{ content: "BASE64", mimeType: "image/png", filename: "atelier.png" }],
+      },
+    });
+    expect(m).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: '<async_tool_result task_id="t4" tool="generate">\n{"ok":true}\n</async_tool_result>',
+        },
+        { type: "image", content: "BASE64", mimeType: "image/png", filename: "atelier.png" },
+      ],
+    });
+  });
+
+  it("success images 为空数组：退化为纯文本", () => {
+    const m = createAsyncToolResultMessage({
+      taskId: "t5",
+      toolName: "generate",
+      outcome: { status: "success", content: "done", images: [] },
+    });
+    expect(m).toEqual({
+      role: "user",
+      content: '<async_tool_result task_id="t5" tool="generate">\ndone\n</async_tool_result>',
+    });
+  });
 });

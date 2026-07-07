@@ -5,16 +5,17 @@ import {
   type ToolContext,
   type ToolKind,
 } from "./tool-component.js";
-import type { AsyncTaskManager } from "../async-task-manager.js";
+import type { AsyncTaskManager, AsyncTaskRunResult } from "../async-task-manager.js";
 
 /**
  * 异步工具的同步准备结果：
  * - `reject`：同步短路（如前置门控不通过），content 原样作为 tool_result 返回，不发起异步任务。
- * - `submit`：提供后台要跑的 thunk，由 AsyncTool 交给 AsyncTaskManager。
+ * - `submit`：提供后台要跑的 thunk，由 AsyncTool 交给 AsyncTaskManager。thunk 可回纯文本或带图结构
+ *   （`AsyncTaskRunResult`），带图时结果回流会拼成多模态消息。
  */
 export type AsyncToolPreparation =
   | { readonly kind: "reject"; readonly content: string }
-  | { readonly kind: "submit"; readonly run: () => Promise<string> };
+  | { readonly kind: "submit"; readonly run: () => Promise<AsyncTaskRunResult> };
 
 export type AsyncToolConfig<TInput extends z.ZodTypeAny> = {
   name: string;

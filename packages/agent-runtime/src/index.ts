@@ -2,8 +2,10 @@ import type { TaskAgent } from "./agent-runtime.js";
 import {
   AsyncTaskManager,
   type AsyncTaskCompletion,
+  type AsyncTaskImage,
   type AsyncTaskManagerDeps,
   type AsyncTaskOutcome,
+  type AsyncTaskRunResult,
 } from "./async-task-manager.js";
 import {
   AsyncTool,
@@ -121,8 +123,10 @@ export {
   type AppStateErrorInfo,
   type AppStateStore,
   type AsyncTaskCompletion,
+  type AsyncTaskImage,
   type AsyncTaskManagerDeps,
   type AsyncTaskOutcome,
+  type AsyncTaskRunResult,
   type AsyncToolConfig,
   type AsyncToolPreparation,
   type CanInvokeResult,
