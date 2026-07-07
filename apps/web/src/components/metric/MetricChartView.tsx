@@ -1,5 +1,5 @@
 import { type MetricChartQueryResponse, type MetricChartSeries } from "@kagami/metric-api/chart";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -22,6 +22,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { formatBucketLabel, formatCompactNumber, formatFullDateTime } from "./metric-format";
+import { SeriesLegend, type LegendSeries } from "./SeriesLegend";
+import { useSeriesVisibility } from "./useSeriesVisibility";
 
 // === 纯展示层：只吃 data / 查询状态 + 展示 props，不发请求、不持控件状态（#444）===
 //
@@ -98,10 +100,9 @@ export function MetricChartView({
   seriesMeta,
   height = 288,
 }: MetricChartViewProps) {
-  // 隐藏集按 series.key（语义 tag 值，如 "wait"/"qq"）记，是纯客户端展示开关，不触发重查。
-  // 不随 data 刷新重置——跨 range/bucket 保留隐藏态（key 语义稳定）；组件卸载/刷新页面自然复位。
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set());
-  const toggleSeries = (key: string) => setHiddenKeys(prev => toggleHiddenKey(prev, key));
+  // 显隐走共享 hook（id = series.key，语义 tag 值如 "wait"/"qq"）：纯客户端展示开关、不触发重查，
+  // 跨 range/bucket 保留（key 语义稳定），刷新页面复位。同一套机器缓存图也在用。
+  const { hiddenIds, toggle, isHidden } = useSeriesVisibility();
 
   const renderSeries = useMemo<RenderSeries[]>(
     () =>
@@ -119,8 +120,13 @@ export function MetricChartView({
   // 可见集：仅在完整 renderSeries 上过滤——dataKey / color 已在 renderSeries 阶段按序号定死，
   // 这里绝不重新编号，否则隐藏中间项会让剩余序列串色 / 串 label。
   const visibleSeries = useMemo(
-    () => selectVisibleSeries(renderSeries, hiddenKeys),
-    [renderSeries, hiddenKeys],
+    () => selectVisibleSeries(renderSeries, hiddenIds),
+    [renderSeries, hiddenIds],
+  );
+  // 图例吃完整序列（含隐藏项），id = series.key，color 用 resolved 值（renderSeries.color）。
+  const legendSeries = useMemo<LegendSeries[]>(
+    () => renderSeries.map(item => ({ id: item.key, label: item.label, color: item.color })),
+    [renderSeries],
   );
   // config 按全量建：隐藏项恢复时其颜色 / label 仍可解析。
   const chartConfig = useMemo(() => buildChartConfig(renderSeries), [renderSeries]);
@@ -387,7 +393,7 @@ export function MetricChartView({
 
         {/* 图例独立于 recharts 图表树，只要有序列就常驻——全部隐藏时图表区换成占位、图例仍可点恢复。 */}
         {!isLoading && !isError && hasSeries ? (
-          <SeriesLegend series={renderSeries} hiddenKeys={hiddenKeys} onToggle={toggleSeries} />
+          <SeriesLegend series={legendSeries} isHidden={isHidden} onToggle={toggle} />
         ) : null}
 
         {!isLoading && !isError && hasRenderable && data ? (
@@ -403,58 +409,6 @@ export function MetricChartView({
       </CardContent>
     </Card>
   );
-}
-
-type SeriesLegendProps = {
-  /** 完整序列（含隐藏项，隐藏项也要在图例里才能点回来）。 */
-  series: RenderSeries[];
-  hiddenKeys: Set<string>;
-  onToggle: (key: string) => void;
-};
-
-/**
- * 交互式图例。吃完整 renderSeries，渲染在 recharts 图表树之外——这样「全部隐藏」时图表区换成占位、
- * 图例仍常驻可点。每项是 button（Tab 可达、Enter/Space 触发、aria-pressed 播报显隐），隐藏态灰显 +
- * label 删除线。样式对齐原 ChartLegendContent（居中、换行、色块 h-2 w-2）。
- */
-function SeriesLegend({ series, hiddenKeys, onToggle }: SeriesLegendProps) {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-3">
-      {series.map(item => {
-        const hidden = hiddenKeys.has(item.key);
-        return (
-          <button
-            key={item.key}
-            type="button"
-            aria-pressed={!hidden}
-            onClick={() => onToggle(item.key)}
-            className={`flex cursor-pointer items-center gap-1.5 text-sm transition-opacity ${
-              hidden ? "opacity-40" : "opacity-100"
-            }`}
-          >
-            <span
-              className="h-2 w-2 shrink-0 rounded-[2px]"
-              style={{ backgroundColor: item.color }}
-            />
-            <span className={hidden ? "line-through" : undefined}>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * 隐藏集切换：不可变返回新 Set（原地 add/delete 不会触发 React 重渲染）。
- */
-export function toggleHiddenKey(prev: Set<string>, key: string): Set<string> {
-  const next = new Set(prev);
-  if (next.has(key)) {
-    next.delete(key);
-  } else {
-    next.add(key);
-  }
-  return next;
 }
 
 /**

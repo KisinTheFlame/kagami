@@ -5,13 +5,13 @@ import {
   formatFullDateTime,
   formatMetricValue,
 } from "@/components/metric/metric-format";
+import { SeriesLegend, type LegendSeries } from "@/components/metric/SeriesLegend";
 import { useMetricChartData } from "@/components/metric/useMetricChartData";
 import { useMetricDerivedData } from "@/components/metric/useMetricDerivedData";
+import { useSeriesVisibility } from "@/components/metric/useSeriesVisibility";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -32,6 +32,12 @@ const chartConfig = {
   tokens: { label: "总输入 token", color: "hsl(var(--llm))" },
   ratePct: { label: "缓存命中率", color: "hsl(var(--story))" },
 } satisfies ChartConfig;
+
+// 图例吃固定 2 序列，id = dataKey；color 用 chartConfig 的 resolved 值（在 ChartContainer 外也解析）。
+const legendSeries: LegendSeries[] = [
+  { id: "tokens", label: chartConfig.tokens.label, color: chartConfig.tokens.color },
+  { id: "ratePct", label: chartConfig.ratePct.label, color: chartConfig.ratePct.color },
+];
 
 export function DashboardCacheChart({ range }: { range: DashboardRange }) {
   const totalQuery = useMetricChartData({
@@ -69,6 +75,13 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
     return hasBelow90 ? [0, 100] : [90, 100];
   }, [rows]);
 
+  // 显隐走共享 hook（id = 固定 dataKey "tokens"/"ratePct"）。隐藏某条时，连同其 Y 轴一起条件渲染掉，
+  // 避免留一根空轴误导（Codex 复核点）。
+  const { toggle, isHidden } = useSeriesVisibility();
+  const tokensHidden = isHidden("tokens");
+  const rateHidden = isHidden("ratePct");
+  const allHidden = tokensHidden && rateHidden;
+
   const isLoading = totalQuery.isLoading || rateQuery.isLoading;
   const isError = totalQuery.isError || rateQuery.isError;
   const errorMessage = totalQuery.isError
@@ -76,6 +89,7 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
     : rateQuery.isError
       ? getApiErrorMessage(rateQuery.error)
       : undefined;
+  const emptyMessage = allHidden ? "全部序列已隐藏，点图例恢复" : "当前时间范围内没有数据。";
   const placeholderClassName = "flex items-center justify-center rounded-none border border-dashed";
   const placeholderStyle = { height: CHART_HEIGHT };
 
@@ -104,29 +118,39 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
           </div>
         ) : null}
 
-        {!isLoading && !isError && rows.length > 0 ? (
+        {!isLoading && !isError && rows.length > 0 && allHidden ? (
+          <div className={placeholderClassName} style={placeholderStyle}>
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+          </div>
+        ) : null}
+
+        {!isLoading && !isError && rows.length > 0 && !allHidden ? (
           <ChartContainer className="w-full" style={{ height: CHART_HEIGHT }} config={chartConfig}>
             <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={24} />
-              <YAxis
-                yAxisId="tokens"
-                width={56}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value: number | string) => formatCompactNumber(value)}
-              />
-              <YAxis
-                yAxisId="rate"
-                orientation="right"
-                width={44}
-                domain={rateDomain}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value: number | string) =>
-                  typeof value === "number" ? `${value}%` : String(value)
-                }
-              />
+              {!tokensHidden ? (
+                <YAxis
+                  yAxisId="tokens"
+                  width={56}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value: number | string) => formatCompactNumber(value)}
+                />
+              ) : null}
+              {!rateHidden ? (
+                <YAxis
+                  yAxisId="rate"
+                  orientation="right"
+                  width={44}
+                  domain={rateDomain}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value: number | string) =>
+                    typeof value === "number" ? `${value}%` : String(value)
+                  }
+                />
+              ) : null}
               <ChartTooltip
                 content={
                   <ChartTooltipContent
@@ -154,31 +178,38 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
                   />
                 }
               />
-              <ChartLegend content={<ChartLegendContent />} />
-              <Line
-                yAxisId="tokens"
-                type="linear"
-                dataKey="tokens"
-                name="总输入 token"
-                stroke="var(--color-tokens)"
-                strokeWidth={2}
-                dot={false}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="rate"
-                type="linear"
-                dataKey="ratePct"
-                name="缓存命中率"
-                stroke="var(--color-ratePct)"
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
+              {!tokensHidden ? (
+                <Line
+                  yAxisId="tokens"
+                  type="linear"
+                  dataKey="tokens"
+                  name="总输入 token"
+                  stroke="var(--color-tokens)"
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              ) : null}
+              {!rateHidden ? (
+                <Line
+                  yAxisId="rate"
+                  type="linear"
+                  dataKey="ratePct"
+                  name="缓存命中率"
+                  stroke="var(--color-ratePct)"
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ) : null}
             </ComposedChart>
           </ChartContainer>
+        ) : null}
+
+        {!isLoading && !isError && rows.length > 0 ? (
+          <SeriesLegend series={legendSeries} isHidden={isHidden} onToggle={toggle} />
         ) : null}
       </CardContent>
     </Card>
