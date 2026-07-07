@@ -24,7 +24,7 @@ type SchedulerTriggerHandlerDeps = {
  *
  * 1. 查 engine.getCallbackBaseUrl(ownerId)。null（owner 未注册/未连）→ 直接回 owner_unreachable。
  * 2. 有 → 现构造一个指向该 callbackBaseUrl 的 client，反向 POST 回 owner 的 triggerCallback 端点
- *    （contract.timeoutMs=5s、不重试）。owner 本地跑 handler（SDK triggerNow），回 accepted / rejected。
+ *    （contract.timeoutMs=5s、不重试）。owner 本地受理并后台跑 handler（SDK triggerNowDetached），回 accepted / rejected。
  * 3. callback 成功 → 把 owner 的判别联合原样透传（两者 accepted/rejected 形状相同）。
  * 4. callback 连不上/超时/非 2xx/响应无效 → createClient 兜底抛错，这里 catch 后归一为 owner_unreachable。
  *

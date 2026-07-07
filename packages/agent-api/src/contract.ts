@@ -5,11 +5,6 @@ import {
   MainAgentContextCompactionResultSchema,
   MainAgentContextSnapshotSchema,
 } from "./main-agent-context.js";
-import {
-  SchedulerTaskListResponseSchema,
-  SchedulerTriggerParamsSchema,
-  SchedulerTriggerResponseSchema,
-} from "./scheduler.js";
 
 // === @kagami/agent-api：kagami-agent 服务面向管理台的 HTTP 契约（issue #279 PR5） ===
 //
@@ -23,19 +18,6 @@ export const agentApiContract = {
     path: "/llm/providers",
     input: z.object({}),
     output: LlmProviderListResponseSchema,
-  }),
-  listSchedulerTasks: defineJsonRoute({
-    method: "GET",
-    path: "/scheduler/tasks",
-    input: z.object({}),
-    output: SchedulerTaskListResponseSchema,
-  }),
-  triggerSchedulerTask: defineJsonRoute({
-    method: "POST",
-    path: "/scheduler/tasks/:name/trigger",
-    params: SchedulerTriggerParamsSchema,
-    input: z.object({}),
-    output: SchedulerTriggerResponseSchema,
   }),
   getRecentMainAgentContext: defineJsonRoute({
     method: "GET",
