@@ -46,6 +46,51 @@ describe("AsyncTaskManager", () => {
     expect(manager.inFlightCount()).toBe(0);
   });
 
+  it("成功带图：run 返回 {content, images} → outcome 透传 images", async () => {
+    let resolveDone: (c: AsyncTaskCompletion) => void = () => {};
+    const done = new Promise<AsyncTaskCompletion>(r => {
+      resolveDone = r;
+    });
+    const manager = new AsyncTaskManager({
+      maxTaskDurationMs: 60_000,
+      onComplete: c => resolveDone(c),
+      generateId: () => "t1",
+    });
+
+    manager.submit({
+      toolName: "gen",
+      run: async () => ({
+        content: "done",
+        images: [{ content: "B64", mimeType: "image/png", filename: "x.png" }],
+      }),
+    });
+
+    const c = await done;
+    expect(c.outcome).toEqual({
+      status: "success",
+      content: "done",
+      images: [{ content: "B64", mimeType: "image/png", filename: "x.png" }],
+    });
+  });
+
+  it("成功空图：run 返回 {content, images:[]} → outcome 不含 images 键", async () => {
+    let resolveDone: (c: AsyncTaskCompletion) => void = () => {};
+    const done = new Promise<AsyncTaskCompletion>(r => {
+      resolveDone = r;
+    });
+    const manager = new AsyncTaskManager({
+      maxTaskDurationMs: 60_000,
+      onComplete: c => resolveDone(c),
+      generateId: () => "t1",
+    });
+
+    manager.submit({ toolName: "gen", run: async () => ({ content: "done", images: [] }) });
+
+    const c = await done;
+    expect(c.outcome).toEqual({ status: "success", content: "done" });
+    expect("images" in c.outcome).toBe(false);
+  });
+
   it("错误：onComplete 恰好一次 error，带错误信息", async () => {
     let resolveDone: (c: AsyncTaskCompletion) => void = () => {};
     const done = new Promise<AsyncTaskCompletion>(r => {

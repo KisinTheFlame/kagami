@@ -99,6 +99,10 @@ export function createForegroundInputMessage(text: string): UserMessage {
  * 异步工具任务完成后的回流消息：包成一条 `<async_tool_result>` user message 追加到尾部。
  * 凭 task_id 对应到当初的 `<async_task_submitted>`。content/message 原样插入，不做 XML 转义
  * （与 `<notification>` 一致：给 LLM 阅读的伪标签，下游无 XML 解析器）。
+ *
+ * 成功且携带图片（`outcome.images`，如生图工具）时，拼成多模态 user message：`<async_tool_result>`
+ * 文本作 text part、产物图作 image part(s)，让主 Agent「看见」异步产物。多模态块用 base64 string、
+ * 走尾部追加（KV 友好，与 append_message 带 image 同源）。无图时退化为纯文本。
  */
 export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): UserMessage {
   const { taskId, toolName, outcome } = completion;
@@ -108,13 +112,27 @@ export function createAsyncToolResultMessage(completion: AsyncTaskCompletion): U
       : outcome.status === "error"
         ? { status: "error", isTimeout: false, body: outcome.message }
         : { status: "timeout", isTimeout: true, body: "" };
-  return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/async-tool-result.hbs", {
-      taskId,
-      toolName,
-      ...view,
-    }),
-  );
+  const text = renderServerStaticTemplate(import.meta.url, "context/async-tool-result.hbs", {
+    taskId,
+    toolName,
+    ...view,
+  });
+
+  const images = outcome.status === "success" ? outcome.images : undefined;
+  if (images && images.length > 0) {
+    const parts: LlmContentPart[] = [
+      { type: "text", text },
+      ...images.map(image => ({
+        type: "image" as const,
+        content: image.content,
+        mimeType: image.mimeType,
+        ...(image.filename ? { filename: image.filename } : {}),
+      })),
+    ];
+    return { role: "user", content: parts };
+  }
+
+  return createUserMessage(text);
 }
 
 /**

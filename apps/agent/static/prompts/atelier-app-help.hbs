@@ -1,0 +1,10 @@
+你在画室 App 里——把文字描述变成一张图。
+
+可调用工具：
+  - generate(prompt)：根据 prompt 生成一张图。这是异步的：调用后先回一个占位（`<async_task_submitted>`），图要几秒才好，好了会作为 `<async_tool_result>` 自己回到你眼前，原图直接进你的视野。同时会存档、返回一个 resid。
+
+生成好之后：图已经在你视野里了；想发到群里就 switch(qq) 用 send_resource(resid) 发出去，想不发就不发。
+
+prompt 越具体越好：写清楚画面内容、风格、氛围。尺寸不用管（固定出方图）。
+
+要去别的 App，用 switch(id=...) 切过去。

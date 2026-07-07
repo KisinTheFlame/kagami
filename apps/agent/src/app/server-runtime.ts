@@ -12,6 +12,7 @@ import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { LlmHandler } from "../llm/http/llm.handler.js";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
+import { HttpImageClient } from "../acl/image-client.js";
 import { HttpNapcatClient } from "../acl/napcat-client.js";
 import { NapcatEventSubscriber, type NapcatCursorStore } from "../acl/napcat-event-subscriber.js";
 import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state-store.js";
@@ -107,6 +108,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 服务侧，agent 不再碰。embedding 能力也在服务侧（将来记忆系统接线时按需在 agent 侧新建 client）。
   const llmServiceBaseUrl = `http://${config.services.llm.host}:${config.services.llm.port}`;
   const llmClient = new HttpLlmClient({ baseUrl: llmServiceBaseUrl });
+  // 生图走同一个 kagami-llm 进程的 /internal/generate-image（issue #508）。专用薄 client，不塞进
+  // chat 语义的 LlmClient。给 atelier App 用。
+  const imageClient = new HttpImageClient({ baseUrl: llmServiceBaseUrl });
   // NapCat 拆成独立 kagami-napcat 进程（issue #347）：agent 经 HttpNapcatClient 出站（发消息 /
   // 群文件 / 群信息 / 禁言查询），地址从顶层 services.napcat 派生。入站事件走下面的 SSE 订阅者。
   // vision / OSS 图片存档 / 落库全在 napcat 侧，agent 不再持有。
@@ -177,6 +181,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     browserClient,
     spireClient,
     pixelClient,
+    imageClient,
   });
 
   // 入站事件订阅：长连 kagami-napcat 的 SSE 流，解析事件喂 qqApp.handleNapcatEvent，处理成功后

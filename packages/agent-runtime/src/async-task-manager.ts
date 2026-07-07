@@ -1,11 +1,34 @@
 import { randomUUID } from "node:crypto";
 
 /**
- * 异步任务的终态结果。成功带 content（给 LLM 看的字符串），失败带 message，
- * 超时不带正文（manager 级安全超时触发）。
+ * 异步任务成功时可携带的图片块。结构级类型（裸 base64 + mime + 可选文件名），刻意不引
+ * `@kagami/llm` 的 `LlmImageContentPart`——内核保持通用、不耦合具体 LLM 内容模型；生成方
+ * 在回流装配时把它映射成多模态 content part（见 apps/agent 的 createAsyncToolResultMessage）。
+ */
+export type AsyncTaskImage = {
+  readonly content: string;
+  readonly mimeType: string;
+  readonly filename?: string;
+};
+
+/**
+ * `run` thunk 的返回值：纯文本（string，向后兼容原有工具）或带图的结构。带图时结果回流会拼成
+ * 多模态消息，让主 Agent「看见」异步产物（如生图）。
+ */
+export type AsyncTaskRunResult =
+  | string
+  | { readonly content: string; readonly images?: readonly AsyncTaskImage[] };
+
+/**
+ * 异步任务的终态结果。成功带 content（给 LLM 看的字符串）+ 可选 images（多模态块），失败带
+ * message，超时不带正文（manager 级安全超时触发）。
  */
 export type AsyncTaskOutcome =
-  | { readonly status: "success"; readonly content: string }
+  | {
+      readonly status: "success";
+      readonly content: string;
+      readonly images?: readonly AsyncTaskImage[];
+    }
   | { readonly status: "error"; readonly message: string }
   | { readonly status: "timeout" };
 
@@ -56,7 +79,9 @@ export class AsyncTaskManager {
     this.generateId = generateId ?? (() => randomUUID());
   }
 
-  public submit(input: { toolName: string; run: () => Promise<string> }): { taskId: string } {
+  public submit(input: { toolName: string; run: () => Promise<AsyncTaskRunResult> }): {
+    taskId: string;
+  } {
     const taskId = this.generateId();
     this.inFlight.add(taskId);
 
@@ -82,9 +107,18 @@ export class AsyncTaskManager {
     // reject 在此 catch 内被捕获，不会冒泡成 unhandled rejection。
     void (async () => {
       try {
-        const content = await input.run();
+        const result = await input.run();
         clearTimeout(timer);
-        finish({ status: "success", content });
+        // 归一化 run 的返回：纯 string → {content}；带图结构原样透传 images（空数组不落）。
+        const success: AsyncTaskOutcome =
+          typeof result === "string"
+            ? { status: "success", content: result }
+            : {
+                status: "success",
+                content: result.content,
+                ...(result.images && result.images.length > 0 ? { images: result.images } : {}),
+              };
+        finish(success);
       } catch (error) {
         clearTimeout(timer);
         finish({
