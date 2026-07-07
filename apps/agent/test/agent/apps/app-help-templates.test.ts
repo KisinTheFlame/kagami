@@ -136,7 +136,7 @@ describe("portal 定位屏 — 不含子工具清单与导航指引", () => {
   it("spire：portal 缩到定位散文，≤ 2 句", async () => {
     const content = appendedContent(await stubSpireApp().onFocus());
     expect(content.startsWith("<spire_portal>")).toBe(true);
-    expect(content).toContain("你进了尖塔");
+    expect(content).toContain("你进了杀戮尖塔");
     expect(content).not.toContain("玩法");
     expectPortalIsPureIntro(content, SPIRE_TOOLS);
     const body = content.replace(/<\/?spire_portal>/g, "").trim();
