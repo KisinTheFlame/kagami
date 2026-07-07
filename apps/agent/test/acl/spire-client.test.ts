@@ -18,6 +18,7 @@ function screenOf(version: number): SpireScreen {
     relics: [{ name: "燃烧之血", description: "每场战斗结束后，回复 6 点生命。" }],
     potions: [],
     event: null,
+    cardSelect: null,
     combat: null,
     options: ["0", "1"],
     log: [],

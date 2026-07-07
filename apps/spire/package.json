@@ -15,7 +15,7 @@
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/spire-api": "workspace:*",
-    "@kisinwen/sts-engine": "0.1.0",
+    "@kisinwen/sts-engine": "0.5.0",
     "fastify": "^5.6.2",
     "zod": "^3.24.4"
   },
