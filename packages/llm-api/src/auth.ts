@@ -120,17 +120,21 @@ export const ClaudeCodeUsageLimitsSchema = z
 
 export type ClaudeCodeUsageLimits = z.infer<typeof ClaudeCodeUsageLimitsSchema>;
 
+// capturedAt = 上一次成功采集额度的时刻（ISO），从未采集过则 null。前端据此显示「更新于 X / 可能过期」，
+// 并让「一次抖动不撤卡」有据可依（epic #521 卡片韧性）。
 export const AuthUsageLimitsResponseSchema = z.discriminatedUnion("provider", [
   z
     .object({
       provider: z.literal("codex"),
       limits: CodexUsageLimitsSchema,
+      capturedAt: z.string().datetime().nullable(),
     })
     .strict(),
   z
     .object({
       provider: z.literal("claude-code"),
       limits: ClaudeCodeUsageLimitsSchema,
+      capturedAt: z.string().datetime().nullable(),
     })
     .strict(),
 ]);

@@ -79,6 +79,9 @@ export class AuthUsageCacheManager {
   ) => Promise<CodexUsageLimitsResponse>;
   private claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
   private codexUsageLimits = EMPTY_CODEX_USAGE_LIMITS;
+  // 上一次成功采集额度的时刻（供前端显示新鲜度）。仅在成功 fetch 时更新，登出清空时置 null。
+  private claudeCodeUsageCapturedAt: Date | null = null;
+  private codexUsageCapturedAt: Date | null = null;
   private isRefreshingClaudeCode = false;
   private isRefreshingCodex = false;
 
@@ -110,6 +113,14 @@ export class AuthUsageCacheManager {
     return this.codexUsageLimits;
   }
 
+  public getClaudeCodeUsageCapturedAt(): Date | null {
+    return this.claudeCodeUsageCapturedAt;
+  }
+
+  public getCodexUsageCapturedAt(): Date | null {
+    return this.codexUsageCapturedAt;
+  }
+
   public async refreshAll(): Promise<void> {
     await Promise.allSettled([this.refreshClaudeCodeUsageLimits(), this.refreshCodexUsageLimits()]);
   }
@@ -123,7 +134,9 @@ export class AuthUsageCacheManager {
     try {
       const status = await this.claudeCodeAuthService.getStatus();
       if (status.status !== "active") {
-        this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
+        // 非 active 不再一律冲空：token 刷新窗口的 expired/refresh_failed 是瞬时态，清空会让卡片消失。
+        // 只有确无凭据（用户显式登出）才清；否则保留上次好值（卡片韧性，epic #521）。
+        await this.clearClaudeCodeUsageIfLoggedOut();
         return;
       }
 
@@ -131,7 +144,8 @@ export class AuthUsageCacheManager {
       try {
         auth = await this.claudeCodeAuthService.getAuthWithoutRefresh();
       } catch {
-        this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
+        // 同上：瞬时读取失败保留上次好值，仅登出才清。
+        await this.clearClaudeCodeUsageIfLoggedOut();
         return;
       }
 
@@ -153,6 +167,7 @@ export class AuthUsageCacheManager {
         return;
       }
       this.claudeCodeUsageLimits = limits;
+      this.claudeCodeUsageCapturedAt = capturedAt;
       this.authUsageSnapshotSink.recordRefreshOutcome({ provider: "claude-code", success: true });
 
       // 旧 auth_usage_snapshot 双写失败不翻转 refresh_success（额度点已进 Metric）；仅记日志。#520 删。
@@ -186,7 +201,8 @@ export class AuthUsageCacheManager {
       try {
         auth = await this.codexAuthService.getAuthWithoutRefresh();
       } catch {
-        this.codexUsageLimits = EMPTY_CODEX_USAGE_LIMITS;
+        // 瞬时读取失败保留上次好值，仅登出（无凭据）才清（卡片韧性，epic #521）。
+        await this.clearCodexUsageIfLoggedOut();
         return;
       }
 
@@ -207,6 +223,7 @@ export class AuthUsageCacheManager {
         return;
       }
       this.codexUsageLimits = limits;
+      this.codexUsageCapturedAt = capturedAt;
       this.authUsageSnapshotSink.recordRefreshOutcome({ provider: "openai-codex", success: true });
 
       // 旧 auth_usage_snapshot 双写失败不翻转 refresh_success；仅记日志。#520 删。
@@ -226,6 +243,31 @@ export class AuthUsageCacheManager {
       });
     } finally {
       this.isRefreshingCodex = false;
+    }
+  }
+
+  // 显式清空（登出路径直调，立刻撤卡，不等下一轮后台刷新）。
+  public clearClaudeCodeUsage(): void {
+    this.claudeCodeUsageLimits = EMPTY_CLAUDE_CODE_USAGE_LIMITS;
+    this.claudeCodeUsageCapturedAt = null;
+  }
+
+  public clearCodexUsage(): void {
+    this.codexUsageLimits = EMPTY_CODEX_USAGE_LIMITS;
+    this.codexUsageCapturedAt = null;
+  }
+
+  // 登出判定 = hasCredentials 为假（凭据已删）。用它区分「用户登出」与「瞬时读取失败/expired」：
+  // 只有确无凭据才把额度缓存清空并撤 capturedAt，让卡片消失；有凭据的瞬时态一律保留上次好值。
+  private async clearClaudeCodeUsageIfLoggedOut(): Promise<void> {
+    if (!(await this.claudeCodeAuthService.hasCredentials())) {
+      this.clearClaudeCodeUsage();
+    }
+  }
+
+  private async clearCodexUsageIfLoggedOut(): Promise<void> {
+    if (!(await this.codexAuthService.hasCredentials())) {
+      this.clearCodexUsage();
     }
   }
 

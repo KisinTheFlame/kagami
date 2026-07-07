@@ -12,7 +12,7 @@ import { type ClaudeCodeUsageLimits } from "@kagami/llm-api/claude-code-auth";
 import { type CodexUsageLimits } from "@kagami/llm-api/codex-auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, LogOut, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { Navigate, NavLink, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +109,8 @@ export function AuthPage() {
       queryKey: queryKeys.auth.usageLimits(providerConfig.key),
       queryFn: () =>
         authClient.getAuthUsageLimits({ params: { provider: providerConfig.key }, input: {} }),
+      // 一次采集/请求抖动不撤卡：保留上次成功数据，配合下方新鲜度提示（epic #521 卡片韧性）。
+      keepPrevious: true,
     }),
   });
   const usageTrendQuery = useQuery({
@@ -165,6 +167,13 @@ export function AuthPage() {
   const statusData = statusQuery.data ?? null;
   const primaryStatus = getPrimaryStatus(statusData);
   const warningMessage = getStatusWarningMessage(statusData);
+
+  // keepPreviousData 会在切 provider（新 query key）时先返回上一个 provider 的额度；按 provider 过滤，
+  // 避免 Codex 页短暂显示 Claude 的额度面板。切换途中无匹配数据即视为加载中。
+  const usageLimitsData =
+    usageLimitsQuery.data?.provider === providerConfig.key ? usageLimitsQuery.data : undefined;
+  const usageLimitsLoading =
+    usageLimitsQuery.isLoading || (usageLimitsQuery.isFetching && !usageLimitsData);
 
   if (shouldRedirect) {
     return <Navigate to="/auth/claude-code" replace />;
@@ -331,16 +340,22 @@ export function AuthPage() {
             </div>
           </div>
 
-          {usageLimitsQuery.isLoading ? (
+          {usageLimitsData ? (
+            <div className="mt-6 space-y-3">
+              <UsageFreshnessLine capturedAt={usageLimitsData.capturedAt} />
+              {usageLimitsQuery.isError ? (
+                <p className="rounded-none border border-scheduler bg-scheduler/10 px-3 py-2 text-xs text-muted-foreground">
+                  最近一次刷新失败，下面展示的是上一次成功的数据。
+                </p>
+              ) : null}
+              <UsageLimitsPanel data={usageLimitsData} />
+            </div>
+          ) : usageLimitsLoading ? (
             <p className="mt-6 text-sm text-muted-foreground">
               正在读取 {providerConfig.label} 额度...
             </p>
           ) : usageLimitsQuery.isError ? (
             <p className="mt-6 text-sm text-destructive">{usageLimitsQuery.error.message}</p>
-          ) : usageLimitsQuery.data ? (
-            <div className="mt-6">
-              <UsageLimitsPanel data={usageLimitsQuery.data} />
-            </div>
           ) : (
             <p className="mt-6 text-sm text-muted-foreground">暂无额度信息。</p>
           )}
@@ -396,6 +411,50 @@ function UsageLimitsPanel({ data }: { data: AuthUsageLimitsResponse }) {
   }
 
   return <CodexUsageLimitsPanel limits={data.limits} />;
+}
+
+// 采集周期是 10 分钟；超过 STALE 阈值（错过约 3 个周期）就提示「可能已过期」。
+const USAGE_STALE_THRESHOLD_MS = 30 * 60 * 1000;
+
+function UsageFreshnessLine({ capturedAt }: { capturedAt: string | null }) {
+  // staleness 依赖当前时间（render 期不能读 Date.now），放 effect 里算，并每分钟自刷。
+  const [isStale, setIsStale] = useState(false);
+  useEffect(() => {
+    if (!capturedAt) {
+      return;
+    }
+    const capturedMs = new Date(capturedAt).getTime();
+    if (Number.isNaN(capturedMs)) {
+      return;
+    }
+    const check = () => setIsStale(Date.now() - capturedMs > USAGE_STALE_THRESHOLD_MS);
+    check();
+    const timer = window.setInterval(check, 60_000);
+    return () => window.clearInterval(timer);
+  }, [capturedAt]);
+
+  if (!capturedAt) {
+    return null;
+  }
+
+  const captured = new Date(capturedAt);
+  if (Number.isNaN(captured.getTime())) {
+    return null;
+  }
+
+  const label = new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(captured);
+
+  return (
+    <p className={`text-xs ${isStale ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+      更新于 {label}
+      {isStale ? " · 数据可能已过期" : ""}
+    </p>
+  );
 }
 
 function ClaudeUsageLimitsPanel({ limits }: { limits: ClaudeCodeUsageLimits }) {

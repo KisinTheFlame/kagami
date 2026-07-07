@@ -102,6 +102,7 @@ export async function createAuthModule({
           primary: null,
           secondary: null,
         },
+        capturedAt: null,
       }) satisfies AuthUsageLimitsResponse,
   });
   codexCallbackServer.setAuthService(codexAuthService);
@@ -150,6 +151,7 @@ export async function createAuthModule({
           seven_day: null,
           extra_usage: null,
         },
+        capturedAt: null,
       }) satisfies AuthUsageLimitsResponse,
   });
   claudeCodeCallbackServer.setAuthService(claudeCodeAuthService);
@@ -180,12 +182,14 @@ export async function createAuthModule({
     return {
       provider: "codex",
       limits: await authUsageCacheManager.getCodexUsageLimits(),
+      capturedAt: authUsageCacheManager.getCodexUsageCapturedAt()?.toISOString() ?? null,
     };
   });
   claudeCodeAuthService.setUsageLimitsProvider(async () => {
     return {
       provider: "claude-code",
       limits: await authUsageCacheManager.getClaudeCodeUsageLimits(),
+      capturedAt: authUsageCacheManager.getClaudeCodeUsageCapturedAt()?.toISOString() ?? null,
     };
   });
   const authServices: AuthModule["authServices"] = {
@@ -200,6 +204,7 @@ export async function createAuthModule({
     authHandler: new AuthHandler({
       authServices,
       authUsageTrendQueryService,
+      authUsageCacheManager,
     }),
     callbackServers: [codexCallbackServer, claudeCodeCallbackServer],
   };

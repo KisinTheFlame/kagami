@@ -3,12 +3,14 @@ import { registerJsonRoute } from "@kagami/http/register";
 import { authApiContract } from "@kagami/llm-api/auth-contract";
 import { type AuthProvider } from "@kagami/llm-api/auth";
 import type { AuthUsageTrendQueryService } from "../application/auth-usage-trend-query.service.js";
+import type { AuthUsageCacheManager } from "../application/auth-usage-cache.impl.service.js";
 import { toInternalAuthProvider } from "../domain/auth-provider.js";
 import type { OAuthAuthService } from "../application/oauth-auth.service.js";
 
 type AuthHandlerDeps = {
   authServices: Record<AuthProvider, OAuthAuthService>;
   authUsageTrendQueryService: AuthUsageTrendQueryService;
+  authUsageCacheManager: AuthUsageCacheManager;
 };
 
 /**
@@ -19,10 +21,16 @@ type AuthHandlerDeps = {
 export class AuthHandler {
   private readonly authServices: Record<AuthProvider, OAuthAuthService>;
   private readonly authUsageTrendQueryService: AuthUsageTrendQueryService;
+  private readonly authUsageCacheManager: AuthUsageCacheManager;
 
-  public constructor({ authServices, authUsageTrendQueryService }: AuthHandlerDeps) {
+  public constructor({
+    authServices,
+    authUsageTrendQueryService,
+    authUsageCacheManager,
+  }: AuthHandlerDeps) {
     this.authServices = authServices;
     this.authUsageTrendQueryService = authUsageTrendQueryService;
+    this.authUsageCacheManager = authUsageCacheManager;
   }
 
   public register(app: FastifyInstance): void {
@@ -34,9 +42,16 @@ export class AuthHandler {
       this.authServices[params.provider].createLoginUrl(),
     );
 
-    registerJsonRoute(app, authApiContract.authLogout, ({ params }) =>
-      this.authServices[params.provider].logout(),
-    );
+    registerJsonRoute(app, authApiContract.authLogout, async ({ params }) => {
+      const result = await this.authServices[params.provider].logout();
+      // 登出即刻撤额度缓存，不等下一轮后台刷新（否则登出后前端 refetch 仍拿到旧卡，epic #521）。
+      if (params.provider === "codex") {
+        this.authUsageCacheManager.clearCodexUsage();
+      } else {
+        this.authUsageCacheManager.clearClaudeCodeUsage();
+      }
+      return result;
+    });
 
     registerJsonRoute(app, authApiContract.authRefresh, ({ params }) =>
       this.authServices[params.provider].refresh(),
