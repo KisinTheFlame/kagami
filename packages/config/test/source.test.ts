@@ -61,7 +61,7 @@ describe("assertSecretShape", () => {
   it("accepts a plain-object secret (any paths allowed — no whitelist)", () => {
     expect(() =>
       assertSecretShape(
-        { services: { agent: { port: 9999 } }, server: { tavily: { apiKey: "x" } } },
+        { services: { agent: { port: 9999 } }, server: { demoProvider: { apiKey: "x" } } },
         "config.secret.yaml",
       ),
     ).not.toThrow();
@@ -95,8 +95,8 @@ describe("resolveSecretConfigPath", () => {
 describe("loadMergedRawConfig", () => {
   it("merges config.yaml with config.secret.yaml (secret wins)", async () => {
     const configPath = await writeFiles({
-      "config.yaml": "server:\n  tavily:\n    apiKey: base\n  keep: base-only\n",
-      "config.secret.yaml": "server:\n  tavily:\n    apiKey: secret\n",
+      "config.yaml": "server:\n  demoProvider:\n    apiKey: base\n  keep: base-only\n",
+      "config.secret.yaml": "server:\n  demoProvider:\n    apiKey: secret\n",
     });
 
     const { raw } = await loadMergedRawConfig({
@@ -104,7 +104,7 @@ describe("loadMergedRawConfig", () => {
       secret: { required: true },
     });
 
-    expect(raw).toEqual({ server: { tavily: { apiKey: "secret" }, keep: "base-only" } });
+    expect(raw).toEqual({ server: { demoProvider: { apiKey: "secret" }, keep: "base-only" } });
   });
 
   it("throws CONFIG_SECRET_NOT_FOUND when the secret file is missing and required", async () => {
