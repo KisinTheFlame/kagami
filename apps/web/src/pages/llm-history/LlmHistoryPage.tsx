@@ -23,7 +23,7 @@ import {
 import { useHistoryListPageState } from "@/hooks/useHistoryListPageState";
 import { formatDateTime } from "@/lib/format";
 import { createSchemaQueryOptions, queryKeys } from "@/lib/query";
-import { agentClient } from "@/lib/rpc";
+import { llmProvidersClient } from "@/lib/rpc";
 import { normalizeOptionalText, setIfNonEmpty } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { LlmChatCallDetailPanel } from "./LlmChatCallDetailPanel";
@@ -46,7 +46,7 @@ export function LlmHistoryPage() {
   const providersQuery = useQuery({
     ...createSchemaQueryOptions({
       queryKey: queryKeys.llm.providers(),
-      queryFn: () => agentClient.listProviders({}),
+      queryFn: () => llmProvidersClient.listProviders({}),
     }),
   });
   const {

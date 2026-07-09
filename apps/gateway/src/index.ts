@@ -7,41 +7,21 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
 import { createHealthResponse } from "@kagami/http/wire";
 import { loadGatewayConfig } from "./config.js";
+import { selectUpstreamKey, type UpstreamKey } from "./routing.js";
 
 const config = loadGatewayConfig();
 const distDir = config.distDir;
 const indexPath = path.join(distDir, "index.html");
 const port = config.port;
-const apiTarget = config.agentTarget;
-const consoleTarget = config.consoleTarget;
-const llmTarget = config.llmTarget;
-const metricTarget = config.metricTarget;
-const ossTarget = config.ossTarget;
-const schedulerTarget = config.schedulerTarget;
-// 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 server（agent）。
-const CONSOLE_PATH_PREFIXES = [
-  "/app-log",
-  "/llm-chat-call",
-  "/inner-thought",
-  "/napcat-event",
-  "/napcat-group-message",
-  "/todo",
-];
-// 这些前缀路由到 kagami-llm 进程（OAuth 凭据中心）：认证管理端点已随 LLM 服务外移。
-const LLM_PATH_PREFIXES = ["/auth"];
-// 整个 /metric 前缀路由到独立的 metric 进程（@kagami/metric）：查询（POST /metric/query）、
-// 派生（POST /metric/derive）、raw 原始点（POST /metric/points）与摄取（POST /metric/record）。
-// 内网单用户部署无安全边界考量，故不再逐个列查询端点、把写入端点排除在外（早期 #444 的做法），
-// 统一整段前缀放行——新增 /metric 子端点无需再同步维护此白名单。
-const METRIC_PATH_PREFIXES = ["/metric"];
-// 管理台对象浏览器只读面路由到 kagami-oss 进程。仅 /oss-object（列表 / 统计 / 预览字节）过网关；
-// 写操作前缀 /objects（put/delete）刻意不在此，浏览器经网关够不到 OSS 的任何写路由。
-const OSS_PATH_PREFIXES = ["/oss-object"];
-// 调度任务面路由到 kagami-scheduler 进程（#493 P4）：全局查询 GET /scheduler/tasks 与手动触发
-// POST /scheduler/tasks/:o/:t/trigger 都落在 /scheduler/tasks 前缀下（后者是它的子路径）。register
-// / status / runs、SSE tick、/internal/scheduler-trigger 都是服务间内部路由，刻意不进网关前缀，
-// 前端经网关够不到它们。
-const SCHEDULER_PATH_PREFIXES = ["/scheduler/tasks"];
+// UpstreamKey → 具体上游地址；路由决策（路径 → key）在 routing.ts，这里只做 key → URL 映射。
+const UPSTREAM_TARGETS: Record<UpstreamKey, URL> = {
+  metric: config.metricTarget,
+  llm: config.llmTarget,
+  console: config.consoleTarget,
+  oss: config.ossTarget,
+  scheduler: config.schedulerTarget,
+  agent: config.agentTarget,
+};
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 // 上游响应超时：等待上游返回响应头的上限。命中即回 504，避免上游卡死 / 半开时前端连接
 // 永久悬挂、socket 句柄泄漏。只约束"拿到响应头"这一段——响应头一到就清除，故不会打断
@@ -149,41 +129,13 @@ process.on("unhandledRejection", reason => {
   process.exit(1);
 });
 
-function matchesAnyPrefix(upstreamPath: string, prefixes: string[]): boolean {
-  return prefixes.some(prefix => upstreamPath === prefix || upstreamPath.startsWith(`${prefix}/`));
-}
-
-function selectUpstreamTarget(upstreamPath: string): URL {
-  if (matchesAnyPrefix(upstreamPath, METRIC_PATH_PREFIXES)) {
-    return metricTarget;
-  }
-
-  if (matchesAnyPrefix(upstreamPath, LLM_PATH_PREFIXES)) {
-    return llmTarget;
-  }
-
-  if (matchesAnyPrefix(upstreamPath, CONSOLE_PATH_PREFIXES)) {
-    return consoleTarget;
-  }
-
-  if (matchesAnyPrefix(upstreamPath, OSS_PATH_PREFIXES)) {
-    return ossTarget;
-  }
-
-  if (matchesAnyPrefix(upstreamPath, SCHEDULER_PATH_PREFIXES)) {
-    return schedulerTarget;
-  }
-
-  return apiTarget;
-}
-
 async function proxyApiRequest(
   req: IncomingMessage,
   res: ServerResponse,
   requestUrl: URL,
 ): Promise<void> {
   const upstreamPath = requestUrl.pathname.slice(4) || "/";
-  const target = selectUpstreamTarget(upstreamPath);
+  const target = UPSTREAM_TARGETS[selectUpstreamKey(upstreamPath)];
   const upstreamUrl = new URL(`${upstreamPath}${requestUrl.search}`, target);
   const headers = new Headers();
 
