@@ -90,7 +90,6 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
         resid: resolved.resId,
         mime: resolved.mimeType,
         size: resolved.size,
-        note: "资源原图已作为下一条消息进入你的上下文。",
       }),
       effects: [appendEffect],
     };
