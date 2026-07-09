@@ -154,9 +154,6 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
       content: JSON.stringify({
         ok: true,
         ...(resid ? { resid } : {}),
-        note: resid
-          ? "静态地图已进入你的上下文；已存档，可用 send_resource 转发或 read_resource 重看。"
-          : "静态地图已进入你的上下文（本次未落 OSS，无 resid）。",
       }),
       effects: [appendEffect],
     };

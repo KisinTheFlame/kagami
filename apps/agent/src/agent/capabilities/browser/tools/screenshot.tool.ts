@@ -65,9 +65,6 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
         ok: true,
         url: shot.url,
         ...(resid ? { resid } : {}),
-        note: resid
-          ? "截图原图已进入你的上下文；已存档，可用 send_resource 转发或 read_resource 重看。"
-          : "截图原图已进入你的上下文（本次未落 OSS，无 resid）。",
       }),
       effects: [appendEffect],
     };

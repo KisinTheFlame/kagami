@@ -77,9 +77,6 @@ export function createAtelierGenerateTool({
           ok: true,
           ...(resid ? { resid } : {}),
           ...(result.revisedPrompt ? { revised_prompt: result.revisedPrompt } : {}),
-          note: resid
-            ? "图生成好了，已进入你的视野，也存了档（resid 见上，可用 send_resource 发出去）。"
-            : "图生成好了，已进入你的视野（本次未落 OSS，无 resid）。",
         });
         return {
           content,
