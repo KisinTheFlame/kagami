@@ -30,6 +30,7 @@ import { MetricAuthUsageSnapshotSink } from "./metric-auth-usage-snapshot-sink.j
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
+import { LlmProvidersViewHandler } from "../http/llm-providers-view.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
 import { buildClaudeFileGcTask } from "./claude-file-gc-task.js";
@@ -172,6 +173,7 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     handlers: [
       new HealthHandler(),
       new InternalLlmHandler({ llmClient, embeddingClient, imageClient }),
+      new LlmProvidersViewHandler({ llmClient }),
       authModule.authHandler,
     ],
   });

@@ -10,7 +10,6 @@ import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
-import { LlmHandler } from "../llm/http/llm.handler.js";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
 import { HttpImageClient } from "../acl/image-client.js";
 import { HttpNapcatClient } from "../acl/napcat-client.js";
@@ -257,7 +256,6 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const app = createServerApp({
     handlers: [
       new HealthHandler(),
-      new LlmHandler({ llmProviderService: agentRuntime.llmProviderService }),
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),

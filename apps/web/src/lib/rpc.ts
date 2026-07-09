@@ -1,6 +1,7 @@
 import { agentApiContract } from "@kagami/agent-api/contract";
 import { consoleApiContract } from "@kagami/console-api/contract";
 import { authApiContract } from "@kagami/llm-api/auth-contract";
+import { llmProvidersViewContract } from "@kagami/llm-api/providers-view";
 import { metricApiContract } from "@kagami/metric-api/contract";
 import { ossConsoleContract } from "@kagami/oss-api/contract";
 import { schedulerTasksViewContract } from "@kagami/scheduler-api/tasks-view";
@@ -14,8 +15,8 @@ import { resolveApiBaseUrl } from "@/lib/api";
 // 用 client.method(input) 一步取代「contractUrl 取 path + 手传 schema + apiGetWithSchema」，
 // path / response schema / 入参类型全部从契约派生。
 //
-// baseUrl 统一 /api：gateway 按 path 前缀分流（/llm-chat-call→console、/auth→llm、/metric→metric、
-// 其余→agent），契约 path 自带前缀，故所有契约共用一个 baseUrl，URL 与迁移前逐字一致、路由不变。
+// baseUrl 统一 /api：gateway 按 path 前缀分流（/llm-chat-call→console、/auth + /llm/providers→llm、
+// /metric→metric、其余→agent），契约 path 自带前缀，故所有契约共用一个 baseUrl、路由不变。
 
 const FALLBACK_ERROR_MESSAGE = "请求失败，请稍后再试";
 
@@ -71,6 +72,9 @@ const clientOptions: CreateClientOptions = {
 export const consoleClient = createClient(consoleApiContract, clientOptions);
 export const agentClient = createClient(agentApiContract, clientOptions);
 export const authClient = createClient(authApiContract, clientOptions);
+// provider 列举（「LLM 调用历史」按 provider 过滤）直连 kagami-llm，经 gateway /llm/providers 前缀，
+// 不再经 agent 中转（镜像 scheduler #493 的 view 契约直连范式）。
+export const llmProvidersClient = createClient(llmProvidersViewContract, clientOptions);
 export const metricClient = createClient(metricApiContract, clientOptions);
 export const ossConsoleClient = createClient(ossConsoleContract, clientOptions);
 

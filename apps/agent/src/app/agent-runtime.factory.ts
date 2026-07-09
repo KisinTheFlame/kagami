@@ -15,8 +15,6 @@ import type { Config } from "@kagami/kernel/config/config.loader";
 import type { Database } from "@kagami/persistence/db/client";
 import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import type { LlmClient } from "@kagami/llm-client";
-import { DefaultLlmProviderService } from "../llm/application/llm-provider.impl.service.js";
-import type { LlmProviderService } from "../llm/application/llm-provider.service.js";
 import type { MetricClient } from "@kagami/metric-client/client";
 import type { NapcatClient } from "../acl/napcat-client.js";
 import type { IthomeService } from "../agent/capabilities/ithome/application/ithome.service.js";
@@ -102,8 +100,6 @@ type BuildAgentRuntimeInput = {
 export type AgentRuntimeBundle = {
   rootAgentRuntime: RootLoopAgent;
   mainAgentContextQueryService: MainAgentContextQueryService;
-  /** LLM provider 列举服务：管理台「LLM 调用历史」按 provider 过滤用（/llm/providers 路由）。 */
-  llmProviderService: LlmProviderService;
   /**
    * 「发现待办」task agent：工具装配与主 Agent 字节相等（tools / system 前缀命中
    * KV 缓存），invoke 只挂 propose_todos 终止子工具。由 wiring 层包进
@@ -437,7 +433,6 @@ export async function buildAgentRuntime({
     });
   }
 
-  const llmProviderService = new DefaultLlmProviderService({ llmClient });
   const mainAgentContextQueryService = new DefaultMainAgentContextQueryService({
     rootAgentRuntime,
   });
@@ -454,7 +449,6 @@ export async function buildAgentRuntime({
   return {
     rootAgentRuntime,
     mainAgentContextQueryService,
-    llmProviderService,
     todoSuggestionTaskAgent,
     qqApp,
     stateSampler,

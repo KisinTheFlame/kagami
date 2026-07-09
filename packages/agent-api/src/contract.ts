@@ -1,5 +1,4 @@
 import { defineJsonRoute } from "@kagami/http/contract";
-import { LlmProviderListResponseSchema } from "@kagami/llm-api/llm-chat";
 import { z } from "zod";
 import {
   MainAgentContextCompactionResultSchema,
@@ -13,12 +12,6 @@ import {
 // 自己的 *-api 包，这里只收 agent 自己产出的路由。
 
 export const agentApiContract = {
-  listProviders: defineJsonRoute({
-    method: "GET",
-    path: "/llm/providers",
-    input: z.object({}),
-    output: LlmProviderListResponseSchema,
-  }),
   getRecentMainAgentContext: defineJsonRoute({
     method: "GET",
     path: "/main-agent-context/recent",
