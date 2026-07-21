@@ -321,7 +321,7 @@ describe("TerminalService", () => {
     it("rejects concurrent bash with BUSY", async () => {
       const { service } = await makeService({ initialCwd: tmpRoot });
       // Launch a slow command, then try to invoke another before it resolves
-      const slow = service.runBash({ command: "sleep 0.3" });
+      const slow = service.runBash({ command: "sleep 0.15" });
       const concurrent = service.runBash({ command: "echo second" });
       const [slowResult, concurrentResult] = await Promise.all([slow, concurrent]);
       expect(slowResult.ok).toBe(true);
@@ -333,7 +333,7 @@ describe("TerminalService", () => {
     it("timeout kills the process and returns TIMEOUT with partial output_id", async () => {
       const { service, outputDao } = await makeService({
         initialCwd: tmpRoot,
-        overrides: { commandTimeoutMs: 300 },
+        overrides: { commandTimeoutMs: 120 },
       });
       const result = await service.runBash({
         command: "printf 'partial '; sleep 2; printf 'never'",
@@ -352,7 +352,7 @@ describe("TerminalService", () => {
       const childScript = [
         "setTimeout(() => {",
         `  require("node:fs").writeFileSync(${JSON.stringify(marker)}, "survived");`,
-        "}, 500);",
+        "}, 250);",
       ].join("\n");
       const parentScript = [
         "require('node:child_process').spawn(",
@@ -374,7 +374,9 @@ describe("TerminalService", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error).toBe(TERMINAL_ERROR.TIMEOUT);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // 等到孙进程的 250ms marker 定时点之后再断言（kill 在 100ms 触发；若 kill 未覆盖进程组，
+      // marker 会在 ~250ms 落盘，450ms 处检查仍留 200ms 裕量）。
+      await new Promise(resolve => setTimeout(resolve, 450));
       await expect(access(marker)).rejects.toThrow();
     });
 

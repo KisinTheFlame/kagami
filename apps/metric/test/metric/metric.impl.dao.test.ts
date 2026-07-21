@@ -177,14 +177,14 @@ describe("DuckDbMetricDao", () => {
 
   it("computes percentiles (p50 / p95 / p99) from raw samples in the bucket", async () => {
     // 桶内样本 1..100；quantile_cont 连续插值：p50=50.5, p95≈95.05, p99≈99.01。
-    for (let v = 1; v <= 100; v++) {
-      await dao.insert({
+    await dao.insertMany(
+      Array.from({ length: 100 }, (_, i) => ({
         metricName: METRIC,
-        value: v,
+        value: i + 1,
         tags: {},
         occurredAt: iso("2026-07-06T10:00:10.000Z"),
-      });
-    }
+      })),
+    );
     const at = iso("2026-07-06T10:00:00.000Z");
 
     const [p50] = await dao.queryChartSeries(baseQuery({ aggregator: "p50" }));
@@ -199,17 +199,16 @@ describe("DuckDbMetricDao", () => {
 
   it("pushes series top-N down to SQL: caps a high-cardinality groupByTag to 20 by magnitude", async () => {
     // 25 个 tool 分组，各占一个桶、总量 = 序号(6..30)；DAO 应在 SQL 层只留总量最大的前 20（11..30）。
-    for (let index = 1; index <= 25; index++) {
-      const magnitude = index + 5;
-      for (let n = 0; n < magnitude; n++) {
-        await dao.insert({
+    await dao.insertMany(
+      Array.from({ length: 25 }, (_, i) => i + 1).flatMap(index =>
+        Array.from({ length: index + 5 }, () => ({
           metricName: METRIC,
           value: 1,
           tags: { tool: `series-${index}` },
           occurredAt: iso("2026-07-06T10:00:10.000Z"),
-        });
-      }
-    }
+        })),
+      ),
+    );
 
     const rows = await dao.queryChartSeries(baseQuery({ aggregator: "count", groupByTag: "tool" }));
 
@@ -248,31 +247,28 @@ describe("DuckDbMetricDao", () => {
   it("keeps the NULL series over a magnitude-tied named series at the top-N boundary (NULLS FIRST)", async () => {
     // 19 条大 series(各 10) + NULL(5) + 命名 "zzz"(5)：共 21 条、截到 20。NULL 与 zzz 在边界打平，
     // series_rank 的 NULLS FIRST tiebreak 让 NULL 排前存活、zzz 被裁（对齐旧 stable-sort 语义）。
-    for (let index = 1; index <= 19; index++) {
-      const key = `aaa-${String(index).padStart(2, "0")}`;
-      for (let n = 0; n < 10; n++) {
-        await dao.insert({
+    await dao.insertMany([
+      ...Array.from({ length: 19 }, (_, i) => i + 1).flatMap(index =>
+        Array.from({ length: 10 }, () => ({
           metricName: METRIC,
           value: 1,
-          tags: { tool: key },
+          tags: { tool: `aaa-${String(index).padStart(2, "0")}` },
           occurredAt: iso("2026-07-06T10:00:10.000Z"),
-        });
-      }
-    }
-    for (let n = 0; n < 5; n++) {
-      await dao.insert({
+        })),
+      ),
+      ...Array.from({ length: 5 }, () => ({
         metricName: METRIC,
         value: 1,
         tags: {},
         occurredAt: iso("2026-07-06T10:00:10.000Z"),
-      });
-      await dao.insert({
+      })),
+      ...Array.from({ length: 5 }, () => ({
         metricName: METRIC,
         value: 1,
         tags: { tool: "zzz" },
         occurredAt: iso("2026-07-06T10:00:10.000Z"),
-      });
-    }
+      })),
+    ]);
 
     const rows = await dao.queryChartSeries(baseQuery({ aggregator: "count", groupByTag: "tool" }));
 
