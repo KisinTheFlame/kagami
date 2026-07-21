@@ -59,7 +59,7 @@ type PressPlan = {
   frames: ReadonlySet<GbaButton>[];
   cursor: number;
   startFrame: number;
-  /** frames 中「最后一个非 settle 帧」的下标 + 1（= 松键时刻）。 */
+  /** frames 中最后一个「按住」帧的下标 + 1（= 松键时刻,尾部 gap/settle 不计入）。 */
   releaseOffset: number;
   resolve: (result: PressResult) => void;
 };
@@ -100,6 +100,10 @@ export class GbaService {
   private frame = 0;
   private foreground = false;
   private plan: PressPlan | null = null;
+  /** loadGame 在飞标记：并发加载会双建核心、泄漏 WASM 实例，一律领域拒绝。 */
+  private loadInFlight = false;
+  /** 帧周期（ms），loadGame 成功后按核心实际 fps 缓存——帧循环热路径不重复推导不变量。 */
+  private frameMs = 1000 / 59.7275;
 
   private timer: NodeJS.Timeout | null = null;
   private nextFrameAt = 0;
@@ -165,38 +169,42 @@ export class GbaService {
     }
     this.abortPlan("GBA_NOT_FOREGROUND: 执行中被切到后台，按键已全部松开");
     this.stopLoop();
+    try {
+      this.flushSramIfDirty();
+    } catch (error) {
+      // flush 失败保持前台（不置位 foreground），恢复帧循环后上抛（HTTP 500）——
+      // 否则重试 blur 会被「focused===foreground」短路，脏存档搁浅到下次前台。
+      this.startLoop();
+      throw error;
+    }
     this.foreground = false;
-    this.flushSramIfDirty();
     logger.info("GBA 转后台（冻结）", { event: "gba.background", romId: this.romId });
     return { foreground: false };
   }
 
   public async loadGame(romId: number): Promise<LoadResult> {
     this.touchActivity();
+    // 在飞互斥：并发 loadGame 会在彼此的 await 间隙双建核心（后设置者胜出、先者永不 shutdown，
+    // WASM 实例泄漏且帧循环错位），与 press 的 PRESS_IN_PROGRESS 同理，一律领域拒绝。
+    if (this.loadInFlight) {
+      return { ok: false, reason: "LOAD_IN_PROGRESS" };
+    }
+    this.loadInFlight = true;
+    try {
+      return await this.doLoadGame(romId);
+    } finally {
+      this.loadInFlight = false;
+    }
+  }
+
+  private async doLoadGame(romId: number): Promise<LoadResult> {
     const rom = this.store.getRom(romId);
     if (!rom) {
       return { ok: false, reason: "ROM_NOT_FOUND" };
     }
 
-    // 换 ROM 顺序（issue #541 执行细则）：先 flush 当前 SRAM（失败拒绝加载），再卸载旧核心。
-    if (this.core) {
-      try {
-        this.flushSramIfDirty();
-      } catch (error) {
-        logger.errorWithCause("GBA 换 ROM 前 flush 存档失败，拒绝加载", error, {
-          event: "gba.load_flush_failed",
-          fromRomId: this.romId,
-          toRomId: romId,
-        });
-        return { ok: false, reason: "SRAM_FLUSH_FAILED" };
-      }
-      this.abortPlan("GBA_GAME_UNLOADED: 游戏被切换，按键已全部松开");
-      this.stopLoop();
-      const old = this.core;
-      this.core = null;
-      await old.shutdown();
-    }
-
+    // 顺序要点：任何会失败的步骤（OSS 拉取 / flush）都放在动旧会话之前——切换失败时
+    // 正在玩的游戏毫发无损地继续跑，绝不出现「旧的没了、新的没来」的自毁窗口。
     let bytes: Buffer;
     try {
       const object = await this.ossClient.getObject(rom.ossKey, { maxBytes: MAX_ROM_BYTES });
@@ -210,8 +218,45 @@ export class GbaService {
       return { ok: false, reason: "ROM_FETCH_FAILED" };
     }
 
+    // 换 ROM 前先 flush 当前 SRAM（issue #541 执行细则）；失败拒绝加载，旧会话继续。
+    if (this.core) {
+      try {
+        this.flushSramIfDirty();
+      } catch (error) {
+        logger.errorWithCause("GBA 换 ROM 前 flush 存档失败，拒绝加载", error, {
+          event: "gba.load_flush_failed",
+          fromRomId: this.romId,
+          toRomId: romId,
+        });
+        return { ok: false, reason: "SRAM_FLUSH_FAILED" };
+      }
+      // 到这里才动旧会话：中止在途 press、停循环、清空全部会话字段（状态保持自洽——
+      // 之后任何失败路径下 state() 都是干净的「未加载」，不会 loaded:false 却挂着旧 romId）。
+      this.abortPlan("GBA_GAME_UNLOADED: 游戏被切换，按键已全部松开");
+      this.stopLoop();
+      const old = this.core;
+      this.core = null;
+      this.romId = null;
+      this.romName = null;
+      this.timelineId = null;
+      this.frame = 0;
+      await old.shutdown();
+    }
+
     const core = this.coreFactory();
-    await core.loadRom(bytes);
+    try {
+      await core.loadRom(bytes);
+    } catch (error) {
+      // 坏 ROM / WASM 初始化失败是领域拒绝而非服务故障：init() 依赖它保住「服务必须能
+      // 空手起来」的契约（否则启动恢复一颗坏 ROM 会让进程 crash-loop）。
+      logger.errorWithCause("GBA 核心加载 ROM 失败", error, {
+        event: "gba.rom_load_failed",
+        romId,
+        romName: rom.name,
+      });
+      await core.shutdown().catch(() => {});
+      return { ok: false, reason: "ROM_LOAD_FAILED" };
+    }
     const save = this.store.getBatterySave(romId);
     if (save) {
       core.setSram(save);
@@ -222,6 +267,7 @@ export class GbaService {
     this.romName = rom.name;
     this.timelineId = `gba-${this.now().toString(36)}-${randomUUID().slice(0, 8)}`;
     this.frame = 0;
+    this.frameMs = 1000 / core.getFps();
     // 冷启动推进一帧：让 screenshot 立即有帧可看（后台加载也只多这一帧，无实时性影响）。
     core.runFrame(EMPTY_HELD);
     this.frame = 1;
@@ -282,15 +328,15 @@ export class GbaService {
     if (!this.core || this.timelineId === null) {
       return { ok: false, reason: "NO_GAME_LOADED" };
     }
-    const frame = this.core.readFrameRgba();
-    if (!frame) {
+    const imageBase64 = this.captureFrameBase64();
+    if (imageBase64 === null) {
       return { ok: false, reason: "NO_FRAME_AVAILABLE" };
     }
     return {
       ok: true,
       timelineId: this.timelineId,
       capturedFrame: this.frame,
-      imageBase64: encodeFramePng(frame).toString("base64"),
+      imageBase64,
     };
   }
 
@@ -324,12 +370,33 @@ export class GbaService {
       bytes,
       mimeType: "application/octet-stream",
     });
-    const rom = this.store.insertRom({ name, ossKey, sizeBytes: bytes.length, sha256 });
+    let rom: RomRow;
+    try {
+      rom = this.store.insertRom({ name, ossKey, sizeBytes: bytes.length, sha256 });
+    } catch (error) {
+      // 并发上传竞态：两发都过了上面的同步去重检查、都传完 OSS，UNIQUE(sha256/name) 拦住后到者。
+      // 归一为领域拒绝，并回收刚上传的孤儿 OSS 对象（失败仅告警，孤儿无害）。
+      if (isUniqueConstraintError(error)) {
+        await this.ossClient.deleteObject(ossKey).catch(() => {});
+        logger.warn("GBA ROM 并发上传竞态，后到者按重复处理", {
+          event: "gba.rom_upload_race",
+          name,
+          sha256,
+        });
+        return { ok: false, reason: "DUPLICATE_ROM" };
+      }
+      throw error;
+    }
     logger.info("GBA ROM 入库", { event: "gba.rom_uploaded", romId: rom.id, name, sha256 });
     return { ok: true, rom: toRomView(rom) };
   }
 
   public async deleteRom(romId: number): Promise<DeleteResult> {
+    // loadGame 在飞期间 this.romId 尚未指向目标 ROM，「加载中拒删」的守卫会漏判——
+    // 删掉正被加载的 ROM 行会让后续 setLastRomId / 存档 flush 撞 FK。加载期一律拒删。
+    if (this.loadInFlight) {
+      return { ok: false, reason: "LOAD_IN_PROGRESS" };
+    }
     if (romId === this.romId && this.core) {
       return { ok: false, reason: "ROM_LOADED" };
     }
@@ -399,11 +466,29 @@ export class GbaService {
   }
 
   private tick(): void {
+    try {
+      this.tickInner();
+    } catch (error) {
+      // 帧推进 / 采帧编码抛错（如 WASM trap）若任其穿透 setTimeout 回调，会命中进程级
+      // uncaughtException → process.exit(1)，一帧坏数据杀死整个服务。这里遏制为：冻结会话
+      //（自保安全态）、中止在途 press（不悬挂），进程活着等人工介入或重新 loadGame。
+      logger.errorWithCause("GBA 帧循环异常，会话已冻结自保", error, {
+        event: "gba.tick_fault",
+        romId: this.romId,
+        frame: this.frame,
+      });
+      this.abortPlan("EMULATOR_FAULT: 模拟器帧推进异常，会话已冻结");
+      this.stopLoop();
+      this.foreground = false;
+    }
+  }
+
+  private tickInner(): void {
     const core = this.core;
     if (!this.foreground || !core) {
       return;
     }
-    const frameMs = 1000 / core.getFps();
+    const frameMs = this.frameMs;
     const t = this.now();
 
     // 事件循环卡顿（GC / 同步大任务）落后超阈值：丢帧重新对齐。宁可时间少流逝，绝不快进补作业。
@@ -451,15 +536,15 @@ export class GbaService {
     }
     plan.cursor += 1;
     if (plan.cursor >= plan.frames.length) {
-      this.completePlan(plan, core);
+      this.completePlan(plan);
     }
   }
 
   /** 计划走完：采帧回图。plan 置空即「全部松开」——按键状态完全由 plan 派生。 */
-  private completePlan(plan: PressPlan, core: EmulatorCore): void {
+  private completePlan(plan: PressPlan): void {
     this.plan = null;
-    const frame = core.readFrameRgba();
-    if (!frame || this.timelineId === null) {
+    const imageBase64 = this.captureFrameBase64();
+    if (imageBase64 === null || this.timelineId === null) {
       plan.resolve({ ok: false, reason: "NO_FRAME_AVAILABLE" });
       return;
     }
@@ -469,8 +554,17 @@ export class GbaService {
       startFrame: plan.startFrame,
       releasedFrame: plan.startFrame + plan.releaseOffset,
       capturedFrame: this.frame,
-      imageBase64: encodeFramePng(frame).toString("base64"),
+      imageBase64,
     });
+  }
+
+  /** 采当前帧并编码 base64 PNG；无帧可采时 null。screenshot 与 completePlan 共用。 */
+  private captureFrameBase64(): string | null {
+    const frame = this.core?.readFrameRgba();
+    if (!frame) {
+      return null;
+    }
+    return encodeFramePng(frame).toString("base64");
   }
 
   /** 中止在途 press（切后台 / 换 ROM / 关停）：plan 置空 = 按键全松开，调用方拿到领域拒绝。 */
@@ -535,6 +629,8 @@ function buildPressPlan(
     return `INVALID_PRESS: settleFrames ${settleFrames} 超上限 ${MAX_SETTLE_FRAMES}`;
   }
   const frames: ReadonlySet<GbaButton>[] = [];
+  // releasedFrame 语义 = 最后一个「按住」帧之后的时刻;尾部 gap 里键已松开,不计入。
+  let lastHoldEnd = 0;
   for (const [index, step] of steps.entries()) {
     const buttons = new Set(step.buttons);
     if (buttons.size !== step.buttons.length) {
@@ -559,11 +655,12 @@ function buildPressPlan(
     for (let i = 0; i < step.holdFrames; i++) {
       frames.push(chord);
     }
+    lastHoldEnd = frames.length;
     for (let i = 0; i < step.gapFrames; i++) {
       frames.push(EMPTY_HELD);
     }
   }
-  const releaseOffset = frames.length;
+  const releaseOffset = lastHoldEnd;
   for (let i = 0; i < settleFrames; i++) {
     frames.push(EMPTY_HELD);
   }
@@ -571,6 +668,12 @@ function buildPressPlan(
     return `INVALID_PRESS: 总帧数 ${frames.length} 超预算 ${MAX_TOTAL_FRAMES}（Σ每步(hold+gap)+settle ≤ ${MAX_TOTAL_FRAMES}）`;
   }
   return { frames, releaseOffset };
+}
+
+/** better-sqlite3 的 UNIQUE 约束冲突（并发上传竞态的判定依据）。 */
+function isUniqueConstraintError(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code.startsWith("SQLITE_CONSTRAINT");
 }
 
 /** RomRow（存储层，ms 时间戳）→ 契约视图（ISO 字符串）。 */

@@ -12,12 +12,23 @@ export class FakeEmulatorCore implements EmulatorCore {
   public sram: Buffer | null = Buffer.alloc(128, 0);
   public shutdownCalled = false;
   public loadedRom: Buffer | null = null;
+  /** 置 true 让 loadRom 抛错（坏 ROM / WASM 初始化失败）。 */
+  public failLoad = false;
+  /** 置 true 让下一次 runFrame 抛错一次（模拟 WASM trap）。 */
+  public throwOnNextRunFrame = false;
 
   public async loadRom(rom: Buffer): Promise<void> {
+    if (this.failLoad) {
+      throw new Error("坏 ROM（测试）");
+    }
     this.loadedRom = rom;
   }
 
   public runFrame(held: ReadonlySet<GbaButton>): void {
+    if (this.throwOnNextRunFrame) {
+      this.throwOnNextRunFrame = false;
+      throw new Error("WASM trap（测试）");
+    }
     this.frames.push(new Set(held));
   }
 

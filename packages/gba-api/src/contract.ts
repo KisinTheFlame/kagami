@@ -43,6 +43,7 @@ const SettleFramesSchema = z.number().int().min(0).default(12);
 /**
  * press 结果的时间线元数据：帧号帮助诊断「决策-执行漂移」（LLM 推理间隙游戏在实时继续跑），
  * 不做乐观锁。timelineId 在 loadGame / 服务重启时更换，防不同时间线的帧号被混为一谈。
+ * releasedFrame = 最后一个「按住」帧之后的时刻（尾部 gap/settle 里键已松开，不计入）。
  */
 export const GbaFrameMetaSchema = z.object({
   timelineId: z.string(),
@@ -51,13 +52,16 @@ export const GbaFrameMetaSchema = z.object({
   capturedFrame: z.number().int(),
 });
 
+/** 各结果 schema 共用的失败分支：领域拒绝统一 `{ ok:false, reason }`。 */
+const GbaFailureSchema = z.object({ ok: z.literal(false), reason: z.string() });
+
 /**
  * 画面以 base64 PNG 走 JSON 回传（240×160 放大 2x，数十 KB、本机回环）：不值得为「上行 JSON +
  * 下行 binary」发明新契约原语；大块数据由 agent 侧工具拦下转多模态 effect，不进主 Agent 上下文。
  */
 export const GbaPressResultSchema = z.discriminatedUnion("ok", [
   GbaFrameMetaSchema.extend({ ok: z.literal(true), imageBase64: z.string() }),
-  z.object({ ok: z.literal(false), reason: z.string() }),
+  GbaFailureSchema,
 ]);
 
 export const GbaScreenshotResultSchema = z.discriminatedUnion("ok", [
@@ -67,7 +71,7 @@ export const GbaScreenshotResultSchema = z.discriminatedUnion("ok", [
     capturedFrame: z.number().int(),
     imageBase64: z.string(),
   }),
-  z.object({ ok: z.literal(false), reason: z.string() }),
+  GbaFailureSchema,
 ]);
 
 export const GbaLoadResultSchema = z.discriminatedUnion("ok", [
@@ -77,7 +81,7 @@ export const GbaLoadResultSchema = z.discriminatedUnion("ok", [
     romName: z.string(),
     timelineId: z.string(),
   }),
-  z.object({ ok: z.literal(false), reason: z.string() }),
+  GbaFailureSchema,
 ]);
 
 export const GbaRunStateSchema = z.object({
@@ -106,12 +110,12 @@ export const GbaRomListSchema = z.object({ roms: z.array(GbaRomViewSchema) });
 
 export const GbaUploadResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), rom: GbaRomViewSchema }),
-  z.object({ ok: z.literal(false), reason: z.string() }),
+  GbaFailureSchema,
 ]);
 
 export const GbaDeleteResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true) }),
-  z.object({ ok: z.literal(false), reason: z.string() }),
+  GbaFailureSchema,
 ]);
 
 /**
@@ -182,7 +186,8 @@ export const gbaApiContract = {
 };
 
 /**
- * 控制台 ROM 管理面（管理台上传 / 列表 / 删除）。gateway 只放行 `/gba/roms` 前缀——游玩路由
+ * 控制台 ROM 管理面（管理台上传 / 列表 / 删除）。gateway 分流在 #541 PR3 落地：只放行
+ * `/gba/roms` 前缀——游玩路由
  * `/gba/run/*` 不进分流表，浏览器够不到（镜像 OSS「写前缀物理隔离」的思路，方向相反：这里
  * 隔离的是游玩面）。listRoms 与 agent 共用同一条路由。
  */

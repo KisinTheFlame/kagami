@@ -66,7 +66,9 @@ export async function buildGbaServiceRuntime(): Promise<GbaServiceRuntime> {
   const app = createServiceApp({
     logger,
     fastifyOptions: {
-      // ROM 上传上限（content-length 声明超限早拒；chunked 由 handler 的 readAllWithCap 兜底）。
+      // 注意：bodyLimit 只约束走内建 parser 的 JSON 路由；octet-stream 走下面的自定义透传
+      // parser，fastify 不对其执行 bodyLimit——上传上限由 handler 的 content-length 早拒 +
+      // readAllWithCap 权威把守（review #541）。
       bodyLimit: config.maxBodyBytes,
     },
     errorHandler,

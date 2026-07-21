@@ -45,22 +45,24 @@ export class HttpOssClient implements OssClient {
       baseUrl,
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       decodeError: () => undefined,
+      // 文案保持操作中立：本 client 同时承载 put/get/delete，底层失败不应一律标成「上传失败」
+      //（那会把 loadGame 的读失败误标为写方向,误导排障）。
       mapFallbackError: info => {
         switch (info.reason) {
           case "bad_status":
             return new BizError({
-              message: `OSS 上传失败：HTTP ${info.status}`,
-              meta: { reason: "OSS_PUT_FAILED", status: info.status },
+              message: `OSS 请求失败：HTTP ${info.status}`,
+              meta: { reason: "OSS_REQUEST_FAILED", status: info.status },
             });
           case "invalid_response_body":
             return new BizError({
               message: "OSS 返回结构无效（缺少 key）",
-              meta: { reason: "OSS_PUT_INVALID_RESPONSE" },
+              meta: { reason: "OSS_INVALID_RESPONSE" },
             });
           case "unreachable":
             return new BizError({
-              message: "OSS 上传失败：服务不可达（未启动 / 半开 / 超时）",
-              meta: { reason: "OSS_PUT_FAILED" },
+              message: "OSS 不可达（未启动 / 半开 / 超时）",
+              meta: { reason: "OSS_UNREACHABLE" },
               cause: info.cause,
             });
         }

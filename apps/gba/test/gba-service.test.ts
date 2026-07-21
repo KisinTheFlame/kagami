@@ -227,7 +227,7 @@ describe("GbaService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.capturedFrame - result.startFrame).toBe(3 + 1 + 12); // hold+gap+settle
-        expect(result.releasedFrame - result.startFrame).toBe(4);
+        expect(result.releasedFrame - result.startFrame).toBe(3); // 松键时刻=最后一个按住帧之后,尾部 gap 不计
         expect(result.imageBase64.length).toBeGreaterThan(0);
       }
       // 计划期内的前 3 帧按住 a，之后全空
@@ -323,6 +323,127 @@ describe("GbaService", () => {
       expect(store.getBatterySave(romA)?.subarray(0, 6).toString()).toBe("A-SAVE");
       expect(coreA.shutdownCalled).toBe(true);
       expect(service.state().romId).toBe(uploadB.rom.id);
+    });
+  });
+
+  describe("review #541 回归", () => {
+    it("并发 loadGame:后到者领域拒绝,不泄漏核心", async () => {
+      const upload = await service.uploadRom({ name: "并发", bytes: fakeRomBytes(4) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      const [a, b] = await Promise.all([
+        service.loadGame(upload.rom.id),
+        service.loadGame(upload.rom.id),
+      ]);
+      const results = [a, b];
+      expect(results.filter(r => r.ok)).toHaveLength(1);
+      expect(results.filter(r => !r.ok && r.reason === "LOAD_IN_PROGRESS")).toHaveLength(1);
+      expect(cores).toHaveLength(1); // 只建了一个核心
+    });
+
+    it("切 ROM 拉取失败:旧会话毫发无损继续跑", async () => {
+      const romA = await uploadAndLoad("旧游戏");
+      service.setForeground(true);
+      const uploadB = await service.uploadRom({ name: "新游戏", bytes: fakeRomBytes(8) });
+      expect(uploadB.ok).toBe(true);
+      if (!uploadB.ok) return;
+
+      oss.failGet = true;
+      const result = await service.loadGame(uploadB.rom.id);
+      expect(result).toEqual({ ok: false, reason: "ROM_FETCH_FAILED" });
+      // 旧会话仍在:状态自洽、帧循环继续推进
+      expect(service.state().romId).toBe(romA);
+      expect(service.state().loaded).toBe(true);
+      const before = service.state().frame;
+      await vi.advanceTimersByTimeAsync(500);
+      expect(service.state().frame).toBeGreaterThan(before);
+    });
+
+    it("坏 ROM 加载:领域拒绝而非抛穿,init 恢复坏 ROM 不炸服务", async () => {
+      const upload = await service.uploadRom({ name: "坏的", bytes: fakeRomBytes(5) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      // 让下一个核心 loadRom 抛错
+      const origFactory = cores.length;
+      const badService = new GbaService({
+        store,
+        ossClient: oss,
+        coreFactory: () => {
+          const core = new FakeEmulatorCore();
+          core.failLoad = true;
+          cores.push(core);
+          return core;
+        },
+      });
+      const result = await badService.loadGame(upload.rom.id);
+      expect(result).toEqual({ ok: false, reason: "ROM_LOAD_FAILED" });
+      expect(badService.state().loaded).toBe(false);
+      expect(badService.state().romId).toBeNull(); // 状态自洽的空态
+      expect(cores[origFactory]!.shutdownCalled).toBe(true); // 半成品核心已释放
+      // init() 走同一路径:坏 ROM 不会让启动抛穿
+      store.setLastRomId(upload.rom.id);
+      await expect(badService.init()).resolves.toBeUndefined();
+      await badService.shutdown();
+    });
+
+    it("帧循环异常遏制:冻结自保、press 拿到领域拒绝、服务活着", async () => {
+      await uploadAndLoad();
+      const core = cores[0]!;
+      service.setForeground(true);
+      const promise = service.press({ buttons: ["a"], holdFrames: 30, settleFrames: 0 });
+      core.throwOnNextRunFrame = true;
+      await vi.advanceTimersByTimeAsync(200);
+      const result = await promise;
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toMatch(/^EMULATOR_FAULT/);
+      }
+      expect(service.state().foreground).toBe(false); // 冻结自保
+      // 服务仍可用:重新前台可继续玩
+      service.setForeground(true);
+      const retry = await (async () => {
+        const p = service.press({ buttons: ["b"], holdFrames: 3, settleFrames: 0 });
+        await vi.advanceTimersByTimeAsync(500);
+        return p;
+      })();
+      expect(retry.ok).toBe(true);
+    });
+
+    it("blur flush 失败可重试:保持前台,重试成功后转后台", async () => {
+      const romId = await uploadAndLoad();
+      const core = cores[0]!;
+      service.setForeground(true);
+      core.sram = Buffer.from("RETRY".padEnd(128, "\0"));
+      const origSave = store.saveBatterySave.bind(store);
+      let failures = 1;
+      store.saveBatterySave = (id, bytes): void => {
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error("写盘失败（测试）");
+        }
+        origSave(id, bytes);
+      };
+      expect(() => service.setForeground(false)).toThrow(/写盘失败/);
+      expect(service.state().foreground).toBe(true); // 未置位,可重试
+      expect(service.setForeground(false)).toEqual({ foreground: false });
+      expect(store.getBatterySave(romId)?.subarray(0, 5).toString()).toBe("RETRY");
+    });
+
+    it("并发上传同一 ROM:后到者归一为 DUPLICATE_ROM 并回收孤儿 OSS 对象", async () => {
+      const bytes = fakeRomBytes(6);
+      const [a, b] = await Promise.all([
+        service.uploadRom({ name: "同一个", bytes }),
+        service.uploadRom({ name: "同一个", bytes }),
+      ]);
+      const results = [a, b];
+      expect(results.filter(r => r.ok)).toHaveLength(1);
+      expect(
+        results.filter(
+          r => !r.ok && (r.reason === "DUPLICATE_ROM" || r.reason === "DUPLICATE_NAME"),
+        ),
+      ).toHaveLength(1);
+      expect(oss.objects.size).toBe(1); // 孤儿对象已回收
+      expect(service.listRoms()).toHaveLength(1);
     });
   });
 

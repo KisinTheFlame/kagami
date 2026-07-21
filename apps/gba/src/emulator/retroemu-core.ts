@@ -43,10 +43,14 @@ type RawFrame = {
  * 输入回调读本实例的 held 位掩码，视频回调把帧拷出 heap 暂存。音频丢弃，存档管理 no-op
  * （SRAM 由 GbaService 经 get/setSram 直接进出 sqlite，不落 retroemu 的 .sav 文件）。
  */
+const EMPTY_ID_SET: ReadonlySet<number> = new Set();
+
 export class RetroemuCore implements EmulatorCore {
   private host: LibretroHost | null = null;
-  private heldIds: ReadonlySet<number> = new Set();
+  private heldIds: ReadonlySet<number> = EMPTY_ID_SET;
   private rawFrame: RawFrame | null = null;
+  /** 帧拷贝复用缓冲：60fps 下每帧新分配 ~80KB 纯属 GC churn（review #541）。 */
+  private frameCopy: Uint8Array | null = null;
   private loaded = false;
 
   public async loadRom(rom: Buffer): Promise<void> {
@@ -60,14 +64,14 @@ export class RetroemuCore implements EmulatorCore {
         if (dataPtr === 0) {
           return; // NULL = 复用上一帧
         }
-        // 拷出 heap：retro_run 返回后 heap 可能被核心改写。
-        this.rawFrame = {
-          bytes: mod.HEAPU8.slice(dataPtr, dataPtr + pitch * height),
-          width,
-          height,
-          pitch,
-          pixelFormat,
-        };
+        // 拷出 heap（retro_run 返回后 heap 可能被核心改写），写进复用缓冲：
+        // 绝大多数帧拷出即被下一帧覆盖、从未被读，不值得每帧新分配。
+        const size = pitch * height;
+        if (this.frameCopy === null || this.frameCopy.length !== size) {
+          this.frameCopy = new Uint8Array(size);
+        }
+        this.frameCopy.set(mod.HEAPU8.subarray(dataPtr, dataPtr + size));
+        this.rawFrame = { bytes: this.frameCopy, width, height, pitch, pixelFormat };
       },
       onCartFrameRGBA: () => {},
       setAspectRatio: () => {},
@@ -116,19 +120,27 @@ export class RetroemuCore implements EmulatorCore {
       saveDir: os.tmpdir(),
       systemDir: os.tmpdir(),
     });
-    // 掐掉内置实时循环：loadAndStart 的首个 tick 经 setImmediate 调度，本行在同一微任务链上
-    // 先执行，内置循环实际推进 0 帧——帧推进权从此唯一归属调用方（PoC 验证）。
+    // 掐掉内置实时循环：loadAndStart 末尾同步跑首个 tick（elapsed≈0，推进 0 帧）后经
+    // setTimeout(~15ms) 调度下一个 tick；本行在 await 续体（微任务）中先于该宏任务执行，
+    // 故内置循环实际推进 0 帧，帧推进权从此唯一归属调用方（对照 LibretroHost._runLoop 源码）。
+    // 警告：不要在 loadAndStart 与本行之间插入任何 await——一旦耗过一个 timer 周期，内置
+    // 循环就会抢跑 _retro_run，破坏「帧推进权唯一归属服务端帧循环」的硬约束（#541）。
     host.stop();
     this.host = host;
   }
 
   public runFrame(held: ReadonlySet<GbaButton>): void {
     const host = this.requireHost();
-    const ids = new Set<number>();
-    for (const button of held) {
-      ids.add(BUTTON_TO_JOYPAD_ID[button]);
+    // 空按键（idle/gap/settle,绝大多数帧）短路复用常量集合,避免 60/s 的小对象 churn。
+    if (held.size === 0) {
+      this.heldIds = EMPTY_ID_SET;
+    } else {
+      const ids = new Set<number>();
+      for (const button of held) {
+        ids.add(BUTTON_TO_JOYPAD_ID[button]);
+      }
+      this.heldIds = ids;
     }
-    this.heldIds = ids;
     host.core._retro_run();
   }
 

@@ -44,22 +44,31 @@ export class GbaHandler {
       roms: this.service.listRoms().map(toRomView),
     }));
 
-    registerBinaryEnvelopeRoute(app, gbaRomsContract.uploadRom, async ({ headers, body }) => {
-      if (!body) {
-        throw new Error("[gba] uploadRom 缺少上行字节流（bytesIn 路由不应至此）");
-      }
-      let name: string;
-      try {
-        name = decodeURIComponent(headers["x-gba-rom-name"]);
-      } catch {
-        return { ok: false as const, reason: "INVALID_NAME" };
-      }
-      const bytes = await readAllWithCap(body, MAX_ROM_BYTES);
-      if (bytes === null) {
-        return { ok: false as const, reason: "INVALID_ROM_SIZE" };
-      }
-      return this.service.uploadRom({ name, bytes });
-    });
+    registerBinaryEnvelopeRoute(
+      app,
+      gbaRomsContract.uploadRom,
+      async ({ headers, body, request }) => {
+        if (!body) {
+          throw new Error("[gba] uploadRom 缺少上行字节流（bytesIn 路由不应至此）");
+        }
+        let name: string;
+        try {
+          name = decodeURIComponent(headers["x-gba-rom-name"]);
+        } catch {
+          return { ok: false as const, reason: "INVALID_NAME" };
+        }
+        // content-length 早拒（透传 parser 不吃 fastify bodyLimit）；chunked/谎报由 readAllWithCap 兜底。
+        const declared = Number(request.headers["content-length"]);
+        if (Number.isFinite(declared) && declared > MAX_ROM_BYTES) {
+          return { ok: false as const, reason: "INVALID_ROM_SIZE" };
+        }
+        const bytes = await readAllWithCap(body, MAX_ROM_BYTES);
+        if (bytes === null) {
+          return { ok: false as const, reason: "INVALID_ROM_SIZE" };
+        }
+        return this.service.uploadRom({ name, bytes });
+      },
+    );
 
     registerJsonRoute(app, gbaRomsContract.deleteRom, async ({ input }) =>
       this.service.deleteRom(input.romId),
