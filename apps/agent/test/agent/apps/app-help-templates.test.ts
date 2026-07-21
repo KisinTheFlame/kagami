@@ -167,7 +167,7 @@ describe("help — 子工具清单的唯一来源，保留 switch 指引", () =>
     for (const name of BROWSER_TOOLS) {
       expect(help).toContain(name);
     }
-    expect(help).toContain("你看不到明文");
+    expect(help).toContain("填输入框");
     expect(help).toContain("switch");
   });
 

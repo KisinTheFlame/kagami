@@ -7,13 +7,8 @@ import { z } from "zod";
 const NAVIGATION_TIMEOUT_MS = 40_000;
 const ACTION_TIMEOUT_MS = 20_000;
 
-/** type 路由的 value：明文 text，或按已存凭据 handle 填充（密码明文不过 agent 上下文）。 */
-export const TypeValueSchema = z.union([
-  z.object({ text: z.string() }),
-  z.object({
-    secret: z.object({ handle: z.string().min(1), field: z.enum(["username", "secret"]) }),
-  }),
-]);
+/** type 路由的 value：明文 text（原 secret 凭据变体随 browser_credential 废表删除，epic #539）。 */
+export const TypeValueSchema = z.object({ text: z.string() });
 
 /**
  * kagami-browser 进程对 agent 暴露的动作 RPC 契约（单一事实源，issue #230）。九条路由全是 JSON

@@ -23,7 +23,6 @@ type BrowserBehaviorConfig = z.infer<typeof BrowserBehaviorConfigSchema>;
 export type BrowserProcessConfig = {
   /** 监听端口，来自顶层 services.browser.port（单一事实来源，见 issue #162）。 */
   port: number;
-  databaseUrl: string;
   browser: BrowserBehaviorConfig;
 };
 
@@ -38,7 +37,6 @@ export async function loadBrowserProcessConfig(): Promise<BrowserProcessConfig> 
   const browser = BrowserBehaviorConfigSchema.parse(config.server.apps.browser ?? {});
   return {
     port: config.services.browser.port,
-    databaseUrl: config.server.databaseUrl,
     browser,
   };
 }

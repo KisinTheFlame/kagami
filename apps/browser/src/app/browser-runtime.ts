@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import {
   createServiceApp,
@@ -11,7 +10,6 @@ import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { BrowserService } from "../application/browser.service.js";
 import { SerialExecutor } from "../application/serial-executor.js";
 import { BrowserError } from "../domain/errors.js";
-import { PrismaBrowserCredentialDao } from "../infra/prisma-browser-credential.dao.js";
 import { BrowserHandler } from "../http/browser.handler.js";
 import { loadBrowserProcessConfig } from "./config.js";
 
@@ -19,24 +17,18 @@ const logger = new AppLogger({ source: "browser-bootstrap" });
 
 export type BrowserRuntime = {
   app: FastifyInstance;
-  database: Database;
   service: BrowserService;
   port: number;
 };
 
 /**
  * 浏览器进程（kagami-browser）运行时装配。独立 PM2 进程，自管 CloakBrowser 生命周期，
- * agent 重启不影响它（issue #173）。经 @kagami/persistence 直读同一 SQLite 的
- * browser_credential 表注入凭据——明文只在本进程内停留，永不过 HTTP、永不回 agent。
+ * agent 重启不影响它（issue #173）。零持久化：不碰共享 SQLite（epic #539 子 issue 1），
+ * 登录态全在 CloakBrowser 的 userDataDir profile 里。
  */
 export async function buildBrowserRuntime(): Promise<BrowserRuntime> {
   const config = await loadBrowserProcessConfig();
 
-  const database = createDbClient({ databaseUrl: config.databaseUrl });
-  // 与 agent / console 并发读同一 SQLite 文件：开 WAL（库文件级持久设置）。
-  await configureSqlite(database);
-
-  const credentialDao = new PrismaBrowserCredentialDao({ database });
   const service = new BrowserService({
     config: {
       headless: config.browser.headless,
@@ -44,7 +36,6 @@ export async function buildBrowserRuntime(): Promise<BrowserRuntime> {
       proxy: config.browser.proxy,
       licenseKey: config.browser.licenseKey,
     },
-    credentialDao,
   });
   const serial = new SerialExecutor();
 
@@ -52,7 +43,7 @@ export async function buildBrowserRuntime(): Promise<BrowserRuntime> {
     handlers: [new HealthHandler(), new BrowserHandler({ service, serial })],
   });
 
-  return { app, database, service, port: config.port };
+  return { app, service, port: config.port };
 }
 
 function createBrowserApp({ handlers }: { handlers: AppRouteHandler[] }): FastifyInstance {

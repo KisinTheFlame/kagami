@@ -8,10 +8,6 @@
     "strict": true,
     "noEmit": true,
     "paths": {
-      "@kagami/persistence/prisma": [
-        "./../../packages/persistence/src/generated/prisma/internal/prismaNamespace.ts"
-      ],
-      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
       "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
       "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"]
