@@ -6,7 +6,6 @@ import {
 import type { BrowserContext, Page } from "playwright-core";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BrowserError } from "../domain/errors.js";
-import type { BrowserCredentialDao } from "./browser-credential.dao.js";
 
 const logger = new AppLogger({ source: "agent.browser-service" });
 
@@ -49,8 +48,6 @@ export type ScreenshotResult = {
   url: string;
 };
 
-type TypeSecret = { handle: string; field: "username" | "secret" };
-
 /**
  * 包 CloakBrowser（Playwright drop-in）的浏览器服务。被 BrowserApp 持有，工具经闭包取。
  *
@@ -59,13 +56,11 @@ type TypeSecret = { handle: string; field: "username" | "secret" };
  *   [box=...] + iframe 内快照。点击经 locator("aria-ref=eN")。无需自建 ElementRegistry。
  * - ref 防失效：每次 observe 递增 epoch 并把 snapshot 里的 ref 改写成 `<epoch>:eN`；
  *   click/type 校验 epoch，过期即拒（STALE_REF）。
- * - 凭据经 BrowserCredentialDao 注入到 fill 层，明文永不回灌进结果/上下文。
  *
  * 设计依据：仓库根 CLAUDE.md + eng-review 决策修订。
  */
 export class BrowserService {
   private readonly config: BrowserServiceConfig;
-  private readonly credentialDao: BrowserCredentialDao;
 
   private context: BrowserContext | null = null;
   private alive = false;
@@ -75,15 +70,8 @@ export class BrowserService {
   private lastUrl: string | null = null;
   private lastTitle: string | null = null;
 
-  public constructor({
-    config,
-    credentialDao,
-  }: {
-    config: BrowserServiceConfig;
-    credentialDao: BrowserCredentialDao;
-  }) {
+  public constructor({ config }: { config: BrowserServiceConfig }) {
     this.config = config;
-    this.credentialDao = credentialDao;
   }
 
   /** onStartup 预热：只下二进制、不开窗，削掉首个 enter 的延迟。失败不抛（enter 时再降级提示）。 */
@@ -250,28 +238,13 @@ export class BrowserService {
 
   public async type(
     target: string,
-    value: { text: string } | { secret: TypeSecret },
+    value: { text: string },
     submit: boolean,
   ): Promise<{ url: string }> {
     const page = await this.getActivePage();
     const locator = this.resolveLocator(page, target);
-    let text: string;
-    if ("text" in value) {
-      text = value.text;
-    } else {
-      const credential = await this.credentialDao.get(value.secret.handle);
-      if (!credential) {
-        throw new BrowserError(
-          "CREDENTIAL_NOT_FOUND",
-          `凭据 handle 不存在：${value.secret.handle}`,
-          { ref: target },
-        );
-      }
-      // 明文只在此处停留：fill 进输入框，绝不回灌进结果。
-      text = value.secret.field === "username" ? credential.username : credential.secret;
-    }
     try {
-      await locator.fill(text, { timeout: ACTION_TIMEOUT_MS });
+      await locator.fill(value.text, { timeout: ACTION_TIMEOUT_MS });
       if (submit) {
         await locator.press("Enter", { timeout: ACTION_TIMEOUT_MS });
       }

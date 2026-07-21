@@ -59,20 +59,12 @@ describe("browser tools golden（tool_result 字节）", () => {
     expect(result.content).toBe('{"ok":true,"url":"https://e.com"}');
   });
 
-  it("type（明文）", async () => {
+  it("type", async () => {
     const tool = new BrowserTypeTool({
       getBrowserClient: () => fakeClient({ type: vi.fn().mockResolvedValue({ url: "u" }) }),
     });
     const result = await tool.execute({ ref: "7:e3", text: "hi" }, ctx);
     expect(result.content).toBe('{"ok":true,"url":"u"}');
-  });
-
-  it("type（凭据）", async () => {
-    const tool = new BrowserTypeTool({
-      getBrowserClient: () => fakeClient({ type: vi.fn().mockResolvedValue({ url: "u" }) }),
-    });
-    const result = await tool.execute({ ref: "7:e3", secret_handle: "gh" }, ctx);
-    expect(result.content).toBe('{"ok":true,"url":"u","filled":"secret"}');
   });
 
   it("press", async () => {

@@ -17,7 +17,6 @@ export type BrowserErrorCode =
   | "TARGET_CLOSED"
   | "EVAL_FAILED"
   | "SCREENSHOT_REFUSED"
-  | "CREDENTIAL_NOT_FOUND"
   | "BROWSER_ERROR";
 
 /** 错误附带的诊断上下文。全可选；序列化时只输出有值的字段（顺序固定）。 */

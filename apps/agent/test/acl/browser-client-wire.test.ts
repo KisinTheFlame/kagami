@@ -89,20 +89,10 @@ describe("HttpBrowserClient wire 字节基线：请求", () => {
     expect(recorded3[0]?.body).toBe('{"script":"6*7"}');
   });
 
-  it("type：text 与 secret 两种 value 的 body 字节", async () => {
+  it("type：value 的 body 字节", async () => {
     const recorded: RecordedRequest[] = [];
     await client(200, { url: "u" }, recorded).type("7:e3", { text: "hi" }, false);
     expect(recorded[0]?.body).toBe('{"target":"7:e3","value":{"text":"hi"},"submit":false}');
-
-    const recorded2: RecordedRequest[] = [];
-    await client(200, { url: "u" }, recorded2).type(
-      "7:e4",
-      { secret: { handle: "gh", field: "secret" } },
-      true,
-    );
-    expect(recorded2[0]?.body).toBe(
-      '{"target":"7:e4","value":{"secret":{"handle":"gh","field":"secret"}},"submit":true}',
-    );
   });
 
   it("waitFor：undefined 字段被 JSON.stringify 丢弃", async () => {

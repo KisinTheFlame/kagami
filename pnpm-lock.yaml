@@ -138,9 +138,6 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@kagami/persistence':
-        specifier: workspace:*
-        version: link:../../packages/persistence
       cloakbrowser:
         specifier: ^0.4.3
         version: 0.4.3(playwright-core@1.61.1)
