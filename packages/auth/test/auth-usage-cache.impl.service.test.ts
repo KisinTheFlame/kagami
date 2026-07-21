@@ -1,6 +1,3 @@
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ClaudeCodeUsageLimitsResponse } from "@kagami/llm-api/claude-code-auth";
 import { type CodexUsageLimitsResponse } from "@kagami/llm-api/codex-auth";
@@ -10,20 +7,16 @@ import {
   EMPTY_CLAUDE_CODE_USAGE_LIMITS,
   EMPTY_CODEX_USAGE_LIMITS,
   fetchClaudeCodeUsageLimitsFromApi,
-  fetchCodexUsageLimitsViaAppServer,
 } from "../src/application/auth-usage-cache.impl.service.js";
 import type { ClaudeCodeAuthService } from "../src/application/claude-code-auth.service.js";
 import type { CodexAuthService } from "../src/application/codex-auth.service.js";
 import type { AuthUsageSnapshotSink } from "../src/application/auth-usage-snapshot-sink.js";
 import { initTestLogger } from "./helpers/logger.js";
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
 });
 
 describe("AuthUsageCacheManager", () => {
@@ -506,92 +499,6 @@ describe("fetchClaudeCodeUsageLimitsFromApi", () => {
         used_credits: 15.5,
         utilization: 15.5,
       },
-    });
-  });
-});
-
-describe("fetchCodexUsageLimitsViaAppServer", () => {
-  it("should use a temporary CODEX_HOME built from the Kagami auth session", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "kagami-codex-binary-"));
-    tempDirs.push(dir);
-
-    const scriptPath = path.join(dir, "fake-codex.mjs");
-    await writeFile(
-      scriptPath,
-      `#!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
-let buffer = "";
-
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => {
-  buffer += chunk;
-  const lines = buffer.split("\\n");
-  buffer = lines.pop() ?? "";
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const message = JSON.parse(trimmed);
-    if (message.id === 1) {
-      process.stdout.write(JSON.stringify({ id: 1, result: { ok: true } }) + "\\n");
-      continue;
-    }
-
-    if (message.id === 2) {
-      const authFile = JSON.parse(
-        readFileSync(path.join(process.env.CODEX_HOME ?? "", "auth.json"), "utf8"),
-      );
-      if (authFile.tokens.access_token !== "expected-access-token") {
-        process.stdout.write(
-          JSON.stringify({ id: 2, error: { message: "unexpected access token" } }) + "\\n",
-        );
-        continue;
-      }
-
-      process.stdout.write(
-        JSON.stringify({
-          id: 2,
-          result: {
-            rateLimits: {
-              primary: {
-                usedPercent: 31,
-                windowDurationMins: 300,
-                resetsAt: 123456,
-              },
-              secondary: null,
-            },
-          },
-        }) + "\\n",
-      );
-    }
-  }
-});
-`,
-      "utf8",
-    );
-    await chmod(scriptPath, 0o755);
-
-    await expect(
-      fetchCodexUsageLimitsViaAppServer({
-        binaryPath: scriptPath,
-        auth: {
-          accessToken: "expected-access-token",
-          refreshToken: "refresh-token",
-          idToken: "id-token",
-          accountId: "account-id",
-          email: "bot@example.com",
-          lastRefresh: "2026-03-25T00:00:00.000Z",
-          expiresAt: Date.now() + 60_000,
-        },
-      }),
-    ).resolves.toEqual({
-      primary: {
-        usedPercent: 31,
-        windowDurationMins: 300,
-        resetsAt: 123456,
-      },
-      secondary: null,
     });
   });
 });

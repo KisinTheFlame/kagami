@@ -76,32 +76,6 @@ export class DuckDbMetricDao implements MetricDao {
     await prepared.run();
   }
 
-  /**
-   * 批量插入：单条多行 VALUES 预处理语句一次落库，整批同一语句天然原子（全成或全败）。
-   * 语义与逐条 insert 完全一致（occurredAt 兜底同走 toDuckDbTimestamp）。当前消费者是测试的
-   * 大批量造数（数百行级）；不分块——若将来生产批量摄取复用且批量逼近参数上限，届时再加。
-   */
-  public async insertMany(inputs: InsertMetricInput[]): Promise<void> {
-    if (inputs.length === 0) return;
-    const valuesClause = inputs
-      .map((_, index) => {
-        const base = index * 4;
-        return `($${base + 1}, $${base + 2}, $${base + 3}::JSON, $${base + 4}::TIMESTAMP)`;
-      })
-      .join(", ");
-    const prepared = await this.connection.prepare(
-      `INSERT INTO metric (metric_name, value, tags, occurred_at) VALUES ${valuesClause}`,
-    );
-    inputs.forEach((input, index) => {
-      const base = index * 4;
-      prepared.bindVarchar(base + 1, input.metricName);
-      prepared.bindDouble(base + 2, input.value);
-      prepared.bindVarchar(base + 3, JSON.stringify(input.tags));
-      prepared.bindVarchar(base + 4, toDuckDbTimestamp(input.occurredAt ?? new Date()));
-    });
-    await prepared.run();
-  }
-
   public async queryChartSeries(
     input: QueryMetricChartSeriesInput,
   ): Promise<MetricChartSeriesRow[]> {
