@@ -61,14 +61,15 @@ if pnpm db:migrate:status >/dev/null 2>&1; then
 else
   echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
   # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console / browser（读 browser_credential）/
-  # llm（写 llm_chat_call/auth/embedding_cache）/ metric（写 metric 表）/ napcat（写 napcat_event/
-  # qq_message/image_asset/outbox），都持有 WAL 库锁，否则迁移 "database is locked"。
-  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-metric kagami-napcat >/dev/null 2>&1 || true
+  # llm（写 llm_chat_call/auth/embedding_cache）/ napcat（写 napcat_event/qq_message/image_asset/
+  # outbox），都持有 WAL 库锁，否则迁移 "database is locked"。metric 自 #475 P1 起独占
+  # data/metric/metric.duckdb，不开共享库，无需停。
+  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
   else
     echo "[app:deploy]   迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-metric kagami-napcat >/dev/null 2>&1 || true
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
     exit 1
   fi
 fi
