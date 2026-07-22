@@ -46,7 +46,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:
@@ -404,7 +404,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:
@@ -722,7 +722,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:
@@ -805,7 +805,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:
@@ -891,7 +891,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:
@@ -973,7 +973,7 @@ services:
   llm: { host: 127.0.0.1, port: 20009 }
   metric: { host: 127.0.0.1, port: 20010 }
   spire: { host: 127.0.0.1, port: 20011 }
-  napcat: { host: 127.0.0.1, port: 20013 }
+  napcat: { host: 127.0.0.1, port: 20013, databaseUrl: "file:./data/sqlite/napcat.db" }
   pixel: { host: 127.0.0.1, port: 20012 }
   scheduler: { host: 127.0.0.1, port: 20014, databaseUrl: "file::memory:" }
 server:

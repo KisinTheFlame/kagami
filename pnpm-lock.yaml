@@ -172,9 +172,15 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/napcat-api':
+        specifier: workspace:*
+        version: link:../../packages/napcat-api
       '@kagami/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../../packages/rpc-client
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -314,19 +320,31 @@ importers:
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
-      '@kagami/persistence':
-        specifier: workspace:*
-        version: link:../../packages/persistence
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
+      '@prisma/adapter-better-sqlite3':
+        specifier: ^7.8.0
+        version: 7.8.0
+      '@prisma/client':
+        specifier: ^7.6.0
+        version: 7.6.0(prisma@7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
+      prisma:
+        specifier: ^7.6.0
+        version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       zod:
         specifier: ^3.24.4
         version: 3.25.76
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^24.10.1
         version: 24.11.0
@@ -865,9 +883,6 @@ importers:
 
   packages/persistence:
     dependencies:
-      '@kagami/http':
-        specifier: workspace:*
-        version: link:../http
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -3377,10 +3392,6 @@ packages:
 
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
-    hasBin: true
-
-  jiti@2.6.1:
-    resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
     hasBin: true
 
   jiti@2.7.0:
@@ -6127,7 +6138,7 @@ snapshots:
       dotenv: 16.6.1
       exsolve: 1.0.8
       giget: 2.0.0
-      jiti: 2.6.1
+      jiti: 2.7.0
       ohash: 2.0.11
       pathe: 2.0.3
       perfect-debounce: 1.0.0
@@ -6905,8 +6916,6 @@ snapshots:
       '@pkgjs/parseargs': 0.11.0
 
   jiti@1.21.7: {}
-
-  jiti@2.6.1: {}
 
   jiti@2.7.0: {}
 

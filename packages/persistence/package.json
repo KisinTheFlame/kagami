@@ -20,7 +20,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",

@@ -1,7 +1,7 @@
 import * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
 import { type JsonValue } from "@kagami/http/wire";
-import { normalizeInputJsonValue, toJsonRecord } from "../../common/prisma-json.js";
-import type { Database } from "../../db/client.js";
+import { normalizeInputJsonValue, toJsonRecord } from "../db/prisma-json.js";
+import type { Database } from "../db/client.js";
 import type {
   InsertNapcatQqMessageItem,
   NapcatQqMessageContextItem,
@@ -176,6 +176,13 @@ export class PrismaNapcatQqMessageDao implements NapcatQqMessageDao {
     `);
 
     return rows.map(mapRawContextRowToItem);
+  }
+
+  public async deleteOlderThan(cutoff: Date): Promise<number> {
+    const { count } = await this.database.napcatQqMessage.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    return count;
   }
 }
 

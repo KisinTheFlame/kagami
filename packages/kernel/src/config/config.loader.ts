@@ -216,7 +216,12 @@ const ServicesSchema = z
     llm: ServiceEndpointSchema,
     metric: ServiceEndpointSchema,
     spire: ServiceEndpointSchema,
-    napcat: ServiceEndpointSchema,
+    // napcat 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 2）：napcat_event /
+    // napcat_qq_message / napcat_event_outbox / image_asset 落它自己的 SQLite 文件，
+    // 与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
+    napcat: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
     pixel: ServiceEndpointSchema,
     // scheduler 除 host/port 外还持有独立 Prisma 库（issue #493）：TaskRun 执行历史落它自己的
     // SQLite 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
@@ -507,6 +512,11 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       scheduler: {
         ...data.services.scheduler,
         databaseUrl: resolveSqliteFileUrl(configDir, data.services.scheduler.databaseUrl),
+      },
+      // napcat 独立 SQLite 库（#539）：同 scheduler，把相对 file: 路径锚定到仓库根。
+      napcat: {
+        ...data.services.napcat,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.napcat.databaseUrl),
       },
     },
     server: {

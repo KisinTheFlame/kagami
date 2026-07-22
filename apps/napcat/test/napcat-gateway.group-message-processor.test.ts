@@ -24,6 +24,7 @@ describe("NapcatGroupMessageProcessor", () => {
     countByQuery: vi.fn(),
     listByQueryPage: vi.fn(),
     listContextWindowById: vi.fn(),
+    deleteOlderThan: vi.fn(),
   };
 
   beforeEach(() => {

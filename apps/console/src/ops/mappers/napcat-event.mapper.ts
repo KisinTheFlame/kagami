@@ -1,16 +1,17 @@
-import {
-  type NapcatEventItem,
-  type NapcatEventListResponse,
-} from "@kagami/console-api/napcat-event";
-import type { NapcatEventItem as NapcatEventDaoItem } from "@kagami/persistence/dao/napcat-event.dao";
+import { type NapcatEventListResponse } from "@kagami/console-api/napcat-event";
+import type { NapcatEventWireItem } from "@kagami/napcat-api/query";
 
 type MapNapcatEventListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: NapcatEventDaoItem[];
+  items: NapcatEventWireItem[];
 };
 
+/**
+ * napcat 契约 wire item 与 console-api item 逐字段同形（时间已是 ISO 字符串），
+ * 这里只负责把 {total, items} 装进 console 的分页信封。
+ */
 export function mapNapcatEventList(input: MapNapcatEventListInput): NapcatEventListResponse {
   return {
     pagination: {
@@ -18,20 +19,6 @@ export function mapNapcatEventList(input: MapNapcatEventListInput): NapcatEventL
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapNapcatEventItem),
-  };
-}
-
-function mapNapcatEventItem(item: NapcatEventDaoItem): NapcatEventItem {
-  return {
-    id: item.id,
-    postType: item.postType,
-    messageType: item.messageType,
-    subType: item.subType,
-    userId: item.userId,
-    groupId: item.groupId,
-    eventTime: item.eventTime ? item.eventTime.toISOString() : null,
-    payload: item.payload,
-    createdAt: item.createdAt.toISOString(),
+    items: input.items,
   };
 }

@@ -68,20 +68,8 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     offsetMinutes: 5,
     getDelegate: db => db.llmChatCall,
   },
-  {
-    displayName: "napcat_event",
-    field: "createdAt",
-    days: 7,
-    offsetMinutes: 15,
-    getDelegate: db => db.napcatEvent,
-  },
-  {
-    displayName: "napcat_qq_message",
-    field: "createdAt",
-    days: 7,
-    offsetMinutes: 20,
-    getDelegate: db => db.napcatQqMessage,
-  },
+  // napcat_event / napcat_qq_message 自 epic #539 子 issue 2 起归 napcat 独占库，
+  // 其保留清理随表迁入 kagami-napcat 进程（napcat-runtime 的 prune 定时器），不在此清理面。
   {
     displayName: "terminal_output",
     field: "createdAt",

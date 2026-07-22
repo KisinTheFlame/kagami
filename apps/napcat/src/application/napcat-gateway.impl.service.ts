@@ -6,7 +6,7 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
+import type { NapcatQqMessageDao } from "../infra/napcat-group-message.dao.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
 import {
   buildOutgoingImageSegments,

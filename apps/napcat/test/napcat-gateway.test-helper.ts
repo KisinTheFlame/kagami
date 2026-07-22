@@ -1,8 +1,8 @@
 import { vi } from "vitest";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
 import type { Config } from "@kagami/kernel/config/config.loader";
-import type { NapcatEventDao } from "@kagami/persistence/dao/napcat-event.dao";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
+import type { NapcatEventDao } from "../src/infra/napcat-event.dao.js";
+import type { NapcatQqMessageDao } from "../src/infra/napcat-group-message.dao.js";
 import { initLoggerRuntime } from "@kagami/kernel/logger/runtime";
 import type { LogEvent, LogSink } from "@kagami/kernel/logger/types";
 
@@ -73,6 +73,7 @@ export function createNapcatEventDao(): NapcatEventDao & {
     insert: vi.fn().mockResolvedValue(undefined),
     countByQuery: vi.fn().mockResolvedValue(0),
     listByQueryPage: vi.fn().mockResolvedValue([]),
+    deleteOlderThan: vi.fn().mockResolvedValue(0),
   };
 }
 
@@ -85,6 +86,7 @@ export function createNapcatGroupMessageDao(): NapcatQqMessageDao & {
     countByQuery: vi.fn().mockResolvedValue(0),
     listByQueryPage: vi.fn().mockResolvedValue([]),
     listContextWindowById: vi.fn().mockResolvedValue([]),
+    deleteOlderThan: vi.fn().mockResolvedValue(0),
   };
 }
 
@@ -99,7 +101,7 @@ export function createConfigManager(): ConfigManager {
       llm: { host: "127.0.0.1", port: 20009 },
       metric: { host: "127.0.0.1", port: 20010 },
       spire: { host: "127.0.0.1", port: 20011 },
-      napcat: { host: "127.0.0.1", port: 20013 },
+      napcat: { host: "127.0.0.1", port: 20013, databaseUrl: ":memory:" },
       pixel: { host: "127.0.0.1", port: 20012 },
       scheduler: {
         host: "127.0.0.1",

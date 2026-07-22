@@ -1,13 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
-import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
+import { configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
+import { migrateFromLegacyDb } from "../infra/db/legacy-migration.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
-import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
-import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
+import { PrismaNapcatEventDao } from "../infra/impl/napcat-event.impl.dao.js";
+import { PrismaNapcatQqMessageDao } from "../infra/impl/napcat-group-message.impl.dao.js";
 import { DefaultNapcatGatewayService } from "../application/napcat-gateway.impl.service.js";
 import type { NapcatGatewayService } from "../application/napcat-gateway.service.js";
 import { NapcatEventPersistenceWriter } from "../application/napcat-gateway/event-persistence-writer.js";
@@ -19,14 +20,19 @@ import { PrismaImageAssetDao } from "../infra/impl/image-asset.impl.dao.js";
 import { PrismaNapcatEventOutboxDao } from "../infra/impl/napcat-event-outbox.impl.dao.js";
 import { NapcatHandler } from "../http/napcat.handler.js";
 import { NapcatEventsHandler } from "../http/napcat-events.handler.js";
+import { NapcatQueryHandler } from "../http/napcat-query.handler.js";
 import type { NapcatAgentEvent } from "@kagami/napcat-api/event";
 import type { NapcatEventOutboxDao } from "../infra/napcat-event-outbox.dao.js";
 
 const logger = new AppLogger({ source: "napcat-bootstrap" });
 
-/** outbox 保留窗口（7 天）+ prune 周期（每小时）。均为代码常量，不进 config。 */
-const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const OUTBOX_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+/**
+ * 数据保留窗口（7 天）+ prune 周期（每小时）。均为代码常量，不进 config。
+ * outbox 原生在此清理；napcat_event / napcat_qq_message 的保留清理随表迁库（epic #539
+ * 子 issue 2）从 agent 的 data-retention 迁入本进程，窗口沿用原 7 天不变。
+ */
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * Fastify 默认 bodyLimit 1 MB 远不够：send_resource 发图经 `/napcat/image/send` 以 `base64://` 内联
@@ -92,8 +98,14 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
   const configManager = new DefaultConfigManager({ config: loadedConfig });
   const config = await configManager.config();
 
-  const database = createDbClient({ databaseUrl: config.server.databaseUrl });
-  // 与 agent / console 并发读写同一 SQLite 文件：开 WAL（库文件级持久设置）。
+  // napcat 独占库（epic #539 子 issue 2）：napcat_event / napcat_qq_message / outbox /
+  // image_asset 落 services.napcat.databaseUrl，主库 kagami.db 不再被本进程长期打开——
+  // 仅启动瞬间由 migrateFromLegacyDb 开一条只读连接做一次性历史搬迁（幂等，搬完即关）。
+  migrateFromLegacyDb({
+    napcatDatabaseUrl: config.services.napcat.databaseUrl,
+    legacyDatabaseUrl: config.server.databaseUrl,
+  });
+  const database = createDbClient({ databaseUrl: config.services.napcat.databaseUrl });
   await configureSqlite(database);
 
   const napcatEventDao = new PrismaNapcatEventDao({ database });
@@ -152,17 +164,29 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
       new HealthHandler(),
       new NapcatHandler({ gateway }),
       new NapcatEventsHandler({ broadcaster, outboxDao }),
+      new NapcatQueryHandler({ napcatEventDao, napcatQqMessageDao }),
     ],
     fastifyOptions: { bodyLimit: NAPCAT_BODY_LIMIT_BYTES },
   });
 
-  // outbox prune：每小时删掉超保留窗口的旧行（保留窗口 > 任何现实停机时长即可安全回放）。
+  // 保留清理：每小时删掉超窗口的旧行。outbox（保留窗口 > 任何现实停机时长即可安全回放）+
+  // napcat_event / napcat_qq_message（原 agent data-retention 的清理面，随表迁入本进程）。
   const pruneTimer = setInterval(() => {
-    const cutoff = new Date(Date.now() - OUTBOX_RETENTION_MS);
+    const cutoff = new Date(Date.now() - RETENTION_MS);
     void outboxDao.pruneOlderThan(cutoff).catch((error: unknown) => {
       logger.errorWithCause("outbox prune failed", error, { event: "napcat.outbox.prune_failed" });
     });
-  }, OUTBOX_PRUNE_INTERVAL_MS);
+    void napcatEventDao.deleteOlderThan(cutoff).catch((error: unknown) => {
+      logger.errorWithCause("napcat_event prune failed", error, {
+        event: "napcat.retention.event_prune_failed",
+      });
+    });
+    void napcatQqMessageDao.deleteOlderThan(cutoff).catch((error: unknown) => {
+      logger.errorWithCause("napcat_qq_message prune failed", error, {
+        event: "napcat.retention.qq_message_prune_failed",
+      });
+    });
+  }, PRUNE_INTERVAL_MS);
   pruneTimer.unref?.();
 
   return {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { type JsonValue } from "@kagami/http/wire";
-import type { Database } from "@kagami/persistence/db/client";
-import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
+import type { Database } from "../src/infra/db/client.js";
+import { PrismaNapcatQqMessageDao } from "../src/infra/impl/napcat-group-message.impl.dao.js";
 
 describe("PrismaNapcatQqMessageDao", () => {
   it("should persist structured message into message column", async () => {

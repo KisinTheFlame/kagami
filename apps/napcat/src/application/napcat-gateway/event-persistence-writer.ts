@@ -1,5 +1,5 @@
-import type { NapcatEventDao } from "@kagami/persistence/dao/napcat-event.dao";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
+import type { NapcatEventDao } from "../../infra/napcat-event.dao.js";
+import type { NapcatQqMessageDao } from "../../infra/napcat-group-message.dao.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { NapcatPersistableQqMessage } from "../napcat-gateway.service.js";
 import {

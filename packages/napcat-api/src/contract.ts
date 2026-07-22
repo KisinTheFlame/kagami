@@ -22,6 +22,12 @@ import {
   NapcatSendPrivateMessageRequestSchema,
   NapcatUploadGroupFileRequestSchema,
 } from "./message.js";
+import {
+  NapcatQueryEventsRequestSchema,
+  NapcatQueryEventsResponseSchema,
+  NapcatQueryQqMessagesRequestSchema,
+  NapcatQueryQqMessagesResponseSchema,
+} from "./query.js";
 import { z } from "zod";
 
 /**
@@ -31,8 +37,8 @@ import { z } from "zod";
  *   JSON 契约里建模（见 event.ts 的 `NAPCAT_EVENTS_SSE_PATH` / `NapcatOutboxEventSchema`）。
  * - **web / 管理台直发（B）**：复用 `sendGroupMessage` / `sendPrivateMessage` 两条 send 路由
  *   （gateway 反代 `/api/napcat/*`）；被禁言时服务端回 `{ reason: "GROUP_MUTED" }` 的 403 富错误。
- * - **console 只读查询（A2，后续 PR）**：`queryNapcatEvents` / `queryNapcatQqMessages` 随 console
- *   从直读 DAO 切成 HTTP client 时一并加入；本 PR 不预挂无 handler 的路由。
+ * - **console 只读查询**：`queryNapcatEvents` / `queryNapcatQqMessages`（epic #539 子 issue 2：
+ *   napcat 独占库后 console 脱库，napcat 数据一律经这两条路由查询，wire 形状见 query.ts）。
  *
  * 出站发送的 wire 入参只有纯文本 `message` + 可选 `replyToMessageId`；段拼装归网关内部。读类
  * RPC 一律用 POST（JSON body），避免 GET query 的数字/嵌套强转。
@@ -116,6 +122,17 @@ export const napcatApiContract = {
     input: NapcatUploadGroupFileRequestSchema,
     output: NapcatEmptyResponseSchema,
   }),
-  // console 只读查询（queryNapcatEvents / queryNapcatQqMessages）随 A2 迁移一并加入——
-  // 那之前 console 仍直读共享 SQLite，故本 PR 不挂无 handler 的死路由。
+  // —— console 只读查询（epic #539 子 issue 2：napcat 独占库后，console 数据经此查询）——
+  queryNapcatEvents: defineJsonRoute({
+    method: "POST",
+    path: "/napcat/events/query",
+    input: NapcatQueryEventsRequestSchema,
+    output: NapcatQueryEventsResponseSchema,
+  }),
+  queryNapcatQqMessages: defineJsonRoute({
+    method: "POST",
+    path: "/napcat/messages/query",
+    input: NapcatQueryQqMessagesRequestSchema,
+    output: NapcatQueryQqMessagesResponseSchema,
+  }),
 } as const;

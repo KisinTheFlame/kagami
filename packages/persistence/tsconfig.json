@@ -6,10 +6,7 @@
     "target": "ES2022",
     "types": ["node"],
     "strict": true,
-    "noEmit": true,
-    "paths": {
-      "@kagami/http/*": ["./../http/src/*"]
-    }
+    "noEmit": true
   },
   "include": ["src"]
 }
