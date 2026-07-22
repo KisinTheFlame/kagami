@@ -7,6 +7,7 @@ import type { LlmUsageId } from "../contracts/llm.js";
 
 const DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT = 40;
 const DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
+const DEFAULT_AGENT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD = 550;
 const DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS = 30_000;
 const DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS = 10 * 60 * 1000;
 const DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS = 2_000;
@@ -260,6 +261,9 @@ const ConfigSchema = z.object({
           contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
             DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
           ),
+          contextCompactionImageCountThreshold: PositiveIntSchema.default(
+            DEFAULT_AGENT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD,
+          ),
           llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
           waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
           stateSampleIntervalMs: PositiveIntSchema.default(DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS),
@@ -311,6 +315,7 @@ const ConfigSchema = z.object({
         })
         .transform(value => ({
           contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
+          contextCompactionImageCountThreshold: value.contextCompactionImageCountThreshold,
           llmRetryBackoffMs: value.llmRetryBackoffMs,
           waitToolMaxWaitMs: value.waitToolMaxWaitMs,
           stateSampleIntervalMs: value.stateSampleIntervalMs,

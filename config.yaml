@@ -32,6 +32,7 @@ server:
   databaseUrl: file:./data/sqlite/kagami.db # SQLite 库文件，相对仓库根；运行时与 Prisma CLI 解析为绝对路径
   agent:
     contextCompactionTotalTokenThreshold: 600000
+    contextCompactionImageCountThreshold: 550 # 上下文图片总数超过该值也触发摘要压缩（图片按张吃上下文，与 token 阈值并列的第二触发条件）
     llmRetryBackoffMs: 30000
     waitToolMaxWaitMs: 600000
     stateSampleIntervalMs: 2000 # 状态心跳采样间隔：每这么久采一次「小镜此刻处于哪个 App / wait / portal」，打 agent.state.sample metric

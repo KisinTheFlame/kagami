@@ -9,11 +9,19 @@ export type ContextCompactionPlan = {
 
 export function createContextCompactionPlan(input: {
   messages: LlmMessage[];
-  totalTokens: number;
+  /** null = 本轮 usage 缺失（provider 未回报），此时仅按图片数触发。 */
+  totalTokens: number | null;
   totalTokenThreshold: number;
+  imageCountThreshold: number;
 }): ContextCompactionPlan | null {
-  const { messages, totalTokens, totalTokenThreshold } = input;
-  if (messages.length === 0 || totalTokens <= totalTokenThreshold) {
+  const { messages, totalTokens, totalTokenThreshold, imageCountThreshold } = input;
+  if (messages.length === 0) {
+    return null;
+  }
+
+  const exceedsTokenThreshold = totalTokens !== null && totalTokens > totalTokenThreshold;
+  const exceedsImageThreshold = countImageContentParts(messages) > imageCountThreshold;
+  if (!exceedsTokenThreshold && !exceedsImageThreshold) {
     return null;
   }
 
@@ -30,6 +38,21 @@ export function createContextCompactionPlan(input: {
     messagesToSummarize: messages.slice(0, cutIndex),
     messagesToKeep: messages.slice(cutIndex),
   };
+}
+
+function countImageContentParts(messages: LlmMessage[]): number {
+  let count = 0;
+  for (const message of messages) {
+    if (message.role !== "user" || typeof message.content === "string") {
+      continue;
+    }
+    for (const part of message.content) {
+      if (part.type === "image") {
+        count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 function calculateCompactionKeepCount(input: { totalMessageCount: number }): number {

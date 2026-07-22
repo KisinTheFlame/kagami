@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { createContextCompactionPlan } from "../../src/agent/runtime/context/context-compaction.js";
 import { createUserMessage } from "../../src/agent/runtime/context/context-message-factory.js";
+import type { LlmMessage } from "@kagami/llm-client";
+
+const IMAGE_COUNT_THRESHOLD = 550;
+
+function createImageUserMessage(imageCount: number): LlmMessage {
+  return {
+    role: "user",
+    content: Array.from({ length: imageCount }, (_, index) => ({
+      type: "image" as const,
+      content: `base64-${String(index)}`,
+      mimeType: "image/png",
+    })),
+  };
+}
 
 describe("createContextCompactionPlan", () => {
   it("returns null when total tokens do not exceed the threshold", () => {
@@ -9,6 +23,7 @@ describe("createContextCompactionPlan", () => {
         messages: [createUserMessage("alpha")],
         totalTokens: 100,
         totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
       }),
     ).toBeNull();
   });
@@ -19,11 +34,79 @@ describe("createContextCompactionPlan", () => {
         messages: [createUserMessage("alpha")],
         totalTokens: 101,
         totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
       }),
     ).toEqual({
       messagesToSummarize: [createUserMessage("alpha")],
       messagesToKeep: [],
     });
+  });
+
+  it("triggers on image count even when total tokens stay below the threshold", () => {
+    const messages = [createImageUserMessage(IMAGE_COUNT_THRESHOLD + 1)];
+
+    expect(
+      createContextCompactionPlan({
+        messages,
+        totalTokens: 100,
+        totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).toEqual({
+      messagesToSummarize: messages,
+      messagesToKeep: [],
+    });
+  });
+
+  it("counts images across multiple user messages and ignores text-only content", () => {
+    const messages = [
+      createUserMessage("text-only"),
+      createImageUserMessage(300),
+      createImageUserMessage(250),
+    ];
+
+    expect(
+      createContextCompactionPlan({
+        messages,
+        totalTokens: 100,
+        totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).toBeNull();
+
+    const overMessages = [...messages, createImageUserMessage(1)];
+    expect(
+      createContextCompactionPlan({
+        messages: overMessages,
+        totalTokens: 100,
+        totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).not.toBeNull();
+  });
+
+  it("triggers on image count when total tokens are unavailable", () => {
+    const messages = [createImageUserMessage(IMAGE_COUNT_THRESHOLD + 1)];
+
+    expect(
+      createContextCompactionPlan({
+        messages,
+        totalTokens: null,
+        totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).not.toBeNull();
+  });
+
+  it("returns null when total tokens are unavailable and image count is within the threshold", () => {
+    expect(
+      createContextCompactionPlan({
+        messages: [createUserMessage("alpha")],
+        totalTokens: null,
+        totalTokenThreshold: 100,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).toBeNull();
   });
 
   it("includes the matching tool result when the cut lands on an assistant tool call", () => {
@@ -46,6 +129,7 @@ describe("createContextCompactionPlan", () => {
         messages,
         totalTokens: 100,
         totalTokenThreshold: 1,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
       }),
     ).toEqual({
       messagesToSummarize: messages,
@@ -87,6 +171,7 @@ describe("createContextCompactionPlan", () => {
         messages,
         totalTokens: 100,
         totalTokenThreshold: 1,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
       }),
     ).toEqual({
       messagesToSummarize: messages.slice(0, -1),
