@@ -26,9 +26,10 @@ case "$SERVICE" in
   spire) PM2_NAME="kagami-spire" ;;
   napcat) PM2_NAME="kagami-napcat" ;;
   pixel) PM2_NAME="kagami-pixel" ;;
+  gba) PM2_NAME="kagami-gba" ;;
   scheduler) PM2_NAME="kagami-scheduler" ;;
   *)
-    echo "用法: pnpm app:stop [<agent|console|gateway|oss|browser|llm|metric|spire|pixel|napcat|scheduler>]" >&2
+    echo "用法: pnpm app:stop [<agent|console|gateway|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>]" >&2
     echo "  无参：停掉所有进程。" >&2
     echo "  带服务名：只停该服务。" >&2
     exit 1

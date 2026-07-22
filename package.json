@@ -35,5 +35,11 @@
     "typescript-eslint": "^8.48.0",
     "vitest": "^3.2.4",
     "yaml": "^2.8.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "native-gles": "file:vendor/stubs/native-gles",
+      "webgl-node": "file:vendor/stubs/webgl-node"
+    }
   }
 }
