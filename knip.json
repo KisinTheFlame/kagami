@@ -15,10 +15,17 @@
     "enumMembers": "warn",
     "duplicates": "warn"
   },
-  "ignoreDependencies": ["@prisma/client", "better-sqlite3", "pm2", "@kagami/web"],
+  "ignoreDependencies": [
+    "@prisma/client",
+    "better-sqlite3",
+    "pm2",
+    "@kagami/web",
+    "romdev-platform-gba"
+  ],
   "ignore": [
     "**/prisma/generated/**",
     "**/prisma/schema.prisma",
+    "vendor/stubs/**",
     "apps/napcat/src/domain/napcat-segment.ts",
     "apps/web/src/components/ui/**",
     "**/test/helpers/**",
@@ -35,6 +42,7 @@
     "apps/browser": { "entry": ["src/index.ts"] },
     "apps/console": { "entry": ["src/index.ts"] },
     "apps/gateway": { "entry": ["src/index.ts", "scripts/*.mjs"] },
+    "apps/gba": { "entry": ["src/index.ts"] },
     "apps/llm": { "entry": ["src/index.ts"] },
     "apps/metric": { "entry": ["src/index.ts"] },
     "apps/napcat": { "entry": ["src/index.ts"] },

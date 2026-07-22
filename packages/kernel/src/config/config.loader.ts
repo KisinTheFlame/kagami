@@ -218,6 +218,7 @@ const ServicesSchema = z
     spire: ServiceEndpointSchema,
     napcat: ServiceEndpointSchema,
     pixel: ServiceEndpointSchema,
+    gba: ServiceEndpointSchema,
     // scheduler 除 host/port 外还持有独立 Prisma 库（issue #493）：TaskRun 执行历史落它自己的
     // SQLite 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
     // historyRetentionCount / historyRetentionDays 是历史 GC 的保留窗口（#493 P2，取交集=更严）。
