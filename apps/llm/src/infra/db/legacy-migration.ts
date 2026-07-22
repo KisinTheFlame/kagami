@@ -3,88 +3,124 @@ import BetterSqlite3 from "better-sqlite3";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { sqliteFilePathFromUrl } from "./client.js";
 
-const logger = new AppLogger({ source: "napcat.legacy-migration" });
+const logger = new AppLogger({ source: "llm.legacy-migration" });
 
 /**
- * 主库 → napcat.db 的一次性历史数据搬迁（epic #539 子 issue 2）。
+ * 主库 → llm.db 的一次性历史数据搬迁（epic #539 子 issue 3，照抄 napcat 子 issue 2 范式）。
  *
  * 语义：
- * - **完成哨兵**：搬迁全部成功后把 napcat.db 的 `PRAGMA user_version` 置 1。此后每次启动
+ * - **完成哨兵**：搬迁全部成功后把 llm.db 的 `PRAGMA user_version` 置 1。此后每次启动
  *   只读一次目标库的 user_version 即返回，**不再打开主库**——也杜绝了「目标表被 retention
  *   清空后重启，被误判为未搬迁而把主库陈旧数据复活」的回归路径。
  * - 按表独立、每表一个事务：目标表非空即跳过；**行数对账在事务内完成**，不符即 throw 让
  *   better-sqlite3 回滚为空表，下次启动整表重试，绝不提交残缺副本。
  * - 显式列名 + 原始值直拷（不经 JS 解析），字节保真。
- * - **自增水位播种**：无论各表是否有行可搬，都把目标库 `sqlite_sequence` 抬到主库水位。
- *   关键是 outbox 的 `seq`——它是 SSE 的 Last-Event-ID，若新库从 1 重新编号，agent 持有的
- *   旧游标会把所有新事件当作「已见过」丢弃。
+ * - **自增水位播种**：无论各表是否有行可搬，都把目标库 `sqlite_sequence` 抬到主库水位
+ *   （claude_file_cache 主键是 TEXT sha256、无自增，播种自然跳过）。
  * - 主库以独立只读连接打开，绝不写主库；主库中的旧表由 #539 子 issue 5 统一 DROP。
  * - 搬迁失败会中止进程启动（fail-closed）：事务已回滚、无数据损坏，PM2 重启自动重试，
  *   持续失败即 crash-loop 显性暴露，绝不带缺口静默运行。
  *
- * 前置：napcat.db 的 schema 已由 `pnpm --filter @kagami/napcat db:migrate:deploy` 建好
- * （deploy.sh Step 2b 在停 kagami-napcat 后执行、Step 3 再拉起本进程——搬迁发生在旧进程
- * 停写主库之后，故快照必然覆盖其全部写入）；主库文件不存在（全新安装）则直接打哨兵。
+ * 前置：llm.db 的 schema 已由 `pnpm --filter @kagami/llm-service db:migrate:deploy` 建好
+ * （deploy.sh 在停 kagami-llm 后执行、Step 3 再拉起本进程——搬迁发生在旧进程停写主库
+ * 之后，故快照必然覆盖其全部写入）；主库文件不存在（全新安装）则直接打哨兵。
  */
 
-/** 搬迁完成标记：napcat.db 的 PRAGMA user_version 值。 */
+/** 搬迁完成标记：llm.db 的 PRAGMA user_version 值。 */
 const MIGRATION_DONE_USER_VERSION = 1;
 
 type TableSpec = {
   table: string;
-  /** 首列为自增主键；列清单与两侧建表 SQL 逐列一致（主库 image_asset 曾有 mime 死列，严禁 SELECT *）。 */
+  /** 列清单与两侧建表 SQL 逐列一致，严禁 SELECT *。autoIncrement 表首列为自增主键。 */
   columns: string[];
+  /** 是否 INTEGER AUTOINCREMENT 主键（claude_file_cache 是 TEXT sha256 主键，不播种水位）。 */
+  autoIncrement: boolean;
 };
 
 const TABLES: TableSpec[] = [
   {
-    table: "napcat_event",
+    table: "llm_chat_call",
+    autoIncrement: true,
     columns: [
       "id",
-      "post_type",
-      "message_type",
-      "sub_type",
-      "user_id",
-      "group_id",
-      "event_time",
-      "payload",
+      "request_id",
+      "seq",
+      "provider",
+      "model",
+      "extension",
+      "status",
+      "request_payload",
+      "response_payload",
+      "native_request_payload",
+      "native_response_payload",
+      "error",
+      "native_error",
+      "latency_ms",
       "created_at",
     ],
   },
   {
-    table: "napcat_qq_message",
+    table: "oauth_session",
+    autoIncrement: true,
     columns: [
       "id",
-      "message_type",
-      "sub_type",
-      "group_id",
-      "user_id",
-      "nickname",
-      "message_id",
-      "message",
-      "event_time",
-      "payload",
+      "provider",
+      "account_id",
+      "email",
+      "access_token",
+      "refresh_token",
+      "id_token",
+      "expires_at",
+      "last_refresh_at",
+      "status",
+      "last_error",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    table: "oauth_state",
+    autoIncrement: true,
+    columns: [
+      "id",
+      "state",
+      "code_verifier",
+      "redirect_uri",
+      "expires_at",
+      "used_at",
       "created_at",
     ],
   },
   {
-    table: "napcat_event_outbox",
-    columns: ["seq", "event", "created_at"],
+    table: "embedding_cache",
+    autoIncrement: true,
+    columns: [
+      "id",
+      "provider",
+      "model",
+      "task_type",
+      "output_dimensionality",
+      "text",
+      "text_hash",
+      "embedding",
+      "created_at",
+    ],
   },
   {
-    table: "image_asset",
-    columns: ["id", "file_id", "resid", "description", "created_at"],
+    table: "claude_file_cache",
+    autoIncrement: false,
+    columns: ["content_sha256", "file_id", "mime_type", "size_bytes", "created_at", "last_used_at"],
   },
 ];
 
 export function migrateFromLegacyDb({
-  napcatDatabaseUrl,
+  llmDatabaseUrl,
   legacyDatabaseUrl,
 }: {
-  napcatDatabaseUrl: string;
+  llmDatabaseUrl: string;
   legacyDatabaseUrl: string;
 }): void {
-  const targetPath = sqliteFilePathFromUrl(napcatDatabaseUrl);
+  const targetPath = sqliteFilePathFromUrl(llmDatabaseUrl);
   const legacyPath = sqliteFilePathFromUrl(legacyDatabaseUrl);
   if (targetPath === ":memory:" || legacyPath === ":memory:") {
     return;
@@ -111,7 +147,7 @@ export function migrateFromLegacyDb({
     try {
       for (const spec of TABLES) {
         // 目标表缺失 = schema 尚未 migrate（deploy 迁移失败后被回滚拉起、或单服务部署跳过
-        // 迁移）。此时绝不能打哨兵——否则 schema 修好后搬迁被永久跳过、历史与 outbox 水位
+        // 迁移）。此时绝不能打哨兵——否则 schema 修好后搬迁被永久跳过、历史（含 OAuth 凭据）
         // 静默丢失。fail-closed 中止启动，交 deploy/PM2 重试。
         if (countRows(target, spec.table) === null) {
           throw new Error(`legacy 搬迁中止：目标库缺表 ${spec.table}（schema 未迁移，不打哨兵）`);
@@ -167,7 +203,7 @@ function migrateTable(
   const copied = copyAll();
 
   logger.info("legacy 表搬迁完成", {
-    event: "napcat.legacy_migration.table_done",
+    event: "llm.legacy_migration.table_done",
     table,
     rows: copied,
     durationMs: Date.now() - startedAt,
@@ -176,14 +212,17 @@ function migrateTable(
 
 /**
  * 把目标库该表的自增水位（sqlite_sequence）抬到主库水位，幂等取 max。
- * 即使表无行可搬（如 outbox 恰好被 prune/消费清空）也必须播种——outbox 的 seq 是
- * SSE Last-Event-ID，从 1 重新编号会让 agent 的旧游标把新事件全部当已读丢弃。
+ * 即使表无行可搬（如 llm_chat_call 恰好被 retention 清空）也播种，避免新库 id 与
+ * 历史 id 空间重叠（照抄 napcat 范式；llm 侧无跨进程游标，此举纯保守）。
  */
 function seedSequenceWatermark(
   legacy: BetterSqlite3.Database,
   target: BetterSqlite3.Database,
-  { table, columns }: TableSpec,
+  { table, columns, autoIncrement }: TableSpec,
 ): void {
+  if (!autoIncrement) {
+    return;
+  }
   if (countRows(legacy, table) === null || countRows(target, table) === null) {
     return;
   }
@@ -202,7 +241,7 @@ function seedSequenceWatermark(
     .prepare("INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (?, ?)")
     .run(table, watermark);
   logger.info("legacy 自增水位播种完成", {
-    event: "napcat.legacy_migration.sequence_seeded",
+    event: "llm.legacy_migration.sequence_seeded",
     table,
     watermark,
   });

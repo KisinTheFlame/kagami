@@ -1,4 +1,4 @@
-import { closeDb } from "@kagami/persistence/db/client";
+import { closeDb } from "./infra/db/client.js";
 import { runService } from "@kagami/kernel/http/service-runner";
 import { buildLlmServiceRuntime } from "./app/llm-service-runtime.js";
 

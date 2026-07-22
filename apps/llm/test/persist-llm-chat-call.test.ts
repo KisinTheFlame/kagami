@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmChatCallObservation } from "@kagami/llm-client";
-import type { LlmChatCallDao } from "@kagami/persistence/dao/llm-chat-call.dao";
+import type { LlmChatCallDao } from "../src/infra/llm-chat-call.dao.js";
 import { persistLlmChatCall } from "../src/app/persist-llm-chat-call.js";
 
 function createDao(): LlmChatCallDao & {

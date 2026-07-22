@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
-import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
+import { configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
+import { migrateFromLegacyDb } from "../infra/db/legacy-migration.js";
+import { PrismaLlmChatCallDao } from "../infra/impl/llm-chat-call.impl.dao.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
@@ -31,9 +32,11 @@ import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js"
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
 import { InternalLlmHandler } from "../http/internal-llm.handler.js";
 import { LlmProvidersViewHandler } from "../http/llm-providers-view.handler.js";
+import { LlmQueryHandler } from "../http/llm-query.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
 import { buildClaudeFileGcTask } from "./claude-file-gc-task.js";
+import { buildLlmDataRetentionTasks } from "./data-retention-tasks.js";
 import { persistLlmChatCall } from "./persist-llm-chat-call.js";
 
 const logger = new AppLogger({ source: "llm-service-bootstrap" });
@@ -55,8 +58,13 @@ export type LlmServiceRuntime = {
 export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   const { config, configManager, databaseUrl, port } = await loadLlmServiceConfig();
 
+  // llm 独占库（epic #539 子 issue 3）：五张表落 services.llm.databaseUrl，主库 kagami.db
+  // 不再被本进程长期打开——仅启动瞬间由 migrateFromLegacyDb 做一次性历史搬迁（哨兵幂等）。
+  migrateFromLegacyDb({
+    llmDatabaseUrl: databaseUrl,
+    legacyDatabaseUrl: config.server.databaseUrl,
+  });
   const database = createDbClient({ databaseUrl });
-  // 与 agent / console 并发读写同一 SQLite 文件：开 WAL（库文件级持久设置）。
   await configureSqlite(database);
 
   // metric 打点走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
@@ -168,12 +176,18 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
       }),
     );
   }
+  // llm 独占库的数据保留清理（#539 子 issue 3：llm_chat_call / embedding_cache / oauth_state
+  // 随表从 agent 的 data-retention 迁入，窗口与错峰 cron 均沿用原值）。
+  for (const registration of buildLlmDataRetentionTasks({ db: database, metricService })) {
+    schedulerClient.register(registration);
+  }
 
   const app = createLlmServiceApp({
     handlers: [
       new HealthHandler(),
       new InternalLlmHandler({ llmClient, embeddingClient, imageClient }),
       new LlmProvidersViewHandler({ llmClient }),
+      new LlmQueryHandler({ llmChatCallDao }),
       authModule.authHandler,
     ],
   });

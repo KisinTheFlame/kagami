@@ -214,7 +214,12 @@ const ServicesSchema = z
     gateway: ServiceEndpointSchema,
     oss: ServiceEndpointSchema,
     browser: ServiceEndpointSchema,
-    llm: ServiceEndpointSchema,
+    // llm 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 3）：llm_chat_call /
+    // embedding_cache / claude_file_cache / oauth_session / oauth_state 落它自己的 SQLite
+    // 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
+    llm: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
     metric: ServiceEndpointSchema,
     spire: ServiceEndpointSchema,
     // napcat 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 2）：napcat_event /
@@ -523,6 +528,11 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       napcat: {
         ...data.services.napcat,
         databaseUrl: resolveSqliteFileUrl(configDir, data.services.napcat.databaseUrl),
+      },
+      // llm 独立 SQLite 库（#539）：同上。
+      llm: {
+        ...data.services.llm,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.llm.databaseUrl),
       },
     },
     server: {

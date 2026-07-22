@@ -41,17 +41,10 @@ export type RetentionSpec = {
  * Intentionally NOT cleaned up (not in this list):
  * - `ledger` (model LinearMessageLedger) — root agent 消息账本，只写不读，留作将来记忆系统的原始素材
  * - `root_agent_runtime_snapshot` — runtime snapshot
- * - `oauth_session` — persistent auth state
  * - `ithome_article` / `ithome_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
- * - `metric` — 已迁到 kagami-metric 独占的 DuckDB 库（#475 P1），不在共享 SQLite 里，
- *   其保留策略归 metric 进程自身，不在此清理面
- *
- * Field choices worth noting:
- * - `embedding_cache` keeps 30 days to avoid evicting hot hash hits that would
- *   trigger re-embed API calls.
- * - `oauth_state` uses `expiresAt` because it has a single-column index; `createdAt`
- *   does not. Since a state row expires ~10 minutes after creation, `expiresAt < now - 7d`
- *   is equivalent to `createdAt < now - 7d` in practice.
+ * - 已随表迁往独立库的清理面（epic #539）：metric（#475，DuckDB 自理）、napcat 两表
+ *   （kagami-napcat 的 prune 定时器）、llm 三表 + oauth（kagami-llm 的
+ *   data-retention-tasks，字段判据说明见彼处）
  */
 export const RETENTION_TASKS: readonly RetentionSpec[] = [
   {
@@ -61,34 +54,15 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     offsetMinutes: 0,
     getDelegate: db => db.appLog,
   },
-  {
-    displayName: "llm_chat_call",
-    field: "createdAt",
-    days: 1,
-    offsetMinutes: 5,
-    getDelegate: db => db.llmChatCall,
-  },
-  // napcat_event / napcat_qq_message 自 epic #539 子 issue 2 起归 napcat 独占库，
-  // 其保留清理随表迁入 kagami-napcat 进程（napcat-runtime 的 prune 定时器），不在此清理面。
+  // napcat_event / napcat_qq_message 自 epic #539 子 issue 2 起归 napcat 独占库，其保留清理
+  // 随表迁入 kagami-napcat 进程（napcat-runtime 的 prune 定时器）；llm_chat_call /
+  // embedding_cache / oauth_state 自子 issue 3 起归 llm 独占库，清理随表迁入 kagami-llm
+  // （data-retention-tasks，窗口不变），均不在此清理面。
   {
     displayName: "terminal_output",
     field: "createdAt",
     days: 7,
     offsetMinutes: 25,
     getDelegate: db => db.terminalOutput,
-  },
-  {
-    displayName: "embedding_cache",
-    field: "createdAt",
-    days: 30,
-    offsetMinutes: 35,
-    getDelegate: db => db.embeddingCache,
-  },
-  {
-    displayName: "oauth_state",
-    field: "expiresAt",
-    days: 7,
-    offsetMinutes: 40,
-    getDelegate: db => db.oauthState,
   },
 ];

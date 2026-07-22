@@ -12,7 +12,10 @@ services:
   gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
   oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
   browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
-  llm: { host: 127.0.0.1, port: 20009 } # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
+  llm: # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
+    host: 127.0.0.1
+    port: 20009
+    databaseUrl: file:./data/sqlite/llm.db # llm 独占 SQLite 库（llm_chat_call / embedding_cache / claude_file_cache / oauth_*，#539），与主库 kagami.db 同目录不同文件
   metric: { host: 127.0.0.1, port: 20010 } # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
   spire: { host: 127.0.0.1, port: 20011 } # kagami-spire（杀塔式卡牌游戏引擎，仅 localhost：agent 经 HttpSpireClient 驱动）
   napcat: # kagami-napcat（NapCat 接入独立进程，仅 localhost：agent 经 HttpNapcatClient 出站 + SSE 订阅入站；#347。20012 留给像素画 #365）

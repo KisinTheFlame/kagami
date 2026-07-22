@@ -20,7 +20,8 @@ export async function loadLlmServiceConfig(): Promise<LlmServiceConfig> {
   const configManager = new DefaultConfigManager({ config });
   return {
     port: config.services.llm.port,
-    databaseUrl: config.server.databaseUrl,
+    // llm 独占库（epic #539 子 issue 3）：不再使用主库 server.databaseUrl。
+    databaseUrl: config.services.llm.databaseUrl,
     config,
     configManager,
   };

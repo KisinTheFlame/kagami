@@ -61,12 +61,12 @@ if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
   echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
-  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console /
-  # llm（写 llm_chat_call/auth/embedding_cache），都持有 WAL 库锁，否则迁移 "database is
-  # locked"。metric 自 #475 P1 起独占 data/metric/metric.duckdb，不开共享库，无需停。
-  # browser（#539 删表后零持久化）与 napcat（#539 拆独立 napcat.db）已不再长期打开主库，
-  # 但为防「旧进程仍持主库锁 + 新停服名单已不含它」的部署时序窗口（browser 删表迁移
-  # 就踩过），两者暂留名单；#539 各拆库迁移全部在生产落地后由子 issue 5 统一移除。
+  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console 持有 WAL 库锁，
+  # 否则迁移 "database is locked"。metric 自 #475 P1 起独占 data/metric/metric.duckdb，
+  # 不开共享库，无需停。browser（#539 删表后零持久化）、napcat（#539 拆 napcat.db）、
+  # llm（#539 拆 llm.db）已不再长期打开主库，但为防「旧进程仍持主库锁 + 新停服名单已
+  # 不含它」的部署时序窗口（browser 删表迁移就踩过），三者暂留名单；#539 各拆库迁移
+  # 全部在生产落地后由子 issue 5 统一移除。
   pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
@@ -97,7 +97,26 @@ else
   fi
 fi
 
-echo "[app:deploy] Step 2c/4: Applying scheduler Prisma migrations..."
+echo "[app:deploy] Step 2c/4: Applying llm Prisma migrations..."
+# llm 有独立 SQLite 库（llm_chat_call / embedding_cache / claude_file_cache / oauth_*，#539），
+# 只被 kagami-llm 单进程持有——迁移只需暂停这一个进程腾出独占锁。历史数据从主库的
+# 一次性搬迁在 llm 进程启动时自动完成（哨兵幂等，见 apps/llm 的 legacy-migration.ts）。
+if pnpm --filter @kagami/llm-service db:migrate:status >/dev/null 2>&1; then
+  echo "[app:deploy]   llm schema 已最新，跳过迁移。"
+else
+  echo "[app:deploy]   检测到 llm 待应用迁移，暂停 kagami-llm 后迁移..."
+  pnpm exec pm2 stop kagami-llm >/dev/null 2>&1 || true
+  if pnpm --filter @kagami/llm-service db:migrate:deploy; then
+    echo "[app:deploy]   llm 迁移完成，进程将在 Step 3 重新拉起。"
+  else
+    # 拉回此前所有步骤停过的进程，绝不把 agent 晾在停机态。
+    echo "[app:deploy]   llm 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
+echo "[app:deploy] Step 2d/4: Applying scheduler Prisma migrations..."
 # scheduler 有独立 SQLite 库（TaskRun 执行历史，#493），只被 kagami-scheduler 单进程持有——
 # 迁移只需暂停这一个进程腾出独占锁，与主库那批多进程互不相干。无待应用迁移时（status 只读）跳过。
 if pnpm --filter @kagami/scheduler-service db:migrate:status >/dev/null 2>&1; then

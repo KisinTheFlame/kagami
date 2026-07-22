@@ -1,5 +1,11 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { LlmProviderOptionSchema } from "./llm-chat.js";
+import {
+  LlmGetChatCallRequestSchema,
+  LlmGetChatCallResponseSchema,
+  LlmQueryChatCallsRequestSchema,
+  LlmQueryChatCallsResponseSchema,
+} from "./query.js";
 import { z } from "zod";
 
 // chat / chat-direct 的客户端超时是「服务真挂/半开」的兜底，不是每次 chat 的时限：服务端每个
@@ -75,5 +81,20 @@ export const llmApiContract = {
     input: z.object({ request: EnvelopeRequest }),
     output: z.unknown(),
     timeoutMs: GENERATE_IMAGE_TIMEOUT_MS,
+  }),
+  // —— console 只读查询（epic #539 子 issue 3：llm 独占库后，llm_chat_call 经此查询）——
+  queryLlmChatCalls: defineJsonRoute({
+    method: "POST",
+    path: "/llm/chat-calls/query",
+    input: LlmQueryChatCallsRequestSchema,
+    output: LlmQueryChatCallsResponseSchema,
+    timeoutMs: QUERY_TIMEOUT_MS,
+  }),
+  getLlmChatCall: defineJsonRoute({
+    method: "POST",
+    path: "/llm/chat-calls/get",
+    input: LlmGetChatCallRequestSchema,
+    output: LlmGetChatCallResponseSchema,
+    timeoutMs: QUERY_TIMEOUT_MS,
   }),
 };

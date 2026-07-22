@@ -2,11 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
-import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
 import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
 import { createClient } from "@kagami/rpc-client/client";
 import { napcatApiContract } from "@kagami/napcat-api/contract";
+import { llmApiContract } from "@kagami/llm-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -46,7 +46,6 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   await configureSqlite(database);
 
   const logDao = new PrismaLogDao({ database });
-  const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const innerThoughtDao = new PrismaInnerThoughtDao({ database });
   const todoItemDao = new PrismaTodoItemDao({ database });
 
@@ -54,10 +53,14 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const napcatQueryClient = createClient(napcatApiContract, {
     baseUrl: `http://${config.services.napcat.host}:${String(config.services.napcat.port)}`,
   });
+  // llm_chat_call 自 epic #539 子 issue 3 起归 llm 独占库，同样经契约路由查询。
+  const llmQueryClient = createClient(llmApiContract, {
+    baseUrl: `http://${config.services.llm.host}:${String(config.services.llm.port)}`,
+  });
 
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
-    llmChatCallDao,
+    llmQueryClient,
   });
   const innerThoughtQueryService = new DefaultInnerThoughtQueryService({
     innerThoughtDao,

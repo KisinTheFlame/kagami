@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "@kagami/persistence/db/client";
-import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
+import type { Database } from "../src/infra/db/client.js";
+import { PrismaLlmChatCallDao } from "../src/infra/impl/llm-chat-call.impl.dao.js";
 
 describe("PrismaLlmChatCallDao", () => {
   it("should persist only serializable response payload fields", async () => {
