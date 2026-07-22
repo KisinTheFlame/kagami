@@ -1,5 +1,5 @@
 import type { LlmChatCallObservation } from "@kagami/llm-client";
-import type { LlmChatCallDao } from "@kagami/persistence/dao/llm-chat-call.dao";
+import type { LlmChatCallDao } from "../infra/llm-chat-call.dao.js";
 
 /**
  * 把一条 LLM observation 落成 llm_chat_call 行（打点等其它订阅动作在调用方，与落库解耦）。

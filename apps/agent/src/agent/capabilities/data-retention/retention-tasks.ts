@@ -61,34 +61,15 @@ export const RETENTION_TASKS: readonly RetentionSpec[] = [
     offsetMinutes: 0,
     getDelegate: db => db.appLog,
   },
-  {
-    displayName: "llm_chat_call",
-    field: "createdAt",
-    days: 1,
-    offsetMinutes: 5,
-    getDelegate: db => db.llmChatCall,
-  },
-  // napcat_event / napcat_qq_message 自 epic #539 子 issue 2 起归 napcat 独占库，
-  // 其保留清理随表迁入 kagami-napcat 进程（napcat-runtime 的 prune 定时器），不在此清理面。
+  // napcat_event / napcat_qq_message 自 epic #539 子 issue 2 起归 napcat 独占库，其保留清理
+  // 随表迁入 kagami-napcat 进程（napcat-runtime 的 prune 定时器）；llm_chat_call /
+  // embedding_cache / oauth_state 自子 issue 3 起归 llm 独占库，清理随表迁入 kagami-llm
+  // （data-retention-tasks，窗口不变），均不在此清理面。
   {
     displayName: "terminal_output",
     field: "createdAt",
     days: 7,
     offsetMinutes: 25,
     getDelegate: db => db.terminalOutput,
-  },
-  {
-    displayName: "embedding_cache",
-    field: "createdAt",
-    days: 30,
-    offsetMinutes: 35,
-    getDelegate: db => db.embeddingCache,
-  },
-  {
-    displayName: "oauth_state",
-    field: "expiresAt",
-    days: 7,
-    offsetMinutes: 40,
-    getDelegate: db => db.oauthState,
   },
 ];

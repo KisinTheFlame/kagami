@@ -23,7 +23,6 @@
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/llm-api": "workspace:*",
-    "@kagami/persistence": "workspace:*",
     "fastify": "^5.6.2"
   },
   "devDependencies": {

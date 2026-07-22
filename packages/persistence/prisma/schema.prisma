@@ -9,6 +9,11 @@ datasource db {
   provider = "sqlite"
 }
 
+// —— llm 旧表（epic #539 子 issue 3 已拆走）——
+// llm_chat_call / oauth_session / oauth_state / embedding_cache / claude_file_cache 的归属
+// 已迁至 apps/llm/prisma（llm 独占 data/sqlite/llm.db），历史数据由 llm 启动时一次性搬迁。
+// 主库中的这五张旧表仅存历史副本、无任何进程读写，由 #539 子 issue 5 统一 DROP；
+// 在那之前 model 保留在此以匹配主库的实际 schema。
 model LlmChatCall {
   id                    Int      @id @default(autoincrement())
   requestId             String   @map("request_id")

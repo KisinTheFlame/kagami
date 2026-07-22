@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/persistence/db/client";
+import type { Database } from "./db/client.js";
 import type {
   EmbeddingCacheDao,
   EmbeddingCacheKey,

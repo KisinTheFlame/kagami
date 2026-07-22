@@ -15,6 +15,7 @@
       "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
       "@kagami/console-api/*": ["./../../packages/console-api/src/*"],
+      "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
       "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"]
     }

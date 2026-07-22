@@ -1,7 +1,7 @@
 import { type AuthUsageLimitsResponse } from "@kagami/llm-api/auth";
 import { SharedOAuthCallbackServer } from "./shared/callback-server.js";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
-import type { Database } from "@kagami/persistence/db/client";
+import type { OAuthDatabase } from "./infra/prisma-oauth.dao.js";
 import { AuthUsageCacheManager } from "./application/auth-usage-cache.impl.service.js";
 import type {
   AuthUsageSnapshotSink,
@@ -29,7 +29,7 @@ import {
 import { PrismaOAuthDao } from "./infra/prisma-oauth.dao.js";
 
 type AuthModuleDeps = {
-  database: Database;
+  database: OAuthDatabase;
   configManager: ConfigManager;
   // OAuth 额度遥测下沉端口（epic #521）。宿主（apps/llm）注入 Metric 实现；缺省 noop。
   authUsageSnapshotSink?: AuthUsageSnapshotSink;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Database } from "@kagami/persistence/db/client";
+import type { Database } from "../src/infra/db/client.js";
 import { PrismaClaudeFileCacheDao } from "../src/infra/prisma-claude-file-cache.dao.js";
 
 describe("PrismaClaudeFileCacheDao", () => {

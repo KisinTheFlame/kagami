@@ -179,6 +179,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/llm-api':
+        specifier: workspace:*
+        version: link:../../packages/llm-api
       '@kagami/napcat-api':
         specifier: workspace:*
         version: link:../../packages/napcat-api
@@ -305,19 +308,31 @@ importers:
       '@kagami/metric-client':
         specifier: workspace:*
         version: link:../../packages/metric-client
-      '@kagami/persistence':
-        specifier: workspace:*
-        version: link:../../packages/persistence
       '@kagami/scheduler-client':
         specifier: workspace:*
         version: link:../../packages/scheduler-client
+      '@prisma/adapter-better-sqlite3':
+        specifier: ^7.8.0
+        version: 7.8.0
+      '@prisma/client':
+        specifier: ^7.6.0
+        version: 7.6.0(prisma@7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
+      prisma:
+        specifier: ^7.6.0
+        version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       zod:
         specifier: ^3.24.4
         version: 3.25.76
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^24.10.1
         version: 24.11.0
@@ -699,9 +714,6 @@ importers:
       '@kagami/llm-api':
         specifier: workspace:*
         version: link:../llm-api
-      '@kagami/persistence':
-        specifier: workspace:*
-        version: link:../persistence
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -964,9 +976,6 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@kagami/llm':
-        specifier: workspace:*
-        version: link:../llm
       '@prisma/adapter-better-sqlite3':
         specifier: ^7.8.0
         version: 7.8.0
