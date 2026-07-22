@@ -33,11 +33,7 @@ export class GbaImportRomTool extends GbaToolComponent<typeof Schema> {
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<string> {
     const rom = await this.getGbaClient().importRom({ resId: input.resid, name: input.name });
-    return JSON.stringify({
-      ok: true,
-      name: rom.name,
-      sizeBytes: rom.sizeBytes,
-      sha256: rom.sha256,
-    });
+    // 响应按「她看了有什么用」裁剪:sha256/字节数是校验痕迹,属于服务端日志。
+    return JSON.stringify({ ok: true, name: rom.name });
   }
 }

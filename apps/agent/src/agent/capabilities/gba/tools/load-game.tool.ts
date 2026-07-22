@@ -41,10 +41,10 @@ export class GbaLoadGameTool extends GbaToolComponent<typeof Schema> {
       );
     }
     const loaded = await client.loadGame(rom.id);
+    // 响应按「她看了有什么用」裁剪:timelineId 是诊断元数据,不进她的上下文。
     return JSON.stringify({
       ok: true,
       romName: loaded.romName,
-      timelineId: loaded.timelineId,
       hasSave: rom.hasSave,
     });
   }

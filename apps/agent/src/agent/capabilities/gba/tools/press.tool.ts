@@ -67,7 +67,6 @@ export class GbaPressTool extends GbaToolComponent<typeof Schema> {
     );
     return buildGbaScreenToolResult({
       imageBase64: outcome.imageBase64,
-      meta: outcome,
       ossClient: this.ossClient,
     });
   }
