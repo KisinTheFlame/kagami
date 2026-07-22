@@ -68,9 +68,8 @@ describe("GbaService", () => {
       const romId = await uploadAndLoad();
       const state = service.state();
       expect(state.loaded).toBe(true);
-      expect(state.romId).toBe(romId);
+      expect(state.romName).toBe("测试 ROM");
       expect(state.frame).toBe(1); // 冷启动推进的一帧
-      expect(state.timelineId).toMatch(/^gba-/);
       expect(state.foreground).toBe(false);
       expect(store.getLastRomId()).toBe(romId);
       // 后台加载：帧循环不跑
@@ -97,7 +96,7 @@ describe("GbaService", () => {
         },
       });
       await service2.init();
-      expect(service2.state().romId).toBe(romId);
+      expect(service2.state().loaded).toBe(true);
       expect(service2.state().foreground).toBe(false); // 冷启动处于后台
       const restored = cores[1]!;
       expect(restored.sram?.subarray(0, 8).toString()).toBe("SAVEDATA");
@@ -226,12 +225,11 @@ describe("GbaService", () => {
       const result = await promise;
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.capturedFrame - result.startFrame).toBe(3 + 1 + 12); // hold+gap+settle
-        expect(result.releasedFrame - result.startFrame).toBe(3); // 松键时刻=最后一个按住帧之后,尾部 gap 不计
         expect(result.imageBase64.length).toBeGreaterThan(0);
       }
-      // 计划期内的前 3 帧按住 a，之后全空
+      // 计划:hold 3 帧按住 a,其后(gap/settle/计划外空转)全松开
       const during = core.frames.slice(baseline);
+      expect(during.filter(f => f.has("a"))).toHaveLength(3);
       expect(during[0]?.has("a")).toBe(true);
       expect(during[2]?.has("a")).toBe(true);
       expect(during[3]?.size).toBe(0);
@@ -254,10 +252,9 @@ describe("GbaService", () => {
       expect(after1s).toBeGreaterThanOrEqual(58);
       await vi.advanceTimersByTimeAsync(4200);
       const result = await promise;
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.capturedFrame - result.startFrame).toBe(300);
-      }
+      expect(result.ok).toBe(true); // 计划(300 帧)已在实速下走完
+      expect(core.frames.length - baseline).toBeGreaterThanOrEqual(300);
+      expect(core.frames.length - baseline).toBeLessThanOrEqual(325); // 5.2s 实速上界
     });
 
     it("切后台中止在途 press：领域拒绝 + 按键清空 + 冻结", async () => {
@@ -322,7 +319,7 @@ describe("GbaService", () => {
       expect(result.ok).toBe(true);
       expect(store.getBatterySave(romA)?.subarray(0, 6).toString()).toBe("A-SAVE");
       expect(coreA.shutdownCalled).toBe(true);
-      expect(service.state().romId).toBe(uploadB.rom.id);
+      expect(service.state().romName).toBe("ROM B");
     });
   });
 
@@ -342,7 +339,7 @@ describe("GbaService", () => {
     });
 
     it("切 ROM 拉取失败:旧会话毫发无损继续跑", async () => {
-      const romA = await uploadAndLoad("旧游戏");
+      await uploadAndLoad("旧游戏");
       service.setForeground(true);
       const uploadB = await service.uploadRom({ name: "新游戏", bytes: fakeRomBytes(8) });
       expect(uploadB.ok).toBe(true);
@@ -352,7 +349,7 @@ describe("GbaService", () => {
       const result = await service.loadGame(uploadB.rom.id);
       expect(result).toEqual({ ok: false, reason: "ROM_FETCH_FAILED" });
       // 旧会话仍在:状态自洽、帧循环继续推进
-      expect(service.state().romId).toBe(romA);
+      expect(service.state().romName).toBe("旧游戏");
       expect(service.state().loaded).toBe(true);
       const before = service.state().frame;
       await vi.advanceTimersByTimeAsync(500);
@@ -378,7 +375,7 @@ describe("GbaService", () => {
       const result = await badService.loadGame(upload.rom.id);
       expect(result).toEqual({ ok: false, reason: "ROM_LOAD_FAILED" });
       expect(badService.state().loaded).toBe(false);
-      expect(badService.state().romId).toBeNull(); // 状态自洽的空态
+      expect(badService.state().romName).toBeNull(); // 状态自洽的空态
       expect(cores[origFactory]!.shutdownCalled).toBe(true); // 半成品核心已释放
       // init() 走同一路径:坏 ROM 不会让启动抛穿
       store.setLastRomId(upload.rom.id);

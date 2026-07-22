@@ -19,40 +19,27 @@ const ROM: GbaRomView = {
   id: 1,
   name: "逆转裁判",
   sizeBytes: 8705280,
-  sha256: "abc",
   createdAt: "2026-07-22T00:00:00.000Z",
   lastPlayedAt: null,
   hasSave: true,
 };
 
-const PRESS_OUTCOME = {
-  timelineId: "gba-t1",
-  startFrame: 100,
-  releasedFrame: 103,
-  capturedFrame: 116,
-  imageBase64: Buffer.from("png-bytes").toString("base64"),
-};
+const IMAGE_BASE64 = Buffer.from("png-bytes").toString("base64");
 
 function createFakeClient(overrides: Partial<GbaClient> = {}): GbaClient {
   return {
     state: vi.fn().mockResolvedValue({
       loaded: true,
-      romId: 1,
       romName: "逆转裁判",
       foreground: true,
       frame: 116,
-      timelineId: "gba-t1",
     }),
     setForeground: vi.fn().mockResolvedValue({ foreground: true }),
     listRoms: vi.fn().mockResolvedValue([ROM]),
-    loadGame: vi.fn().mockResolvedValue({ romId: 1, romName: "逆转裁判", timelineId: "gba-t1" }),
-    press: vi.fn().mockResolvedValue(PRESS_OUTCOME),
-    pressSequence: vi.fn().mockResolvedValue(PRESS_OUTCOME),
-    screenshot: vi.fn().mockResolvedValue({
-      timelineId: "gba-t1",
-      capturedFrame: 116,
-      imageBase64: PRESS_OUTCOME.imageBase64,
-    }),
+    loadGame: vi.fn().mockResolvedValue({ romName: "逆转裁判" }),
+    press: vi.fn().mockResolvedValue(IMAGE_BASE64),
+    pressSequence: vi.fn().mockResolvedValue(IMAGE_BASE64),
+    screenshot: vi.fn().mockResolvedValue(IMAGE_BASE64),
     importRom: vi.fn().mockResolvedValue(ROM),
     ...overrides,
   };
@@ -90,7 +77,7 @@ describe("GBA 工具", () => {
     expect(result.content).toBe('{"ok":true}');
     const effect = appendEffect(result.effects);
     expect(effect.content).toBe('<gba_screen resid="res-99" />');
-    expect(effect.image?.content).toBe(PRESS_OUTCOME.imageBase64);
+    expect(effect.image?.content).toBe(IMAGE_BASE64);
     expect(effect.image?.mimeType).toBe("image/png");
   });
 
@@ -148,7 +135,7 @@ describe("GBA 工具", () => {
     const press = vi
       .fn()
       .mockRejectedValueOnce(new GbaError("GBA_REJECTED", "GBA_NOT_FOREGROUND"))
-      .mockResolvedValue(PRESS_OUTCOME);
+      .mockResolvedValue(IMAGE_BASE64);
     const client = createFakeClient({ press });
     const tool = new GbaPressTool({ getGbaClient: () => client });
     const result = await tool.execute({ buttons: ["a"] }, context);

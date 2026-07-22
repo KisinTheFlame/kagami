@@ -71,7 +71,7 @@ export class GbaPressSequenceTool extends GbaToolComponent<typeof Schema> {
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<ToolExecutionResult> {
     const client = this.getGbaClient();
-    const outcome = await withForegroundRealign(client, () =>
+    const imageBase64 = await withForegroundRealign(client, () =>
       client.pressSequence({
         steps: input.steps.map(step => ({
           buttons: step.buttons,
@@ -81,9 +81,6 @@ export class GbaPressSequenceTool extends GbaToolComponent<typeof Schema> {
         settleFrames: input.settle_frames,
       }),
     );
-    return buildGbaScreenToolResult({
-      imageBase64: outcome.imageBase64,
-      ossClient: this.ossClient,
-    });
+    return buildGbaScreenToolResult({ imageBase64, ossClient: this.ossClient });
   }
 }

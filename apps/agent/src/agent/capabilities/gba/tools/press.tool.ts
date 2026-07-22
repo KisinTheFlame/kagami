@@ -58,16 +58,13 @@ export class GbaPressTool extends GbaToolComponent<typeof Schema> {
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<ToolExecutionResult> {
     const client = this.getGbaClient();
-    const outcome = await withForegroundRealign(client, () =>
+    const imageBase64 = await withForegroundRealign(client, () =>
       client.press({
         buttons: input.buttons,
         holdFrames: input.hold_frames,
         settleFrames: input.settle_frames,
       }),
     );
-    return buildGbaScreenToolResult({
-      imageBase64: outcome.imageBase64,
-      ossClient: this.ossClient,
-    });
+    return buildGbaScreenToolResult({ imageBase64, ossClient: this.ossClient });
   }
 }

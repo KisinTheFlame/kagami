@@ -1,13 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type {
   GbaButton,
   GbaDeleteResultSchema,
   GbaLoadResultSchema,
-  GbaPressResultSchema,
   GbaPressStepSchema,
   GbaRunStateSchema,
-  GbaScreenshotResultSchema,
+  GbaScreenResultSchema,
   GbaUploadResultSchema,
 } from "@kagami/gba-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
@@ -16,8 +15,7 @@ import { encodeFramePng } from "../emulator/frame-png.js";
 import type { OssClient } from "../acl/oss-client.js";
 import type { GbaStore, RomRow } from "../persistence/gba-store.js";
 
-type PressResult = z.infer<typeof GbaPressResultSchema>;
-type ScreenshotResult = z.infer<typeof GbaScreenshotResultSchema>;
+type ScreenResult = z.infer<typeof GbaScreenResultSchema>;
 type LoadResult = z.infer<typeof GbaLoadResultSchema>;
 type UploadResult = z.infer<typeof GbaUploadResultSchema>;
 type DeleteResult = z.infer<typeof GbaDeleteResultSchema>;
@@ -58,10 +56,7 @@ const logger = new AppLogger({ source: "gba-service" });
 type PressPlan = {
   frames: ReadonlySet<GbaButton>[];
   cursor: number;
-  startFrame: number;
-  /** frames 中最后一个「按住」帧的下标 + 1（= 松键时刻,尾部 gap/settle 不计入）。 */
-  releaseOffset: number;
-  resolve: (result: PressResult) => void;
+  resolve: (result: ScreenResult) => void;
 };
 
 type GbaServiceDeps = {
@@ -96,7 +91,6 @@ export class GbaService {
   private core: EmulatorCore | null = null;
   private romId: number | null = null;
   private romName: string | null = null;
-  private timelineId: string | null = null;
   private frame = 0;
   private foreground = false;
   private plan: PressPlan | null = null;
@@ -142,11 +136,9 @@ export class GbaService {
   public state(): RunState {
     return {
       loaded: this.core !== null,
-      romId: this.romId,
       romName: this.romName,
       foreground: this.foreground,
       frame: this.frame,
-      timelineId: this.timelineId,
     };
   }
 
@@ -238,7 +230,6 @@ export class GbaService {
       this.core = null;
       this.romId = null;
       this.romName = null;
-      this.timelineId = null;
       this.frame = 0;
       await old.shutdown();
     }
@@ -265,7 +256,6 @@ export class GbaService {
     this.core = core;
     this.romId = romId;
     this.romName = rom.name;
-    this.timelineId = `gba-${this.now().toString(36)}-${randomUUID().slice(0, 8)}`;
     this.frame = 0;
     this.frameMs = 1000 / core.getFps();
     // 冷启动推进一帧：让 screenshot 立即有帧可看（后台加载也只多这一帧，无实时性影响）。
@@ -280,7 +270,7 @@ export class GbaService {
       this.startLoop();
     }
     logger.info("GBA 加载 ROM", { event: "gba.load_game", romId, romName: rom.name });
-    return { ok: true, romId, romName: rom.name, timelineId: this.timelineId };
+    return { ok: true, romName: rom.name };
   }
 
   /** press 工具的平铺形态：单 chord = 单步序列的语法糖，同一条执行路径。 */
@@ -288,14 +278,14 @@ export class GbaService {
     buttons: GbaButton[];
     holdFrames: number;
     settleFrames: number;
-  }): Promise<PressResult> {
+  }): Promise<ScreenResult> {
     return this.pressSequence({
       steps: [{ buttons: input.buttons, holdFrames: input.holdFrames, gapFrames: 1 }],
       settleFrames: input.settleFrames,
     });
   }
 
-  public pressSequence(input: { steps: PressStep[]; settleFrames: number }): Promise<PressResult> {
+  public pressSequence(input: { steps: PressStep[]; settleFrames: number }): Promise<ScreenResult> {
     this.touchActivity();
     if (!this.core) {
       return Promise.resolve({ ok: false, reason: "NO_GAME_LOADED" });
@@ -312,32 +302,21 @@ export class GbaService {
       return Promise.resolve({ ok: false, reason: built });
     }
 
-    return new Promise<PressResult>(resolve => {
-      this.plan = {
-        frames: built.frames,
-        cursor: 0,
-        startFrame: this.frame,
-        releaseOffset: built.releaseOffset,
-        resolve,
-      };
+    return new Promise<ScreenResult>(resolve => {
+      this.plan = { frames: built.frames, cursor: 0, resolve };
     });
   }
 
-  public screenshot(): ScreenshotResult {
+  public screenshot(): ScreenResult {
     this.touchActivity();
-    if (!this.core || this.timelineId === null) {
+    if (!this.core) {
       return { ok: false, reason: "NO_GAME_LOADED" };
     }
     const imageBase64 = this.captureFrameBase64();
     if (imageBase64 === null) {
       return { ok: false, reason: "NO_FRAME_AVAILABLE" };
     }
-    return {
-      ok: true,
-      timelineId: this.timelineId,
-      capturedFrame: this.frame,
-      imageBase64,
-    };
+    return { ok: true, imageBase64 };
   }
 
   // === ROM 库（控制台管理面）===
@@ -572,18 +551,11 @@ export class GbaService {
   private completePlan(plan: PressPlan): void {
     this.plan = null;
     const imageBase64 = this.captureFrameBase64();
-    if (imageBase64 === null || this.timelineId === null) {
+    if (imageBase64 === null) {
       plan.resolve({ ok: false, reason: "NO_FRAME_AVAILABLE" });
       return;
     }
-    plan.resolve({
-      ok: true,
-      timelineId: this.timelineId,
-      startFrame: plan.startFrame,
-      releasedFrame: plan.startFrame + plan.releaseOffset,
-      capturedFrame: this.frame,
-      imageBase64,
-    });
+    plan.resolve({ ok: true, imageBase64 });
   }
 
   /** 采当前帧并编码 base64 PNG；无帧可采时 null。screenshot 与 completePlan 共用。 */
@@ -656,12 +628,12 @@ export class GbaService {
 
 /**
  * 把 press 序列展开成逐帧按键计划。领域校验失败返回 reason 字符串（`{ ok:false }` 语义），
- * 通过则返回 frames（每帧一个 held 集合）+ releaseOffset（松键时刻，供时间线元数据）。
+ * 通过则返回 frames（每帧一个 held 集合）。
  */
 function buildPressPlan(
   steps: PressStep[],
   settleFrames: number,
-): { frames: ReadonlySet<GbaButton>[]; releaseOffset: number } | string {
+): { frames: ReadonlySet<GbaButton>[] } | string {
   if (steps.length > MAX_STEPS) {
     return `INVALID_PRESS: steps 数量 ${steps.length} 超上限 ${MAX_STEPS}`;
   }
@@ -669,8 +641,6 @@ function buildPressPlan(
     return `INVALID_PRESS: settleFrames ${settleFrames} 超上限 ${MAX_SETTLE_FRAMES}`;
   }
   const frames: ReadonlySet<GbaButton>[] = [];
-  // releasedFrame 语义 = 最后一个「按住」帧之后的时刻;尾部 gap 里键已松开,不计入。
-  let lastHoldEnd = 0;
   for (const [index, step] of steps.entries()) {
     const buttons = new Set(step.buttons);
     if (buttons.size !== step.buttons.length) {
@@ -695,19 +665,17 @@ function buildPressPlan(
     for (let i = 0; i < step.holdFrames; i++) {
       frames.push(chord);
     }
-    lastHoldEnd = frames.length;
     for (let i = 0; i < step.gapFrames; i++) {
       frames.push(EMPTY_HELD);
     }
   }
-  const releaseOffset = lastHoldEnd;
   for (let i = 0; i < settleFrames; i++) {
     frames.push(EMPTY_HELD);
   }
   if (frames.length > MAX_TOTAL_FRAMES) {
     return `INVALID_PRESS: 总帧数 ${frames.length} 超预算 ${MAX_TOTAL_FRAMES}（Σ每步(hold+gap)+settle ≤ ${MAX_TOTAL_FRAMES}）`;
   }
-  return { frames, releaseOffset };
+  return { frames };
 }
 
 /** better-sqlite3 的 UNIQUE 约束冲突（并发上传竞态的判定依据）。 */
@@ -721,7 +689,6 @@ export function toRomView(rom: RomRow): {
   id: number;
   name: string;
   sizeBytes: number;
-  sha256: string;
   createdAt: string;
   lastPlayedAt: string | null;
   hasSave: boolean;
@@ -730,7 +697,6 @@ export function toRomView(rom: RomRow): {
     id: rom.id,
     name: rom.name,
     sizeBytes: rom.sizeBytes,
-    sha256: rom.sha256,
     createdAt: new Date(rom.createdAt).toISOString(),
     lastPlayedAt: rom.lastPlayedAt === null ? null : new Date(rom.lastPlayedAt).toISOString(),
     hasSave: rom.hasSave,
