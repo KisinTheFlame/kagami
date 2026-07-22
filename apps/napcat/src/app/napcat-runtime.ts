@@ -171,21 +171,35 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
 
   // 保留清理：每小时删掉超窗口的旧行。outbox（保留窗口 > 任何现实停机时长即可安全回放）+
   // napcat_event / napcat_qq_message（原 agent data-retention 的清理面，随表迁入本进程）。
-  const pruneTimer = setInterval(() => {
+  // 三路串行执行避免同刻叠加写放大；单路失败不阻断其余，删除行数记 info 供保留面观测。
+  const runPrune = async (): Promise<void> => {
     const cutoff = new Date(Date.now() - RETENTION_MS);
-    void outboxDao.pruneOlderThan(cutoff).catch((error: unknown) => {
-      logger.errorWithCause("outbox prune failed", error, { event: "napcat.outbox.prune_failed" });
-    });
-    void napcatEventDao.deleteOlderThan(cutoff).catch((error: unknown) => {
-      logger.errorWithCause("napcat_event prune failed", error, {
-        event: "napcat.retention.event_prune_failed",
-      });
-    });
-    void napcatQqMessageDao.deleteOlderThan(cutoff).catch((error: unknown) => {
-      logger.errorWithCause("napcat_qq_message prune failed", error, {
-        event: "napcat.retention.qq_message_prune_failed",
-      });
-    });
+    const tasks: [string, string, () => Promise<number>][] = [
+      ["napcat_event_outbox", "napcat.outbox.prune", () => outboxDao.pruneOlderThan(cutoff)],
+      [
+        "napcat_event",
+        "napcat.retention.event_prune",
+        () => napcatEventDao.deleteOlderThan(cutoff),
+      ],
+      [
+        "napcat_qq_message",
+        "napcat.retention.qq_message_prune",
+        () => napcatQqMessageDao.deleteOlderThan(cutoff),
+      ],
+    ];
+    for (const [table, event, run] of tasks) {
+      try {
+        const deleted = await run();
+        if (deleted > 0) {
+          logger.info("保留清理完成", { event: `${event}_done`, table, deleted });
+        }
+      } catch (error) {
+        logger.errorWithCause("保留清理失败", error, { event: `${event}_failed`, table });
+      }
+    }
+  };
+  const pruneTimer = setInterval(() => {
+    void runPrune();
   }, PRUNE_INTERVAL_MS);
   pruneTimer.unref?.();
 

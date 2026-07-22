@@ -89,8 +89,10 @@ else
   if pnpm --filter @kagami/napcat db:migrate:deploy; then
     echo "[app:deploy]   napcat 迁移完成，进程将在 Step 3 重新拉起。"
   else
-    echo "[app:deploy]   napcat 迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-napcat >/dev/null 2>&1 || true
+    # 拉回本步之前（含 Step 2 主库分支）停过的全部进程：中止部署绝不能把 agent 晾在停机态
+    #（对已运行进程 pm2 start 是 no-op，安全）。
+    echo "[app:deploy]   napcat 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
     exit 1
   fi
 fi
@@ -106,8 +108,9 @@ else
   if pnpm --filter @kagami/scheduler-service db:migrate:deploy; then
     echo "[app:deploy]   scheduler 迁移完成，进程将在 Step 3 重新拉起。"
   else
-    echo "[app:deploy]   scheduler 迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-scheduler >/dev/null 2>&1 || true
+    # 同 Step 2b：拉回此前所有步骤停过的进程，绝不把 agent 晾在停机态。
+    echo "[app:deploy]   scheduler 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat kagami-scheduler >/dev/null 2>&1 || true
     exit 1
   fi
 fi

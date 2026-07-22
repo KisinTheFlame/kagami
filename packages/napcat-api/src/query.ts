@@ -12,7 +12,9 @@ import { JsonRecordSchema, JsonValueSchema } from "@kagami/http/wire";
 
 const QueryPaginationSchema = {
   page: z.number().int().min(1),
-  pageSize: z.number().int().min(1).max(200),
+  // 上限与 console-api（@kagami/http/wire 的 PaginationQuerySchema）一致取 100，
+  // 两级边界不允许静默分叉。
+  pageSize: z.number().int().min(1).max(100),
 };
 
 const QueryTimeRangeSchema = {
