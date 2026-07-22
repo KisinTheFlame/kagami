@@ -560,11 +560,23 @@ export class GbaService {
 
   /** 采当前帧并编码 base64 PNG；无帧可采时 null。screenshot 与 completePlan 共用。 */
   private captureFrameBase64(): string | null {
+    return this.captureFramePng()?.toString("base64") ?? null;
+  }
+
+  /**
+   * 控制台实况面的被动采帧（#541 PR3）：只读当前帧、**不 touchActivity**——观战不刷新看门狗,
+   * 否则控制台开着页面轮询就会让前台空转的掌机永不休眠。
+   */
+  public peekFramePng(): Buffer | null {
+    return this.captureFramePng();
+  }
+
+  private captureFramePng(): Buffer | null {
     const frame = this.core?.readFrameRgba();
     if (!frame) {
       return null;
     }
-    return encodeFramePng(frame).toString("base64");
+    return encodeFramePng(frame);
   }
 
   /** 中止在途 press（切后台 / 换 ROM / 关停）：plan 置空 = 按键全松开，调用方拿到领域拒绝。 */

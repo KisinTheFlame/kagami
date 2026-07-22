@@ -1,4 +1,8 @@
-import { defineBinaryEnvelopeRoute, defineJsonRoute } from "@kagami/http/contract";
+import {
+  defineBinaryEnvelopeRoute,
+  defineBinaryRawRoute,
+  defineJsonRoute,
+} from "@kagami/http/contract";
 import { z } from "zod";
 
 // 游玩路由多为「按住 N 帧实速推进」的同步等待：单请求帧预算 ≤300 帧（~5s，服务端校验），
@@ -186,10 +190,9 @@ export const gbaApiContract = {
 };
 
 /**
- * 控制台 ROM 管理面（管理台上传 / 列表 / 删除）。gateway 分流在 #541 PR3 落地：只放行
- * `/gba/roms` 前缀——游玩路由
- * `/gba/run/*` 不进分流表，浏览器够不到（镜像 OSS「写前缀物理隔离」的思路，方向相反：这里
- * 隔离的是游玩面）。listRoms 与 agent 共用同一条路由。
+ * 控制台 ROM 管理面（管理台上传 / 列表 / 删除）。gateway 只放行 `/gba/roms` 与 `/gba/console`
+ * 两个前缀——游玩路由 `/gba/run/*` 不进分流表，浏览器够不到（镜像 OSS「写前缀物理隔离」的
+ * 思路，方向相反：这里隔离的是游玩面）。listRoms 与 agent 共用同一条路由。
  */
 export const gbaRomsContract = {
   listRoms: gbaApiContract.listRoms,
@@ -209,5 +212,26 @@ export const gbaRomsContract = {
     input: z.object({ romId: z.number().int().positive() }),
     output: GbaDeleteResultSchema,
     timeoutMs: GBA_QUERY_TIMEOUT_MS,
+  }),
+};
+
+/**
+ * 控制台实况面（#541 PR3）：管理台展示当前 GBA 画面，页面聚焦时每秒轮询。**被动只读**——
+ * 不刷新看门狗、不算游玩活动（观战不该让掌机以为有人在玩）；screen 是 binary-raw PNG
+ * （浏览器直接消费，no-store），无画面（未加载 ROM）时 404。经 gateway `/gba/console` 前缀。
+ */
+export const gbaConsoleContract = {
+  state: defineJsonRoute({
+    method: "GET",
+    path: "/gba/console/state",
+    input: z.object({}),
+    output: GbaRunStateSchema,
+    timeoutMs: GBA_STATE_TIMEOUT_MS,
+  }),
+  screen: defineBinaryRawRoute({
+    method: "GET",
+    path: "/gba/console/screen",
+    params: z.object({}),
+    bytesIn: false,
   }),
 };

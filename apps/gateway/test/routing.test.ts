@@ -29,6 +29,16 @@ describe("selectUpstreamKey", () => {
     expect(selectUpstreamKey("/scheduler/tasks/todo/x/trigger")).toBe("scheduler");
   });
 
+  it("/gba/roms 与 /gba/console 走 gba,游玩面 /gba/run 不放行(兜底 agent)", () => {
+    expect(selectUpstreamKey("/gba/roms")).toBe("gba");
+    expect(selectUpstreamKey("/gba/roms/delete")).toBe("gba");
+    expect(selectUpstreamKey("/gba/console/screen")).toBe("gba");
+    expect(selectUpstreamKey("/gba/console/state")).toBe("gba");
+    // 游玩路由刻意不进分流表:浏览器经网关够不到按键/加载/前后台切换。
+    expect(selectUpstreamKey("/gba/run/press")).toBe("agent");
+    expect(selectUpstreamKey("/gba")).toBe("agent");
+  });
+
   it("其余路径兜底到 agent", () => {
     expect(selectUpstreamKey("/main-agent-context/recent")).toBe("agent");
     expect(selectUpstreamKey("/")).toBe("agent");
