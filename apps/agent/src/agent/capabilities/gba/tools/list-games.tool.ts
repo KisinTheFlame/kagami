@@ -24,17 +24,16 @@ export class GbaListGamesTool extends GbaToolComponent<typeof Schema> {
   protected async executeTyped(): Promise<string> {
     const client = this.getGbaClient();
     const [roms, state] = await Promise.all([client.listRoms(), client.state()]);
+    // 响应按「她看了有什么用」裁剪:字节数/帧号是诊断元数据;她关心的是有哪些游戏、
+    // 有没有存档、上次什么时候玩的、现在插着哪盘。
     return JSON.stringify({
       ok: true,
       games: roms.map(rom => ({
         name: rom.name,
-        sizeBytes: rom.sizeBytes,
         hasSave: rom.hasSave,
         lastPlayedAt: rom.lastPlayedAt,
       })),
-      current: state.loaded
-        ? { name: state.romName, foreground: state.foreground, frame: state.frame }
-        : null,
+      current: state.loaded ? { name: state.romName } : null,
     });
   }
 }

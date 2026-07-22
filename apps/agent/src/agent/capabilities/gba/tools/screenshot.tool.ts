@@ -36,7 +36,6 @@ export class GbaScreenshotTool extends GbaToolComponent<typeof Schema> {
     const outcome = await withForegroundRealign(client, () => client.screenshot());
     return buildGbaScreenToolResult({
       imageBase64: outcome.imageBase64,
-      meta: outcome,
       ossClient: this.ossClient,
     });
   }

@@ -85,11 +85,11 @@ describe("GBA 工具", () => {
       holdFrames: 60,
       settleFrames: 12, // 默认值
     });
-    const content = JSON.parse(result.content) as Record<string, unknown>;
-    expect(content).toMatchObject({ ok: true, timelineId: "gba-t1", resid: "res-99" });
-    expect(result.content).not.toContain(PRESS_OUTCOME.imageBase64);
+    // 「她看了有什么用」裁剪:content 恒为 {"ok":true},诊断元数据(timelineId/帧号)与
+    // base64 都不进 tool_result;resid 只写在贴图标签里(单一位置)。
+    expect(result.content).toBe('{"ok":true}');
     const effect = appendEffect(result.effects);
-    expect(effect.content).toContain('<gba_screen resid="res-99"');
+    expect(effect.content).toBe('<gba_screen resid="res-99" />');
     expect(effect.image?.content).toBe(PRESS_OUTCOME.imageBase64);
     expect(effect.image?.mimeType).toBe("image/png");
   });
@@ -126,7 +126,7 @@ describe("GBA 工具", () => {
     const tool = new GbaLoadGameTool({ getGbaClient: () => client });
     const ok = await tool.execute({ name: "逆转裁判" }, context);
     expect(client.loadGame).toHaveBeenCalledWith(1);
-    expect(JSON.parse(ok.content)).toMatchObject({ ok: true, romName: "逆转裁判", hasSave: true });
+    expect(JSON.parse(ok.content)).toEqual({ ok: true, romName: "逆转裁判", hasSave: true });
 
     const miss = await tool.execute({ name: "口袋妖怪" }, context);
     const parsed = JSON.parse(miss.content) as Record<string, unknown>;
@@ -140,8 +140,8 @@ describe("GBA 工具", () => {
     const tool = new GbaListGamesTool({ getGbaClient: () => client });
     const result = JSON.parse((await tool.execute({}, context)).content) as Record<string, unknown>;
     expect(result.ok).toBe(true);
-    expect(result.games).toHaveLength(1);
-    expect(result.current).toMatchObject({ name: "逆转裁判", foreground: true });
+    expect(result.games).toEqual([{ name: "逆转裁判", hasSave: true, lastPlayedAt: null }]);
+    expect(result.current).toEqual({ name: "逆转裁判" });
   });
 
   it("前台失位自愈(review P1):press 首拒 GBA_NOT_FOREGROUND → 重申前台后重试成功", async () => {
@@ -154,7 +154,7 @@ describe("GBA 工具", () => {
     const result = await tool.execute({ buttons: ["a"] }, context);
     expect(client.setForeground).toHaveBeenCalledWith(true);
     expect(press).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true });
+    expect(result.content).toBe('{"ok":true}');
 
     // 其他拒绝原因不自愈:原样规整失败
     const otherReject = vi
@@ -176,7 +176,7 @@ describe("GBA 工具", () => {
       (await tool.execute({ resid: "res-7", name: "新卡带" }, context)).content,
     ) as Record<string, unknown>;
     expect(client.importRom).toHaveBeenCalledWith({ resId: "res-7", name: "新卡带" });
-    expect(ok.ok).toBe(true);
+    expect(ok).toEqual({ ok: true, name: "逆转裁判" });
 
     const rejecting = createFakeClient({
       importRom: vi.fn().mockRejectedValue(new GbaError("GBA_REJECTED", "NOT_A_GBA_ROM")),
