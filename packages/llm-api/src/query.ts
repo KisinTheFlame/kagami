@@ -29,7 +29,9 @@ export const LlmChatCallWireSummarySchema = z.object({
   model: z.string().min(1),
   extension: JsonRecordSchema.nullable(),
   status: LlmChatCallQueryStatusSchema,
-  latencyMs: z.number().int().nonnegative().nullable(),
+  // 与 console-api 的 LlmChatCallSummary 完全同形（无 nonnegative）：output 校验比数据源更严
+  // 只会放大整页 500 的风险面，不增加任何保护。
+  latencyMs: z.number().int().nullable(),
   createdAt: z.string().datetime(),
 });
 

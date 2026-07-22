@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import BetterSqlite3 from "better-sqlite3";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { sqliteFilePathFromUrl } from "./client.js";
@@ -98,17 +99,23 @@ export function migrateFromLegacyDb({
       return;
     }
 
-    let legacy: BetterSqlite3.Database;
-    try {
-      legacy = new BetterSqlite3(legacyPath, { readonly: true, fileMustExist: true });
-    } catch {
+    if (!existsSync(legacyPath)) {
       // 主库文件不存在：全新安装，无历史可搬，直接打哨兵。
       target.pragma(`user_version = ${String(MIGRATION_DONE_USER_VERSION)}`);
       return;
     }
+    // 文件存在则任何打开失败（持锁 / 权限 / 损坏）都如实冒泡中止启动——绝不能把真实错误
+    // 误判成「无历史可搬」而打哨兵，那会让一次性搬迁被永久短路。
+    const legacy = new BetterSqlite3(legacyPath, { readonly: true, fileMustExist: true });
 
     try {
       for (const spec of TABLES) {
+        // 目标表缺失 = schema 尚未 migrate（deploy 迁移失败后被回滚拉起、或单服务部署跳过
+        // 迁移）。此时绝不能打哨兵——否则 schema 修好后搬迁被永久跳过、历史与 outbox 水位
+        // 静默丢失。fail-closed 中止启动，交 deploy/PM2 重试。
+        if (countRows(target, spec.table) === null) {
+          throw new Error(`legacy 搬迁中止：目标库缺表 ${spec.table}（schema 未迁移，不打哨兵）`);
+        }
         migrateTable(legacy, target, spec);
         seedSequenceWatermark(legacy, target, spec);
       }
@@ -128,7 +135,7 @@ function migrateTable(
 ): void {
   const targetCount = countRows(target, table);
   if (targetCount === null || targetCount > 0) {
-    // 表不存在（schema 未迁移，防御性跳过）或已有数据（此前部分成功后的重试）。
+    // 已有数据（此前部分成功后的重试）即跳过；表不存在的情形已在上层 fail-closed 拦截。
     return;
   }
   const legacyCount = countRows(legacy, table);

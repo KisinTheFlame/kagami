@@ -41,17 +41,10 @@ export type RetentionSpec = {
  * Intentionally NOT cleaned up (not in this list):
  * - `ledger` (model LinearMessageLedger) — root agent 消息账本，只写不读，留作将来记忆系统的原始素材
  * - `root_agent_runtime_snapshot` — runtime snapshot
- * - `oauth_session` — persistent auth state
  * - `ithome_article` / `ithome_feed_cursor` — RSS articles (see TODOS.md for deferred strategy)
- * - `metric` — 已迁到 kagami-metric 独占的 DuckDB 库（#475 P1），不在共享 SQLite 里，
- *   其保留策略归 metric 进程自身，不在此清理面
- *
- * Field choices worth noting:
- * - `embedding_cache` keeps 30 days to avoid evicting hot hash hits that would
- *   trigger re-embed API calls.
- * - `oauth_state` uses `expiresAt` because it has a single-column index; `createdAt`
- *   does not. Since a state row expires ~10 minutes after creation, `expiresAt < now - 7d`
- *   is equivalent to `createdAt < now - 7d` in practice.
+ * - 已随表迁往独立库的清理面（epic #539）：metric（#475，DuckDB 自理）、napcat 两表
+ *   （kagami-napcat 的 prune 定时器）、llm 三表 + oauth（kagami-llm 的
+ *   data-retention-tasks，字段判据说明见彼处）
  */
 export const RETENTION_TASKS: readonly RetentionSpec[] = [
   {
