@@ -1,5 +1,6 @@
 import { agentApiContract } from "@kagami/agent-api/contract";
 import { consoleApiContract } from "@kagami/console-api/contract";
+import { gbaConsoleContract, gbaRomsContract } from "@kagami/gba-api/contract";
 import { authApiContract } from "@kagami/llm-api/auth-contract";
 import { llmProvidersViewContract } from "@kagami/llm-api/providers-view";
 import { metricApiContract } from "@kagami/metric-api/contract";
@@ -83,3 +84,15 @@ export const ossConsoleClient = createClient(ossConsoleContract, clientOptions);
 // /scheduler/tasks 前缀分流到 kagami-scheduler。
 export const schedulerTasksClient = createClient(schedulerTasksViewContract, clientOptions);
 export const schedulerTriggerClient = createClient(schedulerTriggerContract, clientOptions);
+
+// GBA 面（#541 PR3）：ROM 列表 / 删除 + 实况状态,经 gateway /gba/roms + /gba/console 前缀直连
+// kagami-gba。uploadRom 是 binary-envelope(裸字节上行),不进 JSON client——上传走 buildApiUrl
+// 的裸 fetch(见 pages/gba);实况画面 /gba/console/screen 是 binary-raw PNG,同样裸 fetch 轮询。
+export const gbaClient = createClient(
+  {
+    listRoms: gbaRomsContract.listRoms,
+    deleteRom: gbaRomsContract.deleteRom,
+    consoleState: gbaConsoleContract.state,
+  },
+  clientOptions,
+);

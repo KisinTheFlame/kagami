@@ -11,6 +11,7 @@
   "dependencies": {
     "@kagami/agent-api": "workspace:*",
     "@kagami/console-api": "workspace:*",
+    "@kagami/gba-api": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/llm-api": "workspace:*",
     "@kagami/metric-api": "workspace:*",

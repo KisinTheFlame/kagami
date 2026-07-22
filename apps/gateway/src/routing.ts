@@ -2,7 +2,7 @@
 // 的纯决策（不碰 config / URL），便于单测覆盖边界；index.ts 再把 UpstreamKey 映射到具体上游地址。
 
 /** 上游进程标识；`agent` 是默认兜底（不命中任何专用前缀的都回 kagami-agent）。 */
-export type UpstreamKey = "metric" | "llm" | "console" | "oss" | "scheduler" | "agent";
+export type UpstreamKey = "metric" | "llm" | "console" | "oss" | "scheduler" | "gba" | "agent";
 
 // 这些前缀的 /api 请求路由到 console 进程（管理台后端，纯 DB 查询）；其余仍到 agent。
 const CONSOLE_PATH_PREFIXES = [
@@ -30,6 +30,10 @@ const OSS_PATH_PREFIXES = ["/oss-object"];
 // / status / runs、SSE tick、/internal/scheduler-trigger 都是服务间内部路由，刻意不进网关前缀，
 // 前端经网关够不到它们。
 const SCHEDULER_PATH_PREFIXES = ["/scheduler/tasks"];
+// 管理台 GBA 面路由到 kagami-gba 进程（#541 PR3）：/gba/roms 是 ROM 管理（列表 / 上传 / 删除），
+// /gba/console 是实况只读面（当前画面 PNG + 运行状态，页面聚焦时每秒轮询）。游玩路由 /gba/run/*
+// 刻意不进分流表——浏览器经网关够不到按键 / 加载 / 前后台切换，那是 agent 直连的专属面。
+const GBA_PATH_PREFIXES = ["/gba/roms", "/gba/console"];
 
 /**
  * 前缀匹配：命中「等于前缀」或「前缀 + `/` 打头的子路径」。以 `/` 边界收口是关键——`/llm/providers`
@@ -55,6 +59,9 @@ export function selectUpstreamKey(upstreamPath: string): UpstreamKey {
   }
   if (matchesAnyPrefix(upstreamPath, SCHEDULER_PATH_PREFIXES)) {
     return "scheduler";
+  }
+  if (matchesAnyPrefix(upstreamPath, GBA_PATH_PREFIXES)) {
+    return "gba";
   }
   return "agent";
 }

@@ -473,6 +473,31 @@ describe("GbaService", () => {
       expect(store.getBatterySave(upload.rom.id)?.subarray(0, 4).toString()).toBe("IDLE");
       await watchService.shutdown();
     });
+
+    it("控制台观战(peekFramePng/state)是被动的:不刷新看门狗", async () => {
+      const watchService = new GbaService({
+        store,
+        ossClient: oss,
+        coreFactory: () => {
+          const core = new FakeEmulatorCore();
+          cores.push(core);
+          return core;
+        },
+        watchdogIdleMs: 2000,
+      });
+      const upload = await watchService.uploadRom({ name: "观战", bytes: fakeRomBytes(11) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      await watchService.loadGame(upload.rom.id);
+      watchService.setForeground(true);
+      // 临近超时前持续观战轮询——若 peek 刷新活动,看门狗永不触发。
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(watchService.peekFramePng()).not.toBeNull();
+      watchService.state();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(watchService.state().foreground).toBe(false); // 照常在原始期限转后台
+      await watchService.shutdown();
+    });
   });
 
   describe("ROM 库", () => {

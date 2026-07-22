@@ -1,7 +1,11 @@
 import type { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
-import { registerBinaryEnvelopeRoute, registerJsonRoute } from "@kagami/http/register";
-import { gbaApiContract, gbaRomsContract } from "@kagami/gba-api/contract";
+import {
+  registerBinaryEnvelopeRoute,
+  registerBinaryRawRoute,
+  registerJsonRoute,
+} from "@kagami/http/register";
+import { gbaApiContract, gbaConsoleContract, gbaRomsContract } from "@kagami/gba-api/contract";
 import { MAX_ROM_BYTES, toRomView, type GbaService } from "../application/gba.service.js";
 
 /**
@@ -73,6 +77,26 @@ export class GbaHandler {
     registerJsonRoute(app, gbaRomsContract.deleteRom, async ({ input }) =>
       this.service.deleteRom(input.romId),
     );
+
+    // === 控制台实况面（#541 PR3,被动只读:不刷新看门狗）===
+
+    registerJsonRoute(app, gbaConsoleContract.state, () => this.service.state());
+
+    registerBinaryRawRoute(app, gbaConsoleContract.screen, async ({ raw }) => {
+      const png = this.service.peekFramePng();
+      if (!png) {
+        raw.writeHead(404).end();
+        return;
+      }
+      raw.writeHead(200, {
+        "content-type": "image/png",
+        "content-length": String(png.length),
+        // 实况帧每秒都在变,禁止任何缓存层介入。
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      });
+      raw.end(png);
+    });
   }
 }
 
