@@ -21,36 +21,15 @@ export type GbaRomView = z.infer<typeof GbaRomViewSchema>;
 /** 序列一步（holdFrames/gapFrames 已解析,client 层不吃 zod 默认值——工具层补齐后递交）。 */
 export type GbaPressStepInput = z.infer<typeof GbaPressStepSchema>;
 
-/** press/press_sequence 成功结果（截图 + 时间线元数据）。 */
-export type GbaPressOutcome = {
-  timelineId: string;
-  startFrame: number;
-  releasedFrame: number;
-  capturedFrame: number;
-  imageBase64: string;
-};
-
-export type GbaScreenshotOutcome = {
-  timelineId: string;
-  capturedFrame: number;
-  imageBase64: string;
-};
-
 export interface GbaClient {
   state(): Promise<GbaRunState>;
   setForeground(focused: boolean): Promise<{ foreground: boolean }>;
   listRoms(): Promise<GbaRomView[]>;
-  loadGame(romId: number): Promise<{ romId: number; romName: string; timelineId: string }>;
-  press(input: {
-    buttons: GbaButton[];
-    holdFrames: number;
-    settleFrames: number;
-  }): Promise<GbaPressOutcome>;
-  pressSequence(input: {
-    steps: GbaPressStepInput[];
-    settleFrames: number;
-  }): Promise<GbaPressOutcome>;
-  screenshot(): Promise<GbaScreenshotOutcome>;
+  loadGame(romId: number): Promise<{ romName: string }>;
+  /** press 类成功结果就是画面本身（base64 PNG）——契约不设诊断元数据。 */
+  press(input: { buttons: GbaButton[]; holdFrames: number; settleFrames: number }): Promise<string>;
+  pressSequence(input: { steps: GbaPressStepInput[]; settleFrames: number }): Promise<string>;
+  screenshot(): Promise<string>;
   importRom(input: { resId: string; name: string }): Promise<GbaRomView>;
 }
 
@@ -86,45 +65,43 @@ export class HttpGbaClient implements GbaClient {
     return roms;
   }
 
-  public async loadGame(
-    romId: number,
-  ): Promise<{ romId: number; romName: string; timelineId: string }> {
+  public async loadGame(romId: number): Promise<{ romName: string }> {
     const result = await this.api.loadGame({ romId });
     if (!result.ok) {
       throw new GbaError("GBA_REJECTED", result.reason);
     }
-    return { romId: result.romId, romName: result.romName, timelineId: result.timelineId };
+    return { romName: result.romName };
   }
 
   public async press(input: {
     buttons: GbaButton[];
     holdFrames: number;
     settleFrames: number;
-  }): Promise<GbaPressOutcome> {
+  }): Promise<string> {
     const result = await this.api.press(input);
     if (!result.ok) {
       throw new GbaError("GBA_REJECTED", result.reason);
     }
-    return result;
+    return result.imageBase64;
   }
 
   public async pressSequence(input: {
     steps: GbaPressStepInput[];
     settleFrames: number;
-  }): Promise<GbaPressOutcome> {
+  }): Promise<string> {
     const result = await this.api.pressSequence(input);
     if (!result.ok) {
       throw new GbaError("GBA_REJECTED", result.reason);
     }
-    return result;
+    return result.imageBase64;
   }
 
-  public async screenshot(): Promise<GbaScreenshotOutcome> {
+  public async screenshot(): Promise<string> {
     const result = await this.api.screenshot({});
     if (!result.ok) {
       throw new GbaError("GBA_REJECTED", result.reason);
     }
-    return result;
+    return result.imageBase64;
   }
 
   public async importRom(input: { resId: string; name: string }): Promise<GbaRomView> {

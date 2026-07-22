@@ -44,58 +44,32 @@ export const GbaPressStepSchema = z.object({
 /** 最后一步松开后的结算等待帧数，默认 12（~200ms，避开「刚松键画面未提交」的过渡帧）。 */
 const SettleFramesSchema = z.number().int().min(0).default(12);
 
-/**
- * press 结果的时间线元数据：帧号帮助诊断「决策-执行漂移」（LLM 推理间隙游戏在实时继续跑），
- * 不做乐观锁。timelineId 在 loadGame / 服务重启时更换，防不同时间线的帧号被混为一谈。
- * releasedFrame = 最后一个「按住」帧之后的时刻（尾部 gap/settle 里键已松开，不计入）。
- */
-export const GbaFrameMetaSchema = z.object({
-  timelineId: z.string(),
-  startFrame: z.number().int(),
-  releasedFrame: z.number().int(),
-  capturedFrame: z.number().int(),
-});
-
 /** 各结果 schema 共用的失败分支：领域拒绝统一 `{ ok:false, reason }`。 */
 const GbaFailureSchema = z.object({ ok: z.literal(false), reason: z.string() });
 
 /**
+ * press / press_sequence / screenshot 的统一结果：成功分支**只有画面本身**。契约不设
+ * timelineId / 帧号这类诊断元数据——没有任何读者（小镜看图行动,用户不看,也无处落盘）,
+ * 「服务算了、传了、丢弃」是纯死重（设计原则见 issue #541 收尾反馈）。
  * 画面以 base64 PNG 走 JSON 回传（240×160 放大 2x，数十 KB、本机回环）：不值得为「上行 JSON +
  * 下行 binary」发明新契约原语；大块数据由 agent 侧工具拦下转多模态 effect，不进主 Agent 上下文。
  */
-export const GbaPressResultSchema = z.discriminatedUnion("ok", [
-  GbaFrameMetaSchema.extend({ ok: z.literal(true), imageBase64: z.string() }),
-  GbaFailureSchema,
-]);
-
-export const GbaScreenshotResultSchema = z.discriminatedUnion("ok", [
-  z.object({
-    ok: z.literal(true),
-    timelineId: z.string(),
-    capturedFrame: z.number().int(),
-    imageBase64: z.string(),
-  }),
+export const GbaScreenResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), imageBase64: z.string() }),
   GbaFailureSchema,
 ]);
 
 export const GbaLoadResultSchema = z.discriminatedUnion("ok", [
-  z.object({
-    ok: z.literal(true),
-    romId: z.number().int(),
-    romName: z.string(),
-    timelineId: z.string(),
-  }),
+  z.object({ ok: z.literal(true), romName: z.string() }),
   GbaFailureSchema,
 ]);
 
 export const GbaRunStateSchema = z.object({
   loaded: z.boolean(),
-  romId: z.number().int().nullable(),
   romName: z.string().nullable(),
   foreground: z.boolean(),
-  /** 自核心冷启动以来的帧计数；未加载时为 0。 */
+  /** 自核心冷启动以来的帧计数；未加载时为 0。控制台实况页显示,亦是「活着」的证据。 */
   frame: z.number().int(),
-  timelineId: z.string().nullable(),
 });
 
 /** ROM 库列表行（sqlite `rom` 表视图）。 */
@@ -103,7 +77,6 @@ export const GbaRomViewSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   sizeBytes: z.number().int(),
-  sha256: z.string(),
   createdAt: z.string(),
   lastPlayedAt: z.string().nullable(),
   /** 是否已有电池存档（battery_save 行存在）。 */
@@ -161,7 +134,7 @@ export const gbaApiContract = {
       holdFrames: z.number().int().min(1).default(3),
       settleFrames: SettleFramesSchema,
     }),
-    output: GbaPressResultSchema,
+    output: GbaScreenResultSchema,
     timeoutMs: GBA_PRESS_TIMEOUT_MS,
   }),
   pressSequence: defineJsonRoute({
@@ -171,7 +144,7 @@ export const gbaApiContract = {
       steps: z.array(GbaPressStepSchema).min(1),
       settleFrames: SettleFramesSchema,
     }),
-    output: GbaPressResultSchema,
+    output: GbaScreenResultSchema,
     timeoutMs: GBA_PRESS_TIMEOUT_MS,
   }),
   screenshot: defineJsonRoute({
@@ -179,7 +152,7 @@ export const gbaApiContract = {
     path: "/gba/run/screenshot",
     input: z.object({}),
     // 前后台皆可（冻结帧也能看）；未加载 ROM 时领域拒绝。
-    output: GbaScreenshotResultSchema,
+    output: GbaScreenResultSchema,
     timeoutMs: GBA_QUERY_TIMEOUT_MS,
   }),
   listRoms: defineJsonRoute({
