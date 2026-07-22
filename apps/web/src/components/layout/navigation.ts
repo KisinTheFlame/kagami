@@ -3,6 +3,7 @@ import {
   Brain,
   CalendarClock,
   FileText,
+  Gamepad2,
   Gauge,
   HardDrive,
   History,
@@ -39,6 +40,7 @@ export const navItems: readonly NavItem[] = [
   { to: "/napcat-event-history", label: "NapCat 事件", icon: Webhook },
   { to: "/napcat-group-message-history", label: "QQ 消息", icon: MessagesSquare },
   { to: "/oss-objects", label: "OSS 对象", icon: HardDrive },
+  { to: "/gba", label: "GBA 掌机", icon: Gamepad2 },
 ];
 
 export function getPageTitle(pathname: string): string {

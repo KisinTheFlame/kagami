@@ -1,0 +1,7 @@
+{
+  "name": "native-gles",
+  "version": "0.0.0-kagami-stub",
+  "description": "kagami 本地 stub：native-gles 只服务 retroemu 的 GL 硬渲核心（N64/PSX），mGBA 软渲染永不触达。stub 掉后安装无需原生构建工具链，见 issue #541。",
+  "type": "module",
+  "main": "index.js"
+}

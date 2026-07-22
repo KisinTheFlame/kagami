@@ -19,6 +19,8 @@ export interface GatewayConfig {
   ossTarget: URL;
   /** scheduler 上游基址，由 services.scheduler.host/port 拼出（调度任务全局查询 / 触发 /scheduler/tasks 走它）。 */
   schedulerTarget: URL;
+  /** gba 上游基址，由 services.gba.host/port 拼出（ROM 管理 /gba/roms 与实况面 /gba/console 走它）。 */
+  gbaTarget: URL;
   /** 静态资源目录：gateway 自身产物下的 dist/public（构建期由 @kagami/web 的 dist 拷入，见 #496）。 */
   distDir: string;
 }
@@ -37,6 +39,7 @@ interface RawConfig {
     metric?: RawServiceEndpoint;
     oss?: RawServiceEndpoint;
     scheduler?: RawServiceEndpoint;
+    gba?: RawServiceEndpoint;
   };
 }
 
@@ -68,6 +71,7 @@ export function loadGatewayConfig(): GatewayConfig {
     metricTarget: resolveEndpoint(services?.metric, "metric"),
     ossTarget: resolveEndpoint(services?.oss, "oss"),
     schedulerTarget: resolveEndpoint(services?.scheduler, "scheduler"),
+    gbaTarget: resolveEndpoint(services?.gba, "gba"),
     // 运行时 config.js 位于 apps/gateway/dist/，前端产物在同级 public/ 下（构建期拷入）。
     distDir: path.join(path.dirname(fileURLToPath(import.meta.url)), "public"),
   };

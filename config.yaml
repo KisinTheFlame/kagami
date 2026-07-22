@@ -20,6 +20,7 @@ services:
     port: 20013
     databaseUrl: file:./data/sqlite/napcat.db # napcat 独占 SQLite 库（napcat_event / napcat_qq_message / outbox / image_asset，#539），与主库 kagami.db 同目录不同文件
   pixel: { host: 127.0.0.1, port: 20012 } # kagami-pixel（像素画服务，仅 localhost：agent 经 HttpPixelClient 驱动）
+  gba: { host: 127.0.0.1, port: 20015 } # kagami-gba（GBA 模拟器服务，仅 localhost：agent 经 HttpGbaClient 直连游玩面，gateway 只转 /gba/roms 管理面；#541。20014 scheduler 已占）
   scheduler: # kagami-scheduler（通用定时调度服务，仅 localhost：agent 经 SchedulerClient 注册 + SSE 收 tick；#428。20013 napcat / 20012 pixel 已占）
     host: 127.0.0.1
     port: 20014

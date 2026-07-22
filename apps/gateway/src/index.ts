@@ -20,6 +20,7 @@ const UPSTREAM_TARGETS: Record<UpstreamKey, URL> = {
   console: config.consoleTarget,
   oss: config.ossTarget,
   scheduler: config.schedulerTarget,
+  gba: config.gbaTarget,
   agent: config.agentTarget,
 };
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
@@ -141,6 +142,13 @@ async function proxyApiRequest(
 
   for (const [key, value] of Object.entries(req.headers)) {
     if (typeof value === "undefined") {
+      continue;
+    }
+    // 请求侧同样剥离逐跳头；另外剥 expect——curl 等客户端对 >1MB body 自动加
+    // `Expect: 100-continue`,而 undici fetch 不支持该机制,原样转发会让整个上游请求
+    // 直接 fetch failed(首个受害者:GBA ROM 上传,#541 PR3)。node:http 已在入站侧
+    // 处理过 100-continue 握手,上游无需再见到这个头。
+    if (HOP_BY_HOP_HEADERS.has(key) || key === "expect") {
       continue;
     }
 

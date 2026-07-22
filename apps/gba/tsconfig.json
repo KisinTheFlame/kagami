@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "paths": {
+      "@kagami/gba-api/*": ["./../../packages/gba-api/src/*"],
+      "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"]
+    }
+  },
+  "include": ["src", "test"]
+}

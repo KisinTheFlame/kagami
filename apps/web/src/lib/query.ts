@@ -49,6 +49,11 @@ export const queryKeys = {
   mainAgentContext: {
     recent: () => ["main-agent-context", "recent"] as const,
   },
+  gba: {
+    roms: () => ["gba", "roms"] as const,
+    state: () => ["gba", "state"] as const,
+    screen: () => ["gba", "screen"] as const,
+  },
 };
 
 export function createAppQueryClient() {

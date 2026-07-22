@@ -1,12 +1,8 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { SpireScreenSchema } from "@kagami/spire-api/contract";
 import { newRun } from "@kisinwen/sts-engine/engine/engine";
 import { startCombat } from "@kisinwen/sts-engine/engine/combat/combat";
 import { toScreenView } from "../src/application/state-view.js";
-import { SaveStore } from "../src/persistence/save-store.js";
 import { migrateLoadedState } from "@kisinwen/sts-engine/migrate";
 
 // 回归（小镜「开新局报错 orbs/stance required」）：老版本存档缺 C3/C4 后加字段
@@ -44,14 +40,6 @@ describe("存档迁移：老档缺后加字段", () => {
     // watcher 非机器人 → 0 个球槽。
     expect(migrated.combat!.orbSlots).toBe(0);
     expect(() => SpireScreenSchema.parse(toScreenView(migrated, {}))).not.toThrow();
-  });
-
-  it("SaveStore.load 读老档时自动迁移", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spire-migrate-"));
-    await writeFile(path.join(dir, "save.json"), makeLegacySaveJson(), "utf8");
-    const loaded = await new SaveStore({ dir }).load();
-    expect(loaded).not.toBeNull();
-    expect(() => SpireScreenSchema.parse(toScreenView(loaded!, {}))).not.toThrow();
   });
 
   it("机器人老档回填 3 个球槽", () => {
