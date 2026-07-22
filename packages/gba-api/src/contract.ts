@@ -140,8 +140,10 @@ export const gbaApiContract = {
     path: "/gba/run/foreground",
     input: z.object({ focused: z.boolean() }),
     // blur 会先 flush 电池存档再冻结；flush 失败是服务故障（HTTP 500），不是领域拒绝。
+    // 超时刻意收窄：onFocus/onBlur 会同步等它,服务半开挂死时不能把 App 切换拖住太久
+    //（spire 先例是 onFocus 零 I/O;GBA 的运行模型要求这一跳,用短超时控制暴露面）。
     output: z.object({ foreground: z.boolean() }),
-    timeoutMs: GBA_QUERY_TIMEOUT_MS,
+    timeoutMs: GBA_STATE_TIMEOUT_MS,
   }),
   loadGame: defineJsonRoute({
     method: "POST",
@@ -186,6 +188,15 @@ export const gbaApiContract = {
     input: z.object({}),
     output: GbaRomListSchema,
     timeoutMs: GBA_QUERY_TIMEOUT_MS,
+  }),
+  // 从 OSS 导入 ROM 进卡带库（#541 追加）：小镜收到的 ROM（群文件等渠道已落 OSS 拿到 resid）
+  // 由服务端直接 OSS→gba 搬运校验入库,32MB 字节不过 agent 上下文。校验/去重与 uploadRom 同路。
+  importRom: defineJsonRoute({
+    method: "POST",
+    path: "/gba/roms/import",
+    input: z.object({ resId: z.string().min(1), name: z.string().min(1) }),
+    output: GbaUploadResultSchema,
+    timeoutMs: GBA_LOAD_TIMEOUT_MS,
   }),
 };
 

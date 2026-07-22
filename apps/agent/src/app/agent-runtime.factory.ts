@@ -50,7 +50,9 @@ import { IthomeApp } from "../agent/apps/ithome/ithome.app.js";
 import { BrowserApp } from "../agent/apps/browser/browser.app.js";
 import type { BrowserClient } from "../acl/browser-client.js";
 import { SpireApp } from "../agent/apps/spire/spire.app.js";
+import { GbaApp } from "../agent/apps/gba/gba.app.js";
 import type { SpireClient } from "../acl/spire-client.js";
+import type { GbaClient } from "../acl/gba-client.js";
 import { PixelApp } from "../agent/apps/pixel/pixel.app.js";
 import type { PixelClient } from "../acl/pixel-client.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
@@ -91,6 +93,7 @@ type BuildAgentRuntimeInput = {
   browserClient: BrowserClient;
   /** 尖塔游戏动作客户端：打到独立的 kagami-spire 进程（issue #234）。 */
   spireClient: SpireClient;
+  gbaClient: GbaClient;
   /** 像素画动作客户端：打到独立的 kagami-pixel 进程（issue #365）。 */
   pixelClient: PixelClient;
   /** 生图客户端：打到 kagami-llm 的生图端点（走 codex 订阅额度，issue #508）。 */
@@ -165,6 +168,7 @@ export async function buildAgentRuntime({
   ossClient,
   browserClient,
   spireClient,
+  gbaClient,
   pixelClient,
   imageClient,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
@@ -245,6 +249,7 @@ export async function buildAgentRuntime({
   appManager.register(new AmapApp({ ossClient }));
   appManager.register(new BrowserApp({ browserClient, ossClient }));
   appManager.register(new SpireApp({ spireClient }));
+  appManager.register(new GbaApp({ gbaClient, ossClient }));
   appManager.register(new PixelApp({ pixelClient, ossClient }));
   // 共享异步任务原语：completion 以事件形式塞回主 Agent 事件队列，session 装配成 <async_tool_result>
   // 尾部追加触发新轮。atelier 是首个消费者；未来其它异步工具复用同一实例（#508）。

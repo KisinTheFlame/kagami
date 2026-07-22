@@ -501,6 +501,32 @@ describe("GbaService", () => {
   });
 
   describe("ROM 库", () => {
+    it("importRomFromOss:从 OSS 拉字节走同一校验入库;来源缺失/非 ROM 领域拒绝", async () => {
+      const sourceKey = await oss.putObject({
+        bytes: fakeRomBytes(21),
+        mimeType: "application/octet-stream",
+      });
+      const imported = await service.importRomFromOss({ resId: sourceKey, name: "群友给的" });
+      expect(imported.ok).toBe(true);
+      if (imported.ok) {
+        expect(imported.rom.name).toBe("群友给的");
+      }
+      expect(service.listRoms()).toHaveLength(1);
+
+      expect(await service.importRomFromOss({ resId: "res-404", name: "x" })).toEqual({
+        ok: false,
+        reason: "SOURCE_NOT_FOUND",
+      });
+      const junkKey = await oss.putObject({
+        bytes: Buffer.alloc(512, 0),
+        mimeType: "application/octet-stream",
+      });
+      expect(await service.importRomFromOss({ resId: junkKey, name: "垃圾" })).toEqual({
+        ok: false,
+        reason: "NOT_A_GBA_ROM",
+      });
+    });
+
     it("上传校验：尺寸 / 卡带头 / sha 去重 / 名称去重", async () => {
       expect(await service.uploadRom({ name: "太小", bytes: Buffer.alloc(10) })).toEqual({
         ok: false,

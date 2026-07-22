@@ -391,6 +391,34 @@ export class GbaService {
     return { ok: true, rom: toRomView(rom) };
   }
 
+  /**
+   * 从 OSS 导入 ROM（#541 追加需求）：agent 侧只递 resId + name,字节由本服务从 OSS 拉回、
+   * 走与 uploadRom 完全相同的校验/去重/入库路径(重新 putObject 拿自有 key——OSS 内容寻址
+   * 去重,相同字节零额外存储,且生命周期与来源对象解耦:来源被删不影响卡带库)。
+   */
+  public async importRomFromOss(input: { resId: string; name: string }): Promise<UploadResult> {
+    let bytes: Buffer;
+    try {
+      const object = await this.ossClient.getObject(input.resId, { maxBytes: MAX_ROM_BYTES });
+      bytes = object.bytes;
+    } catch (error) {
+      const reason = (error as { meta?: { reason?: string } }).meta?.reason;
+      logger.warn("GBA 从 OSS 导入 ROM 拉取失败", {
+        event: "gba.rom_import_fetch_failed",
+        resId: input.resId,
+        reason: reason ?? (error instanceof Error ? error.message : String(error)),
+      });
+      if (reason === "OSS_OBJECT_NOT_FOUND") {
+        return { ok: false, reason: "SOURCE_NOT_FOUND" };
+      }
+      if (reason === "OSS_OBJECT_TOO_LARGE") {
+        return { ok: false, reason: "SOURCE_TOO_LARGE" };
+      }
+      return { ok: false, reason: "SOURCE_FETCH_FAILED" };
+    }
+    return this.uploadRom({ name: input.name, bytes });
+  }
+
   public async deleteRom(romId: number): Promise<DeleteResult> {
     // loadGame 在飞期间 this.romId 尚未指向目标 ROM，「加载中拒删」的守卫会漏判——
     // 删掉正被加载的 ROM 行会让后续 setLastRomId / 存档 flush 撞 FK。加载期一律拒删。

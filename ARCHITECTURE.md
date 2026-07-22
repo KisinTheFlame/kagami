@@ -9,7 +9,7 @@ pnpm workspace 由 `apps/*`（各为独立进程）与 `packages/*` 组成，依
 ```
 apps/agent  ──→ packages/agent-runtime ──→ packages/llm
       ├────────→ packages/persistence ──→ packages/kernel
-      └────────→ packages/http + 各 *-api 契约包（llm/browser/oss/spire/metric/pixel/agent-api）
+      └────────→ packages/http + 各 *-api 契约包（llm/browser/oss/spire/metric/pixel/gba/agent-api）
 apps/console ──→ packages/persistence ──→ packages/kernel
       └────────→ packages/http + packages/console-api + napcat-api / rpc-client（napcat 数据经 HTTP 查询，#539）
 apps/llm     ──→ packages/llm-client + packages/auth ──→ packages/kernel / persistence / llm-api  （独立进程，LLM + OAuth 网关）
@@ -135,6 +135,7 @@ apps/agent/src/agent/
     ├── browser/        Browser App：有头浏览器登录 + 交互式逛网站
     ├── amap/           高德地图 App：地点搜索 / 路线规划 / 静态地图出图（#182）
     ├── spire/          Spire App：杀塔式卡牌游戏薄壳，经 HttpSpireClient 打到独立 apps/spire 进程（#234）
+    ├── gba/            GBA 掌机 App：模拟器薄壳（拿起=前台实速/放下=冻结），经 HttpGbaClient 打到独立 apps/gba 进程（#541）
     ├── terminal/       终端 App 壳
     └── todo/           待办本 App：自发记 / 群友托付，到点回提醒
 ```

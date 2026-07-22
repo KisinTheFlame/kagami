@@ -78,6 +78,10 @@ export class GbaHandler {
       this.service.deleteRom(input.romId),
     );
 
+    registerJsonRoute(app, gbaApiContract.importRom, async ({ input }) =>
+      this.service.importRomFromOss(input),
+    );
+
     // === 控制台实况面（#541 PR3,被动只读:不刷新看门狗）===
 
     registerJsonRoute(app, gbaConsoleContract.state, () => this.service.state());
