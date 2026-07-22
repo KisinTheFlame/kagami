@@ -47,6 +47,11 @@ model AppLog {
   @@map("app_log")
 }
 
+// —— napcat 旧表（epic #539 子 issue 2 已拆走）——
+// napcat_event / napcat_qq_message / napcat_event_outbox / image_asset 的归属已迁至
+// apps/napcat/prisma（napcat 独占 data/sqlite/napcat.db），历史数据由 napcat 启动时
+// 一次性搬迁。主库中的这四张旧表仅存历史副本、无任何进程读写，由 #539 子 issue 5
+// 统一 DROP；在那之前 model 保留在此以匹配主库的实际 schema。
 model NapcatEvent {
   id          Int       @id @default(autoincrement())
   postType    String    @map("post_type")

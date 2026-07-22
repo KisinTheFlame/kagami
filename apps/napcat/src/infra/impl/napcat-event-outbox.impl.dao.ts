@@ -1,4 +1,4 @@
-import type { Database } from "@kagami/persistence/db/client";
+import type { Database } from "../db/client.js";
 import { NapcatAgentEventSchema, type NapcatOutboxEvent } from "@kagami/napcat-api/event";
 import type { NapcatAgentEvent } from "@kagami/napcat-api/event";
 import type { NapcatEventOutboxDao } from "../napcat-event-outbox.dao.js";

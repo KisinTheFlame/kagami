@@ -27,7 +27,7 @@ import {
 } from "./shared.js";
 import { isNapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
-import type { NapcatQqMessageDao } from "@kagami/persistence/dao/napcat-group-message.dao";
+import type { NapcatQqMessageDao } from "../../infra/napcat-group-message.dao.js";
 import type {
   NapcatImageAnalysisResult,
   NapcatImageMessageAnalyzer,

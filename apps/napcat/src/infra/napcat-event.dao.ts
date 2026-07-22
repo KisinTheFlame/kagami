@@ -39,4 +39,6 @@ export interface NapcatEventDao {
   insert(item: InsertNapcatEventItem): Promise<void>;
   countByQuery(input: QueryNapcatEventListFilterInput): Promise<number>;
   listByQueryPage(input: QueryNapcatEventListPageInput): Promise<NapcatEventItem[]>;
+  /** 保留清理（epic #539：随表从 agent 的 data-retention 迁入 napcat）：删 createdAt < cutoff 的行。 */
+  deleteOlderThan(cutoff: Date): Promise<number>;
 }

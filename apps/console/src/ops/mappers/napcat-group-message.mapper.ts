@@ -1,16 +1,17 @@
-import {
-  type NapcatQqMessageItem,
-  type NapcatQqMessageListResponse,
-} from "@kagami/console-api/napcat-group-message";
-import type { NapcatQqMessageItem as NapcatQqMessageDaoItem } from "@kagami/persistence/dao/napcat-group-message.dao";
+import { type NapcatQqMessageListResponse } from "@kagami/console-api/napcat-group-message";
+import type { NapcatQqMessageWireItem } from "@kagami/napcat-api/query";
 
 type MapNapcatQqMessageListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: NapcatQqMessageDaoItem[];
+  items: NapcatQqMessageWireItem[];
 };
 
+/**
+ * napcat 契约 wire item 与 console-api item 逐字段同形（时间已是 ISO 字符串），
+ * 这里只负责把 {total, items} 装进 console 的分页信封。
+ */
 export function mapNapcatQqMessageList(
   input: MapNapcatQqMessageListInput,
 ): NapcatQqMessageListResponse {
@@ -20,22 +21,6 @@ export function mapNapcatQqMessageList(
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapNapcatQqMessageItem),
-  };
-}
-
-function mapNapcatQqMessageItem(item: NapcatQqMessageDaoItem): NapcatQqMessageItem {
-  return {
-    id: item.id,
-    messageType: item.messageType,
-    subType: item.subType,
-    groupId: item.groupId,
-    userId: item.userId,
-    nickname: item.nickname,
-    messageId: item.messageId,
-    message: item.message,
-    eventTime: item.eventTime ? item.eventTime.toISOString() : null,
-    payload: item.payload,
-    createdAt: item.createdAt.toISOString(),
+    items: input.items,
   };
 }

@@ -1,6 +1,6 @@
 import type * as Prisma from "../../generated/prisma/internal/prismaNamespace.js";
-import { toJsonRecord, toInputJsonObject } from "../../common/prisma-json.js";
-import type { Database } from "../../db/client.js";
+import { toJsonRecord, toInputJsonObject } from "../db/prisma-json.js";
+import type { Database } from "../db/client.js";
 import type {
   InsertNapcatEventItem,
   NapcatEventDao,
@@ -62,6 +62,13 @@ export class PrismaNapcatEventDao implements NapcatEventDao {
       payload: toJsonRecord(item.payload),
       createdAt: item.createdAt,
     }));
+  }
+
+  public async deleteOlderThan(cutoff: Date): Promise<number> {
+    const { count } = await this.database.napcatEvent.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    return count;
   }
 }
 

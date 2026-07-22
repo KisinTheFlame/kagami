@@ -4,9 +4,9 @@ import { configureSqlite, createDbClient, type Database } from "@kagami/persiste
 import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { PrismaLlmChatCallDao } from "@kagami/persistence/dao/impl/llm-chat-call.impl.dao";
 import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
-import { PrismaNapcatEventDao } from "@kagami/persistence/dao/impl/napcat-event.impl.dao";
-import { PrismaNapcatQqMessageDao } from "@kagami/persistence/dao/impl/napcat-group-message.impl.dao";
 import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
+import { createClient } from "@kagami/rpc-client/client";
+import { napcatApiContract } from "@kagami/napcat-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -48,9 +48,12 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const logDao = new PrismaLogDao({ database });
   const llmChatCallDao = new PrismaLlmChatCallDao({ database });
   const innerThoughtDao = new PrismaInnerThoughtDao({ database });
-  const napcatEventDao = new PrismaNapcatEventDao({ database });
-  const napcatQqMessageDao = new PrismaNapcatQqMessageDao({ database });
   const todoItemDao = new PrismaTodoItemDao({ database });
+
+  // napcat 数据自 epic #539 子 issue 2 起归 napcat 独占库，console 经契约路由查询、不再直读。
+  const napcatQueryClient = createClient(napcatApiContract, {
+    baseUrl: `http://${config.services.napcat.host}:${String(config.services.napcat.port)}`,
+  });
 
   const appLogQueryService = new DefaultAppLogQueryService({ logDao });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
@@ -60,10 +63,10 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
     innerThoughtDao,
   });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
-    napcatEventDao,
+    napcatQueryClient,
   });
   const napcatQqMessageQueryService = new DefaultNapcatQqMessageQueryService({
-    napcatQqMessageDao,
+    napcatQueryClient,
   });
   const todoQueryService = new DefaultTodoQueryService({ todoItemDao });
 
