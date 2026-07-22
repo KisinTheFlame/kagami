@@ -3,6 +3,7 @@ import type { ToolExecutionResult, ToolKind } from "@kagami/agent-runtime";
 import { GbaButtonSchema } from "@kagami/gba-api/contract";
 import { GbaToolComponent } from "./gba-tool-component.js";
 import { buildGbaScreenToolResult } from "../render/gba-screen-effect.js";
+import { withForegroundRealign } from "./foreground-realign.js";
 import type { GbaClient } from "../../../../acl/gba-client.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
@@ -69,14 +70,17 @@ export class GbaPressSequenceTool extends GbaToolComponent<typeof Schema> {
   }
 
   protected async executeTyped(input: z.infer<typeof Schema>): Promise<ToolExecutionResult> {
-    const outcome = await this.getGbaClient().pressSequence({
-      steps: input.steps.map(step => ({
-        buttons: step.buttons,
-        holdFrames: step.hold_frames,
-        gapFrames: step.gap_frames,
-      })),
-      settleFrames: input.settle_frames,
-    });
+    const client = this.getGbaClient();
+    const outcome = await withForegroundRealign(client, () =>
+      client.pressSequence({
+        steps: input.steps.map(step => ({
+          buttons: step.buttons,
+          holdFrames: step.hold_frames,
+          gapFrames: step.gap_frames,
+        })),
+        settleFrames: input.settle_frames,
+      }),
+    );
     return buildGbaScreenToolResult({
       imageBase64: outcome.imageBase64,
       meta: outcome,

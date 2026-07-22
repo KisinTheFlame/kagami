@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ToolExecutionResult, ToolKind } from "@kagami/agent-runtime";
 import { GbaToolComponent } from "./gba-tool-component.js";
 import { buildGbaScreenToolResult } from "../render/gba-screen-effect.js";
+import { withForegroundRealign } from "./foreground-realign.js";
 import type { GbaClient } from "../../../../acl/gba-client.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
@@ -31,7 +32,8 @@ export class GbaScreenshotTool extends GbaToolComponent<typeof Schema> {
   }
 
   protected async executeTyped(): Promise<ToolExecutionResult> {
-    const outcome = await this.getGbaClient().screenshot();
+    const client = this.getGbaClient();
+    const outcome = await withForegroundRealign(client, () => client.screenshot());
     return buildGbaScreenToolResult({
       imageBase64: outcome.imageBase64,
       meta: outcome,

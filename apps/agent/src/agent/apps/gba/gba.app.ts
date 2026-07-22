@@ -67,6 +67,19 @@ export class GbaApp implements App {
     return true;
   }
 
+  /**
+   * 启动对账（review #541 PR2）：agent 上次若停在 GBA App 里退出,onBlur 没机会跑,掌机会
+   * 留在前台空转(看门狗 10 分钟兜底)。重启后焦点回到 portal,主动把掌机转回后台。
+   */
+  public async onStartup(): Promise<void> {
+    await this.setForegroundBestEffort(false);
+  }
+
+  /** 关停对账：正常退出/单独重载不触发 onBlur,这里主动冻结(含服务端 flush 存档)。 */
+  public async onShutdown(): Promise<void> {
+    await this.setForegroundBestEffort(false);
+  }
+
   public async help(): Promise<string> {
     return renderServerStaticTemplate(import.meta.url, "prompts/gba-app-help.hbs");
   }

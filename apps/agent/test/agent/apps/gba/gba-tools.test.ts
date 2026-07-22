@@ -144,6 +144,31 @@ describe("GBA 工具", () => {
     expect(result.current).toMatchObject({ name: "逆转裁判", foreground: true });
   });
 
+  it("前台失位自愈(review P1):press 首拒 GBA_NOT_FOREGROUND → 重申前台后重试成功", async () => {
+    const press = vi
+      .fn()
+      .mockRejectedValueOnce(new GbaError("GBA_REJECTED", "GBA_NOT_FOREGROUND"))
+      .mockResolvedValue(PRESS_OUTCOME);
+    const client = createFakeClient({ press });
+    const tool = new GbaPressTool({ getGbaClient: () => client });
+    const result = await tool.execute({ buttons: ["a"] }, context);
+    expect(client.setForeground).toHaveBeenCalledWith(true);
+    expect(press).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true });
+
+    // 其他拒绝原因不自愈:原样规整失败
+    const otherReject = vi
+      .fn()
+      .mockRejectedValue(new GbaError("GBA_REJECTED", "PRESS_IN_PROGRESS"));
+    const client2 = createFakeClient({ press: otherReject });
+    const failed = await new GbaPressTool({ getGbaClient: () => client2 }).execute(
+      { buttons: ["a"] },
+      context,
+    );
+    expect(otherReject).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(failed.content)).toMatchObject({ ok: false, message: "PRESS_IN_PROGRESS" });
+  });
+
   it("import_rom:递交 resid+name,回冻结结构结果;领域拒绝走 GBA_REJECTED", async () => {
     const client = createFakeClient();
     const tool = new GbaImportRomTool({ getGbaClient: () => client });

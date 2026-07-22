@@ -140,8 +140,10 @@ export const gbaApiContract = {
     path: "/gba/run/foreground",
     input: z.object({ focused: z.boolean() }),
     // blur 会先 flush 电池存档再冻结；flush 失败是服务故障（HTTP 500），不是领域拒绝。
+    // 超时刻意收窄：onFocus/onBlur 会同步等它,服务半开挂死时不能把 App 切换拖住太久
+    //（spire 先例是 onFocus 零 I/O;GBA 的运行模型要求这一跳,用短超时控制暴露面）。
     output: z.object({ foreground: z.boolean() }),
-    timeoutMs: GBA_QUERY_TIMEOUT_MS,
+    timeoutMs: GBA_STATE_TIMEOUT_MS,
   }),
   loadGame: defineJsonRoute({
     method: "POST",
