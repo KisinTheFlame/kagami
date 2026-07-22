@@ -79,6 +79,7 @@ type RootAgentRuntimeDeps = {
   agentTools?: ToolExecutor;
   contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
+  contextCompactionImageCountThreshold?: number;
   metricService?: MetricClient;
   llmRetryBackoffMs?: number;
   loopExtensions?: RootLoopExtension[];
@@ -92,6 +93,8 @@ const DEFAULT_IDLE_WAKE_MAX_WAIT_MS = 600_000;
 /** 摘要超轮失败后，阈值压缩的冷却时长：期间不再每轮重试，防成本放大。 */
 const SUMMARY_MAX_ROUNDS_COOLDOWN_MS = 600_000;
 const DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD = 150_000;
+/** 图片是按张计费的重上下文成分，与 token 阈值并列的第二触发条件。 */
+const DEFAULT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD = 550;
 const DEFAULT_DASHBOARD_CONTEXT_LIMIT = 40;
 const DEFAULT_DASHBOARD_PREVIEW_LENGTH = 160;
 const logger = new AppLogger({ source: "agent.root-agent-runtime" });
@@ -137,6 +140,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
   private readonly runtimeKey: string;
   private readonly contextSummarizer?: ContextSummarizerLike;
   private readonly contextCompactionTotalTokenThreshold: number;
+  private readonly contextCompactionImageCountThreshold: number;
   private readonly llmRetryBackoffMs: number;
   private readonly metricService: MetricClient;
   private readonly now: () => Date;
@@ -163,6 +167,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     runtimeKey,
     contextSummarizer,
     contextCompactionTotalTokenThreshold,
+    contextCompactionImageCountThreshold,
     metricService,
     llmRetryBackoffMs,
     now,
@@ -181,6 +186,8 @@ export class RootAgentHost implements RootAgentExtensionHost {
     this.contextSummarizer = contextSummarizer;
     this.contextCompactionTotalTokenThreshold =
       contextCompactionTotalTokenThreshold ?? DEFAULT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD;
+    this.contextCompactionImageCountThreshold =
+      contextCompactionImageCountThreshold ?? DEFAULT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD;
     this.metricService = metricService ?? NOOP_METRIC_CLIENT;
     this.llmRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
     this.now = now ?? (() => new Date());
@@ -407,23 +414,25 @@ export class RootAgentHost implements RootAgentExtensionHost {
       return false;
     }
 
+    // totalTokens 缺失时不整体跳过：token 阈值判不了，但图片数阈值仍可判（图片数
+    // 直接数消息列表即可，不依赖 provider 回报的 usage）。
     if (typeof totalTokens !== "number") {
       try {
-        logger.warn("Skipping context summary because totalTokens is missing", {
+        logger.warn("Context summary token trigger unavailable because totalTokens is missing", {
           event: "agent.root_agent_runtime.context_summary_skipped_missing_total_tokens",
         });
       } catch {
         // Ignore logger runtime setup gaps in tests and early boot.
       }
-      return false;
     }
 
     while (true) {
       const snapshot = await this.context.getSnapshot();
       const compactionPlan = createContextCompactionPlan({
         messages: snapshot.messages,
-        totalTokens,
+        totalTokens: typeof totalTokens === "number" ? totalTokens : null,
         totalTokenThreshold: this.contextCompactionTotalTokenThreshold,
+        imageCountThreshold: this.contextCompactionImageCountThreshold,
       });
       if (!compactionPlan) {
         return false;

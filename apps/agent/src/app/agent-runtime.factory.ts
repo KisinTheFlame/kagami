@@ -404,6 +404,7 @@ export async function buildAgentRuntime({
     tools: rootAgentTools,
     contextSummarizer: summaryTaskAgent,
     contextCompactionTotalTokenThreshold: config.server.agent.contextCompactionTotalTokenThreshold,
+    contextCompactionImageCountThreshold: config.server.agent.contextCompactionImageCountThreshold,
     metricService,
     llmRetryBackoffMs: config.server.agent.llmRetryBackoffMs,
     // 纯文本轮挂起的自唤醒兜底与 wait 工具共用同一个上限，语义一致：Agent 最多

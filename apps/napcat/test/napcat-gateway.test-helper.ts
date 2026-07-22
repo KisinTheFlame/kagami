@@ -116,6 +116,7 @@ export function createConfigManager(): ConfigManager {
       databaseUrl: "file::memory:",
       agent: {
         contextCompactionTotalTokenThreshold: 150_000,
+        contextCompactionImageCountThreshold: 550,
         llmRetryBackoffMs: 30_000,
         waitToolMaxWaitMs: 600_000,
         stateSampleIntervalMs: 2_000,
