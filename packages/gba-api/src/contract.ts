@@ -187,6 +187,15 @@ export const gbaApiContract = {
     output: GbaRomListSchema,
     timeoutMs: GBA_QUERY_TIMEOUT_MS,
   }),
+  // 从 OSS 导入 ROM 进卡带库（#541 追加）：小镜收到的 ROM（群文件等渠道已落 OSS 拿到 resid）
+  // 由服务端直接 OSS→gba 搬运校验入库,32MB 字节不过 agent 上下文。校验/去重与 uploadRom 同路。
+  importRom: defineJsonRoute({
+    method: "POST",
+    path: "/gba/roms/import",
+    input: z.object({ resId: z.string().min(1), name: z.string().min(1) }),
+    output: GbaUploadResultSchema,
+    timeoutMs: GBA_LOAD_TIMEOUT_MS,
+  }),
 };
 
 /**

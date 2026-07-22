@@ -61,7 +61,7 @@ export function useGbaRoms() {
 }
 
 /** 领域拒绝 reason → 展示文案(服务端 { ok:false, reason } 不是 HTTP 错误)。 */
-export const GBA_REJECT_MESSAGES: Record<string, string> = {
+const GBA_REJECT_MESSAGES: Record<string, string> = {
   INVALID_NAME: "名称不合法(1-200 字符)",
   INVALID_ROM_SIZE: "文件大小不合法(GBA ROM 应 ≤32MB)",
   NOT_A_GBA_ROM: "不是合法的 GBA ROM(卡带头校验失败)",
@@ -72,7 +72,7 @@ export const GBA_REJECT_MESSAGES: Record<string, string> = {
   LOAD_IN_PROGRESS: "正在加载游戏,稍后再试",
 };
 
-export function formatGbaReject(reason: string): string {
+function formatGbaReject(reason: string): string {
   return GBA_REJECT_MESSAGES[reason] ?? `操作被拒绝:${reason}`;
 }
 
