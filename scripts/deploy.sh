@@ -61,10 +61,12 @@ if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
   echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
-  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console / browser（读 browser_credential）/
+  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console /
   # llm（写 llm_chat_call/auth/embedding_cache）/ napcat（写 napcat_event/qq_message/image_asset/
   # outbox），都持有 WAL 库锁，否则迁移 "database is locked"。metric 自 #475 P1 起独占
-  # data/metric/metric.duckdb，不开共享库，无需停。
+  # data/metric/metric.duckdb，不开共享库，无需停。browser 自 #539 删 browser_credential 后
+  # 零持久化，但删表迁移本身要等【旧】browser 进程放锁才能跑，故暂留名单；该迁移在生产
+  # 落地后由 #539 子 issue 5（deploy.sh 收尾）移除。
   pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"

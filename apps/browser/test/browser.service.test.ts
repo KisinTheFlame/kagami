@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BrowserContext } from "playwright-core";
-import type {
-  BrowserCredential,
-  BrowserCredentialDao,
-} from "../src/application/browser-credential.dao.js";
 import { initTestLoggerRuntime } from "./helpers/logger.js";
 
 initTestLoggerRuntime();
@@ -100,16 +96,9 @@ function makeFakeContext(initialPages: FakePage[]) {
   };
 }
 
-const stubDao: BrowserCredentialDao = {
-  get: async () => null,
-  put: async () => undefined,
-  listHandles: async () => [],
-};
-
-function makeService(credentialDao: BrowserCredentialDao = stubDao) {
+function makeService() {
   return new BrowserService({
     config: { headless: true, userDataDir: "/tmp/test-profile" },
-    credentialDao,
   });
 }
 
@@ -126,39 +115,16 @@ describe("BrowserService", () => {
     await expect(service.click("2:e3")).rejects.toMatchObject({ code: "STALE_REF" });
   });
 
-  it("secretHandle 填进 fill 层，但返回值不含明文", async () => {
-    const credential: BrowserCredential = {
-      handle: "gh",
-      username: "kisin",
-      secret: "hunter2",
-    };
-    const dao: BrowserCredentialDao = {
-      get: async handle => (handle === "gh" ? credential : null),
-      put: async () => undefined,
-      listHandles: async () => ["gh"],
-    };
-    const page = makeFakePage("https://login");
-    hoisted.context = makeFakeContext([page]) as unknown as BrowserContext;
-    const service = makeService(dao);
-
-    await service.observe(); // epoch -> 1
-    const result = await service.type("1:e3", { secret: { handle: "gh", field: "secret" } }, false);
-
-    // 明文确实填进了 fill 层
-    expect(page.state.lastLocator.fill).toHaveBeenCalledWith("hunter2", expect.anything());
-    // 但服务返回值绝不含明文
-    expect(JSON.stringify(result)).not.toContain("hunter2");
-  });
-
-  it("缺失的 secretHandle 抛 CREDENTIAL_NOT_FOUND", async () => {
+  it("type 把文本填进 fill 层", async () => {
     const page = makeFakePage("https://login");
     hoisted.context = makeFakeContext([page]) as unknown as BrowserContext;
     const service = makeService();
 
-    await service.observe();
-    await expect(
-      service.type("1:e3", { secret: { handle: "missing", field: "secret" } }, false),
-    ).rejects.toMatchObject({ code: "CREDENTIAL_NOT_FOUND" });
+    await service.observe(); // epoch -> 1
+    const result = await service.type("1:e3", { text: "hello" }, false);
+
+    expect(page.state.lastLocator.fill).toHaveBeenCalledWith("hello", expect.anything());
+    expect(result).toEqual({ url: "https://login" });
   });
 
   it("活动页跟随 opener 栈：弹窗压栈、关闭弹回 opener", async () => {
