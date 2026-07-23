@@ -98,7 +98,7 @@ QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-a
 
 - 除非任务明确要求，否则一切交流与汇报统一使用简体中文。
 - 除非任务明确要求，否则默认在仓库根目录执行命令。
-- 数据库相关命令统一读取仓库根 `config.yaml` 中的 `server.databaseUrl`。
+- 数据库按服务独立（epic #539）：主库（agent 独占）读 `config.yaml` 的 `server.databaseUrl`；napcat / llm / scheduler 各自读 `services.<svc>.databaseUrl`。查哪张表先确认归属库（布局见 docs/configuration.md）。
 - **改配置 schema 必须同步三处**：`packages/kernel/src/config/config.loader.ts`、`config.yaml`（非隐私，纳入版本控制）、`config.secret.yaml.example`（隐私模板，新增隐私字段在这里补占位）。
 - **提交前至少执行**以下五项，且全部成功：
 
