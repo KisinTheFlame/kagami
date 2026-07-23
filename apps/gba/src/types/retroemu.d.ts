@@ -15,6 +15,14 @@ declare module "retroemu/src/core/LibretroHost.js" {
     /** RETRO_MEMORY_SAVE_RAM = 0；返回 WASM heap 内指针（0 = 无此内存区）。 */
     _retro_get_memory_data(memoryType: number): number;
     _retro_get_memory_size(memoryType: number): number;
+    /** savestate（无感重启快照）：序列化尺寸，0 = 核心不支持。 */
+    _retro_serialize_size(): number;
+    /** 序列化到 ptr（调用方 _malloc 好 size 字节）；返回值真 = 成功。 */
+    _retro_serialize(ptr: number, size: number): number;
+    /** 从 ptr 反序列化；核心校验失败（版本/尺寸不匹配）返回假。 */
+    _retro_unserialize(ptr: number, size: number): number;
+    _malloc(size: number): number;
+    _free(ptr: number): void;
   }
 
   export interface RetroemuVideoOutput {
