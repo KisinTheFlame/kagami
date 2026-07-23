@@ -56,7 +56,7 @@ const DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS = 10 * 60 * 1000;
 
 const UrlSchema = z.string().url();
 /**
- * `databaseUrl` 现为 SQLite 文件路径（`file:./data/sqlite/kagami.db`），不再是网络 URL，
+ * `databaseUrl` 现为 SQLite 文件路径（`file:./data/agent/agent.db`），不再是网络 URL，
  * 因此只校验非空字符串；绝对路径解析在 {@link loadStaticConfig} 中完成。
  */
 const DatabaseUrlSchema = z.string().trim().min(1);
