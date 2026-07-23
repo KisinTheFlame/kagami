@@ -58,7 +58,7 @@ export async function buildMetricRuntime(): Promise<MetricRuntime> {
 
 /**
  * metric 的 DuckDB 库落在仓库根 `data/metric/metric.duckdb`。从已解析的 sqlite 库路径
- * （`<repo>/data/sqlite/kagami.db`）反推出 `<repo>/data` 目录。metric 已彻底脱离共享 SQLite /
+ * （`<repo>/data/agent/agent.db`）反推出 `<repo>/data` 目录。metric 已彻底脱离共享 SQLite /
  * Prisma（#475 P1），此处只借 databaseUrl 定位仓库 data 目录，不再连它。
  *
  * 依赖 loadStaticConfig 已把 databaseUrl 绝对化（锚 config.yaml 目录）。若收到相对路径则显式抛错，

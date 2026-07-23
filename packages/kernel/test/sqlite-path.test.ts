@@ -22,8 +22,6 @@ describe("sqliteFilePathFromUrl", () => {
   });
 
   it("非 file: 的裸路径按 cwd resolve 成绝对路径", () => {
-    expect(sqliteFilePathFromUrl("data/sqlite/kagami.db")).toBe(
-      path.resolve("data/sqlite/kagami.db"),
-    );
+    expect(sqliteFilePathFromUrl("data/agent/agent.db")).toBe(path.resolve("data/agent/agent.db"));
   });
 });
