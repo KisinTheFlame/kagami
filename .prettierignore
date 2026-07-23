@@ -5,5 +5,6 @@ build
 coverage
 packages/server-core/src/generated/prisma
 apps/agent/static/**/*.hbs
+apps/napcat/static/**/*.hbs
 apps/agent/static/ai-tone-model.json
 .gstack

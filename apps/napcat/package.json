@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@kagami/http": "workspace:*",
+    "@kagami/image": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",

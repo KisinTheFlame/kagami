@@ -39,7 +39,7 @@ describe("BrowserScreenshotTool", () => {
     });
     expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-7" });
     const effect = result.effects?.[0] as AppendMessageEffect;
-    expect(effect.image?.content).toBe(Buffer.from("shot").toString("base64"));
+    expect(effect.images?.[0]?.content).toBe(Buffer.from("shot").toString("base64"));
     expect(effect.content).toContain('resid="res-7"');
   });
 
@@ -62,7 +62,7 @@ describe("BrowserScreenshotTool", () => {
     const parsed = JSON.parse(result.content);
     expect(parsed.resid).toBeUndefined();
     const effect = result.effects?.[0] as AppendMessageEffect;
-    expect(effect.image?.mimeType).toBe("image/jpeg");
+    expect(effect.images?.[0]?.mimeType).toBe("image/jpeg");
     expect(effect.content).not.toContain("resid=");
   });
 });

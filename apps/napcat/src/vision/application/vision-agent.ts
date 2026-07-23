@@ -1,4 +1,4 @@
-import type { LlmClient } from "@kagami/llm-client";
+import type { LlmClient, LlmContentPart } from "@kagami/llm-client";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { createVisionSystemPrompt } from "./system-prompt.js";
 
@@ -6,10 +6,18 @@ type VisionAgentDeps = {
   llmClient: LlmClient;
 };
 
-export type AnalyzeImageInput = {
+type AnalyzeImagePart = {
   content: Buffer;
   mimeType: string;
   filename?: string;
+};
+
+/**
+ * images 支持多张：极端长图经 @kagami/image 切片后按序传入（#556），一次调用让 vision
+ * 看到全部分片。单图场景传单元素数组。
+ */
+export type AnalyzeImageInput = {
+  images: AnalyzeImagePart[];
   prompt?: string;
 };
 
@@ -34,7 +42,17 @@ export class VisionAgent {
   public async analyzeImage(input: AnalyzeImageInput): Promise<AnalyzeImageResult> {
     validateAnalyzeImageInput(input);
 
-    const prompt = input.prompt?.trim().length ? input.prompt.trim() : createVisionSystemPrompt();
+    const prompt = input.prompt?.trim().length
+      ? input.prompt.trim()
+      : createVisionSystemPrompt({ tileCount: input.images.length });
+    const imageParts: LlmContentPart[] = input.images.map(image => ({
+      type: "image",
+      // LlmImageContentPart.content 现为 base64 字符串（JSON 安全）；
+      // VisionAgent 入参仍收 Buffer 字节，在此边缘转一次。
+      content: image.content.toString("base64"),
+      mimeType: image.mimeType,
+      filename: image.filename,
+    }));
     const response = await this.llmClient.chat(
       {
         messages: [
@@ -45,14 +63,7 @@ export class VisionAgent {
                 type: "text",
                 text: prompt,
               },
-              {
-                type: "image",
-                // LlmImageContentPart.content 现为 base64 字符串（JSON 安全）；
-                // VisionAgent 入参仍收 Buffer 字节，在此边缘转一次。
-                content: input.content.toString("base64"),
-                mimeType: input.mimeType,
-                filename: input.filename,
-              },
+              ...imageParts,
             ],
           },
         ],
@@ -86,24 +97,33 @@ export class VisionAgent {
 }
 
 function validateAnalyzeImageInput(input: AnalyzeImageInput): void {
-  if (input.content.byteLength === 0) {
+  if (input.images.length === 0) {
     throw new BizError({
-      message: "VisionAgent.analyzeImage requires non-empty image content",
+      message: "VisionAgent.analyzeImage requires at least one image",
       meta: { reason: "EMPTY_CONTENT" },
     });
   }
 
-  if (input.mimeType.trim().length === 0) {
-    throw new BizError({
-      message: "VisionAgent.analyzeImage requires a mimeType",
-      meta: { reason: "MISSING_MIME_TYPE" },
-    });
-  }
+  for (const image of input.images) {
+    if (image.content.byteLength === 0) {
+      throw new BizError({
+        message: "VisionAgent.analyzeImage requires non-empty image content",
+        meta: { reason: "EMPTY_CONTENT" },
+      });
+    }
 
-  if (!input.mimeType.toLowerCase().startsWith("image/")) {
-    throw new BizError({
-      message: "VisionAgent.analyzeImage only accepts image/* mime types",
-      meta: { reason: "INVALID_MIME_TYPE", mimeType: input.mimeType },
-    });
+    if (image.mimeType.trim().length === 0) {
+      throw new BizError({
+        message: "VisionAgent.analyzeImage requires a mimeType",
+        meta: { reason: "MISSING_MIME_TYPE" },
+      });
+    }
+
+    if (!image.mimeType.toLowerCase().startsWith("image/")) {
+      throw new BizError({
+        message: "VisionAgent.analyzeImage only accepts image/* mime types",
+        meta: { reason: "INVALID_MIME_TYPE", mimeType: image.mimeType },
+      });
+    }
   }
 }

@@ -28,11 +28,13 @@ export async function buildGbaScreenToolResult({
   const appendEffect: RootAgentEffect = {
     type: "append_message",
     content: `<gba_screen${residAttr} />`,
-    image: {
-      content: imageBase64,
-      mimeType: "image/png",
-      filename: "gba.png",
-    },
+    images: [
+      {
+        content: imageBase64,
+        mimeType: "image/png",
+        filename: "gba.png",
+      },
+    ],
   };
   return {
     content: JSON.stringify({ ok: true }),

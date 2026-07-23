@@ -89,9 +89,9 @@ class AppendMessageHandler implements EffectHandler<never> {
       throw new Error(`AppendMessageHandler received non-append effect: ${effect.type}`);
     }
     const append = effect;
-    if (append.image) {
+    if (append.images && append.images.length > 0) {
       return {
-        appendedMessages: [createUserImageMessage(append.content, append.image)],
+        appendedMessages: [createUserImageMessage(append.content, append.images)],
       };
     }
     return { appendedMessages: [createUserMessage(append.content)] };
