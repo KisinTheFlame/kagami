@@ -59,7 +59,7 @@ server:
     reconnectMs: 3000
     requestTimeoutMs: 10000
     startupContextRecentMessageCount: 40
-    # listenGroupIds（监听的 QQ 群号）是 PII，放 config.secret.yaml
+    # blockedGroupIds（屏蔽的 QQ 群号，含专用告警群）是 PII，放 config.secret.yaml；默认参与所有群
   llm:
     timeoutMs: 300000
     authUsageRefreshIntervalMs: 600000

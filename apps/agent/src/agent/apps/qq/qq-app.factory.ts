@@ -23,7 +23,7 @@ type BuildQqAppInput = {
   botQQ: string;
   creatorName: string;
   creatorQQ: string;
-  listenGroupIds: string[];
+  blockedGroupIds: string[];
   recentMessageLimit: number;
   aiTone: { enabled: boolean; blockThreshold: number };
   /** 资源读取（send_resource 按 resid 取图字节）。OSS 关闭时调用层报错。 */
@@ -55,7 +55,7 @@ export function buildQqApp({
   botQQ,
   creatorName,
   creatorQQ,
-  listenGroupIds,
+  blockedGroupIds,
   recentMessageLimit,
   aiTone,
   resourceService,
@@ -104,7 +104,7 @@ export function buildQqApp({
     botQQ,
     creatorName,
     creatorQQ,
-    listenGroupIds,
+    blockedGroupIds,
     recentMessageLimit,
     muteStore,
     sendMessageTool,

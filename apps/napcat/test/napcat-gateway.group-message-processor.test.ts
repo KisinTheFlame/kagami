@@ -49,7 +49,7 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
@@ -148,7 +148,7 @@ describe("NapcatGroupMessageProcessor", () => {
     };
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester,
       enqueueGroupMessageEvent: eventQueue.enqueue,
       imageMessageAnalyzer,
@@ -230,7 +230,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore bot self group message events", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -266,7 +266,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should ignore realtime message_sent group events", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -305,7 +305,7 @@ describe("NapcatGroupMessageProcessor", () => {
       throw new Error("publish failed");
     });
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -359,7 +359,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should render image segments into rawMessage", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -427,7 +427,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should render face segments via the face name map when faceText is absent", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -483,7 +483,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should render face segments using faceText when present", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -529,7 +529,7 @@ describe("NapcatGroupMessageProcessor", () => {
     imageMessageAnalyzer.analyzeImageSegment.mockResolvedValue({ description: "", resid: null });
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -581,10 +581,10 @@ describe("NapcatGroupMessageProcessor", () => {
     );
   });
 
-  it("should ignore group messages from other groups", async () => {
+  it("should ignore group messages from blocked groups", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: ["000000"],
       actionRequester: {
         request: vi.fn(),
       },
@@ -645,7 +645,7 @@ describe("NapcatGroupMessageProcessor", () => {
   it("should keep group messages when only unsupported segments are present", async () => {
     const eventQueue = createAgentEventQueue();
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -696,7 +696,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
   it("should log payload and skip reasons when malformed history messages are skipped", async () => {
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -735,7 +735,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
   it("should keep self sent message_sent history messages in context payloads", async () => {
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -793,7 +793,7 @@ describe("NapcatGroupMessageProcessor", () => {
 
   it("normalizeForwardMessages reuses vision for images and placeholders nested forwards", async () => {
     const processor = new NapcatGroupMessageProcessor({
-      listenGroupIds: ["987654"],
+      blockedGroupIds: [],
       actionRequester: {
         request: vi.fn(),
       },
@@ -868,9 +868,12 @@ describe("NapcatGroupMessageProcessor", () => {
       };
     }
 
-    function makeProcessor(actionRequester: { request: ReturnType<typeof vi.fn> }) {
+    function makeProcessor(
+      actionRequester: { request: ReturnType<typeof vi.fn> },
+      blockedGroupIds: string[] = [],
+    ) {
       return new NapcatGroupMessageProcessor({
-        listenGroupIds: ["987654"],
+        blockedGroupIds,
         actionRequester,
         enqueueGroupMessageEvent: createAgentEventQueue().enqueue,
         imageMessageAnalyzer,
@@ -933,8 +936,8 @@ describe("NapcatGroupMessageProcessor", () => {
       expect(groupBanEvent).toMatchObject({ targetUserId: null, targetName: null });
     });
 
-    it("非监听群：不产生 groupBanEvent", async () => {
-      const processor = makeProcessor(nameRequester());
+    it("黑名单群：不产生 groupBanEvent", async () => {
+      const processor = makeProcessor(nameRequester(), ["111111"]);
       const { groupBanEvent } = await processor.process({
         post_type: "notice",
         notice_type: "group_ban",

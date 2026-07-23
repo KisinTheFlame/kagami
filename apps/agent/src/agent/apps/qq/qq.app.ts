@@ -84,7 +84,8 @@ type QqAppDeps = {
   /** 创造者名字与 QQ 号：进 QQ 后在 help 里披露，方便小镜在群/私聊里认出创造者。 */
   creatorName: string;
   creatorQQ: string;
-  listenGroupIds: string[];
+  /** 屏蔽群黑名单：仅用于 restore 时重查——曾可见、后拉黑的群不从存档复活（#570）。实时过滤在 napcat 侧。 */
+  blockedGroupIds: string[];
   recentMessageLimit: number;
   /** 群禁言状态：禁言事件写、发送工具读。与 DefaultAgentMessageService 共享同一实例。 */
   muteStore: GroupMuteStateStore;
@@ -131,6 +132,7 @@ export class QqApp implements App, ForegroundInputSource {
   private readonly creatorQQ: string;
   private readonly recentMessageLimit: number;
   private readonly muteStore: GroupMuteStateStore;
+  private readonly blockedGroupIds: Set<string>;
   private readonly conversations = new Map<ConversationId, Conversation>();
   private currentConversationId: ConversationId | null = null;
   /**
@@ -146,7 +148,7 @@ export class QqApp implements App, ForegroundInputSource {
     botQQ,
     creatorName,
     creatorQQ,
-    listenGroupIds,
+    blockedGroupIds,
     recentMessageLimit,
     muteStore,
     sendMessageTool,
@@ -163,10 +165,9 @@ export class QqApp implements App, ForegroundInputSource {
     this.creatorQQ = creatorQQ;
     this.recentMessageLimit = recentMessageLimit;
     this.muteStore = muteStore;
-    for (const groupId of listenGroupIds) {
-      const conversation = Conversation.group(groupId, recentMessageLimit);
-      this.conversations.set(conversation.id, conversation);
-    }
+    // 黑名单模式（#570）：不再静态预建群会话——群会话在首次收到该群消息 / 禁言通知时懒创建
+    // （ensureGroupConversation）。blockedGroupIds 仅供 restore 重查，防拉黑群从存档复活。
+    this.blockedGroupIds = new Set(blockedGroupIds);
     this.tools = [
       sendMessageTool,
       sendResourceTool,
@@ -198,22 +199,14 @@ export class QqApp implements App, ForegroundInputSource {
     // napcat 拆成独立进程（issue #347）：WS 连接归 kagami-napcat，agent 经 HttpNapcatClient 出站、
     // NapcatEventSubscriber 订阅入站。这里只做启动上下文加载（拉群信息 / 恢复全员禁言态）。
     // 拉群信息（显示名）。私聊会话由 friend_list 事件 upsert。
+    // 黑名单模式下群会话懒创建：启动时 conversations 里的群均来自 restore（重启前可见的群），
+    // 给它们补拉群信息 + 恢复禁言态；新群在首次消息时经 ensureGroupConversation 懒补同一份逻辑。
     await Promise.all(
       [...this.conversations.values()]
         .filter(conversation => conversation.kind === "group")
-        .map(async conversation => {
+        .map(conversation => {
           const groupId = parseConversationGroupId(conversation.id);
-          if (!groupId) {
-            return;
-          }
-          try {
-            const groupInfo = await this.napcatGateway.getGroupInfo({ groupId });
-            conversation.setGroupInfo(groupInfo);
-            // 重启自愈：全员禁言态从群信息恢复（内存态重启即丢），无需先发一次失败。
-            this.muteStore.setWholeGroupMute(groupId, groupInfo.groupAllShut);
-          } catch {
-            // 群信息拉不到就退化为 groupId 显示。
-          }
+          return groupId ? this.hydrateGroupConversation(groupId) : Promise.resolve();
         }),
     );
 
@@ -343,10 +336,8 @@ export class QqApp implements App, ForegroundInputSource {
     }
 
     if (event.type === "napcat_group_message") {
-      const conversation = this.conversations.get(createGroupConversationId(event.data.groupId));
-      if (!conversation) {
-        return;
-      }
+      // 黑名单模式：到达 agent 的群消息均已过 napcat 黑名单过滤，首次即懒建会话（#570）。
+      const conversation = this.ensureGroupConversation(event.data.groupId);
       this.ingestMessage(
         conversation,
         event.data,
@@ -371,14 +362,11 @@ export class QqApp implements App, ForegroundInputSource {
 
   /**
    * 群禁言 / 解禁事件：更新禁言状态（自己被禁言 / 解禁、全员禁言开 / 关）+ 作为 group_notice
-   * 会话流消息走 ingestMessage（与普通消息完全同路：计未读、推通知、前台敲门）。会话不存在
-   * （非监听群，理论上已被网关过滤）则丢弃。
+   * 会话流消息走 ingestMessage（与普通消息完全同路：计未读、推通知、前台敲门）。黑名单模式下
+   * 非黑名单群的禁言通知同样懒建会话，让禁言态可展示（napcat 已过滤黑名单群，#570）。
    */
   private handleGroupBan(data: NapcatGroupBanData): void {
-    const conversation = this.conversations.get(createGroupConversationId(data.groupId));
-    if (!conversation) {
-      return;
-    }
+    const conversation = this.ensureGroupConversation(data.groupId);
 
     const wholeGroup = data.targetUserId === null;
     const selfTargeted = data.targetUserId === this.botQQ;
@@ -633,8 +621,9 @@ export class QqApp implements App, ForegroundInputSource {
   }
 
   /**
-   * 恢复存档时按 id 定位会话：群会话在监听列表里就用现成的（已下架的不复活）；私聊会话
-   * 按 id 现建一个空壳（好友信息留待 friend_list 事件回填）。
+   * 恢复存档时按 id 定位会话：私聊会话按 id 现建空壳（好友信息留待 friend_list 回填）；群会话
+   * 重查当前黑名单——曾可见、后加入黑名单的群不从存档复活（默认开放模式下唯一的隐性泄漏路径，
+   * #570），非黑名单群正常恢复、保留重启前的未读红点。
    */
   private ensureConversationForRestore(id: string): Conversation | null {
     const conversationId = toConversationId(id);
@@ -648,7 +637,13 @@ export class QqApp implements App, ForegroundInputSource {
       this.conversations.set(conversation.id, conversation);
       return conversation;
     }
-    // 群 id 不在当前监听列表（已下架）→ 不复活。
+    const groupId = parseConversationGroupId(conversationId);
+    if (groupId && !this.blockedGroupIds.has(groupId)) {
+      const conversation = Conversation.group(groupId, this.recentMessageLimit);
+      this.conversations.set(conversation.id, conversation);
+      return conversation;
+    }
+    // 拉黑群 / 无法解析 → 不复活。
     return null;
   }
 
@@ -663,6 +658,42 @@ export class QqApp implements App, ForegroundInputSource {
     conversation.setFriendInfo(friendInfo);
     this.conversations.set(id, conversation);
     return conversation;
+  }
+
+  /**
+   * 群会话懒创建（#570 黑名单模式）：首次收到某群消息 / 禁言通知时按需建会话——取代旧的启动
+   * 静态预建。到达 agent 的群事件均已过 napcat 黑名单过滤，故此处不再二次查黑名单。首次建时
+   * 异步补拉群信息 + 恢复禁言态（hydrate），best-effort、不阻塞消息处理。仿 ensurePrivateConversation。
+   */
+  private ensureGroupConversation(groupId: string): Conversation {
+    const id = createGroupConversationId(groupId);
+    const existing = this.conversations.get(id);
+    if (existing) {
+      return existing;
+    }
+    const conversation = Conversation.group(groupId, this.recentMessageLimit);
+    this.conversations.set(id, conversation);
+    void this.hydrateGroupConversation(groupId);
+    return conversation;
+  }
+
+  /**
+   * 给一个已存在的群会话补拉群信息（显示名）+ 从群信息恢复全员禁言态（内存态重启即丢）。
+   * 由 onStartup（restore 来的群）与 ensureGroupConversation（新懒建的群）共用。拉不到就退化为
+   * groupId 显示，不抛。
+   */
+  private async hydrateGroupConversation(groupId: string): Promise<void> {
+    const conversation = this.conversations.get(createGroupConversationId(groupId));
+    if (!conversation || conversation.kind !== "group") {
+      return;
+    }
+    try {
+      const groupInfo = await this.napcatGateway.getGroupInfo({ groupId });
+      conversation.setGroupInfo(groupInfo);
+      this.muteStore.setWholeGroupMute(groupId, groupInfo.groupAllShut);
+    } catch {
+      // 群信息拉不到就退化为 groupId 显示。
+    }
   }
 
   private async fetchRecent(conversation: Conversation): Promise<ConversationMessage[]> {

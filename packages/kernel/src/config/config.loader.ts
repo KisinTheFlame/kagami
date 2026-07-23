@@ -97,7 +97,6 @@ const OpenAiDefaultableStringSchema = z.preprocess(value => {
   return value;
 }, z.string().trim().min(1).optional());
 const NonEmptyStringArraySchema = z.array(NonEmptyStringSchema).min(1);
-const StringLikeArraySchema = z.array(StringLikeSchema).min(1);
 const LlmProviderSchema = z.enum(LLM_PROVIDER_IDS);
 const GoogleEmbeddingConfigSchema = z.object({
   provider: z.literal("google"),
@@ -155,34 +154,34 @@ const NapcatConfigSchema = z.preprocess(
     }
 
     const record = value as Record<string, unknown>;
-    if (!("listenGroupId" in record)) {
+    // QQ 群可见性由白名单反转为黑名单（语义相反：默认参与所有群，仅屏蔽列出的群）。旧白名单
+    // 字段（单数 listenGroupId / 复数 listenGroupIds）若被静默当黑名单沿用，会把「原本要监听
+    // 的群」变成「要屏蔽的群」——危险反转。检测到任一旧字段就标记，交 superRefine 报错强制人工迁移。
+    if (!("listenGroupId" in record) && !("listenGroupIds" in record)) {
       return value;
     }
 
-    return {
-      ...record,
-      listenGroupIds:
-        "listenGroupIds" in record ? record.listenGroupIds : ["__legacy_listen_group_id__"],
-      __legacyListenGroupId__: record.listenGroupId,
-    };
+    return { ...record, __legacyWhitelistPresent__: true };
   },
   z
     .object({
       wsUrl: UrlSchema,
       reconnectMs: PositiveIntSchema,
       requestTimeoutMs: PositiveIntSchema,
-      listenGroupIds: StringLikeArraySchema,
+      // 黑名单：列出的群号对小镜不可见（含专用告警群）。默认空 = 参与所有被拉入的群。
+      blockedGroupIds: z.array(StringLikeSchema).default([]),
       startupContextRecentMessageCount: NonNegativeIntSchema.default(
         DEFAULT_NAPCAT_STARTUP_CONTEXT_RECENT_MESSAGE_COUNT,
       ),
-      __legacyListenGroupId__: z.unknown().optional(),
+      __legacyWhitelistPresent__: z.boolean().optional(),
     })
     .superRefine((value, ctx) => {
-      if (value.__legacyListenGroupId__ !== undefined) {
+      if (value.__legacyWhitelistPresent__) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["listenGroupId"],
-          message: "listenGroupId 已废弃，请改用 listenGroupIds",
+          path: ["blockedGroupIds"],
+          message:
+            "白名单 listenGroupId(s) 已反转为黑名单 blockedGroupIds（语义相反：默认参与所有群，仅屏蔽列出的群）。请删除旧字段、按黑名单语义重新配置 blockedGroupIds 后重启。",
         });
       }
     })
@@ -190,7 +189,7 @@ const NapcatConfigSchema = z.preprocess(
       wsUrl: value.wsUrl,
       reconnectMs: value.reconnectMs,
       requestTimeoutMs: value.requestTimeoutMs,
-      listenGroupIds: value.listenGroupIds,
+      blockedGroupIds: value.blockedGroupIds,
       startupContextRecentMessageCount: value.startupContextRecentMessageCount,
     })),
 );

@@ -152,7 +152,7 @@ try {
     port: runtime.port,
     pid: process.pid,
     providers,
-    listenGroupIds: runtime.listenGroupIds,
+    blockedGroupIds: runtime.blockedGroupIds,
     traceRuntimeEnabled: true,
   });
 

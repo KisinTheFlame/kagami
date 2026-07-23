@@ -211,7 +211,7 @@ export async function buildAgentRuntime({
     botQQ: config.server.bot.qq,
     creatorName: config.server.bot.creator.name,
     creatorQQ: config.server.bot.creator.qq,
-    listenGroupIds: config.server.napcat.listenGroupIds,
+    blockedGroupIds: config.server.napcat.blockedGroupIds,
     recentMessageLimit: config.server.napcat.startupContextRecentMessageCount,
     aiTone: {
       enabled: config.server.agent.messaging.aiTone.enabled,

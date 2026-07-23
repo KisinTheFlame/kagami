@@ -222,7 +222,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       },
     });
     const groupMessageProcessor = new NapcatGroupMessageProcessor({
-      listenGroupIds: config.listenGroupIds,
+      blockedGroupIds: config.blockedGroupIds,
       actionRequester: {
         request: async (action, params) => {
           const data = await transport.request(action, params);

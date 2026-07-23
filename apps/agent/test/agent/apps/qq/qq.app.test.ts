@@ -77,17 +77,18 @@ function createApp(
     notifyForegroundInput?: () => void;
     napcatGateway?: NapcatClient;
     muteStore?: GroupMuteStateStore;
+    blockedGroupIds?: string[];
   } = {},
 ) {
   const center = new NotificationCenter({ leadingWindowMs: 50, windowMs: 100, onFlush, scheduler });
-  return new QqApp({
+  const app = new QqApp({
     napcatGateway: options.napcatGateway ?? fakeGateway(),
     notificationCenter: center,
     notifyForegroundInput: options.notifyForegroundInput ?? (() => {}),
     botQQ: "10001",
     creatorName: "测试创造者",
     creatorQQ: "20002",
-    listenGroupIds: ["1"],
+    blockedGroupIds: options.blockedGroupIds ?? [],
     recentMessageLimit: 5,
     muteStore: options.muteStore ?? new GroupMuteStateStore(),
     sendMessageTool: dummySendTool,
@@ -96,6 +97,14 @@ function createApp(
     downloadGroupFileTool: dummySendTool,
     uploadGroupFileTool: dummySendTool,
   });
+  // 黑名单模式（#570）下群会话懒建，不再静态预建。测试通过 restore 预置群 1（0 未读，等价
+  // 「重启前群 1 可见」），让依赖群 1 的会话管理用例无需逐个种消息；onStartup 会 hydrate 出
+  // 显示名「产品群」。测懒建本身的新用例不走 createApp、直接发消息。
+  app.restoreState({
+    version: 1,
+    conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
+  });
+  return app;
 }
 
 describe("QqApp", () => {
@@ -230,7 +239,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 5,
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -238,6 +247,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
     await app.onStartup();
     await app.onFocus(); // 进入 QQ（前台）才会对外暴露发送目标
@@ -316,7 +330,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 5,
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -324,6 +338,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
     await app.onStartup();
     await app.onFocus();
@@ -381,7 +400,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 2, // 缓冲只留 2 条，未读计数不封顶
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -389,6 +408,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
     await app.onStartup();
     await app.onFocus();
@@ -457,7 +481,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 5,
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -465,6 +489,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
     await app.onStartup();
 
@@ -529,6 +558,33 @@ describe("QqApp", () => {
     expect(result.error).toBe("CONVERSATION_NOT_FOUND");
   });
 
+  it("lazily creates a group conversation on the first message (#570 blocklist mode)", async () => {
+    // 群 2 未预置：黑名单模式下默认参与，首条消息即懒建会话、可打开。
+    const app = createApp(new FakeScheduler(), vi.fn());
+    await app.onStartup();
+    await app.onFocus();
+    app.handleNapcatEvent({
+      type: "napcat_group_message",
+      data: { ...groupMessage("初次见面"), groupId: "2" },
+    });
+    const result = await app.openConversation("qq_group:2");
+    expect(result.ok).toBe(true);
+    expect(app.getCurrentChatTarget()).toEqual({ chatType: "group", groupId: "2" });
+  });
+
+  it("does not resurrect a blocked group from the archive on restore (#570)", async () => {
+    // 群 9 曾可见（存档里有未读），后被加入黑名单：restore 重查黑名单，不复活、不可见。
+    const app = createApp(new FakeScheduler(), vi.fn(), { blockedGroupIds: ["9"] });
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:9", unreadCount: 3, mentioned: false }],
+    });
+    await app.onStartup();
+    const result = await app.openConversation("qq_group:9");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("CONVERSATION_NOT_FOUND");
+  });
+
   it("view_forward renders a forward page wrapped in <qq_forward> with a pagination hint", async () => {
     const getForwardMessages = vi.fn().mockResolvedValue({
       nodes: [
@@ -550,7 +606,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 5,
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -558,6 +614,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
 
     const result = await app.viewForward("res-123", 0);
@@ -586,7 +647,7 @@ describe("QqApp", () => {
       botQQ: "10001",
       creatorName: "测试创造者",
       creatorQQ: "20002",
-      listenGroupIds: ["1"],
+      blockedGroupIds: [],
       recentMessageLimit: 5,
       muteStore: new GroupMuteStateStore(),
       sendMessageTool: dummySendTool,
@@ -594,6 +655,11 @@ describe("QqApp", () => {
       listGroupFilesTool: dummySendTool,
       downloadGroupFileTool: dummySendTool,
       uploadGroupFileTool: dummySendTool,
+    });
+    // 黑名单模式（#570）群会话懒建：restore 预置群 1（0 未读，等价重启前可见），onStartup hydrate 显示名。
+    app.restoreState({
+      version: 1,
+      conversations: [{ id: "qq_group:1", unreadCount: 0, mentioned: false }],
     });
 
     const result = await app.viewForward("res-404", 0);
