@@ -37,7 +37,7 @@ describe("BrowserScreenshotTool", () => {
       bytes: Buffer.from("shot"),
       mimeType: "image/jpeg",
     });
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-7" });
+    expect(JSON.parse(result.content)).toEqual({ ok: true });
     const effect = result.effects?.[0] as AppendMessageEffect;
     expect(effect.images?.[0]?.content).toBe(Buffer.from("shot").toString("base64"));
     expect(effect.content).toContain('resid="res-7"');

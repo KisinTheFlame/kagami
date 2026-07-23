@@ -53,8 +53,6 @@ describe("send_message tool", () => {
     });
     expect(JSON.parse(result.content)).toEqual({
       ok: true,
-      chatType: "group",
-      groupId: "987654",
       messageId: 9527,
       aiToneScore: 0.1,
     });
@@ -101,8 +99,6 @@ describe("send_message tool", () => {
     });
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
-      chatType: "private",
-      userId: "123456",
       messageId: 9630,
       aiToneScore: 0.2,
     });
@@ -139,7 +135,6 @@ describe("send_message tool", () => {
       ok: false,
       blocked: true,
       aiToneScore: 0.9,
-      threshold: 0.8,
     });
     expect(pendingDraftStore.peek()).toMatchObject({
       message: "这不是结束，而是开始",
@@ -157,11 +152,10 @@ describe("send_message tool", () => {
       groupId: "987654",
       message: "这不是结束，而是开始",
     });
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      confirmedResend: true,
-      aiToneScore: 0.9,
-    });
+    const parsed = JSON.parse(result.content);
+    expect(parsed).toMatchObject({ ok: true, messageId: 9527 });
+    expect(parsed.confirmedResend).toBeUndefined();
+    expect(parsed.aiToneScore).toBeUndefined();
     expect(pendingDraftStore.peek()).toBeNull();
   });
 
@@ -175,7 +169,7 @@ describe("send_message tool", () => {
       groupId: "987654",
       message: "这不是结束，而是开始",
     });
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true, confirmedResend: true });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true });
     expect(JSON.parse(result.content).note).toContain("已忽略本次 message");
   });
 

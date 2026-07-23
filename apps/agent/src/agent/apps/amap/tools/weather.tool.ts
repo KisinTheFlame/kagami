@@ -51,6 +51,6 @@ export class WeatherTool extends ZodToolComponent<typeof Schema> {
     const result = await this.getClient().weather({ adcode: input.adcode, kind });
     const content = renderWeather(input.adcode, result, this.getMaxChars());
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
-    return { content: JSON.stringify({ ok: true, kind }), effects };
+    return { content: JSON.stringify({ ok: true }), effects };
   }
 }

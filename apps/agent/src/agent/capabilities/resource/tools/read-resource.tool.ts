@@ -56,7 +56,6 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       return {
         content: JSON.stringify({
           ok: false,
-          resid: input.resid,
           error: reason,
           note: error instanceof Error ? error.message : String(error),
         }),
@@ -84,7 +83,6 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       type: "append_message",
       content: renderServerStaticTemplate(import.meta.url, "context/resource-image.hbs", {
         resid: resolved.resId,
-        mime: resolved.mimeType,
         tiled,
         tileCount: normalized.parts.length,
       }).trim(),
@@ -98,12 +96,7 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       })),
     };
     return {
-      content: JSON.stringify({
-        ok: true,
-        resid: resolved.resId,
-        mime: resolved.mimeType,
-        size: resolved.size,
-      }),
+      content: JSON.stringify({ ok: true }),
       effects: [appendEffect],
     };
   }

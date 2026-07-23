@@ -62,7 +62,6 @@ export class OpenIthomeArticleTool extends ZodToolComponent<
         content: JSON.stringify({
           ok: false,
           error: "ARTICLE_NOT_FOUND",
-          articleId: input.articleId,
           message: "当前 IT 之家列表中找不到该文章 ID。",
         }),
       };
@@ -81,12 +80,7 @@ export class OpenIthomeArticleTool extends ZodToolComponent<
     const effects: RootAgentEffect[] = [{ type: "append_message", content: detailContent }];
 
     return {
-      content: JSON.stringify({
-        ok: true,
-        articleId: article.articleId,
-        title: article.title,
-        url: article.url,
-      }),
+      content: JSON.stringify({ ok: true }),
       effects,
     };
   }

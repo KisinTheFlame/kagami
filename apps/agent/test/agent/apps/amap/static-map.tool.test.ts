@@ -34,7 +34,7 @@ describe("StaticMapTool", () => {
       bytes: Buffer.from("MAP"),
       mimeType: "image/png",
     });
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-9" });
+    expect(JSON.parse(result.content)).toEqual({ ok: true });
     const effect = result.effects?.[0] as AppendMessageEffect;
     expect(effect.images?.[0]?.content).toBe(Buffer.from("MAP").toString("base64"));
     expect(effect.content).toContain('resid="res-9"');

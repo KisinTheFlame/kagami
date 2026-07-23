@@ -48,7 +48,6 @@ export class BashTool extends ZodToolComponent<typeof BashArgumentsSchema> {
         stderr_truncated: result.stderrTruncated,
         stderr_total_bytes: result.stderrTotalBytes,
         cwd: result.cwd,
-        duration_ms: result.durationMs,
       });
     }
     return JSON.stringify({
@@ -61,7 +60,6 @@ export class BashTool extends ZodToolComponent<typeof BashArgumentsSchema> {
       exit_code: result.exitCode ?? null,
       signal: result.signal ?? null,
       cwd: result.cwd ?? null,
-      duration_ms: result.durationMs ?? null,
     });
   }
 }

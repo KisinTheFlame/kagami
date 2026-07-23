@@ -87,7 +87,6 @@ export class InvokeTool extends ZodToolComponent<typeof InvokeArgumentsSchema> {
         content: JSON.stringify({
           ok: false,
           error: "INVOKE_TOOL_NOT_FOUND",
-          tool: input.tool,
           message: buildInvokeToolNotFoundMessage({
             tool: input.tool,
             availableToolDefinitions,

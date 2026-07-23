@@ -21,14 +21,12 @@ describe("ReadResourceTool", () => {
     );
 
     const result = await tool.execute({ resid: "res-7" }, {});
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      resid: "res-7",
-      mime: "image/jpeg",
-    });
+    expect(JSON.parse(result.content)).toEqual({ ok: true });
     expect(result.effects).toHaveLength(1);
     const effect = result.effects?.[0] as AppendMessageEffect;
     expect(effect.type).toBe("append_message");
+    expect(effect.content).toContain('resid="res-7"');
+    expect(effect.content).not.toContain("mime=");
     // 假字节解码失败 → 归一化 fail-open 原样透传成单元素 images。
     expect(effect.images).toHaveLength(1);
     expect(effect.images?.[0]?.mimeType).toBe("image/jpeg");
@@ -92,7 +90,8 @@ describe("ReadResourceTool", () => {
     const result = await tool.execute({ resid: "res-404" }, {});
     expect(result.effects).toBeUndefined();
     const parsed = JSON.parse(result.content);
-    expect(parsed).toMatchObject({ ok: false, resid: "res-404", error: "OSS_OBJECT_NOT_FOUND" });
+    expect(parsed).toMatchObject({ ok: false, error: "OSS_OBJECT_NOT_FOUND" });
+    expect(parsed.resid).toBeUndefined();
     expect(parsed.note).toContain("res-404");
   });
 });

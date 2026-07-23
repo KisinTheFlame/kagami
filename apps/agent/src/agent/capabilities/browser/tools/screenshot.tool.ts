@@ -63,11 +63,7 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
       ],
     };
     return {
-      content: JSON.stringify({
-        ok: true,
-        url: shot.url,
-        ...(resid ? { resid } : {}),
-      }),
+      content: JSON.stringify({ ok: true }),
       effects: [appendEffect],
     };
   }

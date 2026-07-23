@@ -749,18 +749,18 @@ export class QqApp implements App, ForegroundInputSource {
   }
 
   private renderConversationList(): string {
-    const lines = ["<qq_conversation_list>", "你的 QQ 会话："];
-    for (const conversation of this.conversations.values()) {
+    const conversations = [...this.conversations.values()].map(conversation => {
       const unread = conversation.getUnreadCount();
-      const unreadText = unread > 0 ? `（未读 ${unread > 99 ? "99+" : unread}）` : "";
-      const currentMark = conversation.id === this.currentConversationId ? "  ← 当前会话" : "";
-      lines.push(
-        `- ${conversation.getDisplayName()}${unreadText} [id: ${conversation.id}]${currentMark}`,
-      );
-    }
-    lines.push("用 open_conversation(id) 打开/切换任意会话。");
-    lines.push("</qq_conversation_list>");
-    return lines.join("\n");
+      return {
+        displayName: conversation.getDisplayName(),
+        id: conversation.id,
+        unreadLabel: unread > 0 ? (unread > 99 ? "99+" : String(unread)) : null,
+        isCurrent: conversation.id === this.currentConversationId,
+      };
+    });
+    return renderServerStaticTemplate(import.meta.url, "context/qq-conversation-list.hbs", {
+      conversations,
+    });
   }
 
   /**
@@ -773,20 +773,14 @@ export class QqApp implements App, ForegroundInputSource {
     olderUnread = 0,
     emptyHint = "（暂无最近消息）",
   ): string {
-    const lines = [`<qq_conversation name="${conversation.getDisplayName()}">`];
-    if (recent.length === 0) {
-      lines.push(emptyHint);
-    } else {
-      if (olderUnread > 0) {
-        lines.push(`（更早 ${olderUnread} 条未读未展示）`);
-      }
-      for (const message of recent) {
-        lines.push(renderMessagePlainText(message));
-      }
-    }
-    lines.push("用 send_message 发言；list_conversations 看会话列表、open_conversation 切换会话。");
-    lines.push("</qq_conversation>");
-    return lines.join("\n");
+    return renderServerStaticTemplate(import.meta.url, "context/qq-conversation.hbs", {
+      displayName: conversation.getDisplayName(),
+      isEmpty: recent.length === 0,
+      emptyHint,
+      hasOlderUnread: olderUnread > 0,
+      olderUnread,
+      messages: recent.map(message => renderMessagePlainText(message)),
+    });
   }
 }
 

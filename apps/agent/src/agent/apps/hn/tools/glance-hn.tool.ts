@@ -59,7 +59,7 @@ export class GlanceHnTool extends ZodToolComponent<typeof GlanceHnArgumentsSchem
     const content = renderHnFrontPageContent(result);
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
     return {
-      content: JSON.stringify({ ok: true, feed: result.feed, count: result.stories.length }),
+      content: JSON.stringify({ ok: true }),
       effects,
     };
   }

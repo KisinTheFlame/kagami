@@ -97,12 +97,7 @@ export class UploadGroupFileTool extends ZodToolComponent<typeof UploadGroupFile
     }
 
     return {
-      content: JSON.stringify({
-        ok: true,
-        resid: input.resid,
-        name: input.name,
-        note: "文件已上传到群。",
-      }),
+      content: JSON.stringify({ ok: true }),
     };
   }
 

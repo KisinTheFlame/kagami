@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 /**
  * 异步任务成功时可携带的图片块。结构级类型（裸 base64 + mime + 可选文件名），刻意不引
  * `@kagami/llm` 的 `LlmImageContentPart`——内核保持通用、不耦合具体 LLM 内容模型；生成方
@@ -50,7 +48,7 @@ export type AsyncTaskManagerDeps = {
    * 但其晚到 settle 会被丢弃）。是「无 cancel 工具」前提下唯一的兜底。
    */
   maxTaskDurationMs: number;
-  /** 可注入，便于测试确定性；默认 node:crypto randomUUID。 */
+  /** 可注入，便于测试确定性；默认「进程前缀+自增序号」（短、避免 UUID 噪声，又跨进程不重号）。 */
   generateId?: () => string;
 };
 
@@ -72,11 +70,16 @@ export class AsyncTaskManager {
   private readonly maxTaskDurationMs: number;
   private readonly generateId: () => string;
   private readonly inFlight = new Set<string>();
+  // 每进程随机前缀 + 进程内自增序号：短（远小于 36 字符 UUID，少占她上下文），又能跨进程/重启
+  // 区分——避免旧会话残留的 <async_task_submitted> 占位符与新任务序号视觉重号（异步任务纯内存、
+  // 不跨重启恢复，活任务本就不会碰撞，这里进一步消掉重启后残留占位的歧义）。
+  private readonly idPrefix = Math.random().toString(36).slice(2, 5);
+  private nextTaskSeq = 1;
 
   public constructor({ onComplete, maxTaskDurationMs, generateId }: AsyncTaskManagerDeps) {
     this.onComplete = onComplete;
     this.maxTaskDurationMs = maxTaskDurationMs;
-    this.generateId = generateId ?? (() => randomUUID());
+    this.generateId = generateId ?? (() => `${this.idPrefix}-${this.nextTaskSeq++}`);
   }
 
   public submit(input: { toolName: string; run: () => Promise<AsyncTaskRunResult> }): {

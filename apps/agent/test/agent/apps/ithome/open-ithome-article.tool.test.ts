@@ -16,7 +16,7 @@ describe("OpenIthomeArticleTool", () => {
     const parsed = JSON.parse(result.content);
 
     expect(parsed.error).toBe("ARTICLE_NOT_FOUND");
-    expect(parsed.articleId).toBe(99999);
+    expect(parsed.articleId).toBeUndefined();
     expect(parsed.message).toBe("当前 IT 之家列表中找不到该文章 ID。");
   });
 });

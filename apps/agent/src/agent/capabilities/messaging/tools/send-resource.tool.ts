@@ -18,7 +18,7 @@ const SendResourceArgumentsSchema = z.object({
  * 发送（自包含，不依赖 napcat 访问 OSS）。v1 只支持图片资源；非图片 / 不存在 / 超限都报错不发。
  *
  * 不经 AI 味门控 / pending draft / confirm_last——图片不是文本发言，刻意如此。
- * 出站只回 resid + messageId，**不回 base64**。
+ * 出站只回 messageId（发送回执），**不回 base64、不回显入参 resid**。
  */
 export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgumentsSchema> {
   public readonly name = SEND_RESOURCE_TOOL_NAME;
@@ -79,7 +79,6 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
         error instanceof BizError ? (error.meta?.reason ?? "SEND_FAILED") : "SEND_FAILED";
       return JSON.stringify({
         ok: false,
-        resid: input.resid,
         error: reason,
         note: error instanceof Error ? error.message : String(error),
       });
@@ -88,9 +87,7 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
     if (!resolved.isImage) {
       return JSON.stringify({
         ok: false,
-        resid: input.resid,
         error: "NON_IMAGE_RESOURCE",
-        mime: resolved.mimeType,
         note: "send_resource 目前只支持图片资源。",
       });
     }
@@ -108,7 +105,6 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
       if (error instanceof MutedSendError) {
         return JSON.stringify({
           ok: false,
-          resid: input.resid,
           error: "MUTED",
           note: formatMutedNote(error),
         });
@@ -116,12 +112,6 @@ export class SendResourceTool extends ZodToolComponent<typeof SendResourceArgume
       throw error;
     }
 
-    return JSON.stringify({
-      ok: true,
-      resid: resolved.resId,
-      mime: resolved.mimeType,
-      size: resolved.size,
-      messageId: result.messageId,
-    });
+    return JSON.stringify({ ok: true, messageId: result.messageId });
   }
 }

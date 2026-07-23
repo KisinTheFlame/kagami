@@ -110,8 +110,6 @@ export class DownloadGroupFileTool extends ZodToolComponent<
       content: JSON.stringify({
         ok: true,
         resid,
-        mime: mimeType,
-        size: downloaded.bytes.byteLength,
         note: "群文件已存进 OSS。可用 read_resource 看它，或 download_resource 落地成本地文件。",
       }),
     };
