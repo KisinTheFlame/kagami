@@ -9,6 +9,9 @@ import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
+import { OpsQueryHandler } from "../ops/http/ops-query.handler.js";
+import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
+import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { HttpLlmClient } from "../acl/http-llm-client.js";
 import { HttpImageClient } from "../acl/image-client.js";
@@ -265,6 +268,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new HealthHandler(),
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
+      }),
+      // console 只读查询（epic #539 子 issue 4）：console 脱库后经这三条路由查 agent 持有的表。
+      new OpsQueryHandler({
+        logDao,
+        innerThoughtDao: new PrismaInnerThoughtDao({ database }),
+        todoItemDao: new PrismaTodoItemDao({ database }),
       }),
       new SchedulerTriggerCallbackHandler({ schedulerClient }),
     ],

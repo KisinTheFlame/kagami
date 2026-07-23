@@ -20,7 +20,8 @@ export type QueryTodoItemListInput = {
 };
 
 /**
- * Todo 的只读查询 DAO：供 console（管理台后端）分页展示 todo_item 用。
+ * Todo 的只读查询 DAO：供 agent 的 OpsQueryHandler 分页查询 todo_item 用
+ * （console 自 #539 子 issue 4 起零 DB，经 @kagami/agent-api 查询路由取数）。
  *
  * 注意与 agent 侧 `TodoDao`（capabilities/todo）区分——那个 DAO 承载 agent 的读写
  * 业务（限额插入 / CAS 续期 / 完成 / soft delete），属 agent 私有；console 只需只读

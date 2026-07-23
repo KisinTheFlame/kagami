@@ -170,6 +170,9 @@ importers:
 
   apps/console:
     dependencies:
+      '@kagami/agent-api':
+        specifier: workspace:*
+        version: link:../../packages/agent-api
       '@kagami/console-api':
         specifier: workspace:*
         version: link:../../packages/console-api
@@ -185,9 +188,6 @@ importers:
       '@kagami/napcat-api':
         specifier: workspace:*
         version: link:../../packages/napcat-api
-      '@kagami/persistence':
-        specifier: workspace:*
-        version: link:../../packages/persistence
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
