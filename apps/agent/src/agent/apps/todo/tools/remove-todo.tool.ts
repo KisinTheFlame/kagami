@@ -39,7 +39,7 @@ export class RemoveTodoTool extends ZodToolComponent<typeof RemoveTodoArgumentsS
   ): Promise<ToolExecutionResult> {
     const ok = await this.getTodoService().removeTodo({ id: input.id });
     return ok
-      ? { content: JSON.stringify({ ok: true, message: `已删除 #${input.id}` }) }
+      ? { content: JSON.stringify({ ok: true }) }
       : { content: JSON.stringify({ ok: false, error: "TODO_NOT_FOUND" }) };
   }
 }

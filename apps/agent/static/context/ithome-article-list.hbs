@@ -8,13 +8,11 @@
 {{else}}
 以下是最近文章列表。
 {{/if}}
-如果想阅读全文，调用 invoke(tool="open_ithome_article", articleId=...)；如果想去别的 App，用 switch(id=...) 切过去。
 </system_instruction>
 <ithome_article_list>
 {{#each articles}}
 [{{id}}] {{title}}
 发布时间：{{publishedAtText}}
-链接：{{url}}
 摘要：{{rssSummary}}
 
 {{/each}}

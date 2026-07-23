@@ -86,7 +86,6 @@ export class SwitchTool extends ZodToolComponent<typeof SwitchArgumentsSchema> {
       return JSON.stringify({
         ok: false,
         error: "SWITCH_TARGET_NOT_AVAILABLE",
-        id: input.id,
         message: "没有这个 App。可用的 App 见系统说明里的 App 列表，照那里的 id 来。",
       });
     }

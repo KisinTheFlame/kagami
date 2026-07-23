@@ -129,12 +129,7 @@ describe("invoke tool", () => {
       groupId: "group-1",
       message: "hello group",
     });
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      chatType: "group",
-      groupId: "group-1",
-      messageId: 9527,
-    });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, messageId: 9527 });
   });
 
   it("should invoke send_message to the current private conversation", async () => {
@@ -165,12 +160,7 @@ describe("invoke tool", () => {
       userId: "user-1",
       message: "hello private",
     });
-    expect(JSON.parse(result.content)).toMatchObject({
-      ok: true,
-      chatType: "private",
-      userId: "user-1",
-      messageId: 9630,
-    });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, messageId: 9630 });
   });
 
   it("should describe available tools when invoke subtool does not exist", async () => {
@@ -247,7 +237,6 @@ describe("invoke tool", () => {
     expect(parsed).toMatchObject({
       ok: false,
       error: "INVOKE_TOOL_NOT_FOUND",
-      tool: "calculate",
       availableTools: [],
     });
     expect(parsed.message).toContain("invoke 子工具 calculate 不存在。");

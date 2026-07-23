@@ -43,6 +43,6 @@ export class RegeocodeTool extends ZodToolComponent<typeof Schema> {
     const result = await this.getClient().regeocode({ location: input.location });
     const content = renderRegeocode(input.location, result, this.getMaxChars());
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
-    return { content: JSON.stringify({ ok: true, adcode: result.adcode ?? null }), effects };
+    return { content: JSON.stringify({ ok: true }), effects };
   }
 }

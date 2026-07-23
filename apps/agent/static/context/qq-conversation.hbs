@@ -1,0 +1,12 @@
+<qq_conversation name="{{displayName}}">
+{{#if isEmpty}}
+{{emptyHint}}
+{{else}}
+{{#if hasOlderUnread}}
+（更早 {{olderUnread}} 条未读未展示）
+{{/if}}
+{{#each messages}}
+{{this}}
+{{/each}}
+{{/if}}
+</qq_conversation>

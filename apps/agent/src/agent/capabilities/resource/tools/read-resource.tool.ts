@@ -54,7 +54,6 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       return {
         content: JSON.stringify({
           ok: false,
-          resid: input.resid,
           error: reason,
           note: error instanceof Error ? error.message : String(error),
         }),
@@ -76,7 +75,7 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
 
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<resource resid="${resolved.resId}" mime="${resolved.mimeType}" />`,
+      content: `<resource resid="${resolved.resId}" />`,
       // base64 字符串：图片要进持久上下文（快照/ledger 走 JSON），Buffer 会被 JSON 毒坏。
       image: {
         content: resolved.bytes.toString("base64"),
@@ -85,12 +84,7 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       },
     };
     return {
-      content: JSON.stringify({
-        ok: true,
-        resid: resolved.resId,
-        mime: resolved.mimeType,
-        size: resolved.size,
-      }),
+      content: JSON.stringify({ ok: true }),
       effects: [appendEffect],
     };
   }

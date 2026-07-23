@@ -30,7 +30,6 @@ export class BrowserObserveTool extends BrowserToolComponent<typeof Schema> {
       `<browser_screen epoch="${result.epoch}" url="${result.url}" title="${result.title}">`,
       result.snapshot,
       "</browser_screen>",
-      `提示：用 ref（形如 ${result.epoch}:e3）调 browser_click / browser_type；ref 仅 epoch ${result.epoch} 有效，过期需重新 observe。`,
     ].join("\n");
   }
 }

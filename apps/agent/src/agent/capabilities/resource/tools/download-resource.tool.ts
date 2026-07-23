@@ -63,9 +63,7 @@ export class DownloadResourceTool extends ZodToolComponent<typeof DownloadResour
       return {
         content: JSON.stringify({
           ok: true,
-          resid: input.resid,
           path: result.absolutePath,
-          size: result.size,
           note: "资源已落地为本地文件，可在 terminal 里操作它。",
         }),
       };
@@ -76,7 +74,6 @@ export class DownloadResourceTool extends ZodToolComponent<typeof DownloadResour
       return {
         content: JSON.stringify({
           ok: false,
-          resid: input.resid,
           error: reason,
           note: error instanceof Error ? error.message : String(error),
         }),

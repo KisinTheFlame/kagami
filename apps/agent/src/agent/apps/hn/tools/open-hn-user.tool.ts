@@ -47,12 +47,7 @@ export class OpenHnUserTool extends ZodToolComponent<typeof OpenHnUserArgumentsS
     const content = renderHnUserContent(result);
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
     return {
-      content: JSON.stringify({
-        ok: true,
-        username: result.username,
-        found: result.found,
-        recentCount: result.recent.length,
-      }),
+      content: JSON.stringify({ ok: true }),
       effects,
     };
   }

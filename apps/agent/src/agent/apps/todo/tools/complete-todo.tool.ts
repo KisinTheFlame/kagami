@@ -39,7 +39,7 @@ export class CompleteTodoTool extends ZodToolComponent<typeof CompleteTodoArgume
   ): Promise<ToolExecutionResult> {
     const ok = await this.getTodoService().completeTodo({ id: input.id });
     return ok
-      ? { content: JSON.stringify({ ok: true, message: `已完成 #${input.id}` }) }
+      ? { content: JSON.stringify({ ok: true }) }
       : { content: JSON.stringify({ ok: false, error: "TODO_NOT_FOUND" }) };
   }
 }

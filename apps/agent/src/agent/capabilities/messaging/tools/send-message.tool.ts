@@ -19,9 +19,7 @@ export interface AiToneGuardConfig {
   readonly blockThreshold: number;
 }
 
-type DispatchResult =
-  | { chatType: "group"; groupId: string; messageId: number }
-  | { chatType: "private"; userId: string; messageId: number };
+type DispatchResult = { messageId: number };
 
 export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgumentsSchema> {
   public readonly name = SEND_MESSAGE_TOOL_NAME;
@@ -130,7 +128,6 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
         ok: false,
         blocked: true,
         aiToneScore: round(score),
-        threshold: this.aiTone.blockThreshold,
         note: "这条 AI 味偏高，没发出去。想原样发就下次调用带 confirm_last=true，或者重写一条更像真人的。",
       });
     }
@@ -165,8 +162,6 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
       return JSON.stringify({
         ok: true,
         ...result,
-        confirmedResend: true,
-        aiToneScore: round(draft.score),
         ...(ignoredMessage
           ? { note: "已忽略本次 message，补发的是上一次被 AI 味拦下的草稿。" }
           : {}),
@@ -196,7 +191,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
         message,
         replyToMessageId,
       });
-      return { chatType: "group", groupId: chatTarget.groupId, messageId: result.messageId };
+      return { messageId: result.messageId };
     }
 
     const result = await this.agentMessageService.sendPrivateMessage({
@@ -204,7 +199,7 @@ export class SendMessageTool extends ZodToolComponent<typeof SendMessageArgument
       message,
       replyToMessageId,
     });
-    return { chatType: "private", userId: chatTarget.userId, messageId: result.messageId };
+    return { messageId: result.messageId };
   }
 }
 

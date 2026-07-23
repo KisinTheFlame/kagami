@@ -58,7 +58,7 @@ export class UpdateTodoTool extends ZodToolComponent<typeof UpdateTodoArgumentsS
     try {
       const ok = await this.getTodoService().updateTodo(input);
       return ok
-        ? { content: JSON.stringify({ ok: true, message: `已更新 #${input.id}` }) }
+        ? { content: JSON.stringify({ ok: true }) }
         : { content: JSON.stringify({ ok: false, error: "TODO_NOT_FOUND" }) };
     } catch (error) {
       if (error instanceof InvalidTimeError) {

@@ -60,10 +60,6 @@ export class ReadBashOutputTool extends ZodToolComponent<typeof ReadBashOutputAr
     if (result.ok) {
       return JSON.stringify({
         ok: true,
-        output_id: result.outputId,
-        stream: result.stream,
-        offset: result.offset,
-        size: result.size,
         total_bytes: result.totalBytes,
         next_offset: result.nextOffset,
         eof: result.eof,

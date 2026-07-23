@@ -151,10 +151,7 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
       },
     };
     return {
-      content: JSON.stringify({
-        ok: true,
-        ...(resid ? { resid } : {}),
-      }),
+      content: JSON.stringify({ ok: true }),
       effects: [appendEffect],
     };
   }

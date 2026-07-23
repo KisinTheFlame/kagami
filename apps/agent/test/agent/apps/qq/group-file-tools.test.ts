@@ -86,7 +86,7 @@ describe("QQ group file tools", () => {
     });
 
     const body = parse((await tool.execute({ file_id: "f1" }, {})).content);
-    expect(body).toMatchObject({ ok: true, resid: "res-3", mime: "application/octet-stream" });
+    expect(body).toMatchObject({ ok: true, resid: "res-3" });
     expect(fetchMock).toHaveBeenCalledWith("https://cdn.qq.com/f1");
     expect(ossClient.putObject).toHaveBeenCalledWith({
       bytes: Buffer.from("%PDF-1.7 data"),
@@ -145,7 +145,7 @@ describe("QQ group file tools", () => {
     });
 
     const body = parse((await tool.execute({ resid: "res-5", name: "x.pdf" }, {})).content);
-    expect(body).toMatchObject({ ok: true, resid: "res-5", name: "x.pdf" });
+    expect(body).toEqual({ ok: true });
     expect(ossClient.getObject).toHaveBeenCalledWith("res-5", { maxBytes: 32 * 1024 * 1024 });
     expect(napcatGateway.uploadGroupFile).toHaveBeenCalledWith({
       groupId: "1",

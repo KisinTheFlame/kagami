@@ -57,13 +57,7 @@ export class PixelRenderTool extends ZodToolComponent<typeof Schema> {
       },
     };
     return {
-      content: JSON.stringify({
-        ok: true,
-        ...(resid ? { resid } : {}),
-        note: resid
-          ? "画已进入你的视野，也存了档（resid 见上）。"
-          : "画已进入你的视野（本次未落 OSS，无 resid）。",
-      }),
+      content: JSON.stringify({ ok: true }),
       effects: [appendEffect],
     };
   }
