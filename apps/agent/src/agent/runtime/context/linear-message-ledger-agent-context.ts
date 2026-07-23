@@ -38,6 +38,10 @@ export class LinearMessageLedgerAgentContext implements AgentContext {
     return await this.inner.getSnapshot();
   }
 
+  public async getLastMessage(): Promise<LlmMessage | null> {
+    return await this.inner.getLastMessage();
+  }
+
   public async fork(): Promise<AgentContext> {
     return await this.inner.fork();
   }
