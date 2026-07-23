@@ -23,8 +23,8 @@ export type InsertInnerThoughtInput = {
 };
 
 /**
- * inner-voice 念头账本（issue #359）：agent 侧写（每次摸鱼触发落一行），console 侧读（分页展示）。
- * 与 `LlmChatCallDao` 同构——一份 DAO 两处 new，靠 SQLite WAL 并发同库。
+ * inner-voice 念头账本（issue #359）：agent 写（每次摸鱼触发落一行）+ agent 的 OpsQueryHandler 读
+ * （console 自 #539 子 issue 4 起零 DB，经 @kagami/agent-api 查询路由取数，不再直连本 DAO）。
  */
 export interface InnerThoughtDao {
   insert(input: InsertInnerThoughtInput): Promise<void>;

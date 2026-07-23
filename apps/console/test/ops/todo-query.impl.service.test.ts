@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  QueryTodoItemListInput,
-  TodoItemQueryDao,
-  TodoItemRow,
-} from "@kagami/persistence/dao/todo-item.dao";
+import type { AgentTodoWireItem } from "@kagami/agent-api/ops-query";
 import { DefaultTodoQueryService } from "../../src/ops/application/todo-query.impl.service.js";
+import type { AgentOpsQueryClient } from "../../src/ops/application/app-log-query.impl.service.js";
 
-function makeDao(overrides: Partial<TodoItemQueryDao>): TodoItemQueryDao {
+function makeClient(overrides: Partial<AgentOpsQueryClient>): AgentOpsQueryClient {
   return {
-    countByQuery: vi.fn(),
-    listPage: vi.fn(),
+    queryAppLogs: vi.fn(),
+    queryInnerThoughts: vi.fn(),
+    queryTodos: vi.fn(),
     ...overrides,
   };
 }
 
-const sampleRow: TodoItemRow = {
+const sampleItem: AgentTodoWireItem = {
   id: 1,
   title: "写周报",
   note: null,
@@ -22,40 +20,32 @@ const sampleRow: TodoItemRow = {
   remindAt: null,
   repeatEveryMs: null,
   snoozedUntil: null,
-  createdAt: new Date("2026-04-01T00:00:00.000Z"),
-  updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+  createdAt: "2026-04-01T00:00:00.000Z",
+  updatedAt: "2026-04-01T00:00:00.000Z",
   completedAt: null,
 };
 
 describe("DefaultTodoQueryService", () => {
-  it("queryList should assemble count + page into a paginated response", async () => {
-    const todoItemDao = makeDao({
-      countByQuery: vi.fn().mockResolvedValue(3),
-      listPage: vi.fn().mockResolvedValue([sampleRow]),
+  it("queryList should assemble total + items into a paginated response", async () => {
+    const queryTodos = vi.fn().mockResolvedValue({ total: 3, items: [sampleItem] });
+    const service = new DefaultTodoQueryService({
+      agentOpsQueryClient: makeClient({ queryTodos }),
     });
 
-    const service = new DefaultTodoQueryService({ todoItemDao });
     const result = await service.queryList({ page: 1, pageSize: 20, status: undefined });
 
     expect(result.pagination).toEqual({ page: 1, pageSize: 20, total: 3 });
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({
-      id: 1,
-      status: "pending",
-      createdAt: expect.any(String),
-    });
+    expect(result.items).toEqual([sampleItem]);
   });
 
-  it("queryList should forward status filter to both dao calls", async () => {
-    const countByQuery = vi.fn().mockResolvedValue(0);
-    const listPage = vi.fn().mockResolvedValue([]);
-    const todoItemDao = makeDao({ countByQuery, listPage });
+  it("queryList should forward status filter to the client", async () => {
+    const queryTodos = vi.fn().mockResolvedValue({ total: 0, items: [] });
+    const service = new DefaultTodoQueryService({
+      agentOpsQueryClient: makeClient({ queryTodos }),
+    });
 
-    const service = new DefaultTodoQueryService({ todoItemDao });
     await service.queryList({ page: 2, pageSize: 20, status: "completed" });
 
-    const expected: QueryTodoItemListInput = { page: 2, pageSize: 20, status: "completed" };
-    expect(countByQuery).toHaveBeenCalledWith(expected);
-    expect(listPage).toHaveBeenCalledWith(expected);
+    expect(queryTodos).toHaveBeenCalledWith({ status: "completed", page: 2, pageSize: 20 });
   });
 });

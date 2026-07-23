@@ -1,16 +1,17 @@
-import {
-  type InnerThoughtItem,
-  type InnerThoughtListResponse,
-} from "@kagami/console-api/inner-thought";
-import type { InnerThoughtSummary } from "@kagami/persistence/dao/inner-thought.dao";
+import { type InnerThoughtListResponse } from "@kagami/console-api/inner-thought";
+import type { AgentInnerThoughtWireItem } from "@kagami/agent-api/ops-query";
 
 type MapInnerThoughtListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: InnerThoughtSummary[];
+  items: AgentInnerThoughtWireItem[];
 };
 
+/**
+ * agent 契约 wire item 与 console-api item 逐字段同形（时间已是 ISO 字符串），
+ * 这里只负责把 {total, items} 装进 console 的分页信封。
+ */
 export function mapInnerThoughtList(input: MapInnerThoughtListInput): InnerThoughtListResponse {
   return {
     pagination: {
@@ -18,17 +19,6 @@ export function mapInnerThoughtList(input: MapInnerThoughtListInput): InnerThoug
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapInnerThoughtItem),
-  };
-}
-
-function mapInnerThoughtItem(item: InnerThoughtSummary): InnerThoughtItem {
-  return {
-    id: item.id,
-    triggeredAt: item.triggeredAt.toISOString(),
-    outcome: item.outcome,
-    thought: item.thought,
-    runtimeKey: item.runtimeKey,
-    createdAt: item.createdAt.toISOString(),
+    items: input.items,
   };
 }

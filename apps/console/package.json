@@ -11,12 +11,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kagami/agent-api": "workspace:*",
     "@kagami/console-api": "workspace:*",
     "@kagami/llm-api": "workspace:*",
     "@kagami/napcat-api": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
-    "@kagami/persistence": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
     "fastify": "^5.6.2",
     "zod": "^3.24.4"

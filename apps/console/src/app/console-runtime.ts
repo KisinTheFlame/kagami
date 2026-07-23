@@ -1,12 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
-import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
-import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
-import { PrismaInnerThoughtDao } from "@kagami/persistence/dao/impl/inner-thought.impl.dao";
-import { PrismaTodoItemDao } from "@kagami/persistence/dao/impl/todo-item.impl.dao";
 import { createClient } from "@kagami/rpc-client/client";
 import { napcatApiContract } from "@kagami/napcat-api/contract";
 import { llmApiContract } from "@kagami/llm-api/contract";
+import { agentApiContract } from "@kagami/agent-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -27,43 +24,36 @@ const logger = new AppLogger({ source: "console-bootstrap" });
 
 export type ConsoleRuntime = {
   app: FastifyInstance;
-  database: Database;
   port: number;
 };
 
 /**
- * 管理台后端（console）运行时装配。console 是独立进程，只服务前端的纯 DB 查询接口，
- * 不持有任何 Agent 活内存（事件队列 / HNSW / NapCat 网关都在 server 进程）。它与 server
- * 经 `@kagami/persistence` 共享 Prisma DAO，各自 new 一份 DAO 连同一个 SQLite 库文件。
+ * 管理台后端（console）运行时装配。console 是独立进程，为前端聚合各服务的只读查询，
+ * 不持有任何 Agent 活内存（事件队列 / HNSW / NapCat 网关都在 agent 进程）。
+ *
+ * epic #539 子 issue 4 起 console **零 DB 依赖**：napcat 数据经 `@kagami/napcat-api`、
+ * llm_chat_call 经 `@kagami/llm-api`、agent 持有的 app_log / inner_thought / todo 经
+ * `@kagami/agent-api` 的契约查询路由，各拨数据属主服务；console 本身不打开任何 SQLite。
  */
 export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const config = await loadStaticConfig();
 
-  const database = createDbClient({
-    databaseUrl: config.server.databaseUrl,
-  });
-  // 与 server 进程并发读写同一 SQLite 文件：开 WAL（库文件级持久设置，设一次长期生效）。
-  await configureSqlite(database);
-
-  const logDao = new PrismaLogDao({ database });
-  const innerThoughtDao = new PrismaInnerThoughtDao({ database });
-  const todoItemDao = new PrismaTodoItemDao({ database });
-
-  // napcat 数据自 epic #539 子 issue 2 起归 napcat 独占库，console 经契约路由查询、不再直读。
   const napcatQueryClient = createClient(napcatApiContract, {
     baseUrl: `http://${config.services.napcat.host}:${String(config.services.napcat.port)}`,
   });
-  // llm_chat_call 自 epic #539 子 issue 3 起归 llm 独占库，同样经契约路由查询。
   const llmQueryClient = createClient(llmApiContract, {
     baseUrl: `http://${config.services.llm.host}:${String(config.services.llm.port)}`,
   });
+  const agentOpsQueryClient = createClient(agentApiContract, {
+    baseUrl: `http://${config.services.agent.host}:${String(config.services.agent.port)}`,
+  });
 
-  const appLogQueryService = new DefaultAppLogQueryService({ logDao });
+  const appLogQueryService = new DefaultAppLogQueryService({ agentOpsQueryClient });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmQueryClient,
   });
   const innerThoughtQueryService = new DefaultInnerThoughtQueryService({
-    innerThoughtDao,
+    agentOpsQueryClient,
   });
   const napcatEventQueryService = new DefaultNapcatEventQueryService({
     napcatQueryClient,
@@ -71,7 +61,7 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const napcatQqMessageQueryService = new DefaultNapcatQqMessageQueryService({
     napcatQueryClient,
   });
-  const todoQueryService = new DefaultTodoQueryService({ todoItemDao });
+  const todoQueryService = new DefaultTodoQueryService({ agentOpsQueryClient });
 
   // 面向前端查询服务：traceId / 默认错误三分支（ZodError→400、BizError→toHttpErrorResponse、
   // 其余→500）都由公共装配壳提供。
@@ -88,5 +78,5 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
     ],
   });
 
-  return { app, database, port: config.services.console.port };
+  return { app, port: config.services.console.port };
 }

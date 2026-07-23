@@ -1,13 +1,17 @@
-import { type TodoItem, type TodoListResponse } from "@kagami/console-api/todo";
-import type { TodoItemRow } from "@kagami/persistence/dao/todo-item.dao";
+import { type TodoListResponse } from "@kagami/console-api/todo";
+import type { AgentTodoWireItem } from "@kagami/agent-api/ops-query";
 
 type MapTodoListInput = {
   page: number;
   pageSize: number;
   total: number;
-  items: TodoItemRow[];
+  items: AgentTodoWireItem[];
 };
 
+/**
+ * agent 契约 wire item 与 console-api item 逐字段同形（时间已是 ISO 字符串、
+ * repeatEveryMs 归一在 agent 侧完成），这里只负责把 {total, items} 装进分页信封。
+ */
 export function mapTodoList(input: MapTodoListInput): TodoListResponse {
   return {
     pagination: {
@@ -15,24 +19,6 @@ export function mapTodoList(input: MapTodoListInput): TodoListResponse {
       pageSize: input.pageSize,
       total: input.total,
     },
-    items: input.items.map(mapTodoItem),
-  };
-}
-
-function mapTodoItem(row: TodoItemRow): TodoItem {
-  return {
-    id: row.id,
-    title: row.title,
-    note: row.note,
-    status: row.status,
-    remindAt: row.remindAt?.toISOString() ?? null,
-    // DB 列是无约束 Int?；把 <=0（legacy / 手工写入）归一成 null，
-    // 既符合「0 = 无重复」语义，也保证契约 .positive().nullable() 恒成立，
-    // 免得一条坏行让整页只读查询在 output.parse 时 500。
-    repeatEveryMs: row.repeatEveryMs !== null && row.repeatEveryMs > 0 ? row.repeatEveryMs : null,
-    snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    completedAt: row.completedAt?.toISOString() ?? null,
+    items: input.items,
   };
 }

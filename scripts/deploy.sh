@@ -52,21 +52,19 @@ echo "[app:deploy] Step 1/4: Building workspace..."
 pnpm build
 
 echo "[app:deploy] Step 2/4: Applying Prisma migrations..."
-# SQLite 多后端进程下的迁移：prisma migrate 的 schema engine 用独立连接、不带 busy_timeout，
-# 当 kagami-agent / kagami-console 两个写库进程持有 WAL 库时它拿不到锁，会直接
+# SQLite 下的迁移：prisma migrate 的 schema engine 用独立连接、不带 busy_timeout，
+# 当持库进程（#539 后主库仅 kagami-agent 长期持有）开着 WAL 库时它拿不到锁，会直接
 # "database is locked" 而中止部署。对策：无待应用迁移时（绝大多数部署）跳过 deploy
-# （status 是只读、WAL 下与运行进程并存无碍）；确有待应用迁移时，先停掉两个写库进程腾出
+# （status 是只读、WAL 下与运行进程并存无碍）；确有待应用迁移时，先停掉相关进程腾出
 # 独占访问再迁，迁移成功与否都把进程拉回来，Step 3 的 startOrReload 再正常 reload。
 if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
   echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
-  # 所有开同一 SQLite 的写库进程都要暂停腾出独占锁：agent / console 持有 WAL 库锁，
-  # 否则迁移 "database is locked"。metric 自 #475 P1 起独占 data/metric/metric.duckdb，
-  # 不开共享库，无需停。browser（#539 删表后零持久化）、napcat（#539 拆 napcat.db）、
-  # llm（#539 拆 llm.db）已不再长期打开主库，但为防「旧进程仍持主库锁 + 新停服名单已
-  # 不含它」的部署时序窗口（browser 删表迁移就踩过），三者暂留名单；#539 各拆库迁移
-  # 全部在生产落地后由子 issue 5 统一移除。
+  # 主库自 #539 起由 agent 独占（console 子 issue 4 起零 DB），理论上只需停 agent。
+  # metric 独占 DuckDB 无需停；browser / napcat / llm / console 已不再长期打开主库，
+  # 但为防「旧进程仍持主库锁 + 新停服名单已不含它」的部署时序窗口（browser 删表迁移
+  # 就踩过），四者暂留名单；#539 各拆库/脱库改动全部在生产落地后由子 issue 5 统一移除。
   pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
