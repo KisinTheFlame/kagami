@@ -172,6 +172,41 @@ export class RetroemuCore implements EmulatorCore {
     host.core.HEAPU8.set(bytes.subarray(0, Math.min(bytes.length, size)), ptr);
   }
 
+  public getState(): Buffer | null {
+    const host = this.requireHost();
+    const size = host.core._retro_serialize_size();
+    if (!size) {
+      return null;
+    }
+    const ptr = host.core._malloc(size);
+    if (!ptr) {
+      return null;
+    }
+    try {
+      if (!host.core._retro_serialize(ptr, size)) {
+        return null;
+      }
+      // slice（非 subarray）拷出 heap：_free 之后 heap 该区域随时被改写。
+      return Buffer.from(host.core.HEAPU8.slice(ptr, ptr + size));
+    } finally {
+      host.core._free(ptr);
+    }
+  }
+
+  public setState(bytes: Buffer): boolean {
+    const host = this.requireHost();
+    const ptr = host.core._malloc(bytes.length);
+    if (!ptr) {
+      return false;
+    }
+    try {
+      host.core.HEAPU8.set(bytes, ptr);
+      return Boolean(host.core._retro_unserialize(ptr, bytes.length));
+    } finally {
+      host.core._free(ptr);
+    }
+  }
+
   public getFps(): number {
     return this.host?.systemAVInfo?.timing.fps ?? GBA_NOMINAL_FPS;
   }

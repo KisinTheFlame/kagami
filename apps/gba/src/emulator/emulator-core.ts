@@ -24,6 +24,10 @@ export interface EmulatorCore {
   getSram(): Buffer | null;
   /** 注入电池存档（loadGame 恢复进度用）。ROM 无存档通道时为 no-op。 */
   setSram(bytes: Buffer): void;
+  /** 全机器状态快照（libretro savestate，优雅关停的无感重启用）；核心不支持时 null。 */
+  getState(): Buffer | null;
+  /** 恢复快照；核心校验失败（版本/尺寸不匹配）返回 false，调用方降级冷启动。 */
+  setState(bytes: Buffer): boolean;
   /** 核心标称帧率（mGBA = 59.7275）。loadRom 之前调用返回 GBA 标称值。 */
   getFps(): number;
   /** 卸载游戏并释放核心。之后本实例不可再用。 */
