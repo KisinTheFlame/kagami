@@ -34,6 +34,7 @@ export class DefaultLlmChatCallQueryService implements LlmChatCallQueryService {
     const { total, items } = await this.llmQueryClient.queryLlmChatCalls({
       provider: query.provider,
       model: query.model,
+      scene: query.scene,
       status: query.status,
       page: query.page,
       pageSize: query.pageSize,

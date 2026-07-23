@@ -418,13 +418,14 @@ const ConfigSchema = z.object({
             keepAliveReplayIntervalMinutes: DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
           }),
       }),
+      // usage = KV 缓存身份，只有 agent / vision 两个。fork 型 task agent
+      // （contextSummarizer / todoSuggestionAgent / innerVoice）复用主 Agent 前缀命中
+      // prompt cache，直接用 usage=agent 走同一份配置，不单独配置。调用归因走 scene
+      // 字段（见 @kagami/kernel/contracts/llm 与 issue #555）。
       usages: z
         .object({
           agent: LlmUsageConfigSchema,
-          contextSummarizer: LlmUsageConfigSchema,
           vision: LlmUsageConfigSchema,
-          todoSuggestionAgent: LlmUsageConfigSchema,
-          innerVoice: LlmUsageConfigSchema,
         })
         .strict(),
     }),
@@ -579,10 +580,7 @@ function resolveSqliteFileUrl(baseDir: string, value: string): string {
 function normalizeLlmUsages(input: RawConfig["server"]["llm"]): Record<LlmUsageId, LlmUsageConfig> {
   return {
     agent: normalizeUsageConfig(input.usages.agent),
-    contextSummarizer: normalizeUsageConfig(input.usages.contextSummarizer),
     vision: normalizeUsageConfig(input.usages.vision),
-    todoSuggestionAgent: normalizeUsageConfig(input.usages.todoSuggestionAgent),
-    innerVoice: normalizeUsageConfig(input.usages.innerVoice),
   };
 }
 

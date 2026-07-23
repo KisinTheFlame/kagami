@@ -35,6 +35,7 @@ export class InternalLlmHandler {
     registerJsonRoute(app, llmApiContract.chat, async ({ input }) => {
       return await this.llmClient.chat(input.request as LlmChatRequest, {
         usage: input.usage as LlmUsageId,
+        scene: input.scene,
         ...(input.recordCall === undefined ? {} : { recordCall: input.recordCall }),
       });
     });

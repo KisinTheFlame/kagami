@@ -49,6 +49,8 @@ export const llmApiContract = {
     input: z.object({
       request: EnvelopeRequest,
       usage: z.string().min(1),
+      // 调用归因（自由 string），与 usage 并列进 chat；服务侧透传给 LlmClient.chat.scene。
+      scene: z.string().min(1),
       recordCall: z.boolean().optional(),
     }),
     output: z.unknown(),

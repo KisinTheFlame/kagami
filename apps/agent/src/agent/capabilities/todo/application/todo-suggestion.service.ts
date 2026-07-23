@@ -7,7 +7,7 @@ const logger = new AppLogger({ source: "todo.suggestion-service" });
 
 /**
  * 一次 digest 里「发现待办」子任务的总尝试次数（含首次）；耗尽仍失败则降级为两段。
- * 底层 llm-client 已按 usage 配置（todoSuggestionAgent: times 3）对每次 chat 做无退避的
+ * 底层 llm-client 已按 usage=agent 配置（times 3）对每次 chat 做无退避的
  * 立即重试，两层是乘法关系（外层 N × 底层 times 次 provider 调用）——外层只留 2，
  * 专补底层没有的「隔一段再试」，不把最坏调用数推得更高。
  */

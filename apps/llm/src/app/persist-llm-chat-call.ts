@@ -21,6 +21,7 @@ export function persistLlmChatCall(
     return dao.recordSuccess({
       provider: observation.provider,
       model: observation.model,
+      scene: observation.scene,
       extension: observation.extension,
       requestId: observation.requestId,
       seq: observation.seq,
@@ -35,6 +36,7 @@ export function persistLlmChatCall(
   return dao.recordError({
     provider: observation.provider,
     model: observation.model,
+    scene: observation.scene,
     extension: observation.extension,
     requestId: observation.requestId,
     seq: observation.seq,

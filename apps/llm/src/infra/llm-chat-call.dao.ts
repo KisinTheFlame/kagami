@@ -8,6 +8,8 @@ export type LlmChatCallSummary = {
   seq: number;
   provider: string;
   model: string;
+  /** 调用归因（自由 string）；chatDirect 无归因时为 null。 */
+  scene: string | null;
   extension: Record<string, unknown> | null;
   status: LlmChatCallStatus;
   latencyMs: number | null;
@@ -28,6 +30,7 @@ export type QueryLlmChatCallListInput = {
   pageSize: number;
   provider?: string;
   model?: string;
+  scene?: string;
   status?: LlmChatCallStatus;
 };
 
@@ -36,6 +39,8 @@ type LlmChatCallBaseInput = {
   seq: number;
   provider: LlmProviderId;
   model: string;
+  /** 调用归因（自由 string）；chatDirect 无归因时传 null。 */
+  scene?: string | null;
   extension?: Record<string, unknown> | null;
   latencyMs: number;
   request: Record<string, unknown>;

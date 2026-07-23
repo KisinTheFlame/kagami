@@ -51,6 +51,7 @@ function mapSummary(item: LlmChatCallSummary): LlmChatCallWireSummary {
     seq: item.seq,
     provider: item.provider,
     model: item.model,
+    scene: item.scene,
     extension: item.extension,
     status: item.status,
     latencyMs: item.latencyMs,

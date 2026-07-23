@@ -6,8 +6,8 @@ import {
 import type { MetricClient } from "@kagami/metric-client/client";
 
 // LLM 调用打点（fire-and-forget）：在 kagami-llm 的观测点把每次 attempt 记成 metric，喂给独占 DuckDB
-// 的查询/派生层（P1-P4）。三个 metric：
-// - llm.call        计数（provider/model/status/usage[来处]，失败带 error 粗分类）→ 调用量 / 成功率
+// 的查询/派生层（P1-P4）。三个 metric（tags 均带 usage[KV 缓存身份] + scene[调用归因] 双维度）：
+// - llm.call        计数（provider/model/status/usage/scene，失败带 error 粗分类）→ 调用量 / 成功率
 // - llm.call.latency 延迟秒（同上 tags）→ p50/p95/p99
 // - llm.call.tokens  token 用量，按 kind 拆（input_total/input_cache_hit/input_cache_miss/output）
 //                    → 用量 + KV 缓存命中率（cache_hit ÷ input_total，派生一条比率线）
@@ -34,8 +34,10 @@ export function recordLlmCallMetrics(
   const base = {
     provider: observation.provider,
     model: observation.model,
-    // chatDirect 无调用来处 → "direct"。
+    // usage = KV 缓存身份（agent / vision）；chatDirect 无身份 → "direct"。
     usage: observation.usage ?? "direct",
+    // scene = 调用归因（自由 string，如 contextSummarizer / innerVoice）；chatDirect 无归因 → "direct"。
+    scene: observation.scene ?? "direct",
   };
 
   void metricService.record({

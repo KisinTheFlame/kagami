@@ -41,6 +41,7 @@ describe("DefaultLlmChatCallQueryService", () => {
       seq: 1,
       provider: "openai",
       model: "gpt-test",
+      scene: "agent",
       extension: { foo: "bar" },
       status: "success",
       requestPayload: { messages: [] },
@@ -73,12 +74,14 @@ describe("DefaultLlmChatCallQueryService", () => {
       pageSize: 10,
       provider: "claude-code",
       model: undefined,
+      scene: "contextSummarizer",
       status: "failed",
     });
 
     expect(llmQueryClient.queryLlmChatCalls).toHaveBeenCalledWith({
       provider: "claude-code",
       model: undefined,
+      scene: "contextSummarizer",
       status: "failed",
       page: 2,
       pageSize: 10,

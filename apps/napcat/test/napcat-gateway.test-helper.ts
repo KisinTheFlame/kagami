@@ -210,16 +210,7 @@ export function createConfigManager(): ConfigManager {
           agent: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
-          contextSummarizer: {
-            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
-          },
           vision: {
-            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
-          },
-          todoSuggestionAgent: {
-            attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
-          },
-          innerVoice: {
             attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
           },
         },

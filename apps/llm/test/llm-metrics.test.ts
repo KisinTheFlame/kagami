@@ -22,6 +22,7 @@ function successObservation(
     provider: "claude-code",
     model: "claude-x",
     usage: "agent",
+    scene: "agent",
     extension: {},
     requestId: "r1",
     seq: 1,
@@ -48,7 +49,8 @@ function failedObservation(
     status: "failed",
     provider: "openai",
     model: "gpt-x",
-    usage: "contextSummarizer",
+    usage: "agent",
+    scene: "contextSummarizer",
     extension: null,
     requestId: "r2",
     seq: 1,
@@ -73,7 +75,13 @@ describe("recordLlmCallMetrics", () => {
       {
         metricName: "llm.call",
         value: 1,
-        tags: { provider: "claude-code", model: "claude-x", usage: "agent", status: "success" },
+        tags: {
+          provider: "claude-code",
+          model: "claude-x",
+          usage: "agent",
+          scene: "agent",
+          status: "success",
+        },
       },
     ]);
     expect(byMetric("llm.call.latency")).toEqual([
@@ -81,7 +89,13 @@ describe("recordLlmCallMetrics", () => {
         metricName: "llm.call.latency",
         // 打点存原始毫秒；秒换算在前端。
         value: 1234,
-        tags: { provider: "claude-code", model: "claude-x", usage: "agent", status: "success" },
+        tags: {
+          provider: "claude-code",
+          model: "claude-x",
+          usage: "agent",
+          scene: "agent",
+          status: "success",
+        },
       },
     ]);
 
@@ -117,7 +131,8 @@ describe("recordLlmCallMetrics", () => {
     expect(call?.tags).toEqual({
       provider: "openai",
       model: "gpt-x",
-      usage: "contextSummarizer",
+      usage: "agent",
+      scene: "contextSummarizer",
       status: "failed",
       error: "rate_limit",
     });
@@ -144,9 +159,10 @@ describe("recordLlmCallMetrics", () => {
     expect(kindOf({ error: new Error("服务暂时不可用") })).toBe("other");
   });
 
-  it("labels chatDirect (usage=null) as 'direct'", () => {
+  it("labels chatDirect (usage=null, scene=null) as 'direct' on both tags", () => {
     const { client, calls } = capturing();
-    recordLlmCallMetrics(client, successObservation({ usage: null }));
+    recordLlmCallMetrics(client, successObservation({ usage: null, scene: null }));
     expect(calls.every(c => c.tags?.usage === "direct")).toBe(true);
+    expect(calls.every(c => c.tags?.scene === "direct")).toBe(true);
   });
 });

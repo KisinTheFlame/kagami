@@ -15,6 +15,7 @@ export function useLlmChatCallList(
     pageSize,
     provider: filters.provider,
     model: filters.model,
+    scene: filters.scene,
     status: filters.status,
   };
 
