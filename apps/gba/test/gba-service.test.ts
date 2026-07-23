@@ -104,6 +104,108 @@ describe("GbaService", () => {
     });
   });
 
+  describe("无感重启（优雅关停快照）", () => {
+    function buildService2(configure?: (core: FakeEmulatorCore) => void): GbaService {
+      return new GbaService({
+        store,
+        ossClient: oss,
+        coreFactory: () => {
+          const core = new FakeEmulatorCore();
+          configure?.(core);
+          cores.push(core);
+          return core;
+        },
+      });
+    }
+
+    it("前台优雅关停：快照落库；init 恢复现场（同字节注入、前台继续、帧计数接续、消费即删）", async () => {
+      await uploadAndLoad();
+      service.setForeground(true);
+      await vi.advanceTimersByTimeAsync(500); // 跑出一段进度
+      const frameAtShutdown = service.state().frame;
+      expect(frameAtShutdown).toBeGreaterThan(1);
+
+      await service.shutdown();
+      const saved = store.getResumeState();
+      expect(saved).not.toBeNull();
+      expect(saved?.foreground).toBe(true);
+      expect(saved?.frame).toBe(frameAtShutdown);
+      expect(saved?.savestate).toEqual(Buffer.from("fake-savestate"));
+
+      const service2 = buildService2();
+      await service2.init();
+      const restored = cores[1]!;
+      expect(restored.setStateCalls).toHaveLength(1);
+      expect(restored.setStateCalls[0]).toEqual(Buffer.from("fake-savestate"));
+      // 接续现场：前台恢复、帧循环继续跑、帧计数从停机瞬间接续（+1 为刷新画面的一帧）
+      expect(service2.state().foreground).toBe(true);
+      expect(service2.state().frame).toBe(frameAtShutdown + 1);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(service2.state().frame).toBeGreaterThan(frameAtShutdown + 1);
+      // 消费即删：快照不会隔代复活
+      expect(store.getResumeState()).toBeNull();
+      await service2.shutdown();
+    });
+
+    it("后台优雅关停：恢复后仍后台冻结", async () => {
+      await uploadAndLoad();
+      await service.shutdown(); // 从未转前台
+
+      const service2 = buildService2();
+      await service2.init();
+      expect(cores[1]!.setStateCalls).toHaveLength(1);
+      expect(service2.state().foreground).toBe(false);
+      const frame = service2.state().frame;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(service2.state().frame).toBe(frame); // 冻结：帧循环不跑
+      await service2.shutdown();
+    });
+
+    it("快照校验不通过（核心版本变了）：降级冷启动，快照已删", async () => {
+      await uploadAndLoad();
+      service.setForeground(true);
+      await service.shutdown();
+
+      const service2 = buildService2(core => {
+        core.failSetState = true;
+      });
+      await service2.init();
+      // 冷启动语义：只有 loadGame 的一帧、后台
+      expect(service2.state().loaded).toBe(true);
+      expect(service2.state().frame).toBe(1);
+      expect(service2.state().foreground).toBe(false);
+      expect(store.getResumeState()).toBeNull();
+      await service2.shutdown();
+    });
+
+    it("crash（未优雅关停）：无快照，落回断电 + 电池存档语义", async () => {
+      await uploadAndLoad();
+      service.setForeground(true);
+      await vi.advanceTimersByTimeAsync(500);
+      // 不调 shutdown，直接模拟重启
+      expect(store.getResumeState()).toBeNull();
+
+      const service2 = buildService2();
+      await service2.init();
+      expect(cores[1]!.setStateCalls).toHaveLength(0);
+      expect(service2.state().frame).toBe(1); // 冷启动
+      expect(service2.state().foreground).toBe(false);
+      await service2.shutdown();
+    });
+
+    it("核心不支持 savestate：关停不写快照", async () => {
+      await uploadAndLoad();
+      cores[0]!.stateBlob = null;
+      await service.shutdown();
+      expect(store.getResumeState()).toBeNull();
+    });
+
+    it("未加载 ROM 时关停不写快照", async () => {
+      await service.shutdown();
+      expect(store.getResumeState()).toBeNull();
+    });
+  });
+
   describe("press 领域校验", () => {
     beforeEach(async () => {
       await uploadAndLoad();

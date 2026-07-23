@@ -16,6 +16,12 @@ export class FakeEmulatorCore implements EmulatorCore {
   public failLoad = false;
   /** 置 true 让下一次 runFrame 抛错一次（模拟 WASM trap）。 */
   public throwOnNextRunFrame = false;
+  /** getState 返回的假快照；置 null 模拟核心不支持 savestate。 */
+  public stateBlob: Buffer | null = Buffer.from("fake-savestate");
+  /** setState 收到的字节（按序）。 */
+  public readonly setStateCalls: Buffer[] = [];
+  /** 置 true 让 setState 返回 false（核心校验不通过）。 */
+  public failSetState = false;
 
   public async loadRom(rom: Buffer): Promise<void> {
     if (this.failLoad) {
@@ -44,6 +50,15 @@ export class FakeEmulatorCore implements EmulatorCore {
     if (this.sram) {
       bytes.copy(this.sram, 0, 0, Math.min(bytes.length, this.sram.length));
     }
+  }
+
+  public getState(): Buffer | null {
+    return this.stateBlob ? Buffer.from(this.stateBlob) : null;
+  }
+
+  public setState(bytes: Buffer): boolean {
+    this.setStateCalls.push(Buffer.from(bytes));
+    return !this.failSetState;
   }
 
   public getFps(): number {
