@@ -10,9 +10,8 @@ datasource db {
 }
 
 // llm 独占的 SQLite 库（epic #539 子 issue 3，与主库 kagami.db 物理分离）。
-// 五张表从 packages/persistence 的共享 schema 原样搬入：表名 / 列名 / 索引名保持不变，
-// 让「主库 → llm.db」的启动期数据搬迁可以按显式列名整搬（照 napcat 子 issue 2 范式）。
-// 主库中的同名旧表在搬迁落地后由 #539 子 issue 5 统一 DROP。
+// 五张表从 packages/persistence 的共享 schema 原样搬入（表名 / 列名 / 索引名不变）。
+// 历史数据搬迁与主库旧表 DROP 均已完成（#539 子 issue 5），本库是这些表的唯一归属。
 
 // LLM 请求审计：一行 = 一次 provider 调用（console 查询用；agent 的 tool_result 只留摘要，
 // 完整原文在此可查）。
@@ -22,6 +21,8 @@ model LlmChatCall {
   seq                   Int      @default(1)
   provider              String
   model                 String
+  // 调用归因（自由 string，如 agent / contextSummarizer / vision）；chatDirect 无归因 → null。
+  scene                 String?
   extension             Json?
   status                String
   requestPayload        Json     @map("request_payload")
@@ -36,6 +37,7 @@ model LlmChatCall {
   @@unique([requestId, seq], map: "llm_chat_call_request_id_seq_uq")
   @@index([provider, model], map: "llm_chat_call_provider_model_idx")
   @@index([createdAt], map: "llm_chat_call_created_at_idx")
+  @@index([scene, createdAt], map: "llm_chat_call_scene_created_at_idx")
   @@map("llm_chat_call")
 }
 

@@ -37,14 +37,16 @@ describe("llm-api 契约：编译期类型强制", () => {
     const api = createClient(llmApiContract, { baseUrl: "http://llm" });
     void (async (): Promise<void> => {
       // request 是 unknown：任意结构放行（信封级刻意不逐字段校验）
-      await api.chat({ request: { whatever: true }, usage: "agent" });
+      await api.chat({ request: { whatever: true }, usage: "agent", scene: "agent" });
       // @ts-expect-error 信封字段 usage 必填，缺失必须报错
-      await api.chat({ request: {} });
-      // @ts-expect-error chatDirect 信封要求 providerId/model，缺失必须报错
+      await api.chat({ request: {}, scene: "agent" });
+      // @ts-expect-error 信封字段 scene 必填，缺失必须报错
+      await api.chat({ request: {}, usage: "agent" });
+      // @ts-expect-error chatDirect 信封要求 providerId/model，缺失必须报错（chatDirect 无 scene）
       await api.chatDirect({ request: {}, usage: "agent" });
       await api.chatDirect({ request: {}, providerId: "openai", model: "gpt" });
       // output 是 unknown：不暴露具体字段类型（信封级，门面按接口断言）
-      const res: unknown = await api.chat({ request: {}, usage: "agent" });
+      const res: unknown = await api.chat({ request: {}, usage: "agent", scene: "agent" });
       void res;
       await api.embed({ request: { content: "hi" } });
     });

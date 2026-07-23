@@ -13,7 +13,7 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
 import type { EmulatorCore, EmulatorCoreFactory } from "../emulator/emulator-core.js";
 import { encodeFramePng } from "../emulator/frame-png.js";
 import type { OssClient } from "../acl/oss-client.js";
-import type { GbaStore, RomRow } from "../persistence/gba-store.js";
+import type { GbaStore, ResumeStateRow, RomRow } from "../persistence/gba-store.js";
 
 type ScreenResult = z.infer<typeof GbaScreenResultSchema>;
 type LoadResult = z.infer<typeof GbaLoadResultSchema>;
@@ -78,8 +78,10 @@ type GbaServiceDeps = {
  *   消费完毕 + settle 走完后采帧回图。天然无重复推进 / 竞态；并发 press 直接拒绝。
  * - 按键状态完全由活动 plan 派生（无 plan = 全松开）：任何路径清掉 plan 即等价「finally 清键」，
  *   不存在方向键卡死的状态残留。
- * - 电池存档：SRAM 周期脏检查（hash 对比）+ blur / 换 ROM / 关停时强制 flush；重启 = 关机重开
- *   （恢复上次 ROM + 存档，冷启动、处于后台，未记录的进度像真机断电一样丢失）。
+ * - 电池存档：SRAM 周期脏检查（hash 对比）+ blur / 换 ROM / 关停时强制 flush。
+ * - 重启语义分两档：**优雅关停**（deploy / PM2 reload）额外落 savestate 快照，下次启动
+ *   unserialize 接续停机现场（含前后台，无感重启）；**crash** 没有快照，落回「断电 + 电池
+ *   存档」的真机语义（恢复上次 ROM + 存档，冷启动、处于后台）。
  */
 export class GbaService {
   private readonly store: GbaStore;
@@ -115,19 +117,101 @@ export class GbaService {
   }
 
   /**
-   * 启动恢复：上次加载的 ROM 冷启动回来（后台、注入电池存档）。OSS 不可达 / ROM 已删时
-   * 跳过并告警——服务必须能空手起来，恢复失败不是启动失败。
+   * 启动恢复：上次加载的 ROM 装回来（注入电池存档），若有优雅关停留下的 savestate 快照则
+   * unserialize 接续停机现场（含前后台，无感重启）；无快照 / 恢复失败降级为冷启动 + 后台
+   * （断电语义）。OSS 不可达 / ROM 已删时跳过并告警——服务必须能空手起来，恢复失败不是
+   * 启动失败。
    */
   public async init(): Promise<void> {
     const lastRomId = this.store.getLastRomId();
     if (lastRomId === null) {
       return;
     }
+    // 先把快照读进内存：紧随其后的 loadGame 成功会作废持久化行（防 crash 复活，见
+    // doLoadGame），启动恢复用的是这份内存副本。
+    const resume = this.store.getResumeState();
     const result = await this.loadGame(lastRomId);
     if (!result.ok) {
+      // 快照行留着不清：装 ROM 都没成（多半 OSS 瞬断），让下一次启动仍有机会无感恢复。
+      // 运行中任何一次成功加载都会作废它，不会陈旧复活。
       logger.warn("GBA 启动恢复上次 ROM 失败，跳过", {
         event: "gba.restore_last_rom_failed",
         romId: lastRomId,
+        reason: result.reason,
+      });
+      return;
+    }
+    if (resume) {
+      await this.restoreSnapshot(resume, lastRomId);
+    }
+  }
+
+  /**
+   * 优雅关停快照的恢复。持久化行已在本次 loadGame 成功时作废，这里只消费启动前读出的内存
+   * 副本。恢复失败（校验不通过 / WASM trap）时核心可能已被 unserialize **部分改写**，不能
+   * 当冷启动继续用——整个丢弃（不 flush 可能被污染的 SRAM）后全新重载（review #557 [P2]）。
+   */
+  private async restoreSnapshot(resume: ResumeStateRow, romId: number): Promise<void> {
+    if (resume.romId !== romId || !this.core) {
+      return;
+    }
+    let restored = false;
+    try {
+      restored = this.core.setState(resume.savestate);
+      if (restored) {
+        // 推进一帧刷新画面缓冲（理由同 loadGame 的冷启动一帧：让 screenshot 立即有帧可看）；
+        // 重启窗口内游戏冻结，恢复后原帧继续，不快进。WASM trap 一并在此遏制，不炸启动。
+        this.core.runFrame(EMPTY_HELD);
+      }
+    } catch (error) {
+      logger.errorWithCause("GBA 快照恢复抛错，丢弃半恢复核心重载", error, {
+        event: "gba.resume_restore_failed",
+        romId,
+      });
+      restored = false;
+    }
+    if (!restored) {
+      logger.warn("GBA 快照恢复失败（核心校验不通过，多半核心版本变了），丢弃后重载为冷启动", {
+        event: "gba.resume_restore_rejected",
+        romId,
+      });
+      await this.reloadDiscardingCore(romId);
+      return;
+    }
+    // 帧计数接续停机瞬间（+1 = 上面刷新画面的那一帧）。
+    this.frame = resume.frame + 1;
+    this.lastSramHash = this.hashSram();
+    if (resume.foreground) {
+      this.setForeground(true);
+    }
+    logger.info("GBA 无感恢复：接续优雅关停时的现场", {
+      event: "gba.resume_restored",
+      romId,
+      frame: this.frame,
+      foreground: resume.foreground,
+    });
+  }
+
+  /**
+   * 恢复失败后的净化重载：丢弃现核心（**不 flush SRAM**——可能已被失败的 unserialize 污染，
+   * flush 会拿脏数据覆盖电池存档），再从 OSS + battery_save 全新加载出真正干净的冷启动实例。
+   * 重载也失败时保持未加载空手起，服务照常对外。
+   */
+  private async reloadDiscardingCore(romId: number): Promise<void> {
+    const poisoned = this.core;
+    this.core = null;
+    this.romId = null;
+    this.romName = null;
+    this.frame = 0;
+    this.lastSramHash = null;
+    if (poisoned) {
+      await poisoned.shutdown().catch(() => {});
+    }
+    const result = await this.loadGame(romId);
+    if (!result.ok) {
+      logger.warn("GBA 恢复失败后的重载也失败，保持未加载", {
+        event: "gba.resume_reload_failed",
+        romId,
         reason: result.reason,
       });
     }
@@ -266,6 +350,10 @@ export class GbaService {
 
     this.store.touchLastPlayed(romId);
     this.store.setLastRomId(romId);
+    // 任何一次成功加载都作废持久化快照（review #557 [P1]）：快照描述的是「上一次关停时的
+    // 现场」，一旦有新加载（含 OSS 瞬断恢复后的手动加载、换 ROM），它就过时了——留着会在
+    // 之后 crash 的下一次启动里复活、回滚新进度。init 的无感恢复用的是启动前读出的内存副本。
+    this.store.clearResumeState();
     if (this.foreground) {
       this.startLoop();
     }
@@ -427,8 +515,9 @@ export class GbaService {
     return { ok: true };
   }
 
-  /** 关停：中止在途 press、冻结、best-effort flush 存档、释放核心。 */
+  /** 关停：中止在途 press、冻结、best-effort flush 存档、拍无感重启快照、释放核心。 */
   public async shutdown(): Promise<void> {
+    const wasForeground = this.foreground;
     this.abortPlan("GBA_SHUTTING_DOWN: 服务关停，按键已全部松开");
     this.stopLoop();
     this.foreground = false;
@@ -443,7 +532,38 @@ export class GbaService {
     const core = this.core;
     this.core = null;
     if (core) {
+      this.snapshotResumeState(core, wasForeground);
       await core.shutdown();
+    }
+  }
+
+  /**
+   * 优雅关停快照：savestate 全机器状态 + 停机瞬间的前后台/帧计数落库，下次启动无感接续。
+   * 只此一处写快照——crash 没走到这里就没有快照，保持「断电 + 电池存档」的真机语义。
+   * best-effort：快照失败只告警，绝不阻断关停（电池存档已在上面 flush 过，进度有底）。
+   */
+  private snapshotResumeState(core: EmulatorCore, foreground: boolean): void {
+    if (this.romId === null) {
+      return;
+    }
+    try {
+      const savestate = core.getState();
+      if (!savestate) {
+        return;
+      }
+      this.store.saveResumeState({ romId: this.romId, savestate, foreground, frame: this.frame });
+      logger.info("GBA 关停快照落库（无感重启现场）", {
+        event: "gba.resume_snapshot_saved",
+        romId: this.romId,
+        frame: this.frame,
+        foreground,
+        bytes: savestate.length,
+      });
+    } catch (error) {
+      logger.errorWithCause("GBA 关停快照失败（下次启动为冷启动）", error, {
+        event: "gba.resume_snapshot_failed",
+        romId: this.romId,
+      });
     }
   }
 

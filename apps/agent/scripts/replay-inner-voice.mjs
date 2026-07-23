@@ -3,7 +3,7 @@
 // 用法：
 //   1. 先 `pnpm --filter @kagami/agent build`（脚本从 dist 导入判定纯函数，保证与生产同源）
 //   2. 从生产库 dump 素材（只读模式）：
-//      sqlite3 -json "file:<仓库根>/data/sqlite/kagami.db?mode=ro" \
+//      sqlite3 -json "file:<仓库根>/data/agent/agent.db?mode=ro" \
 //        "SELECT created_at, json(message) AS message FROM ledger \
 //         WHERE runtime_key='root-agent' AND created_at > datetime('now','-14 days') \
 //           AND json_extract(message,'$.role')='assistant' ORDER BY id ASC" > /tmp/ledger-14d.json

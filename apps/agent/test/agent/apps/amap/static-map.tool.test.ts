@@ -36,7 +36,7 @@ describe("StaticMapTool", () => {
     });
     expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-9" });
     const effect = result.effects?.[0] as AppendMessageEffect;
-    expect(effect.image?.content).toBe(Buffer.from("MAP").toString("base64"));
+    expect(effect.images?.[0]?.content).toBe(Buffer.from("MAP").toString("base64"));
     expect(effect.content).toContain('resid="res-9"');
   });
 
@@ -50,7 +50,7 @@ describe("StaticMapTool", () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.resid).toBeUndefined();
     const effect = result.effects?.[0] as AppendMessageEffect;
-    expect(effect.image?.content).toBe(Buffer.from("MAP").toString("base64"));
+    expect(effect.images?.[0]?.content).toBe(Buffer.from("MAP").toString("base64"));
   });
 
   it("works with no OSS configured (no resid, image still appended)", async () => {
@@ -58,7 +58,7 @@ describe("StaticMapTool", () => {
     const parsed = JSON.parse(result.content);
     expect(parsed.ok).toBe(true);
     expect(parsed.resid).toBeUndefined();
-    expect((result.effects?.[0] as AppendMessageEffect).image).toBeDefined();
+    expect((result.effects?.[0] as AppendMessageEffect).images?.[0]).toBeDefined();
   });
 
   it("rejects an empty call (no location, no markers, no paths)", async () => {

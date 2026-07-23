@@ -77,8 +77,8 @@ describe("GBA 工具", () => {
     expect(result.content).toBe('{"ok":true}');
     const effect = appendEffect(result.effects);
     expect(effect.content).toBe('<gba_screen resid="res-99" />');
-    expect(effect.image?.content).toBe(IMAGE_BASE64);
-    expect(effect.image?.mimeType).toBe("image/png");
+    expect(effect.images?.[0]?.content).toBe(IMAGE_BASE64);
+    expect(effect.images?.[0]?.mimeType).toBe("image/png");
   });
 
   it("press:OSS 缺省时优雅降级(无 resid,图仍进视野)", async () => {

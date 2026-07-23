@@ -30,7 +30,10 @@ export type TaskAgentInvocationState<TUsage extends string> = {
   systemPrompt?: string;
   messages: LlmMessage[];
   toolContext?: ToolContext;
+  /** KV 缓存身份（决定 provider/model）；fork 型 task agent 一律 "agent"。 */
   usage: TUsage;
+  /** 调用归因（自由 string，只进 metric / 落库）。 */
+  scene: string;
 };
 
 /** TaskAgent 终止 Effect 的 type 字面量。 */
@@ -163,6 +166,7 @@ export abstract class BaseTaskAgent<
         tools: this.taskTools,
         toolContext: invocation.toolContext,
         usage: invocation.usage,
+        scene: invocation.scene,
       });
       if (roundResult.shouldCommit) {
         messages.push(roundResult.assistantMessage, ...roundResult.appendedMessages);

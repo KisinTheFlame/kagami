@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@kagami/http": "workspace:*",
+    "@kagami/image": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
@@ -26,13 +27,11 @@
     "@kagami/rpc-client": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.6.0",
-    "better-sqlite3": "^12.11.1",
     "fastify": "^5.6.2",
     "prisma": "^7.6.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

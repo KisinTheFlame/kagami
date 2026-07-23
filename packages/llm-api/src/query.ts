@@ -14,6 +14,7 @@ export const LlmChatCallQueryStatusSchema = z.enum(["success", "failed"]);
 export const LlmQueryChatCallsRequestSchema = z.object({
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  scene: z.string().min(1).optional(),
   status: LlmChatCallQueryStatusSchema.optional(),
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1).max(100),
@@ -27,6 +28,7 @@ export const LlmChatCallWireSummarySchema = z.object({
   seq: z.number().int().positive(),
   provider: z.string().min(1),
   model: z.string().min(1),
+  scene: z.string().min(1).nullable(),
   extension: JsonRecordSchema.nullable(),
   status: LlmChatCallQueryStatusSchema,
   // 与 console-api 的 LlmChatCallSummary 完全同形（无 nonnegative）：output 校验比数据源更严

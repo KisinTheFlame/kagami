@@ -46,13 +46,16 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     expect(fetchMock).toHaveBeenCalledWith("https://example.com/screen.png", {
       signal: expect.any(AbortSignal),
     });
-    expect(visionAgent.analyzeImage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: Buffer.from("image"),
-        mimeType: "image/png",
-        filename: "screen.png",
-      }),
-    );
+    // 假字节解码失败 → 归一化 fail-open 原样透传成单元素 images。
+    expect(visionAgent.analyzeImage).toHaveBeenCalledWith({
+      images: [
+        expect.objectContaining({
+          content: Buffer.from("image"),
+          mimeType: "image/png",
+          filename: "screen.png",
+        }),
+      ],
+    });
   });
 
   it("should return empty description when response content-type is not image", async () => {
@@ -92,9 +95,9 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
       analyzer.analyzeImageSegment(createImageSegment("https://example.com/cat", "cat")),
     ).resolves.toEqual({ description: "一只猫", resid: null });
 
-    expect(visionAgent.analyzeImage).toHaveBeenCalledWith(
-      expect.objectContaining({ mimeType: "image/jpeg" }),
-    );
+    expect(visionAgent.analyzeImage).toHaveBeenCalledWith({
+      images: [expect.objectContaining({ mimeType: "image/jpeg" })],
+    });
   });
 
   it("should trust bytes over a wrong header (text/html header + PNG magic → image/png)", async () => {
@@ -148,7 +151,7 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
     expect(visionAgent.analyzeImage).not.toHaveBeenCalled();
   });
 
-  it("should return empty description when vision agent throws", async () => {
+  it("should degrade to a failure placeholder when vision agent throws", async () => {
     const analyzer = new DefaultNapcatImageMessageAnalyzer({
       visionAgent: {
         analyzeImage: vi.fn().mockRejectedValue(new Error("vision failed")),
@@ -156,9 +159,10 @@ describe("DefaultNapcatImageMessageAnalyzer", () => {
       fetch: vi.fn().mockResolvedValue(imageResponse({ "content-type": "image/png" })),
     });
 
+    // 占位而非空串：空描述会诱导主 Agent 去 read_resource 拉原图（#556 事故诱因环）。
     await expect(
       analyzer.analyzeImageSegment(createImageSegment("https://example.com/fail.png")),
-    ).resolves.toEqual({ description: "", resid: null });
+    ).resolves.toEqual({ description: "[图片描述失败]", resid: null });
   });
 
   it("should sanitize verbose vision output into a single short message", async () => {

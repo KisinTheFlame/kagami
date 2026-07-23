@@ -30,7 +30,7 @@ export type InnerVoiceTaskInput = {
  * TaskAgentMaxRoundsExceededError，由 InnerVoiceExtension 降级为一次 failed。
  */
 export class InnerVoiceTaskAgent
-  extends BaseTaskAgent<InnerVoiceTaskInput, string, "innerVoice">
+  extends BaseTaskAgent<InnerVoiceTaskInput, string, "agent">
   implements TaskAgentInvoker<InnerVoiceTaskInput, string>
 {
   public constructor({ llmClient, taskTools }: { llmClient: LlmClient; taskTools: ToolExecutor }) {
@@ -45,7 +45,8 @@ export class InnerVoiceTaskAgent
   protected async createInvocation(input: InnerVoiceTaskInput): Promise<{
     systemPrompt: string;
     messages: LlmMessage[];
-    usage: "innerVoice";
+    usage: "agent";
+    scene: string;
   }> {
     const systemPrompt = input.systemPrompt.trim();
     if (systemPrompt.length === 0) {
@@ -55,7 +56,9 @@ export class InnerVoiceTaskAgent
     return {
       systemPrompt,
       messages: [...input.messages, createInnerVoiceInstructionMessage()],
-      usage: "innerVoice",
+      // usage=agent：复用主 Agent 前缀命中 prompt cache。scene 保留原归因标签。
+      usage: "agent",
+      scene: "innerVoice",
     };
   }
 

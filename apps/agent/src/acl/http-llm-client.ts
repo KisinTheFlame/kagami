@@ -57,6 +57,7 @@ export class HttpLlmClient implements LlmClient {
     return (await this.api.chat({
       request,
       usage: options.usage,
+      scene: options.scene,
       ...(options.recordCall === undefined ? {} : { recordCall: options.recordCall }),
     })) as LlmChatResponsePayload;
   }

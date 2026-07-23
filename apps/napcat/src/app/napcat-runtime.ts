@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
-import { migrateFromLegacyDb } from "../infra/db/legacy-migration.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -98,13 +97,8 @@ export async function buildNapcatRuntime(): Promise<NapcatRuntime> {
   const configManager = new DefaultConfigManager({ config: loadedConfig });
   const config = await configManager.config();
 
-  // napcat 独占库（epic #539 子 issue 2）：napcat_event / napcat_qq_message / outbox /
-  // image_asset 落 services.napcat.databaseUrl，主库 kagami.db 不再被本进程长期打开——
-  // 仅启动瞬间由 migrateFromLegacyDb 开一条只读连接做一次性历史搬迁（幂等，搬完即关）。
-  migrateFromLegacyDb({
-    napcatDatabaseUrl: config.services.napcat.databaseUrl,
-    legacyDatabaseUrl: config.server.databaseUrl,
-  });
+  // napcat 独占库（epic #539）：napcat_event / napcat_qq_message / outbox / image_asset
+  // 落 services.napcat.databaseUrl。历史数据搬迁已在生产完成，搬迁代码随子 issue 5 退役。
   const database = createDbClient({ databaseUrl: config.services.napcat.databaseUrl });
   await configureSqlite(database);
 

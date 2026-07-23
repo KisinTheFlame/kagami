@@ -1,5 +1,7 @@
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
+import { normalizeImageForLlm } from "@kagami/image/normalize";
 import type { NapcatReceiveImageSegment } from "../../domain/napcat-segment.js";
 import { detectMime } from "@kagami/kernel/utils/detect-mime";
 import type { OssClient } from "../../acl/oss-client.js";
@@ -34,7 +36,9 @@ export interface NapcatImageMessageAnalyzer {
 }
 
 type VisionImageAnalyzer = {
-  analyzeImage(input: { content: Buffer; mimeType: string; filename?: string }): Promise<{
+  analyzeImage(input: {
+    images: Array<{ content: Buffer; mimeType: string; filename?: string }>;
+  }): Promise<{
     description: string;
   }>;
 };
@@ -197,10 +201,19 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
     url: string;
   }): Promise<string> {
     try {
+      // 归一化（#556）：超大图缩到可读尺寸、极端长图切片，保证 vision 请求不再撞
+      // provider 的 8000px 硬限制，长图也不再被服务端缩成不可读的细条。
+      const normalized = await normalizeImageForLlm(input.content, input.mimeType);
+      const filename = inferFilenameFromUrl(input.url);
       const result = await this.visionAgent.analyzeImage({
-        content: input.content,
-        mimeType: input.mimeType,
-        filename: inferFilenameFromUrl(input.url),
+        images: normalized.parts.map(part => ({
+          content: part.bytes,
+          mimeType: part.mimeType,
+          filename:
+            part.tile && filename
+              ? `${filename}-part-${part.tile.index}of${part.tile.total}`
+              : filename,
+        })),
       });
       return sanitizeVisionDescription(result.description);
     } catch (error) {
@@ -208,7 +221,11 @@ export class DefaultNapcatImageMessageAnalyzer implements NapcatImageMessageAnal
         event: "napcat.gateway.image_analysis_failed",
         url: input.url,
       });
-      return "";
+      // 占位而非空串：空描述会诱导主 Agent 去 read_resource 拉原图（2026-07-23 事故诱因环）。
+      return renderServerStaticTemplate(
+        import.meta.url,
+        "texts/image-description-failed.hbs",
+      ).trim();
     }
   }
 

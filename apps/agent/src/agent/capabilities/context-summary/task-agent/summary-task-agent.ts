@@ -24,7 +24,7 @@ export type SummaryTaskInput = {
  * TaskAgentMaxRoundsExceededError，调用方降级为本次不压缩。
  */
 export class SummaryTaskAgent
-  extends BaseTaskAgent<SummaryTaskInput, string, "contextSummarizer">
+  extends BaseTaskAgent<SummaryTaskInput, string, "agent">
   implements TaskAgentInvoker<SummaryTaskInput, string>
 {
   private readonly reminderMessageFactory: () => Extract<LlmMessage, { role: "user" }>;
@@ -51,7 +51,8 @@ export class SummaryTaskAgent
   protected async createInvocation(input: SummaryTaskInput): Promise<{
     systemPrompt: string;
     messages: LlmMessage[];
-    usage: "contextSummarizer";
+    usage: "agent";
+    scene: string;
   }> {
     const systemPrompt = input.systemPrompt.trim();
     if (systemPrompt.length === 0) {
@@ -61,7 +62,9 @@ export class SummaryTaskAgent
     return {
       systemPrompt,
       messages: [...input.messages, this.reminderMessageFactory()],
-      usage: "contextSummarizer",
+      // usage=agent：复用主 Agent 前缀命中 prompt cache。scene 保留原归因标签。
+      usage: "agent",
+      scene: "contextSummarizer",
     };
   }
 

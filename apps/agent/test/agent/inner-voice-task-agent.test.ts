@@ -49,7 +49,7 @@ function emitThought(thought: string): LlmChatResponsePayload {
 }
 
 describe("InnerVoiceTaskAgent", () => {
-  it("emit 非空念头 → 复用完整前缀 + auto + usage=innerVoice，返回念头", async () => {
+  it("emit 非空念头 → 复用完整前缀 + auto + usage=agent/scene=innerVoice，返回念头", async () => {
     const chat = vi.fn().mockResolvedValueOnce(emitThought("想翻翻那篇文章"));
     const agent = createAgent(chat);
 
@@ -69,7 +69,7 @@ describe("InnerVoiceTaskAgent", () => {
         toolChoice: "auto",
         tools: expect.arrayContaining([expect.objectContaining({ name: INVOKE_TOOL_NAME })]),
       },
-      { usage: "innerVoice" },
+      { usage: "agent", scene: "innerVoice" },
     );
   });
 

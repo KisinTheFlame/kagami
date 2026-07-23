@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
+import { normalizeImageForLlm } from "@kagami/image/normalize";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { ResourceService } from "../application/resource.service.js";
 
@@ -74,15 +76,26 @@ export class ReadResourceTool extends ZodToolComponent<typeof ReadResourceArgume
       };
     }
 
+    // 归一化（#556）：超大图缩到可读尺寸、极端长图切片，原图绝不直接入持久上下文——
+    // 一张 >8000px 的图进上下文就是每轮 400 的毒消息（2026-07-23 事故）。
+    const normalized = await normalizeImageForLlm(resolved.bytes, resolved.mimeType);
+    const tiled = normalized.parts.length > 1;
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<resource resid="${resolved.resId}" mime="${resolved.mimeType}" />`,
+      content: renderServerStaticTemplate(import.meta.url, "context/resource-image.hbs", {
+        resid: resolved.resId,
+        mime: resolved.mimeType,
+        tiled,
+        tileCount: normalized.parts.length,
+      }).trim(),
       // base64 字符串：图片要进持久上下文（快照/ledger 走 JSON），Buffer 会被 JSON 毒坏。
-      image: {
-        content: resolved.bytes.toString("base64"),
-        mimeType: resolved.mimeType,
-        filename: resolved.resId,
-      },
+      images: normalized.parts.map(part => ({
+        content: part.bytes.toString("base64"),
+        mimeType: part.mimeType,
+        filename: part.tile
+          ? `${resolved.resId}-part-${part.tile.index}of${part.tile.total}`
+          : resolved.resId,
+      })),
     };
     return {
       content: JSON.stringify({
