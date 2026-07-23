@@ -53,6 +53,7 @@ describe("InternalLlmHandler", () => {
       payload: {
         request: { messages: [{ role: "user", content: "ping" }], tools: [], toolChoice: "none" },
         usage: "agent",
+        scene: "agent",
       },
     });
 
@@ -60,7 +61,7 @@ describe("InternalLlmHandler", () => {
     expect(response.json()).toMatchObject({ provider: "openai", model: "m" });
     expect(chat).toHaveBeenCalledWith(
       { messages: [{ role: "user", content: "ping" }], tools: [], toolChoice: "none" },
-      { usage: "agent" },
+      { usage: "agent", scene: "agent" },
     );
   });
 
@@ -77,7 +78,7 @@ describe("InternalLlmHandler", () => {
     const response = await app.inject({
       method: "POST",
       url: "/internal/chat",
-      payload: { request: {}, usage: "agent" },
+      payload: { request: {}, usage: "agent", scene: "agent" },
     });
 
     expect(response.statusCode).toBe(503);

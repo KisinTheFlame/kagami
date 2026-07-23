@@ -124,13 +124,11 @@ server:
         fileCacheGcEnabled: true # kill-switch；false 则不注册 GC task（急停用）
         fileCacheGcMaxIdleDays: 3 # 连续多少天未被使用即回收
         fileCacheGcMaxDeletionsPerRun: 2000 # 单轮删除上限，超出的次日续删
+    # 只配 agent / vision 两个 KV 缓存身份。fork 型 task agent（contextSummarizer /
+    # todoSuggestionAgent / innerVoice）在调用点直接用 usage=agent，复用主 Agent 前缀命中
+    # prompt cache，故不在此单独配置；调用归因走 scene 字段（见 issue #555）。
     usages:
       agent:
-        attempts:
-          - provider: claude-code
-            model: claude-opus-4-6
-            times: 3
-      contextSummarizer:
         attempts:
           - provider: claude-code
             model: claude-opus-4-6
@@ -140,16 +138,6 @@ server:
           - provider: claude-code
             model: claude-sonnet-5
             times: 2
-      todoSuggestionAgent:
-        attempts:
-          - provider: claude-code
-            model: claude-opus-4-6
-            times: 3
-      innerVoice:
-        attempts:
-          - provider: claude-code
-            model: claude-opus-4-6
-            times: 3
   # bot.qq / bot.creator 是密钥 / PII，放 config.secret.yaml
   # 自建对象存储（@kagami/oss）启用开关。地址不在这里——统一来自顶层 services.oss。
   # 整段可省略 → 关闭图片存档（resid 恒为 null，只走 vision 文字描述，优雅降级）；

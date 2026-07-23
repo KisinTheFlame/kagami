@@ -20,7 +20,8 @@ const successObservation: LlmChatCallObservation = {
   status: "success",
   provider: "claude-code",
   model: "claude",
-  usage: null,
+  usage: "agent",
+  scene: "agent",
   extension: { actualModel: "claude-actual" },
   requestId: "req-1",
   seq: 1,
@@ -36,6 +37,7 @@ const errorObservation: LlmChatCallObservation = {
   provider: "claude-code",
   model: "claude",
   usage: null,
+  scene: null,
   extension: null,
   requestId: "req-2",
   seq: 1,
@@ -63,6 +65,8 @@ describe("persistLlmChatCall — 成功轮不落 native_request_payload", () => 
     expect(input.response).toEqual({ message: "ok" });
     expect(input.nativeResponsePayload).toEqual({ anthropic: "wire resp" });
     expect(input.requestId).toBe("req-1");
+    // 归因 scene 透传落库（issue #555）。
+    expect(input.scene).toBe("agent");
   });
 
   it("失败轮：recordError 完整保留 native_request_payload（诊断需要）", async () => {
@@ -77,5 +81,7 @@ describe("persistLlmChatCall — 成功轮不落 native_request_payload", () => 
     expect(input.nativeRequestPayload).toEqual({ anthropic: "wire body" });
     expect(input.nativeError).toEqual({ message: "boom" });
     expect(input.error).toBeInstanceOf(Error);
+    // chatDirect 无归因：scene 落 null。
+    expect(input.scene).toBeNull();
   });
 });

@@ -98,25 +98,7 @@ function createUsageConfig(
         },
       ],
     },
-    contextSummarizer: {
-      attempts: [
-        {
-          provider: "openai",
-          model: "gpt-4o-mini",
-          times: 1,
-        },
-      ],
-    },
     vision: {
-      attempts: [
-        {
-          provider: "openai",
-          model: "gpt-4o-mini",
-          times: 1,
-        },
-      ],
-    },
-    todoSuggestionAgent: {
       attempts: [
         {
           provider: "openai",
@@ -533,6 +515,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).resolves.toMatchObject({
@@ -624,6 +607,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).resolves.toMatchObject({
@@ -693,6 +677,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).rejects.toBe(lastError);
@@ -731,6 +716,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).rejects.toMatchObject({
@@ -801,6 +787,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).resolves.toMatchObject({
@@ -871,6 +858,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).resolves.toMatchObject({
@@ -945,6 +933,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).rejects.toMatchObject({
@@ -973,6 +962,24 @@ describe("createLlmClient", () => {
         {} as never,
       ),
     ).rejects.toThrow("require an explicit usage");
+  });
+
+  it("should require explicit scene for chat (归因必填，issue #555)", async () => {
+    const { client } = createClient({
+      providers: { openai: { id: "openai", chat: vi.fn() } },
+    });
+
+    await expect(
+      client.chat(
+        {
+          messages: [{ role: "user", content: "ping" }],
+          tools: [],
+          toolChoice: "none",
+        },
+        // usage 合法但缺 scene：必须在动 provider 前 fail loud。
+        { usage: "agent" } as never,
+      ),
+    ).rejects.toThrow("requires an explicit non-empty scene");
   });
 
   it("should require explicit model for direct chat", async () => {
@@ -1066,6 +1073,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "vision",
+          scene: "vision",
         },
       ),
     ).resolves.toEqual({
@@ -1202,6 +1210,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "vision",
+          scene: "vision",
         },
       ),
     ).resolves.toMatchObject({
@@ -1334,6 +1343,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "vision",
+          scene: "vision",
         },
       ),
     ).resolves.toMatchObject({
@@ -1423,6 +1433,7 @@ describe("createLlmClient", () => {
         },
         {
           usage: "agent",
+          scene: "agent",
         },
       ),
     ).resolves.toMatchObject({

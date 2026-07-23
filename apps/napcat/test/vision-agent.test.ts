@@ -57,6 +57,7 @@ describe("VisionAgent", () => {
       },
       {
         usage: "vision",
+        scene: "vision",
       },
     );
     const firstMessage = vi.mocked(llmClient.chat).mock.calls[0]?.[0]?.messages[0];
@@ -112,6 +113,7 @@ describe("VisionAgent", () => {
       }),
       {
         usage: "vision",
+        scene: "vision",
       },
     );
   });

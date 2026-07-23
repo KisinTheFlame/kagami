@@ -213,6 +213,7 @@ describe("PrismaLlmChatCallDao", () => {
       pageSize: 20,
       provider: "openai",
       model: "gpt-5.4",
+      scene: "agent",
       status: "success",
     });
 
@@ -221,6 +222,7 @@ describe("PrismaLlmChatCallDao", () => {
       pageSize: 10,
       provider: "openai",
       model: "gpt-5.4",
+      scene: "contextSummarizer",
       status: "failed",
     });
 
@@ -228,6 +230,7 @@ describe("PrismaLlmChatCallDao", () => {
       where: {
         provider: "openai",
         model: "gpt-5.4",
+        scene: "agent",
         status: "success",
       },
     });
@@ -235,6 +238,7 @@ describe("PrismaLlmChatCallDao", () => {
       where: {
         provider: "openai",
         model: "gpt-5.4",
+        scene: "contextSummarizer",
         status: "failed",
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -246,6 +250,7 @@ describe("PrismaLlmChatCallDao", () => {
         seq: true,
         provider: true,
         model: true,
+        scene: true,
         extension: true,
         status: true,
         latencyMs: true,

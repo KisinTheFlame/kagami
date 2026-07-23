@@ -287,6 +287,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
         rootAgentSession: this.session,
       } as ReActKernelRunRoundInput<"agent">["toolContext"],
       usage: "agent",
+      scene: "agent",
     };
   }
 

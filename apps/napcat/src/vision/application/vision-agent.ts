@@ -72,6 +72,7 @@ export class VisionAgent {
       },
       {
         usage: "vision",
+        scene: "vision",
       },
     );
 

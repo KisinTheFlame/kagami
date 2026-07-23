@@ -33,12 +33,24 @@ import { useLlmChatCallList } from "./useLlmChatCallList";
 const PAGE_SIZE = 20;
 const ALL_PROVIDER_VALUE = "__all_provider__";
 const ALL_MODEL_VALUE = "__all_model__";
+const ALL_SCENE_VALUE = "__all_scene__";
 const ALL_STATUS_VALUE = "__all__";
 const EMPTY_PROVIDERS: Array<{ id: string; models: string[] }> = [];
+
+// 当前代码里在用的 scene 归因值（issue #555）。scene 是自由 string，这里只是把常见值
+// 做成下拉方便筛；DB 里若出现新值，可直接改 URL 的 ?scene= 精确查。
+const SCENE_OPTIONS = [
+  "agent",
+  "contextSummarizer",
+  "todoSuggestionAgent",
+  "innerVoice",
+  "vision",
+] as const;
 
 type FilterFormState = {
   provider: string;
   model: string;
+  scene: string;
   status: "" | LlmChatCallStatus;
 };
 
@@ -189,6 +201,31 @@ export function LlmHistoryPage() {
             </div>
 
             <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">Scene</span>
+              <Select
+                value={formState.scene || ALL_SCENE_VALUE}
+                onValueChange={value =>
+                  setFormState(prev => ({
+                    ...prev,
+                    scene: value === ALL_SCENE_VALUE ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger aria-label="Scene" className="min-w-0 flex-1">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_SCENE_VALUE}>全部</SelectItem>
+                  {SCENE_OPTIONS.map(scene => (
+                    <SelectItem key={scene} value={scene}>
+                      {scene}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">状态</span>
               <Select
                 value={formState.status || ALL_STATUS_VALUE}
@@ -223,25 +260,26 @@ export function LlmHistoryPage() {
       }
       desktopList={
         <div className="min-h-0 flex-1 overflow-hidden rounded-none border">
-          <Table className="min-w-[680px] table-fixed">
+          <Table className="min-w-[760px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[190px]">时间</TableHead>
                 <TableHead className="w-[130px]">Provider</TableHead>
                 <TableHead>Model</TableHead>
+                <TableHead className="w-[150px]">Scene</TableHead>
                 <TableHead className="w-[140px]">状态</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isInitialLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     加载中…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -258,6 +296,9 @@ export function LlmHistoryPage() {
                     </TableCell>
                     <TableCell className="truncate text-sm">{item.provider}</TableCell>
                     <TableCell className="truncate text-sm">{item.model}</TableCell>
+                    <TableCell className="truncate text-sm text-muted-foreground">
+                      {item.scene ?? "—"}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <Badge variant={item.status === "success" ? "story" : "destructive"}>
                         {toStatusLabel(item.status)}
@@ -313,11 +354,13 @@ export function LlmHistoryPage() {
 function parseFilters(params: URLSearchParams): {
   provider: string | undefined;
   model: string | undefined;
+  scene: string | undefined;
   status: LlmChatCallStatus | undefined;
 } {
   return {
     provider: normalizeOptionalText(params.get("provider")),
     model: normalizeOptionalText(params.get("model")),
+    scene: normalizeOptionalText(params.get("scene")),
     status: parseStatus(params.get("status")),
   };
 }
@@ -326,6 +369,7 @@ function toFormState(params: URLSearchParams): FilterFormState {
   return {
     provider: params.get("provider") ?? "",
     model: params.get("model") ?? "",
+    scene: params.get("scene") ?? "",
     status: parseStatus(params.get("status")) ?? "",
   };
 }
@@ -334,6 +378,7 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
   const nextParams = new URLSearchParams();
   setIfNonEmpty(nextParams, "provider", formState.provider);
   setIfNonEmpty(nextParams, "model", formState.model);
+  setIfNonEmpty(nextParams, "scene", formState.scene);
   if (formState.status) {
     nextParams.set("status", formState.status);
   }
@@ -345,6 +390,7 @@ function createEmptyFormState(): FilterFormState {
   return {
     provider: "",
     model: "",
+    scene: "",
     status: "",
   };
 }
@@ -379,7 +425,10 @@ function LlmHistoryMobileCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{item.model}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{item.provider}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {item.provider}
+            {item.scene ? ` · ${item.scene}` : ""}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Badge variant={item.status === "success" ? "default" : "destructive"}>

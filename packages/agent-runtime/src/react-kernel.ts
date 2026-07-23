@@ -35,7 +35,10 @@ export interface ReActModel<
       toolChoice: "auto";
     },
     options: {
+      /** KV 缓存身份（决定 provider/model）。 */
       usage: TUsage;
+      /** 调用归因（自由 string，只进 metric / 落库，不影响缓存与选模型）。 */
+      scene: string;
     },
   ): Promise<TCompletion>;
 }
@@ -49,7 +52,10 @@ export type ReActKernelRunRoundInput<TUsage extends string> = {
   state: ReActRoundState;
   tools: ToolExecutor;
   toolContext?: ToolContext;
+  /** KV 缓存身份（决定 provider/model）。 */
   usage: TUsage;
+  /** 调用归因（自由 string，只进 metric / 落库）。 */
+  scene: string;
 };
 
 export type ReActToolExecution<TExtensionData = unknown> = {
@@ -215,6 +221,7 @@ export class ReActKernel<
         },
         {
           usage: request.usage,
+          scene: request.scene,
         },
       );
     } catch (error) {

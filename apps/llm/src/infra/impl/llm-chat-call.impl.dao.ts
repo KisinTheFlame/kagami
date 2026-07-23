@@ -44,6 +44,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
         seq: true,
         provider: true,
         model: true,
+        scene: true,
         extension: true,
         status: true,
         latencyMs: true,
@@ -57,6 +58,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       seq: item.seq,
       provider: item.provider,
       model: item.model,
+      scene: item.scene,
       extension: toOptionalJsonRecord(item.extension),
       status: item.status as LlmChatCallStatus,
       latencyMs: item.latencyMs,
@@ -78,6 +80,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
       seq: item.seq,
       provider: item.provider,
       model: item.model,
+      scene: item.scene,
       extension: toOptionalJsonRecord(item.extension),
       status: item.status as LlmChatCallStatus,
       requestPayload: toJsonRecord(item.requestPayload),
@@ -102,6 +105,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           seq: input.seq,
           provider: input.provider,
           model: input.model,
+          ...(input.scene ? { scene: input.scene } : {}),
           ...(extension ? { extension } : {}),
           status: "success",
           requestPayload: toInputJsonObject(input.request),
@@ -133,6 +137,7 @@ export class PrismaLlmChatCallDao implements LlmChatCallDao {
           seq: input.seq,
           provider: input.provider,
           model: input.model,
+          ...(input.scene ? { scene: input.scene } : {}),
           ...(extension ? { extension } : {}),
           status: "failed",
           requestPayload: toInputJsonObject(input.request),
@@ -208,6 +213,7 @@ function toWhereInput(input: QueryLlmChatCallListInput): Prisma.LlmChatCallWhere
   return {
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
+    ...(input.scene ? { scene: input.scene } : {}),
     ...(input.status ? { status: input.status } : {}),
   };
 }

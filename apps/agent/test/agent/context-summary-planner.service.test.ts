@@ -97,7 +97,8 @@ describe("SummaryTaskAgent", () => {
         tools: expect.arrayContaining([expect.objectContaining({ name: INVOKE_TOOL_NAME })]),
       }),
       {
-        usage: "contextSummarizer",
+        usage: "agent",
+        scene: "contextSummarizer",
       },
     );
   });

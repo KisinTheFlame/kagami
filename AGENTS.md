@@ -90,6 +90,7 @@ QQ 前台当前会话的新消息不经 NotificationCenter，走 `runtime/root-a
 - **不要**为了排版/美观调整历史消息的序列化格式、字段顺序、JSON 键顺序——同一会话内这类改动会让已命中的前缀全部报废。
 - **不要**给主 Agent 添加会返回大块原始数据的工具。大数据先进子 Agent（TaskAgent），再以摘要回传。
 - **不要**在压缩之外的地方调用 `replaceMessages`。
+- **fork 型 task agent 一律用 `usage: "agent"`，绝不为它单开一个 usage**：`usage` 是「KV 缓存身份」（决定 provider/model），只有 `agent` / `vision` 两个值。凡是复用主 Agent 前缀（system + tools + 消息历史）的子任务（`contextSummarizer` / `todoSuggestionAgent` / `innerVoice` 等），模型必须与主 Agent 逐字节一致才可能命中 prompt cache——给它单配一个 usage 就是只能配错的脚枪。「哪个业务场景发起的」这类归因走 `LlmClient.chat` 的 `scene` 自由字段（进 metric 标签 + `llm_chat_call.scene` 落库），与选模型解耦。见 issue #555。
 - **system prompt 和工具集的改动要集中提交**：每次改动都会让所有在飞会话的前缀失效一次，小步高频修改是最糟糕的模式。
 - **进上下文的散文一律走模板，禁止在 TS 里内联字面量**：任何最终会进 LLM 上下文的成句文案（system prompt、各类 reminder、`<notification>` / `<async_tool_result>` 等伪标签内容、通知 draft 的渲染文本）都必须落在 `apps/agent/static/` 下的 `.hbs` 模板，经 `renderServerStaticTemplate(import.meta.url, ...)` 渲染。TS 侧只负责算 view-model（计数、数组、布尔 flag、预格式化好的日期/截断文本），不写成句文案。这样调小镜的语气只改 `static/` 一棵树、不碰代码，也让"所有会进上下文的文本"始终收在同一处可审。**例外（留 TS 常量）**：分组 key / 结构标识（如 `"QQ"`、`"IT之家"`、`"待办"`）这类不是语气的标识符；以及工具 description 与工具 result 的 error/status note（前者绑 param schema 属渐进式披露垂直切片，后者进易变尾部且与控制流交织，见 `TODOS.md`）。
 - Review 新 capability / task agent / tool 时，把"会不会破坏 KV 缓存命中"以及"进上下文的散文是否走了模板"作为显式检查项写进自检清单。

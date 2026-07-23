@@ -25,7 +25,10 @@ import type { DashboardRange } from "./dashboard-charts";
 // （cache_hit ÷ input_total），口径收在后端。两条查询共享同一 range，桶轴对齐。
 
 const LLM_TOKENS = "llm.call.tokens";
-const AGENT_USAGE = { usage: { op: "eq" as const, value: "agent" } };
+// 只看主 Agent：按 scene=agent 过滤。usage=agent 会混入 fork 型调用
+// （contextSummarizer / innerVoice / todoSuggestionAgent，它们共享 usage=agent 缓存身份），
+// scene 才是「哪个业务场景」的归因维度（issue #555）。
+const AGENT_SCENE = { scene: { op: "eq" as const, value: "agent" } };
 const CHART_HEIGHT = 300;
 
 const chartConfig = {
@@ -46,18 +49,18 @@ export function DashboardCacheChart({ range }: { range: DashboardRange }) {
     bucket: range.bucket,
     startAt: range.startAt,
     endAt: range.endAt,
-    tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_total" } },
+    tagFilters: { ...AGENT_SCENE, kind: { op: "eq", value: "input_total" } },
   });
   const rateQuery = useMetricDerivedData({
     numerator: {
       metricName: LLM_TOKENS,
       aggregator: "sum",
-      tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_cache_hit" } },
+      tagFilters: { ...AGENT_SCENE, kind: { op: "eq", value: "input_cache_hit" } },
     },
     denominator: {
       metricName: LLM_TOKENS,
       aggregator: "sum",
-      tagFilters: { ...AGENT_USAGE, kind: { op: "eq", value: "input_total" } },
+      tagFilters: { ...AGENT_SCENE, kind: { op: "eq", value: "input_total" } },
     },
     op: "ratio",
     bucket: range.bucket,
