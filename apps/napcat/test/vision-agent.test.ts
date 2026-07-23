@@ -26,9 +26,7 @@ describe("VisionAgent", () => {
 
     await expect(
       agent.analyzeImage({
-        content: Buffer.from("image"),
-        mimeType: "image/png",
-        filename: "cat.png",
+        images: [{ content: Buffer.from("image"), mimeType: "image/png", filename: "cat.png" }],
       }),
     ).resolves.toEqual({
       provider: "openai",
@@ -88,8 +86,7 @@ describe("VisionAgent", () => {
     const agent = new VisionAgent({ llmClient });
 
     await agent.analyzeImage({
-      content: Buffer.from("image"),
-      mimeType: "image/jpeg",
+      images: [{ content: Buffer.from("image"), mimeType: "image/jpeg" }],
       prompt: "  只提取文字  ",
     });
 
@@ -134,8 +131,7 @@ describe("VisionAgent", () => {
 
     await expect(
       agent.analyzeImage({
-        content: Buffer.from("image"),
-        mimeType: "image/png",
+        images: [{ content: Buffer.from("image"), mimeType: "image/png" }],
       }),
     ).rejects.toMatchObject({
       name: "BizError",
@@ -148,8 +144,7 @@ describe("VisionAgent", () => {
 
     await expect(
       agent.analyzeImage({
-        content: Buffer.from("not-image"),
-        mimeType: "application/pdf",
+        images: [{ content: Buffer.from("not-image"), mimeType: "application/pdf" }],
       }),
     ).rejects.toThrow("only accepts image/* mime types");
   });

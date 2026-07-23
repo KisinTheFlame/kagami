@@ -16,6 +16,7 @@
     "@kagami/browser-api": "workspace:*",
     "@kagami/gba-api": "workspace:*",
     "@kagami/http": "workspace:*",
+    "@kagami/image": "workspace:*",
     "@kagami/kernel": "workspace:*",
     "@kagami/llm": "workspace:*",
     "@kagami/llm-api": "workspace:*",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "sharp": "^0.33.5",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

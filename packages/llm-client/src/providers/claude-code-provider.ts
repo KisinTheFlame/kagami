@@ -16,6 +16,7 @@ import { mapClaudeMessageResult, parseClaudeMessageResponse } from "./claude-cod
 import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-code-wire.js";
 import type { ClaudeFileCacheDao } from "./claude-file-cache.dao.js";
 import { resolveClaudeImageFileIds } from "./claude-file-upload.js";
+import { clampRequestImages } from "./claude-image-clamp.js";
 import {
   ANTHROPIC_VERSION,
   ANTHROPIC_BETA,
@@ -121,6 +122,9 @@ export function createClaudeCodeProvider(input: {
     },
     async chat(request: LlmChatRequest): Promise<LlmProviderChatResult> {
       try {
+        // wire 保险丝（#556）：超限图片先确定性降采样，绝不把 >8000px 的 400 毒图发出去。
+        // 必须在 File API 预解析之前——file_id 以变换后字节的 sha256 为准。
+        request = await clampRequestImages(request);
         // File API 预解析：图片先换 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限。
         // 关闭 / 无缓存 DAO 时 imageFileIds 为 undefined → builder 全走 base64（旧行为）。
         const imageFileIds =

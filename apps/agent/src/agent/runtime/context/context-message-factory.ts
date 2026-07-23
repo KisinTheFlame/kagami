@@ -14,21 +14,24 @@ export function createUserMessage(content: string): UserMessage {
 }
 
 /**
- * 一条多模态 user 消息：文本 + 原图块。图片原图直接进上下文，不经 vision 转文字。
- * 由 Browser App 的 screenshot 经 append_message Effect（带 image）触发。
+ * 一条多模态 user 消息：文本 + 图片块（可多张，如切片长图按序排列）。图片直接进上下文，
+ * 不经 vision 转文字。由 Browser App 的 screenshot / read_resource 经 append_message
+ * Effect（带 images）触发。
  */
 export function createUserImageMessage(
   text: string,
-  image: { content: string; mimeType: string; filename?: string },
+  images: readonly { content: string; mimeType: string; filename?: string }[],
 ): UserMessage {
   const parts: LlmContentPart[] = [
     { type: "text", text },
-    {
-      type: "image",
-      content: image.content,
-      mimeType: image.mimeType,
-      ...(image.filename ? { filename: image.filename } : {}),
-    },
+    ...images.map(
+      (image): LlmContentPart => ({
+        type: "image",
+        content: image.content,
+        mimeType: image.mimeType,
+        ...(image.filename ? { filename: image.filename } : {}),
+      }),
+    ),
   ];
   return { role: "user", content: parts };
 }
