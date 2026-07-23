@@ -47,18 +47,13 @@ export class OpenHnThreadTool extends ZodToolComponent<typeof OpenHnThreadArgume
     const thread = await this.getHnReader().openThread({ id: input.id });
     if (!thread) {
       return {
-        content: JSON.stringify({ ok: false, error: "THREAD_NOT_FOUND", id: input.id }),
+        content: JSON.stringify({ ok: false, error: "THREAD_NOT_FOUND" }),
       };
     }
     const content = renderHnThreadContent(thread);
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
     return {
-      content: JSON.stringify({
-        ok: true,
-        id: thread.id,
-        title: thread.title,
-        shownComments: thread.comments.length,
-      }),
+      content: JSON.stringify({ ok: true }),
       effects,
     };
   }

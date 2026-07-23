@@ -59,11 +59,7 @@ export class AddTodoTool extends ZodToolComponent<typeof AddTodoArgumentsSchema>
         return { content: JSON.stringify({ ok: false, error: "TODO_LIMIT_REACHED" }) };
       }
       return {
-        content: JSON.stringify({
-          ok: true,
-          id: result.todo.id,
-          message: `已记下《${result.todo.title}》#${result.todo.id}`,
-        }),
+        content: JSON.stringify({ ok: true, id: result.todo.id }),
       };
     } catch (error) {
       if (error instanceof InvalidTimeError) {

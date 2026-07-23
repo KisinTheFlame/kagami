@@ -45,7 +45,6 @@ describe("browser tools golden（tool_result 字节）", () => {
         '<browser_screen epoch="7" url="https://e.com" title="E">',
         "SNAP",
         "</browser_screen>",
-        "提示：用 ref（形如 7:e3）调 browser_click / browser_type；ref 仅 epoch 7 有效，过期需重新 observe。",
       ].join("\n"),
     );
   });

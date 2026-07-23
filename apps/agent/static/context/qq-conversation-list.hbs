@@ -1,0 +1,6 @@
+<qq_conversation_list>
+你的 QQ 会话：
+{{#each conversations}}
+- {{displayName}}{{#if unreadLabel}}（未读 {{unreadLabel}}）{{/if}} [id: {{id}}]{{#if isCurrent}}  ← 当前会话{{/if}}
+{{/each}}
+</qq_conversation_list>

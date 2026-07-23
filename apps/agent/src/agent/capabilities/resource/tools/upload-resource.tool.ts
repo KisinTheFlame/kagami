@@ -47,13 +47,7 @@ export class UploadResourceTool extends ZodToolComponent<typeof UploadResourceAr
     try {
       const result = await this.resourceFileService.uploadFromFile({ path: input.path });
       return {
-        content: JSON.stringify({
-          ok: true,
-          resid: result.resId,
-          mime: result.mimeType,
-          size: result.size,
-          note: "本地文件已存进 OSS，可用这个 resid 引用它。",
-        }),
+        content: JSON.stringify({ ok: true, resid: result.resId }),
       };
     } catch (error) {
       const reason =
@@ -61,7 +55,6 @@ export class UploadResourceTool extends ZodToolComponent<typeof UploadResourceAr
       return {
         content: JSON.stringify({
           ok: false,
-          path: input.path,
           error: reason,
           note: error instanceof Error ? error.message : String(error),
         }),

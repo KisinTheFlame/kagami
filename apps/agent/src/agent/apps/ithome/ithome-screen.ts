@@ -23,8 +23,10 @@ export function renderIthomeArticleListContent(input: IthomeArticleListInput): s
     isNewMode: input.mode === "new",
     hiddenNewCount: input.hiddenNewCount,
     articles: input.articles.map(article => ({
-      ...article,
+      id: article.id,
+      title: article.title,
       publishedAtText: formatBeijingDateTime(article.publishedAt),
+      rssSummary: article.rssSummary,
     })),
   });
 }

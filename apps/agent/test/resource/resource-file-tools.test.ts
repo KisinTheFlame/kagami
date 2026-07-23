@@ -9,7 +9,7 @@ function parse(content: string): Record<string, unknown> {
 }
 
 describe("download_resource / upload_resource tools", () => {
-  it("download_resource 成功回 path + size", async () => {
+  it("download_resource 成功回 path（resid/size 不进上下文）", async () => {
     const resourceFileService = {
       downloadToFile: vi.fn().mockResolvedValue({ absolutePath: "/home/k/kagami/a.txt", size: 5 }),
       uploadFromFile: vi.fn(),
@@ -19,7 +19,9 @@ describe("download_resource / upload_resource tools", () => {
     const result = await tool.execute({ resid: "res-7", filename: "a.txt" }, {});
     const body = parse(result.content);
 
-    expect(body).toMatchObject({ ok: true, resid: "res-7", path: "/home/k/kagami/a.txt", size: 5 });
+    expect(body).toMatchObject({ ok: true, path: "/home/k/kagami/a.txt" });
+    expect(body.resid).toBeUndefined();
+    expect(body.size).toBeUndefined();
     expect(resourceFileService.downloadToFile).toHaveBeenCalledWith({
       resId: "res-7",
       dir: undefined,
@@ -41,7 +43,7 @@ describe("download_resource / upload_resource tools", () => {
     expect(body).toMatchObject({ ok: false, error: "FILE_EXISTS" });
   });
 
-  it("upload_resource 成功回 resid + mime + size", async () => {
+  it("upload_resource 成功回 resid（mime/size 不进上下文）", async () => {
     const resourceFileService = {
       downloadToFile: vi.fn(),
       uploadFromFile: vi
@@ -52,7 +54,7 @@ describe("download_resource / upload_resource tools", () => {
 
     const body = parse((await tool.execute({ path: "docs/x.pdf" }, {})).content);
 
-    expect(body).toMatchObject({ ok: true, resid: "res-9", mime: "application/pdf", size: 123 });
+    expect(body).toEqual({ ok: true, resid: "res-9" });
     expect(resourceFileService.uploadFromFile).toHaveBeenCalledWith({ path: "docs/x.pdf" });
   });
 });

@@ -45,7 +45,7 @@ export class SnoozeTodoTool extends ZodToolComponent<typeof SnoozeTodoArgumentsS
     try {
       const ok = await this.getTodoService().snoozeTodo(input);
       return ok
-        ? { content: JSON.stringify({ ok: true, message: `已推迟 #${input.id}` }) }
+        ? { content: JSON.stringify({ ok: true }) }
         : { content: JSON.stringify({ ok: false, error: "TODO_NOT_FOUND" }) };
     } catch (error) {
       if (error instanceof InvalidTimeError) {

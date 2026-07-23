@@ -46,10 +46,7 @@ describe("SendResourceTool", () => {
       }),
     });
     const result = await tool.execute({ resid: "res-2" }, {});
-    expect(JSON.parse(result.content)).toMatchObject({
-      error: "NON_IMAGE_RESOURCE",
-      mime: "application/pdf",
-    });
+    expect(JSON.parse(result.content)).toMatchObject({ error: "NON_IMAGE_RESOURCE" });
     expect(sendImage).not.toHaveBeenCalled();
   });
 
@@ -86,7 +83,7 @@ describe("SendResourceTool", () => {
       fileRef: `base64://${Buffer.from("imgbytes").toString("base64")}`,
       replyToMessageId: 42,
     });
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-7", messageId: 555 });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, messageId: 555 });
   });
 
   // 回归：发送目标必须取自实时 getChatTarget()（持有工具的 QqApp 当前会话），
@@ -110,12 +107,12 @@ describe("SendResourceTool", () => {
       chatTarget: MISLEADING_CONTEXT_TARGET,
     } as never);
 
-    expect(JSON.parse(result.content)).toMatchObject({ ok: true, resid: "res-9" });
+    expect(JSON.parse(result.content)).toMatchObject({ ok: true, messageId: 555 });
     expect(sendImage).toHaveBeenCalledTimes(1);
     expect(sendImage).toHaveBeenCalledWith(expect.objectContaining({ target: GROUP_TARGET }));
   });
 
-  it("发图遇 MutedSendError：翻译成 error=MUTED（带 resid + 友好 note）", async () => {
+  it("发图遇 MutedSendError：翻译成 error=MUTED（友好 note）", async () => {
     const { tool } = build({
       chatTarget: GROUP_TARGET,
       resolve: vi.fn().mockResolvedValue({
@@ -131,7 +128,6 @@ describe("SendResourceTool", () => {
     const parsed = JSON.parse(result.content);
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toBe("MUTED");
-    expect(parsed.resid).toBe("res-1");
     expect(parsed.note).toContain("全员禁言");
   });
 });

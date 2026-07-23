@@ -64,7 +64,7 @@ export class SearchHnTool extends ZodToolComponent<typeof SearchHnArgumentsSchem
     const content = renderHnSearchContent(result);
     const effects: RootAgentEffect[] = [{ type: "append_message", content }];
     return {
-      content: JSON.stringify({ ok: true, query: result.query, count: result.hits.length }),
+      content: JSON.stringify({ ok: true }),
       effects,
     };
   }

@@ -40,7 +40,7 @@ export function renderHnFrontPageContent(result: HnGlanceResult): string {
 }
 
 export function renderHnThreadContent(result: HnThreadResult): string {
-  const lines = [`<hn_thread id="${result.id}">`];
+  const lines = ["<hn_thread>"];
   lines.push(result.title ?? "(无标题)");
   const head = [
     result.by ? `by ${result.by}` : null,
