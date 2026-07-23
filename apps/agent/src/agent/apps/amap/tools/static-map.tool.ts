@@ -144,11 +144,13 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
     const appendEffect: RootAgentEffect = {
       type: "append_message",
       content: `<amap_static_map${residAttr} />`,
-      image: {
-        content: image.bytes.toString("base64"),
-        mimeType: image.mimeType,
-        filename: "amap-static.png",
-      },
+      images: [
+        {
+          content: image.bytes.toString("base64"),
+          mimeType: image.mimeType,
+          filename: "amap-static.png",
+        },
+      ],
     };
     return {
       content: JSON.stringify({ ok: true }),

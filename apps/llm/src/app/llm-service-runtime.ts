@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
-import { migrateFromLegacyDb } from "../infra/db/legacy-migration.js";
 import { PrismaLlmChatCallDao } from "../infra/impl/llm-chat-call.impl.dao.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BizError } from "@kagami/kernel/errors/biz-error";
@@ -58,12 +57,8 @@ export type LlmServiceRuntime = {
 export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   const { config, configManager, databaseUrl, port } = await loadLlmServiceConfig();
 
-  // llm 独占库（epic #539 子 issue 3）：五张表落 services.llm.databaseUrl，主库 kagami.db
-  // 不再被本进程长期打开——仅启动瞬间由 migrateFromLegacyDb 做一次性历史搬迁（哨兵幂等）。
-  migrateFromLegacyDb({
-    llmDatabaseUrl: databaseUrl,
-    legacyDatabaseUrl: config.server.databaseUrl,
-  });
+  // llm 独占库（epic #539）：五张表落 services.llm.databaseUrl。历史数据搬迁已在生产完成，
+  // 搬迁代码随子 issue 5 退役。
   const database = createDbClient({ databaseUrl });
   await configureSqlite(database);
 

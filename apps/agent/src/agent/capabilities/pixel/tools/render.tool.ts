@@ -50,11 +50,13 @@ export class PixelRenderTool extends ZodToolComponent<typeof Schema> {
     const appendEffect: RootAgentEffect = {
       type: "append_message",
       content: `<pixel_render${residAttr} />`,
-      image: {
-        content: png.toString("base64"),
-        mimeType: "image/png",
-        filename: "pixel.png",
-      },
+      images: [
+        {
+          content: png.toString("base64"),
+          mimeType: "image/png",
+          filename: "pixel.png",
+        },
+      ],
     };
     return {
       content: JSON.stringify({ ok: true }),

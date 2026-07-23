@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
+import { sqliteFilePathFromUrl } from "@kagami/kernel/utils/sqlite-path";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   getPrismaClientClass,
   type PrismaClient as PrismaClientInstance,
@@ -42,21 +42,4 @@ export async function configureSqlite(database: Database): Promise<void> {
 
 export async function closeDb(database: Database): Promise<void> {
   await database.$disconnect();
-}
-
-/**
- * `databaseUrl` 由 config loader 解析为绝对 `file:` URL，这里还原成 better-sqlite3 需要的绝对
- * 文件路径。`:memory:` 透传给测试使用。
- */
-function sqliteFilePathFromUrl(databaseUrl: string): string {
-  if (databaseUrl === ":memory:" || databaseUrl === "file::memory:") {
-    return ":memory:";
-  }
-
-  if (databaseUrl.startsWith("file:")) {
-    const withoutScheme = databaseUrl.slice("file:".length);
-    return path.isAbsolute(withoutScheme) ? withoutScheme : fileURLToPath(new URL(databaseUrl));
-  }
-
-  return path.resolve(databaseUrl);
 }

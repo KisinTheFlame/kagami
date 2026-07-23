@@ -27,7 +27,11 @@ describe("HttpLlmClient", () => {
     );
     const client = new HttpLlmClient({ baseUrl: "http://127.0.0.1:20009/", fetch: fetchMock });
 
-    const result = await client.chat(sampleRequest, { usage: "agent", recordCall: false });
+    const result = await client.chat(sampleRequest, {
+      usage: "agent",
+      scene: "agent",
+      recordCall: false,
+    });
 
     expect(result).toMatchObject({ provider: "openai", model: "gpt-4o-mini" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -36,6 +40,7 @@ describe("HttpLlmClient", () => {
     expect(JSON.parse(String(init.body))).toEqual({
       request: sampleRequest,
       usage: "agent",
+      scene: "agent",
       recordCall: false,
     });
   });
@@ -68,7 +73,9 @@ describe("HttpLlmClient", () => {
     );
     const client = new HttpLlmClient({ baseUrl: "http://127.0.0.1:20009", fetch: fetchMock });
 
-    const error = await client.chat(sampleRequest, { usage: "agent" }).catch((e: unknown) => e);
+    const error = await client
+      .chat(sampleRequest, { usage: "agent", scene: "agent" })
+      .catch((e: unknown) => e);
     expect(error).toMatchObject({
       name: "BizError",
       message: "所选 LLM provider 当前不可用",
@@ -83,7 +90,9 @@ describe("HttpLlmClient", () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
     const client = new HttpLlmClient({ baseUrl: "http://127.0.0.1:20009", fetch: fetchMock });
 
-    const error = await client.chat(sampleRequest, { usage: "agent" }).catch((e: unknown) => e);
+    const error = await client
+      .chat(sampleRequest, { usage: "agent", scene: "agent" })
+      .catch((e: unknown) => e);
     expect(error).toMatchObject({
       name: "BizError",
       message: "LLM 上游服务调用失败",
@@ -96,7 +105,9 @@ describe("HttpLlmClient", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ oops: true }, 502));
     const client = new HttpLlmClient({ baseUrl: "http://127.0.0.1:20009", fetch: fetchMock });
 
-    const error = await client.chat(sampleRequest, { usage: "agent" }).catch((e: unknown) => e);
+    const error = await client
+      .chat(sampleRequest, { usage: "agent", scene: "agent" })
+      .catch((e: unknown) => e);
     expect(error).toMatchObject({
       name: "BizError",
       message: "LLM 上游服务调用失败",
@@ -113,7 +124,9 @@ describe("HttpLlmClient", () => {
       );
     const client = new HttpLlmClient({ baseUrl: "http://127.0.0.1:20009", fetch: fetchMock });
 
-    const error = await client.chat(sampleRequest, { usage: "agent" }).catch((e: unknown) => e);
+    const error = await client
+      .chat(sampleRequest, { usage: "agent", scene: "agent" })
+      .catch((e: unknown) => e);
     expect(error).toMatchObject({
       name: "BizError",
       message: "LLM 上游服务调用失败",

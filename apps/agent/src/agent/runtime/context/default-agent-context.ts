@@ -53,6 +53,18 @@ export class DefaultAgentContext implements AgentContext {
     };
   }
 
+  public async getLastMessage(): Promise<LlmMessage | null> {
+    // 从尾部往前找第一个渲染出 message 的 item：event item 可能渲染成 0 条 message
+    // （如 friend_list / ithome 事件），要跳过才能拿到真正的尾部 message。
+    for (let i = this.items.length - 1; i >= 0; i -= 1) {
+      const rendered = renderContextItemToMessages(this.items[i]);
+      if (rendered.length > 0) {
+        return rendered[rendered.length - 1];
+      }
+    }
+    return null;
+  }
+
   public async fork(): Promise<AgentContext> {
     const snapshot = await this.getSnapshot();
     const forkedContext = new DefaultAgentContext({

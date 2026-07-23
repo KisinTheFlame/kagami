@@ -106,7 +106,7 @@ describe("TodoSuggestionService.propose", () => {
       { role: "user", content: "hi" },
       createTodoSuggestionInstructionMessage(input.openTodos),
     ]);
-    expect(options).toEqual({ usage: "todoSuggestionAgent" });
+    expect(options).toEqual({ usage: "agent", scene: "todoSuggestionAgent" });
   });
 
   it("超过 5 条：截断到 5，并去空白项", async () => {

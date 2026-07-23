@@ -59,7 +59,14 @@ type CreateLlmClientOptions = {
 };
 
 export type LlmChatOptions = {
+  /** KV 缓存身份：决定走哪份 usages 配置（provider/model/attempts）。 */
   usage: LlmUsageId;
+  /**
+   * 调用归因（自由 string）：进 metric 标签与 llm_chat_call.scene 列，只做「哪个业务
+   * 场景发起的」归因，不参与选模型、不影响缓存。fork 型 task agent 用 usage=agent 但
+   * 各带自己的 scene（contextSummarizer / todoSuggestionAgent / innerVoice）。
+   */
+  scene: string;
   recordCall?: boolean;
 };
 
@@ -82,8 +89,10 @@ export type LlmChatCallSuccessObservation = {
   status: "success";
   provider: LlmProviderId;
   model: string;
-  /** 调用来处（主循环 / 摘要 / todo / inner-voice…）；chatDirect 无来处时为 null。 */
+  /** KV 缓存身份（agent / vision）；chatDirect 无身份时为 null。 */
   usage: LlmUsageId | null;
+  /** 调用归因（自由 string）；chatDirect 无归因时为 null。 */
+  scene: string | null;
   extension: Record<string, unknown>;
   requestId: string;
   seq: number;
@@ -98,8 +107,10 @@ export type LlmChatCallErrorObservation = {
   status: "failed";
   provider: LlmProviderId;
   model: string;
-  /** 调用来处；chatDirect 无来处时为 null。 */
+  /** KV 缓存身份（agent / vision）；chatDirect 无身份时为 null。 */
   usage: LlmUsageId | null;
+  /** 调用归因（自由 string）；chatDirect 无归因时为 null。 */
+  scene: string | null;
   extension: Record<string, unknown> | null;
   requestId: string;
   seq: number;
@@ -137,6 +148,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       chatOptions: LlmChatOptions,
     ): Promise<LlmChatResponsePayload> {
       const usage = requireUsage(chatOptions?.usage);
+      const scene = requireScene(chatOptions?.scene);
       const requestId = randomUUID();
       const recordCall = chatOptions?.recordCall ?? true;
       const usageConfig = requireUsageConfig(options.usages, usage);
@@ -152,6 +164,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
               request,
               attempt,
               usage,
+              scene,
               requestId,
               seq: (seq += 1),
               recordCall,
@@ -183,6 +196,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
           times: 1,
         },
         usage: null,
+        scene: null,
         requestId: randomUUID(),
         seq: 1,
         recordCall: chatOptions?.recordCall ?? true,
@@ -198,6 +212,7 @@ async function executeChatAttempt({
   request,
   attempt,
   usage,
+  scene,
   requestId,
   seq,
   recordCall,
@@ -208,6 +223,7 @@ async function executeChatAttempt({
   request: LlmChatRequest;
   attempt: LlmUsageAttemptConfig;
   usage: LlmUsageId | null;
+  scene: string | null;
   requestId: string;
   seq: number;
   recordCall: boolean;
@@ -239,6 +255,7 @@ async function executeChatAttempt({
         provider: provider.id,
         model: attempt.model,
         usage,
+        scene,
         extension: buildExtension({
           actualModel: response.model,
         }),
@@ -271,6 +288,7 @@ async function executeChatAttempt({
         provider: attempt.provider,
         model: attempt.model,
         usage,
+        scene,
         extension:
           actualModel === undefined
             ? null
@@ -404,6 +422,17 @@ function requireUsage(usage: LlmUsageId | undefined): LlmUsageId {
   }
 
   return usage;
+}
+
+function requireScene(scene: string | undefined): string {
+  const trimmed = scene?.trim() ?? "";
+  if (trimmed.length === 0) {
+    throw new Error("LlmClient.chat requires an explicit non-empty scene");
+  }
+
+  // 归一化返回 trim 后的值：scene 是 metric tag + DB 索引维度，" agent " 与 "agent"
+  // 必须折叠成同一归因，避免尾随空白制造重复基数。
+  return trimmed;
 }
 
 function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknown> {

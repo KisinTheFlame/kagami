@@ -18,6 +18,7 @@ export type LlmChatCallStatus = z.infer<typeof LlmChatCallStatusSchema>;
 export const LlmChatCallListQuerySchema = PaginationQuerySchema.extend({
   provider: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   model: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
+  scene: z.preprocess(parseOptionalStringInput, z.string().min(1).optional()),
   status: z.preprocess(parseOptionalStringInput, LlmChatCallStatusSchema.optional()),
 });
 
@@ -29,6 +30,7 @@ export const LlmChatCallSummarySchema = z.object({
   seq: z.number().int().positive(),
   provider: z.string().min(1),
   model: z.string().min(1),
+  scene: z.string().min(1).nullable(),
   extension: JsonRecordSchema.nullable(),
   status: LlmChatCallStatusSchema,
   latencyMs: z.number().int().nullable(),

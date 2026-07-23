@@ -27,8 +27,34 @@ describe("ReadResourceTool", () => {
     expect(effect.type).toBe("append_message");
     expect(effect.content).toContain('resid="res-7"');
     expect(effect.content).not.toContain("mime=");
-    expect(effect.image?.mimeType).toBe("image/jpeg");
-    expect(effect.image?.content).toBe(Buffer.from("imgbytes").toString("base64"));
+    // 假字节解码失败 → 归一化 fail-open 原样透传成单元素 images。
+    expect(effect.images).toHaveLength(1);
+    expect(effect.images?.[0]?.mimeType).toBe("image/jpeg");
+    expect(effect.images?.[0]?.content).toBe(Buffer.from("imgbytes").toString("base64"));
+  });
+
+  it("slices an extreme long image into ordered tiles in one message", async () => {
+    const sharp = (await import("sharp")).default;
+    const longImage = await sharp({
+      create: { width: 300, height: 8100, channels: 3, background: { r: 9, g: 9, b: 9 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const tool = toolWith(
+      vi.fn().mockResolvedValue({
+        resId: "res-11",
+        bytes: longImage,
+        mimeType: "image/jpeg",
+        size: longImage.byteLength,
+        isImage: true,
+      }),
+    );
+
+    const result = await tool.execute({ resid: "res-11" }, {});
+    const effect = result.effects?.[0] as AppendMessageEffect;
+    expect(effect.images?.length).toBeGreaterThan(1);
+    expect(effect.content).toContain(`tiles="${effect.images?.length}"`);
+    expect(effect.images?.[0]?.filename).toBe(`res-11-part-1of${effect.images?.length}`);
   });
 
   it("returns metadata only (no image effect) for a non-image resource", async () => {

@@ -60,25 +60,23 @@ echo "[app:deploy] Step 2/4: Applying Prisma migrations..."
 if pnpm db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   schema 已最新，跳过迁移（避免与运行进程争锁）。"
 else
-  echo "[app:deploy]   检测到待应用迁移，暂停开库进程后迁移..."
-  # 主库自 #539 起由 agent 独占（console 子 issue 4 起零 DB），理论上只需停 agent。
-  # metric 独占 DuckDB 无需停；browser / napcat / llm / console 已不再长期打开主库，
-  # 但为防「旧进程仍持主库锁 + 新停服名单已不含它」的部署时序窗口（browser 删表迁移
-  # 就踩过），四者暂留名单；#539 各拆库/脱库改动全部在生产落地后由子 issue 5 统一移除。
-  pnpm exec pm2 stop kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
+  echo "[app:deploy]   检测到待应用迁移，暂停 kagami-agent 后迁移..."
+  # 主库 kagami.db 自 #539 起由 kagami-agent 独占（browser/napcat/llm 已拆库、console 零 DB
+  # 且均已在生产落地），迁移只需停 agent 一个进程——这正是 epic #539 的核心收益：
+  # 主库 schema 变更不再打断浏览器登录态 / QQ 长连接 / OAuth 刷新等卫星进程热状态。
+  pnpm exec pm2 stop kagami-agent >/dev/null 2>&1 || true
   if pnpm db:migrate:deploy; then
     echo "[app:deploy]   迁移完成，进程将在 Step 3 重新拉起。"
   else
     echo "[app:deploy]   迁移失败！立即拉回进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
+    pnpm exec pm2 start kagami-agent >/dev/null 2>&1 || true
     exit 1
   fi
 fi
 
 echo "[app:deploy] Step 2b/4: Applying napcat Prisma migrations..."
 # napcat 有独立 SQLite 库（napcat_event / napcat_qq_message / outbox / image_asset，#539），
-# 只被 kagami-napcat 单进程持有——迁移只需暂停这一个进程腾出独占锁。历史数据从主库的
-# 一次性搬迁在 napcat 进程启动时自动完成（幂等，见 legacy-migration.ts），不在本脚本做。
+# 只被 kagami-napcat 单进程持有——迁移只需暂停这一个进程腾出独占锁。
 if pnpm --filter @kagami/napcat db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   napcat schema 已最新，跳过迁移。"
 else
@@ -89,16 +87,15 @@ else
   else
     # 拉回本步之前（含 Step 2 主库分支）停过的全部进程：中止部署绝不能把 agent 晾在停机态
     #（对已运行进程 pm2 start 是 no-op，安全）。
-    echo "[app:deploy]   napcat 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
+    echo "[app:deploy]   napcat 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat >/dev/null 2>&1 || true
     exit 1
   fi
 fi
 
 echo "[app:deploy] Step 2c/4: Applying llm Prisma migrations..."
 # llm 有独立 SQLite 库（llm_chat_call / embedding_cache / claude_file_cache / oauth_*，#539），
-# 只被 kagami-llm 单进程持有——迁移只需暂停这一个进程腾出独占锁。历史数据从主库的
-# 一次性搬迁在 llm 进程启动时自动完成（哨兵幂等，见 apps/llm 的 legacy-migration.ts）。
+# 只被 kagami-llm 单进程持有——迁移只需暂停这一个进程腾出独占锁。
 if pnpm --filter @kagami/llm-service db:migrate:status >/dev/null 2>&1; then
   echo "[app:deploy]   llm schema 已最新，跳过迁移。"
 else
@@ -108,8 +105,8 @@ else
     echo "[app:deploy]   llm 迁移完成，进程将在 Step 3 重新拉起。"
   else
     # 拉回此前所有步骤停过的进程，绝不把 agent 晾在停机态。
-    echo "[app:deploy]   llm 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat >/dev/null 2>&1 || true
+    echo "[app:deploy]   llm 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat kagami-llm >/dev/null 2>&1 || true
     exit 1
   fi
 fi
@@ -126,8 +123,8 @@ else
     echo "[app:deploy]   scheduler 迁移完成，进程将在 Step 3 重新拉起。"
   else
     # 同 Step 2b：拉回此前所有步骤停过的进程，绝不把 agent 晾在停机态。
-    echo "[app:deploy]   scheduler 迁移失败！立即拉回全部进程避免停机，然后中止部署。" >&2
-    pnpm exec pm2 start kagami-agent kagami-console kagami-browser kagami-llm kagami-napcat kagami-scheduler >/dev/null 2>&1 || true
+    echo "[app:deploy]   scheduler 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat kagami-llm kagami-scheduler >/dev/null 2>&1 || true
     exit 1
   fi
 fi

@@ -37,6 +37,12 @@ export interface AgentContext {
    */
   getRevision(): number;
   getSnapshot(): Promise<AgentContextSnapshot>;
+  /**
+   * 只读窥视上下文尾部渲染出的最后一条 message；空上下文（或只有 0-message 的 event item）
+   * 返回 null。供起轮前的角色交替不变量检查用（尾部是 assistant 时须补一条 user 轮，
+   * 否则纯文本轮 + 空闲自唤醒会造成连续 assistant → provider 400）。O(1)，不克隆整表。
+   */
+  getLastMessage(): Promise<LlmMessage | null>;
   fork(): Promise<AgentContext>;
   exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot>;
   restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void>;

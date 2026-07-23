@@ -57,6 +57,7 @@ describe("LoopLlmRetryExtension", () => {
       },
       tools: new ToolCatalog([]).pick([]),
       usage: "agent" as const,
+      scene: "agent",
     };
 
     const first = await kernel.runRound(request);

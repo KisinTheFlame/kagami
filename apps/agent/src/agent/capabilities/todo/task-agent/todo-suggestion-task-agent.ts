@@ -31,7 +31,7 @@ export type TodoSuggestionTaskInput = {
  * TaskAgentMaxRoundsExceededError，由 TodoSuggestionService 降级为空建议。
  */
 export class TodoSuggestionTaskAgent
-  extends BaseTaskAgent<TodoSuggestionTaskInput, string[], "todoSuggestionAgent">
+  extends BaseTaskAgent<TodoSuggestionTaskInput, string[], "agent">
   implements TaskAgentInvoker<TodoSuggestionTaskInput, string[]>
 {
   public constructor({ llmClient, taskTools }: { llmClient: LlmClient; taskTools: ToolExecutor }) {
@@ -46,7 +46,8 @@ export class TodoSuggestionTaskAgent
   protected async createInvocation(input: TodoSuggestionTaskInput): Promise<{
     systemPrompt: string;
     messages: LlmMessage[];
-    usage: "todoSuggestionAgent";
+    usage: "agent";
+    scene: string;
   }> {
     const systemPrompt = input.systemPrompt.trim();
     if (systemPrompt.length === 0) {
@@ -56,7 +57,9 @@ export class TodoSuggestionTaskAgent
     return {
       systemPrompt,
       messages: [...input.messages, createTodoSuggestionInstructionMessage(input.openTodos)],
-      usage: "todoSuggestionAgent",
+      // usage=agent：复用主 Agent 前缀命中 prompt cache。scene 保留原归因标签。
+      usage: "agent",
+      scene: "todoSuggestionAgent",
     };
   }
 
