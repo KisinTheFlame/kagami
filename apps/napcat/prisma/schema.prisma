@@ -10,9 +10,8 @@ datasource db {
 }
 
 // napcat 独占的 SQLite 库（epic #539 子 issue 2，与主库 kagami.db 物理分离）。
-// 四张表从 packages/persistence 的共享 schema 原样搬入：表名 / 列名 / 索引名保持不变，
-// 让「主库 → napcat.db」的数据搬迁可以 ATTACH + INSERT SELECT 逐表整搬。
-// 主库中的同名旧表在搬迁落地后由 #539 子 issue 5 统一 DROP。
+// 四张表从 packages/persistence 的共享 schema 原样搬入（表名 / 列名 / 索引名不变）。
+// 历史数据搬迁与主库旧表 DROP 均已完成（#539 子 issue 5），本库是这些表的唯一归属。
 
 // NapCat 入站原始事件审计（console 查询用）。
 model NapcatEvent {

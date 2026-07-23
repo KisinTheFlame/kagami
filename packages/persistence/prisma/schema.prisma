@@ -9,34 +9,6 @@ datasource db {
   provider = "sqlite"
 }
 
-// —— llm 旧表（epic #539 子 issue 3 已拆走）——
-// llm_chat_call / oauth_session / oauth_state / embedding_cache / claude_file_cache 的归属
-// 已迁至 apps/llm/prisma（llm 独占 data/sqlite/llm.db），历史数据由 llm 启动时一次性搬迁。
-// 主库中的这五张旧表仅存历史副本、无任何进程读写，由 #539 子 issue 5 统一 DROP；
-// 在那之前 model 保留在此以匹配主库的实际 schema。
-model LlmChatCall {
-  id                    Int      @id @default(autoincrement())
-  requestId             String   @map("request_id")
-  seq                   Int      @default(1)
-  provider              String
-  model                 String
-  extension             Json?
-  status                String
-  requestPayload        Json     @map("request_payload")
-  responsePayload       Json?    @map("response_payload")
-  nativeRequestPayload  Json?    @map("native_request_payload")
-  nativeResponsePayload Json?    @map("native_response_payload")
-  error                 Json?
-  nativeError           Json?    @map("native_error")
-  latencyMs             Int?     @map("latency_ms")
-  createdAt             DateTime @default(now()) @map("created_at")
-
-  @@unique([requestId, seq], map: "llm_chat_call_request_id_seq_uq")
-  @@index([provider, model], map: "llm_chat_call_provider_model_idx")
-  @@index([createdAt], map: "llm_chat_call_created_at_idx")
-  @@map("llm_chat_call")
-}
-
 model AppLog {
   id        Int      @id @default(autoincrement())
   traceId   String   @map("trace_id")
@@ -50,127 +22,6 @@ model AppLog {
   @@index([level, createdAt], map: "app_log_level_created_at_idx")
   @@index([createdAt], map: "app_log_created_at_idx")
   @@map("app_log")
-}
-
-// —— napcat 旧表（epic #539 子 issue 2 已拆走）——
-// napcat_event / napcat_qq_message / napcat_event_outbox / image_asset 的归属已迁至
-// apps/napcat/prisma（napcat 独占 data/sqlite/napcat.db），历史数据由 napcat 启动时
-// 一次性搬迁。主库中的这四张旧表仅存历史副本、无任何进程读写，由 #539 子 issue 5
-// 统一 DROP；在那之前 model 保留在此以匹配主库的实际 schema。
-model NapcatEvent {
-  id          Int       @id @default(autoincrement())
-  postType    String    @map("post_type")
-  messageType String?   @map("message_type")
-  subType     String?   @map("sub_type")
-  userId      String?   @map("user_id")
-  groupId     String?   @map("group_id")
-  eventTime   DateTime? @map("event_time")
-  payload     Json
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  @@index([createdAt], map: "napcat_event_created_at_idx")
-  @@index([postType, createdAt], map: "napcat_event_post_type_created_at_idx")
-  @@index([messageType, createdAt], map: "napcat_event_message_type_created_at_idx")
-  @@index([userId, createdAt], map: "napcat_event_user_id_created_at_idx")
-  @@map("napcat_event")
-}
-
-model NapcatQqMessage {
-  id          Int       @id @default(autoincrement())
-  messageType String    @map("message_type")
-  subType     String    @map("sub_type")
-  groupId     String?   @map("group_id")
-  userId      String?   @map("user_id")
-  nickname    String?
-  messageId   Int?      @map("message_id")
-  message     Json
-  eventTime   DateTime? @map("event_time")
-  payload     Json
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  @@index([createdAt], map: "napcat_qq_message_created_at_idx")
-  @@index([messageType, createdAt], map: "napcat_qq_message_message_type_created_at_idx")
-  @@index([groupId, createdAt], map: "napcat_qq_message_group_id_created_at_idx")
-  @@index([nickname, createdAt], map: "napcat_qq_message_nickname_created_at_idx")
-  @@index([userId, createdAt], map: "napcat_qq_message_user_id_created_at_idx")
-  @@map("napcat_qq_message")
-}
-
-// napcat 服务对 agent 的入站事件 outbox（issue #347）。每条 = 一个渲染好的 agent-facing
-// NapcatAgentEvent，单调 seq 即 SSE event id。napcat 先事务落这里拿 seq 再推 SSE，agent 重连带
-// Last-Event-ID 回放 seq> 缺口、按 seq 去重（严格 at-least-once）。createdAt 索引 + 定期 prune >7d。
-model NapcatEventOutbox {
-  seq       Int      @id @default(autoincrement())
-  event     Json
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([createdAt], map: "napcat_event_outbox_created_at_idx")
-  @@map("napcat_event_outbox")
-}
-
-model OauthSession {
-  id            Int       @id @default(autoincrement())
-  provider      String
-  accountId     String?   @map("account_id")
-  email         String?
-  accessToken   String?   @map("access_token")
-  refreshToken  String?   @map("refresh_token")
-  idToken       String?   @map("id_token")
-  expiresAt     DateTime? @map("expires_at")
-  lastRefreshAt DateTime? @map("last_refresh_at")
-  status        String
-  lastError     String?   @map("last_error")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @map("updated_at")
-
-  @@unique([provider], map: "oauth_session_provider_uq")
-  @@index([status, updatedAt], map: "oauth_session_status_updated_at_idx")
-  @@map("oauth_session")
-}
-
-model OauthState {
-  id           Int       @id @default(autoincrement())
-  state        String    @unique(map: "oauth_state_state_uq")
-  codeVerifier String    @map("code_verifier")
-  redirectUri  String    @map("redirect_uri")
-  expiresAt    DateTime  @map("expires_at")
-  usedAt       DateTime? @map("used_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-
-  @@index([expiresAt], map: "oauth_state_expires_at_idx")
-  @@map("oauth_state")
-}
-
-model EmbeddingCache {
-  id                   Int      @id @default(autoincrement())
-  provider             String
-  model                String
-  taskType             String   @map("task_type")
-  outputDimensionality Int      @map("output_dimensionality")
-  text                 String
-  textHash             String   @map("text_hash")
-  embedding            String
-  createdAt            DateTime @default(now()) @map("created_at")
-
-  @@unique([provider, model, taskType, outputDimensionality, textHash], map: "embedding_cache_provider_model_task_output_text_hash_uq")
-  @@index([createdAt], map: "embedding_cache_created_at_idx")
-  @@map("embedding_cache")
-}
-
-// claude-code 图片 File API 缓存：图片内容 sha256 → 已上传的 Anthropic file_id。
-// 让同一张图（跨轮次 / 跨 kagami-llm 重启 / 跨会话）只上传一次。Files API 文件不过期
-// （persist until deleted），故由 llm 进程的每日 GC 按 lastUsedAt 回收（#433）。仅 claude-code provider 用。
-model ClaudeFileCache {
-  contentSha256 String   @id @map("content_sha256")
-  fileId        String   @map("file_id")
-  mimeType      String   @map("mime_type")
-  sizeBytes     Int      @map("size_bytes")
-  createdAt     DateTime @default(now()) @map("created_at")
-  // 最近使用时间：缓存命中时刷新（节流写）。GC 判据 = lastUsedAt 早于 idle cutoff 即回收（#433）。
-  lastUsedAt    DateTime @default(now()) @map("last_used_at")
-
-  @@index([lastUsedAt], map: "claude_file_cache_last_used_at_idx")
-  @@map("claude_file_cache")
 }
 
 model RootAgentRuntimeSnapshot {
@@ -267,19 +118,6 @@ model TodoItem {
   completedAt   DateTime? @map("completed_at")
 
   @@map("todo_item")
-}
-
-// 内容寻址的图片资产登记：NapCat 图片 file_id（= 内容 MD5 + 扩展名）→ OSS resid +
-// vision 描述。每张不同的图全局只下载/描述/PUT 一次，命中即复用，让 resid 跨消息稳定、
-// 不膨胀；description 一并缓存，命中时连 vision 都跳过。
-model ImageAsset {
-  id          Int      @id @default(autoincrement())
-  fileId      String   @unique(map: "image_asset_file_id_uq") @map("file_id")
-  resid       String
-  description String
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("image_asset")
 }
 
 // inner-voice 念头落库（issue #359）：一行 = 一次摸鱼触发。outcome 三态覆盖「所有触发」——
