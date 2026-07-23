@@ -36,6 +36,26 @@ describe.runIf(romPath)("RetroemuCore（真 mGBA 核心冒烟）", () => {
     core.setSram(Buffer.from("KAGAMI"));
     expect(core.getSram()?.subarray(0, 6).toString()).toBe("KAGAMI");
 
+    // savestate 往返（无感重启的核心前提）：serialize 出快照 → 跑走 30 帧 → unserialize 回来
+    const state = core.getState();
+    expect(state).not.toBeNull();
+    expect(state!.length).toBeGreaterThan(0);
+    for (let i = 0; i < 30; i++) {
+      core.runFrame(new Set(["down"]));
+    }
+    expect(core.setState(state!)).toBe(true);
+    // 恢复后核心仍可正常推进与序列化（尺寸稳定）
+    core.runFrame(new Set());
+    expect(core.getState()?.length).toBe(state!.length);
+
     await core.shutdown();
+
+    // 跨实例恢复（重启的真实路径）：全新核心 loadRom 同一 ROM 后注入快照
+    const core2 = new RetroemuCore();
+    await core2.loadRom(readFileSync(romPath!));
+    expect(core2.setState(state!)).toBe(true);
+    core2.runFrame(new Set());
+    expect(core2.readFrameRgba()).not.toBeNull();
+    await core2.shutdown();
   }, 60_000);
 });

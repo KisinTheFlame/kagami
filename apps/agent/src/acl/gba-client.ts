@@ -34,6 +34,52 @@ export interface GbaClient {
 }
 
 type FetchLike = typeof fetch;
+type SleepFn = (ms: number) => Promise<void>;
+
+/** 重试节奏：总等待 ~3s，覆盖 deploy gba 的常规重启窗口（进程停到端口重开约 1-3 秒）。 */
+const CONN_REFUSED_RETRY_DELAYS_MS: readonly number[] = [300, 700, 1000, 1000];
+
+const defaultSleep: SleepFn = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * 连接级短重试（GBA 无感重启的 agent 半边）：只重试「连接被拒」——请求根本没进服务，对
+ * press 这类非幂等调用也安全。已建立连接后的失败（超时 / RESET / 非 2xx）服务端可能已有
+ * 副作用，一律不重试，交给上层归一 GBA_NOT_READY。重试间隙里若整体超时信号已触发则放弃。
+ */
+export function withConnRefusedRetry(
+  fetchImpl: FetchLike,
+  opts: { delaysMs?: readonly number[]; sleep?: SleepFn } = {},
+): FetchLike {
+  const delaysMs = opts.delaysMs ?? CONN_REFUSED_RETRY_DELAYS_MS;
+  const sleep = opts.sleep ?? defaultSleep;
+  return async (input, init) => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fetchImpl(input, init);
+      } catch (error) {
+        const delayMs = delaysMs[attempt];
+        if (delayMs === undefined || !isConnRefused(error) || init?.signal?.aborted === true) {
+          throw error;
+        }
+        await sleep(delayMs);
+      }
+    }
+  };
+}
+
+/** undici 的连接被拒形状：TypeError("fetch failed")，ECONNREFUSED 藏在 cause 链或 AggregateError.errors 里。 */
+function isConnRefused(error: unknown, depth = 0): boolean {
+  if (depth > 4 || typeof error !== "object" || error === null) {
+    return false;
+  }
+  if ((error as { code?: unknown }).code === "ECONNREFUSED") {
+    return true;
+  }
+  if (error instanceof AggregateError && error.errors.some(e => isConnRefused(e, depth + 1))) {
+    return true;
+  }
+  return isConnRefused((error as { cause?: unknown }).cause, depth + 1);
+}
 
 export class HttpGbaClient implements GbaClient {
   private readonly api: JsonClient<typeof gbaApiContract>;
@@ -41,7 +87,8 @@ export class HttpGbaClient implements GbaClient {
   public constructor({ baseUrl, fetch: fetchImpl }: { baseUrl: string; fetch?: FetchLike }) {
     this.api = createClient(gbaApiContract, {
       baseUrl,
-      ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+      // bind 到 globalThis 再包重试：与 createClient 内部的默认 fetch 处理一致（brand-check）。
+      fetch: withConnRefusedRetry(fetchImpl ?? fetch.bind(globalThis)),
       // 服务端错误信封是 { error: { message, statusCode } }（非 BizErrorWire），非 2xx 一律
       // 走 mapFallbackError 归一成 GBA_NOT_READY。
       decodeError: () => undefined,

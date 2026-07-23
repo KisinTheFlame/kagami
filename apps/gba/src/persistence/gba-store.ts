@@ -60,6 +60,14 @@ export class GbaStore {
         id     INTEGER PRIMARY KEY CHECK (id = 1),
         rom_id INTEGER REFERENCES rom(id) ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS resume_state (
+        id         INTEGER PRIMARY KEY CHECK (id = 1),
+        rom_id     INTEGER NOT NULL REFERENCES rom(id) ON DELETE CASCADE,
+        savestate  BLOB NOT NULL,
+        foreground INTEGER NOT NULL,
+        frame      INTEGER NOT NULL,
+        saved_at   INTEGER NOT NULL
+      );
     `);
   }
 
@@ -153,6 +161,55 @@ export class GbaStore {
       )
       .run(romId);
   }
+
+  /**
+   * 无感重启快照（单行）：只在优雅关停时写入、只在紧随其后的启动里恢复一次。
+   * crash（非优雅退出）不写快照——落回「断电 + 电池存档」的真机语义。
+   */
+  public saveResumeState(input: {
+    romId: number;
+    savestate: Buffer;
+    foreground: boolean;
+    frame: number;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO resume_state (id, rom_id, savestate, foreground, frame, saved_at)
+         VALUES (1, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET rom_id = excluded.rom_id, savestate = excluded.savestate,
+           foreground = excluded.foreground, frame = excluded.frame, saved_at = excluded.saved_at`,
+      )
+      .run(input.romId, input.savestate, input.foreground ? 1 : 0, input.frame, Date.now());
+  }
+
+  public getResumeState(): ResumeStateRow | null {
+    const row = this.db
+      .prepare(`SELECT rom_id, savestate, foreground, frame FROM resume_state WHERE id = 1`)
+      .get() as
+      | { rom_id: number; savestate: Buffer; foreground: number; frame: number }
+      | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      romId: row.rom_id,
+      savestate: row.savestate,
+      foreground: row.foreground === 1,
+      frame: row.frame,
+    };
+  }
+
+  /** 快照消费即删：恢复尝试过（无论成败）就清掉，绝不让陈旧快照在多次重启后复活。 */
+  public clearResumeState(): void {
+    this.db.prepare(`DELETE FROM resume_state WHERE id = 1`).run();
+  }
+}
+
+export interface ResumeStateRow {
+  romId: number;
+  savestate: Buffer;
+  foreground: boolean;
+  frame: number;
 }
 
 const SELECT_ROM = `

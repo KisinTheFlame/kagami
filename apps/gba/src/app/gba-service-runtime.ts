@@ -17,7 +17,7 @@ const logger = new AppLogger({ source: "gba-service-bootstrap" });
 export type GbaServiceRuntime = {
   app: FastifyInstance;
   port: number;
-  /** 关停：中止在途 press、flush 电池存档、释放核心、关库。 */
+  /** 关停：中止在途 press、flush 电池存档、落无感重启快照、释放核心、关库。 */
   shutdown: () => Promise<void>;
 };
 
