@@ -161,7 +161,7 @@ describe("GbaService", () => {
       await service2.shutdown();
     });
 
-    it("快照校验不通过（核心版本变了）：降级冷启动，快照已删", async () => {
+    it("快照校验不通过（核心版本变了）：丢弃半恢复核心、全新重载为真冷启动，快照已删", async () => {
       await uploadAndLoad();
       service.setForeground(true);
       await service.shutdown();
@@ -170,11 +170,42 @@ describe("GbaService", () => {
         core.failSetState = true;
       });
       await service2.init();
+      // 吃过失败 unserialize 的核心（cores[1]）不能继续用：整个丢弃，重载出干净实例（cores[2]）
+      expect(cores).toHaveLength(3);
+      expect(cores[1]!.shutdownCalled).toBe(true);
+      expect(cores[2]!.setStateCalls).toHaveLength(0);
       // 冷启动语义：只有 loadGame 的一帧、后台
       expect(service2.state().loaded).toBe(true);
       expect(service2.state().frame).toBe(1);
       expect(service2.state().foreground).toBe(false);
       expect(store.getResumeState()).toBeNull();
+      await service2.shutdown();
+    });
+
+    it("OSS 瞬断保留快照；之后任何成功加载作废快照，crash 后不复活回滚（review #557 [P1]）", async () => {
+      const romId = await uploadAndLoad();
+      service.setForeground(true);
+      await service.shutdown(); // 写快照
+
+      oss.failGet = true;
+      const service2 = buildService2();
+      await service2.init(); // 装 ROM 失败：快照保留，下次启动仍有机会无感恢复
+      expect(service2.state().loaded).toBe(false);
+      expect(store.getResumeState()).not.toBeNull();
+
+      // 运行中手动加载成功 → 快照作废（不恢复：手动加载 = 插卡带开机的冷启动语义）
+      oss.failGet = false;
+      const load = await service2.loadGame(romId);
+      expect(load.ok).toBe(true);
+      expect(cores[1]!.setStateCalls).toHaveLength(0);
+      expect(store.getResumeState()).toBeNull();
+
+      // 此后 crash（不调 shutdown）再启动：无快照可复活，冷启动 + 电池存档
+      const service3 = buildService2();
+      await service3.init();
+      expect(cores[2]!.setStateCalls).toHaveLength(0);
+      expect(service3.state().frame).toBe(1);
+      await service3.shutdown();
       await service2.shutdown();
     });
 
