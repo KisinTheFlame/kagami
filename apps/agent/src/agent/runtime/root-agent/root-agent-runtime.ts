@@ -302,8 +302,13 @@ export class RootAgentHost implements RootAgentExtensionHost {
       result.assistantMessage,
       tools,
     );
+    // 有 text 或有留痕的 tool_use 就持久化。纯文本轮（零工具调用）现在也把 text 写进上下文，
+    // 不再是「上下文零写入」；只有既无 text 又无可留痕 tool_use 的空轮才丢弃（无内容可留）。
     const assistantToPersist =
-      persistentAssistantMessage.toolCalls.length > 0 ? persistentAssistantMessage : null;
+      persistentAssistantMessage.content.trim().length > 0 ||
+      persistentAssistantMessage.toolCalls.length > 0
+        ? persistentAssistantMessage
+        : null;
     const toolPersistences: PendingToolPersistence[] = result.toolExecutions.map(execution => ({
       // 不再按 content 是否为空过滤：被持久化的 assistant tool_use 必须有配对的
       // tool_result（空串也合法），否则上下文不平衡、下一轮 provider 400 且每轮复发。
@@ -336,7 +341,14 @@ export class RootAgentHost implements RootAgentExtensionHost {
   public async appendWakeReminderIfNeeded(): Promise<void> {
     const now = this.now();
     await this.mutationExecutor.submit(async () => {
-      if (isSameWakeReminderBucket(this.lastWakeReminderAt, now)) {
+      // 角色交替不变量：纯文本轮会把 assistant(text, []) 留在上下文尾部。若随后被空闲自唤醒
+      // （wake 是 no-op、不追加 user 消息）唤醒，下一轮就把这条 assistant 作为上下文最后一条发给
+      // provider——assistant 不能收尾：会被当作 assistant prefill 续写（并非主循环的续轮语义），
+      // 且触发 provider 400、每轮复发（历史 400 死循环的形状）。故起轮前尾部是 assistant 时无条件
+      // 补一条 wake-reminder（user 角色）收尾。真实事件（通知/前台输入）已自带 user 消息、尾部不会
+      // 是 assistant，不受影响。
+      const tailIsAssistant = (await this.context.getLastMessage())?.role === "assistant";
+      if (!tailIsAssistant && isSameWakeReminderBucket(this.lastWakeReminderAt, now)) {
         return;
       }
 
@@ -810,13 +822,14 @@ export class RootLoopAgent extends BaseLoopAgent<
     // until a producer (real event or timer-enqueued wake) resolves them.
     const roundResult = await this.runReactRound();
 
-    // toolChoice auto 下模型可以一个工具都不调（纯文本轮：text 用完即弃、上下文
-    // 零写入）。此时本轮视为自然结束，挂起到事件队列非空才进下一轮——否则外层
-    // while 会立即用几乎相同的上下文再起一轮 LLM 调用空转。
+    // toolChoice auto 下模型可以一个工具都不调（纯文本轮）。此时 text 照常随 assistant 消息
+    // 进上下文（见 toPersistableAssistantMessage / commitRoundResult 门控），但本轮无工具动作、
+    // 视为自然结束，挂起到事件队列非空才进下一轮——否则外层 while 会立即用几乎相同的上下文再
+    // 起一轮 LLM 调用空转。
     if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
       try {
         // 可观测性：纯文本轮意味着模型「看到但选择不行动」（含对通知不回应）。
-        // 完整文本在 llm_chat_call 可查，这里只留一条轻量事件供时间序列归因。
+        // text 已进上下文（完整原文亦在 llm_chat_call 可查），这里只留一条轻量事件供时间序列归因。
         logger.info("Root agent idle round (zero tool calls); suspending until next event", {
           event: "agent.root_agent_runtime.idle_round_suspended",
         });
@@ -905,9 +918,10 @@ function failMissingTools(): never {
 }
 
 /**
- * assistant turn 的持久化形态：text 是一次性草稿（用完即弃、不进上下文，完整原文
- * 留在 llm_chat_call 审计记录里可查），control 工具调用同样不留痕（wait 除外）。
- * 剥离发生在写入时——已写入的历史只追加不改写，不违反 KV 缓存的只追加原则。
+ * assistant turn 的持久化形态：text 现在保留进上下文（不再剥离），与 tool_use 一起随消息
+ * 尾部追加，让后续轮次能回看小镜自己这一轮的思考；control 工具调用仍不留痕（wait 除外）。
+ * 追加发生在写入时——已写入的历史只追加不改写，不违反 KV 缓存的只追加原则（代价是上下文更快
+ * 增长、压缩更频繁，见 issue #268 的语义修订）。
  */
 function toPersistableAssistantMessage(
   message: AssistantMessage,
@@ -915,7 +929,6 @@ function toPersistableAssistantMessage(
 ): AssistantMessage {
   return {
     ...message,
-    content: "",
     toolCalls: message.toolCalls.filter(
       toolCall =>
         agentTools.getKind(toolCall.name) !== "control" ||

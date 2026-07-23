@@ -36,6 +36,7 @@ describe("RootLoopAgent — 纯文本轮挂起直到新事件", () => {
       },
       context: {
         getSnapshot: async () => ({ systemPrompt: "sys", messages: [] }),
+        getLastMessage: vi.fn(async () => null),
         appendAssistantTurn: vi.fn(async () => {}),
         appendToolResult: vi.fn(async () => {}),
         appendMessages: vi.fn(async () => {}),

@@ -46,7 +46,7 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 对应到运行时，`AgentContext` 只暴露两个会改动 message 列表的操作：`appendMessages`（保留前缀）与 `replaceMessages`（明确破坏并重建前缀）。新功能如果既不是追加也不是压缩，就要警惕。
 
-另外两条与 ReAct 循环相关的既定语义（#268）：主 Agent 每轮 `toolChoice: auto`，assistant 的纯文本输出是**用完即弃的草稿**——持久化边界剥掉 content、只留 tool_use / tool_result 进上下文（完整原文在 `llm_chat_call` 可查）；模型某轮零工具调用时主循环**挂起等下一个事件**，不会立即再起一轮。thinking 目前显式关死（`disabled`），开启 adaptive thinking 需要 thinking 块全链路支持，见 issue #269。
+另外两条与 ReAct 循环相关的既定语义（#268，text 保留语义经后续修订）：主 Agent 每轮 `toolChoice: auto`，assistant 的纯文本输出**保留进上下文**——持久化边界连同 content 一起随消息尾部追加（早期曾剥掉 content 只留 tool_use，现已改为保留，让小镜后续轮次能回看自己这一轮的思考；control 工具调用仍不留痕，wait 除外）；纯文本轮（零工具调用）同样把 text 写进上下文，代价是上下文更快增长、压缩更频繁。因为纯文本轮会把 assistant 消息留在尾部，`appendWakeReminderIfNeeded` 起轮前若发现尾部是 assistant 就无条件补一条 user 角色 wake-reminder 收尾——assistant 不能作为发给 provider 的最后一条（会被当 assistant prefill 续写，且触发 400、每轮复发），这条不变量避免「纯文本轮 + 空闲自唤醒」把 assistant 留在尾部。模型某轮零工具调用时主循环**挂起等下一个事件**，不会立即再起一轮。thinking 目前显式关死（`disabled`），开启 adaptive thinking 需要 thinking 块全链路支持，见 issue #269。
 
 ### 工具组织：InvokeTool 是顶层工具集的稳定壳
 
