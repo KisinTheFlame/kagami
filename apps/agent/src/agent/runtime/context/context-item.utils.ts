@@ -1,14 +1,5 @@
 import type { LlmMessage } from "@kagami/llm-client";
 import type { ContextItem } from "./agent-context.js";
-import type { Event } from "../event/event.js";
-import { createMessagesFromEvent } from "./context-message-factory.js";
-
-export function createContextItemFromEvent(event: Event): ContextItem {
-  return {
-    kind: "event",
-    event,
-  };
-}
 
 export function createContextItemFromMessage(message: LlmMessage): ContextItem {
   return {
@@ -18,11 +9,7 @@ export function createContextItemFromMessage(message: LlmMessage): ContextItem {
 }
 
 export function renderContextItemToMessages(item: ContextItem): LlmMessage[] {
-  if (item.kind === "llm_message") {
-    return [item.message];
-  }
-
-  return createMessagesFromEvent(item.event);
+  return [item.message];
 }
 
 export function serializeLlmMessage(message: LlmMessage): Record<string, unknown> {

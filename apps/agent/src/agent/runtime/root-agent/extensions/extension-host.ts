@@ -1,6 +1,5 @@
 import type { LlmMessage } from "@kagami/llm-client";
 import type { AgentContextSnapshot } from "../../context/agent-context.js";
-import type { RootAgentPostToolEffects } from "../session/root-agent-session.js";
 
 /**
  * 暴露给 root agent 扩展的稳定契约。RootAgentHost 的内部细节（mutationExecutor、
@@ -18,5 +17,4 @@ export interface RootAgentExtensionHost {
   getContextSnapshot(): Promise<AgentContextSnapshot>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   recordToolCall(input: { toolName: string; argumentsValue: Record<string, unknown> }): void;
-  flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
 }

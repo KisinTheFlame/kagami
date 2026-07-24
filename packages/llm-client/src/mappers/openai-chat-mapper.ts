@@ -15,6 +15,8 @@ import type {
   LlmUsage,
 } from "../types.js";
 import { imageContentToBase64, type LlmProviderId } from "@kagami/llm";
+import { isRecord } from "@kagami/kernel/json/is-record";
+import { llmUpstreamCallFailedError } from "../retryable-error.js";
 
 type OpenAiStyleUsage = {
   prompt_tokens?: number;
@@ -107,14 +109,19 @@ export function toLlmChatResponsePayload(
   completion: ChatCompletion,
   provider: LlmProviderId,
 ): LlmChatResponsePayload {
-  const openAiMessage = completion.choices[0].message;
+  // 调用方（openai-compatible-provider）已在 map 前守过空 choices；这里再守一层做防御，
+  // 让 mapper 单独复用时也不会因 choices[0] 解引用崩成未分类 TypeError。
+  const openAiMessage = completion.choices[0]?.message;
+  if (!openAiMessage) {
+    throw llmUpstreamCallFailedError({ meta: { provider, reason: "EMPTY_CHOICES" } });
+  }
 
   const toolCalls: LlmToolCall[] = (openAiMessage.tool_calls ?? [])
     .filter((tc): tc is ChatCompletionMessageFunctionToolCall => tc.type === "function")
     .map(tc => ({
       id: tc.id,
       name: tc.function.name,
-      arguments: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+      arguments: parseToolCallArguments(tc.function.arguments, provider),
     }));
 
   const message: Extract<LlmMessage, { role: "assistant" }> = {
@@ -129,6 +136,27 @@ export function toLlmChatResponsePayload(
     message,
     usage: completion.usage ? toLlmUsage(completion.usage as OpenAiStyleUsage) : undefined,
   };
+}
+
+/**
+ * 安全解析 OpenAI 风格 tool_call 的 arguments（模型产的 JSON 字符串）。坏 JSON 或非对象
+ * （数组 / 标量）都不放行——裸 `JSON.parse` 会抛未分类 SyntaxError、`as Record` 又会让非对象
+ * 蒙混进下游工具执行。统一抛可重试的 INVALID_TOOL_ARGUMENTS，模型有机会重生成一版。
+ */
+function parseToolCallArguments(raw: string, provider: LlmProviderId): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (cause) {
+    throw llmUpstreamCallFailedError({
+      meta: { provider, reason: "INVALID_TOOL_ARGUMENTS" },
+      cause,
+    });
+  }
+  if (!isRecord(parsed)) {
+    throw llmUpstreamCallFailedError({ meta: { provider, reason: "INVALID_TOOL_ARGUMENTS" } });
+  }
+  return parsed;
 }
 
 function toLlmUsage(usage: OpenAiStyleUsage): LlmUsage {

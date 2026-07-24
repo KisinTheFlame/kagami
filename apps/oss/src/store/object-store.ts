@@ -5,6 +5,14 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import type Database from "better-sqlite3";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import {
+  blobShard,
+  formatObjectKey,
+  isTempArtifactName,
+  parseObjectKey,
+  shouldDeleteBlobAfterUnref,
+} from "./object-store-logic.js";
+import { Mutex } from "./mutex.js";
 
 /**
  * Typed content-addressed object store（对标 S3 / MinIO）。对外是「bytes + content-type」的
@@ -40,8 +48,6 @@ import { AppLogger } from "@kagami/kernel/logger/logger";
  * 但 fd 一旦打开即免疫后续 unlink(POSIX 已打开 fd 保住 inode)。
  */
 
-const SHARD_PREFIX_LENGTH = 2;
-const KEY_PREFIX = "res-";
 const TMP_DIR_NAME = "tmp";
 
 const logger = new AppLogger({ source: "oss-store" });
@@ -215,12 +221,12 @@ export class ObjectStore {
           .run(sha256, mime, now);
         return Number(info.lastInsertRowid);
       });
-      return { key: `${KEY_PREFIX}${insert()}` };
+      return { key: formatObjectKey(insert()) };
     });
   }
 
   public async get(key: string): Promise<GetResult | null> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return null;
     }
@@ -248,7 +254,7 @@ export class ObjectStore {
   }
 
   public async head(key: string): Promise<HeadResult | null> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return null;
     }
@@ -328,7 +334,7 @@ export class ObjectStore {
   }
 
   public async delete(key: string): Promise<boolean> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return false;
     }
@@ -346,7 +352,7 @@ export class ObjectStore {
         const blob = this.db
           .prepare(`SELECT refcount FROM blob WHERE sha256 = ?`)
           .get(row.sha256) as BlobRefcountRow | undefined;
-        if (blob && blob.refcount <= 1) {
+        if (blob && shouldDeleteBlobAfterUnref(blob.refcount)) {
           this.db.prepare(`DELETE FROM blob WHERE sha256 = ?`).run(row.sha256);
           return { found: true, orphanSha256: row.sha256 };
         }
@@ -398,7 +404,7 @@ export class ObjectStore {
       }
       for (const name of entries) {
         // 崩溃残留的临时写入文件（含 tmp/ 目录里的）也是孤儿。
-        const isOrphan = name.includes(".tmp-") || blobExists.get(name) === undefined;
+        const isOrphan = isTempArtifactName(name) || blobExists.get(name) === undefined;
         if (!isOrphan) {
           continue;
         }
@@ -417,7 +423,7 @@ export class ObjectStore {
   }
 
   private blobPath(sha256: string): string {
-    return path.join(this.blobDir, sha256.slice(0, SHARD_PREFIX_LENGTH), sha256);
+    return path.join(this.blobDir, blobShard(sha256), sha256);
   }
 
   /**
@@ -446,49 +452,6 @@ export class ObjectStore {
         event: "oss.unlink_orphan_failed",
         sha256,
       });
-    }
-  }
-}
-
-/** 由 object id 拼出对外 key（`res-<id>`）。与 {@link parseKey} 共享同一前缀，单一事实源。 */
-export function formatObjectKey(id: number): string {
-  return `${KEY_PREFIX}${id}`;
-}
-
-/** 解析对外 key：`res-<正整数>` → id；前缀不对 / 非正整数 / 越界 → null（视作无映射）。 */
-function parseKey(key: string): number | null {
-  if (!key.startsWith(KEY_PREFIX)) {
-    return null;
-  }
-  const rest = key.slice(KEY_PREFIX.length);
-  if (!/^[0-9]+$/.test(rest)) {
-    return null;
-  }
-  const id = Number(rest);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    return null;
-  }
-  return id;
-}
-
-/**
- * 极简进程内互斥锁:把异步操作串成一条链,后来的等前一个完成再跑。用于串行化写操作的临界区,
- * 消除"文件 I/O 在事务外 + await 让出事件循环"导致的并发竞态。
- */
-class Mutex {
-  private tail: Promise<void> = Promise.resolve();
-
-  public async run<T>(task: () => Promise<T>): Promise<T> {
-    const previous = this.tail;
-    let release!: () => void;
-    this.tail = new Promise<void>(resolve => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await task();
-    } finally {
-      release();
     }
   }
 }
