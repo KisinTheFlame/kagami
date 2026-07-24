@@ -43,7 +43,7 @@ type NapcatActionRequester = {
 };
 
 type NapcatGroupMessageProcessorOptions = {
-  listenGroupIds: string[];
+  blockedGroupIds: string[];
   actionRequester: NapcatActionRequester;
   enqueueGroupMessageEvent: (event: NapcatGroupMessageEvent) => number | Promise<number>;
   imageMessageAnalyzer: NapcatImageMessageAnalyzer;
@@ -55,7 +55,7 @@ const LIVE_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message"]);
 const HISTORICAL_GROUP_MESSAGE_POST_TYPES = new Set<string>(["message", "message_sent"]);
 
 export class NapcatGroupMessageProcessor {
-  private readonly listenGroupIds: Set<string>;
+  private readonly blockedGroupIds: Set<string>;
   private readonly actionRequester: NapcatActionRequester;
   private readonly enqueueGroupMessageEvent: (
     event: NapcatGroupMessageEvent,
@@ -68,13 +68,13 @@ export class NapcatGroupMessageProcessor {
   >();
 
   public constructor({
-    listenGroupIds,
+    blockedGroupIds,
     actionRequester,
     enqueueGroupMessageEvent,
     imageMessageAnalyzer,
     qqMessageDao,
   }: NapcatGroupMessageProcessorOptions) {
-    this.listenGroupIds = new Set(listenGroupIds);
+    this.blockedGroupIds = new Set(blockedGroupIds);
     this.actionRequester = actionRequester;
     this.enqueueGroupMessageEvent = enqueueGroupMessageEvent;
     this.imageMessageAnalyzer = imageMessageAnalyzer;
@@ -119,8 +119,8 @@ export class NapcatGroupMessageProcessor {
 
   /**
    * 归一化 group_ban notice → 禁言事件（其余 notice 返回 null，照旧只落 persistEvent）。
-   * 识别条件：postType=notice 且 notice_type=group_ban 且 sub_type∈{ban,lift_ban} 且群在
-   * listenGroupIds。丢弃条件收窄（spec D5）：仅 groupId / sub_type 不可用时整条丢弃；
+   * 识别条件：postType=notice 且 notice_type=group_ban 且 sub_type∈{ban,lift_ban} 且群不在
+   * blockedGroupIds（黑名单，#570）。丢弃条件收窄（spec D5）：仅 groupId / sub_type 不可用时整条丢弃；
    * duration 畸形降级为 0（事件保留、通知照发、不写 mute 态）。operator/target 名解析
    * 复用成员名缓存，失败不阻塞（名字置 null，渲染退化裸号）。
    */
@@ -150,7 +150,8 @@ export class NapcatGroupMessageProcessor {
       });
       return null;
     }
-    if (!this.listenGroupIds.has(event.groupId)) {
+    // 黑名单：屏蔽群的禁言通知同样不发往 agent（与实时消息过滤同步反转，#570）。
+    if (this.blockedGroupIds.has(event.groupId)) {
       return null;
     }
 
@@ -325,7 +326,7 @@ export class NapcatGroupMessageProcessor {
     event: NapcatGatewayNormalizedPostTypeEvent,
   ): NapcatPersistableGroupMessageEvent | null {
     const groupMessageData = this.toGroupMessageData(event, {
-      requireListenedGroup: true,
+      applyBlocklist: true,
       includeSelfMessages: false,
       acceptedPostTypes: LIVE_GROUP_MESSAGE_POST_TYPES,
     });
@@ -385,7 +386,7 @@ export class NapcatGroupMessageProcessor {
   private toGroupMessageData(
     event: NapcatGatewayNormalizedPostTypeEvent,
     options: {
-      requireListenedGroup: boolean;
+      applyBlocklist: boolean;
       includeSelfMessages: boolean;
       acceptedPostTypes: ReadonlySet<string>;
     },
@@ -398,7 +399,9 @@ export class NapcatGroupMessageProcessor {
       return null;
     }
 
-    if (options.requireListenedGroup && !this.listenGroupIds.has(event.groupId)) {
+    // 黑名单模式：默认放行所有群，仅命中黑名单的群消息不发往 agent（#570）。历史拉取路径
+    // 传 applyBlocklist:false，不受黑名单影响（用户主动查历史时不再二次过滤）。
+    if (options.applyBlocklist && this.blockedGroupIds.has(event.groupId)) {
       return null;
     }
 
@@ -723,7 +726,7 @@ export class NapcatGroupMessageProcessor {
           ...messagePayload,
         });
         const groupMessageData = this.toGroupMessageData(normalizedEvent, {
-          requireListenedGroup: false,
+          applyBlocklist: false,
           includeSelfMessages: true,
           acceptedPostTypes: HISTORICAL_GROUP_MESSAGE_POST_TYPES,
         });

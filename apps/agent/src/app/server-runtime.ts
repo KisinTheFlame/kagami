@@ -71,7 +71,7 @@ export type ServerRuntime = {
   /** 状态心跳采样器：由 index.ts 在 run loop 启动后 start()、server-shutdown 时 stop()。 */
   stateSampler: { start(): void; stop(): void };
   port: number;
-  listenGroupIds: string[];
+  blockedGroupIds: string[];
   startupContextRecentMessageCount: number;
   /**
    * LLM provider 生命周期已随 kagami-llm 服务外移；agent 进程不再持有 provider，这里恒为 no-op。
@@ -297,7 +297,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     metricService,
     stateSampler: agentRuntime.stateSampler,
     port: config.services.agent.port,
-    listenGroupIds: config.server.napcat.listenGroupIds,
+    blockedGroupIds: config.server.napcat.blockedGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
     // provider 生命周期在 kagami-llm 服务侧；agent 无本地 provider 可关，no-op。
     closeLlmProviders: async () => {},
