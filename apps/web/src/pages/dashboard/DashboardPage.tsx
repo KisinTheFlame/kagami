@@ -148,6 +148,7 @@ export function DashboardPage() {
             aggregator="count"
             groupByTag={STATE_TAG}
             seriesMeta={stateSeriesMeta}
+            pinSeriesToTop="wait"
             chartType="stacked-area"
             range={range}
           />
