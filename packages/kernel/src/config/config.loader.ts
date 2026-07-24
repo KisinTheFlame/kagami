@@ -219,7 +219,11 @@ const ServicesSchema = z
     llm: ServiceEndpointSchema.extend({
       databaseUrl: DatabaseUrlSchema,
     }),
-    metric: ServiceEndpointSchema,
+    // metric 除 host/port 外还持有独立 DuckDB 单文件（#475 P1）：metric 摄取 / 查询落它自己的
+    // 列式 .duckdb，不再借主库 server.databaseUrl 反推路径。databaseUrl 非隐私，进 config.yaml。
+    metric: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
     spire: ServiceEndpointSchema,
     // napcat 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 2）：napcat_event /
     // napcat_qq_message / napcat_event_outbox / image_asset 落它自己的 SQLite 文件，
@@ -533,6 +537,12 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       llm: {
         ...data.services.llm,
         databaseUrl: resolveSqliteFileUrl(configDir, data.services.llm.databaseUrl),
+      },
+      // metric 独占 DuckDB 单文件（#475）：同上把相对 file: 路径锚定到仓库根（resolveSqliteFileUrl
+      // 只做 file: 绝对化，对 .duckdb 同样适用），杜绝按进程 cwd 静默解析。
+      metric: {
+        ...data.services.metric,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.metric.databaseUrl),
       },
     },
     server: {
