@@ -9,10 +9,7 @@ import type {
   ContextItem,
 } from "./agent-context.js";
 import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
-import {
-  createContextItemFromMessage,
-  renderContextItemToMessages,
-} from "./context-item.utils.js";
+import { createContextItemFromMessage, renderContextItemToMessages } from "./context-item.utils.js";
 
 const DEFAULT_DASHBOARD_LIMIT = 5;
 const DEFAULT_PREVIEW_LENGTH = 200;

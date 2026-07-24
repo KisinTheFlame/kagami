@@ -13,9 +13,11 @@ import type { RootAgentExtensionHost } from "./extension-host.js";
  * （pendingPostToolMessages / flushPendingPostToolEffects）从无生产写入方、恒为空，已随死抽象
  * 清理一并移除。
  */
-export class RootToolCallMetricExtension
-  implements ReActKernelExtension<"agent", RootAgentCompletion, RootAgentToolExecutionData>
-{
+export class RootToolCallMetricExtension implements ReActKernelExtension<
+  "agent",
+  RootAgentCompletion,
+  RootAgentToolExecutionData
+> {
   private readonly host: Pick<RootAgentExtensionHost, "recordToolCall">;
 
   public constructor({ host }: { host: Pick<RootAgentExtensionHost, "recordToolCall"> }) {
