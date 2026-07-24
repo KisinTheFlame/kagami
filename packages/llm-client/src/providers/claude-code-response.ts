@@ -17,7 +17,9 @@ export function parseClaudeMessageResponse(value: string): ClaudeMessageResponse
   }
 
   try {
-    return JSON.parse(value) as ClaudeMessageResponse;
+    const parsed: unknown = JSON.parse(value);
+    // 非对象（数组 / 标量）不是合法 wire 响应；返回 null，由 mapClaudeMessageResult 归到 EMPTY_CONTENT。
+    return isRecord(parsed) ? (parsed as ClaudeMessageResponse) : null;
   } catch {
     return null;
   }
