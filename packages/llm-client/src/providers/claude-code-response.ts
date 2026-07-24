@@ -6,7 +6,7 @@ import {
   type LlmProviderChatResult,
 } from "../provider.js";
 import { llmUpstreamCallFailedError } from "../retryable-error.js";
-import type { LlmChatResponsePayload } from "../types.js";
+import type { LlmChatResponsePayload, LlmThinkingBlock } from "../types.js";
 import type { ClaudeMessageRequestBody, ClaudeMessageResponse } from "./claude-code-wire.js";
 
 /** 响应文本 → wire 响应：优先按 SSE 流重组，非流则按整块 JSON；都不是返回 null。 */
@@ -85,6 +85,7 @@ function toClaudeAssistantMessage(
 ): LlmChatResponsePayload["message"] {
   const textParts: string[] = [];
   const toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+  const thinkingBlocks: LlmThinkingBlock[] = [];
 
   for (const block of response.content ?? []) {
     if (block.type === "text" && block.text) {
@@ -98,6 +99,25 @@ function toClaudeAssistantMessage(
         name: block.name,
         arguments: isRecord(block.input) ? block.input : {},
       });
+      continue;
+    }
+
+    // thinking 块（#573）不透明收集，按响应出块序保序；signature 缺失的块回放必 400，
+    // 宁可丢弃（服务端容忍历史缺块，Step 0 E2/E5）也不带残块中毒上下文。
+    if (block.type === "thinking" && typeof block.thinking === "string" && block.signature) {
+      thinkingBlocks.push({
+        type: "thinking",
+        thinking: block.thinking,
+        signature: block.signature,
+      });
+      continue;
+    }
+
+    if (block.type === "redacted_thinking" && block.data) {
+      thinkingBlocks.push({
+        type: "redacted_thinking",
+        data: block.data,
+      });
     }
   }
 
@@ -105,6 +125,7 @@ function toClaudeAssistantMessage(
     role: "assistant",
     content: textParts.join("\n"),
     toolCalls,
+    ...(thinkingBlocks.length > 0 ? { thinkingBlocks } : {}),
   };
 }
 
@@ -121,6 +142,8 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
         block: { type: "tool_use"; id?: string; name?: string; input?: Record<string, unknown> };
         partialJson: string;
       }
+    | { kind: "thinking"; block: { type: "thinking"; thinking: string; signature: string } }
+    | { kind: "redacted_thinking"; block: { type: "redacted_thinking"; data: string } }
   > = [];
   let model: string | undefined;
   let sawMessageStart = false;
@@ -215,6 +238,31 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
         continue;
       }
 
+      // thinking 块（#573）：正文经 thinking_delta 增量到达，signature 经 signature_delta
+      // 在块尾到达；redacted_thinking 的 data 在 content_block_start 即完整给出。
+      if (contentBlock.type === "thinking") {
+        streamBlocks[index] = {
+          kind: "thinking",
+          block: {
+            type: "thinking",
+            thinking: typeof contentBlock.thinking === "string" ? contentBlock.thinking : "",
+            signature: typeof contentBlock.signature === "string" ? contentBlock.signature : "",
+          },
+        };
+        continue;
+      }
+
+      if (contentBlock.type === "redacted_thinking") {
+        streamBlocks[index] = {
+          kind: "redacted_thinking",
+          block: {
+            type: "redacted_thinking",
+            data: typeof contentBlock.data === "string" ? contentBlock.data : "",
+          },
+        };
+        continue;
+      }
+
       streamBlocks[index] = { kind: "ignored" };
       continue;
     }
@@ -234,6 +282,16 @@ function parseClaudeStreamResponse(value: string): ClaudeMessageResponse | null 
 
       if (streamBlock.kind === "tool_use" && delta.type === "input_json_delta") {
         streamBlock.partialJson += typeof delta.partial_json === "string" ? delta.partial_json : "";
+        continue;
+      }
+
+      if (streamBlock.kind === "thinking" && delta.type === "thinking_delta") {
+        streamBlock.block.thinking += typeof delta.thinking === "string" ? delta.thinking : "";
+        continue;
+      }
+
+      if (streamBlock.kind === "thinking" && delta.type === "signature_delta") {
+        streamBlock.block.signature += typeof delta.signature === "string" ? delta.signature : "";
       }
       continue;
     }

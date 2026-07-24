@@ -64,6 +64,67 @@ function createAuthStore(): OpenAiCodexAuthStore {
 }
 
 describe("createOpenAiCodexProvider", () => {
+  it("should ignore thinking fields entirely (thinkingBlocks / request.thinking, #573)", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      // claude 专属字段绝不泄漏进 codex 请求体：assistant 输入只映射 content/toolCalls。
+      expect(JSON.stringify(body)).not.toContain("thinking");
+      expect(body.input).toEqual([
+        { role: "user", content: "ping" },
+        { role: "assistant", content: "draft" },
+        { role: "user", content: "again" },
+      ]);
+
+      return buildSseResponse({
+        type: "response.completed",
+        response: {
+          status: "completed",
+          model: "gpt-5.3-codex",
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "pong" }],
+            },
+          ],
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createOpenAiCodexProvider({
+      config: {
+        baseUrl: "https://chatgpt.com/backend-api/codex/responses",
+        models: ["gpt-5.3-codex"],
+        timeoutMs: 5_000,
+      },
+      authStore: createAuthStore(),
+    });
+
+    await expect(
+      provider.chat({
+        model: "gpt-5.3-codex",
+        thinking: "low",
+        messages: [
+          { role: "user", content: "ping" },
+          {
+            role: "assistant",
+            content: "draft",
+            toolCalls: [],
+            thinkingBlocks: [{ type: "thinking", thinking: "推理", signature: "sig-1" }],
+          },
+          { role: "user", content: "again" },
+        ],
+        tools: [],
+        toolChoice: "none",
+      }),
+    ).resolves.toMatchObject({
+      response: {
+        message: { role: "assistant", content: "pong" },
+      },
+    });
+  });
+
   it("should map a final assistant message from the Codex SSE response", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;

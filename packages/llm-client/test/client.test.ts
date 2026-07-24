@@ -1460,3 +1460,102 @@ describe("createLlmClient", () => {
     await expect(client.listAvailableProviders({} as never)).rejects.toThrow("explicit usage");
   });
 });
+
+describe("createLlmClient adaptive thinking (usage 级注入, #573)", () => {
+  it("should inject usage-configured thinking into the provider request and the recorded payload", async () => {
+    const provider = {
+      id: "openai" as const,
+      chat: vi.fn().mockResolvedValue(createProviderChatResult(createChatResponse())),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: { openai: provider },
+      usages: createUsageConfig({
+        agent: {
+          attempts: [{ provider: "openai", model: "gpt-4o-mini", times: 1 }],
+          thinking: "low",
+        },
+      }),
+    });
+
+    await client.chat(
+      { messages: [{ role: "user", content: "ping" }], tools: [], toolChoice: "auto" },
+      { usage: "agent", scene: "agent" },
+    );
+
+    expect(provider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thinking: "low",
+      }),
+    );
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          thinking: "low",
+        }),
+      }),
+    );
+  });
+
+  it("should not inject thinking when the usage has no thinking configured", async () => {
+    const provider = {
+      id: "openai" as const,
+      chat: vi.fn().mockResolvedValue(createProviderChatResult(createChatResponse())),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: { openai: provider },
+    });
+
+    await client.chat(
+      { messages: [{ role: "user", content: "ping" }], tools: [], toolChoice: "auto" },
+      { usage: "agent", scene: "agent" },
+    );
+
+    const chatArg = provider.chat.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(chatArg).not.toHaveProperty("thinking");
+    const recorded = llmChatCallDao.recordSuccess.mock.calls[0]?.[0] as {
+      request: Record<string, unknown>;
+    };
+    expect(recorded.request).not.toHaveProperty("thinking");
+  });
+
+  it("should record assistant thinkingBlocks in the request payload (回放落库可查)", async () => {
+    const provider = {
+      id: "openai" as const,
+      chat: vi.fn().mockResolvedValue(createProviderChatResult(createChatResponse())),
+    };
+    const { client, llmChatCallDao } = createClient({
+      providers: { openai: provider },
+    });
+
+    await client.chat(
+      {
+        messages: [
+          { role: "user", content: "ping" },
+          {
+            role: "assistant",
+            content: "draft",
+            toolCalls: [],
+            thinkingBlocks: [{ type: "thinking", thinking: "推理", signature: "sig-1" }],
+          },
+          { role: "user", content: "again" },
+        ],
+        tools: [],
+        toolChoice: "auto",
+      },
+      { usage: "agent", scene: "agent" },
+    );
+
+    expect(llmChatCallDao.recordSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "assistant",
+              thinkingBlocks: [{ type: "thinking", thinking: "推理", signature: "sig-1" }],
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+});

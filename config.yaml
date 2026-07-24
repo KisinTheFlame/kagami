@@ -136,6 +136,9 @@ server:
           - provider: claude-code
             model: claude-opus-4-6
             times: 3
+        # adaptive thinking effort（#573）。usage=agent 覆盖主 Agent 与镜像 fork task agent
+        # （它们字节级复用主 Agent 前缀，必须同 lineage）。删掉此行即整体关回 disabled。
+        thinking: low
       vision:
         attempts:
           - provider: claude-code

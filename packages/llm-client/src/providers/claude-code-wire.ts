@@ -51,6 +51,15 @@ export type ClaudeMessageResponse = {
         name?: string;
         input?: Record<string, unknown>;
       }
+    | {
+        type?: "thinking";
+        thinking?: string;
+        signature?: string;
+      }
+    | {
+        type?: "redacted_thinking";
+        data?: string;
+      }
   >;
   usage?: {
     input_tokens?: number;
