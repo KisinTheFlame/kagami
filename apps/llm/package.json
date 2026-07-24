@@ -24,10 +24,10 @@
     "@kagami/llm-client": "workspace:*",
     "@kagami/metric-client": "workspace:*",
     "@kagami/scheduler-client": "workspace:*",
-    "@prisma/adapter-better-sqlite3": "^7.8.0",
-    "@prisma/client": "^7.6.0",
+    "@prisma/adapter-better-sqlite3": "7.6.0",
+    "@prisma/client": "7.6.0",
     "fastify": "^5.6.2",
-    "prisma": "^7.6.0",
+    "prisma": "7.6.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {
