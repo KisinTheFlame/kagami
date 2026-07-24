@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildChartRows,
   buildPieData,
+  orderSeriesForStack,
   selectVisibleSeries,
   type RenderSeries,
 } from "@/components/metric/MetricChartView";
@@ -52,6 +53,42 @@ describe("selectVisibleSeries：仅过滤、不重排不串色", () => {
 
   it("残留 stale key（不在序列里）→ 无害 no-op", () => {
     expect(selectVisibleSeries(all, new Set(["gone"]))).toEqual(all);
+  });
+});
+
+describe("orderSeriesForStack：pin 移末位 = 堆叠视觉最顶，不改 dataKey/color", () => {
+  const s0 = series("qq", "c0", [{ bucketStart: b0, value: 1 }], 0);
+  const s1 = series("wait", "c1", [{ bucketStart: b0, value: 2 }], 1);
+  const s2 = series("portal", "c2", [{ bucketStart: b0, value: 3 }], 2);
+  const all: RenderSeries[] = [s0, s1, s2];
+
+  it("pinKey 存在：移到末位，其余保持原相对顺序", () => {
+    const ordered = orderSeriesForStack(all, "wait");
+    expect(ordered.map(s => s.key)).toEqual(["qq", "portal", "wait"]);
+  });
+
+  it("重排不改 dataKey / color（随 dataKey 走色，绝不串色）", () => {
+    const ordered = orderSeriesForStack(all, "wait");
+    const waitEntry = ordered.at(-1);
+    expect(waitEntry?.key).toBe("wait");
+    // wait 原来是 series_1 / c1，移位后依旧。
+    expect(waitEntry?.dataKey).toBe("series_1");
+    expect(waitEntry?.color).toBe("c1");
+    // qq 仍是 series_0 / c0。
+    expect(ordered[0]?.dataKey).toBe("series_0");
+    expect(ordered[0]?.color).toBe("c0");
+  });
+
+  it("pinKey 缺省：原样返回（顺序不变）", () => {
+    expect(orderSeriesForStack(all).map(s => s.key)).toEqual(["qq", "wait", "portal"]);
+  });
+
+  it("pinKey 不在序列里：原样返回（顺序不变，无害 no-op）", () => {
+    expect(orderSeriesForStack(all, "gone").map(s => s.key)).toEqual(["qq", "wait", "portal"]);
+  });
+
+  it("pin 已在末位：仍是末位（幂等）", () => {
+    expect(orderSeriesForStack(all, "portal").map(s => s.key)).toEqual(["qq", "wait", "portal"]);
   });
 });
 

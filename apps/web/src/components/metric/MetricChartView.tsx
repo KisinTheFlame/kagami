@@ -60,6 +60,11 @@ type MetricChartViewProps = {
   chartType?: MetricChartType;
   /** 序列展示元数据解析器（显式配色/命名）。缺省时用 seriesColors 轮转 + 后端 label。 */
   seriesMeta?: SeriesMetaResolver;
+  /**
+   * 把指定 series key 移到堆叠渲染顺序末位（stacked-area 里 = 视觉最顶）。缺省不重排。
+   * 只影响堆叠面积图的 `<Area>` 渲染顺序；不改 dataKey/color/图例顺序。
+   */
+  pinSeriesToTop?: string;
   /** 图表区高度（px），默认 288（h-72）。 */
   height?: number;
 };
@@ -98,6 +103,7 @@ export function MetricChartView({
   data,
   chartType = "line",
   seriesMeta,
+  pinSeriesToTop,
   height = 288,
 }: MetricChartViewProps) {
   // 显隐走共享 hook（id = series.key，语义 tag 值如 "wait"/"qq"）：纯客户端展示开关、不触发重查，
@@ -283,7 +289,8 @@ export function MetricChartView({
                       />
                     }
                   />
-                  {visibleSeries.map(series => (
+                  {/* 渲染顺序末位 = 堆叠视觉最顶：pinSeriesToTop 指定的序列（如 wait）恒在顶。 */}
+                  {orderSeriesForStack(visibleSeries, pinSeriesToTop).map(series => (
                     <Area
                       key={series.key}
                       type="linear"
@@ -420,6 +427,22 @@ export function selectVisibleSeries(
   hiddenKeys: Set<string>,
 ): RenderSeries[] {
   return series.filter(item => !hiddenKeys.has(item.key));
+}
+
+/**
+ * 把 pinKey 对应的序列移到数组末位（stacked-area 里 = 堆叠视觉最顶），其余保持原相对顺序。
+ * 只改渲染顺序、不碰 dataKey/color（已在 renderSeries 阶段按原序号定死，随 dataKey 走色）——
+ * 守住「绝不重新编号」不变量。pinKey 缺省或不在序列里时按原序返回（顺序不变，不保证同一引用）。
+ */
+export function orderSeriesForStack<T extends { key: string }>(series: T[], pinKey?: string): T[] {
+  if (!pinKey) {
+    return series;
+  }
+  const pinned = series.filter(item => item.key === pinKey);
+  if (pinned.length === 0) {
+    return series;
+  }
+  return [...series.filter(item => item.key !== pinKey), ...pinned];
 }
 
 function buildChartConfig(series: RenderSeries[]): ChartConfig {

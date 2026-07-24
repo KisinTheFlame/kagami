@@ -1,55 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { STATE_META, STATE_FALLBACK, stateSeriesMeta } from "@/components/metric/state-meta";
+import { stateSeriesMeta } from "@/components/metric/state-meta";
 
-// 后端已注册的 11 个 App id（对齐 apps/agent agent-runtime.factory 的注册表）+ 两个语义状态。
-// AppId 是 string 无可枚举源，这里钉住已知集合：删掉任一映射即回归，防止漂移丢色/丢 label。
-const KNOWN_APP_IDS = [
-  "calc",
-  "terminal",
-  "ithome",
-  "todo",
-  "clock",
-  "hn",
-  "amap",
-  "browser",
-  "spire",
-  "pixel",
-  "qq",
-] as const;
-
-describe("STATE_META", () => {
-  it("覆盖全部 11 个已知 App id + wait + portal", () => {
-    for (const id of KNOWN_APP_IDS) {
-      expect(STATE_META[id], `缺 App 状态映射: ${id}`).toBeDefined();
-    }
-    expect(STATE_META.wait).toBeDefined();
-    expect(STATE_META.portal).toBeDefined();
-  });
-
-  it("wait = 语义黄（--scheduler = 等待），符合 DESIGN.md", () => {
-    expect(STATE_META.wait?.color).toBe("hsl(var(--scheduler))");
-    expect(STATE_META.wait?.label).toBe("等待");
-  });
-
-  it("portal 用中性弱色", () => {
-    expect(STATE_META.portal?.color).toBe("hsl(var(--muted-foreground))");
-  });
-
-  it("每个状态颜色互不相同（同图多带不撞色）", () => {
-    const colors = Object.values(STATE_META).map(meta => meta.color);
-    expect(new Set(colors).size).toBe(colors.length);
-  });
-});
-
+// 「状态时间占比」图只显式钉两个语义状态（DESIGN.md），其余状态一律回落后端原始 tag + 轮转色。
 describe("stateSeriesMeta 解析器", () => {
-  it("命中 STATE_META 时返回其 label + color", () => {
-    expect(stateSeriesMeta("qq", 0)).toEqual(STATE_META.qq);
-    expect(stateSeriesMeta("wait", 5)).toEqual(STATE_META.wait);
+  it("wait = 语义黄 + 中文名「等待」（DESIGN.md 钉死）", () => {
+    expect(stateSeriesMeta("wait", 0)).toEqual({ label: "等待", color: "hsl(var(--scheduler))" });
   });
 
-  it("未命中（新增 App 漂移）时回落到 STATE_FALLBACK 色 + 带 id 的 label，不缺色不崩", () => {
-    const resolved = stateSeriesMeta("brand_new_app", 3);
-    expect(resolved?.color).toBe(STATE_FALLBACK.color);
-    expect(resolved?.label).toContain("brand_new_app");
+  it("portal = 中性弱色 + 中文名「桌面」", () => {
+    expect(stateSeriesMeta("portal", 1)).toEqual({
+      label: "桌面",
+      color: "hsl(var(--muted-foreground))",
+    });
+  });
+
+  it("其余状态（App / 新增漂移）返回 undefined → 回落后端原始 tag + 轮转色，绝不再出现「未知」", () => {
+    // 已知 App：不再维护名字/配色映射，图例直接用原始 tag。
+    expect(stateSeriesMeta("qq", 2)).toBeUndefined();
+    // gba 曾漏在旧表里显示成「未知（gba）」；现在回落成原始 tag "gba"。
+    expect(stateSeriesMeta("gba", 3)).toBeUndefined();
+    // 未来任意新增 App：零维护，同样回落，不会「未知」。
+    expect(stateSeriesMeta("brand_new_app", 4)).toBeUndefined();
   });
 });

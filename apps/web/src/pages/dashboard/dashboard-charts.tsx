@@ -75,6 +75,8 @@ type DashboardChartProps = {
   tagFilters?: MetricChartTagFilters;
   /** 序列展示元数据解析器（显式配色/命名，如状态占比图）。透传给 MetricChartView。 */
   seriesMeta?: SeriesMetaResolver;
+  /** 把指定 series key 钉在堆叠面积图的最顶（如状态占比图的 wait）。透传给 MetricChartView。 */
+  pinSeriesToTop?: string;
   /** 显示前的值缩放系数（如延迟 ms→秒 传 0.001）；缺省不缩放。存储值不变，只改展示。 */
   valueScale?: number;
   range: DashboardRange;
@@ -90,6 +92,7 @@ export function DashboardChart({
   groupByTag,
   tagFilters,
   seriesMeta,
+  pinSeriesToTop,
   valueScale,
   range,
 }: DashboardChartProps) {
@@ -107,6 +110,7 @@ export function DashboardChart({
       subtitle={subtitle}
       chartType={chartType}
       {...(seriesMeta ? { seriesMeta } : {})}
+      {...(pinSeriesToTop ? { pinSeriesToTop } : {})}
       isLoading={query.isLoading}
       isError={query.isError}
       errorMessage={query.isError ? getApiErrorMessage(query.error) : undefined}
