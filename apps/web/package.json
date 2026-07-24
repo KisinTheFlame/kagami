@@ -3,13 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist/server/index.js",
   "scripts": {
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b && tsc --noEmit -p tsconfig.test.json",
+    "start": "node dist/server/index.js",
     "test": "vitest run"
   },
   "dependencies": {
     "@kagami/agent-api": "workspace:*",
+    "@kagami/config": "workspace:*",
     "@kagami/console-api": "workspace:*",
     "@kagami/gba-api": "workspace:*",
     "@kagami/http": "workspace:*",
@@ -28,7 +31,8 @@
     "react-router-dom": "^7.13.1",
     "recharts": "2.15.4",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

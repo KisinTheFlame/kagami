@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { resolveConfigPath } from "@kagami/config/source";
 import { parse } from "yaml";
 
@@ -21,8 +19,8 @@ export interface GatewayConfig {
   schedulerTarget: URL;
   /** gba 上游基址，由 services.gba.host/port 拼出（ROM 管理 /gba/roms 与实况面 /gba/console 走它）。 */
   gbaTarget: URL;
-  /** 静态资源目录：gateway 自身产物下的 dist/public（构建期由 @kagami/web 的 dist 拷入，见 #496）。 */
-  distDir: string;
+  /** web 上游基址，由 services.web.host/port 拼出：非 /api 的请求（前端页面 + 静态资源）全转给它（#578）。 */
+  webTarget: URL;
 }
 
 interface RawServiceEndpoint {
@@ -40,6 +38,7 @@ interface RawConfig {
     oss?: RawServiceEndpoint;
     scheduler?: RawServiceEndpoint;
     gba?: RawServiceEndpoint;
+    web?: RawServiceEndpoint;
   };
 }
 
@@ -72,7 +71,6 @@ export function loadGatewayConfig(): GatewayConfig {
     ossTarget: resolveEndpoint(services?.oss, "oss"),
     schedulerTarget: resolveEndpoint(services?.scheduler, "scheduler"),
     gbaTarget: resolveEndpoint(services?.gba, "gba"),
-    // 运行时 config.js 位于 apps/gateway/dist/，前端产物在同级 public/ 下（构建期拷入）。
-    distDir: path.join(path.dirname(fileURLToPath(import.meta.url)), "public"),
+    webTarget: resolveEndpoint(services?.web, "web"),
   };
 }

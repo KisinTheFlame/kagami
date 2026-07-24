@@ -1,6 +1,24 @@
 // 网关按 `/api` 之后的上游路径前缀，决定这条请求转发给哪个后端进程。这里只做「路径 → 上游标识」
 // 的纯决策（不碰 config / URL），便于单测覆盖边界；index.ts 再把 UpstreamKey 映射到具体上游地址。
 
+/**
+ * 前门三分岔：网关自答健康检查、`/api/*` 分流到后端、其余全部转给 kagami-web（#578）。
+ *
+ * 「其余 → web」是 #578 后的形态：前端产物不再由网关托管，而是 web 进程自持，网关只反代。
+ */
+export type FrontDoorTarget = "health" | "api" | "web";
+
+/** 纯决策：请求路径 → 前门去向。顺序即优先级。 */
+export function selectFrontDoor(pathname: string): FrontDoorTarget {
+  if (pathname === "/health") {
+    return "health";
+  }
+  if (pathname.startsWith("/api/")) {
+    return "api";
+  }
+  return "web";
+}
+
 /** 上游进程标识；`agent` 是默认兜底（不命中任何专用前缀的都回 kagami-agent）。 */
 export type UpstreamKey = "metric" | "llm" | "console" | "oss" | "scheduler" | "gba" | "agent";
 

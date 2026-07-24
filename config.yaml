@@ -9,7 +9,8 @@
 services:
   agent: { host: localhost, port: 20003 } # kagami-agent
   console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
-  gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：静态托管 + /api 反向代理）
+  gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：纯反向代理，/api 分流后端 + 其余转 web；#578）
+  web: { host: 127.0.0.1, port: 20016 } # kagami-web（管理台前端，自持静态托管，仅 localhost：只经 gateway 反代；#578。20015 gba 已占）
   oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
   browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
   llm: # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）

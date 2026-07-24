@@ -214,6 +214,8 @@ const ServicesSchema = z
     agent: ServiceEndpointSchema,
     console: ServiceEndpointSchema,
     gateway: ServiceEndpointSchema,
+    // web 是管理台前端的独立进程（#578）：自持静态托管，只由 gateway 反代，不对外。
+    web: ServiceEndpointSchema,
     oss: ServiceEndpointSchema,
     browser: ServiceEndpointSchema,
     // llm 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 3）：llm_chat_call /
