@@ -27,6 +27,9 @@ const MIME_TYPES: Record<string, string> = {
 // 命中即可长缓存——文件内容变了文件名一定变，故 immutable 不会发陈旧资源。
 const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 
+/** 「任意媒体类型均可」的 Accept 通配串。单列成常量，免得写进块注释里把注释提前闭合。 */
+const WILDCARD_MEDIA_RANGE = "*/*";
+
 /**
  * 请求路径 → 静态根下的绝对路径。`/` 映射到 index.html。
  *
@@ -39,7 +42,9 @@ export function resolveAssetPath(pathname: string, staticDir: string, indexPath:
   const relativePath = decodedPath === "/" ? "/index.html" : decodedPath;
   const resolvedPath = path.resolve(staticDir, `.${relativePath}`);
 
-  if (!resolvedPath.startsWith(staticDir)) {
+  // 以分隔符收口，而非裸前缀比较：否则静态根的兄弟目录（`dist/client-old` 之于 `dist/client`）
+  // 会被误判成「在根内」。当前布局下不可利用，但这层是安全边界，按最严的写法收。
+  if (!resolvedPath.startsWith(`${staticDir}${path.sep}`)) {
     return indexPath;
   }
 
@@ -50,9 +55,15 @@ export function resolveAssetPath(pathname: string, staticDir: string, indexPath:
  * 目标文件不存在时的回退决策（存在性由调用方探测后才轮到这里）：
  * 返回 index.html = 交给前端路由（SPA 深链刷新），返回 null = 该回 404。
  *
- * 三条规则按序：带扩展名的必是资源请求，缺了就是真 404，不能拿 index.html 冒充；
- * 显式表明不收 HTML 的（如 fetch 的 `Accept: application/json`）同样不该拿到 index.html；
- * 其余（含无 Accept 头）视为浏览器导航，回 index.html 让前端路由接管。
+ * 两条规则按序：
+ * 1. 带扩展名的必是资源请求，缺了就是真 404——拿 index.html 冒充会让浏览器把 HTML 当脚本执行；
+ * 2. 其余按「客户端是否接受 HTML」判定：显式限定了非 HTML 类型的（如 `Accept: application/json`）
+ *    回 404，其余回 index.html 让前端路由接管。
+ *
+ * 关于通配 Accept 与缺失 Accept（#578 review 修正）：二者都表示「什么类型都收」，按 RFC 7231
+ * 都应拿到 index.html。这不只是语义正确，更是经 gateway 反代后的必需——undici fetch 会给缺失
+ * 的头自动补上通配 Accept，网关无法把「客户端原本没发 Accept」这个信息透传给上游。若把通配判为
+ * 不收 HTML，无 Accept 头的深链就会从 200 静默退化成 404。
  */
 export function selectMissingAssetFallback(
   targetPath: string,
@@ -63,11 +74,16 @@ export function selectMissingAssetFallback(
     return null;
   }
 
-  if (typeof acceptHeader === "string" && !acceptHeader.includes("text/html")) {
+  if (typeof acceptHeader === "string" && !acceptsHtml(acceptHeader)) {
     return null;
   }
 
   return indexPath;
+}
+
+/** Accept 是否接受 HTML：显式 text/html，或"什么类型都收"的通配。 */
+function acceptsHtml(acceptHeader: string): boolean {
+  return acceptHeader.includes("text/html") || acceptHeader.includes(WILDCARD_MEDIA_RANGE);
 }
 
 /**

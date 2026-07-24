@@ -217,7 +217,7 @@ Key routing rules:
 - Deploy status command: pm2 status / pm2 list
 - Merge method: PR merge（主分支 master）
 - Project type: 后端 Agent 服务 + React 管理台（monorepo）
-- Post-deploy health check: curl http://localhost:20003/health（web: http://localhost:20004/health）
+- Post-deploy health check: curl http://localhost:20003/health（agent）、http://localhost:20004/health（gateway 前门自答）、http://127.0.0.1:20016/health（kagami-web 自身）。**三个都要探**：gateway 的 /health 由它自答，`kagami-web` 挂掉时它照样返回 200，只探网关会得到假绿（前端已全 502 却判部署成功）。要一条命令覆盖整链，改探 gateway 根路径 `curl -sf -H 'Accept: text/html' http://localhost:20004/` —— 它会穿到 web。
 
 ### Custom deploy hooks
 

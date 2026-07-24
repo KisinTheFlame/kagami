@@ -40,6 +40,12 @@ describe("resolveAssetPath", () => {
       path.join(STATIC_DIR, "favicon.ico"),
     );
   });
+
+  it("静态根的兄弟目录不被裸前缀误判为根内", () => {
+    // 守卫以分隔符收口（#578 review）：`/../client-old/x` 归一化后是 dist/client-old/x，
+    // 它以 "dist/client" 打头但并不在 dist/client 之内，必须收敛回 index。
+    expect(resolveAssetPath("/../client-old/secret.txt", STATIC_DIR, INDEX_PATH)).toBe(INDEX_PATH);
+  });
 });
 
 describe("selectMissingAssetFallback", () => {
@@ -57,6 +63,22 @@ describe("selectMissingAssetFallback", () => {
     expect(selectMissingAssetFallback(path.join(STATIC_DIR, "todos"), undefined, INDEX_PATH)).toBe(
       INDEX_PATH,
     );
+  });
+
+  it("通配 Accept 同样回 index.html —— 经 gateway 反代后这是无 Accept 的真实形态", () => {
+    // 回归锁（#578 review）：undici fetch 会给缺失的头自动补通配 Accept，网关无法透传
+    // 「客户端原本没发 Accept」。若把通配判为不收 HTML，无 Accept 的深链会静默退化成 404。
+    expect(selectMissingAssetFallback(path.join(STATIC_DIR, "todos"), "*/*", INDEX_PATH)).toBe(
+      INDEX_PATH,
+    );
+    // undici 实际补的是这一整串，一并锁住。
+    expect(
+      selectMissingAssetFallback(
+        path.join(STATIC_DIR, "todos"),
+        "*/*, application/signed-exchange",
+        INDEX_PATH,
+      ),
+    ).toBe(INDEX_PATH);
   });
 
   it("无扩展名但明确不收 HTML → 404，不拿 index.html 冒充", () => {

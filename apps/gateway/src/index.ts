@@ -60,7 +60,7 @@ const server = createServer(async (req, res) => {
         // 剥掉 `/api` 前缀后按路径前缀选后端；契约 path 自带各自前缀，故上游看到的路径不含 /api。
         const upstreamPath = requestUrl.pathname.slice(4) || "/";
         const target = UPSTREAM_TARGETS[selectUpstreamKey(upstreamPath)];
-        await proxyRequest(req, res, new URL(`${upstreamPath}${requestUrl.search}`, target));
+        await proxyRequest(req, res, buildUpstreamUrl(target, upstreamPath, requestUrl.search));
         return;
       }
       case "web": {
@@ -68,7 +68,7 @@ const server = createServer(async (req, res) => {
         await proxyRequest(
           req,
           res,
-          new URL(`${requestUrl.pathname}${requestUrl.search}`, config.webTarget),
+          buildUpstreamUrl(config.webTarget, requestUrl.pathname, requestUrl.search),
         );
         return;
       }
@@ -124,6 +124,20 @@ process.on("unhandledRejection", reason => {
   );
   process.exit(1);
 });
+
+/**
+ * 拼上游 URL：克隆上游基址后赋 pathname / search，**绝不用 `new URL(相对路径, base)`**。
+ *
+ * 相对拼接会把 `//evil.example/x` 当协议相对 URL 解析，直接把 origin 换成外部主机——网关就成了
+ * 任意外部地址的 SSRF 跳板（`GET /api//evil.example/x` 即可触发）。赋 pathname 则 origin 不可
+ * 被劫持，畸形路径最多变成上游的一个怪路径（由上游自己 404），出不去内网。
+ */
+function buildUpstreamUrl(target: URL, pathname: string, search: string): URL {
+  const upstreamUrl = new URL(target);
+  upstreamUrl.pathname = pathname;
+  upstreamUrl.search = search;
+  return upstreamUrl;
+}
 
 /**
  * 把一条请求整体转发到指定上游并回灌响应。上游是谁由调用方决定（`/api` 分流的后端，或
