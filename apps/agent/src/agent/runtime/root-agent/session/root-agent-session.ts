@@ -33,10 +33,6 @@ const logger = new AppLogger({ source: "agent.root-session" });
  * 转发。
  */
 
-export type RootAgentPostToolEffects = {
-  messages: LlmMessage[];
-};
-
 export type RootAgentSessionController = {
   getCurrentApp(): AppId | undefined;
   setCurrentApp(appId: AppId): void;
@@ -61,7 +57,6 @@ export type RootAgentSessionController = {
   initializeContext(): Promise<void>;
   consumeIncomingEvent(event: Event): Promise<{ shouldTriggerRound: boolean }>;
   flushPendingIncomingEffects(): Promise<{ shouldTriggerRound: boolean }>;
-  flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects>;
   /**
    * reset 前的失焦广播：调当前 App 的 onBlur（其退化副作用如 center 补推独立于上下文
    * 存活），丢弃返回的 effects——上下文即将整体重建，无处 append。catch 一切错误只记
@@ -82,7 +77,6 @@ export class RootAgentSession implements RootAgentSessionController {
   private readonly context: AgentContext;
   private readonly appManager: AppManager | null;
   private readonly pendingIncomingMessages: LlmMessage[] = [];
-  private readonly pendingPostToolMessages: LlmMessage[] = [];
   private initialized = false;
   /**
    * 当前所在 App id。仅内存持有；不进 snapshot。undefined = Portal（桌面），只在初始
@@ -144,7 +138,6 @@ export class RootAgentSession implements RootAgentSessionController {
 
   public reset(): void {
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
-    this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = false;
     this.currentApp = undefined;
     this.suspended = false;
@@ -158,7 +151,6 @@ export class RootAgentSession implements RootAgentSessionController {
    */
   public markRestored(): void {
     this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
-    this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length);
     this.initialized = true;
     this.currentApp = undefined;
     this.suspended = false;
@@ -275,12 +267,5 @@ export class RootAgentSession implements RootAgentSessionController {
       this.pendingIncomingMessages.splice(0, this.pendingIncomingMessages.length);
     }
     return { shouldTriggerRound };
-  }
-
-  public async flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects> {
-    await this.initializeContext();
-    return {
-      messages: this.pendingPostToolMessages.splice(0, this.pendingPostToolMessages.length),
-    };
   }
 }

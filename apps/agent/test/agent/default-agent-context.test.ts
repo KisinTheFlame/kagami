@@ -89,21 +89,6 @@ describe("DefaultAgentContext", () => {
     });
   });
 
-  it("renders no snapshot messages for events (events don't flow into context)", async () => {
-    const context = new DefaultAgentContext({
-      systemPromptFactory: () => "system-prompt",
-    });
-
-    // 手机 OS 模型下没有任何事件类型渲染成上下文消息：notification 由 session 直接装配
-    // 追加，QQ 消息归 QQ App。appendEvents 因此对 snapshot 是 no-op。
-    await context.appendEvents([{ type: "notification", data: { lines: ["QQ: 产品群: 你好"] } }]);
-
-    await expect(context.getSnapshot()).resolves.toEqual({
-      systemPrompt: "system-prompt",
-      messages: [],
-    });
-  });
-
   it("should reset to the original system prompt source and clear messages", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "latest-system-prompt",
@@ -183,18 +168,17 @@ describe("DefaultAgentContext", () => {
     });
   });
 
-  it("should align the leading count across zero-message event items", async () => {
+  it("replaces the leading count of messages (item 与 message 1:1 对齐)", async () => {
     const context = new DefaultAgentContext({
       systemPromptFactory: () => "system-prompt",
     });
 
-    // 事件渲染成 0 条 message——它夹在两条真实 message 之间，count 的 item 边界要跨过它。
-    await context.appendMessages([{ role: "user", content: "old" }]);
-    await context.appendEvents([{ type: "notification", data: { lines: ["x"] } }]);
-    await context.appendMessages([{ role: "user", content: "keep-me" }]);
+    await context.appendMessages([
+      { role: "user", content: "old" },
+      { role: "user", content: "keep-me" },
+    ]);
 
-    // 展平后 message = [old, keep-me]，count=1 替换 old；中间的 0-message 事件并入
-    // 已替换前缀，keep-me 保留。
+    // count=1 替换最前一条 old，keep-me 保留。
     await context.replaceLeadingMessages(1, [createConversationSummaryMessage("摘要")]);
 
     await expect(context.getSnapshot()).resolves.toEqual({
