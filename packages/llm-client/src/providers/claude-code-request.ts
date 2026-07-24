@@ -27,7 +27,11 @@ export function toClaudeCodeRequestBody(
   const model = requireRequestModel(request);
   const toolsEnabled = request.tools.length > 0 && request.toolChoice !== "none";
   const toolChoice = toClaudeToolChoice(request.toolChoice);
-  const thinkingEnabled = request.thinking !== undefined;
+  // Anthropic 约束：thinking 与强制工具调用（tool_choice: any/tool）不兼容，只允许 auto/none。
+  // 强制单工具是 vision/一次性抽取类场景，语义上也不需要 thinking——静默回落 disabled。
+  const forcedToolChoice =
+    request.toolChoice === "required" || typeof request.toolChoice === "object";
+  const thinkingEnabled = request.thinking !== undefined && !forcedToolChoice;
 
   return {
     model,

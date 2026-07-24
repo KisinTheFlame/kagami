@@ -96,6 +96,38 @@ describe("claude-code adaptive thinking request", () => {
     expect(body.output_config).toEqual({ effort: "low" });
   });
 
+  it("should fall back to disabled when tool_choice forces tool use (Anthropic 不兼容约束)", async () => {
+    stubTextSse();
+    await createProvider().chat(
+      createChatRequest({
+        thinking: "low",
+        tools: [{ name: "add", parameters: { type: "object", properties: {} } }],
+        toolChoice: { tool_name: "add" },
+        messages: [
+          { role: "user", content: "question" },
+          {
+            role: "assistant",
+            content: "draft",
+            toolCalls: [],
+            thinkingBlocks: [{ type: "thinking", thinking: "推理", signature: "sig-1" }],
+          },
+          { role: "user", content: "next" },
+        ],
+      }),
+    );
+
+    const body = lastRequestBody();
+    expect(body.thinking).toEqual({ type: "disabled" });
+    expect(body).not.toHaveProperty("output_config");
+    // thinking 未生效 → 回放剥离规则同样适用
+    const messages = body.messages as Array<{
+      role: string;
+      content: Array<Record<string, unknown>>;
+    }>;
+    const assistant = messages.find(message => message.role === "assistant");
+    expect(assistant?.content.map(block => block.type)).toEqual(["text"]);
+  });
+
   it("should keep thinking disabled and omit output_config when request.thinking is absent", async () => {
     stubTextSse();
     await createProvider().chat(createChatRequest());
