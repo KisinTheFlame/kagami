@@ -99,7 +99,7 @@ export function createConfigManager(): ConfigManager {
       oss: { host: "127.0.0.1", port: 20005 },
       browser: { host: "127.0.0.1", port: 20007 },
       llm: { host: "127.0.0.1", port: 20009, databaseUrl: ":memory:" },
-      metric: { host: "127.0.0.1", port: 20010 },
+      metric: { host: "127.0.0.1", port: 20010, databaseUrl: ":memory:" },
       spire: { host: "127.0.0.1", port: 20011 },
       napcat: { host: "127.0.0.1", port: 20013, databaseUrl: ":memory:" },
       pixel: { host: "127.0.0.1", port: 20012 },

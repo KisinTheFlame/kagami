@@ -1,3 +1,4 @@
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import { htmlToPlainText } from "./client/sanitize.js";
 import type { HnFeed, HnFirebaseClient, HnFirebaseItem } from "./client/firebase.js";
 import type {
@@ -358,11 +359,13 @@ function extractDomain(url: string | null | undefined): string | null {
   }
 }
 
+/**
+ * 按码点安全截断评论/正文，绝不从 UTF-16 代理对（emoji）中间切开。裸 `.slice()` 会劈开
+ * 代理对、往上下文写半个字符，触发 Anthropic「no low surrogate」400 把整条会话打挂（见事故
+ * 簿「半个 emoji」）——一律走 kernel 的码点安全正典，它同时剥除输入里已有的落单代理项。
+ */
 function truncate(value: string, maxChars: number): string {
-  if (value.length <= maxChars) {
-    return value;
-  }
-  return `${value.slice(0, maxChars).trimEnd()}……`;
+  return truncateWithEllipsis(value, maxChars, "……");
 }
 
 /** 简单并发池：最多 concurrency 个在飞，保持输入顺序返回结果。 */

@@ -77,7 +77,7 @@ export class TerminateHandler implements EffectHandler<TaskAgentControl> {
 
 /**
  * TaskAgent 用的标准 EffectInterpreter。只装一个 `TerminateHandler`——TaskAgent
- * 不像 RootAgent 有切状态 / append message 这些副作用语义，遇到非 terminate 的
+ * 不像循环型主 Agent 有切状态 / append message 这些副作用语义，遇到非 terminate 的
  * Effect 由 HandlerEffectInterpreter 抛错。
  */
 export class TaskEffectInterpreter

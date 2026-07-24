@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import type { AmapClient, StaticMapMarker, StaticMapPath } from "../client/amap-client.js";
-import { escapeAttr } from "../amap-screen.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
 
@@ -140,10 +140,12 @@ export class StaticMapTool extends ZodToolComponent<typeof Schema> {
       paths: input.paths as StaticMapPath[] | undefined,
     });
     const resid = await this.tryPutToOss(image.bytes, image.mimeType);
-    const residAttr = resid ? ` resid="${escapeAttr(resid)}"` : "";
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<amap_static_map${residAttr} />`,
+      // 进上下文的伪标签文案走 static 模板（AGENTS.md 红线），TS 只算 view-model。
+      content: renderServerStaticTemplate(import.meta.url, "context/amap-static-map.hbs", {
+        resid,
+      }).trim(),
       images: [
         {
           content: image.bytes.toString("base64"),

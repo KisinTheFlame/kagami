@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ZodToolComponent, type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { serializePixelError } from "../domain/errors.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
 import type { OssClient } from "../../../../acl/oss-client.js";
@@ -46,10 +47,12 @@ export class PixelRenderTool extends ZodToolComponent<typeof Schema> {
   protected async executeTyped(): Promise<ToolExecutionResult> {
     const png = await this.getPixelClient().render();
     const resid = await this.tryPutToOss(png);
-    const residAttr = resid ? ` resid="${resid}"` : "";
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<pixel_render${residAttr} />`,
+      // 进上下文的伪标签文案走 static 模板（AGENTS.md 红线），TS 只算 view-model。
+      content: renderServerStaticTemplate(import.meta.url, "context/pixel-render.hbs", {
+        resid,
+      }).trim(),
       images: [
         {
           content: png.toString("base64"),

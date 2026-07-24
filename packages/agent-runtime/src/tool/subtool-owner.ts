@@ -55,8 +55,8 @@ export interface InvokeSubtoolOwner {
  *
  * - ok=true：可以执行
  * - ok=false：拒绝。error 是错误代码（"INVOKE_TOOL_APP_GUARD" / "INVOKE_TOOL_NOT_AVAILABLE"
- *   等），message 是给 Kagami 看的可操作提示，extras 是所有者想附加的诊断字段
- *   （比如状态树会附 state、availableTools 给 Kagami 看可替代选项）
+ *   等），message 是给 Agent 看的可操作提示，extras 是所有者想附加的诊断字段
+ *   （比如状态树会附 state、availableTools 给 Agent 看可替代选项）
  */
 export type SubtoolGuardResult =
   | { ok: true }

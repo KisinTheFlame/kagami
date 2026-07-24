@@ -40,15 +40,12 @@ import {
 } from "./persistence/root-agent-runtime-snapshot.repository.js";
 import type { PersistedRootAgentRuntimeSnapshot } from "./persistence/root-agent-runtime-snapshot.js";
 import { recordToolCallMetric } from "../tool-call-metric.js";
-import type {
-  RootAgentPostToolEffects,
-  RootAgentSessionController,
-} from "./session/root-agent-session.js";
+import type { RootAgentSessionController } from "./session/root-agent-session.js";
 import { WAIT_TOOL_NAME } from "./tools/wait.tool.js";
 import { ContextCompactionExtension } from "./extensions/context-compaction.extension.js";
 import type { RootAgentExtensionHost } from "./extensions/extension-host.js";
 import { createRootEffectInterpreter } from "../effect/root-effect-interpreter.js";
-import { RootPostToolEffectsExtension } from "./extensions/post-tool-effects.extension.js";
+import { RootToolCallMetricExtension } from "./extensions/tool-call-metric.extension.js";
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
@@ -110,12 +107,10 @@ type PendingToolPersistence = {
    * 内容只会在回合内可见、不进 ledger，下一轮 Agent 就看不到了。
    */
   effectMessages: LlmMessage[];
-  postToolEffects: RootAgentPostToolEffects;
 };
 
-export type RootAgentToolExecutionData = {
-  postToolEffects: RootAgentPostToolEffects;
-};
+/** 本 Agent 的各扩展当前不通过 extensionData 透传任何 per-tool 结构化数据。 */
+export type RootAgentToolExecutionData = Record<string, never>;
 
 export type RootAgentCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
@@ -291,10 +286,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
     };
   }
 
-  public async flushPendingPostToolEffects(): Promise<RootAgentPostToolEffects> {
-    return await this.session.flushPendingPostToolEffects();
-  }
-
   public async commitRoundResult(
     result: ReActCommittedRoundResult<RootAgentCompletion, RootAgentToolExecutionData>,
     tools: ToolExecutor,
@@ -325,10 +316,6 @@ export class RootAgentHost implements RootAgentExtensionHost {
           }
         : {}),
       effectMessages: execution.effectMessages,
-      postToolEffects: execution.extensionData?.postToolEffects ?? {
-        messages: [],
-        events: [],
-      },
     }));
 
     await this.mutationExecutor.submit(async () => {
@@ -398,14 +385,10 @@ export class RootAgentHost implements RootAgentExtensionHost {
         await this.context.appendToolResult(toolPersistence.toolResult);
       }
 
-      // tool 结果之后、postToolEffects 之前追加 effect 产出的"屏幕"消息，
-      // 与 kernel 回合内顺序（toolMessages → interpretedMessages → extraMessages）一致。
+      // tool 结果之后追加 effect 产出的"屏幕"消息（App 列表 / 文章正文等），与 kernel
+      // 回合内顺序（toolMessages → interpretedMessages → extraMessages）一致。
       if (toolPersistence.effectMessages.length > 0) {
         await this.context.appendMessages(toolPersistence.effectMessages);
-      }
-
-      if (toolPersistence.postToolEffects.messages.length > 0) {
-        await this.context.appendMessages(toolPersistence.postToolEffects.messages);
       }
     }
   }
@@ -681,7 +664,7 @@ export class RootLoopAgent extends BaseLoopAgent<
           },
         }),
         new RootToolFallbackExtension(),
-        new RootPostToolEffectsExtension({
+        new RootToolCallMetricExtension({
           host,
         }),
       ],
