@@ -146,6 +146,9 @@ const LlmUsageAttemptConfigSchema = z.object({
 });
 const LlmUsageConfigSchema = z.object({
   attempts: z.array(LlmUsageAttemptConfigSchema).min(1),
+  // adaptive thinking 的 effort 档位（issue #573）。缺省 = disabled。usage 是 KV 缓存
+  // 身份，thinking 影响 prompt cache lineage，故收口在 usage 级而非按调用点分叉。
+  thinking: z.enum(["low", "medium", "high"]).optional(),
 });
 const NapcatConfigSchema = z.preprocess(
   value => {
@@ -462,6 +465,7 @@ type LlmUsageAttemptConfig = {
 
 type LlmUsageConfig = {
   attempts: LlmUsageAttemptConfig[];
+  thinking?: "low" | "medium" | "high";
 };
 
 type RawConfig = z.infer<typeof ConfigSchema>;
@@ -588,6 +592,7 @@ function normalizeUsageConfig(
 ): LlmUsageConfig {
   return {
     attempts: value.attempts.map(attempt => normalizeUsageAttempt(attempt)),
+    ...(value.thinking ? { thinking: value.thinking } : {}),
   };
 }
 

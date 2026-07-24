@@ -152,6 +152,10 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
       const requestId = randomUUID();
       const recordCall = chatOptions?.recordCall ?? true;
       const usageConfig = requireUsageConfig(options.usages, usage);
+      // thinking 是 usage 级配置（KV 缓存身份的一部分），在这里注入请求；调用方不直接传。
+      const requestForUsage: LlmChatRequest = usageConfig.thinking
+        ? { ...request, thinking: usageConfig.thinking }
+        : request;
 
       let lastError: unknown;
       let seq = 0;
@@ -161,7 +165,7 @@ export function createLlmClient(options: CreateLlmClientOptions): LlmClient {
             const result = await executeChatAttempt({
               providers: options.providers,
               providerConfigs: options.providerConfigs,
-              request,
+              request: requestForUsage,
               attempt,
               usage,
               scene,
@@ -457,6 +461,7 @@ function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknow
           role: "assistant",
           content: message.content,
           toolCalls: message.toolCalls,
+          ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
         };
       }
 
@@ -468,6 +473,7 @@ function toRecordableChatRequest(request: LlmChatRequest): Record<string, unknow
     }),
     tools: request.tools,
     toolChoice: request.toolChoice,
+    ...(request.thinking ? { thinking: request.thinking } : {}),
   };
 
   return payload;

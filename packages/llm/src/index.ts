@@ -76,9 +76,34 @@ export function imageContentToBase64(content: unknown): string {
   return "";
 }
 
+/**
+ * adaptive thinking 的 effort 档位（issue #573）。作为 usage 级配置值直通 Anthropic
+ * 请求的 `output_config.effort`；缺省（undefined）= thinking disabled。
+ */
+export type LlmThinkingEffort = "low" | "medium" | "high";
+
+/**
+ * assistant 消息携带的 thinking 块（issue #573）。**不透明存储、原样回放**：
+ * `signature` 是 Anthropic 的签名（改一字节则续轮回放 400），`redacted_thinking`
+ * 的 `data` 是加密载荷。除 claude-code provider 外一律忽略此字段。
+ */
+export type LlmThinkingBlock =
+  | { type: "thinking"; thinking: string; signature: string }
+  | { type: "redacted_thinking"; data: string };
+
 export type LlmMessage =
   | { role: "user"; content: string | LlmContentPart[] }
-  | { role: "assistant"; content: string; toolCalls: LlmToolCall[] }
+  | {
+      role: "assistant";
+      content: string;
+      toolCalls: LlmToolCall[];
+      /**
+       * thinking 开启期间产出的 thinking 块，随消息进上下文全保留（Step 0 实测：
+       * thinking 块参与 prompt cache hash，全量原样回放是唯一保住缓存连续性的策略；
+       * 发送侧裁剪会在被裁块处断链）。thinking 未开启的请求由 provider 渲染层剥除。
+       */
+      thinkingBlocks?: LlmThinkingBlock[];
+    }
   | { role: "tool"; toolCallId: string; content: string };
 
 /** 工具参数的 JSON Schema（仅支持 object 顶层）。 */
