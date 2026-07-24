@@ -22,7 +22,7 @@ export interface Effect {
  * kernel：
  *
  * - `appendedMessages`：要追加到本轮 commit 的消息列表，走 kernel 的原子提交。
- * - `control`（可选）：控制流信号。默认 `never`——RootAgent 这种没有 "循环退出"
+ * - `control`（可选）：控制流信号。默认 `never`——循环型主 Agent 这种没有 "循环退出"
  *   语义的 Agent 用不到。TaskAgent 把 `TControl` specialize 成
  *   `{ kind: "stop"; content: string }`，让外层 `BaseTaskAgent.invoke` 看到
  *   `control.kind === "stop"` 就退出循环。
@@ -65,7 +65,7 @@ export class NoopEffectInterpreter implements EffectInterpreter<never> {
 // Interpreter 的标准实现方式：把"如何处理某一类 Effect"拆成一个个 EffectHandler，
 // 用 HandlerEffectInterpreter 把它们组合起来。复用粒度是 handler——不同 Agent
 // 装不同的 handler 子集：
-//   - RootAgent：ReplaceLeadingMessagesHandler（公共）+ 自己的 switch_app /
+//   - 循环型主 Agent：ReplaceLeadingMessagesHandler（公共）+ 自己的 switch_app /
 //     switch_state / wait_for_event / append_message handler
 //   - 只做上下文压缩的 Agent：只装 ReplaceLeadingMessagesHandler（公共）
 // 公共 Effect + 公共 handler 收在 agent-runtime；Agent 专属 Effect + 专属 handler
@@ -145,7 +145,7 @@ export const REPLACE_LEADING_MESSAGES_EFFECT_TYPE = "replace_leading_messages";
  * 为什么是"前缀替换"而非"整列重建"：compact 的本质就是"把最旧的一段压成摘要、
  * 保留最近一段"——旧的永远在前缀。`count` = 被摘要的前缀长度，`replacement` =
  * `[summaryMessage]`。保留段不用显式携带（它就是 count 之后的部分），所以产 Effect
- * 的一方（如 RootAgentHost.attemptSummarize）不需要知道"保留哪些"，职责更纯。全量压缩 =
+ * 的一方（如做上下文压缩的宿主）不需要知道"保留哪些"，职责更纯。全量压缩 =
  * count 取全部 message 数。
  */
 export interface ReplaceLeadingMessagesEffect extends Effect {

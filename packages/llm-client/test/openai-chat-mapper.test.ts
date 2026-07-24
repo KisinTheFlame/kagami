@@ -4,6 +4,7 @@ import {
   toLlmChatResponsePayload,
   toOpenAiChatRequest,
 } from "../src/mappers/openai-chat-mapper.js";
+import { isRetryableLlmFailure } from "../src/retryable-error.js";
 import { z } from "zod";
 
 describe("toOpenAiChatRequest", () => {
@@ -173,6 +174,71 @@ describe("toLlmChatResponsePayload", () => {
         cacheMissTokens: 8,
       },
     });
+  });
+
+  function completionWithToolArgs(argumentsJson: string): ChatCompletion {
+    return {
+      id: "chatcmpl-x",
+      object: "chat.completion",
+      created: 1710000002,
+      model: "gpt-test",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "tool_calls",
+          logprobs: null,
+          message: {
+            role: "assistant",
+            content: "",
+            refusal: null,
+            annotations: [],
+            audio: null,
+            tool_calls: [
+              {
+                id: "call-x",
+                type: "function",
+                function: { name: "do_thing", arguments: argumentsJson },
+              },
+            ],
+          },
+        },
+      ],
+    } as ChatCompletion;
+  }
+
+  it("throws a retryable INVALID_TOOL_ARGUMENTS on malformed tool-call JSON", () => {
+    let caught: unknown;
+    try {
+      toLlmChatResponsePayload(completionWithToolArgs("{not json"), "openai");
+    } catch (error) {
+      caught = error;
+    }
+    expect(isRetryableLlmFailure(caught)).toBe(true);
+    expect((caught as { meta?: { reason?: string } }).meta?.reason).toBe("INVALID_TOOL_ARGUMENTS");
+  });
+
+  it("throws INVALID_TOOL_ARGUMENTS when tool-call args are valid JSON but not an object", () => {
+    // 数组 / 标量都是合法 JSON 但不是工具参数对象——`as Record` 曾让它们蒙混进下游。
+    expect(() => toLlmChatResponsePayload(completionWithToolArgs("[1,2,3]"), "openai")).toThrow();
+    expect(() => toLlmChatResponsePayload(completionWithToolArgs("42"), "openai")).toThrow();
+  });
+
+  it("throws a retryable EMPTY_CHOICES when the completion has no choices", () => {
+    const empty = {
+      id: "chatcmpl-empty",
+      object: "chat.completion",
+      created: 1710000003,
+      model: "gpt-test",
+      choices: [],
+    } as unknown as ChatCompletion;
+    let caught: unknown;
+    try {
+      toLlmChatResponsePayload(empty, "openai");
+    } catch (error) {
+      caught = error;
+    }
+    expect(isRetryableLlmFailure(caught)).toBe(true);
+    expect((caught as { meta?: { reason?: string } }).meta?.reason).toBe("EMPTY_CHOICES");
   });
 });
 

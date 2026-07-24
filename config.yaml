@@ -16,7 +16,10 @@ services:
     host: 127.0.0.1
     port: 20009
     databaseUrl: file:./data/llm/llm.db # llm 独占 SQLite 库（llm_chat_call / embedding_cache / claude_file_cache / oauth_*，#539）
-  metric: { host: 127.0.0.1, port: 20010 } # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
+  metric: # kagami-metric（仅 localhost：metric 摄取 + metric-chart 查询；20008 TEI embedding / 20009 kagami-llm 已占）
+    host: 127.0.0.1
+    port: 20010
+    databaseUrl: file:./data/metric/metric.duckdb # metric 独占 DuckDB 单文件（列式，为 p95/分析聚合而生，#475）；与旧反推路径同址，无需迁移
   spire: { host: 127.0.0.1, port: 20011 } # kagami-spire（杀塔式卡牌游戏引擎，仅 localhost：agent 经 HttpSpireClient 驱动）
   napcat: # kagami-napcat（NapCat 接入独立进程，仅 localhost：agent 经 HttpNapcatClient 出站 + SSE 订阅入站；#347。20012 留给像素画 #365）
     host: 127.0.0.1
