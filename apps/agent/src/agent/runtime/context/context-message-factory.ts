@@ -1,5 +1,4 @@
 import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
-import type { Event } from "../event/event.js";
 import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { BEIJING_TIME_ZONE } from "@kagami/kernel/utils/time";
@@ -174,11 +173,4 @@ export function createInnerVoiceInstructionMessage(): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/inner-voice-instruction.hbs"),
   );
-}
-
-export function createMessagesFromEvent(_event: Event): UserMessage[] {
-  // 目前没有任何事件类型需要渲染成上下文消息：notification 由 session 直接装配成
-  // <notification> 消息追加（不是 event 类 ContextItem），wake 是纯唤醒。保留此入口是为
-  // event→ContextItem 渲染路径留口子——未来若有需要直接进上下文的新事件类型，在这里加分支即可。
-  return [];
 }

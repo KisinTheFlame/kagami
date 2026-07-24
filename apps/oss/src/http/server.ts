@@ -11,8 +11,9 @@ import { getOssObjectContent, ossApiContract, ossConsoleContract } from "@kagami
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp, type ServiceErrorHandler } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
-import { formatObjectKey, PayloadTooLargeError } from "../store/object-store.js";
+import { PayloadTooLargeError } from "../store/object-store.js";
 import type { ObjectStore } from "../store/object-store.js";
+import { formatObjectKey } from "../store/object-store-logic.js";
 
 const logger = new AppLogger({ source: "oss-http" });
 
@@ -20,7 +21,7 @@ const logger = new AppLogger({ source: "oss-http" });
  * OSS 的 Fastify 应用。路由全量走 @kagami/oss-api 契约（issue #230）：putObject 是二进制信封路由
  * （上行原始字节流透传、下行 `{ key }` 信封两端共享 schema），get/head/delete 是 raw 路由——
  * `reply.hijack()` 后在裸 ServerResponse 上原样保留迁移前的流式管道 / fd 生命周期 / 安全头逻辑
- * （下方三个 handle* 函数从裸 node:http 实现逐行搬运，行为由 test/server.test.ts 的传输层基线钉死）。
+ * （下方三个 handle* 函数从裸 node:http 实现逐行搬运，原样保留迁移前的传输层行为）。
  */
 export function buildOssApp(store: ObjectStore, maxBodyBytes: number): FastifyInstance {
   const errorHandler: ServiceErrorHandler = (error, _request, reply) => {

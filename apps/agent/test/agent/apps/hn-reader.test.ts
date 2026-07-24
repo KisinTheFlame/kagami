@@ -184,6 +184,29 @@ describe("HnReader.openThread", () => {
     expect(result?.comments.length).toBe(1);
   });
 
+  it("truncates comment bodies on code-point boundaries (never splits an emoji)", async () => {
+    // 😀 是一个 UTF-16 代理对；perCommentMaxChars=3 让截断点正好落在它中间。
+    // 裸 `.slice(0, 3)` 会留下半个高代理项（\uD83D），往上下文写半个 emoji → Anthropic 400。
+    const tree = node({
+      id: 200,
+      type: "story",
+      title: "T",
+      children: [node({ id: 1, author: "a", text: "ab😀cd" })],
+    });
+    const service = new HnReader({
+      firebaseClient: new FakeFirebaseClient({}),
+      algoliaClient: new FakeAlgoliaClient({ tree }),
+      config: { ...CONFIG, perCommentMaxChars: 3 },
+    });
+    const result = await service.openThread({ id: 200 });
+    const text = result?.comments[0]?.text ?? "";
+    // 整个 emoji 要么全进要么不进，绝不劈成半个。
+    expect(text).toContain("😀");
+    // 无任何落单代理项。
+    const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(loneSurrogate.test(text)).toBe(false);
+  });
+
   it("returns null when the item tree is missing", async () => {
     const service = makeService(new FakeFirebaseClient({}), new FakeAlgoliaClient({ tree: null }));
     expect(await service.openThread({ id: 999 })).toBeNull();

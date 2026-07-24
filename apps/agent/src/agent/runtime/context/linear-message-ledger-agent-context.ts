@@ -5,11 +5,9 @@ import type {
   AgentContextSnapshot,
   AssistantMessage,
 } from "./agent-context.js";
-import type { Event } from "../event/event.js";
 import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
 import type { LinearMessageLedgerDao } from "../../capabilities/ledger/infra/linear-message-ledger.dao.js";
 import type { LinearMessageLedgerInsert } from "../../capabilities/ledger/domain/ledger.js";
-import { createContextItemFromEvent, renderContextItemToMessages } from "./context-item.utils.js";
 
 export class LinearMessageLedgerAgentContext implements AgentContext {
   private readonly inner: AgentContext;
@@ -58,13 +56,6 @@ export class LinearMessageLedgerAgentContext implements AgentContext {
     await this.inner.reset();
   }
 
-  public async appendEvents(events: Event[]): Promise<void> {
-    await this.inner.appendEvents(events);
-    await this.writeLedgerEntries(
-      events.flatMap(event => renderContextItemToMessages(createContextItemFromEvent(event))),
-    );
-  }
-
   public async appendMessages(messages: LlmMessage[]): Promise<void> {
     await this.inner.appendMessages(messages);
     await this.writeLedgerEntries(messages);
@@ -99,27 +90,13 @@ export class LinearMessageLedgerAgentContext implements AgentContext {
   private async writeLedgerEntries(
     messages: LinearMessageLedgerInsert["message"][],
   ): Promise<void> {
-    const entries = messages
-      .map(message =>
-        toLinearMessageLedgerInsert({
-          runtimeKey: this.runtimeKey,
-          message,
-        }),
-      )
-      .filter((entry): entry is LinearMessageLedgerInsert => Boolean(entry));
-    if (entries.length === 0) {
+    if (messages.length === 0) {
       return;
     }
+    const entries: LinearMessageLedgerInsert[] = messages.map(message => ({
+      runtimeKey: this.runtimeKey,
+      message,
+    }));
     await this.linearMessageLedgerDao.insertMany(entries);
   }
-}
-
-function toLinearMessageLedgerInsert(input: {
-  runtimeKey: string;
-  message: LinearMessageLedgerInsert["message"];
-}): LinearMessageLedgerInsert | null {
-  return {
-    runtimeKey: input.runtimeKey,
-    message: input.message,
-  };
 }

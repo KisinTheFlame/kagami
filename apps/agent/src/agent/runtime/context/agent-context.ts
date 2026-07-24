@@ -1,10 +1,9 @@
 import type { LlmMessage } from "@kagami/llm-client";
-import type { Event } from "../event/event.js";
 import type { PersistedAgentContextSnapshot } from "../root-agent/persistence/root-agent-runtime-snapshot.js";
 
 export type AssistantMessage = Extract<LlmMessage, { role: "assistant" }>;
 export type AgentContextDashboardItem = {
-  kind: "llm_message" | "event";
+  kind: "llm_message";
   label: string;
   preview: string;
   truncated: boolean;
@@ -14,15 +13,11 @@ export type AgentContextDashboardSummary = {
   recentItems: AgentContextDashboardItem[];
   recentItemsTruncated: boolean;
 };
-type ContextEventItem = {
-  kind: "event";
-  event: Event;
-};
 type ContextLlmMessageItem = {
   kind: "llm_message";
   message: LlmMessage;
 };
-export type ContextItem = ContextEventItem | ContextLlmMessageItem;
+export type ContextItem = ContextLlmMessageItem;
 
 export type AgentContextSnapshot = {
   systemPrompt: string;
@@ -38,25 +33,21 @@ export interface AgentContext {
   getRevision(): number;
   getSnapshot(): Promise<AgentContextSnapshot>;
   /**
-   * 只读窥视上下文尾部渲染出的最后一条 message；空上下文（或只有 0-message 的 event item）
-   * 返回 null。供起轮前的角色交替不变量检查用（尾部是 assistant 时须补一条 user 轮，
-   * 否则纯文本轮 + 空闲自唤醒会造成连续 assistant → provider 400）。O(1)，不克隆整表。
+   * 只读窥视上下文尾部的最后一条 message；空上下文返回 null。供起轮前的角色交替不变量
+   * 检查用（尾部是 assistant 时须补一条 user 轮，否则纯文本轮 + 空闲自唤醒会造成连续
+   * assistant → provider 400）。O(1)，不克隆整表。
    */
   getLastMessage(): Promise<LlmMessage | null>;
   fork(): Promise<AgentContext>;
   exportPersistedSnapshot(): Promise<PersistedAgentContextSnapshot>;
   restorePersistedSnapshot(snapshot: PersistedAgentContextSnapshot): Promise<void>;
   reset(): Promise<void>;
-  appendEvents(events: Event[]): Promise<void>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   appendAssistantTurn(message: AssistantMessage): Promise<void>;
   appendToolResult(input: { toolCallId: string; content: string }): Promise<void>;
   /**
-   * 把最前面的 `count` 条 message（按展平后的 message 计）替换成 `replacement`。
-   * 上下文压缩的"计划性重建"用——破坏 KV 缓存前缀，仅压缩路径应调用。
-   *
-   * `count` 必须落在内部 ContextItem 的边界上（一个 event item 可能渲染成 0 条
-   * message，所以 message 下标和 item 下标不一定对齐）。落不上会抛错。
+   * 把最前面的 `count` 条 message 替换成 `replacement`。上下文压缩的"计划性重建"用——
+   * 破坏 KV 缓存前缀，仅压缩路径应调用。`count` 超过总 message 数会抛错。
    */
   replaceLeadingMessages(count: number, replacement: LlmMessage[]): Promise<void>;
   getDashboardSummary(input?: {

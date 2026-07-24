@@ -3,7 +3,11 @@ import {
   type LlmChatCallStatus,
   type LlmChatCallSummary,
 } from "@kagami/console-api/llm-chat-call";
-import { type LlmRequestMessage, type LlmRequestUserContentPart } from "@kagami/llm-api/llm-chat";
+import {
+  type LlmRequestMessage,
+  type LlmRequestUserContentPart,
+  type LlmThinkingBlockPayload,
+} from "@kagami/llm-api/llm-chat";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getApiErrorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -242,6 +246,11 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
                     toolCalls: parsed.response.message.toolCalls,
                   })}
                 >
+                  {parsed.response.message.thinkingBlocks?.length ? (
+                    <div className="mb-2 flex items-center gap-2">
+                      <ThinkingBadge blocks={parsed.response.message.thinkingBlocks} />
+                    </div>
+                  ) : null}
                   <MessageContent
                     content={parsed.response.message.content}
                     emptyHint={
@@ -403,6 +412,7 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
     <ContentCard title={title} preview={preview}>
       <div className="mb-2 flex items-center gap-2">
         <Badge variant="secondary">{message.role}</Badge>
+        <ThinkingBadge blocks={message.role === "assistant" ? message.thinkingBlocks : undefined} />
       </div>
       <MessageContent
         content={renderMessageContent(message.content)}
@@ -424,6 +434,18 @@ function MessageCard({ message, index }: { message: LlmRequestMessage; index: nu
       ) : null}
     </ContentCard>
   );
+}
+
+/**
+ * thinking 块的**存在性**标示（issue #577）：只读 `blocks.length`，绝不触碰块内的
+ * `thinking` / `data` 字段——思考正文因此在组件层面就无从进入 DOM，不是靠肉眼保证。
+ */
+function ThinkingBadge({ blocks }: { blocks?: LlmThinkingBlockPayload[] }) {
+  if (!blocks || blocks.length === 0) {
+    return null;
+  }
+
+  return <Badge variant="llm">思考 ×{blocks.length}</Badge>;
 }
 
 function MessageContent({ content, emptyHint }: { content: string; emptyHint?: string }) {

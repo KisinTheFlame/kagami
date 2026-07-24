@@ -4,6 +4,14 @@ import { mkdir, open, readdir, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import {
+  blobShard,
+  formatObjectKey,
+  isTempArtifactName,
+  parseObjectKey,
+  shouldDeleteBlobAfterUnref,
+} from "./object-store-logic.js";
+import { Mutex } from "./mutex.js";
 import type { Database } from "../infra/db/client.js";
 
 /**
@@ -24,6 +32,7 @@ import type { Database } from "../infra/db/client.js";
  *                       └── 删 key 仅 -1; 归零才删 blob 行 + 物理文件
  *
  * 库经 Prisma（better-sqlite3 adapter）接入；schema 由 prisma/migrations 拥有，进程只连不建表。
+ * 纯决策逻辑（key 编解码 / 分片 / 临时判定 / 解引用归零）抽在 object-store-logic.ts，本文件只剩 I/O 编排。
  *
  * 流式 put 的两段式：字节写入在写锁外（边流边算 sha256 落 tmp/ 临时文件，慢速大上传不再串行
  * 阻塞其它写），只有 final-path 存在性检查 + rename + 事务在写锁内（临界区仅剩快操作）。临时文件
@@ -42,8 +51,6 @@ import type { Database } from "../infra/db/client.js";
  * 但 fd 一旦打开即免疫后续 unlink(POSIX 已打开 fd 保住 inode)。
  */
 
-const SHARD_PREFIX_LENGTH = 2;
-const KEY_PREFIX = "res-";
 const TMP_DIR_NAME = "tmp";
 
 const logger = new AppLogger({ source: "oss-store" });
@@ -177,14 +184,14 @@ export class ObjectStore {
           update: { refcount: { increment: 1 } },
         });
         const object = await tx.object.create({ data: { sha256, mime, createdAt: now } });
-        return `${KEY_PREFIX}${object.id}`;
+        return formatObjectKey(object.id);
       });
       return { key };
     });
   }
 
   public async get(key: string): Promise<GetResult | null> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return null;
     }
@@ -210,7 +217,7 @@ export class ObjectStore {
   }
 
   public async head(key: string): Promise<HeadResult | null> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return null;
     }
@@ -284,7 +291,7 @@ export class ObjectStore {
   }
 
   public async delete(key: string): Promise<boolean> {
-    const id = parseKey(key);
+    const id = parseObjectKey(key);
     if (id === null) {
       return false;
     }
@@ -301,7 +308,7 @@ export class ObjectStore {
           where: { sha256: row.sha256 },
           select: { refcount: true },
         });
-        if (blob && blob.refcount <= 1) {
+        if (blob && shouldDeleteBlobAfterUnref(blob.refcount)) {
           await tx.blob.delete({ where: { sha256: row.sha256 } });
           return { found: true, orphanSha256: row.sha256 };
         }
@@ -352,10 +359,10 @@ export class ObjectStore {
       }
       for (const name of entries) {
         // 崩溃残留的临时写入文件（含 tmp/ 目录里的）也是孤儿；其余按库里有没有对应 blob 行判定。
-        const blobRow = name.includes(".tmp-")
+        const blobRow = isTempArtifactName(name)
           ? null
           : await this.db.blob.findUnique({ where: { sha256: name }, select: { sha256: true } });
-        const isOrphan = name.includes(".tmp-") || blobRow === null;
+        const isOrphan = isTempArtifactName(name) || blobRow === null;
         if (!isOrphan) {
           continue;
         }
@@ -374,7 +381,7 @@ export class ObjectStore {
   }
 
   private blobPath(sha256: string): string {
-    return path.join(this.blobDir, sha256.slice(0, SHARD_PREFIX_LENGTH), sha256);
+    return path.join(this.blobDir, blobShard(sha256), sha256);
   }
 
   /**
@@ -403,49 +410,6 @@ export class ObjectStore {
         event: "oss.unlink_orphan_failed",
         sha256,
       });
-    }
-  }
-}
-
-/** 由 object id 拼出对外 key（`res-<id>`）。与 {@link parseKey} 共享同一前缀，单一事实源。 */
-export function formatObjectKey(id: number): string {
-  return `${KEY_PREFIX}${id}`;
-}
-
-/** 解析对外 key：`res-<正整数>` → id；前缀不对 / 非正整数 / 越界 → null（视作无映射）。 */
-function parseKey(key: string): number | null {
-  if (!key.startsWith(KEY_PREFIX)) {
-    return null;
-  }
-  const rest = key.slice(KEY_PREFIX.length);
-  if (!/^[0-9]+$/.test(rest)) {
-    return null;
-  }
-  const id = Number(rest);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    return null;
-  }
-  return id;
-}
-
-/**
- * 极简进程内互斥锁:把异步操作串成一条链,后来的等前一个完成再跑。用于串行化写操作的临界区,
- * 消除"文件 I/O 在事务外 + await 让出事件循环"导致的并发竞态。
- */
-class Mutex {
-  private tail: Promise<void> = Promise.resolve();
-
-  public async run<T>(task: () => Promise<T>): Promise<T> {
-    const previous = this.tail;
-    let release!: () => void;
-    this.tail = new Promise<void>(resolve => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await task();
-    } finally {
-      release();
     }
   }
 }

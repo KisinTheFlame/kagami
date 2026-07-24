@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type ToolExecutionResult, type ToolKind } from "@kagami/agent-runtime";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { BrowserToolComponent } from "./browser-tool-component.js";
 import type { BrowserClient } from "../../../../acl/browser-client.js";
 import type { RootAgentEffect } from "../../../runtime/effect/root-agent-effect.js";
@@ -49,10 +50,13 @@ export class BrowserScreenshotTool extends BrowserToolComponent<typeof Schema> {
     const shot = await this.getBrowserClient().screenshot();
     // 叠加落 OSS：失败不影响截图入上下文（降级，resid 置空）。
     const resid = await this.tryPutToOss(shot.image, shot.mimeType);
-    const residAttr = resid ? ` resid="${resid}"` : "";
     const appendEffect: RootAgentEffect = {
       type: "append_message",
-      content: `<browser_screenshot url="${shot.url}"${residAttr} />`,
+      // 进上下文的伪标签文案走 static 模板（AGENTS.md 红线），TS 只算 view-model。
+      content: renderServerStaticTemplate(import.meta.url, "context/browser-screenshot.hbs", {
+        url: shot.url,
+        resid,
+      }).trim(),
       // content 用 base64 字符串：图片要进持久上下文（快照/ledger 走 JSON），Buffer 会被 JSON 毒坏。
       images: [
         {

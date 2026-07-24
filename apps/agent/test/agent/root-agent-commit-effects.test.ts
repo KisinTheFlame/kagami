@@ -10,7 +10,7 @@ import { RootAgentHost } from "../../src/agent/runtime/root-agent/root-agent-run
  * 持久化进上下文——否则这些"屏幕"内容只在回合内可见、不进 ledger，下一轮 Agent
  * 就只剩 tool_result 的那句简短状态（如 `{count:10}`），看不到榜单本身。
  *
- * 修复前：commitRoundResult 只落 tool 结果 + postToolEffects，丢掉 effectMessages，
+ * 修复前：commitRoundResult 只落 tool 结果，丢掉 effectMessages，
  * 本测试的 `append_message` 断言失败。
  */
 describe("RootAgentHost.commitRoundResult — append_message effect 持久化", () => {
