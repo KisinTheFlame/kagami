@@ -8,6 +8,8 @@ import type {
   LlmMessage,
   LlmProviderId,
   LlmTextContentPart,
+  LlmThinkingBlock,
+  LlmThinkingEffort,
   LlmToolCall,
   Tool,
 } from "@kagami/llm";
@@ -18,6 +20,8 @@ export type {
   LlmImageContentPart,
   LlmMessage,
   LlmTextContentPart,
+  LlmThinkingBlock,
+  LlmThinkingEffort,
   LlmToolCall,
   Tool,
 };
@@ -44,6 +48,11 @@ export type LlmChatRequest = {
   tools: Tool[];
   toolChoice: LlmToolChoice;
   model?: string;
+  /**
+   * adaptive thinking effort 档位（issue #573）。由 usage 配置在 client.chat 注入，
+   * 调用方不直接传；缺省 = disabled。目前仅 claude-code provider 消费，其余忽略。
+   */
+  thinking?: LlmThinkingEffort;
 };
 
 export type LlmChatResponsePayload = {

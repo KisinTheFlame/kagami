@@ -27,6 +27,7 @@ export function toClaudeCodeRequestBody(
   const model = requireRequestModel(request);
   const toolsEnabled = request.tools.length > 0 && request.toolChoice !== "none";
   const toolChoice = toClaudeToolChoice(request.toolChoice);
+  const thinkingEnabled = request.thinking !== undefined;
 
   return {
     model,
@@ -67,6 +68,14 @@ export function toClaudeCodeRequestBody(
           });
         }
 
+        // thinking 块回放（#573）：仅在本请求开启 thinking 时前置渲染（Step 0 实测该形态
+        // 与模型自然出块序一致且回放合法）；未开启的请求（镜像 fork agent 关回 disabled、
+        // config kill-switch 后）剥除不发——API 容忍携带（Step 0 E3）但剥除省 token 且字节
+        // 确定。thinking-only 消息不单独成 turn：无 text/tool_use 则整条照旧丢弃。
+        if (thinkingEnabled && content.length > 0 && message.thinkingBlocks?.length) {
+          content.unshift(...message.thinkingBlocks.map(block => ({ ...block })));
+        }
+
         return content.length > 0
           ? [
               {
@@ -90,12 +99,24 @@ export function toClaudeCodeRequestBody(
         },
       ];
     }),
-    // thinking 显式关死：消息模型与持久化尚不认识 thinking 块（解析层会静默丢弃），
-    // tool loop 续轮回放缺块会被 API 拒绝（400）。开启 adaptive thinking 是独立
-    // 工程，见 https://github.com/KisinTheFlame/kagami/issues/269。
-    thinking: {
-      type: "disabled",
-    },
+    // thinking 按请求开关（#573）：request.thinking 来自 usage 级配置（llm 服务侧注入）。
+    // adaptive + output_config.effort 直通配置值；缺省 disabled 与旧行为逐字节一致。
+    // 注意 thinking 参数值本身分割 prompt cache lineage（Step 0 E3：同字节 messages 换
+    // 参数即全量重写），切换档位等价一次全量换入，属计划性成本。
+    ...(thinkingEnabled
+      ? {
+          thinking: {
+            type: "adaptive",
+          },
+          output_config: {
+            effort: request.thinking,
+          },
+        }
+      : {
+          thinking: {
+            type: "disabled",
+          },
+        }),
     ...(toolsEnabled
       ? {
           tools: request.tools.map(tool => ({

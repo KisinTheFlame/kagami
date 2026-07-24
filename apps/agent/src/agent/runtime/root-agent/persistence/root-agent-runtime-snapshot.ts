@@ -4,6 +4,7 @@ import type {
   LlmImageContentPart,
   LlmMessage,
   LlmTextContentPart,
+  LlmThinkingBlock,
   LlmToolCall,
 } from "@kagami/llm-client";
 
@@ -38,6 +39,20 @@ const LlmToolCallSchema: z.ZodType<LlmToolCall> = z.object({
   arguments: JsonRecordSchema,
 });
 
+// thinking 块（#573）不透明存储原样回放：zod 默认 strip 未知键，不加这条恢复期会把
+// 快照里的 thinking 块静默剥掉——崩溃恢复若落在 tool loop 中段，缺块续轮有 400 风险。
+const LlmThinkingBlockSchema: z.ZodType<LlmThinkingBlock> = z.union([
+  z.object({
+    type: z.literal("thinking"),
+    thinking: z.string(),
+    signature: z.string(),
+  }),
+  z.object({
+    type: z.literal("redacted_thinking"),
+    data: z.string(),
+  }),
+]);
+
 const LlmMessageSchema: z.ZodType<LlmMessage> = z.union([
   z.object({
     role: z.literal("user"),
@@ -47,6 +62,7 @@ const LlmMessageSchema: z.ZodType<LlmMessage> = z.union([
     role: z.literal("assistant"),
     content: z.string(),
     toolCalls: z.array(LlmToolCallSchema),
+    thinkingBlocks: z.array(LlmThinkingBlockSchema).optional(),
   }),
   z.object({
     role: z.literal("tool"),

@@ -16,6 +16,30 @@ export const LlmToolCallPayloadSchema = z
 
 export type LlmToolCallPayload = z.infer<typeof LlmToolCallPayloadSchema>;
 
+/**
+ * assistant 消息携带的 thinking 块（issue #573）。不透明存储、原样回放：signature /
+ * data 都是 Anthropic 侧校验的黑盒字节，落库与回放链路不做任何加工。
+ */
+export const LlmThinkingBlockPayloadSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("thinking"),
+      thinking: z.string(),
+      signature: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("redacted_thinking"),
+      data: z.string(),
+    })
+    .strict(),
+]);
+
+export type LlmThinkingBlockPayload = z.infer<typeof LlmThinkingBlockPayloadSchema>;
+
+export const LlmThinkingEffortSchema = z.enum(["low", "medium", "high"]);
+
 export const LlmToolDefinitionSchema = z
   .object({
     name: z.string().min(1),
@@ -71,6 +95,7 @@ export const LlmRequestMessageSchema = z.discriminatedUnion("role", [
       role: z.literal("assistant"),
       content: z.string(),
       toolCalls: z.array(LlmToolCallPayloadSchema),
+      thinkingBlocks: z.array(LlmThinkingBlockPayloadSchema).optional(),
     })
     .strict(),
   z
@@ -100,6 +125,9 @@ export const LlmChatRequestPayloadSchema = z
         .strict(),
     ]),
     model: z.string().min(1).optional(),
+    // adaptive thinking effort 档位（issue #573）：usage 配置在 llm 服务侧解析后注入，
+    // 落库 shape 随之记录，viewer 可见该次调用是否开了 thinking。
+    thinking: LlmThinkingEffortSchema.optional(),
   })
   .strict();
 
@@ -114,6 +142,7 @@ export const LlmChatResponsePayloadSchema = z
         role: z.literal("assistant"),
         content: z.string(),
         toolCalls: z.array(LlmToolCallPayloadSchema),
+        thinkingBlocks: z.array(LlmThinkingBlockPayloadSchema).optional(),
       })
       .strict(),
     usage: z
