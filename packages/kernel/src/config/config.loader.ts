@@ -214,7 +214,11 @@ const ServicesSchema = z
     agent: ServiceEndpointSchema,
     console: ServiceEndpointSchema,
     gateway: ServiceEndpointSchema,
-    oss: ServiceEndpointSchema,
+    // oss 除 host/port 外还持有独立 Prisma 库：blob / object 两表落它自己的 SQLite 文件
+    // （对象元数据；字节在 blob 目录）。databaseUrl 非隐私，进 config.yaml。
+    oss: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
     browser: ServiceEndpointSchema,
     // llm 除 host/port 外还持有独立 Prisma 库（epic #539 子 issue 3）：llm_chat_call /
     // embedding_cache / claude_file_cache / oauth_session / oauth_state 落它自己的 SQLite
@@ -231,7 +235,12 @@ const ServicesSchema = z
       databaseUrl: DatabaseUrlSchema,
     }),
     pixel: ServiceEndpointSchema,
-    gba: ServiceEndpointSchema,
+    // gba 除 host/port 外还持有独立 Prisma 库：rom / battery_save / run_state / resume_state
+    // 落它自己的 SQLite 文件（ROM 元数据 + 电池存档 + 重启现场；ROM 字节在 OSS）。
+    // databaseUrl 非隐私，进 config.yaml。
+    gba: ServiceEndpointSchema.extend({
+      databaseUrl: DatabaseUrlSchema,
+    }),
     // scheduler 除 host/port 外还持有独立 Prisma 库（issue #493）：TaskRun 执行历史落它自己的
     // SQLite 文件，与主库 server.databaseUrl 物理分离。databaseUrl 非隐私，进 config.yaml。
     // historyRetentionCount / historyRetentionDays 是历史 GC 的保留窗口（#493 P2，取交集=更严）。
@@ -537,6 +546,11 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       llm: {
         ...data.services.llm,
         databaseUrl: resolveSqliteFileUrl(configDir, data.services.llm.databaseUrl),
+      },
+      // gba 独立 SQLite 库：同上，把相对 file: 路径锚定到仓库根。
+      gba: {
+        ...data.services.gba,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.gba.databaseUrl),
       },
     },
     server: {

@@ -1,0 +1,37 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// kagami-oss 独占的 SQLite 库（对象元数据；字节在 data/oss/blobs）。两层：
+// blob = 内容层（sha256 内容寻址 + refcount 计活引用），object = 命名层（对外 key = `res-<id>`）。
+// 多 object 可指向同一 blob（去重）；created_at 为 Unix ms（Int，SQLite INTEGER 承 64 位）。
+
+model Blob {
+  sha256    String   @id
+  size      Int
+  refcount  Int
+  createdAt Int      @map("created_at")
+
+  objects   Object[]
+
+  @@map("blob")
+}
+
+model Object {
+  id        Int    @id @default(autoincrement())
+  sha256    String
+  mime      String
+  createdAt Int    @map("created_at")
+
+  blob      Blob   @relation(fields: [sha256], references: [sha256])
+
+  @@index([sha256], map: "idx_object_sha256")
+  @@map("object")
+}
