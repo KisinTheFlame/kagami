@@ -8,7 +8,9 @@ initTestLoggerRuntime();
 
 /**
  * GbaService 状态机测试：fake timers 驱动帧循环（fps=60 → 每帧 ~16.67ms），FakeEmulatorCore
- * 记录每帧 held 集合，断言按键计划、实速节奏、finally 清键与存档语义。
+ * 记录每帧 held 集合，断言按键计划、实速节奏、finally 清键与存档语义。store 是内存版 fake
+ * （InMemoryGbaStore，方法全异步）：随 Prisma 化后 store 接口异步，帧循环相关断言统一走
+ * `advanceTimersByTimeAsync`，让 await 的 store 调用与 fire-and-forget 的微任务在断言前 flush。
  */
 describe("GbaService", () => {
   let store: GbaStore;
@@ -71,7 +73,7 @@ describe("GbaService", () => {
       expect(state.romName).toBe("测试 ROM");
       expect(state.frame).toBe(1); // 冷启动推进的一帧
       expect(state.foreground).toBe(false);
-      expect(store.getLastRomId()).toBe(romId);
+      expect(await store.getLastRomId()).toBe(romId);
       // 后台加载：帧循环不跑
       await vi.advanceTimersByTimeAsync(1000);
       expect(service.state().frame).toBe(1);
@@ -81,9 +83,9 @@ describe("GbaService", () => {
       const romId = await uploadAndLoad();
       const core = cores[0]!;
       core.sram = Buffer.from("SAVEDATA".padEnd(128, "\0"));
-      service.setForeground(true);
-      service.setForeground(false); // blur 强制 flush
-      expect(store.getBatterySave(romId)).not.toBeNull();
+      await service.setForeground(true);
+      await service.setForeground(false); // blur 强制 flush
+      expect(await store.getBatterySave(romId)).not.toBeNull();
 
       const service2 = new GbaService({
         store,
@@ -120,13 +122,13 @@ describe("GbaService", () => {
 
     it("前台优雅关停：快照落库；init 恢复现场（同字节注入、前台继续、帧计数接续、消费即删）", async () => {
       await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
       await vi.advanceTimersByTimeAsync(500); // 跑出一段进度
       const frameAtShutdown = service.state().frame;
       expect(frameAtShutdown).toBeGreaterThan(1);
 
       await service.shutdown();
-      const saved = store.getResumeState();
+      const saved = await store.getResumeState();
       expect(saved).not.toBeNull();
       expect(saved?.foreground).toBe(true);
       expect(saved?.frame).toBe(frameAtShutdown);
@@ -143,7 +145,7 @@ describe("GbaService", () => {
       await vi.advanceTimersByTimeAsync(200);
       expect(service2.state().frame).toBeGreaterThan(frameAtShutdown + 1);
       // 消费即删：快照不会隔代复活
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
       await service2.shutdown();
     });
 
@@ -163,7 +165,7 @@ describe("GbaService", () => {
 
     it("快照校验不通过（核心版本变了）：丢弃半恢复核心、全新重载为真冷启动，快照已删", async () => {
       await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
       await service.shutdown();
 
       const service2 = buildService2(core => {
@@ -178,27 +180,27 @@ describe("GbaService", () => {
       expect(service2.state().loaded).toBe(true);
       expect(service2.state().frame).toBe(1);
       expect(service2.state().foreground).toBe(false);
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
       await service2.shutdown();
     });
 
     it("OSS 瞬断保留快照；之后任何成功加载作废快照，crash 后不复活回滚（review #557 [P1]）", async () => {
       const romId = await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
       await service.shutdown(); // 写快照
 
       oss.failGet = true;
       const service2 = buildService2();
       await service2.init(); // 装 ROM 失败：快照保留，下次启动仍有机会无感恢复
       expect(service2.state().loaded).toBe(false);
-      expect(store.getResumeState()).not.toBeNull();
+      expect(await store.getResumeState()).not.toBeNull();
 
       // 运行中手动加载成功 → 快照作废（不恢复：手动加载 = 插卡带开机的冷启动语义）
       oss.failGet = false;
       const load = await service2.loadGame(romId);
       expect(load.ok).toBe(true);
       expect(cores[1]!.setStateCalls).toHaveLength(0);
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
 
       // 此后 crash（不调 shutdown）再启动：无快照可复活，冷启动 + 电池存档
       const service3 = buildService2();
@@ -211,10 +213,10 @@ describe("GbaService", () => {
 
     it("crash（未优雅关停）：无快照，落回断电 + 电池存档语义", async () => {
       await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
       await vi.advanceTimersByTimeAsync(500);
       // 不调 shutdown，直接模拟重启
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
 
       const service2 = buildService2();
       await service2.init();
@@ -228,19 +230,19 @@ describe("GbaService", () => {
       await uploadAndLoad();
       cores[0]!.stateBlob = null;
       await service.shutdown();
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
     });
 
     it("未加载 ROM 时关停不写快照", async () => {
       await service.shutdown();
-      expect(store.getResumeState()).toBeNull();
+      expect(await store.getResumeState()).toBeNull();
     });
   });
 
   describe("press 领域校验", () => {
     beforeEach(async () => {
       await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
     });
 
     it.each([
@@ -326,14 +328,14 @@ describe("GbaService", () => {
 
     it("未加载 / 后台 / 并发各自拒绝", async () => {
       // 后台
-      service.setForeground(false);
+      await service.setForeground(false);
       expect(await service.press({ buttons: ["a"], holdFrames: 3, settleFrames: 0 })).toEqual({
         ok: false,
         reason: "GBA_NOT_FOREGROUND",
       });
 
       // 并发：第一发在飞（不推进时钟），第二发拒绝
-      service.setForeground(true);
+      await service.setForeground(true);
       const first = service.press({ buttons: ["a"], holdFrames: 3, settleFrames: 3 });
       expect(await service.press({ buttons: ["b"], holdFrames: 3, settleFrames: 0 })).toEqual({
         ok: false,
@@ -347,7 +349,7 @@ describe("GbaService", () => {
   describe("press 执行与实速", () => {
     beforeEach(async () => {
       await uploadAndLoad();
-      service.setForeground(true);
+      await service.setForeground(true);
     });
 
     it("按键计划逐帧生效，结束后按键全松开，元数据自洽", async () => {
@@ -397,7 +399,7 @@ describe("GbaService", () => {
       const framesBefore = core.frames.length;
       expect(core.frames[framesBefore - 1]?.has("right")).toBe(true);
 
-      service.setForeground(false);
+      await service.setForeground(false);
       const result = await promise;
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -407,7 +409,7 @@ describe("GbaService", () => {
       await vi.advanceTimersByTimeAsync(1000);
       expect(core.frames.length).toBe(framesBefore);
       // 重新前台：计划已清，空手推进（按键不卡死）
-      service.setForeground(true);
+      await service.setForeground(true);
       await vi.advanceTimersByTimeAsync(100);
       expect(core.frames.slice(framesBefore).every(f => f.size === 0)).toBe(true);
     });
@@ -417,32 +419,32 @@ describe("GbaService", () => {
     it("blur 强制 flush；内容不变时不重复写", async () => {
       const romId = await uploadAndLoad();
       const core = cores[0]!;
-      service.setForeground(true);
+      await service.setForeground(true);
       core.sram = Buffer.from("PROGRESS".padEnd(128, "\0"));
-      service.setForeground(false);
-      const saved = store.getBatterySave(romId);
+      await service.setForeground(false);
+      const saved = await store.getBatterySave(romId);
       expect(saved?.subarray(0, 8).toString()).toBe("PROGRESS");
 
       // 内容未变，再次 blur 不应改变 updated_at 语义（用另一份引用对比字节即可）
-      service.setForeground(true);
-      service.setForeground(false);
-      expect(store.getBatterySave(romId)?.subarray(0, 8).toString()).toBe("PROGRESS");
+      await service.setForeground(true);
+      await service.setForeground(false);
+      expect((await store.getBatterySave(romId))?.subarray(0, 8).toString()).toBe("PROGRESS");
     });
 
     it("前台期间周期脏检查落库", async () => {
       const romId = await uploadAndLoad();
       const core = cores[0]!;
-      service.setForeground(true);
+      await service.setForeground(true);
       await vi.advanceTimersByTimeAsync(1000);
       core.sram = Buffer.from("AUTOSAVE".padEnd(128, "\0"));
       await vi.advanceTimersByTimeAsync(31_000); // 越过 30s 周期
-      expect(store.getBatterySave(romId)?.subarray(0, 8).toString()).toBe("AUTOSAVE");
+      expect((await store.getBatterySave(romId))?.subarray(0, 8).toString()).toBe("AUTOSAVE");
     });
 
     it("换 ROM 先 flush 旧档再卸载", async () => {
       const romA = await uploadAndLoad("ROM A");
       const coreA = cores[0]!;
-      service.setForeground(true);
+      await service.setForeground(true);
       coreA.sram = Buffer.from("A-SAVE".padEnd(128, "\0"));
 
       const uploadB = await service.uploadRom({ name: "ROM B", bytes: fakeRomBytes(7) });
@@ -450,7 +452,7 @@ describe("GbaService", () => {
       if (!uploadB.ok) return;
       const result = await service.loadGame(uploadB.rom.id);
       expect(result.ok).toBe(true);
-      expect(store.getBatterySave(romA)?.subarray(0, 6).toString()).toBe("A-SAVE");
+      expect((await store.getBatterySave(romA))?.subarray(0, 6).toString()).toBe("A-SAVE");
       expect(coreA.shutdownCalled).toBe(true);
       expect(service.state().romName).toBe("ROM B");
     });
@@ -471,9 +473,38 @@ describe("GbaService", () => {
       expect(cores).toHaveLength(1); // 只建了一个核心
     });
 
+    it("并发 load + delete 同一 ROM:load 先起则拒删,ROM 不被删", async () => {
+      const upload = await service.uploadRom({ name: "载删互斥A", bytes: fakeRomBytes(13) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      // Promise.all 内 loadGame 先同步置 loadInFlight，再 await；deleteRom 随后看到即拒。
+      const [load, del] = await Promise.all([
+        service.loadGame(upload.rom.id),
+        service.deleteRom(upload.rom.id),
+      ]);
+      expect(load.ok).toBe(true);
+      expect(del).toEqual({ ok: false, reason: "LOAD_IN_PROGRESS" });
+      expect(await service.listRoms()).toHaveLength(1); // 行仍在，未被并发删掉
+    });
+
+    it("并发 delete + load 同一 ROM:delete 先起则拒载,不留幻影会话", async () => {
+      const upload = await service.uploadRom({ name: "载删互斥B", bytes: fakeRomBytes(14) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      // deleteRom 先同步置 deleteInFlight，再 await getRom；loadGame 随后看到即拒（不装幻影 core）。
+      const [del, load] = await Promise.all([
+        service.deleteRom(upload.rom.id),
+        service.loadGame(upload.rom.id),
+      ]);
+      expect(del).toEqual({ ok: true });
+      expect(load).toEqual({ ok: false, reason: "LOAD_IN_PROGRESS" });
+      expect(service.state().loaded).toBe(false); // 没有把已删 ROM 装成核心
+      expect(await service.listRoms()).toHaveLength(0);
+    });
+
     it("切 ROM 拉取失败:旧会话毫发无损继续跑", async () => {
       await uploadAndLoad("旧游戏");
-      service.setForeground(true);
+      await service.setForeground(true);
       const uploadB = await service.uploadRom({ name: "新游戏", bytes: fakeRomBytes(8) });
       expect(uploadB.ok).toBe(true);
       if (!uploadB.ok) return;
@@ -511,7 +542,7 @@ describe("GbaService", () => {
       expect(badService.state().romName).toBeNull(); // 状态自洽的空态
       expect(cores[origFactory]!.shutdownCalled).toBe(true); // 半成品核心已释放
       // init() 走同一路径:坏 ROM 不会让启动抛穿
-      store.setLastRomId(upload.rom.id);
+      await store.setLastRomId(upload.rom.id);
       await expect(badService.init()).resolves.toBeUndefined();
       await badService.shutdown();
     });
@@ -519,7 +550,7 @@ describe("GbaService", () => {
     it("帧循环异常遏制:冻结自保、press 拿到领域拒绝、服务活着", async () => {
       await uploadAndLoad();
       const core = cores[0]!;
-      service.setForeground(true);
+      await service.setForeground(true);
       const promise = service.press({ buttons: ["a"], holdFrames: 30, settleFrames: 0 });
       core.throwOnNextRunFrame = true;
       await vi.advanceTimersByTimeAsync(200);
@@ -530,7 +561,7 @@ describe("GbaService", () => {
       }
       expect(service.state().foreground).toBe(false); // 冻结自保
       // 服务仍可用:重新前台可继续玩
-      service.setForeground(true);
+      await service.setForeground(true);
       const retry = await (async () => {
         const p = service.press({ buttons: ["b"], holdFrames: 3, settleFrames: 0 });
         await vi.advanceTimersByTimeAsync(500);
@@ -542,21 +573,21 @@ describe("GbaService", () => {
     it("blur flush 失败可重试:保持前台,重试成功后转后台", async () => {
       const romId = await uploadAndLoad();
       const core = cores[0]!;
-      service.setForeground(true);
+      await service.setForeground(true);
       core.sram = Buffer.from("RETRY".padEnd(128, "\0"));
       const origSave = store.saveBatterySave.bind(store);
       let failures = 1;
-      store.saveBatterySave = (id, bytes): void => {
+      store.saveBatterySave = async (id, bytes): Promise<void> => {
         if (failures > 0) {
           failures -= 1;
           throw new Error("写盘失败（测试）");
         }
-        origSave(id, bytes);
+        await origSave(id, bytes);
       };
-      expect(() => service.setForeground(false)).toThrow(/写盘失败/);
+      await expect(service.setForeground(false)).rejects.toThrow(/写盘失败/);
       expect(service.state().foreground).toBe(true); // 未置位,可重试
-      expect(service.setForeground(false)).toEqual({ foreground: false });
-      expect(store.getBatterySave(romId)?.subarray(0, 5).toString()).toBe("RETRY");
+      expect(await service.setForeground(false)).toEqual({ foreground: false });
+      expect((await store.getBatterySave(romId))?.subarray(0, 5).toString()).toBe("RETRY");
     });
 
     it("并发上传同一 ROM:后到者归一为 DUPLICATE_ROM 并回收孤儿 OSS 对象", async () => {
@@ -573,7 +604,7 @@ describe("GbaService", () => {
         ),
       ).toHaveLength(1);
       expect(oss.objects.size).toBe(1); // 孤儿对象已回收
-      expect(service.listRoms()).toHaveLength(1);
+      expect(await service.listRoms()).toHaveLength(1);
     });
   });
 
@@ -596,11 +627,11 @@ describe("GbaService", () => {
       const load = await watchService.loadGame(upload.rom.id);
       expect(load.ok).toBe(true);
       const core = cores[cores.length - 1]!;
-      watchService.setForeground(true);
+      await watchService.setForeground(true);
       core.sram = Buffer.from("IDLE".padEnd(128, "\0"));
       await vi.advanceTimersByTimeAsync(3500);
       expect(watchService.state().foreground).toBe(false);
-      expect(store.getBatterySave(upload.rom.id)?.subarray(0, 4).toString()).toBe("IDLE");
+      expect((await store.getBatterySave(upload.rom.id))?.subarray(0, 4).toString()).toBe("IDLE");
       await watchService.shutdown();
     });
 
@@ -619,7 +650,7 @@ describe("GbaService", () => {
       expect(upload.ok).toBe(true);
       if (!upload.ok) return;
       await watchService.loadGame(upload.rom.id);
-      watchService.setForeground(true);
+      await watchService.setForeground(true);
       // 临近超时前持续观战轮询——若 peek 刷新活动,看门狗永不触发。
       await vi.advanceTimersByTimeAsync(1500);
       expect(watchService.peekFramePng()).not.toBeNull();
@@ -641,7 +672,7 @@ describe("GbaService", () => {
       if (imported.ok) {
         expect(imported.rom.name).toBe("群友给的");
       }
-      expect(service.listRoms()).toHaveLength(1);
+      expect(await service.listRoms()).toHaveLength(1);
 
       expect(await service.importRomFromOss({ resId: "res-404", name: "x" })).toEqual({
         ok: false,
@@ -677,7 +708,7 @@ describe("GbaService", () => {
         ok: false,
         reason: "DUPLICATE_NAME",
       });
-      expect(service.listRoms()).toHaveLength(1);
+      expect(await service.listRoms()).toHaveLength(1);
     });
 
     it("删除：加载中的拒删；成功删除连带 OSS best-effort，OSS 失败不回滚", async () => {
@@ -689,7 +720,7 @@ describe("GbaService", () => {
       if (!other.ok) return;
       oss.failDelete = true;
       expect(await service.deleteRom(other.rom.id)).toEqual({ ok: true });
-      expect(store.getRom(other.rom.id)).toBeNull();
+      expect(await store.getRom(other.rom.id)).toBeNull();
     });
   });
 });

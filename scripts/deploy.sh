@@ -129,6 +129,43 @@ else
   fi
 fi
 
+echo "[app:deploy] Step 2e/4: Applying oss Prisma migrations..."
+# oss 有独立 SQLite 库（blob / object 对象元数据），只被 kagami-oss 单进程持有——迁移只需暂停
+# 这一个进程腾出独占锁。无待应用迁移时（status 只读）跳过。首次 prisma 化前，存量库需先做一次
+# baseline（`pnpm --filter @kagami/oss db:migrate:resolve --applied <init>`）标记初始迁移已应用，
+# 否则 migrate deploy 会因 CREATE TABLE 撞已存在的表而失败（见 docs/configuration.md）。
+if pnpm --filter @kagami/oss db:migrate:status >/dev/null 2>&1; then
+  echo "[app:deploy]   oss schema 已最新，跳过迁移。"
+else
+  echo "[app:deploy]   检测到 oss 待应用迁移，暂停 kagami-oss 后迁移..."
+  pnpm exec pm2 stop kagami-oss >/dev/null 2>&1 || true
+  if pnpm --filter @kagami/oss db:migrate:deploy; then
+    echo "[app:deploy]   oss 迁移完成，进程将在 Step 3 重新拉起。"
+  else
+    echo "[app:deploy]   oss 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat kagami-llm kagami-scheduler kagami-oss >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
+echo "[app:deploy] Step 2f/4: Applying gba Prisma migrations..."
+# gba 有独立 SQLite 库（rom / battery_save / run_state / resume_state），只被 kagami-gba 单进程
+# 持有——迁移只需暂停这一个进程腾出独占锁。无待应用迁移时（status 只读）跳过。首次 prisma 化前，
+# 存量库同样需先 baseline（`pnpm --filter @kagami/gba-service db:migrate:resolve --applied <init>`）。
+if pnpm --filter @kagami/gba-service db:migrate:status >/dev/null 2>&1; then
+  echo "[app:deploy]   gba schema 已最新，跳过迁移。"
+else
+  echo "[app:deploy]   检测到 gba 待应用迁移，暂停 kagami-gba 后迁移..."
+  pnpm exec pm2 stop kagami-gba >/dev/null 2>&1 || true
+  if pnpm --filter @kagami/gba-service db:migrate:deploy; then
+    echo "[app:deploy]   gba 迁移完成，进程将在 Step 3 重新拉起。"
+  else
+    echo "[app:deploy]   gba 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat kagami-llm kagami-scheduler kagami-oss kagami-gba >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
 echo "[app:deploy] Step 3/4: Reloading PM2 apps..."
 # 一次性迁移兜底：清理改名前的旧 kagami-web 进程（见单服务分支注释）。
 pnpm exec pm2 delete kagami-web >/dev/null 2>&1 || true

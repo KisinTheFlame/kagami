@@ -1,5 +1,3 @@
-import { mkdirSync } from "node:fs";
-import Database from "better-sqlite3";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AppLogger } from "@kagami/kernel/logger/logger";
@@ -8,7 +6,8 @@ import { HealthHandler } from "@kagami/kernel/http/health.handler";
 import { HttpOssClient } from "../acl/oss-client.js";
 import { GbaService } from "../application/gba.service.js";
 import { RetroemuCore } from "../emulator/retroemu-core.js";
-import { GbaStore } from "../persistence/gba-store.js";
+import { createDbClient, configureSqlite, closeDb } from "../infra/db/client.js";
+import { PrismaGbaStore } from "../persistence/gba-store.js";
 import { GbaHandler } from "../http/gba.handler.js";
 import { loadGbaServiceConfig } from "./config.js";
 
@@ -28,9 +27,9 @@ export type GbaServiceRuntime = {
 export async function buildGbaServiceRuntime(): Promise<GbaServiceRuntime> {
   const config = await loadGbaServiceConfig();
 
-  mkdirSync(config.dataDir, { recursive: true });
-  const db = new Database(config.dbPath);
-  const store = new GbaStore({ db });
+  const db = createDbClient({ databaseUrl: config.databaseUrl });
+  await configureSqlite(db);
+  const store = new PrismaGbaStore({ db });
   const ossClient = new HttpOssClient({ baseUrl: config.ossBaseUrl });
   const service = new GbaService({
     store,
@@ -87,7 +86,7 @@ export async function buildGbaServiceRuntime(): Promise<GbaServiceRuntime> {
     port: config.port,
     shutdown: async () => {
       await service.shutdown();
-      db.close();
+      await closeDb(db);
     },
   };
 }

@@ -103,8 +103,8 @@ function registerOssRoutes(app: FastifyInstance, store: ObjectStore, maxBodyByte
 
   // === 控制台只读面（管理台对象浏览器）===
 
-  registerJsonRoute(app, ossConsoleContract.queryObjects, ({ input }) => {
-    const { items, total } = store.list(input);
+  registerJsonRoute(app, ossConsoleContract.queryObjects, async ({ input }) => {
+    const { items, total } = await store.list(input);
     return {
       pagination: { page: input.page, pageSize: input.pageSize, total },
       items: items.map(row => ({
@@ -118,8 +118,8 @@ function registerOssRoutes(app: FastifyInstance, store: ObjectStore, maxBodyByte
     };
   });
 
-  registerJsonRoute(app, ossConsoleContract.getStats, () => {
-    const s = store.stats();
+  registerJsonRoute(app, ossConsoleContract.getStats, async () => {
+    const s = await store.stats();
     return {
       objectCount: s.objectCount,
       blobCount: s.blobCount,

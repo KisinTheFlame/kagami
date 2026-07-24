@@ -44,8 +44,8 @@ export class GbaHandler {
 
     // === ROM 管理面（listRoms 与 agent 共用同一条路由）===
 
-    registerJsonRoute(app, gbaApiContract.listRoms, () => ({
-      roms: this.service.listRoms().map(toRomView),
+    registerJsonRoute(app, gbaApiContract.listRoms, async () => ({
+      roms: (await this.service.listRoms()).map(toRomView),
     }));
 
     registerBinaryEnvelopeRoute(
