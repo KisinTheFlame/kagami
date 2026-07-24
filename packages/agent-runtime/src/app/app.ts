@@ -38,7 +38,7 @@ export interface AppStateErrorInfo {
 }
 
 /**
- * App 是 Kagami "手机" 上的一个能力单元。每个 App 自带一组 invoke 子工具、
+ * App 是宿主 Agent 的一个能力单元。每个 App 自带一组 invoke 子工具、
  * 可选的生命周期钩子，以及一个能力说明（help）。
  *
  * 框架不窥探 App 内部状态。所有 view focus、缓存、计时器等都由 App 自己管理。
@@ -54,12 +54,12 @@ export interface App<TConfig = void> {
   /** 唯一短串识别符，用作 Registry key 与外部 switch 目标 id。 */
   readonly id: AppId;
 
-  /** 给 Kagami 看的人类可读短名，例如 "计算器"。在 Portal 列出 App 时使用。 */
+  /** 给 Agent 看的人类可读短名，例如 "计算器"。在 Portal 列出 App 时使用。 */
   readonly displayName: string;
 
   /**
-   * 给 Kagami 看的一句功能简介，平铺直叙介绍这个 App 能做什么。
-   * 每轮随 App 名单渲染进 system prompt，让她在桌面层就能判断该切进哪个 App。
+   * 给 Agent 看的一句功能简介，平铺直叙介绍这个 App 能做什么。
+   * 每轮随 App 名单渲染进 system prompt，让 Agent 在门户层就能判断该切进哪个 App。
    * 静态常量、进程内不变，与 displayName 同为「稳定前缀」的一部分。
    */
   readonly description: string;
@@ -93,7 +93,7 @@ export interface App<TConfig = void> {
   canInvoke(toolName: string): boolean;
 
   /**
-   * 当 Kagami 调用 help 工具且当前进入了本 App 时被调用。
+   * 当 Agent 调用 help 工具且当前进入了本 App 时被调用。
    * 应返回工具使用说明（不含状态）。
    */
   help(): Promise<string>;
@@ -149,7 +149,7 @@ export type CanInvokeResult = { ok: true } | { ok: false; reason: string };
  * 查询 "这个工具属于哪个 App / 现在能不能调" 的唯一入口。
  *
  * AppManager 自己不持有 "当前所在 App" 状态。currentApp 由调用方（通常是
- * RootAgentSession）持有并以参数形式传入。
+ * 宿主的会话层）持有并以参数形式传入。
  */
 export class AppManager {
   // 内部存的是 App<unknown>，泛型擦除。各 App 实例自己负责 TConfig 的类型安全。
@@ -217,7 +217,7 @@ export class AppManager {
    *
    * 规则：
    * 1. 不属于任何注册过的 App → ok（理论上不会走到这里，调用方应先用 ownsTool 判）
-   * 2. 属于某 App，但 Kagami 不在该 App → not ok，返回提示
+   * 2. 属于某 App，但 Agent 不在该 App → not ok，返回提示
    * 3. 属于当前 App，但 App 自己说 "不能调" → not ok
    */
   public canInvoke(toolName: string, currentApp: AppId | undefined): CanInvokeResult {
@@ -337,7 +337,7 @@ export class AppManager {
     try {
       await this.stateStore.save(app.id, app.exportState());
     } catch (error) {
-      // 存档失败不阻断关停，但上报给宿主，避免跨重启状态（如 QQ 未读红点）无声丢失。
+      // 存档失败不阻断关停，但上报给宿主，避免跨重启状态（如未读红点这类宿主状态）无声丢失。
       this.onStateError?.({ appId: app.id, phase: "persist", error });
     }
   }
