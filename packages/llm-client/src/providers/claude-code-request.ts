@@ -10,7 +10,7 @@ const CLAUDE_CODE_SDK_PROMPT = "You are a Claude agent, built on Anthropic's Cla
 const CLAUDE_CODE_BILLING_HEADER =
   "x-anthropic-billing-header: cc_version=2.1.76.b57; cc_entrypoint=sdk-cli; cch=00000;";
 const DEFAULT_MAX_TOKENS = 4096;
-const CLAUDE_4_MAX_TOKENS = 32000;
+const LARGE_OUTPUT_MAX_TOKENS = 32000;
 
 /**
  * LlmChatRequest → Anthropic Messages 请求体（含 system 前缀块 / thinking / 工具映射）。
@@ -239,15 +239,26 @@ function toClaudeToolChoice(
 }
 
 function resolveClaudeMaxTokens(model: string): number {
-  if (isClaude4Model(model)) {
-    return CLAUDE_4_MAX_TOKENS;
+  if (isLargeOutputModel(model)) {
+    return LARGE_OUTPUT_MAX_TOKENS;
   }
 
   return DEFAULT_MAX_TOKENS;
 }
 
-function isClaude4Model(model: string): boolean {
-  return model.startsWith("claude-sonnet-4-") || model.startsWith("claude-opus-4-");
+/**
+ * 支持大输出上限的机型（opus / sonnet 的 4 系与 5 系）。
+ *
+ * 注意 max_tokens 是「thinking + 正文」的合计硬顶：开着 adaptive thinking 时漏判会让思考
+ * 吃掉配额、正文中途截断。新增机型必须同步这里，否则静默回落 4096。
+ */
+function isLargeOutputModel(model: string): boolean {
+  return (
+    model.startsWith("claude-sonnet-4-") ||
+    model.startsWith("claude-opus-4-") ||
+    model.startsWith("claude-sonnet-5") ||
+    model.startsWith("claude-opus-5")
+  );
 }
 
 function requireRequestModel(request: { model?: string }): string {
