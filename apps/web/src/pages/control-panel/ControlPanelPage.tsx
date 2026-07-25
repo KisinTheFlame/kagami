@@ -21,11 +21,13 @@ export function ControlPanelPage() {
 
   const parsedRatio = parseCompressRatio(ratioInput);
   const compactionResult = compactMutation.isSuccess ? compactMutation.data : null;
-  // 并发压缩去重时会复用先到那次的比例，与本次输入不一定相同，如实标出来。
+  // 并发压缩去重时会复用先到那次的比例，如实标出来。比较对象必须是那次 mutation 真正
+  // 提交的值（mutation.variables），拿当前输入框比会在「压缩完又改了输入」时误报并发。
+  const submittedRatio = compactMutation.variables;
   const ratioDiverged =
     compactionResult !== null &&
-    parsedRatio.ok &&
-    compactionResult.appliedCompressRatio !== parsedRatio.value;
+    submittedRatio !== undefined &&
+    compactionResult.appliedCompressRatio !== submittedRatio;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-3 md:p-6">
