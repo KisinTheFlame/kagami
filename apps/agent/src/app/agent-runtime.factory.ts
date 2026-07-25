@@ -392,7 +392,7 @@ export async function buildAgentRuntime({
       mainTopLevelTools,
       terminalTool: new EmitInnerThoughtTool(),
       taskLabel: "内心独白子任务",
-      submitHint: 'invoke(tool="emit_inner_thought", thought=...) 提交念头',
+      submitHint: 'invoke(tool="emit_inner_thought", thoughts=[...]) 提交念头',
     }),
   });
   const innerVoiceExtension = new InnerVoiceExtension({

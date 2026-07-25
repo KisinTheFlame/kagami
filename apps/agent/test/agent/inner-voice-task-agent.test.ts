@@ -30,7 +30,7 @@ function createAgent(chat: ReturnType<typeof vi.fn>): InnerVoiceTaskAgent {
   return new InnerVoiceTaskAgent({ llmClient, taskTools });
 }
 
-function emitThought(thought: string): LlmChatResponsePayload {
+function emitThoughts(thoughts: string[]): LlmChatResponsePayload {
   return {
     provider: "openai",
     model: "gpt-4o-mini",
@@ -41,7 +41,7 @@ function emitThought(thought: string): LlmChatResponsePayload {
         {
           id: "emit-1",
           name: INVOKE_TOOL_NAME,
-          arguments: { tool: EMIT_INNER_THOUGHT_TOOL_NAME, thought },
+          arguments: { tool: EMIT_INNER_THOUGHT_TOOL_NAME, thoughts },
         },
       ],
     },
@@ -50,7 +50,7 @@ function emitThought(thought: string): LlmChatResponsePayload {
 
 describe("InnerVoiceTaskAgent", () => {
   it("emit 非空念头 → 复用完整前缀 + auto + usage=agent/scene=innerVoice，返回念头", async () => {
-    const chat = vi.fn().mockResolvedValueOnce(emitThought("想翻翻那篇文章"));
+    const chat = vi.fn().mockResolvedValueOnce(emitThoughts(["想翻翻那篇文章", "去看看她回没回"]));
     const agent = createAgent(chat);
 
     await expect(
@@ -58,7 +58,7 @@ describe("InnerVoiceTaskAgent", () => {
         systemPrompt: "persona",
         messages: [{ role: "user", content: "material" }],
       }),
-    ).resolves.toBe("想翻翻那篇文章");
+    ).resolves.toEqual(["想翻翻那篇文章", "去看看她回没回"]);
 
     // 复用主 Agent system + 完整消息前缀，尾部只多一条 inner-voice 指令；toolChoice auto。
     expect(chat).toHaveBeenNthCalledWith(
@@ -73,21 +73,42 @@ describe("InnerVoiceTaskAgent", () => {
     );
   });
 
-  it("emit 空字符串 → 返回 ''（调用方据此判 empty 不注入）", async () => {
-    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("   ")));
-    await expect(agent.invoke({ systemPrompt: "p", messages: [] })).resolves.toBe("");
+  it("emit 空数组 / 全空白 → 返回 []（调用方据此判 empty 不注入）", async () => {
+    const empty = createAgent(vi.fn().mockResolvedValueOnce(emitThoughts([])));
+    await expect(empty.invoke({ systemPrompt: "p", messages: [] })).resolves.toEqual([]);
+
+    const blank = createAgent(vi.fn().mockResolvedValueOnce(emitThoughts(["   ", ""])));
+    await expect(blank.invoke({ systemPrompt: "p", messages: [] })).resolves.toEqual([]);
   });
 
-  it("超长念头按码点截断到 120", async () => {
-    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("啊".repeat(200))));
+  it("超长念头逐条按码点截断到 30（issue #592：整体截断会切掉最后一条半句）", async () => {
+    const agent = createAgent(
+      vi.fn().mockResolvedValueOnce(emitThoughts(["啊".repeat(200), "哦".repeat(50), "短的"])),
+    );
     const result = await agent.invoke({ systemPrompt: "p", messages: [] });
-    expect(result).toHaveLength(120);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toHaveLength(30);
+    expect(result[1]).toHaveLength(30);
+    // 逐条截断的关键收益：靠后的候选不会被整体预算吃掉，「有退路」才成立。
+    expect(result[2]).toBe("短的");
+  });
+
+  it("候选超过 4 条只取前 4 条", async () => {
+    const agent = createAgent(
+      vi.fn().mockResolvedValueOnce(emitThoughts(["一", "二", "三", "四", "五", "六"])),
+    );
+    await expect(agent.invoke({ systemPrompt: "p", messages: [] })).resolves.toEqual([
+      "一",
+      "二",
+      "三",
+      "四",
+    ]);
   });
 
   it("超长 emoji 念头按码点截断且不劈代理对（issue #187 教训）", async () => {
-    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("🀄".repeat(130))));
-    const result = await agent.invoke({ systemPrompt: "p", messages: [] });
-    expect([...result]).toHaveLength(120);
+    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThoughts(["🀄".repeat(130)])));
+    const [result] = await agent.invoke({ systemPrompt: "p", messages: [] });
+    expect([...result]).toHaveLength(30);
     const lastCodeUnit = result.charCodeAt(result.length - 1);
     expect(lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff).toBe(false);
   });
