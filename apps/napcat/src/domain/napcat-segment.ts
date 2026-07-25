@@ -366,15 +366,14 @@ const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegment> = 
   }),
 });
 
-const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(
-  () =>
-    z.object({
-      type: z.literal("forward"),
-      data: z.object({
-        id: NonEmptyStringSchema,
-        content: z.array(NapcatReceiveMessageSegmentSchema).optional(),
-      }),
+const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(() =>
+  z.object({
+    type: z.literal("forward"),
+    data: z.object({
+      id: NonEmptyStringSchema,
+      content: z.array(NapcatReceiveMessageSegmentSchema).optional(),
     }),
+  }),
 );
 
 const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.object({
@@ -384,14 +383,12 @@ const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.ob
   }),
 });
 
-const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object(
-  {
-    type: z.literal("markdown"),
-    data: z.object({
-      content: z.string(),
-    }),
-  },
-);
+const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object({
+  type: z.literal("markdown"),
+  data: z.object({
+    content: z.string(),
+  }),
+});
 
 export const NapcatReceiveMessageSegmentSchema: z.ZodType<NapcatReceiveMessageSegment> = z.lazy(
   () =>
