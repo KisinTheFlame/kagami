@@ -5,7 +5,7 @@ import { agentClient } from "@/lib/rpc";
 export function useCompactMainAgentContext() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => agentClient.compactMainAgentContext({}),
+    mutationFn: (compressRatio: number) => agentClient.compactMainAgentContext({ compressRatio }),
     onSuccess: () => {
       // 压缩会重建上下文，主动让上下文快照重新拉取一次。
       void queryClient.invalidateQueries({ queryKey: queryKeys.mainAgentContext.recent() });

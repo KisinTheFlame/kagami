@@ -75,6 +75,8 @@ Kagami **不是一个 QQ 群聊机器人**，而是一个**拥有自己生活的
 
 `RootAgentRuntime.compactContextIfNeeded` 在 token 超阈值时触发压缩：计算保留边界（最近 10% 消息，扩展到 tool-call 边界），对前半部分生成摘要，然后用 `replaceMessages([summaryMessage, ...messagesToKeep])` **一次性**重建整条消息列表。这一次重建会彻底失效旧的 KV cache，但换来的是一个更短、更稳定的新前缀，后续多轮共享。压缩后通过 `notifyContextCompacted()` 通知所有扩展重置自身临时状态，让它们配合新前缀继续工作。
 
+同一次重建还有第二个**触发源**（不是第二条路径）：管理台控制面板的手动压缩 `compactContextByRatio(compressRatio)`，比例由人在面板上填（10~100，100 = 全部摘要一条不留），不看 token/图片阈值、不受超轮冷却闸限制。它与自动压缩共用 `createContextCompactionSlice` 这一份切法和同一个 `replace_leading_messages` effect，所以 tool-call 边界这类语义永远不会在两条触发源上漂移。
+
 **教训**：`replaceMessages` 是一次"受控的昂贵操作"。除了上下文压缩这种明确场景，不要再引入第二种会调用它的路径。任何新功能想"改写一下历史"，都应该先问：能不能改成 append？
 
 **3. Foreground Input —— 不带内容的敲门，drain 时现拉，仍走尾部追加**
