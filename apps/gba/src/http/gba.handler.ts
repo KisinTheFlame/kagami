@@ -6,7 +6,8 @@ import {
   registerJsonRoute,
 } from "@kagami/http/register";
 import { gbaApiContract, gbaConsoleContract, gbaRomsContract } from "@kagami/gba-api/contract";
-import { MAX_ROM_BYTES, toRomView, type GbaService } from "../application/gba.service.js";
+import type { GbaService } from "../application/gba.service.js";
+import { MAX_ROM_BYTES, toRomView } from "../application/rom-library.js";
 
 /**
  * kagami-gba 的 HTTP 面：游玩路由（agent 直连）+ ROM 管理路由（控制台经 gateway `/gba/roms`）。

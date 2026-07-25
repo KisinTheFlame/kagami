@@ -14,6 +14,8 @@ import type { EmulatorCore, EmulatorCoreFactory } from "../emulator/emulator-cor
 import { encodeFramePng } from "../emulator/frame-png.js";
 import type { OssClient } from "../acl/oss-client.js";
 import type { GbaStore, ResumeStateRow, RomRow } from "../persistence/gba-store.js";
+import { EMPTY_HELD, buildPressPlan } from "./press-plan.js";
+import { GbaRomLibrary, MAX_ROM_BYTES } from "./rom-library.js";
 
 type ScreenResult = z.infer<typeof GbaScreenResultSchema>;
 type LoadResult = z.infer<typeof GbaLoadResultSchema>;
@@ -21,16 +23,6 @@ type UploadResult = z.infer<typeof GbaUploadResultSchema>;
 type DeleteResult = z.infer<typeof GbaDeleteResultSchema>;
 type RunState = z.infer<typeof GbaRunStateSchema>;
 type PressStep = z.infer<typeof GbaPressStepSchema>;
-
-// === press 领域上限（超限回 { ok:false, reason }，不是 HTTP 400——镜像 spire「引擎拒绝不是
-// 服务故障」；数值定稿于 issue #541 的 Codex 咨询）===
-const MAX_CHORD_BUTTONS = 4;
-const MAX_HOLD_FRAMES = 120;
-const MAX_GAP_FRAMES = 30;
-const MAX_SETTLE_FRAMES = 120;
-const MAX_STEPS = 8;
-/** 单请求总帧预算：Σ每步(hold+gap) + settle ≤ 300（实速 ~5s）。 */
-const MAX_TOTAL_FRAMES = 300;
 
 /** 前台空闲看门狗：超时自动转后台 + flush 存档（防 agent 崩溃后模拟器空转）。 */
 const WATCHDOG_IDLE_MS = 10 * 60 * 1000;
@@ -40,15 +32,6 @@ const SRAM_FLUSH_INTERVAL_MS = 30 * 1000;
 const MAX_CATCHUP_FRAMES_PER_TICK = 4;
 /** 落后超此值（事件循环卡顿）就丢帧重新对齐——宁可丢帧，绝不快进补作业。 */
 const RESYNC_THRESHOLD_MS = 250;
-
-/** GBA ROM 上限 32MB；OSS 侧与 body 上限取 40MB 留余量。 */
-export const MAX_ROM_BYTES = 40 * 1024 * 1024;
-/** GBA 卡带头固定校验字节（offset 0xB2 恒为 0x96），轻量甄别「根本不是 GBA ROM」的上传。 */
-const GBA_HEADER_FIXED_OFFSET = 0xb2;
-const GBA_HEADER_FIXED_VALUE = 0x96;
-const MIN_ROM_BYTES = 192;
-
-const EMPTY_HELD: ReadonlySet<GbaButton> = new Set();
 
 const logger = new AppLogger({ source: "gba-service" });
 
@@ -89,6 +72,8 @@ export class GbaService {
   private readonly coreFactory: EmulatorCoreFactory;
   private readonly now: () => number;
   private readonly watchdogIdleMs: number;
+  /** 卡带库（store + OSS 的 ROM 增删查改）；会话态把关仍在本服务。 */
+  private readonly romLibrary: GbaRomLibrary;
 
   private core: EmulatorCore | null = null;
   private romId: number | null = null;
@@ -120,6 +105,7 @@ export class GbaService {
     // 晚绑定：测试用 vi.useFakeTimers 替换全局 Date 时，这里才能取到假时钟。
     this.now = now ?? ((): number => Date.now());
     this.watchdogIdleMs = watchdogIdleMs ?? WATCHDOG_IDLE_MS;
+    this.romLibrary = new GbaRomLibrary({ store, ossClient });
   }
 
   /**
@@ -425,82 +411,18 @@ export class GbaService {
   // === ROM 库（控制台管理面）===
 
   public async listRoms(): Promise<RomRow[]> {
-    return this.store.listRoms();
+    return await this.romLibrary.list();
   }
 
   public async uploadRom(input: { name: string; bytes: Buffer }): Promise<UploadResult> {
-    const name = input.name.trim();
-    if (name.length === 0 || name.length > 200) {
-      return { ok: false, reason: "INVALID_NAME" };
-    }
-    const { bytes } = input;
-    if (bytes.length < MIN_ROM_BYTES || bytes.length > MAX_ROM_BYTES) {
-      return { ok: false, reason: "INVALID_ROM_SIZE" };
-    }
-    // 轻量甄别：GBA 卡带头 0xB2 处恒为 0x96。不做深度格式解析。
-    if (bytes[GBA_HEADER_FIXED_OFFSET] !== GBA_HEADER_FIXED_VALUE) {
-      return { ok: false, reason: "NOT_A_GBA_ROM" };
-    }
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    if (await this.store.findRomBySha256(sha256)) {
-      return { ok: false, reason: "DUPLICATE_ROM" };
-    }
-    if (await this.store.findRomByName(name)) {
-      return { ok: false, reason: "DUPLICATE_NAME" };
-    }
-    const ossKey = await this.ossClient.putObject({
-      bytes,
-      mimeType: "application/octet-stream",
-    });
-    let rom: RomRow;
-    try {
-      rom = await this.store.insertRom({ name, ossKey, sizeBytes: bytes.length, sha256 });
-    } catch (error) {
-      // 并发上传竞态：两发都过了上面的同步去重检查、都传完 OSS，UNIQUE(sha256/name) 拦住后到者。
-      // 归一为领域拒绝，并回收刚上传的孤儿 OSS 对象（失败仅告警，孤儿无害）。
-      if (isUniqueConstraintError(error)) {
-        await this.ossClient.deleteObject(ossKey).catch(() => {});
-        logger.warn("GBA ROM 并发上传竞态，后到者按重复处理", {
-          event: "gba.rom_upload_race",
-          name,
-          sha256,
-        });
-        return { ok: false, reason: "DUPLICATE_ROM" };
-      }
-      throw error;
-    }
-    logger.info("GBA ROM 入库", { event: "gba.rom_uploaded", romId: rom.id, name, sha256 });
-    return { ok: true, rom: toRomView(rom) };
+    return await this.romLibrary.upload(input);
   }
 
-  /**
-   * 从 OSS 导入 ROM（#541 追加需求）：agent 侧只递 resId + name,字节由本服务从 OSS 拉回、
-   * 走与 uploadRom 完全相同的校验/去重/入库路径(重新 putObject 拿自有 key——OSS 内容寻址
-   * 去重,相同字节零额外存储,且生命周期与来源对象解耦:来源被删不影响卡带库)。
-   */
   public async importRomFromOss(input: { resId: string; name: string }): Promise<UploadResult> {
-    let bytes: Buffer;
-    try {
-      const object = await this.ossClient.getObject(input.resId, { maxBytes: MAX_ROM_BYTES });
-      bytes = object.bytes;
-    } catch (error) {
-      const reason = (error as { meta?: { reason?: string } }).meta?.reason;
-      logger.warn("GBA 从 OSS 导入 ROM 拉取失败", {
-        event: "gba.rom_import_fetch_failed",
-        resId: input.resId,
-        reason: reason ?? (error instanceof Error ? error.message : String(error)),
-      });
-      if (reason === "OSS_OBJECT_NOT_FOUND") {
-        return { ok: false, reason: "SOURCE_NOT_FOUND" };
-      }
-      if (reason === "OSS_OBJECT_TOO_LARGE") {
-        return { ok: false, reason: "SOURCE_TOO_LARGE" };
-      }
-      return { ok: false, reason: "SOURCE_FETCH_FAILED" };
-    }
-    return this.uploadRom({ name: input.name, bytes });
+    return await this.romLibrary.importFromOss(input);
   }
 
+  /** 删除前的会话态把关（正在加载 / 正被玩一律先拒），删除机制本身交卡带库。 */
   public async deleteRom(romId: number): Promise<DeleteResult> {
     // loadGame 在飞期间 this.romId 尚未指向目标 ROM，「加载中拒删」的守卫会漏判——
     // 删掉正被加载的 ROM 行会让后续 setLastRomId / 存档 flush 撞 FK。加载期一律拒删。
@@ -514,24 +436,7 @@ export class GbaService {
     // getRom / deleteRom 之间被并发 loadGame 插入的 TOCTOU 窗口。
     this.deleteInFlight = true;
     try {
-      const rom = await this.store.getRom(romId);
-      if (!rom) {
-        return { ok: false, reason: "ROM_NOT_FOUND" };
-      }
-      // 删除一致性（issue #541 执行细则）：先删元数据行（battery_save 级联），后 best-effort 删
-      // OSS 对象——失败仅告警，孤儿对象无害（OSS 有 refcount + 启动清扫）。
-      await this.store.deleteRom(romId);
-      try {
-        await this.ossClient.deleteObject(rom.ossKey);
-      } catch (error) {
-        logger.errorWithCause("GBA 删除 OSS ROM 对象失败（孤儿无害，留待人工清理）", error, {
-          event: "gba.rom_oss_delete_failed",
-          romId,
-          ossKey: rom.ossKey,
-        });
-      }
-      logger.info("GBA ROM 删除", { event: "gba.rom_deleted", romId, name: rom.name });
-      return { ok: true };
+      return await this.romLibrary.delete(romId);
     } finally {
       this.deleteInFlight = false;
     }
@@ -770,80 +675,4 @@ export class GbaService {
   private touchActivity(): void {
     this.lastActivityAt = this.now();
   }
-}
-
-/**
- * 把 press 序列展开成逐帧按键计划。领域校验失败返回 reason 字符串（`{ ok:false }` 语义），
- * 通过则返回 frames（每帧一个 held 集合）。
- */
-function buildPressPlan(
-  steps: PressStep[],
-  settleFrames: number,
-): { frames: ReadonlySet<GbaButton>[] } | string {
-  if (steps.length > MAX_STEPS) {
-    return `INVALID_PRESS: steps 数量 ${steps.length} 超上限 ${MAX_STEPS}`;
-  }
-  if (settleFrames > MAX_SETTLE_FRAMES) {
-    return `INVALID_PRESS: settleFrames ${settleFrames} 超上限 ${MAX_SETTLE_FRAMES}`;
-  }
-  const frames: ReadonlySet<GbaButton>[] = [];
-  for (const [index, step] of steps.entries()) {
-    const buttons = new Set(step.buttons);
-    if (buttons.size !== step.buttons.length) {
-      return `INVALID_PRESS: 第 ${index + 1} 步 buttons 含重复键`;
-    }
-    if (buttons.size > MAX_CHORD_BUTTONS) {
-      return `INVALID_PRESS: 第 ${index + 1} 步同时按 ${buttons.size} 键，超上限 ${MAX_CHORD_BUTTONS}`;
-    }
-    if (buttons.has("up") && buttons.has("down")) {
-      return `INVALID_PRESS: 第 ${index + 1} 步同时按 up+down（物理不可能的互斥方向）`;
-    }
-    if (buttons.has("left") && buttons.has("right")) {
-      return `INVALID_PRESS: 第 ${index + 1} 步同时按 left+right（物理不可能的互斥方向）`;
-    }
-    if (step.holdFrames > MAX_HOLD_FRAMES) {
-      return `INVALID_PRESS: 第 ${index + 1} 步 holdFrames ${step.holdFrames} 超上限 ${MAX_HOLD_FRAMES}`;
-    }
-    if (step.gapFrames > MAX_GAP_FRAMES) {
-      return `INVALID_PRESS: 第 ${index + 1} 步 gapFrames ${step.gapFrames} 超上限 ${MAX_GAP_FRAMES}`;
-    }
-    const chord: ReadonlySet<GbaButton> = buttons;
-    for (let i = 0; i < step.holdFrames; i++) {
-      frames.push(chord);
-    }
-    for (let i = 0; i < step.gapFrames; i++) {
-      frames.push(EMPTY_HELD);
-    }
-  }
-  for (let i = 0; i < settleFrames; i++) {
-    frames.push(EMPTY_HELD);
-  }
-  if (frames.length > MAX_TOTAL_FRAMES) {
-    return `INVALID_PRESS: 总帧数 ${frames.length} 超预算 ${MAX_TOTAL_FRAMES}（Σ每步(hold+gap)+settle ≤ ${MAX_TOTAL_FRAMES}）`;
-  }
-  return { frames };
-}
-
-/** Prisma 的 UNIQUE 约束冲突（P2002；并发上传竞态的判定依据）。 */
-function isUniqueConstraintError(error: unknown): boolean {
-  return (error as { code?: unknown }).code === "P2002";
-}
-
-/** RomRow（存储层，ms 时间戳）→ 契约视图（ISO 字符串）。 */
-export function toRomView(rom: RomRow): {
-  id: number;
-  name: string;
-  sizeBytes: number;
-  createdAt: string;
-  lastPlayedAt: string | null;
-  hasSave: boolean;
-} {
-  return {
-    id: rom.id,
-    name: rom.name,
-    sizeBytes: rom.sizeBytes,
-    createdAt: new Date(rom.createdAt).toISOString(),
-    lastPlayedAt: rom.lastPlayedAt === null ? null : new Date(rom.lastPlayedAt).toISOString(),
-    hasSave: rom.hasSave,
-  };
 }

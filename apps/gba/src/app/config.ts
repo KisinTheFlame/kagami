@@ -1,5 +1,5 @@
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
-import { MAX_ROM_BYTES } from "../application/gba.service.js";
+import { MAX_ROM_BYTES } from "../application/rom-library.js";
 
 export type GbaServiceConfig = {
   /** 监听端口，来自顶层 services.gba.port（单一事实来源，见 issue #162）。 */
