@@ -1,0 +1,63 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// kagami-gba 独占的 SQLite 库（ROM 元数据 + 电池存档 + 无感重启现场；ROM 字节在 OSS）。
+// 时间戳列为 Unix ms（Int，SQLite INTEGER 承 64 位）。
+// FK 级联/置空靠 DB 强制（onDelete + configureSqlite 的 PRAGMA foreign_keys = ON）。
+// run_state / resume_state 是单行表（id 恒为 1），单行不变量由 store 侧 upsert(where id=1) 维护。
+
+model Rom {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  ossKey       String  @map("oss_key")
+  sizeBytes    Int     @map("size_bytes")
+  sha256       String  @unique
+  createdAt    Int     @map("created_at")
+  lastPlayedAt Int?    @map("last_played_at")
+
+  batterySave  BatterySave?
+  runStates    RunState[]
+  resumeStates ResumeState[]
+
+  @@map("rom")
+}
+
+model BatterySave {
+  romId     Int   @id @map("rom_id")
+  bytes     Bytes
+  updatedAt Int   @map("updated_at")
+
+  rom       Rom   @relation(fields: [romId], references: [id], onDelete: Cascade)
+
+  @@map("battery_save")
+}
+
+model RunState {
+  id    Int  @id
+  romId Int? @map("rom_id")
+
+  rom   Rom? @relation(fields: [romId], references: [id], onDelete: SetNull)
+
+  @@map("run_state")
+}
+
+model ResumeState {
+  id         Int     @id
+  romId      Int     @map("rom_id")
+  savestate  Bytes
+  foreground Boolean
+  frame      Int
+  savedAt    Int     @map("saved_at")
+
+  rom        Rom     @relation(fields: [romId], references: [id], onDelete: Cascade)
+
+  @@map("resume_state")
+}

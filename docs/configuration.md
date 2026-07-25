@@ -36,7 +36,7 @@ Kagami 的配置读取、配置分区、SQLite 存储布局与 Prisma 迁移流�
 
 - 数据库为**进程内 SQLite 文件**，不依赖外部 PostgreSQL；ORM 仍是 Prisma，driver adapter 为 `@prisma/adapter-better-sqlite3`。
 - 直接查库用 `sqlite3` CLI；库文件路径以 `config.yaml` 的 `server.databaseUrl`（`file:` 路径，运行时解析为绝对路径）为准。
-- **`data/` 按服务分目录**（epic #539「每个持库服务独立数据库」，统一 `data/<服务>/<服务>.db` 范式）：agent 独占 `data/agent/agent.db`（`server.databaseUrl`，原主库 kagami.db 更名）；napcat 独占 `data/napcat/napcat.db`、llm 独占 `data/llm/llm.db`、scheduler 独占 `data/scheduler/scheduler.db`（各自 `services.<svc>.databaseUrl`，schema 在各 `apps/<svc>/prisma/`）；metric 独占 `data/metric/metric.duckdb`（#475）、oss 独占 `data/oss/oss.db`、gba 自持 `data/gba/gba.db`。console 零 DB（#539，经各服务查询路由聚合）。
+- **`data/` 按服务分目录**（epic #539「每个持库服务独立数据库」，统一 `data/<服务>/<服务>.db` 范式）：agent 独占 `data/agent/agent.db`（`server.databaseUrl`，原主库 kagami.db 更名）；napcat 独占 `data/napcat/napcat.db`、llm 独占 `data/llm/llm.db`、scheduler 独占 `data/scheduler/scheduler.db`、oss 独占 `data/oss/oss.db`（对象元数据；blob 字节在 `data/oss/blobs/`）、gba 独占 `data/gba/gba.db`（各自 `services.<svc>.databaseUrl`，schema 在各 `apps/<svc>/prisma/`）；metric 独占 `data/metric/metric.duckdb`（#475，唯一非 SQLite，走裸 DuckDB 驱动）。console 零 DB（#539，经各服务查询路由聚合）。所有用 SQLite 的服务一律经 Prisma（`@prisma/adapter-better-sqlite3`）接入，不再有裸 better-sqlite3。
 - 所有持久化数据放在仓库根 `data/` 下按服务分子目录；整个 `data/` 已在 `.gitignore` 中。
 
 ## Prisma 迁移
@@ -56,12 +56,21 @@ pnpm db:migrate:resolve -- --applied <migration_id> # 标记迁移已应用
 3. 提交 schema 变更和 `packages/persistence/prisma/migrations/*`。
 4. 在目标环境执行 `pnpm db:migrate:deploy`，或通过 `pnpm app:deploy` 一并完成。
 
-独立库服务（scheduler / napcat / llm）的迁移走各自包内的同名脚本（同一 `scripts/prisma.sh` 参数化复用），如 `pnpm --filter @kagami/napcat db:migrate:dev -- --name <name>`；`pnpm app:deploy` 的 Step 2b/2c/2d 会分别应用，且各只停对应单进程。
+独立库服务（scheduler / napcat / llm / oss / gba）的迁移走各自包内的同名脚本（同一 `scripts/prisma.sh` 参数化复用），如 `pnpm --filter @kagami/napcat db:migrate:dev -- --name <name>`；`pnpm app:deploy` 的 Step 2b–2f 会分别应用，且各只停对应单进程。
 
 已有数据库接入 Prisma Migrate（基线）：
 
-1. 若数据库结构已与当前 schema 对齐，先 `pnpm db:migrate:resolve -- --applied <baseline_migration_id>`。
+1. 若数据库结构已与当前 schema 对齐，先 `pnpm --filter @kagami/<svc> db:migrate:resolve -- --applied <baseline_migration_id>`（主库省略 `--filter`）。
 2. 后续按标准流程使用 `db:migrate:dev` 和 `db:migrate:deploy`。
+
+> **oss / gba 首次 prisma 化的一次性基线**：这两个库此前是裸 better-sqlite3（启动时 `CREATE TABLE IF NOT EXISTS`），生产库已有表但无 `_prisma_migrations`。首次带本次改动部署**前**，须各跑一次基线，否则 `migrate deploy` 会因 `CREATE TABLE` 撞已存在的表而失败：
+>
+> ```bash
+> pnpm --filter @kagami/oss db:migrate:resolve -- --applied 20260725000000_init
+> pnpm --filter @kagami/gba-service db:migrate:resolve -- --applied 20260725000000_init
+> ```
+>
+> 基线后 `db:migrate:status` 即报「up to date」，`pnpm app:deploy` 的 Step 2e/2f 正常跳过。库文件路径与表结构不变，无数据搬迁。
 
 > **迁移涉及 DB schema 变更时，部署必须走无参 `pnpm app:deploy`**（会跑 `prisma migrate deploy`），不能用单服务部署（详见 AGENTS.md「部署速查」）。
 

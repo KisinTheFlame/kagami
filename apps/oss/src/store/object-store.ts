@@ -3,7 +3,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readdir, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
-import type Database from "better-sqlite3";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import {
   blobShard,
@@ -13,6 +12,7 @@ import {
   shouldDeleteBlobAfterUnref,
 } from "./object-store-logic.js";
 import { Mutex } from "./mutex.js";
+import type { Database } from "../infra/db/client.js";
 
 /**
  * Typed content-addressed object store（对标 S3 / MinIO）。对外是「bytes + content-type」的
@@ -30,6 +30,9 @@ import { Mutex } from "./mutex.js";
  *   └───────────────┘   │    └────────────────┘     临时: blobs/tmp/<uuid>.tmp-<uuid>
  *   对外 key="res-"+id  │    多 object 可指向同一 blob(去重); refcount 计活引用
  *                       └── 删 key 仅 -1; 归零才删 blob 行 + 物理文件
+ *
+ * 库经 Prisma（better-sqlite3 adapter）接入；schema 由 prisma/migrations 拥有，进程只连不建表。
+ * 纯决策逻辑（key 编解码 / 分片 / 临时判定 / 解引用归零）抽在 object-store-logic.ts，本文件只剩 I/O 编排。
  *
  * 流式 put 的两段式：字节写入在写锁外（边流边算 sha256 落 tmp/ 临时文件，慢速大上传不再串行
  * 阻塞其它写），只有 final-path 存在性检查 + rename + 事务在写锁内（临界区仅剩快操作）。临时文件
@@ -72,19 +75,6 @@ export interface HeadResult {
   sha256: string;
 }
 
-interface ObjectRow {
-  sha256: string;
-  mime: string;
-}
-
-interface BlobRefcountRow {
-  refcount: number;
-}
-
-interface BlobSizeRow {
-  size: number;
-}
-
 interface DeleteOutcome {
   found: boolean;
   /** 归零需要在事务提交后 unlink 的 sha256；否则 null。 */
@@ -117,38 +107,16 @@ export interface StorageStats {
 }
 
 export class ObjectStore {
-  private readonly db: Database.Database;
+  private readonly db: Database;
   private readonly blobDir: string;
   private readonly tmpDir: string;
   /** 串行化写操作的临界区(put 的 rename+事务 / delete 的事务+unlink),消除文件 I/O 与事务分离带来的并发竞态。读不走它。 */
   private readonly writeLock = new Mutex();
 
-  public constructor({ db, blobDir }: { db: Database.Database; blobDir: string }) {
+  public constructor({ db, blobDir }: { db: Database; blobDir: string }) {
     this.db = db;
     this.blobDir = blobDir;
     this.tmpDir = path.join(blobDir, TMP_DIR_NAME);
-    this.applySchema();
-  }
-
-  /** 启动时幂等建表 + PRAGMA。裸 better-sqlite3 不显式开 FK 则 REFERENCES 形同虚设。 */
-  private applySchema(): void {
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("foreign_keys = ON");
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS blob (
-        sha256     TEXT PRIMARY KEY,
-        size       INTEGER NOT NULL,
-        refcount   INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS object (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        sha256     TEXT NOT NULL REFERENCES blob(sha256),
-        mime       TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_object_sha256 ON object(sha256);
-    `);
   }
 
   /**
@@ -208,20 +176,17 @@ export class ObjectStore {
     return this.writeLock.run(async () => {
       await this.ensureBlobFileFromTemp(sha256, tmpPath);
       const now = Date.now();
-      const insert = this.db.transaction((): number => {
-        this.db
-          .prepare(
-            `INSERT INTO blob (sha256, size, refcount, created_at)
-             VALUES (?, ?, 1, ?)
-             ON CONFLICT(sha256) DO UPDATE SET refcount = refcount + 1`,
-          )
-          .run(sha256, size, now);
-        const info = this.db
-          .prepare(`INSERT INTO object (sha256, mime, created_at) VALUES (?, ?, ?)`)
-          .run(sha256, mime, now);
-        return Number(info.lastInsertRowid);
+      const key = await this.db.$transaction(async tx => {
+        // blob 缺则建（refcount=1），已存在则 +1（去重：不改 size/created_at）。
+        await tx.blob.upsert({
+          where: { sha256 },
+          create: { sha256, size, refcount: 1, createdAt: now },
+          update: { refcount: { increment: 1 } },
+        });
+        const object = await tx.object.create({ data: { sha256, mime, createdAt: now } });
+        return formatObjectKey(object.id);
       });
-      return { key: formatObjectKey(insert()) };
+      return { key };
     });
   }
 
@@ -230,16 +195,14 @@ export class ObjectStore {
     if (id === null) {
       return null;
     }
-    const row = this.db.prepare(`SELECT sha256, mime FROM object WHERE id = ?`).get(id) as
-      | ObjectRow
-      | undefined;
+    // size 取自 blob 行（权威，与 head 一致）；一次 join 拿 mime + size，流不逐字节回算长度。
+    const row = await this.db.object.findUnique({
+      where: { id },
+      include: { blob: { select: { size: true } } },
+    });
     if (!row) {
       return null;
     }
-    // size 取自 blob 行（权威，与 head 一致）；流不逐字节回算长度。
-    const blob = this.db.prepare(`SELECT size FROM blob WHERE sha256 = ?`).get(row.sha256) as
-      | BlobSizeRow
-      | undefined;
     // 先 open fd：文件缺失（行在文件没）刻意抛出，由 HTTP 层映射成 500，绝不用 null 掩盖文件丢失。
     // fd 一旦打开即免疫并发 delete 的 unlink。autoClose：流结束 / 出错 / destroy 时自动关 fd，防泄漏。
     const handle = await open(this.blobPath(row.sha256), "r");
@@ -250,7 +213,7 @@ export class ObjectStore {
       await handle.close();
       throw error;
     }
-    return { stream, mime: row.mime, size: blob?.size ?? 0 };
+    return { stream, mime: row.mime, size: row.blob.size };
   }
 
   public async head(key: string): Promise<HeadResult | null> {
@@ -258,24 +221,22 @@ export class ObjectStore {
     if (id === null) {
       return null;
     }
-    const row = this.db.prepare(`SELECT sha256, mime FROM object WHERE id = ?`).get(id) as
-      | ObjectRow
-      | undefined;
+    // size 取自 blob 行（权威），head 不读物理文件。
+    const row = await this.db.object.findUnique({
+      where: { id },
+      include: { blob: { select: { size: true } } },
+    });
     if (!row) {
       return null;
     }
-    // size 取自 blob 行（权威），head 不读物理文件。
-    const blob = this.db.prepare(`SELECT size FROM blob WHERE sha256 = ?`).get(row.sha256) as
-      | BlobSizeRow
-      | undefined;
-    return { mime: row.mime, size: blob?.size ?? 0, sha256: row.sha256 };
+    return { mime: row.mime, size: row.blob.size, sha256: row.sha256 };
   }
 
   /**
    * 控制台只读：分页列出对象（object ⋈ blob），按 id 倒序（最新在前）。可选 mime 精确过滤。
    * 读不走 writeLock（与 get/head 一致，读并发安全）。size/refcount 取自权威 blob 行。
    */
-  public list({
+  public async list({
     page,
     pageSize,
     mime,
@@ -283,54 +244,50 @@ export class ObjectStore {
     page: number;
     pageSize: number;
     mime?: string;
-  }): ObjectListPage {
+  }): Promise<ObjectListPage> {
+    const where = mime ? { mime } : {};
     const offset = (page - 1) * pageSize;
-    const total = mime
-      ? (
-          this.db.prepare(`SELECT COUNT(*) AS c FROM object WHERE mime = ?`).get(mime) as {
-            c: number;
-          }
-        ).c
-      : (this.db.prepare(`SELECT COUNT(*) AS c FROM object`).get() as { c: number }).c;
-
-    const selectSql = `
-      SELECT o.id AS id, o.mime AS mime, o.created_at AS createdAt,
-             b.size AS size, b.sha256 AS sha256, b.refcount AS refcount
-      FROM object o JOIN blob b ON b.sha256 = o.sha256
-      ${mime ? "WHERE o.mime = ?" : ""}
-      ORDER BY o.id DESC
-      LIMIT ? OFFSET ?
-    `;
-    const items = (
-      mime
-        ? this.db.prepare(selectSql).all(mime, pageSize, offset)
-        : this.db.prepare(selectSql).all(pageSize, offset)
-    ) as ObjectListRow[];
-
+    const [total, rows] = await Promise.all([
+      this.db.object.count({ where }),
+      this.db.object.findMany({
+        where,
+        include: { blob: { select: { size: true, sha256: true, refcount: true } } },
+        orderBy: { id: "desc" },
+        skip: offset,
+        take: pageSize,
+      }),
+    ]);
+    const items: ObjectListRow[] = rows.map(row => ({
+      id: row.id,
+      mime: row.mime,
+      createdAt: row.createdAt,
+      size: row.blob.size,
+      sha256: row.blob.sha256,
+      refcount: row.blob.refcount,
+    }));
     return { items, total };
   }
 
   /**
    * 控制台只读：存储统计。全表聚合（COUNT + SUM(int)，无 json_extract，成本远低于会撞网关超时的
    * 大表 json 聚合）；当前规模下远小于 gateway 30s 超时。读不走 writeLock。
+   * logicalBytes（object ⋈ blob 求和）用 $queryRaw 一次算完，避免把全表行拉进进程再累加。
    */
-  public stats(): StorageStats {
-    const objectCount = (this.db.prepare(`SELECT COUNT(*) AS c FROM object`).get() as { c: number })
-      .c;
-    const blobCount = (this.db.prepare(`SELECT COUNT(*) AS c FROM blob`).get() as { c: number }).c;
-    const physicalBytes = (
-      this.db.prepare(`SELECT COALESCE(SUM(size), 0) AS s FROM blob`).get() as { s: number }
-    ).s;
-    const logicalBytes = (
-      this.db
-        .prepare(
-          `SELECT COALESCE(SUM(b.size), 0) AS s
-           FROM object o JOIN blob b ON b.sha256 = o.sha256`,
-        )
-        .get() as { s: number }
-    ).s;
-
-    return { objectCount, blobCount, physicalBytes, logicalBytes };
+  public async stats(): Promise<StorageStats> {
+    const [objectCount, blobCount, physicalAgg, logicalRows] = await Promise.all([
+      this.db.object.count(),
+      this.db.blob.count(),
+      this.db.blob.aggregate({ _sum: { size: true } }),
+      this.db.$queryRaw<{ s: number }[]>`
+        SELECT COALESCE(SUM(b.size), 0) AS s
+        FROM object o JOIN blob b ON b.sha256 = o.sha256`,
+    ]);
+    return {
+      objectCount,
+      blobCount,
+      physicalBytes: physicalAgg._sum.size ?? 0,
+      logicalBytes: Number(logicalRows[0]?.s ?? 0),
+    };
   }
 
   public async delete(key: string): Promise<boolean> {
@@ -341,30 +298,29 @@ export class ObjectStore {
 
     // 写锁串行化：提交后 unlink 与并发 put 的 rename 不会交错（见类头"并发一致性"）。
     return this.writeLock.run(async () => {
-      const remove = this.db.transaction((): DeleteOutcome => {
-        const row = this.db.prepare(`SELECT sha256 FROM object WHERE id = ?`).get(id) as
-          | Pick<ObjectRow, "sha256">
-          | undefined;
+      const outcome = await this.db.$transaction(async (tx): Promise<DeleteOutcome> => {
+        const row = await tx.object.findUnique({ where: { id }, select: { sha256: true } });
         if (!row) {
           return { found: false, orphanSha256: null };
         }
-        this.db.prepare(`DELETE FROM object WHERE id = ?`).run(id);
-        const blob = this.db
-          .prepare(`SELECT refcount FROM blob WHERE sha256 = ?`)
-          .get(row.sha256) as BlobRefcountRow | undefined;
+        await tx.object.delete({ where: { id } });
+        const blob = await tx.blob.findUnique({
+          where: { sha256: row.sha256 },
+          select: { refcount: true },
+        });
         if (blob && shouldDeleteBlobAfterUnref(blob.refcount)) {
-          this.db.prepare(`DELETE FROM blob WHERE sha256 = ?`).run(row.sha256);
+          await tx.blob.delete({ where: { sha256: row.sha256 } });
           return { found: true, orphanSha256: row.sha256 };
         }
         if (blob) {
-          this.db
-            .prepare(`UPDATE blob SET refcount = refcount - 1 WHERE sha256 = ?`)
-            .run(row.sha256);
+          await tx.blob.update({
+            where: { sha256: row.sha256 },
+            data: { refcount: { decrement: 1 } },
+          });
         }
         return { found: true, orphanSha256: null };
       });
 
-      const outcome = remove();
       if (!outcome.found) {
         return false;
       }
@@ -390,7 +346,6 @@ export class ObjectStore {
       return { removed: 0 };
     }
 
-    const blobExists = this.db.prepare(`SELECT 1 FROM blob WHERE sha256 = ?`);
     for (const shard of shards) {
       const shardDir = path.join(this.blobDir, shard);
       let entries: string[];
@@ -403,8 +358,11 @@ export class ObjectStore {
         continue;
       }
       for (const name of entries) {
-        // 崩溃残留的临时写入文件（含 tmp/ 目录里的）也是孤儿。
-        const isOrphan = isTempArtifactName(name) || blobExists.get(name) === undefined;
+        // 崩溃残留的临时写入文件（含 tmp/ 目录里的）也是孤儿；其余按库里有没有对应 blob 行判定。
+        const blobRow = isTempArtifactName(name)
+          ? null
+          : await this.db.blob.findUnique({ where: { sha256: name }, select: { sha256: true } });
+        const isOrphan = isTempArtifactName(name) || blobRow === null;
         if (!isOrphan) {
           continue;
         }

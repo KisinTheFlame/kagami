@@ -11,7 +11,10 @@ services:
   console: { host: localhost, port: 20006 } # kagami-console（管理台后端，纯 DB 查询）
   gateway: { host: localhost, port: 20004 } # kagami-gateway（前门：纯反向代理，/api 分流后端 + 其余转 web；#578）
   web: { host: 127.0.0.1, port: 20016 } # kagami-web（管理台前端，自持静态托管，仅 localhost：只经 gateway 反代；#578。20015 gba 已占）
-  oss: { host: 127.0.0.1, port: 20005 } # kagami-oss（仅 localhost）
+  oss: # kagami-oss（自建对象存储，仅 localhost：agent 经 HttpOssClient 存取，gateway 转只读浏览）
+    host: 127.0.0.1
+    port: 20005
+    databaseUrl: file:./data/oss/oss.db # oss 独占 SQLite 库（blob / object 对象元数据；字节在 data/oss/blobs）
   browser: { host: 127.0.0.1, port: 20007 } # kagami-browser（仅 localhost：暴露 type secret / eval / screenshot，绝不对外）
   llm: # kagami-llm（LLM 网关 + OAuth 凭据中心，仅 localhost：agent 经 HttpLlmClient 直连、gateway 转 /auth）
     host: 127.0.0.1
@@ -27,7 +30,10 @@ services:
     port: 20013
     databaseUrl: file:./data/napcat/napcat.db # napcat 独占 SQLite 库（napcat_event / napcat_qq_message / outbox / image_asset，#539）
   pixel: { host: 127.0.0.1, port: 20012 } # kagami-pixel（像素画服务，仅 localhost：agent 经 HttpPixelClient 驱动）
-  gba: { host: 127.0.0.1, port: 20015 } # kagami-gba（GBA 模拟器服务，仅 localhost：agent 经 HttpGbaClient 直连游玩面，gateway 只转 /gba/roms 管理面；#541。20014 scheduler 已占）
+  gba: # kagami-gba（GBA 模拟器服务，仅 localhost：agent 经 HttpGbaClient 直连游玩面，gateway 只转 /gba/roms 管理面；#541。20014 scheduler 已占）
+    host: 127.0.0.1
+    port: 20015
+    databaseUrl: file:./data/gba/gba.db # gba 独占 SQLite 库（rom / battery_save / run_state / resume_state；ROM 字节在 OSS）
   scheduler: # kagami-scheduler（通用定时调度服务，仅 localhost：agent 经 SchedulerClient 注册 + SSE 收 tick；#428。20013 napcat / 20012 pixel 已占）
     host: 127.0.0.1
     port: 20014

@@ -1,26 +1,25 @@
 import { mkdirSync } from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { runService } from "@kagami/kernel/http/service-runner";
 import { loadOssConfig } from "./config/config.js";
+import { createDbClient, configureSqlite, closeDb } from "./infra/db/client.js";
 import { buildOssApp } from "./http/server.js";
 import { ObjectStore } from "./store/object-store.js";
 
 const logger = new AppLogger({ source: "oss-bootstrap" });
 
-// kagami-oss 进程：自建对象存储，裸 better-sqlite3 + blob 目录。日志只走 stdout（同其余
-// 卫星进程），由 PM2 的 oss-out.log 承载。
+// kagami-oss 进程：自建对象存储，Prisma（better-sqlite3 adapter）独占库 + blob 目录。日志只走
+// stdout（同其余卫星进程），由 PM2 的 oss-out.log 承载。
 runService({
   name: "oss",
   source: "oss-bootstrap",
   build: async () => {
     const config = loadOssConfig();
 
-    mkdirSync(path.dirname(config.dbPath), { recursive: true });
     mkdirSync(config.blobDir, { recursive: true });
 
-    const db = new Database(config.dbPath);
+    const db = createDbClient({ databaseUrl: config.databaseUrl });
+    await configureSqlite(db);
     const store = new ObjectStore({ db, blobDir: config.blobDir });
 
     const swept = await store.sweepOrphans();
@@ -37,8 +36,8 @@ runService({
       bindHost: "127.0.0.1",
       port: config.port,
       cleanup: [
-        () => {
-          db.close();
+        async () => {
+          await closeDb(db);
         },
       ],
     };

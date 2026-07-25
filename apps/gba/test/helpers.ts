@@ -1,8 +1,7 @@
-import Database from "better-sqlite3";
 import type { GbaButton } from "@kagami/gba-api/contract";
 import type { EmulatorCore, GbaFrameRgba } from "../src/emulator/emulator-core.js";
 import type { OssClient, OssObject } from "../src/acl/oss-client.js";
-import { GbaStore } from "../src/persistence/gba-store.js";
+import type { GbaStore, ResumeStateRow, RomRow } from "../src/persistence/gba-store.js";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 
 /** 确定性的假内核：记录每帧 held 集合，SRAM 是可注入的内存缓冲。 */
@@ -110,8 +109,158 @@ export class FakeOssClient implements OssClient {
   }
 }
 
-export function createMemoryStore(): GbaStore {
-  return new GbaStore({ db: new Database(":memory:") });
+/** Prisma 的 UNIQUE 冲突（P2002）——让 GbaService.isUniqueConstraintError 走并发上传竞态分支。 */
+function uniqueConstraintError(): Error {
+  const error = new Error("Unique constraint failed（测试）") as Error & { code: string };
+  error.code = "P2002";
+  return error;
+}
+
+/**
+ * 内存版 GbaStore：JS Map 承载，方法全异步（镜像 Prisma 的异步接口）。复刻真库的关键语义——
+ * UNIQUE(name/sha256) 冲突抛 P2002、删 ROM 级联清电池存档 / 消费快照 + run_state 置 NULL、
+ * run_state / resume_state 单行。单测只测纯逻辑、不碰真实 DB 引擎（GbaService 状态机的替身）。
+ */
+export class InMemoryGbaStore implements GbaStore {
+  private readonly roms = new Map<
+    number,
+    {
+      name: string;
+      ossKey: string;
+      sizeBytes: number;
+      sha256: string;
+      createdAt: number;
+      lastPlayedAt: number | null;
+    }
+  >();
+  private readonly batterySaves = new Map<number, Buffer>();
+  private lastRomId: number | null = null;
+  private resume: ResumeStateRow | null = null;
+  private nextId = 1;
+
+  public async listRoms(): Promise<RomRow[]> {
+    return [...this.roms.keys()].sort((a, b) => b - a).map(id => this.buildRomRow(id));
+  }
+
+  public async getRom(id: number): Promise<RomRow | null> {
+    return this.roms.has(id) ? this.buildRomRow(id) : null;
+  }
+
+  public async findRomBySha256(sha256: string): Promise<RomRow | null> {
+    for (const [id, rom] of this.roms) {
+      if (rom.sha256 === sha256) {
+        return this.buildRomRow(id);
+      }
+    }
+    return null;
+  }
+
+  public async findRomByName(name: string): Promise<RomRow | null> {
+    for (const [id, rom] of this.roms) {
+      if (rom.name === name) {
+        return this.buildRomRow(id);
+      }
+    }
+    return null;
+  }
+
+  public async insertRom(input: {
+    name: string;
+    ossKey: string;
+    sizeBytes: number;
+    sha256: string;
+  }): Promise<RomRow> {
+    for (const rom of this.roms.values()) {
+      if (rom.name === input.name || rom.sha256 === input.sha256) {
+        throw uniqueConstraintError();
+      }
+    }
+    const id = this.nextId++;
+    this.roms.set(id, { ...input, createdAt: Date.now(), lastPlayedAt: null });
+    return this.buildRomRow(id);
+  }
+
+  public async deleteRom(id: number): Promise<boolean> {
+    if (!this.roms.has(id)) {
+      return false;
+    }
+    this.roms.delete(id);
+    this.batterySaves.delete(id); // ON DELETE CASCADE
+    if (this.lastRomId === id) {
+      this.lastRomId = null; // ON DELETE SET NULL
+    }
+    if (this.resume?.romId === id) {
+      this.resume = null; // ON DELETE CASCADE
+    }
+    return true;
+  }
+
+  public async touchLastPlayed(id: number): Promise<void> {
+    const rom = this.roms.get(id);
+    if (rom) {
+      rom.lastPlayedAt = Date.now();
+    }
+  }
+
+  public async getBatterySave(romId: number): Promise<Buffer | null> {
+    const bytes = this.batterySaves.get(romId);
+    return bytes ? Buffer.from(bytes) : null;
+  }
+
+  public async saveBatterySave(romId: number, bytes: Buffer): Promise<void> {
+    this.batterySaves.set(romId, Buffer.from(bytes));
+  }
+
+  public async getLastRomId(): Promise<number | null> {
+    return this.lastRomId;
+  }
+
+  public async setLastRomId(romId: number | null): Promise<void> {
+    this.lastRomId = romId;
+  }
+
+  public async saveResumeState(input: {
+    romId: number;
+    savestate: Buffer;
+    foreground: boolean;
+    frame: number;
+  }): Promise<void> {
+    this.resume = {
+      romId: input.romId,
+      savestate: Buffer.from(input.savestate),
+      foreground: input.foreground,
+      frame: input.frame,
+    };
+  }
+
+  public async getResumeState(): Promise<ResumeStateRow | null> {
+    return this.resume ? { ...this.resume, savestate: Buffer.from(this.resume.savestate) } : null;
+  }
+
+  public async clearResumeState(): Promise<void> {
+    this.resume = null;
+  }
+
+  private buildRomRow(id: number): RomRow {
+    const rom = this.roms.get(id);
+    if (!rom) {
+      throw new Error(`[test] InMemoryGbaStore.buildRomRow 未找到 rom ${id}`);
+    }
+    return {
+      id,
+      name: rom.name,
+      ossKey: rom.ossKey,
+      sizeBytes: rom.sizeBytes,
+      sha256: rom.sha256,
+      createdAt: rom.createdAt,
+      lastPlayedAt: rom.lastPlayedAt,
+      hasSave: this.batterySaves.has(id),
+    };
+  }
+}
+
+export function createMemoryStore(): InMemoryGbaStore {
+  return new InMemoryGbaStore();
 }
 
 /** 造一份最小合法 GBA ROM 字节（0xB2 处 0x96 固定值）。 */
