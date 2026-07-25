@@ -9,8 +9,19 @@ import type {
 const CLAUDE_CODE_SDK_PROMPT = "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
 const CLAUDE_CODE_BILLING_HEADER =
   "x-anthropic-billing-header: cc_version=2.1.76.b57; cc_entrypoint=sdk-cli; cch=00000;";
-const DEFAULT_MAX_TOKENS = 4096;
-const LARGE_OUTPUT_MAX_TOKENS = 32000;
+/**
+ * 所有机型统一的输出上限（`max_tokens` 是 Messages API 必填字段，省不掉）。
+ *
+ * 这里刻意不按机型分档：分档来自 provider 初版对齐官方 CLI 请求形状时的 Claude 3.x/4 代际
+ * 探测（当年 3.x 上限就是 4096 且不支持 thinking），代际差今天已消失——白名单里的机型输出
+ * 上限最低的是 haiku-4-5 的 64K，全都远高于此。留着分档只剩一个后果：新机型漏进白名单就
+ * 静默降到 4096，而 max_tokens 是「thinking + 正文」的合计硬顶，开着 adaptive thinking 时
+ * 表现为正文中途截断，很难往这上面想。
+ *
+ * 代价是若将来接入上限低于该值的机型，会拿到 Anthropic 的 400（max_tokens exceeds），
+ * 这是刻意的：显式失败远好过静默截断。
+ */
+const CLAUDE_MAX_TOKENS = 32000;
 
 /**
  * LlmChatRequest → Anthropic Messages 请求体（含 system 前缀块 / thinking / 工具映射）。
@@ -36,7 +47,7 @@ export function toClaudeCodeRequestBody(
   return {
     model,
     stream: true,
-    max_tokens: resolveClaudeMaxTokens(model),
+    max_tokens: CLAUDE_MAX_TOKENS,
     cache_control: {
       type: "ephemeral",
       ttl: "1h",
@@ -236,29 +247,6 @@ function toClaudeToolChoice(
     type: "tool",
     name: toolChoice.tool_name,
   };
-}
-
-function resolveClaudeMaxTokens(model: string): number {
-  if (isLargeOutputModel(model)) {
-    return LARGE_OUTPUT_MAX_TOKENS;
-  }
-
-  return DEFAULT_MAX_TOKENS;
-}
-
-/**
- * 支持大输出上限的机型（opus / sonnet 的 4 系与 5 系）。
- *
- * 注意 max_tokens 是「thinking + 正文」的合计硬顶：开着 adaptive thinking 时漏判会让思考
- * 吃掉配额、正文中途截断。新增机型必须同步这里，否则静默回落 4096。
- */
-function isLargeOutputModel(model: string): boolean {
-  return (
-    model.startsWith("claude-sonnet-4-") ||
-    model.startsWith("claude-opus-4-") ||
-    model.startsWith("claude-sonnet-5") ||
-    model.startsWith("claude-opus-5")
-  );
 }
 
 function requireRequestModel(request: { model?: string }): string {
