@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { selectUpstreamKey } from "../src/routing.js";
+import { selectFrontDoor, selectUpstreamKey } from "../src/routing.js";
+
+// 前门三分岔的边界回归（#578：静态托管移交 kagami-web 后，网关只剩 自答 / 分流 / 转 web 三条路）。
+describe("selectFrontDoor", () => {
+  it("/health 由网关自答，不转给 web", () => {
+    // 探的是前门自身活性；转给 web 会让 web 挂了时网关也显示不健康，误导监控。
+    expect(selectFrontDoor("/health")).toBe("health");
+  });
+
+  it("/api/ 打头的走后端分流", () => {
+    expect(selectFrontDoor("/api/todo")).toBe("api");
+    expect(selectFrontDoor("/api/metric/query")).toBe("api");
+  });
+
+  it("前端页面与静态资源全部转 web", () => {
+    expect(selectFrontDoor("/")).toBe("web");
+    expect(selectFrontDoor("/dashboard")).toBe("web");
+    expect(selectFrontDoor("/assets/app-a1b2c3d4.js")).toBe("web");
+  });
+
+  it("裸 /api（无尾斜杠）不算 API，落 web——与既有前缀判定逐字一致", () => {
+    // 既有实现用的是 startsWith("/api/")，这里锁死该边界：改成 "/api" 会把前端的 /api 路由吞掉。
+    expect(selectFrontDoor("/api")).toBe("web");
+  });
+
+  it("/healthz 一类近似路径不被 /health 误吞", () => {
+    expect(selectFrontDoor("/healthz")).toBe("web");
+  });
+});
 
 // 路由决策的边界回归：这层是「哪条请求打哪个进程」的唯一裁决点，前缀写错就会静默串进程。
 describe("selectUpstreamKey", () => {

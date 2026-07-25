@@ -29,11 +29,24 @@ module.exports = {
       },
     },
     {
-      // 前门网关：静态托管 apps/web/dist + /api 反向代理。监听端口与上游地址全部自读
-      // config.yaml 的 services 块，ecosystem 不再持有任何端口/地址（见 issue #162）。
+      // 前门网关：纯反向代理——/api 按前缀分流到各后端，其余转给 kagami-web（#578）。监听端口
+      // 与上游地址全部自读 config.yaml 的 services 块，ecosystem 不再持有任何端口/地址（见 issue #162）。
       name: "kagami-gateway",
       cwd: path.join(__dirname, "apps/gateway"),
       script: "dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+    {
+      // 管理台前端进程：自持静态托管（dist/server 发 dist/client），只绑回环、只由 gateway 反代。
+      // 与 gateway 拆开后两者生命周期独立：重载前端不动网关，反之亦然（#578）。
+      name: "kagami-web",
+      cwd: path.join(__dirname, "apps/web"),
+      script: "dist/server/index.js",
       interpreter: "node",
       exec_mode: "fork",
       instances: 1,

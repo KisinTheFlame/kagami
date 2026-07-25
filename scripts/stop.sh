@@ -12,13 +12,14 @@ if [ -z "$SERVICE" ]; then
   exit 0
 fi
 
-# ── 单服务模式：pnpm app:stop <agent|console|gateway|oss|browser|llm|metric|spire|napcat> ──
+# ── 单服务模式：pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat> ──
 # 别名 → PM2 进程名。与 scripts/deploy.sh 的别名表保持一致，让 stop / deploy 用同一套短名。
 case "$SERVICE" in
   agent) PM2_NAME="kagami-agent" ;;
   console) PM2_NAME="kagami-console" ;;
-  # web 是已弃用别名，等价于 gateway（kagami-web → kagami-gateway 改名见 issue #162）。
-  gateway | web) PM2_NAME="kagami-gateway" ;;
+  gateway) PM2_NAME="kagami-gateway" ;;
+  # web 自 #578 起是真服务（管理台前端独立进程），不再是 gateway 的弃用别名。
+  web) PM2_NAME="kagami-web" ;;
   oss) PM2_NAME="kagami-oss" ;;
   browser) PM2_NAME="kagami-browser" ;;
   llm) PM2_NAME="kagami-llm" ;;
@@ -29,7 +30,7 @@ case "$SERVICE" in
   gba) PM2_NAME="kagami-gba" ;;
   scheduler) PM2_NAME="kagami-scheduler" ;;
   *)
-    echo "用法: pnpm app:stop [<agent|console|gateway|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>]" >&2
+    echo "用法: pnpm app:stop [<agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>]" >&2
     echo "  无参：停掉所有进程。" >&2
     echo "  带服务名：只停该服务。" >&2
     exit 1

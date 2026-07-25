@@ -96,6 +96,7 @@ export function createConfigManager(): ConfigManager {
       agent: { host: "localhost", port: 20003 },
       console: { host: "localhost", port: 20006 },
       gateway: { host: "localhost", port: 20004 },
+      web: { host: "127.0.0.1", port: 20016 },
       oss: { host: "127.0.0.1", port: 20005, databaseUrl: ":memory:" },
       browser: { host: "127.0.0.1", port: 20007 },
       llm: { host: "127.0.0.1", port: 20009, databaseUrl: ":memory:" },

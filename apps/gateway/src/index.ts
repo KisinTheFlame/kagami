@@ -1,17 +1,16 @@
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+// kagami-gateway：浏览器的唯一前门。自 #578 起是**纯反向代理**——`/api/*` 按前缀分流到各后端
+// 进程，其余（前端页面与静态资源）原样转给 kagami-web。网关自身不再托管任何文件：前端产物由
+// web 进程自持，两个 app 之间只剩一条 HTTP 边界，不再有构建期的 dist 装配耦合（原 #496 方案）。
+
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
 import { createHealthResponse } from "@kagami/http/wire";
 import { loadGatewayConfig } from "./config.js";
-import { selectUpstreamKey, type UpstreamKey } from "./routing.js";
+import { selectFrontDoor, selectUpstreamKey, type UpstreamKey } from "./routing.js";
 
 const config = loadGatewayConfig();
-const distDir = config.distDir;
-const indexPath = path.join(distDir, "index.html");
 const port = config.port;
 // UpstreamKey → 具体上游地址；路由决策（路径 → key）在 routing.ts，这里只做 key → URL 映射。
 const UPSTREAM_TARGETS: Record<UpstreamKey, URL> = {
@@ -23,7 +22,6 @@ const UPSTREAM_TARGETS: Record<UpstreamKey, URL> = {
   gba: config.gbaTarget,
   agent: config.agentTarget,
 };
-const HASHED_ASSET_NAME_PATTERN = /(?:^|[-.])[a-z0-9]{8,}(?=\.)/i;
 // 上游响应超时：等待上游返回响应头的上限。命中即回 504，避免上游卡死 / 半开时前端连接
 // 永久悬挂、socket 句柄泄漏。只约束"拿到响应头"这一段——响应头一到就清除，故不会打断
 // 合法的长响应体流式传输（大文件 / SSE）。
@@ -43,41 +41,38 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade",
 ]);
 
-const MIME_TYPES: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
-
 const server = createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url ?? "/", "http://localhost");
 
-    if (requestUrl.pathname === "/health") {
-      res.writeHead(200, {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store",
-      });
-      // 与其余服务共享 HealthResponseSchema 形状（{ status, timestamp }），监控探活全进程统一。
-      res.end(JSON.stringify(createHealthResponse()));
-      return;
+    switch (selectFrontDoor(requestUrl.pathname)) {
+      case "health": {
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        // 与其余服务共享 HealthResponseSchema 形状（{ status, timestamp }），监控探活全进程统一。
+        // 网关自答，不代理到 web——探的是前门自身的活性。
+        res.end(JSON.stringify(createHealthResponse()));
+        return;
+      }
+      case "api": {
+        // 剥掉 `/api` 前缀后按路径前缀选后端；契约 path 自带各自前缀，故上游看到的路径不含 /api。
+        const upstreamPath = requestUrl.pathname.slice(4) || "/";
+        const target = UPSTREAM_TARGETS[selectUpstreamKey(upstreamPath)];
+        await proxyRequest(req, res, buildUpstreamUrl(target, upstreamPath, requestUrl.search));
+        return;
+      }
+      case "web": {
+        // 前端页面与静态资源：路径原样透传给 kagami-web（含 query），由它做 SPA 回退与缓存头。
+        await proxyRequest(
+          req,
+          res,
+          buildUpstreamUrl(config.webTarget, requestUrl.pathname, requestUrl.search),
+        );
+        return;
+      }
     }
-
-    if (requestUrl.pathname.startsWith("/api/")) {
-      await proxyApiRequest(req, res, requestUrl);
-      return;
-    }
-
-    await serveStaticAsset(req, res, requestUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
@@ -130,14 +125,29 @@ process.on("unhandledRejection", reason => {
   process.exit(1);
 });
 
-async function proxyApiRequest(
+/**
+ * 拼上游 URL：克隆上游基址后赋 pathname / search，**绝不用 `new URL(相对路径, base)`**。
+ *
+ * 相对拼接会把 `//evil.example/x` 当协议相对 URL 解析，直接把 origin 换成外部主机——网关就成了
+ * 任意外部地址的 SSRF 跳板（`GET /api//evil.example/x` 即可触发）。赋 pathname 则 origin 不可
+ * 被劫持，畸形路径最多变成上游的一个怪路径（由上游自己 404），出不去内网。
+ */
+function buildUpstreamUrl(target: URL, pathname: string, search: string): URL {
+  const upstreamUrl = new URL(target);
+  upstreamUrl.pathname = pathname;
+  upstreamUrl.search = search;
+  return upstreamUrl;
+}
+
+/**
+ * 把一条请求整体转发到指定上游并回灌响应。上游是谁由调用方决定（`/api` 分流的后端，或
+ * kagami-web），本函数只管转发语义：逐跳头剥离、超时、流式回灌、错误映射。
+ */
+async function proxyRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  requestUrl: URL,
+  upstreamUrl: URL,
 ): Promise<void> {
-  const upstreamPath = requestUrl.pathname.slice(4) || "/";
-  const target = UPSTREAM_TARGETS[selectUpstreamKey(upstreamPath)];
-  const upstreamUrl = new URL(`${upstreamPath}${requestUrl.search}`, target);
   const headers = new Headers();
 
   for (const [key, value] of Object.entries(req.headers)) {
@@ -155,7 +165,7 @@ async function proxyApiRequest(
     headers.set(key, Array.isArray(value) ? value.join(", ") : value);
   }
 
-  headers.set("host", target.host);
+  headers.set("host", upstreamUrl.host);
 
   // 只给"拿到响应头"这一段设超时：拿到响应后立即 clearTimeout，body 流式阶段不受限，
   // 避免误伤合法长响应。abort 后 fetch 抛错，走下方 catch 回 504。
@@ -215,108 +225,4 @@ async function proxyApiRequest(
     );
     res.destroy();
   }
-}
-
-async function serveStaticAsset(
-  req: IncomingMessage,
-  res: ServerResponse,
-  requestUrl: URL,
-): Promise<void> {
-  const assetPath = resolveAssetPath(requestUrl.pathname);
-  const selectedPath = await resolveResponsePath(assetPath, req.headers.accept);
-
-  if (!selectedPath) {
-    res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ error: "Not found" }));
-    return;
-  }
-
-  const ext = path.extname(selectedPath).toLowerCase();
-  const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
-  res.writeHead(200, {
-    "content-type": contentType,
-    "cache-control": getCacheControlHeader(selectedPath),
-  });
-
-  if (req.method === "HEAD") {
-    res.end();
-    return;
-  }
-
-  try {
-    // pipeline 在 res 关闭 / 读文件出错时 destroy 读流（autoClose 关 fd），杜绝 fd 泄漏。
-    await pipeline(createReadStream(selectedPath), res);
-  } catch (error) {
-    // 响应头已发（200），无法改状态码；销毁 socket 断开即可。
-    process.stderr.write(
-      `[kagami-gateway] static stream failed for ${selectedPath}: ${
-        error instanceof Error ? error.message : String(error)
-      }\n`,
-    );
-    res.destroy();
-  }
-}
-
-function resolveAssetPath(pathname: string): string {
-  const decodedPath = decodeURIComponent(pathname);
-  const relativePath = decodedPath === "/" ? "/index.html" : decodedPath;
-  const resolvedPath = path.resolve(distDir, `.${relativePath}`);
-
-  if (!resolvedPath.startsWith(distDir)) {
-    return indexPath;
-  }
-
-  return resolvedPath;
-}
-
-async function resolveResponsePath(
-  targetPath: string,
-  acceptHeader: string | undefined,
-): Promise<string | null> {
-  if (await fileExists(targetPath)) {
-    return targetPath;
-  }
-
-  if (path.extname(targetPath).length > 0) {
-    return null;
-  }
-
-  if (typeof acceptHeader === "string" && !acceptHeader.includes("text/html")) {
-    return null;
-  }
-
-  return indexPath;
-}
-
-async function fileExists(targetPath: string): Promise<boolean> {
-  try {
-    const targetStat = await stat(targetPath);
-    return targetStat.isFile();
-  } catch {
-    return false;
-  }
-}
-
-function getCacheControlHeader(targetPath: string): string {
-  if (targetPath === indexPath) {
-    return "no-cache";
-  }
-
-  const relativePath = path.relative(distDir, targetPath);
-  const normalizedPath = relativePath.split(path.sep).join("/");
-  const fileName = path.basename(targetPath);
-
-  if (normalizedPath.startsWith("assets/") && isHashedAsset(fileName)) {
-    return "public, max-age=31536000, immutable";
-  }
-
-  if (isHashedAsset(fileName)) {
-    return "public, max-age=31536000, immutable";
-  }
-
-  return "no-cache";
-}
-
-function isHashedAsset(fileName: string): boolean {
-  return HASHED_ASSET_NAME_PATTERN.test(fileName);
 }

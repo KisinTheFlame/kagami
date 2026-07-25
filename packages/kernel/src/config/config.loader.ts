@@ -214,6 +214,8 @@ const ServicesSchema = z
     agent: ServiceEndpointSchema,
     console: ServiceEndpointSchema,
     gateway: ServiceEndpointSchema,
+    // web 是管理台前端的独立进程（#578）：自持静态托管，只由 gateway 反代，不对外。
+    web: ServiceEndpointSchema,
     // oss 除 host/port 外还持有独立 Prisma 库：blob / object 两表落它自己的 SQLite 文件
     // （对象元数据；字节在 blob 目录）。databaseUrl 非隐私，进 config.yaml。
     oss: ServiceEndpointSchema.extend({

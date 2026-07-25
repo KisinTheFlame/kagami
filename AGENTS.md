@@ -135,10 +135,10 @@ pnpm knip         # 死代码/僵尸依赖审计。CI 门禁分级：孤儿文�
 pnpm --filter @kagami/agent <script>   # 单包命令，如 test / test:watch / db:*
 
 pnpm app:deploy                        # 全量部署：build → prisma migrate deploy → PM2 reload(全部) → pm2 save
-pnpm app:deploy <agent|console|gateway|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
+pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
 
 pnpm app:stop                          # 停掉 ecosystem 里全部进程
-pnpm app:stop <agent|console|gateway|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>    # 只停该服务（与 app:deploy 共用同一套短名别名）
+pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>    # 只停该服务（与 app:deploy 共用同一套短名别名）
 ```
 
 - 仓库当前**没有**统一的根 `pnpm dev`。前后端联调需按实际分别启动，不要假设有一键 dev。
@@ -172,7 +172,8 @@ pnpm app:stop <agent|console|gateway|oss|browser|llm|metric|spire|pixel|gba|napc
 进程拓扑与端口见 [ARCHITECTURE.md](./ARCHITECTURE.md)「部署」。操作层面：
 
 - `pnpm app:deploy`（无参）= 全量：build → Prisma 迁移 → PM2 reload/startOrReload → `pm2 save`。**涉及 DB schema 变更必须走这个**（会跑 `prisma migrate deploy`）。
-- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `browser` / `llm` / `metric` / `spire` / `pixel` / `gba` / `napcat` / `scheduler` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。（`web` 是 `gateway` 的已弃用别名。）
+- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `web` / `browser` / `llm` / `metric` / `spire` / `pixel` / `gba` / `napcat` / `scheduler` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。
+- `web` 自 #578 起是**真服务**（`kagami-web`，管理台前端独立进程，自持静态托管），不再是 `gateway` 的弃用别名。改前端用 `pnpm app:deploy web`，它不动网关；改网关用 `pnpm app:deploy gateway`，它不重建前端。
 - `kagami-browser` / `kagami-llm` / `kagami-metric` 是独立进程，`app:deploy agent` 不触及它们，让「agent 重启不杀浏览器 / 不打断 LLM 服务与登录态 / 不丢 metric 通道」。metric 摄取是 fire-and-forget，服务挂掉只丢点、不影响 agent。
 
 ## 部署红线（用户硬约束）
@@ -211,12 +212,12 @@ Key routing rules:
 ## Deploy Configuration (configured by /setup-deploy)
 
 - Platform: 本地宿主机（PM2 fork 模式，无任何云平台 / PaaS）
-- Production URL: http://localhost:20003（agent）、http://localhost:20004（kagami-gateway：静态托管 + 代理 /api/\*）
+- Production URL: http://localhost:20003（agent）、http://localhost:20004（kagami-gateway：纯反代，/api 分流后端 + 其余转 kagami-web）
 - Deploy workflow: 手动触发，无自动 push 部署
 - Deploy status command: pm2 status / pm2 list
 - Merge method: PR merge（主分支 master）
 - Project type: 后端 Agent 服务 + React 管理台（monorepo）
-- Post-deploy health check: curl http://localhost:20003/health（web: http://localhost:20004/health）
+- Post-deploy health check: curl http://localhost:20003/health（agent）、http://localhost:20004/health（gateway 前门自答）、http://127.0.0.1:20016/health（kagami-web 自身）。**三个都要探**：gateway 的 /health 由它自答，`kagami-web` 挂掉时它照样返回 200，只探网关会得到假绿（前端已全 502 却判部署成功）。要一条命令覆盖整链，改探 gateway 根路径 `curl -sf -H 'Accept: text/html' http://localhost:20004/` —— 它会穿到 web。
 
 ### Custom deploy hooks
 
