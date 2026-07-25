@@ -8,7 +8,7 @@ import type { MetricClient } from "@kagami/metric-client/client";
 // LLM 调用打点（fire-and-forget）：在 kagami-llm 的观测点把每次 attempt 记成 metric，喂给独占 DuckDB
 // 的查询/派生层（P1-P4）。三个 metric（tags 均带 usage[KV 缓存身份] + scene[调用归因] 双维度）：
 // - llm.call        计数（provider/model/status/usage/scene，失败带 error 粗分类）→ 调用量 / 成功率
-// - llm.call.latency 延迟秒（同上 tags）→ p50/p95/p99
+// - llm.call.latency 延迟毫秒（同上 tags）→ p50/p95/p99（秒是展示层的事，前端 ÷1000 换算）
 // - llm.call.tokens  token 用量，按 kind 拆（input_total/input_cache_hit/input_cache_miss/output）
 //                    → 用量 + KV 缓存命中率（cache_hit ÷ input_total，派生一条比率线）
 // record 永不 reject（HttpMetricClient 咽下失败），故一律 `void`，绝不影响 LLM 结果。
@@ -16,8 +16,6 @@ import type { MetricClient } from "@kagami/metric-client/client";
 const METRIC_CALL = "llm.call";
 const METRIC_LATENCY = "llm.call.latency";
 const METRIC_TOKENS = "llm.call.tokens";
-
-/** 毫秒 → 秒。latency 以秒为单位打点（前端直接显示秒，单位口径在后端定死）。 */
 
 /** response.usage 的 token 字段 → 打点 kind。input_total = 命中 + 未命中（见 claude-code-response）。 */
 const TOKEN_KINDS: ReadonlyArray<readonly [kind: string, field: string]> = [
