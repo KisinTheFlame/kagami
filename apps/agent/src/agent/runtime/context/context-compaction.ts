@@ -1,11 +1,46 @@
 import type { LlmMessage } from "@kagami/llm-client";
 
-const CONTEXT_COMPACTION_KEEP_RATIO = 0.1;
+/** 阈值触发的自动压缩固定用这一档：摘要前 90%，保留最近 10%。 */
+const AUTO_CONTEXT_COMPRESS_RATIO = 90;
 
 export type ContextCompactionPlan = {
   messagesToSummarize: LlmMessage[];
   messagesToKeep: LlmMessage[];
 };
+
+/**
+ * 纯切片：按「摘要掉前百分之多少」把消息列表切成两段。compressRatio 是整数百分比，
+ * 100 = 全部摘要、一条不留。阈值触发的自动压缩与人工面板压缩共用这一份切法，
+ * 保证 tool-call 边界这类语义永远不会在两条路径上漂移。
+ * 返回 null = 无可压缩（列表为空，或按该比例算下来一条都不该摘要）。
+ */
+export function createContextCompactionSlice(input: {
+  messages: LlmMessage[];
+  compressRatio: number;
+}): ContextCompactionPlan | null {
+  const { messages, compressRatio } = input;
+  if (messages.length === 0) {
+    return null;
+  }
+
+  const keepCount = calculateCompactionKeepCount({
+    totalMessageCount: messages.length,
+    compressRatio,
+  });
+  const initialCutIndex = messages.length - keepCount;
+  const cutIndex = extendCompactionCutIndexForAssistantToolBoundary({
+    messages,
+    cutIndex: initialCutIndex,
+  });
+  if (cutIndex <= 0) {
+    return null;
+  }
+
+  return {
+    messagesToSummarize: messages.slice(0, cutIndex),
+    messagesToKeep: messages.slice(cutIndex),
+  };
+}
 
 export function createContextCompactionPlan(input: {
   messages: LlmMessage[];
@@ -25,19 +60,10 @@ export function createContextCompactionPlan(input: {
     return null;
   }
 
-  const keepCount = calculateCompactionKeepCount({
-    totalMessageCount: messages.length,
-  });
-  const initialCutIndex = messages.length - keepCount;
-  const cutIndex = extendCompactionCutIndexForAssistantToolBoundary({
+  return createContextCompactionSlice({
     messages,
-    cutIndex: initialCutIndex,
+    compressRatio: AUTO_CONTEXT_COMPRESS_RATIO,
   });
-
-  return {
-    messagesToSummarize: messages.slice(0, cutIndex),
-    messagesToKeep: messages.slice(cutIndex),
-  };
 }
 
 function countImageContentParts(messages: LlmMessage[]): number {
@@ -55,12 +81,16 @@ function countImageContentParts(messages: LlmMessage[]): number {
   return count;
 }
 
-function calculateCompactionKeepCount(input: { totalMessageCount: number }): number {
-  if (input.totalMessageCount <= 1) {
+function calculateCompactionKeepCount(input: {
+  totalMessageCount: number;
+  compressRatio: number;
+}): number {
+  if (input.compressRatio >= 100 || input.totalMessageCount <= 1) {
     return 0;
   }
 
-  return Math.max(1, Math.ceil(input.totalMessageCount * CONTEXT_COMPACTION_KEEP_RATIO));
+  const keepRatio = (100 - input.compressRatio) / 100;
+  return Math.max(1, Math.ceil(input.totalMessageCount * keepRatio));
 }
 
 function extendCompactionCutIndexForAssistantToolBoundary(input: {

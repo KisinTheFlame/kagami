@@ -1,4 +1,5 @@
 import type {
+  MainAgentContextCompactionRequest,
   MainAgentContextCompactionResult,
   MainAgentContextSnapshot,
 } from "@kagami/agent-api/main-agent-context";
@@ -25,11 +26,16 @@ export class DefaultMainAgentContextQueryService implements MainAgentContextQuer
     };
   }
 
-  public async compactEntireContext(): Promise<MainAgentContextCompactionResult> {
-    const result = await this.rootAgentRuntime.compactEntireContext();
+  public async compactContext(
+    input: MainAgentContextCompactionRequest,
+  ): Promise<MainAgentContextCompactionResult> {
+    const result = await this.rootAgentRuntime.compactContextByRatio(input.compressRatio);
     return {
       compacted: result.compacted,
       compactedAt: result.compactedAt.toISOString(),
+      summarizedCount: result.summarizedCount,
+      keptCount: result.keptCount,
+      appliedCompressRatio: result.appliedCompressRatio,
     };
   }
 }

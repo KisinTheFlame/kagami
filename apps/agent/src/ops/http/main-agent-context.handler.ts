@@ -20,8 +20,8 @@ export class MainAgentContextHandler {
       return await this.mainAgentContextQueryService.getRecentSnapshot();
     });
 
-    registerJsonRoute(app, agentApiContract.compactMainAgentContext, async () => {
-      return await this.mainAgentContextQueryService.compactEntireContext();
+    registerJsonRoute(app, agentApiContract.compactMainAgentContext, async ({ input }) => {
+      return await this.mainAgentContextQueryService.compactContext(input);
     });
   }
 }

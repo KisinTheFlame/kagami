@@ -1,6 +1,7 @@
 import { defineJsonRoute } from "@kagami/http/contract";
 import { z } from "zod";
 import {
+  MainAgentContextCompactionRequestSchema,
   MainAgentContextCompactionResultSchema,
   MainAgentContextSnapshotSchema,
 } from "./main-agent-context.js";
@@ -30,7 +31,7 @@ export const agentApiContract = {
   compactMainAgentContext: defineJsonRoute({
     method: "POST",
     path: "/main-agent-context/compact",
-    input: z.object({}).strict(),
+    input: MainAgentContextCompactionRequestSchema,
     output: MainAgentContextCompactionResultSchema,
   }),
   // —— console 只读查询（epic #539 子 issue 4：console 脱库，agent 持有的三张表经此查询）——

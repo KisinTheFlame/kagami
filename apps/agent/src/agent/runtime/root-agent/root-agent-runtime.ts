@@ -22,7 +22,10 @@ import {
   createConversationSummaryMessage,
   createWakeReminderMessage,
 } from "../context/context-message-factory.js";
-import { createContextCompactionPlan } from "../context/context-compaction.js";
+import {
+  createContextCompactionPlan,
+  createContextCompactionSlice,
+} from "../context/context-compaction.js";
 import type { AgentEventQueue } from "../event/event.queue.js";
 import { isRetryableLlmFailure, type LlmClient } from "@kagami/llm-client";
 import type { LlmMessage } from "@kagami/llm-client";
@@ -111,6 +114,19 @@ type PendingToolPersistence = {
 
 /** 本 Agent 的各扩展当前不通过 extensionData 透传任何 per-tool 结构化数据。 */
 export type RootAgentToolExecutionData = Record<string, never>;
+
+/** 人工触发的按比例压缩的执行结果。compacted=false 时 keptCount = 当前全部条数。 */
+export type ContextCompactionOutcome = {
+  compacted: boolean;
+  summarizedCount: number;
+  keptCount: number;
+};
+
+/** 面板可见的压缩结果：在执行结果之上补齐实际生效比例与本次操作时刻。 */
+export type ContextCompactionReport = ContextCompactionOutcome & {
+  appliedCompressRatio: number;
+  compactedAt: Date;
+};
 
 export type RootAgentCompletion = Awaited<ReturnType<LlmClient["chat"]>>;
 
@@ -402,7 +418,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     // 超轮失败后的冷却闸：压缩在每轮 commit 后触发，若 summarizer 持续不 finalize
     //（toolChoice auto 下模型可能被上下文带偏），没有冷却就会每轮白烧 maxRounds 次
     // LLM 调用（跨模型对抗审查各自独立命中的成本放大点）。冷却期内跳过阈值压缩；
-    // 人工触发的 compactEntireContext 不受此限。
+    // 人工触发的 compactContextByRatio 不受此限。
     if (
       this.summaryCooldownUntilMs !== null &&
       this.now().getTime() < this.summaryCooldownUntilMs
@@ -457,40 +473,53 @@ export class RootAgentHost implements RootAgentExtensionHost {
   }
 
   /**
-   * 全量压缩：把整条消息列表（不保留最近 10%）一次性摘要成单条 summary。
-   * 与阈值无关，由人工面板手动触发。和 compactContextIfNeeded 一样走 Effect 模型
-   * 的 replace_leading_messages（count = 全部 message 数），是 KV 缓存允许被破坏的
-   * "计划性重建"路径之一。
+   * 按比例压缩：摘要前 compressRatio% 的消息，保留其余尾部（100 = 全部摘要、一条不留）。
+   * 与阈值无关、也不受冷却闸限制，由人工面板手动触发。和 compactContextIfNeeded 一样
+   * 走 Effect 模型的 replace_leading_messages，共用 createContextCompactionSlice 的切法，
+   * 是 KV 缓存允许被破坏的"计划性重建"路径之一。
    */
-  public async compactEntireContext(): Promise<boolean> {
+  public async compactContextByRatio(compressRatio: number): Promise<ContextCompactionOutcome> {
     const summarizer = this.contextSummarizer;
     if (!summarizer) {
-      return false;
+      return await this.createUncompactedOutcome();
     }
 
     while (true) {
       const snapshot = await this.context.getSnapshot();
-      if (snapshot.messages.length === 0) {
-        return false;
+      const compactionPlan = createContextCompactionSlice({
+        messages: snapshot.messages,
+        compressRatio,
+      });
+      if (!compactionPlan) {
+        return { compacted: false, summarizedCount: 0, keptCount: snapshot.messages.length };
       }
 
-      // 全量压缩：摘要整条消息列表，count = 全部 message 数。
       const attempt = await this.attemptSummarize(summarizer, {
         systemPrompt: snapshot.systemPrompt,
-        messages: snapshot.messages,
+        messages: compactionPlan.messagesToSummarize,
       });
       if (attempt.retry) {
         continue;
       }
       if (attempt.effects.length === 0) {
-        return false;
+        return { compacted: false, summarizedCount: 0, keptCount: snapshot.messages.length };
       }
 
       await this.interpreter.apply(attempt.effects);
-      // 全量压缩成功 = 上下文已重建，阈值压缩的冷却没有存在意义了。
+      // 手动压缩成功 = 上下文已重建，阈值压缩的冷却没有存在意义了。
       this.summaryCooldownUntilMs = null;
-      return true;
+      return {
+        compacted: true,
+        summarizedCount: compactionPlan.messagesToSummarize.length,
+        keptCount: compactionPlan.messagesToKeep.length,
+      };
     }
+  }
+
+  /** 没动上下文时的回报：keptCount = 当前全部条数，让面板能如实显示"一条没动"。 */
+  private async createUncompactedOutcome(): Promise<ContextCompactionOutcome> {
+    const snapshot = await this.context.getSnapshot();
+    return { compacted: false, summarizedCount: 0, keptCount: snapshot.messages.length };
   }
 
   private async attemptSummarize(
@@ -616,8 +645,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly session: Pick<RootAgentSessionController, "setSuspended">;
   private readonly idleWakeMaxWaitMs: number;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
-  private pendingCompactionPromise: Promise<{ compacted: boolean; compactedAt: Date }> | null =
-    null;
+  private pendingCompactionPromise: Promise<ContextCompactionReport> | null = null;
 
   public constructor({
     llmClient,
@@ -729,13 +757,14 @@ export class RootLoopAgent extends BaseLoopAgent<
   }
 
   /**
-   * 手动触发全量上下文压缩。语义对齐 resetContext：
+   * 手动触发按比例上下文压缩。语义对齐 resetContext：
    * 如果当前正卡在 wait 工具里，先推一个 wake 事件解除阻塞；如果当轮 LLM/工具
    * 调用正在进行，则等它收尾（waitForActiveRunOnce）后再压缩，因此对调用方表现为
    * "立即，或在当次调用完成后"。pendingCompactionPromise 让下一轮 runOnce 在
-   * 压缩完成前不会用旧上下文起新一轮。
+   * 压缩完成前不会用旧上下文起新一轮；并发调用会复用先到那次的结果，故结果里带
+   * appliedCompressRatio，让调用方知道实际按哪一档执行。
    */
-  public async compactEntireContext(): Promise<{ compacted: boolean; compactedAt: Date }> {
+  public async compactContextByRatio(compressRatio: number): Promise<ContextCompactionReport> {
     if (this.pendingCompactionPromise) {
       return await this.pendingCompactionPromise;
     }
@@ -744,11 +773,11 @@ export class RootLoopAgent extends BaseLoopAgent<
       this.eventQueue.enqueue({ type: "wake" });
       await this.waitForActiveRunOnce();
 
-      const compacted = await this.host.compactEntireContext();
-      if (compacted) {
+      const outcome = await this.host.compactContextByRatio(compressRatio);
+      if (outcome.compacted) {
         await this.notifyContextCompacted();
       }
-      return { compacted, compactedAt: new Date() };
+      return { ...outcome, appliedCompressRatio: compressRatio, compactedAt: new Date() };
     })();
 
     this.pendingCompactionPromise = compactionPromise;

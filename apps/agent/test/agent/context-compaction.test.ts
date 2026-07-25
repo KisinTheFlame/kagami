@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createContextCompactionPlan } from "../../src/agent/runtime/context/context-compaction.js";
+import {
+  createContextCompactionPlan,
+  createContextCompactionSlice,
+} from "../../src/agent/runtime/context/context-compaction.js";
 import { createUserMessage } from "../../src/agent/runtime/context/context-message-factory.js";
 import type { LlmMessage } from "@kagami/llm-client";
 
@@ -176,6 +179,101 @@ describe("createContextCompactionPlan", () => {
     ).toEqual({
       messagesToSummarize: messages.slice(0, -1),
       messagesToKeep: [tailMessage],
+    });
+  });
+
+  it("与 createContextCompactionSlice(90) 在同一输入下结果一致（自动压缩没有第二套切法）", () => {
+    const messages = Array.from({ length: 37 }, (_, index) =>
+      createUserMessage(`history-${String(index)}`),
+    );
+
+    expect(
+      createContextCompactionPlan({
+        messages,
+        totalTokens: 100,
+        totalTokenThreshold: 1,
+        imageCountThreshold: IMAGE_COUNT_THRESHOLD,
+      }),
+    ).toEqual(createContextCompactionSlice({ messages, compressRatio: 90 }));
+  });
+});
+
+describe("createContextCompactionSlice", () => {
+  it("compressRatio 90：20 条消息摘要 18 条、保留 2 条", () => {
+    const messages = Array.from({ length: 20 }, (_, index) =>
+      createUserMessage(`m-${String(index)}`),
+    );
+
+    expect(createContextCompactionSlice({ messages, compressRatio: 90 })).toEqual({
+      messagesToSummarize: messages.slice(0, 18),
+      messagesToKeep: messages.slice(18),
+    });
+  });
+
+  it("compressRatio 50：20 条消息对半切", () => {
+    const messages = Array.from({ length: 20 }, (_, index) =>
+      createUserMessage(`m-${String(index)}`),
+    );
+
+    expect(createContextCompactionSlice({ messages, compressRatio: 50 })).toEqual({
+      messagesToSummarize: messages.slice(0, 10),
+      messagesToKeep: messages.slice(10),
+    });
+  });
+
+  it("compressRatio 100：全部摘要、一条不留", () => {
+    const messages = Array.from({ length: 20 }, (_, index) =>
+      createUserMessage(`m-${String(index)}`),
+    );
+
+    expect(createContextCompactionSlice({ messages, compressRatio: 100 })).toEqual({
+      messagesToSummarize: messages,
+      messagesToKeep: [],
+    });
+  });
+
+  it("切点落在 assistant tool call 上时向后扩，保留段绝不以 tool 消息打头", () => {
+    const messages = [
+      ...Array.from({ length: 8 }, (_, index) => createUserMessage(`history-${String(index)}`)),
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "tool-1", name: "wait", arguments: {} }],
+      },
+      {
+        role: "tool" as const,
+        toolCallId: "tool-1",
+        content: "tool-result-1",
+      },
+      createUserMessage("tail-1"),
+      createUserMessage("tail-2"),
+    ];
+
+    // 名义 keepCount = max(1, ceil(12 × 0.25)) = 3 → cutIndex 9，正好落在 assistant tool call
+    // 之后、它的 tool 结果之前；边界扩展把 cutIndex 推到 10，实际摘要条数多于名义值。
+    const plan = createContextCompactionSlice({ messages, compressRatio: 75 });
+    expect(plan?.messagesToSummarize).toHaveLength(10);
+    expect(plan?.messagesToKeep).toHaveLength(2);
+    expect(plan?.messagesToKeep[0]?.role).not.toBe("tool");
+  });
+
+  it("按比例算下来一条都不该摘要时返回 null", () => {
+    // 2 条消息 × compressRatio 10 → keepCount = max(1, ceil(2 × 0.9)) = 2 → cutIndex 0。
+    expect(
+      createContextCompactionSlice({
+        messages: [createUserMessage("m-0"), createUserMessage("m-1")],
+        compressRatio: 10,
+      }),
+    ).toBeNull();
+  });
+
+  it("空列表返回 null；单条消息一律全摘要", () => {
+    expect(createContextCompactionSlice({ messages: [], compressRatio: 90 })).toBeNull();
+
+    const single = [createUserMessage("only")];
+    expect(createContextCompactionSlice({ messages: single, compressRatio: 90 })).toEqual({
+      messagesToSummarize: single,
+      messagesToKeep: [],
     });
   });
 });
