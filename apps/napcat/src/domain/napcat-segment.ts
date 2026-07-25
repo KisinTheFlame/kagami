@@ -53,7 +53,7 @@ export type NapcatSendMessageSegment =
   | NapcatSendFaceSegment
   | NapcatSendImageSegment;
 
-export type NapcatReceiveTextSegment = {
+type NapcatReceiveTextSegment = {
   type: "text";
   data: {
     text: string;
@@ -99,7 +99,7 @@ export function isNapcatReceiveImageSegment(
   return segment.type === "image";
 }
 
-export type NapcatReceiveFileSegment = {
+type NapcatReceiveFileSegment = {
   type: "file";
   data: {
     file: string;
@@ -108,7 +108,7 @@ export type NapcatReceiveFileSegment = {
   };
 };
 
-export type NapcatReceivePokeSegment = {
+type NapcatReceivePokeSegment = {
   type: "poke";
   data: {
     type: string;
@@ -116,14 +116,14 @@ export type NapcatReceivePokeSegment = {
   };
 };
 
-export type NapcatReceiveDiceSegment = {
+type NapcatReceiveDiceSegment = {
   type: "dice";
   data: {
     result: string;
   };
 };
 
-export type NapcatReceiveRPSSegment = {
+type NapcatReceiveRPSSegment = {
   type: "rps";
   data: {
     result: string;
@@ -176,7 +176,7 @@ export type NapcatReceiveReplySegment = {
   };
 };
 
-export type NapcatReceiveVideoSegment = {
+type NapcatReceiveVideoSegment = {
   type: "video";
   data: {
     file: string;
@@ -185,7 +185,7 @@ export type NapcatReceiveVideoSegment = {
   };
 };
 
-export type NapcatReceiveRecordSegment = {
+type NapcatReceiveRecordSegment = {
   type: "record";
   data: {
     file: string;
@@ -201,14 +201,14 @@ export type NapcatReceiveForwardSegment = {
   };
 };
 
-export type NapcatReceiveJsonSegment = {
+type NapcatReceiveJsonSegment = {
   type: "json";
   data: {
     data: string;
   };
 };
 
-export type NapcatReceiveMarkdownSegment = {
+type NapcatReceiveMarkdownSegment = {
   type: "markdown";
   data: {
     content: string;
@@ -231,14 +231,14 @@ export type NapcatReceiveMessageSegment =
   | NapcatReceiveJsonSegment
   | NapcatReceiveMarkdownSegment;
 
-export const NapcatReceiveTextSegmentSchema: z.ZodType<NapcatReceiveTextSegment> = z.object({
+const NapcatReceiveTextSegmentSchema: z.ZodType<NapcatReceiveTextSegment> = z.object({
   type: z.literal("text"),
   data: z.object({
     text: z.string(),
   }),
 });
 
-export const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z.object({
+const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z.object({
   type: z.literal("at"),
   data: z.object({
     qq: z.union([NonEmptyStringSchema, z.literal("all")]),
@@ -246,7 +246,7 @@ export const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z
   }),
 });
 
-export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegment> = z.object({
+const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegment> = z.object({
   type: z.literal("image"),
   data: z.union([
     z.object({
@@ -270,7 +270,7 @@ export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegmen
   ]),
 });
 
-export const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment> = z.object({
+const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment> = z.object({
   type: z.literal("file"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -279,7 +279,7 @@ export const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment>
   }),
 });
 
-export const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment> = z.object({
+const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment> = z.object({
   type: z.literal("poke"),
   data: z.object({
     type: NonEmptyStringSchema,
@@ -287,14 +287,14 @@ export const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment>
   }),
 });
 
-export const NapcatReceiveDiceSegmentSchema: z.ZodType<NapcatReceiveDiceSegment> = z.object({
+const NapcatReceiveDiceSegmentSchema: z.ZodType<NapcatReceiveDiceSegment> = z.object({
   type: z.literal("dice"),
   data: z.object({
     result: z.string(),
   }),
 });
 
-export const NapcatReceiveRPSSegmentSchema: z.ZodType<NapcatReceiveRPSSegment> = z.object({
+const NapcatReceiveRPSSegmentSchema: z.ZodType<NapcatReceiveRPSSegment> = z.object({
   type: z.literal("rps"),
   data: z.object({
     result: z.string(),
@@ -329,7 +329,7 @@ const NapcatReceiveFaceRawSchema: z.ZodType<NapcatReceiveFaceRaw> = z
   })
   .passthrough();
 
-export const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment> = z.object({
+const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment> = z.object({
   type: z.literal("face"),
   data: z.object({
     id: NonEmptyStringSchema,
@@ -339,7 +339,7 @@ export const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment>
   }),
 });
 
-export const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegment> = z.object({
+const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegment> = z.object({
   type: z.literal("reply"),
   data: z.object({
     id: NonEmptyStringSchema,
@@ -349,7 +349,7 @@ export const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegmen
   }),
 });
 
-export const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegment> = z.object({
+const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegment> = z.object({
   type: z.literal("video"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -358,7 +358,7 @@ export const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegmen
   }),
 });
 
-export const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegment> = z.object({
+const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegment> = z.object({
   type: z.literal("record"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -366,7 +366,7 @@ export const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegm
   }),
 });
 
-export const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(
+const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(
   () =>
     z.object({
       type: z.literal("forward"),
@@ -377,14 +377,14 @@ export const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSe
     }),
 );
 
-export const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.object({
+const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.object({
   type: z.literal("json"),
   data: z.object({
     data: z.string(),
   }),
 });
 
-export const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object(
+const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object(
   {
     type: z.literal("markdown"),
     data: z.object({
