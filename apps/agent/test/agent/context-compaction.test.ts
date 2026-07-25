@@ -257,6 +257,31 @@ describe("createContextCompactionSlice", () => {
     expect(plan?.messagesToKeep[0]?.role).not.toBe("tool");
   });
 
+  it("切点落在同一组 tool 结果中间时整组划到摘要侧，保留段不会以孤儿 tool 打头", () => {
+    const messages = [
+      ...Array.from({ length: 6 }, (_, index) => createUserMessage(`history-${String(index)}`)),
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [
+          { id: "tool-1", name: "wait", arguments: {} },
+          { id: "tool-2", name: "wait", arguments: {} },
+        ],
+      },
+      { role: "tool" as const, toolCallId: "tool-1", content: "tool-result-1" },
+      { role: "tool" as const, toolCallId: "tool-2", content: "tool-result-2" },
+      createUserMessage("tail-1"),
+      createUserMessage("tail-2"),
+    ];
+
+    // 名义 keepCount = max(1, ceil(11 × 0.25)) = 3 → cutIndex 8，正好切在 tool-1 与 tool-2
+    // 之间：切点前一条是 tool 而不是 assistant，旧的边界扩展在这里不生效。
+    const plan = createContextCompactionSlice({ messages, compressRatio: 75 });
+    expect(plan?.messagesToSummarize).toHaveLength(9);
+    expect(plan?.messagesToKeep).toEqual([messages[9], messages[10]]);
+    expect(plan?.messagesToKeep.some(message => message.role === "tool")).toBe(false);
+  });
+
   it("按比例算下来一条都不该摘要时返回 null", () => {
     // 2 条消息 × compressRatio 10 → keepCount = max(1, ceil(2 × 0.9)) = 2 → cutIndex 0。
     expect(

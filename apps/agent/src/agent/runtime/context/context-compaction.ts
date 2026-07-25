@@ -93,6 +93,15 @@ function calculateCompactionKeepCount(input: {
   return Math.max(1, Math.ceil(input.totalMessageCount * keepRatio));
 }
 
+/**
+ * 把切点向后推到不会拆散「assistant tool_use ↔ 它的 tool 结果」的位置。
+ * 判据不是"切点前一条恰好是 assistant"——切点可能落在同一组 tool 结果中间，甚至
+ * 中间还夹着别的消息（tool 结果之间允许插入其它消息）。所以这里改成：只要摘要侧
+ * 存在某个 assistant 的 tool 结果掉在保留侧，就把边界推到那条结果之后；推完可能
+ * 又把新的 assistant 纳入摘要侧，故循环到不再变化为止。
+ *
+ * 漏掉这一步的后果是保留段以孤儿 tool 消息打头，provider 直接 400。
+ */
 function extendCompactionCutIndexForAssistantToolBoundary(input: {
   messages: LlmMessage[];
   cutIndex: number;
@@ -102,20 +111,30 @@ function extendCompactionCutIndexForAssistantToolBoundary(input: {
     return cutIndex;
   }
 
-  const boundaryMessage = messages[cutIndex - 1];
-  if (boundaryMessage?.role !== "assistant" || boundaryMessage.toolCalls.length === 0) {
-    return cutIndex;
-  }
+  let boundary = cutIndex;
+  let extended = true;
 
-  const toolCallIds = new Set(boundaryMessage.toolCalls.map(toolCall => toolCall.id));
-  let lastMatchingToolIndex = -1;
+  while (extended) {
+    extended = false;
 
-  for (let index = cutIndex; index < messages.length; index += 1) {
-    const message = messages[index];
-    if (message?.role === "tool" && toolCallIds.has(message.toolCallId)) {
-      lastMatchingToolIndex = index;
+    const summarizedToolCallIds = new Set<string>();
+    for (let index = 0; index < boundary; index += 1) {
+      const message = messages[index];
+      if (message?.role === "assistant" && message.toolCalls.length > 0) {
+        for (const toolCall of message.toolCalls) {
+          summarizedToolCallIds.add(toolCall.id);
+        }
+      }
+    }
+
+    for (let index = boundary; index < messages.length; index += 1) {
+      const message = messages[index];
+      if (message?.role === "tool" && summarizedToolCallIds.has(message.toolCallId)) {
+        boundary = index + 1;
+        extended = true;
+      }
     }
   }
 
-  return lastMatchingToolIndex >= 0 ? lastMatchingToolIndex + 1 : cutIndex;
+  return boundary;
 }
