@@ -73,7 +73,6 @@ type RootAgentRuntimeDeps = {
   snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   runtimeKey?: string;
   tools?: ToolExecutor;
-  agentTools?: ToolExecutor;
   contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
   contextCompactionImageCountThreshold?: number;
@@ -167,7 +166,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     llmRetryBackoffMs,
     now,
     sleep,
-  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools"> & {
+  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools"> & {
     interpreter: EffectInterpreter<never>;
   }) {
     this.context = context;
@@ -622,7 +621,6 @@ export class RootLoopAgent extends BaseLoopAgent<
   public constructor({
     llmClient,
     tools,
-    agentTools,
     llmRetryBackoffMs,
     sleep,
     eventQueue,
@@ -634,7 +632,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
     const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
-    const resolvedTools = tools ?? agentTools ?? failMissingTools();
+    const resolvedTools = tools ?? failMissingTools();
     // 单例 Interpreter：host（compactContextIfNeeded 直接调）和 kernel（每个工具
     // 跑完后内置消费 effects）共享。Interpreter 无状态，但语义上应该同一个。
     const interpreter = createRootEffectInterpreter({ session, context, eventQueue });
@@ -909,13 +907,13 @@ function failMissingTools(): never {
  */
 function toPersistableAssistantMessage(
   message: AssistantMessage,
-  agentTools: ToolExecutor,
+  tools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,
     toolCalls: message.toolCalls.filter(
       toolCall =>
-        agentTools.getKind(toolCall.name) !== "control" ||
+        tools.getKind(toolCall.name) !== "control" ||
         shouldPersistControlToolInContext(toolCall.name),
     ),
   };
