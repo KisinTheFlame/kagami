@@ -1,52 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NapcatSendGroupMessageRequestSchema } from "@kagami/napcat-api/message";
-import {
-  NapcatReceiveMessageSegmentSchema,
-  NapcatSendMessageSegmentSchema,
-} from "../src/domain/napcat-segment.js";
+import { NapcatReceiveMessageSegmentSchema } from "../src/domain/napcat-segment.js";
 
+// 出站 segment 没有 zod 校验层（出站只用 NapcatSendMessageSegment 联合**类型**在编译期约束，
+// 运行时不 parse），原先那组 NapcatSend*SegmentSchema 只被本文件自测、无任何生产消费者，
+// 已随死代码清理删除。出站实际产出的形状由 outgoing-image-segments / shared 的解析测试覆盖。
 describe("NapCat segment schemas", () => {
-  it("should validate all supported send segments", () => {
-    const samples: unknown[] = [
-      { type: "text", data: { text: "hello" } },
-      { type: "at", data: { qq: "123456" } },
-      { type: "reply", data: { id: "9988" } },
-      { type: "face", data: { id: "66" } },
-      { type: "mface", data: { emoji_id: "1", emoji_package_id: "2", key: "k" } },
-      { type: "image", data: { file: "https://example.com/a.png", summary: "a" } },
-      { type: "file", data: { file: "/tmp/demo.txt", name: "demo.txt" } },
-      { type: "video", data: { file: "/tmp/demo.mp4", thumb: "https://example.com/t.png" } },
-      { type: "record", data: { file: "/tmp/demo.mp3" } },
-      { type: "json", data: { data: '{"ok":true}' } },
-      { type: "dice", data: {} },
-      { type: "rps", data: {} },
-      { type: "markdown", data: { content: "# title" } },
-      { type: "music", data: { type: "qq", id: "123" } },
-      {
-        type: "music",
-        data: {
-          type: "custom",
-          url: "https://example.com",
-          image: "https://example.com/a.png",
-          title: "demo",
-        },
-      },
-      { type: "node", data: { id: "10001", nickname: "bot" } },
-      {
-        type: "node",
-        data: {
-          content: [{ type: "text", data: { text: "nested" } }],
-        },
-      },
-      { type: "forward", data: { id: "7788" } },
-      { type: "contact", data: { type: "group", id: "112233" } },
-    ];
-
-    for (const sample of samples) {
-      expect(NapcatSendMessageSegmentSchema.safeParse(sample).success).toBe(true);
-    }
-  });
-
   it("should validate all supported receive segments", () => {
     const samples: unknown[] = [
       { type: "text", data: { text: "hello" } },
