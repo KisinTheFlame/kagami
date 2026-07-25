@@ -540,7 +540,12 @@ export class RootAgentHost implements RootAgentExtensionHost {
     }
   }
 
-  public async persistSnapshotIfChanged(input?: { suppressError?: boolean }): Promise<void> {
+  /**
+   * 落库当前快照（仅在 context 修订号变过时）。落库失败默认只记日志不抛——快照持久化是
+   * 尽力而为的旁路，绝不该因它中断主循环；只有明确要感知失败的调用方（如 reset 后的重建）
+   * 才传 `throwOnError: true`。
+   */
+  public async persistSnapshotIfChanged(input?: { throwOnError?: boolean }): Promise<void> {
     if (!this.snapshotRepository) {
       return;
     }
@@ -562,7 +567,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
         event: "agent.root_agent_runtime_snapshot.persist_failed",
         runtimeKey: this.runtimeKey,
       });
-      if (input?.suppressError === false) {
+      if (input?.throwOnError) {
         throw error;
       }
     }

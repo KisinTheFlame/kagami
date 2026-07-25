@@ -13,7 +13,7 @@ import type { AgentContextSnapshot } from "../../context/agent-context.js";
 export interface RootAgentExtensionHost {
   appendWakeReminderIfNeeded(): Promise<void>;
   compactContextIfNeeded(totalTokens: number | null | undefined): Promise<boolean>;
-  persistSnapshotIfChanged(input?: { suppressError?: boolean }): Promise<void>;
+  persistSnapshotIfChanged(input?: { throwOnError?: boolean }): Promise<void>;
   getContextSnapshot(): Promise<AgentContextSnapshot>;
   appendMessages(messages: LlmMessage[]): Promise<void>;
   recordToolCall(input: { toolName: string; argumentsValue: Record<string, unknown> }): void;

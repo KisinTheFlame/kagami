@@ -25,7 +25,7 @@ export class SnapshotPersistenceExtension implements LoopAgentExtension<
 
   public async onAfterReset(context: RootLoopExtensionContext): Promise<void> {
     await context.host.persistSnapshotIfChanged({
-      suppressError: false,
+      throwOnError: true,
     });
   }
 }
