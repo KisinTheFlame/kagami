@@ -1,28 +1,35 @@
 import { z } from "zod";
 import type { ConfigManager } from "@kagami/kernel/config/config.manager";
 import type { Config } from "@kagami/kernel/config/config.loader";
-import { BizError } from "@kagami/kernel/errors/biz-error";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { type NapcatGatewayPersistenceWriter } from "./napcat-gateway/event-persistence-writer.js";
+import { NapcatForwardMessageReader } from "./napcat-gateway/forward-message-reader.js";
+import { NapcatFriendListManager } from "./napcat-gateway/friend-list-manager.js";
+import { NapcatGroupFileClient } from "./napcat-gateway/group-file-client.js";
 import { NapcatGroupMessageProcessor } from "./napcat-gateway/group-message-processor.js";
 import type { NapcatImageMessageAnalyzer } from "./napcat-gateway/image-message-analyzer.js";
 import type { NapcatQqMessageDao } from "../infra/napcat-group-message.dao.js";
 import { NapcatGatewayInboundMessageRouter } from "./napcat-gateway/inbound-message-router.js";
+import { NapcatOrderedEventFlusher } from "./napcat-gateway/ordered-event-flusher.js";
 import {
   buildOutgoingImageSegments,
   buildOutgoingMessageSegments,
-  type NapcatGatewayActionResponseData,
   type WebSocketLike,
 } from "./napcat-gateway/shared.js";
 import { NapcatGatewayTransport } from "./napcat-gateway/transport.js";
+import {
+  NonEmptyStringSchema,
+  NonNegativeIntSchema,
+  PositiveIntSchema,
+  extractMessageId,
+  parseOrThrow,
+} from "./napcat-gateway/wire-schemas.js";
 import type {
   NapcatAgentEvent,
-  NapcatForwardMessageNode,
   NapcatForwardMessagePage,
   NapcatFriendInfo,
   NapcatGetGroupInfoInput,
   NapcatGetGroupInfoResult,
-  NapcatGroupBanData,
   NapcatGroupFileListing,
   NapcatGroupMessageData,
   NapcatGatewayService,
@@ -54,27 +61,9 @@ type NapcatGatewayOptions = {
   createWebSocket?: (url: string) => WebSocketLike;
 };
 
-const MessageIdSchema = z.number().int().positive();
-const PositiveIntSchema = z.number().int().positive();
-const NonNegativeIntSchema = z.number().int().nonnegative();
-const NonEmptyStringSchema = z.string().min(1);
 const GroupMessageHistoryResponseSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())),
 });
-const FriendListResponseSchema = z.array(
-  z.object({
-    user_id: z.union([NonEmptyStringSchema, PositiveIntSchema]).transform(value => String(value)),
-    nickname: z.string().default(""),
-    remark: z
-      .string()
-      .nullable()
-      .optional()
-      .transform(value => {
-        const normalized = value?.trim() ?? "";
-        return normalized.length > 0 ? normalized : null;
-      }),
-  }),
-);
 const GroupInfoResponseSchema = z.object({
   group_all_shut: z.union([z.boolean(), NonNegativeIntSchema]),
   group_remark: z.string().optional().default(""),
@@ -83,106 +72,30 @@ const GroupInfoResponseSchema = z.object({
   member_count: NonNegativeIntSchema,
   max_member_count: NonNegativeIntSchema,
 });
-// get_forward_msg 返回结构对齐 node-napcat-ts（规范 TS 客户端）：节点只挂在 messages 下。
-const ForwardMessageResponseSchema = z.object({
-  messages: z.array(z.record(z.string(), z.unknown())).optional(),
-});
-// get_msg 主路径：容器消息的 forward 段自带内联 content（节点形态与 get_forward_msg 的 messages 一致），
-// 比 get_forward_msg（resId→getMsgHistory 多一跳）更稳。这里只取 message 段数组，逐段挑出 forward。
-const GetMsgResponseSchema = z.object({
-  message: z.array(z.unknown()).optional(),
-});
-const ForwardSegmentWithContentSchema = z.object({
-  type: z.literal("forward"),
-  data: z
-    .object({
-      content: z.array(z.record(z.string(), z.unknown())).optional(),
-    })
-    .passthrough(),
-});
-const GroupFileListingResponseSchema = z.object({
-  files: z
-    .array(
-      z
-        .object({
-          file_id: NonEmptyStringSchema,
-          file_name: z.string(),
-          // 不同 napcat 版本字段名不一（file_size / size），两者都收，映射时兜底。
-          file_size: NonNegativeIntSchema.optional(),
-          size: NonNegativeIntSchema.optional(),
-          upload_time: NonNegativeIntSchema.optional(),
-          uploader_name: z.string().optional(),
-        })
-        .passthrough(),
-    )
-    .optional()
-    .default([]),
-  folders: z
-    .array(
-      z
-        .object({
-          folder_id: NonEmptyStringSchema,
-          folder_name: z.string(),
-          total_file_count: NonNegativeIntSchema.optional(),
-        })
-        .passthrough(),
-    )
-    .optional()
-    .default([]),
-});
-const GroupFileUrlResponseSchema = z.object({
-  url: NonEmptyStringSchema,
-});
 // shut_up_timestamp：成员禁言到期的 epoch 秒；0 / 缺失 / 过去时间都视为未禁言。
 const GroupMemberInfoShutUpResponseSchema = z.object({
   shut_up_timestamp: z.union([z.number(), z.string()]).optional(),
 });
 const logger = new AppLogger({ source: "service.napcat-gateway" });
-const FRIEND_LIST_REFRESH_INTERVAL_MS = 10_000;
-const FORWARD_MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
-// 转发刚到达 / 内层是旧消息时，NapCat 对 get_msg / get_forward_msg 会瞬时返回空（内层尚未解析），
-// 稍候即有（实测）。一次取空就重试几次带退避；仍空则不缓存，留给下次调用再试，避免把瞬时空固化成永久失败。
-const FORWARD_FETCH_MAX_ATTEMPTS = 3;
-const FORWARD_FETCH_RETRY_BACKOFF_MS = 400;
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+/** 一条入站事件处理完的产物，按到达序提交（见 NapcatOrderedEventFlusher）。 */
+type ProcessedPostTypeEvent = Awaited<ReturnType<NapcatGroupMessageProcessor["process"]>> & {
+  privateMessageEvent: NapcatPrivateMessageEvent | null;
+};
 
-type OrderedPostTypeEventResult =
-  | {
-      kind: "processed";
-      normalizedEvent: Awaited<
-        ReturnType<NapcatGroupMessageProcessor["process"]>
-      >["normalizedEvent"];
-      qqMessage: Awaited<ReturnType<NapcatGroupMessageProcessor["process"]>>["qqMessage"];
-      groupMessageEvent: Awaited<
-        ReturnType<NapcatGroupMessageProcessor["process"]>
-      >["groupMessageEvent"];
-      privateMessageEvent: NapcatPrivateMessageEvent | null;
-      groupBanEvent: NapcatGroupBanData | null;
-    }
-  | {
-      kind: "failed";
-    };
-
+/**
+ * NapCat 网关：进程与 NapCat 之间的门面。自身只保留「连接生命周期 + 消息收发 + 事件发布」，
+ * 其余职责拆给协作对象——好友表（{@link NapcatFriendListManager}）、合并转发读取与缓存
+ * （{@link NapcatForwardMessageReader}）、群文件（{@link NapcatGroupFileClient}）、
+ * 入站事件保序提交（{@link NapcatOrderedEventFlusher}）。
+ */
 export class DefaultNapcatGatewayService implements NapcatGatewayService {
   private readonly transport: NapcatGatewayTransport;
   private readonly groupMessageProcessor: NapcatGroupMessageProcessor;
   private readonly enqueueAgentEvent: (event: NapcatAgentEvent) => number | Promise<number>;
-  private friendInfoByUserId: Map<string, NapcatFriendInfo> | null = null;
-  private friendListRefreshTimer: NodeJS.Timeout | null = null;
-  private friendListRefreshPromise: Promise<void> | null = null;
-  // 转发原始节点缓存（按 res_id）：翻页时不重复调 get_forward_msg。
-  private readonly forwardRawNodeCache = new Map<
-    string,
-    { nodes: Record<string, unknown>[]; expiresAt: number }
-  >();
-  // 转发当页已渲染结果缓存（按 res_id+offset+limit）：避免同一页来回翻时重复跑 vision。
-  private readonly forwardPageCache = new Map<
-    string,
-    { nodes: NapcatForwardMessageNode[]; total: number; expiresAt: number }
-  >();
+  private readonly friendListManager: NapcatFriendListManager;
+  private readonly forwardMessageReader: NapcatForwardMessageReader;
+  private readonly groupFileClient: NapcatGroupFileClient;
 
   public static async create({
     configManager,
@@ -233,22 +146,29 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       imageMessageAnalyzer,
       qqMessageDao,
     });
+    // 直传（不加 async/await 包装）：多一层 async 会给每次请求多插一个微任务 tick，
+    // 改变 get_msg → get_forward_msg 这类链式回退的时序。
+    const request: NapcatGatewayTransport["request"] = (action, params) =>
+      transport.request(action, params);
+
+    this.transport = transport;
     this.groupMessageProcessor = groupMessageProcessor;
     this.enqueueAgentEvent = enqueueGroupMessageEvent;
-    let nextSequence = 0;
-    let nextFlushSequence = 0;
-    const completedResults = new Map<number, OrderedPostTypeEventResult>();
+    this.friendListManager = new NapcatFriendListManager({
+      request,
+      publishAgentEvent: event => {
+        this.publishAgentEvent(event);
+      },
+    });
+    this.forwardMessageReader = new NapcatForwardMessageReader({
+      request,
+      normalizeForwardMessages: rawNodes =>
+        groupMessageProcessor.normalizeForwardMessages(rawNodes),
+    });
+    this.groupFileClient = new NapcatGroupFileClient({ request });
 
-    const flushCompletedResults = (): void => {
-      while (completedResults.has(nextFlushSequence)) {
-        const result = completedResults.get(nextFlushSequence);
-        completedResults.delete(nextFlushSequence);
-        nextFlushSequence += 1;
-
-        if (!result || result.kind !== "processed") {
-          continue;
-        }
-
+    const orderedEventFlusher = new NapcatOrderedEventFlusher<ProcessedPostTypeEvent>({
+      onFlush: result => {
         if (result.qqMessage) {
           persistenceWriter.persistQqMessage(result.qqMessage, result.normalizedEvent.eventTime);
         }
@@ -262,55 +182,39 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
           this.publishAgentEvent({ type: "napcat_group_ban", data: result.groupBanEvent });
         }
         persistenceWriter.persistEvent(result.normalizedEvent);
-      }
-    };
+      },
+    });
 
     const inboundMessageRouter = new NapcatGatewayInboundMessageRouter({
       resolveActionResponse: response => {
         transport.resolveActionResponse(response);
       },
       handlePostTypeEvent: async eventPayload => {
-        const sequence = nextSequence;
-        nextSequence += 1;
-
-        void groupMessageProcessor
-          .process(eventPayload)
-          .then(async result => {
+        orderedEventFlusher.submit({
+          run: async () => {
+            const result = await groupMessageProcessor.process(eventPayload);
             const privateMessageEvent = await this.toPrivateMessageEvent(result.normalizedEvent);
-            completedResults.set(sequence, {
-              kind: "processed",
-              normalizedEvent: result.normalizedEvent,
-              qqMessage: result.qqMessage,
-              groupMessageEvent: result.groupMessageEvent,
-              privateMessageEvent,
-              groupBanEvent: result.groupBanEvent,
-            });
-            flushCompletedResults();
-          })
-          .catch(() => {
+            return { ...result, privateMessageEvent };
+          },
+          onError: () => {
             logger.error("Failed to process ordered NapCat post type event", {
               event: "napcat.gateway.post_type_event_handle_failed",
               postType: eventPayload.post_type,
               messageType: eventPayload.message_type,
             });
-            completedResults.set(sequence, {
-              kind: "failed",
-            });
-            flushCompletedResults();
-          });
+          },
+        });
       },
     });
-
-    this.transport = transport;
   }
 
   public async start(): Promise<void> {
     await this.transport.start();
-    this.startFriendListRefreshTimer();
+    this.friendListManager.startRefreshTimer();
   }
 
   public async stop(): Promise<void> {
-    this.stopFriendListRefreshTimer();
+    this.friendListManager.stopRefreshTimer();
     await this.transport.stop();
   }
 
@@ -325,20 +229,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       message: messageSegments,
     });
 
-    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
-    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
-    if (!messageIdResult.success) {
-      throw new BizError({
-        message: "NapCat 返回结果缺少 message_id",
-        meta: {
-          reason: "MISSING_MESSAGE_ID",
-        },
-      });
-    }
-
-    return {
-      messageId: messageIdResult.data,
-    };
+    return { messageId: extractMessageId(data) };
   }
 
   public async sendPrivateMessage({
@@ -352,20 +243,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       message: messageSegments,
     });
 
-    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
-    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
-    if (!messageIdResult.success) {
-      throw new BizError({
-        message: "NapCat 返回结果缺少 message_id",
-        meta: {
-          reason: "MISSING_MESSAGE_ID",
-        },
-      });
-    }
-
-    return {
-      messageId: messageIdResult.data,
-    };
+    return { messageId: extractMessageId(data) };
   }
 
   /**
@@ -391,56 +269,37 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
             message: messageSegments,
           });
 
-    const messageIdSource = Array.isArray(data) ? undefined : data?.message_id;
-    const messageIdResult = MessageIdSchema.safeParse(messageIdSource);
-    if (!messageIdResult.success) {
-      throw new BizError({
-        message: "NapCat 返回结果缺少 message_id",
-        meta: { reason: "MISSING_MESSAGE_ID" },
-      });
-    }
-
-    return { messageId: messageIdResult.data };
+    return { messageId: extractMessageId(data) };
   }
 
   public async getFriendList(): Promise<NapcatFriendInfo[]> {
-    return [...(await this.loadFriendInfoByUserId()).values()].map(friend => ({ ...friend }));
+    return await this.friendListManager.list();
   }
 
   public async getGroupInfo({
     groupId,
   }: NapcatGetGroupInfoInput): Promise<NapcatGetGroupInfoResult> {
-    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
-    if (!groupIdResult.success) {
-      throw new BizError({
-        message: "groupId 必须是非空字符串",
-        meta: {
-          reason: "INVALID_GROUP_ID",
-        },
-      });
-    }
-
-    const data = await this.transport.request("get_group_info", {
-      group_id: groupIdResult.data,
+    const normalizedGroupId = parseOrThrow(NonEmptyStringSchema, groupId, {
+      message: "groupId 必须是非空字符串",
+      reason: "INVALID_GROUP_ID",
     });
 
-    const groupInfoResult = GroupInfoResponseSchema.safeParse(data ?? {});
-    if (!groupInfoResult.success) {
-      throw new BizError({
-        message: "NapCat 返回的群信息结构无效",
-        meta: {
-          reason: "INVALID_GROUP_INFO_RESPONSE",
-        },
-      });
-    }
+    const data = await this.transport.request("get_group_info", {
+      group_id: normalizedGroupId,
+    });
+
+    const groupInfo = parseOrThrow(GroupInfoResponseSchema, data ?? {}, {
+      message: "NapCat 返回的群信息结构无效",
+      reason: "INVALID_GROUP_INFO_RESPONSE",
+    });
 
     return {
-      groupId: groupInfoResult.data.group_id,
-      groupName: groupInfoResult.data.group_name,
-      memberCount: groupInfoResult.data.member_count,
-      maxMemberCount: groupInfoResult.data.max_member_count,
-      groupRemark: groupInfoResult.data.group_remark,
-      groupAllShut: Boolean(groupInfoResult.data.group_all_shut),
+      groupId: groupInfo.group_id,
+      groupName: groupInfo.group_name,
+      memberCount: groupInfo.member_count,
+      maxMemberCount: groupInfo.max_member_count,
+      groupRemark: groupInfo.group_remark,
+      groupAllShut: Boolean(groupInfo.group_all_shut),
     };
   }
 
@@ -448,47 +307,29 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     groupId: string;
     count: number;
   }): Promise<NapcatGroupMessageData[]> {
-    const groupIdResult = NonEmptyStringSchema.safeParse(input.groupId);
-    if (!groupIdResult.success) {
-      throw new BizError({
-        message: "groupId 必须是非空字符串",
-        meta: {
-          reason: "INVALID_GROUP_ID",
-        },
-      });
-    }
-
-    const countResult = PositiveIntSchema.safeParse(input.count);
-    if (!countResult.success) {
-      throw new BizError({
-        message: "count 必须是正整数",
-        meta: {
-          reason: "INVALID_COUNT",
-        },
-      });
-    }
+    const groupId = parseOrThrow(NonEmptyStringSchema, input.groupId, {
+      message: "groupId 必须是非空字符串",
+      reason: "INVALID_GROUP_ID",
+    });
+    const count = parseOrThrow(PositiveIntSchema, input.count, {
+      message: "count 必须是正整数",
+      reason: "INVALID_COUNT",
+    });
 
     const data = await this.transport.request("get_group_msg_history", {
-      group_id: groupIdResult.data,
+      group_id: groupId,
       // message_seq=0 = 从最新一条往前取（OneBot/NapCat 约定）。缺省时 NapCat 会按
       // undefined 去定位锚点消息、报「消息undefined不存在」，故必须显式给锚点。
       message_seq: 0,
-      count: countResult.data,
+      count,
     });
 
-    const historyResult = GroupMessageHistoryResponseSchema.safeParse(data ?? {});
-    if (!historyResult.success) {
-      throw new BizError({
-        message: "NapCat 返回的群历史消息结构无效",
-        meta: {
-          reason: "INVALID_GROUP_MESSAGE_HISTORY_RESPONSE",
-        },
-      });
-    }
+    const history = parseOrThrow(GroupMessageHistoryResponseSchema, data ?? {}, {
+      message: "NapCat 返回的群历史消息结构无效",
+      reason: "INVALID_GROUP_MESSAGE_HISTORY_RESPONSE",
+    });
 
-    return await this.groupMessageProcessor.normalizeHistoricalGroupMessages(
-      historyResult.data.messages,
-    );
+    return await this.groupMessageProcessor.normalizeHistoricalGroupMessages(history.messages);
   }
 
   public async getRecentPrivateMessages(input: {
@@ -496,29 +337,18 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     count: number;
     messageSeq?: number;
   }): Promise<NapcatPersistableQqMessage[]> {
-    const userIdResult = NonEmptyStringSchema.safeParse(input.userId);
-    if (!userIdResult.success) {
-      throw new BizError({
-        message: "userId 必须是非空字符串",
-        meta: {
-          reason: "INVALID_USER_ID",
-        },
-      });
-    }
-
-    const countResult = PositiveIntSchema.safeParse(input.count);
-    if (!countResult.success) {
-      throw new BizError({
-        message: "count 必须是正整数",
-        meta: {
-          reason: "INVALID_COUNT",
-        },
-      });
-    }
+    const userId = parseOrThrow(NonEmptyStringSchema, input.userId, {
+      message: "userId 必须是非空字符串",
+      reason: "INVALID_USER_ID",
+    });
+    const count = parseOrThrow(PositiveIntSchema, input.count, {
+      message: "count 必须是正整数",
+      reason: "INVALID_COUNT",
+    });
 
     const params: Record<string, unknown> = {
-      user_id: userIdResult.data,
-      count: countResult.data,
+      user_id: userId,
+      count,
       // 同 get_group_msg_history：缺省 message_seq 会让 NapCat 按 undefined 查锚点报错，
       // 未显式指定时以 0 = 从最新一条往前取。
       message_seq:
@@ -528,170 +358,44 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     };
 
     const data = await this.transport.request("get_friend_msg_history", params);
-    const historyResult = GroupMessageHistoryResponseSchema.safeParse(data ?? {});
-    if (!historyResult.success) {
-      throw new BizError({
-        message: "NapCat 返回的私聊历史消息结构无效",
-        meta: {
-          reason: "INVALID_PRIVATE_MESSAGE_HISTORY_RESPONSE",
-        },
-      });
-    }
+    const history = parseOrThrow(GroupMessageHistoryResponseSchema, data ?? {}, {
+      message: "NapCat 返回的私聊历史消息结构无效",
+      reason: "INVALID_PRIVATE_MESSAGE_HISTORY_RESPONSE",
+    });
 
-    return await this.groupMessageProcessor.normalizeHistoricalPrivateMessages(
-      historyResult.data.messages,
-    );
+    return await this.groupMessageProcessor.normalizeHistoricalPrivateMessages(history.messages);
   }
 
-  public async getForwardMessages({
-    id,
-    offset,
-    limit,
-  }: {
+  public async getForwardMessages(input: {
     id: string;
     offset: number;
     limit: number;
   }): Promise<NapcatForwardMessagePage> {
-    const idResult = NonEmptyStringSchema.safeParse(id);
-    if (!idResult.success) {
-      throw new BizError({
-        message: "合并转发 id 必须是非空字符串",
-        meta: {
-          reason: "INVALID_FORWARD_ID",
-        },
-      });
-    }
-
-    const offsetResult = NonNegativeIntSchema.safeParse(offset);
-    if (!offsetResult.success) {
-      throw new BizError({
-        message: "offset 必须是非负整数",
-        meta: {
-          reason: "INVALID_FORWARD_OFFSET",
-        },
-      });
-    }
-
-    const limitResult = PositiveIntSchema.safeParse(limit);
-    if (!limitResult.success) {
-      throw new BizError({
-        message: "limit 必须是正整数",
-        meta: {
-          reason: "INVALID_FORWARD_LIMIT",
-        },
-      });
-    }
-
-    const forwardId = idResult.data;
-    const pageOffset = offsetResult.data;
-    const pageLimit = limitResult.data;
-
-    const pageCacheKey = `${forwardId}:${pageOffset}:${pageLimit}`;
-    const cachedPage = this.forwardPageCache.get(pageCacheKey);
-    if (cachedPage && cachedPage.expiresAt > Date.now()) {
-      return { nodes: cachedPage.nodes, total: cachedPage.total, offset: pageOffset };
-    }
-    if (cachedPage) {
-      this.forwardPageCache.delete(pageCacheKey);
-    }
-
-    const rawNodes = await this.loadForwardRawNodes(forwardId);
-    const total = rawNodes.length;
-    const pageRawNodes = rawNodes.slice(pageOffset, pageOffset + pageLimit);
-    const nodes = await this.groupMessageProcessor.normalizeForwardMessages(pageRawNodes);
-
-    // 同样不缓存空结果（total 为 0 多是瞬时未解析）：缓存空会让 TTL 内的重试都命中空，下次本可成功也读不到。
-    if (total > 0) {
-      this.forwardPageCache.set(pageCacheKey, {
-        nodes,
-        total,
-        expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
-      });
-    }
-
-    return { nodes, total, offset: pageOffset };
+    return await this.forwardMessageReader.getPage(input);
   }
 
-  public async listGroupFiles({
-    groupId,
-    folderId,
-    fileCount,
-  }: {
+  public async listGroupFiles(input: {
     groupId: string;
     folderId?: string;
     fileCount?: number;
   }): Promise<NapcatGroupFileListing> {
-    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
-    if (!groupIdResult.success) {
-      throw new BizError({
-        message: "groupId 必须是非空字符串",
-        meta: { reason: "INVALID_GROUP_ID" },
-      });
-    }
-
-    // folderId 省略 → 根目录；带上 → 该文件夹。两个 action 返回结构相同。
-    const action = folderId ? "get_group_files_by_folder" : "get_group_root_files";
-    const params: Record<string, unknown> = { group_id: groupIdResult.data };
-    if (fileCount !== undefined) {
-      params.file_count = fileCount;
-    }
-    if (folderId !== undefined) {
-      params.folder_id = folderId;
-    }
-
-    const data = await this.transport.request(action, params);
-    const parsed = GroupFileListingResponseSchema.safeParse(data ?? {});
-    if (!parsed.success) {
-      throw new BizError({
-        message: "NapCat 返回的群文件列表结构无效",
-        meta: { reason: "INVALID_GROUP_FILE_LISTING_RESPONSE" },
-      });
-    }
-
-    return {
-      files: parsed.data.files.map(file => ({
-        fileId: file.file_id,
-        fileName: file.file_name,
-        size: file.file_size ?? file.size ?? 0,
-        uploadTime: file.upload_time ?? null,
-        uploaderName: file.uploader_name ?? "",
-      })),
-      folders: parsed.data.folders.map(folder => ({
-        folderId: folder.folder_id,
-        folderName: folder.folder_name,
-        fileCount: folder.total_file_count ?? 0,
-      })),
-    };
+    return await this.groupFileClient.list(input);
   }
 
-  public async getGroupFileUrl({
-    groupId,
-    fileId,
-  }: {
+  public async getGroupFileUrl(input: {
     groupId: string;
     fileId: string;
   }): Promise<{ url: string }> {
-    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
-    const fileIdResult = NonEmptyStringSchema.safeParse(fileId);
-    if (!groupIdResult.success || !fileIdResult.success) {
-      throw new BizError({
-        message: "groupId / fileId 必须是非空字符串",
-        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
-      });
-    }
+    return await this.groupFileClient.getUrl(input);
+  }
 
-    const data = await this.transport.request("get_group_file_url", {
-      group_id: groupIdResult.data,
-      file_id: fileIdResult.data,
-    });
-    const parsed = GroupFileUrlResponseSchema.safeParse(data ?? {});
-    if (!parsed.success) {
-      throw new BizError({
-        message: "NapCat 返回的群文件 URL 结构无效",
-        meta: { reason: "INVALID_GROUP_FILE_URL_RESPONSE" },
-      });
-    }
-    return { url: parsed.data.url };
+  public async uploadGroupFile(input: {
+    groupId: string;
+    fileRef: string;
+    name: string;
+    folderId?: string;
+  }): Promise<void> {
+    await this.groupFileClient.upload(input);
   }
 
   /**
@@ -736,153 +440,6 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
     return untilMs > Date.now() ? untilMs : null;
   }
 
-  public async uploadGroupFile({
-    groupId,
-    fileRef,
-    name,
-    folderId,
-  }: {
-    groupId: string;
-    fileRef: string;
-    name: string;
-    folderId?: string;
-  }): Promise<void> {
-    const groupIdResult = NonEmptyStringSchema.safeParse(groupId);
-    const nameResult = NonEmptyStringSchema.safeParse(name);
-    if (!groupIdResult.success || !nameResult.success) {
-      throw new BizError({
-        message: "groupId / name 必须是非空字符串",
-        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
-      });
-    }
-    if (fileRef.length === 0) {
-      throw new BizError({
-        message: "fileRef 不能为空",
-        meta: { reason: "INVALID_GROUP_FILE_ARGS" },
-      });
-    }
-
-    // fileRef 走 base64:// 自包含形态；**不记录 fileRef**（base64 串会爆日志）。
-    const params: Record<string, unknown> = {
-      group_id: groupIdResult.data,
-      file: fileRef,
-      name: nameResult.data,
-    };
-    if (folderId !== undefined) {
-      params.folder_id = folderId;
-    }
-    // 返回 null；transport.request 已在 retcode!=0 时抛 BizError，失败自动冒泡。
-    await this.transport.request("upload_group_file", params);
-  }
-
-  private async loadForwardRawNodes(forwardId: string): Promise<Record<string, unknown>[]> {
-    const cached = this.forwardRawNodeCache.get(forwardId);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.nodes;
-    }
-    if (cached) {
-      this.forwardRawNodeCache.delete(forwardId);
-    }
-
-    const nodes = await this.fetchForwardRawNodesWithRetry(forwardId);
-    // 只缓存非空结果：空往往是 NapCat 的瞬时未解析，缓存空会把它固化成 TTL 内（10 分钟）永久失败，
-    // 下次调用本可成功却被空缓存挡住。空就不写缓存，留给下次 view_forward 重新拉。
-    if (nodes.length > 0) {
-      this.forwardRawNodeCache.set(forwardId, {
-        nodes,
-        expiresAt: Date.now() + FORWARD_MESSAGE_CACHE_TTL_MS,
-      });
-    }
-    return nodes;
-  }
-
-  /** 取一条合并转发的原始节点，空就重试带退避（NapCat 对刚到达 / 内层旧消息会瞬时返回空，稍候即有）。 */
-  private async fetchForwardRawNodesWithRetry(
-    forwardId: string,
-  ): Promise<Record<string, unknown>[]> {
-    for (let attempt = 1; attempt <= FORWARD_FETCH_MAX_ATTEMPTS; attempt += 1) {
-      const nodes = await this.requestForwardRawNodes(forwardId);
-      if (nodes.length > 0) {
-        return nodes;
-      }
-      if (attempt < FORWARD_FETCH_MAX_ATTEMPTS) {
-        logger.info("Forward fetch returned empty, retrying", {
-          event: "napcat.gateway.forward_fetch_empty_retry",
-          forwardId,
-          attempt,
-        });
-        await delay(FORWARD_FETCH_RETRY_BACKOFF_MS * attempt);
-      }
-    }
-    logger.warn("Forward fetch still empty after retries", {
-      event: "napcat.gateway.forward_fetch_empty",
-      forwardId,
-      attempts: FORWARD_FETCH_MAX_ATTEMPTS,
-    });
-    return [];
-  }
-
-  /**
-   * 单次拉取转发节点：主路径走 get_msg（容器消息的 forward 段自带内联 content，更稳），
-   * 拿不到再兜底 get_forward_msg（resId→getMsgHistory，会瞬时返回空的那条）。
-   */
-  private async requestForwardRawNodes(forwardId: string): Promise<Record<string, unknown>[]> {
-    const viaGetMsg = await this.loadForwardNodesViaGetMsg(forwardId);
-    if (viaGetMsg.length > 0) {
-      return viaGetMsg;
-    }
-    return await this.loadForwardNodesViaGetForwardMsg(forwardId);
-  }
-
-  /** 主路径：get_msg(forwardId) 拿容器消息，挑出 forward 段的内联 content 作为节点。失败/无内容返回空。 */
-  private async loadForwardNodesViaGetMsg(forwardId: string): Promise<Record<string, unknown>[]> {
-    let data: NapcatGatewayActionResponseData;
-    try {
-      data = await this.transport.request("get_msg", { message_id: forwardId });
-    } catch (error) {
-      // get_msg 失败不致命，交给 get_forward_msg 兜底。
-      logger.info("get_msg path for forward failed, will fall back", {
-        event: "napcat.gateway.forward_get_msg_failed",
-        forwardId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
-
-    const parsed = GetMsgResponseSchema.safeParse(data ?? {});
-    if (!parsed.success) {
-      return [];
-    }
-    for (const segment of parsed.data.message ?? []) {
-      const forwardSegment = ForwardSegmentWithContentSchema.safeParse(segment);
-      if (forwardSegment.success && forwardSegment.data.data.content) {
-        return forwardSegment.data.data.content;
-      }
-    }
-    return [];
-  }
-
-  /** 兜底路径：get_forward_msg（入参对齐 node-napcat-ts，只传 message_id）。 */
-  private async loadForwardNodesViaGetForwardMsg(
-    forwardId: string,
-  ): Promise<Record<string, unknown>[]> {
-    const data = await this.transport.request("get_forward_msg", {
-      message_id: forwardId,
-    });
-
-    const responseResult = ForwardMessageResponseSchema.safeParse(data ?? {});
-    if (!responseResult.success) {
-      throw new BizError({
-        message: "NapCat 返回的合并转发结构无效",
-        meta: {
-          reason: "INVALID_FORWARD_MESSAGE_RESPONSE",
-        },
-      });
-    }
-
-    return responseResult.data.messages ?? [];
-  }
-
   private async toPrivateMessageEvent(input: {
     postType: string;
     messageType: string | null;
@@ -906,7 +463,7 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
       return null;
     }
 
-    const friendInfo = await this.findFriendByUserId(input.userId);
+    const friendInfo = await this.friendListManager.findByUserId(input.userId);
     if (!friendInfo) {
       logger.info("Ignoring NapCat private message from non-friend user", {
         event: "napcat.gateway.private_message_ignored_non_friend",
@@ -929,111 +486,6 @@ export class DefaultNapcatGatewayService implements NapcatGatewayService {
         time: input.time,
       },
     };
-  }
-
-  private async findFriendByUserId(userId: string): Promise<NapcatFriendInfo | null> {
-    const cachedFriend = (await this.loadFriendInfoByUserId()).get(userId);
-    if (cachedFriend) {
-      return cachedFriend;
-    }
-
-    // miss 时刷新一次再判定：缓存可能已过期（含冷启动窗口内刚加为好友的用户，其首条私聊
-    // 此前会被误当非好友静默永久丢弃）。走 refreshFriendList 复用单飞锁，让并发 miss 合并成
-    // 一次 get_friend_list、规避「读-改-写好友表」的覆盖竞态；刷新失败在其内部被吞（记日志），
-    // 此处退化为干净地按非好友处理，不把瞬时拉取失败抛成整条消息 failed。
-    await this.refreshFriendList({ force: true, reason: "friend_lookup_miss" });
-    return this.friendInfoByUserId?.get(userId) ?? null;
-  }
-
-  private async loadFriendInfoByUserId(input?: {
-    refresh?: boolean;
-  }): Promise<Map<string, NapcatFriendInfo>> {
-    if (!input?.refresh && this.friendInfoByUserId) {
-      return this.friendInfoByUserId;
-    }
-
-    const data = await this.transport.request("get_friend_list", {});
-    const friendListResult = FriendListResponseSchema.safeParse(data ?? []);
-    if (!friendListResult.success) {
-      throw new BizError({
-        message: "NapCat 返回的好友列表结构无效",
-        meta: {
-          reason: "INVALID_FRIEND_LIST_RESPONSE",
-        },
-      });
-    }
-
-    const normalizedFriendList = normalizeFriendList(
-      friendListResult.data.map(friend => ({
-        userId: friend.user_id,
-        nickname: friend.nickname.trim(),
-        remark: friend.remark,
-      })),
-    );
-    const previousFriendInfoByUserId = this.friendInfoByUserId;
-    this.friendInfoByUserId = new Map(normalizedFriendList.map(friend => [friend.userId, friend]));
-
-    if (hasFriendListChanged(previousFriendInfoByUserId, this.friendInfoByUserId)) {
-      this.publishAgentEvent({
-        type: "napcat_friend_list_updated",
-        data: {
-          friends: normalizedFriendList.map(friend => ({ ...friend })),
-        },
-      });
-    }
-
-    return this.friendInfoByUserId;
-  }
-
-  private startFriendListRefreshTimer(): void {
-    if (this.friendListRefreshTimer) {
-      return;
-    }
-
-    this.friendListRefreshTimer = setInterval(() => {
-      void this.refreshFriendList({
-        force: true,
-        reason: "interval",
-      });
-    }, FRIEND_LIST_REFRESH_INTERVAL_MS);
-  }
-
-  private stopFriendListRefreshTimer(): void {
-    if (!this.friendListRefreshTimer) {
-      return;
-    }
-
-    clearInterval(this.friendListRefreshTimer);
-    this.friendListRefreshTimer = null;
-  }
-
-  private async refreshFriendList(input?: {
-    force?: boolean;
-    reason?: "interval" | "friend_lookup_miss";
-  }): Promise<void> {
-    if (this.friendListRefreshPromise) {
-      return await this.friendListRefreshPromise;
-    }
-
-    const refreshPromise = this.loadFriendInfoByUserId({
-      refresh: input?.force ?? false,
-    })
-      .then(() => undefined)
-      .catch(error => {
-        logger.warn("Failed to refresh NapCat friend list", {
-          event: "napcat.gateway.friend_list_refresh_failed",
-          reason: input?.reason ?? "interval",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      })
-      .finally(() => {
-        if (this.friendListRefreshPromise === refreshPromise) {
-          this.friendListRefreshPromise = null;
-        }
-      });
-
-    this.friendListRefreshPromise = refreshPromise;
-    await refreshPromise;
   }
 
   private publishAgentEvent(event: NapcatAgentEvent): void {
@@ -1077,50 +529,6 @@ function agentEventMessageId(event: NapcatAgentEvent): number | null {
     return event.data.messageId;
   }
   return null;
-}
-
-function normalizeFriendList(friendList: NapcatFriendInfo[]): NapcatFriendInfo[] {
-  return [...friendList]
-    .map(friend => ({
-      userId: friend.userId,
-      nickname: friend.nickname.trim(),
-      remark: normalizeRemark(friend.remark),
-    }))
-    .sort((left, right) => left.userId.localeCompare(right.userId));
-}
-
-function hasFriendListChanged(
-  previous: Map<string, NapcatFriendInfo> | null,
-  current: Map<string, NapcatFriendInfo>,
-): boolean {
-  if (!previous) {
-    return true;
-  }
-
-  if (previous.size !== current.size) {
-    return true;
-  }
-
-  for (const [userId, currentFriend] of current.entries()) {
-    const previousFriend = previous.get(userId);
-    if (!previousFriend) {
-      return true;
-    }
-
-    if (
-      previousFriend.nickname !== currentFriend.nickname ||
-      normalizeRemark(previousFriend.remark) !== normalizeRemark(currentFriend.remark)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function normalizeRemark(remark: string | null): string | null {
-  const normalized = remark?.trim() ?? "";
-  return normalized.length > 0 ? normalized : null;
 }
 
 function toAgentEventMessageType(
