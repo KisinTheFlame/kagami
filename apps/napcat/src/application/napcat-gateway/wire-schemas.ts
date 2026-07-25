@@ -8,7 +8,7 @@ import type { NapcatGatewayActionResponseData } from "./shared.js";
  * 协作对象各自复制一份 `z.string().min(1)`。
  */
 
-export const MessageIdSchema = z.number().int().positive();
+const MessageIdSchema = z.number().int().positive();
 export const PositiveIntSchema = z.number().int().positive();
 export const NonNegativeIntSchema = z.number().int().nonnegative();
 export const NonEmptyStringSchema = z.string().min(1);
