@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { toClaudeCodeRequestBody } from "../src/providers/claude-code-request.js";
 import type { LlmChatRequest } from "../src/types.js";
 
-// max_tokens 是「thinking + 正文」的合计硬顶：机型漏判会静默回落 4096，
-// 开着 adaptive thinking 时思考吃掉配额、正文中途截断。换主力机型时钉死这条。
+// max_tokens 不按机型分档：换主力机型不该再牵动这里。曾经的代际分档会让新机型静默降到
+// 4096，而 max_tokens 是「thinking + 正文」的合计硬顶，表现为正文中途截断、极难归因。
 
 function createChatRequest(model: string): LlmChatRequest {
   return {
@@ -22,11 +22,9 @@ describe("claude-code max_tokens", () => {
     "claude-opus-4-8",
     "claude-opus-4-6",
     "claude-sonnet-4-6",
-  ])("should give %s the large output budget", model => {
+    "claude-haiku-4-5",
+    "claude-some-future-model",
+  ])("should send the same budget regardless of model (%s)", model => {
     expect(toClaudeCodeRequestBody(createChatRequest(model)).max_tokens).toBe(32000);
-  });
-
-  it("should fall back to the conservative budget for other models", () => {
-    expect(toClaudeCodeRequestBody(createChatRequest("claude-haiku-4-5")).max_tokens).toBe(4096);
   });
 });
