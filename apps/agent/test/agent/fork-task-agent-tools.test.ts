@@ -57,7 +57,9 @@ describe("fork task agent 拒绝话术（KV 前缀基线）", () => {
       "在上下文摘要子任务中不可调用 upload_resource。",
       "在上下文摘要子任务中不可调用 help。",
     ]);
-    expect(defaultReason("「发现待办」子任务", "wait")).toBe("在「发现待办」子任务中不可调用 wait。");
+    expect(defaultReason("「发现待办」子任务", "wait")).toBe(
+      "在「发现待办」子任务中不可调用 wait。",
+    );
     expect(defaultReason("内心独白子任务", "help")).toBe("在内心独白子任务中不可调用 help。");
   });
 });
