@@ -19,10 +19,8 @@ let app: FastifyInstance | null = null;
 let database: Database | null = null;
 let shutdownApps: (() => Promise<void>) | null = null;
 let schedulerClient: SchedulerClient | null = null;
-let callbackServers: Array<{ stop(): Promise<void> }> = [];
 let rootAgentRuntime: AgentRuntimeController | null = null;
 let stateSampler: { start(): void; stop(): void } | null = null;
-let closeLlmProviders: (() => Promise<void>) | null = null;
 let isServerStarted = false;
 let isShuttingDown = false;
 let port: number | null = null;
@@ -75,10 +73,8 @@ async function fatalExit(event: string, message: string, error: unknown): Promis
     database,
     shutdownApps,
     schedulerClient,
-    callbackServers,
     rootAgentRuntime,
     stateSampler,
-    closeLlmProviders,
     closeDatabase: closeDb,
     // 崩溃路径无论清理成功与否都以非零码退出（graceful 路径才 exit(0)）。
     exit: () => process.exit(1),
@@ -103,10 +99,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     database,
     shutdownApps,
     schedulerClient,
-    callbackServers,
     rootAgentRuntime,
     stateSampler,
-    closeLlmProviders,
     closeDatabase: closeDb,
   });
 }
@@ -125,10 +119,8 @@ try {
   database = runtime.database;
   shutdownApps = runtime.shutdownApps;
   schedulerClient = runtime.schedulerClient;
-  callbackServers = runtime.callbackServers;
   rootAgentRuntime = runtime.rootAgentRuntime;
   stateSampler = runtime.stateSampler;
-  closeLlmProviders = runtime.closeLlmProviders;
   port = runtime.port;
 
   // napcat 网关已收纳进 QQ App：在 buildServerRuntime 内随 App.onStartup 起好了，这里不再单独 start。
