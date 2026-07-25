@@ -30,16 +30,6 @@ export type NapcatSendFaceSegment = {
   };
 };
 
-export type NapcatSendMFaceSegment = {
-  type: "mface";
-  data: {
-    emoji_id: string;
-    emoji_package_id: string;
-    key: string;
-    summary?: string;
-  };
-};
-
 export type NapcatSendImageSegment = {
   type: "image";
   data: {
@@ -49,325 +39,21 @@ export type NapcatSendImageSegment = {
   };
 };
 
-export type NapcatSendFileSegment = {
-  type: "file";
-  data: {
-    file: string;
-    name?: string;
-  };
-};
-
-export type NapcatSendVideoSegment = {
-  type: "video";
-  data: {
-    file: string;
-    name?: string;
-    thumb?: string;
-  };
-};
-
-export type NapcatSendRecordSegment = {
-  type: "record";
-  data: {
-    file: string;
-  };
-};
-
-export type NapcatSendJsonSegment = {
-  type: "json";
-  data: {
-    data: string;
-  };
-};
-
-export type NapcatSendDiceSegment = {
-  type: "dice";
-  data: Record<string, unknown>;
-};
-
-export type NapcatSendRPSSegment = {
-  type: "rps";
-  data: Record<string, unknown>;
-};
-
-export type NapcatSendMarkdownSegment = {
-  type: "markdown";
-  data: {
-    content: string;
-  };
-};
-
-export type NapcatSendCloudMusicSegment = {
-  type: "music";
-  data: {
-    type: "qq" | "163" | "kugou" | "kuwo" | "migu";
-    id: string;
-  };
-};
-
-export type NapcatSendCustomMusicSegment = {
-  type: "music";
-  data: {
-    type: "qq" | "163" | "kugou" | "kuwo" | "migu" | "custom";
-    url: string;
-    image: string;
-    audio?: string;
-    title?: string;
-    singer?: string;
-  };
-};
-
-export type NapcatSendNodeSegment = {
-  type: "node";
-  data:
-    | (NapcatSendNodeMeta & {
-        id: string;
-      })
-    | (NapcatSendNodeMeta & {
-        content: NapcatSendMessageSegment[];
-      });
-};
-
-type NapcatSendNodeMeta = {
-  user_id?: string;
-  nickname?: string;
-  source?: string;
-  news?: Array<{
-    text: string;
-  }>;
-  summary?: string;
-  prompt?: string;
-  time?: string;
-};
-
-export type NapcatSendForwardSegment = {
-  type: "forward";
-  data: {
-    id: string;
-  };
-};
-
-export type NapcatSendContactSegment = {
-  type: "contact";
-  data: {
-    type: "qq" | "group";
-    id: string;
-  };
-};
-
-export type NapcatSendMusicSegment = NapcatSendCloudMusicSegment | NapcatSendCustomMusicSegment;
-
+/**
+ * 出站可构造的 segment 全集，与 `parseOutgoingMessageSegments` / 发图路径实际产出的种类
+ * 一一对应。NapCat 协议本身还接受 mface / file / video / record / json / dice / rps /
+ * markdown / music / node / forward / contact，但本服务从不构造它们——这些「以后可能用得上」
+ * 的投机类型（及配套 zod schema）此前只被自己的单测验证，已随死代码清理移除。真要发新种类时
+ * 在这里补回对应类型即可。
+ */
 export type NapcatSendMessageSegment =
   | NapcatSendTextSegment
   | NapcatSendAtSegment
   | NapcatSendReplySegment
   | NapcatSendFaceSegment
-  | NapcatSendMFaceSegment
-  | NapcatSendImageSegment
-  | NapcatSendFileSegment
-  | NapcatSendVideoSegment
-  | NapcatSendRecordSegment
-  | NapcatSendJsonSegment
-  | NapcatSendDiceSegment
-  | NapcatSendRPSSegment
-  | NapcatSendMarkdownSegment
-  | NapcatSendMusicSegment
-  | NapcatSendNodeSegment
-  | NapcatSendForwardSegment
-  | NapcatSendContactSegment;
+  | NapcatSendImageSegment;
 
-export const NapcatSendTextSegmentSchema: z.ZodType<NapcatSendTextSegment> = z.object({
-  type: z.literal("text"),
-  data: z.object({
-    text: z.string(),
-  }),
-});
-
-export const NapcatSendAtSegmentSchema: z.ZodType<NapcatSendAtSegment> = z.object({
-  type: z.literal("at"),
-  data: z.object({
-    qq: z.union([NonEmptyStringSchema, z.literal("all")]),
-  }),
-});
-
-export const NapcatSendReplySegmentSchema: z.ZodType<NapcatSendReplySegment> = z.object({
-  type: z.literal("reply"),
-  data: z.object({
-    id: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendFaceSegmentSchema: z.ZodType<NapcatSendFaceSegment> = z.object({
-  type: z.literal("face"),
-  data: z.object({
-    id: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendMFaceSegmentSchema: z.ZodType<NapcatSendMFaceSegment> = z.object({
-  type: z.literal("mface"),
-  data: z.object({
-    emoji_id: NonEmptyStringSchema,
-    emoji_package_id: NonEmptyStringSchema,
-    key: NonEmptyStringSchema,
-    summary: z.string().optional(),
-  }),
-});
-
-export const NapcatSendImageSegmentSchema: z.ZodType<NapcatSendImageSegment> = z.object({
-  type: z.literal("image"),
-  data: z.object({
-    file: NonEmptyStringSchema,
-    summary: z.string().optional(),
-    sub_type: z.string().optional(),
-  }),
-});
-
-export const NapcatSendFileSegmentSchema: z.ZodType<NapcatSendFileSegment> = z.object({
-  type: z.literal("file"),
-  data: z.object({
-    file: NonEmptyStringSchema,
-    name: z.string().optional(),
-  }),
-});
-
-export const NapcatSendVideoSegmentSchema: z.ZodType<NapcatSendVideoSegment> = z.object({
-  type: z.literal("video"),
-  data: z.object({
-    file: NonEmptyStringSchema,
-    name: z.string().optional(),
-    thumb: z.string().optional(),
-  }),
-});
-
-export const NapcatSendRecordSegmentSchema: z.ZodType<NapcatSendRecordSegment> = z.object({
-  type: z.literal("record"),
-  data: z.object({
-    file: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendJsonSegmentSchema: z.ZodType<NapcatSendJsonSegment> = z.object({
-  type: z.literal("json"),
-  data: z.object({
-    data: z.string(),
-  }),
-});
-
-const NapcatSendMagicDataSchema = z.record(z.string(), z.unknown());
-
-export const NapcatSendDiceSegmentSchema: z.ZodType<NapcatSendDiceSegment> = z.object({
-  type: z.literal("dice"),
-  data: NapcatSendMagicDataSchema,
-});
-
-export const NapcatSendRPSSegmentSchema: z.ZodType<NapcatSendRPSSegment> = z.object({
-  type: z.literal("rps"),
-  data: NapcatSendMagicDataSchema,
-});
-
-export const NapcatSendMarkdownSegmentSchema: z.ZodType<NapcatSendMarkdownSegment> = z.object({
-  type: z.literal("markdown"),
-  data: z.object({
-    content: z.string(),
-  }),
-});
-
-export const NapcatSendCloudMusicSegmentSchema: z.ZodType<NapcatSendCloudMusicSegment> = z.object({
-  type: z.literal("music"),
-  data: z.object({
-    type: z.enum(["qq", "163", "kugou", "kuwo", "migu"]),
-    id: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendCustomMusicSegmentSchema: z.ZodType<NapcatSendCustomMusicSegment> = z.object(
-  {
-    type: z.literal("music"),
-    data: z.object({
-      type: z.enum(["qq", "163", "kugou", "kuwo", "migu", "custom"]),
-      url: NonEmptyStringSchema,
-      image: NonEmptyStringSchema,
-      audio: z.string().optional(),
-      title: z.string().optional(),
-      singer: z.string().optional(),
-    }),
-  },
-);
-
-export const NapcatSendMusicSegmentSchema: z.ZodType<NapcatSendMusicSegment> = z.union([
-  NapcatSendCloudMusicSegmentSchema,
-  NapcatSendCustomMusicSegmentSchema,
-]);
-
-const NapcatSendNodeMetaSchema = z.object({
-  user_id: NonEmptyStringSchema.optional(),
-  nickname: z.string().optional(),
-  source: z.string().optional(),
-  news: z
-    .array(
-      z.object({
-        text: z.string(),
-      }),
-    )
-    .optional(),
-  summary: z.string().optional(),
-  prompt: z.string().optional(),
-  time: NonEmptyStringSchema.optional(),
-});
-
-export const NapcatSendNodeSegmentSchema: z.ZodType<NapcatSendNodeSegment> = z.lazy(() =>
-  z.object({
-    type: z.literal("node"),
-    data: z.union([
-      NapcatSendNodeMetaSchema.extend({
-        id: NonEmptyStringSchema,
-      }),
-      NapcatSendNodeMetaSchema.extend({
-        content: z.array(NapcatSendMessageSegmentSchema),
-      }),
-    ]),
-  }),
-);
-
-export const NapcatSendForwardSegmentSchema: z.ZodType<NapcatSendForwardSegment> = z.object({
-  type: z.literal("forward"),
-  data: z.object({
-    id: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendContactSegmentSchema: z.ZodType<NapcatSendContactSegment> = z.object({
-  type: z.literal("contact"),
-  data: z.object({
-    type: z.enum(["qq", "group"]),
-    id: NonEmptyStringSchema,
-  }),
-});
-
-export const NapcatSendMessageSegmentSchema: z.ZodType<NapcatSendMessageSegment> = z.lazy(() =>
-  z.union([
-    NapcatSendTextSegmentSchema,
-    NapcatSendAtSegmentSchema,
-    NapcatSendReplySegmentSchema,
-    NapcatSendFaceSegmentSchema,
-    NapcatSendMFaceSegmentSchema,
-    NapcatSendImageSegmentSchema,
-    NapcatSendFileSegmentSchema,
-    NapcatSendVideoSegmentSchema,
-    NapcatSendRecordSegmentSchema,
-    NapcatSendJsonSegmentSchema,
-    NapcatSendDiceSegmentSchema,
-    NapcatSendRPSSegmentSchema,
-    NapcatSendMarkdownSegmentSchema,
-    NapcatSendMusicSegmentSchema,
-    NapcatSendNodeSegmentSchema,
-    NapcatSendForwardSegmentSchema,
-    NapcatSendContactSegmentSchema,
-  ]),
-);
-
-export type NapcatReceiveTextSegment = {
+type NapcatReceiveTextSegment = {
   type: "text";
   data: {
     text: string;
@@ -413,7 +99,7 @@ export function isNapcatReceiveImageSegment(
   return segment.type === "image";
 }
 
-export type NapcatReceiveFileSegment = {
+type NapcatReceiveFileSegment = {
   type: "file";
   data: {
     file: string;
@@ -422,7 +108,7 @@ export type NapcatReceiveFileSegment = {
   };
 };
 
-export type NapcatReceivePokeSegment = {
+type NapcatReceivePokeSegment = {
   type: "poke";
   data: {
     type: string;
@@ -430,14 +116,14 @@ export type NapcatReceivePokeSegment = {
   };
 };
 
-export type NapcatReceiveDiceSegment = {
+type NapcatReceiveDiceSegment = {
   type: "dice";
   data: {
     result: string;
   };
 };
 
-export type NapcatReceiveRPSSegment = {
+type NapcatReceiveRPSSegment = {
   type: "rps";
   data: {
     result: string;
@@ -490,7 +176,7 @@ export type NapcatReceiveReplySegment = {
   };
 };
 
-export type NapcatReceiveVideoSegment = {
+type NapcatReceiveVideoSegment = {
   type: "video";
   data: {
     file: string;
@@ -499,7 +185,7 @@ export type NapcatReceiveVideoSegment = {
   };
 };
 
-export type NapcatReceiveRecordSegment = {
+type NapcatReceiveRecordSegment = {
   type: "record";
   data: {
     file: string;
@@ -515,14 +201,14 @@ export type NapcatReceiveForwardSegment = {
   };
 };
 
-export type NapcatReceiveJsonSegment = {
+type NapcatReceiveJsonSegment = {
   type: "json";
   data: {
     data: string;
   };
 };
 
-export type NapcatReceiveMarkdownSegment = {
+type NapcatReceiveMarkdownSegment = {
   type: "markdown";
   data: {
     content: string;
@@ -545,14 +231,14 @@ export type NapcatReceiveMessageSegment =
   | NapcatReceiveJsonSegment
   | NapcatReceiveMarkdownSegment;
 
-export const NapcatReceiveTextSegmentSchema: z.ZodType<NapcatReceiveTextSegment> = z.object({
+const NapcatReceiveTextSegmentSchema: z.ZodType<NapcatReceiveTextSegment> = z.object({
   type: z.literal("text"),
   data: z.object({
     text: z.string(),
   }),
 });
 
-export const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z.object({
+const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z.object({
   type: z.literal("at"),
   data: z.object({
     qq: z.union([NonEmptyStringSchema, z.literal("all")]),
@@ -560,7 +246,7 @@ export const NapcatReceiveAtSegmentSchema: z.ZodType<NapcatReceiveAtSegment> = z
   }),
 });
 
-export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegment> = z.object({
+const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegment> = z.object({
   type: z.literal("image"),
   data: z.union([
     z.object({
@@ -584,7 +270,7 @@ export const NapcatReceiveImageSegmentSchema: z.ZodType<NapcatReceiveImageSegmen
   ]),
 });
 
-export const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment> = z.object({
+const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment> = z.object({
   type: z.literal("file"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -593,7 +279,7 @@ export const NapcatReceiveFileSegmentSchema: z.ZodType<NapcatReceiveFileSegment>
   }),
 });
 
-export const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment> = z.object({
+const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment> = z.object({
   type: z.literal("poke"),
   data: z.object({
     type: NonEmptyStringSchema,
@@ -601,14 +287,14 @@ export const NapcatReceivePokeSegmentSchema: z.ZodType<NapcatReceivePokeSegment>
   }),
 });
 
-export const NapcatReceiveDiceSegmentSchema: z.ZodType<NapcatReceiveDiceSegment> = z.object({
+const NapcatReceiveDiceSegmentSchema: z.ZodType<NapcatReceiveDiceSegment> = z.object({
   type: z.literal("dice"),
   data: z.object({
     result: z.string(),
   }),
 });
 
-export const NapcatReceiveRPSSegmentSchema: z.ZodType<NapcatReceiveRPSSegment> = z.object({
+const NapcatReceiveRPSSegmentSchema: z.ZodType<NapcatReceiveRPSSegment> = z.object({
   type: z.literal("rps"),
   data: z.object({
     result: z.string(),
@@ -643,7 +329,7 @@ const NapcatReceiveFaceRawSchema: z.ZodType<NapcatReceiveFaceRaw> = z
   })
   .passthrough();
 
-export const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment> = z.object({
+const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment> = z.object({
   type: z.literal("face"),
   data: z.object({
     id: NonEmptyStringSchema,
@@ -653,7 +339,7 @@ export const NapcatReceiveFaceSegmentSchema: z.ZodType<NapcatReceiveFaceSegment>
   }),
 });
 
-export const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegment> = z.object({
+const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegment> = z.object({
   type: z.literal("reply"),
   data: z.object({
     id: NonEmptyStringSchema,
@@ -663,7 +349,7 @@ export const NapcatReceiveReplySegmentSchema: z.ZodType<NapcatReceiveReplySegmen
   }),
 });
 
-export const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegment> = z.object({
+const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegment> = z.object({
   type: z.literal("video"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -672,7 +358,7 @@ export const NapcatReceiveVideoSegmentSchema: z.ZodType<NapcatReceiveVideoSegmen
   }),
 });
 
-export const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegment> = z.object({
+const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegment> = z.object({
   type: z.literal("record"),
   data: z.object({
     file: NonEmptyStringSchema,
@@ -680,32 +366,29 @@ export const NapcatReceiveRecordSegmentSchema: z.ZodType<NapcatReceiveRecordSegm
   }),
 });
 
-export const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(
-  () =>
-    z.object({
-      type: z.literal("forward"),
-      data: z.object({
-        id: NonEmptyStringSchema,
-        content: z.array(NapcatReceiveMessageSegmentSchema).optional(),
-      }),
+const NapcatReceiveForwardSegmentSchema: z.ZodType<NapcatReceiveForwardSegment> = z.lazy(() =>
+  z.object({
+    type: z.literal("forward"),
+    data: z.object({
+      id: NonEmptyStringSchema,
+      content: z.array(NapcatReceiveMessageSegmentSchema).optional(),
     }),
+  }),
 );
 
-export const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.object({
+const NapcatReceiveJsonSegmentSchema: z.ZodType<NapcatReceiveJsonSegment> = z.object({
   type: z.literal("json"),
   data: z.object({
     data: z.string(),
   }),
 });
 
-export const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object(
-  {
-    type: z.literal("markdown"),
-    data: z.object({
-      content: z.string(),
-    }),
-  },
-);
+const NapcatReceiveMarkdownSegmentSchema: z.ZodType<NapcatReceiveMarkdownSegment> = z.object({
+  type: z.literal("markdown"),
+  data: z.object({
+    content: z.string(),
+  }),
+});
 
 export const NapcatReceiveMessageSegmentSchema: z.ZodType<NapcatReceiveMessageSegment> = z.lazy(
   () =>

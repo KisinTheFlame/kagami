@@ -20,7 +20,6 @@
     "**/prisma/generated/**",
     "**/prisma/schema.prisma",
     "vendor/stubs/**",
-    "apps/napcat/src/domain/napcat-segment.ts",
     "apps/web/src/components/ui/**",
     "**/test/helpers/**",
     "**/*.test-helper.ts",
