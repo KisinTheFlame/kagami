@@ -24,18 +24,44 @@ export function stripLoneSurrogates(text: string): string {
   return out;
 }
 
+export type TruncatedText = {
+  text: string;
+  /** 是否真的发生了截断（用于「内容过长」类提示 / 落库标记）。 */
+  truncated: boolean;
+};
+
 /**
- * 按 Unicode 码点安全截断：绝不从代理对（emoji）中间切开。先剥除输入里已有的落单代理项，
- * 再按码点数截断——超过 maxCodePoints 时截到该长度并追加 ellipsis（默认 …）。
+ * 按 Unicode 码点安全截断并报告是否截断——**全仓截断逻辑的唯一实现**。绝不从代理对
+ * （emoji）中间切开：先剥除输入里已有的落单代理项，再按码点数截断，超出时截到该长度并
+ * 追加 ellipsis（默认 …）。
  *
  * maxCodePoints 以「码点」计（一个 emoji 记 1），不是 UTF-16 码元；这正是 `.slice(0, n)`
- * 会劈开代理对、而本函数不会的原因。
+ * 会劈开代理对、而本函数不会的原因。半个 emoji 进上下文会让上游以 "no low surrogate"
+ * 400 掉整条请求、每轮复发（见事故「半个 emoji 打挂会话」），所以任何外部文本在进入
+ * Agent 上下文前都必须走这里，不要再就地手写 slice / Array.from。
+ *
+ * - `ellipsis`：截断后缀，按站点排版需要给（省略号计在 maxCodePoints **之外**）。
+ * - `trimEnd`：截断分支里，追加后缀前先去掉正文尾部空白（避免「正文 …」这种空格夹缝）。
  */
-export function truncateWithEllipsis(text: string, maxCodePoints: number, ellipsis = "…"): string {
+export function truncateWithEllipsisDetailed(
+  text: string,
+  maxCodePoints: number,
+  options?: { ellipsis?: string; trimEnd?: boolean },
+): TruncatedText {
   const clean = stripLoneSurrogates(text);
   const codePoints = Array.from(clean); // 字符串迭代器按码点拆分，emoji 是单个元素
   if (codePoints.length <= maxCodePoints) {
-    return clean;
+    return { text: clean, truncated: false };
   }
-  return codePoints.slice(0, maxCodePoints).join("") + ellipsis;
+
+  const body = codePoints.slice(0, Math.max(0, maxCodePoints)).join("");
+  return {
+    text: `${options?.trimEnd ? body.trimEnd() : body}${options?.ellipsis ?? "…"}`,
+    truncated: true,
+  };
+}
+
+/** {@link truncateWithEllipsisDetailed} 的便捷封装：只要结果文本、不关心是否截断。 */
+export function truncateWithEllipsis(text: string, maxCodePoints: number, ellipsis = "…"): string {
+  return truncateWithEllipsisDetailed(text, maxCodePoints, { ellipsis }).text;
 }

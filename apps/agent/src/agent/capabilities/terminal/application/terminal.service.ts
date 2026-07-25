@@ -4,6 +4,7 @@ import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { AppLogger } from "@kagami/kernel/logger/logger";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import { TERMINAL_ERROR, type TerminalErrorCode } from "../domain/errors.js";
 import type { TerminalStateDao } from "./terminal-state.dao.js";
 import type { TerminalOutputDao } from "./terminal-output.dao.js";
@@ -668,9 +669,15 @@ function killSpawnedProcessGroup(child: ChildProcess, signal: NodeJS.Signals): v
   }
 }
 
+/**
+ * Buffer.from("...", "utf8") 本身就会对非法字节做 replacement，但为了显式保证 JSON 可序列化，
+ * 再把 lone surrogate 也替换掉。
+ *
+ * 刻意**不复用** kernel 的 `stripLoneSurrogates`：那条正典是「丢弃」半个字符（面向要进 Agent
+ * 上下文的外部文本），而终端输出是给人看的原始字节流，这里要的是「替换成 U+FFFD」——保留坏
+ * 字节的位置与可见性，让人看得出哪里乱码。语义不同故各留一份；截断则统一走正典。
+ */
 function sanitizeUtf8String(s: string): string {
-  // Buffer.from("...", "utf8") 本身就会对非法字节做 replacement，但为了
-  // 显式保证 JSON 可序列化，再把 lone surrogate 也替换掉
   return s.replace(
     /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
     "\uFFFD",
@@ -686,5 +693,6 @@ function generateOutputId(): string {
 }
 
 function truncateForLog(s: string): string {
-  return s.length > 200 ? `${s.slice(0, 200)}…` : s;
+  // 命令行可能含 emoji；裸 `.slice()` 会把代理对劈成半个字符写进日志。
+  return truncateWithEllipsis(s, 200);
 }

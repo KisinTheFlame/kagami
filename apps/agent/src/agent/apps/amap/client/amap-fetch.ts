@@ -1,4 +1,5 @@
 import { BizError } from "@kagami/kernel/errors/biz-error";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
 import {
   RETRYABLE_STATUS,
   computeBackoffMs,
@@ -239,7 +240,8 @@ export async function amapFetchImage(url: string, options: AmapFetchOptions): Pr
     // 非 JSON 兜底文本可能回显含 key 的请求 URL，先脱敏再进 info，绝不让 key 泄漏进上下文。
     const text = await response.text();
     let infocode = "";
-    let info = redactUrl(text.slice(0, 200));
+    // 码点安全截断：这段错误文本会经 AmapError 进上下文，裸 slice 可能留半个 emoji。
+    let info = redactUrl(truncateWithEllipsis(text, 200, ""));
     try {
       const parsed = JSON.parse(text) as AmapJsonEnvelope;
       infocode = coerceStr(parsed.infocode);

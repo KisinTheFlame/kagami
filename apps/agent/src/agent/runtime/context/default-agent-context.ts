@@ -1,4 +1,5 @@
 import type { LlmMessage } from "@kagami/llm-client";
+import { truncateWithEllipsisDetailed, type TruncatedText } from "@kagami/kernel/utils/text";
 import { createAgentSystemPrompt } from "../root-agent/system-prompt.js";
 import type {
   AgentContext,
@@ -225,17 +226,9 @@ function renderUserMessagePreview(
   return parts.join("\n");
 }
 
-function truncateText(input: string, maxLength: number): { text: string; truncated: boolean } {
-  const normalized = input.trim();
-  if (normalized.length <= maxLength) {
-    return {
-      text: normalized,
-      truncated: false,
-    };
-  }
-
-  return {
-    text: `${normalized.slice(0, Math.max(0, maxLength - 1))}…`,
-    truncated: true,
-  };
+function truncateText(input: string, maxLength: number): TruncatedText {
+  // 码点安全截断走 kernel 正典：裸 `.slice()` 会劈开 emoji 代理对，给管理台预览留半个字符。
+  // 与旧手写版的唯一差异：省略号计在 maxLength 之外（旧版从预算里挪 1 个字符给它），
+  // 对管理台预览无影响，换来与全仓其它截断点一致的语义。
+  return truncateWithEllipsisDetailed(input.trim(), maxLength, { trimEnd: true });
 }
