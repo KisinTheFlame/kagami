@@ -76,7 +76,6 @@ type RootAgentRuntimeDeps = {
   snapshotRepository?: RootAgentRuntimeSnapshotRepository;
   runtimeKey?: string;
   tools?: ToolExecutor;
-  agentTools?: ToolExecutor;
   contextSummarizer?: ContextSummarizerLike;
   contextCompactionTotalTokenThreshold?: number;
   contextCompactionImageCountThreshold?: number;
@@ -183,7 +182,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
     llmRetryBackoffMs,
     now,
     sleep,
-  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools" | "agentTools"> & {
+  }: Omit<RootAgentRuntimeDeps, "llmClient" | "tools"> & {
     interpreter: EffectInterpreter<never>;
   }) {
     this.context = context;
@@ -570,7 +569,12 @@ export class RootAgentHost implements RootAgentExtensionHost {
     }
   }
 
-  public async persistSnapshotIfChanged(input?: { suppressError?: boolean }): Promise<void> {
+  /**
+   * 落库当前快照（仅在 context 修订号变过时）。落库失败默认只记日志不抛——快照持久化是
+   * 尽力而为的旁路，绝不该因它中断主循环；只有明确要感知失败的调用方（如 reset 后的重建）
+   * 才传 `throwOnError: true`。
+   */
+  public async persistSnapshotIfChanged(input?: { throwOnError?: boolean }): Promise<void> {
     if (!this.snapshotRepository) {
       return;
     }
@@ -592,7 +596,7 @@ export class RootAgentHost implements RootAgentExtensionHost {
         event: "agent.root_agent_runtime_snapshot.persist_failed",
         runtimeKey: this.runtimeKey,
       });
-      if (input?.suppressError === false) {
+      if (input?.throwOnError) {
         throw error;
       }
     }
@@ -650,7 +654,6 @@ export class RootLoopAgent extends BaseLoopAgent<
   public constructor({
     llmClient,
     tools,
-    agentTools,
     llmRetryBackoffMs,
     sleep,
     eventQueue,
@@ -662,7 +665,7 @@ export class RootLoopAgent extends BaseLoopAgent<
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
     const resolvedRetryBackoffMs = llmRetryBackoffMs ?? DEFAULT_LLM_RETRY_BACKOFF_MS;
-    const resolvedTools = tools ?? agentTools ?? failMissingTools();
+    const resolvedTools = tools ?? failMissingTools();
     // 单例 Interpreter：host（compactContextIfNeeded 直接调）和 kernel（每个工具
     // 跑完后内置消费 effects）共享。Interpreter 无状态，但语义上应该同一个。
     const interpreter = createRootEffectInterpreter({ session, context, eventQueue });
@@ -938,13 +941,13 @@ function failMissingTools(): never {
  */
 function toPersistableAssistantMessage(
   message: AssistantMessage,
-  agentTools: ToolExecutor,
+  tools: ToolExecutor,
 ): AssistantMessage {
   return {
     ...message,
     toolCalls: message.toolCalls.filter(
       toolCall =>
-        agentTools.getKind(toolCall.name) !== "control" ||
+        tools.getKind(toolCall.name) !== "control" ||
         shouldPersistControlToolInContext(toolCall.name),
     ),
   };

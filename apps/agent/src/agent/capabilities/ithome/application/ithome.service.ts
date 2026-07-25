@@ -1,4 +1,4 @@
-import { stripLoneSurrogates } from "@kagami/kernel/utils/text";
+import { truncateWithEllipsisDetailed, type TruncatedText } from "@kagami/kernel/utils/text";
 import type { IthomeArticleDao, IthomeArticleListItem } from "./ithome-article.dao.js";
 import type { IthomeFeedCursorDao } from "./ithome-feed-cursor.dao.js";
 import type { IthomeClient } from "./ithome-client.js";
@@ -250,26 +250,8 @@ export class IthomeService {
   }
 }
 
-function truncateText(
-  value: string,
-  maxChars: number,
-): {
-  text: string;
-  truncated: boolean;
-} {
-  // 按 Unicode 码点截断，绝不从代理对（emoji）中间切开——半个 emoji 会让上游 400 掉
-  // 整条请求（见「引用预览按 UTF-16 长度截断劈开代理对」事故）。先剥落单代理项再按码点判长。
-  const clean = stripLoneSurrogates(value);
-  const codePoints = Array.from(clean);
-  if (codePoints.length <= maxChars) {
-    return {
-      text: clean,
-      truncated: false,
-    };
-  }
-
-  return {
-    text: `${codePoints.slice(0, maxChars).join("").trimEnd()}……`,
-    truncated: true,
-  };
+function truncateText(value: string, maxChars: number): TruncatedText {
+  // 码点安全截断走 kernel 正典（绝不劈开 emoji 代理对）；这里只声明本站点的排版：
+  // 后缀 "……"、截断时先去掉正文尾部空白。输出与手写版逐字节一致（正文进上下文，不可漂移）。
+  return truncateWithEllipsisDetailed(value, maxChars, { ellipsis: "……", trimEnd: true });
 }

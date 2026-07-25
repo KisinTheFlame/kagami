@@ -41,7 +41,6 @@ describe("LoopLlmRetryExtension", () => {
         new LoopLlmRetryExtension({
           backoffPolicy,
           sleep,
-          onRecoverableError: vi.fn(),
         }),
       ],
     });

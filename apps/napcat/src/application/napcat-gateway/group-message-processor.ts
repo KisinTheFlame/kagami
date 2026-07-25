@@ -81,21 +81,11 @@ export class NapcatGroupMessageProcessor {
     this.qqMessageDao = qqMessageDao;
   }
 
-  public async handle(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
-    normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
-    qqMessage: NapcatPersistableQqMessage | null;
-    groupMessageEvent: NapcatPersistableGroupMessageEvent | null;
-    groupBanEvent: NapcatGroupBanData | null;
-  }> {
-    const result = await this.process(eventPayload);
-    const { groupMessageEvent } = result;
-    if (groupMessageEvent) {
-      this.publishGroupMessage(groupMessageEvent);
-    }
-
-    return result;
-  }
-
+  /**
+   * 归一化一条 post_type 事件，产出待落库 / 待发布的各件，但**不**发布 group message ——
+   * 发布由调用方在有序 flush 时另调 {@link publishGroupMessageEvent}，两步拆开才能保住
+   * 事件顺序（见 napcat-gateway.impl.service 的 completedResults flush）。
+   */
   public async process(eventPayload: NapcatGatewayPostTypeEventPayload): Promise<{
     normalizedEvent: NapcatGatewayNormalizedPostTypeEvent;
     qqMessage: NapcatPersistableQqMessage | null;
@@ -274,8 +264,41 @@ export class NapcatGroupMessageProcessor {
     );
   }
 
+  /**
+   * 把归一化好的群消息作为 agent 事件入队。刻意与 {@link process} 分开由调用方按顺序调用。
+   * 入队失败只记日志、不抛：发布是尽力而为，不该反过来打断归一化 / 落库链路。
+   */
   public publishGroupMessageEvent(event: NapcatPersistableGroupMessageEvent): void {
-    this.publishGroupMessage(event);
+    const { groupId, userId, nickname, rawMessage, messageSegments, messageId, time } = event;
+    try {
+      const result = this.enqueueGroupMessageEvent({
+        type: "napcat_group_message",
+        data: {
+          groupId,
+          userId,
+          nickname,
+          rawMessage,
+          messageSegments,
+          messageId,
+          time,
+        },
+      });
+      void Promise.resolve(result).catch(error => {
+        logger.errorWithCause("Failed to publish group message event", error, {
+          event: "napcat.gateway.group_message_publish_failed",
+          groupId,
+          userId,
+          messageId,
+        });
+      });
+    } catch (error) {
+      logger.errorWithCause("Failed to publish group message event", error, {
+        event: "napcat.gateway.group_message_publish_failed",
+        groupId,
+        userId,
+        messageId,
+      });
+    }
   }
 
   private async normalize(
@@ -426,42 +449,6 @@ export class NapcatGroupMessageProcessor {
       messageId: event.messageId,
       time: event.time,
     };
-  }
-
-  private publishGroupMessage(
-    event: NapcatGroupMessageEvent | NapcatPersistableGroupMessageEvent,
-  ): void {
-    try {
-      const data = "data" in event ? event.data : event;
-      const { groupId, userId, nickname, rawMessage, messageSegments, messageId, time } = data;
-      const result = this.enqueueGroupMessageEvent({
-        type: "napcat_group_message",
-        data: {
-          groupId,
-          userId,
-          nickname,
-          rawMessage,
-          messageSegments,
-          messageId,
-          time,
-        },
-      });
-      void Promise.resolve(result).catch(error => {
-        logger.errorWithCause("Failed to publish group message event", error, {
-          event: "napcat.gateway.group_message_publish_failed",
-          groupId,
-          userId,
-          messageId,
-        });
-      });
-    } catch (error) {
-      logger.errorWithCause("Failed to publish group message event", error, {
-        event: "napcat.gateway.group_message_publish_failed",
-        groupId: "data" in event ? event.data.groupId : event.groupId,
-        userId: "data" in event ? event.data.userId : event.userId,
-        messageId: "data" in event ? event.data.messageId : event.messageId,
-      });
-    }
   }
 
   private async normalizeMessageContent({

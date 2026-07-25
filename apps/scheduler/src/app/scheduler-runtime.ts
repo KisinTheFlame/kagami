@@ -29,9 +29,12 @@ export type SchedulerRuntime = {
 };
 
 /**
- * kagami-scheduler 进程运行时装配（issue #428）。通用薄时钟：无 DB、无业务语义。持有 driver 注册表
+ * kagami-scheduler 进程运行时装配（issue #428）。通用薄时钟：无业务语义。持有 driver 注册表
  * （引擎）+ SSE tick 广播器；使用方经 register 注册、经 SSE 收 tick。agent 频繁重启不打断本进程的
- * 计时节奏（虽然对无状态调度器收益薄，但作为通用能力独立成服务）。
+ * 计时节奏（虽然对调度态无持久化的调度器收益薄，但作为通用能力独立成服务）。
+ *
+ * 持久化边界：**调度状态**（注册表 / 计时）是纯内存派生态——tick 是派生事实，断连按 misfire 合并、
+ * 不做持久回放；**执行历史**（TaskRun）落 scheduler 独占的 `data/scheduler/scheduler.db`（#493）。
  */
 export async function buildSchedulerRuntime(): Promise<SchedulerRuntime> {
   const loadedConfig = await loadStaticConfig();

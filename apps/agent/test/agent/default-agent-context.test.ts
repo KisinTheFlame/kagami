@@ -330,6 +330,8 @@ describe("DefaultAgentContext", () => {
       },
     ]);
 
+    // previewLength 是正文码点预算，省略号计在预算之外（与全仓其它截断点一致：正文 12 码点
+    // + "…"，正文尾部空白先 trim 掉）。旧手写版从预算里挪 1 个字符给省略号，收敛到正典后统一。
     await expect(
       context.getDashboardSummary({
         limit: 2,
@@ -342,7 +344,7 @@ describe("DefaultAgentContext", () => {
         {
           kind: "llm_message",
           label: "Assistant",
-          preview: "assistant r…",
+          preview: "assistant re…",
           truncated: true,
         },
         {

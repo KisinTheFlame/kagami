@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 SERVICE="${1:-}"
 
-# ── 单服务模式：pnpm app:deploy <agent|console|gateway|web|oss|browser|metric> ─────
+# ── 单服务模式：pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat|pixel|gba|scheduler> ─────
 # 只重建并重载指定服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——
 # 尤其重载 console / gateway 不会打断 kagami-agent 的热状态（KV 缓存前缀、HNSW 索引、活内存
 # 上下文），符合「KV 缓存命中率优先」原则。涉及 DB schema 变更请用无参 `pnpm app:deploy`

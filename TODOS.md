@@ -30,7 +30,7 @@
 
 - **Priority:** P2
 - **Status:** open
-- **Context:** `innerVoice` / `contextSummarizer` / `todoSuggestionAgent` 这些 usage 全是 **agent 的业务词汇**（命名"agent 为什么发这次 LLM 调用"），但当前 usage→(provider, model, attempts) 的解析 + 多 attempt 重试循环整个跑在 **kagami-llm 内部**的 `@kagami/llm-client`（`client.ts:137` `requireUsageConfig`），`usages.{...}` 还是 config 里逐字段硬编码的对象。抽象泄漏：号称"通用 LLM + OAuth 网关"的服务被迫认识每个 agent 私有 usage 名 + 替它保管 provider 策略。**具体代价**（2026-07-04 踩到）：agent 新增 `innerVoice` usage 后只 `app:deploy agent` 不够——kagami-llm 没重载读到新 `usages.innerVoice`，每次调用报 `LlmClient usage is not configured: innerVoice`、被 extension 吞成 `agent.inner_voice.failed`。加一个 usage 就要连带重启一个通用基础设施服务，这是边界画错的信号。多 Agent 未来更糟：网关会堆积每个 agent 的私有 usage 词汇，而共享网关本该只管 provider/凭据/OAuth。
+- **Context:** usage→(provider, model, attempts) 的解析 + 多 attempt 重试循环整个跑在 **kagami-llm 内部**的 `@kagami/llm-client`（`client.ts:137` `requireUsageConfig`），`usages.{...}` 还是 config 里逐字段硬编码的对象。抽象泄漏：号称"通用 LLM + OAuth 网关"的服务替调用方保管 provider 策略。**原先记录的具体代价已被 #555 消解**：当时 `innerVoice` / `contextSummarizer` / `todoSuggestionAgent` 各占一个私有 usage，新增一个就得连带重启 kagami-llm（否则报 `LlmClient usage is not configured`）；#555 后 fork 型 task agent 一律复用 `usage: "agent"`（这也是命中 prompt cache 的硬要求），调用归因改走 `scene` 自由字段，usage 集合收敛为 `agent` / `vision` 两个稳定值，那条 bug 路径已不复存在。**剩下的仍是边界问题**：这两个 usage 名依旧是 agent 的词汇，多 Agent 未来网关会重新堆积各家私有 usage。优先级因此从"踩过坑"降为"纯架构整洁"。
 - **Notes:** 正确边界 = kagami-llm 拥有 provider 凭据/OAuth + "拿 provider X + model Y 打这一发"的机械执行 + 落库 observation（词汇是 provider/model，通用稳定）；agent 拥有 usage→provider 策略表 + attempt 重试循环。**机制已现成**：`chatDirect(providerId, model)` 就是"caller 定 provider、网关只执行"（`@kagami/llm-client` 已暴露该原语）。重构 = 把 `usages` 配置从共享 llm 段（`config.loader.ts:365`）挪到 agent 段、把 attempt-loop 从 `@kagami/llm-client` 搬到 agent 侧解析器、重写 `HttpLlmClient.chat`（`http-llm-client.ts:47`）为"本地解析 usage→provider→chatDirect"。收益：加 usage 永不碰/不重启 llm，那个 failed bug 结构性消失，边界对上"通用网关"定位。走 spec 流水线单开 issue，别 inline。
 
 ### 治理对外部时间/外部条件的直接依赖，核心逻辑改为可注入的状态机
@@ -62,7 +62,7 @@
 
 - **Priority:** P1
 - **Status:** open
-- **Context:** 当前 `apps/agent/src/scheduler/tasks/data-retention/retention-tasks.ts` 显式把 `ithome_article` 与 `ithome_feed_cursor` 排除在每日清理之外（[retention-tasks.ts:41](apps/agent/src/scheduler/tasks/data-retention/retention-tasks.ts:41)）。RSS 文章既不像日志那样安全按时间清掉，也不像 Story 记忆那样需要永久保留 —— 需要单独想清楚保留窗口、与 Agent 召回路径的关系、以及 `ithome_feed_cursor` 在重置后如何避免重新拉取已读旧文章。
+- **Context:** 当前 `apps/agent/src/agent/capabilities/data-retention/retention-tasks.ts` 显式把 `ithome_article` 与 `ithome_feed_cursor` 排除在每日清理之外（[retention-tasks.ts:44](apps/agent/src/agent/capabilities/data-retention/retention-tasks.ts:44)）。RSS 文章既不像日志那样安全按时间清掉，也不像 `ledger` 消息账本那样要整份留作原始素材 —— 需要单独想清楚保留窗口、与 Agent 召回路径的关系、以及 `ithome_feed_cursor` 在重置后如何避免重新拉取已读旧文章。
 - **Notes:** 决策前不要简单地把它加进 `RETENTION_TASKS`。
 
 ---
@@ -91,33 +91,8 @@
 
 - **Priority:** P3
 - **Status:** open
-- **Context:** `apps/oss/src/store/object-store.ts` 的 `ensureBlobFile` 只 `writeFile` + `rename`，未 fsync 文件与目录。断电/内核崩溃后可能 SQLite 事务已提交（库说有）但文件内容/目录项未落盘（文件空或丢失），`sweepOrphans` 只回收"文件在、行不在"，不修复"行在、文件没内容"。Codex 对抗式评审发现。概率低且内容可重新拉取（QQ 图片源可重取 + put 自愈），故定 P3。
+- **Context:** `apps/oss/src/store/object-store.ts` 的 `ensureBlobFileFromTemp` 只把流式落好的临时文件 `rename` 转正，未 fsync 文件与目录。断电/内核崩溃后可能 SQLite 事务已提交（库说有）但文件内容/目录项未落盘（文件空或丢失），`sweepOrphans` 只回收"文件在、行不在"，不修复"行在、文件没内容"。Codex 对抗式评审发现。概率低且内容可重新拉取（QQ 图片源可重取 + put 自愈），故定 P3。
 - **Notes:** 修法：写完 tmp 后 fd.sync()，rename 后再 fsync 父目录。
-
----
-
-## resource（资源 / 文件能力）
-
-### QQ 群文件的列表查询、上传、下载
-
-- **Priority:** P1
-- **Status:** open
-- **Context:** 给小镜的 QQ App 增加群文件能力：列出群文件、上传文件到群、从群下载文件。上传与下载都走自建 OSS 作为中转——下载即把群文件落进 OSS 成为一个 res，上传即把 OSS 里的 res 推到群文件。视角上这是"给 Agent 的生活添一种新的存在方式"，群文件只是 QQ App 内的一个能力，概念不要泄漏到 runtime。
-- **Notes:** 依赖下面的 `download_resource` / `upload_resource` 全局工具与 OSS。NapCat 侧需要对应的群文件 list/upload/download 协议接口。
-
-### `download_resource` 全局工具
-
-- **Priority:** P1
-- **Status:** open
-- **Context:** 提供一个全局工具 `download_resource`，允许小镜把一个 res 下载到它指定的路径。文件名必须由小镜来给出（而不是沿用 res 自身的 key / 内容寻址名）。这是把 OSS 里的资源落地成本地文件的桥。
-- **Notes:** 作为全局工具暴露——评估是否真的需要顶层工具，还是仍走 InvokeTool 子工具（按 KV 缓存原则，新增能力第一反应是做成 InvokeTool 子工具，除非它是结构性元能力）。入参至少含 res 标识 + 目标路径 + 文件名。
-
-### `upload_resource` 全局工具
-
-- **Priority:** P1
-- **Status:** open
-- **Context:** 提供一个全局工具 `upload_resource`，允许小镜把一个指定路径的本地文件保存进 OSS，得到一个 res。是 `download_resource` 的反向操作，把本地文件提升为可被其他能力引用的 OSS 资源。
-- **Notes:** 同样评估顶层工具 vs InvokeTool 子工具。复用 OSS 现有的 sha256 内容去重 + refcount；入参为源文件路径。
 
 ---
 
@@ -163,21 +138,21 @@
 
 - **Priority:** P2
 - **Status:** open
-- **Context:** 「鲜艳蒙德里安」方向要把 `main-agent-context` landing 做成二维大色块 dashboard（Story 总数 / LLM token / 主动发言数 / 高成本 / scheduler pending / context tokens 等填实色块）。但当前 `main-agent-context` 接口只返回 `recentItems`，没有这些聚合统计。要真实呈现需**改后端 + shared schema** 加聚合字段，属跨前后端的新功能。前端这轮只在数据已就绪处上大色块（Auth 额度），landing 暂留 feed + 轮询状态，不硬编假数。
+- **Context:** 「鲜艳蒙德里安」方向要把 `main-agent-context` landing 做成二维大色块 dashboard（LLM token / 主动发言数 / 高成本 / scheduler pending / context tokens 等填实色块）。但当前 `main-agent-context` 接口只返回 `recentItems`，没有这些聚合统计。要真实呈现需**改后端 + shared schema** 加聚合字段，属跨前后端的新功能。前端这轮只在数据已就绪处上大色块（Auth 额度），landing 暂留 feed + 轮询状态，不硬编假数。
 - **Notes:** 设计样张见 `/private/tmp/kagami-v3-light.html`（二维构图 + 大色块）。后端补聚合后，landing 按该构图实现。
 
 ### 填实状态色块铺到剩余数据页
 
 - **Priority:** P3
 - **Status:** in-progress（2026-07-01 /design-review DR-4 已做大部分）
-- **Context:** 已改填实语义变体：app-log 级别、scheduler 状态、llm-history 状态、story matchedKinds/人物。**剩余**：NapCat 事件 / QQ 消息行**没有**类型徽章（要新增 event=signal/message=llm 的填实行标，属 additive）；llm-history 详情的 message role badge 仍 `secondary`（role→语义映射偏主观，待定）。
+- **Context:** 已改填实语义变体：app-log 级别、scheduler 状态、llm-history 状态。**剩余**：NapCat 事件 / QQ 消息行**没有**类型徽章（要新增 event=signal/message=llm 的填实行标，属 additive）；llm-history 详情的 message role badge 仍 `secondary`（role→语义映射偏主观，待定）。
 - **Notes:** 后端没起时无法逐页视觉验证，本轮按 enum 映射 + build/类型校验为准；跑通后端后再目检。napcat 行标是新增控件，单独评估。
 
 ### 历史表格行键盘可达（a11y）
 
 - **Priority:** P2
 - **Status:** open
-- **Context:** llm-history / app-log / napcat-event / story 等页面用 `<tr onClick>` 做行选择，无 `role`/`tabIndex`/`onKeyDown`/focus-visible，键盘用户不可达（Codex 指出，4 处）。属交互行为改动，超出本轮 CSS-first 范围。
+- **Context:** llm-history / app-log / napcat-event / napcat-group-message / oss / todos 六个页面用 `<TableRow onClick>` 做行选择，无 `role`/`tabIndex`/`onKeyDown`/focus-visible，键盘用户不可达（Codex 指出；2026-07-25 复核仍为这 6 处）。属交互行为改动，超出本轮 CSS-first 范围。
 - **Notes:** 给行加 `role="button" tabIndex=0`，回车/空格触发，补 focus-visible ring；或抽成可复用的可点击行组件。
 
 ### 抽共享 Input 基元

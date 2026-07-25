@@ -35,7 +35,6 @@ export class LoopLlmRetryExtension<
 > implements ReActKernelExtension<TUsage, TCompletion, TExtensionData> {
   private readonly backoffPolicy: RetryBackoffPolicy;
   private readonly sleep: (ms: number) => Promise<void>;
-  private readonly onRecoverableError?: ((error: unknown) => Promise<void> | void) | undefined;
   private readonly onBeforeRetry?:
     | ((input: {
         request: ReActKernelRunRoundInput<TUsage>;
@@ -44,43 +43,26 @@ export class LoopLlmRetryExtension<
         attempt: number;
       }) => Promise<void> | void)
     | undefined;
-  private readonly onSuccessfulModelCall?:
-    | ((input: {
-        request: ReActKernelRunRoundInput<TUsage>;
-        completion: TCompletion;
-      }) => Promise<void> | void)
-    | undefined;
   private retryAttempt = 0;
 
   public constructor(input: {
     backoffPolicy: RetryBackoffPolicy;
     sleep: (ms: number) => Promise<void>;
-    onRecoverableError?: (error: unknown) => Promise<void> | void;
     onBeforeRetry?: (input: {
       request: ReActKernelRunRoundInput<TUsage>;
       error: unknown;
       delayMs: number;
       attempt: number;
     }) => Promise<void> | void;
-    onSuccessfulModelCall?: (input: {
-      request: ReActKernelRunRoundInput<TUsage>;
-      completion: TCompletion;
-    }) => Promise<void> | void;
   }) {
     this.backoffPolicy = input.backoffPolicy;
     this.sleep = input.sleep;
-    this.onRecoverableError = input.onRecoverableError;
     this.onBeforeRetry = input.onBeforeRetry;
-    this.onSuccessfulModelCall = input.onSuccessfulModelCall;
   }
 
-  public async onAfterModel(input: {
-    request: ReActKernelRunRoundInput<TUsage>;
-    completion: TCompletion;
-  }): Promise<void> {
+  public async onAfterModel(): Promise<void> {
     this.retryAttempt = 0;
     this.backoffPolicy.reset?.();
-    await this.onSuccessfulModelCall?.(input);
   }
 
   public async onModelError(input: {
@@ -96,7 +78,6 @@ export class LoopLlmRetryExtension<
       attempt: this.retryAttempt,
     });
 
-    await this.onRecoverableError?.(input.error);
     await this.onBeforeRetry?.({
       request: input.request,
       error: input.error,
