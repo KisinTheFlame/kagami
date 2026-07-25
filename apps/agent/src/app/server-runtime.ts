@@ -65,7 +65,6 @@ export type ServerRuntime = {
   /** 停入站 SSE 订阅后反序关停所有 App（napcat WS 生命周期已外移到 kagami-napcat 进程）。 */
   shutdownApps: () => Promise<void>;
   schedulerClient: SchedulerClient;
-  callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: RootLoopAgent;
   metricService: MetricClient;
   /** 状态心跳采样器：由 index.ts 在 run loop 启动后 start()、server-shutdown 时 stop()。 */
@@ -73,11 +72,6 @@ export type ServerRuntime = {
   port: number;
   blockedGroupIds: string[];
   startupContextRecentMessageCount: number;
-  /**
-   * LLM provider 生命周期已随 kagami-llm 服务外移；agent 进程不再持有 provider，这里恒为 no-op。
-   * 保留字段以免动 index/server-shutdown 的关停编排（它们对空/no-op 天然无害）。
-   */
-  closeLlmProviders: () => Promise<void>;
   listAvailableAgentProviders: () => Promise<LlmProviderOption[]>;
 };
 
@@ -291,16 +285,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       await agentRuntime.shutdownApps();
     },
     schedulerClient,
-    // OAuth callback server 随 kagami-llm 服务外移；agent 不再持有，关停编排对空数组无害。
-    callbackServers: [],
     rootAgentRuntime: agentRuntime.rootAgentRuntime,
     metricService,
     stateSampler: agentRuntime.stateSampler,
     port: config.services.agent.port,
     blockedGroupIds: config.server.napcat.blockedGroupIds,
     startupContextRecentMessageCount: config.server.napcat.startupContextRecentMessageCount,
-    // provider 生命周期在 kagami-llm 服务侧；agent 无本地 provider 可关，no-op。
-    closeLlmProviders: async () => {},
     listAvailableAgentProviders: async () => {
       return await llmClient.listAvailableProviders({ usage: "agent" });
     },
