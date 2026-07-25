@@ -193,8 +193,8 @@ export class RootAgentSession implements RootAgentSessionController {
     }
 
     if (event.type === "inner_thought") {
-      // 内心独白（issue #265）：装配成 <inner_thought> 消息追加到尾部，触发一轮 round。
-      this.pendingIncomingMessages.push(createInnerThoughtMessage(event.data.thought));
+      // 内心独白（issue #265）：装配成 <inner_impulse> 消息追加到尾部，触发一轮 round。
+      this.pendingIncomingMessages.push(createInnerThoughtMessage(event.data.thoughts));
       return { shouldTriggerRound: true };
     }
 

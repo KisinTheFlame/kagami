@@ -49,14 +49,14 @@ type ForegroundInputEvent = {
 
 /**
  * 内心独白事件：摸鱼判定触发、inner-voice TaskAgent 产出非空念头后塞进队列
- * （issue #265）。Session 路由时装配成一条 `<inner_thought>` user message 追加到
+ * （issue #265）。Session 路由时装配成一条 `<inner_impulse>` user message 追加到
  * 上下文尾部并触发一轮 round；enqueue 本身兼作唤醒（她摸鱼时多半正阻塞在 wait 里）。
  */
 type InnerThoughtEvent = {
   type: "inner_thought";
   data: {
-    /** 已经以小镜口吻写好的第一人称念头文本。 */
-    thought: string;
+    /** 已经以小镜口吻写好的第一人称念头，2~4 条（issue #592 起多候选）。 */
+    thoughts: string[];
   };
 };
 

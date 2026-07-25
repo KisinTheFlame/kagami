@@ -39,7 +39,7 @@ const RUNTIME_KEY = "root-agent";
 function createHarness(input: {
   tracker: InnerVoiceIdleTracker;
   /** null = 空念头（task agent 返回 ""，判 empty 不注入）。 */
-  thought: string | null;
+  thoughts: string[] | null;
   invokeError?: Error;
   daoError?: Error;
 }): {
@@ -53,7 +53,7 @@ function createHarness(input: {
   const enqueue = vi.fn();
   const invoke = input.invokeError
     ? vi.fn().mockRejectedValue(input.invokeError)
-    : vi.fn().mockResolvedValue(input.thought ?? "");
+    : vi.fn().mockResolvedValue(input.thoughts ?? []);
   const insert = input.daoError
     ? vi.fn().mockRejectedValue(input.daoError)
     : vi.fn().mockResolvedValue(undefined);
@@ -101,7 +101,7 @@ describe("InnerVoiceExtension", () => {
   it("摸鱼成立且产出念头 → enqueue inner_thought 事件 + triggered/injected metric + 落 injected 行", async () => {
     const { extension, enqueue, invoke, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thought: "想翻翻那篇文章",
+      thoughts: ["想翻翻那篇文章", "去看看她回没回"],
     });
 
     await extension.onAfterCommit({ context, result: waitRound() });
@@ -109,14 +109,15 @@ describe("InnerVoiceExtension", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith({
       type: "inner_thought",
-      data: { thought: "想翻翻那篇文章" },
+      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
     });
     expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_INJECTED]);
     expect(insert).toHaveBeenCalledTimes(1);
     expect(insert).toHaveBeenCalledWith({
       triggeredAt: NOW,
       outcome: "injected",
-      thought: "想翻翻那篇文章",
+      // `thought` 列仍是单 TEXT：多候选按空格拼成一串存（无迁移，issue #592）。
+      thought: "想翻翻那篇文章 去看看她回没回",
       runtimeKey: RUNTIME_KEY,
     });
   });
@@ -125,7 +126,7 @@ describe("InnerVoiceExtension", () => {
     const tracker = trackerAboutToTrigger();
     const { extension, enqueue, insert, metrics, context } = createHarness({
       tracker,
-      thought: null,
+      thoughts: null,
     });
 
     await extension.onAfterCommit({ context, result: waitRound() });
@@ -144,7 +145,7 @@ describe("InnerVoiceExtension", () => {
   it("摸鱼不成立 → 完全不跑 task agent、不打 metric、不落行", async () => {
     const { extension, invoke, insert, metrics, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
-      thought: "x",
+      thoughts: ["x"],
     });
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(invoke).not.toHaveBeenCalled();
@@ -155,7 +156,7 @@ describe("InnerVoiceExtension", () => {
   it("非 wait 调用不推进摸鱼判定（wait 才计数）", async () => {
     const { extension, invoke, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
-      thought: "x",
+      thoughts: ["x"],
     });
     // 一轮 3 个 invoke 不等于 3 个 wait —— 判定不成立。
     await extension.onAfterCommit({
@@ -172,7 +173,7 @@ describe("InnerVoiceExtension", () => {
   it("task agent 抛错被吞掉，不拖垮主循环，打 triggered/failed metric + 落 failed 空行", async () => {
     const { extension, enqueue, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thought: null,
+      thoughts: null,
       invokeError: new Error("boom"),
     });
     await expect(
@@ -191,7 +192,7 @@ describe("InnerVoiceExtension", () => {
   it("落库抛错被吞掉，不拖垮主循环，念头仍照常注入", async () => {
     const { extension, enqueue, insert, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thought: "想翻翻那篇文章",
+      thoughts: ["想翻翻那篇文章", "去看看她回没回"],
       daoError: new Error("db down"),
     });
     await expect(
@@ -200,14 +201,14 @@ describe("InnerVoiceExtension", () => {
     // 落库失败不影响念头进上下文（enqueue 在 insert 之前，且 insert 异常被 best-effort 吞掉）。
     expect(enqueue).toHaveBeenCalledWith({
       type: "inner_thought",
-      data: { thought: "想翻翻那篇文章" },
+      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
     });
     expect(insert).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("inner_thought 事件的 session 路由", () => {
-  it("装配成 <inner_thought> 消息追加尾部并触发一轮", async () => {
+  it("装配成 <inner_impulse> 消息追加尾部并触发一轮", async () => {
     const appended: unknown[] = [];
     const context = {
       appendMessages: vi.fn(async (messages: unknown[]) => {
@@ -218,14 +219,16 @@ describe("inner_thought 事件的 session 路由", () => {
 
     const routed = await session.consumeIncomingEvent({
       type: "inner_thought",
-      data: { thought: "想翻翻那篇文章" },
+      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
     });
     expect(routed.shouldTriggerRound).toBe(true);
 
     const flushed = await session.flushPendingIncomingEffects();
     expect(flushed.shouldTriggerRound).toBe(true);
     // initializeContext 会先追加 portal reminder，inner_thought 在其后。
-    expect(appended.at(-1)).toEqual(createInnerThoughtMessage("想翻翻那篇文章"));
+    expect(appended.at(-1)).toEqual(
+      createInnerThoughtMessage(["想翻翻那篇文章", "去看看她回没回"]),
+    );
   });
 });
 
@@ -244,12 +247,29 @@ describe("inner-voice 进上下文文案的义务口吻禁令（issue #265 验�
 
   it("指令模板保留「不行动合法」的台阶", () => {
     const content = readFileSync(join(staticDir, "context/inner-voice-instruction.hbs"), "utf8");
-    expect(content).toContain("没什么真想做的就是没有");
+    expect(content).toContain("这很正常，闲着也是过日子");
   });
 
-  it("inner_thought 消息只是念头的伪标签壳", () => {
-    const { content } = createInnerThoughtMessage(" 想翻翻那篇文章 ");
-    expect(typeof content).toBe("string");
-    expect(String(content).trimEnd()).toBe("<inner_thought>想翻翻那篇文章</inner_thought>");
+  /**
+   * issue #265 原验收判据里这条是「inner_thought 消息只是念头的伪标签壳」（零框定）。
+   * issue #592 用生产数据推翻了它：裸标签下注入后 68.8% 直接 wait、比全部轮次基线（55.4%）
+   * 还高，失败形态是「复述一遍更漂亮的话就收工」。经项目所有者明确批准，注入侧改为带一段
+   * 第一人称框定。故本条改钉新的不变量：仍是第一人称、仍不是任务/工具结果，但不再是裸壳。
+   */
+  it("inner_impulse 消息带第一人称框定，且候选拼成一行意识流（不是清单）", () => {
+    const { content } = createInnerThoughtMessage([" 想翻翻那篇文章 ", " 去看看她回没回 "]);
+    const text = String(content);
+    expect(text.startsWith("<inner_impulse>")).toBe(true);
+    expect(text.trimEnd().endsWith("</inner_impulse>")).toBe(true);
+    // 候选按空格拼成单串：无编号、无项目符号、不换行分条。
+    expect(text).toContain("想翻翻那篇文章 去看看她回没回");
+    expect(text).not.toMatch(/^\s*[-*\d]/m);
+    // 框定是她自己的话，不是第二人称指令（禁词表已另测）。
+    expect(text).toContain("我");
+  });
+
+  it("空白候选被剔除，全空白 → 只剩空壳", () => {
+    const { content } = createInnerThoughtMessage(["  ", ""]);
+    expect(String(content)).toContain("<inner_impulse>");
   });
 });

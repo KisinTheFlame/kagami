@@ -37,7 +37,7 @@ type InnerVoiceTaskAgentLike = Pick<InnerVoiceTaskAgent, "invoke">;
  * 2. tracker 判定摸鱼成立时，打 triggered metric，先记一次注入尝试（无论产不产出念头都
  *    消耗配额，防连环空转），再复用主上下文完整 system/消息前缀跑 InnerVoiceTaskAgent
  *    （字节相等命中 KV cache）；
- * 3. 产出非空念头 → enqueue InnerThoughtEvent，经 session 路由装配成 `<inner_thought>`
+ * 3. 产出非空念头 → enqueue InnerThoughtEvent，经 session 路由装配成 `<inner_impulse>`
  *    追加尾部并触发一轮（enqueue 兼作唤醒——她摸鱼时多半正阻塞在 wait 里）。
  *
  * 一切异常就地吞掉并记日志：内心独白是锦上添花，绝不允许拖垮主循环。
@@ -111,7 +111,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     this.tracker.recordAttempt(committedAt);
 
     let outcome: InnerThoughtOutcome;
-    let thought = "";
+    let thoughts: string[] = [];
     try {
       const snapshot = await input.context.host.getContextSnapshot();
       // 复用主 Agent 完整 system / 消息前缀（字节相等命中 KV cache）——不再切片；
@@ -128,13 +128,13 @@ export class InnerVoiceExtension implements LoopAgentExtension<
           event: "agent.inner_voice.empty_thought",
         });
       } else {
-        thought = result;
+        thoughts = result;
         outcome = "injected";
-        this.eventQueue.enqueue({ type: "inner_thought", data: { thought } });
+        this.eventQueue.enqueue({ type: "inner_thought", data: { thoughts } });
         this.recordMetric(INNER_VOICE_METRIC_INJECTED);
         logger.info("Inner thought enqueued", {
           event: "agent.inner_voice.thought_enqueued",
-          thoughtLength: thought.length,
+          thoughtCount: thoughts.length,
         });
       }
     } catch (error) {
@@ -145,7 +145,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
       });
     }
 
-    await this.persistThought({ triggeredAt: committedAt, outcome, thought });
+    await this.persistThought({ triggeredAt: committedAt, outcome, thoughts });
   }
 
   /**
@@ -155,13 +155,14 @@ export class InnerVoiceExtension implements LoopAgentExtension<
   private async persistThought(input: {
     triggeredAt: Date;
     outcome: InnerThoughtOutcome;
-    thought: string;
+    thoughts: readonly string[];
   }): Promise<void> {
     try {
       await this.innerThoughtDao.insert({
         triggeredAt: input.triggeredAt,
         outcome: input.outcome,
-        thought: input.thought,
+        // `thought` 列仍是单 TEXT（无迁移）：多候选按空格拼成一串存，与注入侧读到的一致。
+        thought: input.thoughts.join(" "),
         runtimeKey: this.runtimeKey,
       });
     } catch (error) {

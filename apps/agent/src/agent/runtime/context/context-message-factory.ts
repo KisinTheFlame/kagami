@@ -154,20 +154,24 @@ export function createTodoSuggestionInstructionMessage(
 
 /**
  * 内心独白回流消息：摸鱼判定触发、inner-voice TaskAgent 产出的念头，包成一条
- * `<inner_thought>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
+ * `<inner_impulse>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
  * 不是任务也不是要求（issue #265）。
  */
-export function createInnerThoughtMessage(thought: string): UserMessage {
+export function createInnerThoughtMessage(thoughts: readonly string[]): UserMessage {
+  const trimmed = thoughts.map(thought => thought.trim()).filter(thought => thought.length > 0);
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/inner-thought.hbs", {
-      thought: thought.trim(),
+      // 模板 view-model 固定两个字段：thought（候选按空格拼成的单串意识流）与 thoughts（数组）。
+      // 现行模板用前者——多候选是生成侧的装置，注入侧读起来仍是一行自言自语，不是清单。
+      thought: trimmed.join(" "),
+      thoughts: trimmed,
     }),
   );
 }
 
 /**
  * inner-voice TaskAgent 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
- * 口吻产出（或放弃产出）一个锚定近期真实经历的念头，经 emit_inner_thought 提交。
+ * 口吻产出（或放弃产出）几个锚定近期真实经历的念头，经 emit_inner_thought 提交。
  */
 export function createInnerVoiceInstructionMessage(): UserMessage {
   return createUserMessage(
