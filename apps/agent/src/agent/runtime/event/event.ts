@@ -48,7 +48,7 @@ type ForegroundInputEvent = {
 };
 
 /**
- * 内心独白事件：摸鱼判定触发、inner-voice Operation 产出非空念头后塞进队列
+ * 内心独白事件：摸鱼判定触发、inner-voice TaskAgent 产出非空念头后塞进队列
  * （issue #265）。Session 路由时装配成一条 `<inner_thought>` user message 追加到
  * 上下文尾部并触发一轮 round；enqueue 本身兼作唤醒（她摸鱼时多半正阻塞在 wait 里）。
  */

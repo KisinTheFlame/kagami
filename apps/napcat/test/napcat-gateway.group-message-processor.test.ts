@@ -9,6 +9,23 @@ function expectEnqueuedGroupMessage(data: Record<string, unknown>) {
   });
 }
 
+/**
+ * 复刻生产序列：`process()` 归一化，再把 groupMessageEvent 交给 `publishGroupMessageEvent`
+ * 入队——正是 napcat-gateway.impl.service 有序 flush 的两步（拆开是为了保住事件顺序）。
+ * 生产没有「一步到底」的入口，测试也不该有：原先的 `handle()` 就是这样一条只有测试走的
+ * 旁路，已随死代码清理删除，这里改用与生产同构的组合。
+ */
+async function processAndPublish(
+  processor: NapcatGroupMessageProcessor,
+  payload: Parameters<NapcatGroupMessageProcessor["process"]>[0],
+): ReturnType<NapcatGroupMessageProcessor["process"]> {
+  const result = await processor.process(payload);
+  if (result.groupMessageEvent) {
+    processor.publishGroupMessageEvent(result.groupMessageEvent);
+  }
+  return result;
+}
+
 describe("NapcatGroupMessageProcessor", () => {
   let logs = initTestLogger();
 
@@ -56,7 +73,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    const result = await processor.handle({
+    const result = await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -182,8 +199,8 @@ describe("NapcatGroupMessageProcessor", () => {
       },
     };
 
-    await processor.handle(payload);
-    await processor.handle({
+    await processAndPublish(processor, payload);
+    await processAndPublish(processor, {
       ...payload,
       message_id: 1002,
       raw_message: "[CQ:at,qq=10001] again",
@@ -239,7 +256,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    const result = await processor.handle({
+    const result = await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -275,7 +292,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    const result = await processor.handle({
+    const result = await processAndPublish(processor, {
       post_type: "message_sent",
       message_type: "group",
       group_id: "987654",
@@ -315,7 +332,7 @@ describe("NapcatGroupMessageProcessor", () => {
     });
 
     await expect(
-      processor.handle({
+      processAndPublish(processor, {
         post_type: "message",
         message_type: "group",
         group_id: "987654",
@@ -368,7 +385,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -436,7 +453,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -492,7 +509,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -538,7 +555,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -593,7 +610,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",
@@ -612,7 +629,7 @@ describe("NapcatGroupMessageProcessor", () => {
         card: "测试群名片",
       },
     });
-    await processor.handle({
+    await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "000000",
@@ -654,7 +671,7 @@ describe("NapcatGroupMessageProcessor", () => {
       qqMessageDao,
     });
 
-    const result = await processor.handle({
+    const result = await processAndPublish(processor, {
       post_type: "message",
       message_type: "group",
       group_id: "987654",

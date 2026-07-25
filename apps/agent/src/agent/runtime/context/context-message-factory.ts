@@ -153,7 +153,7 @@ export function createTodoSuggestionInstructionMessage(
 }
 
 /**
- * 内心独白回流消息：摸鱼判定触发、inner-voice Operation 产出的念头，包成一条
+ * 内心独白回流消息：摸鱼判定触发、inner-voice TaskAgent 产出的念头，包成一条
  * `<inner_thought>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
  * 不是任务也不是要求（issue #265）。
  */
@@ -166,7 +166,7 @@ export function createInnerThoughtMessage(thought: string): UserMessage {
 }
 
 /**
- * inner-voice Operation 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
+ * inner-voice TaskAgent 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
  * 口吻产出（或放弃产出）一个锚定近期真实经历的念头，经 emit_inner_thought 提交。
  */
 export function createInnerVoiceInstructionMessage(): UserMessage {

@@ -12,7 +12,7 @@ if [ -z "$SERVICE" ]; then
   exit 0
 fi
 
-# ── 单服务模式：pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat> ──
+# ── 单服务模式：pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat|pixel|gba|scheduler> ──
 # 别名 → PM2 进程名。与 scripts/deploy.sh 的别名表保持一致，让 stop / deploy 用同一套短名。
 case "$SERVICE" in
   agent) PM2_NAME="kagami-agent" ;;

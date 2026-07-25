@@ -155,6 +155,40 @@ function createMirroredTaskAgentTools({
   return new ToolCatalog(mirrored).pick(mirrored.map(tool => tool.name));
 }
 
+/**
+ * 三个 fork 型 task agent（summary / todo / inner-voice）的镜像工具装配。它们的差异只有
+ * 三处：终止子工具、任务名标签、提交指引；其余（挂 invoke 的 unguarded owner、switch 的
+ * 定制指路话术、其它顶层工具的默认拒绝话术）形状完全一致，这里收敛成一个小工厂。
+ *
+ * 拒绝话术会进各 fork agent 的 tools 前缀，是 KV 缓存字节相等的一部分——模板拼出的字符串
+ * 与收敛前逐字节相同（见 fork-task-agent-tools 单测钉死），改这里等于同时改三个子 agent 的前缀。
+ */
+function buildForkTaskAgentTools({
+  mainTopLevelTools,
+  terminalTool,
+  taskLabel,
+  submitHint,
+}: {
+  mainTopLevelTools: readonly ToolComponent[];
+  /** 该子任务唯一可用的终止子工具（挂到自己的 invoke 上）。 */
+  terminalTool: ToolComponent;
+  /** 任务名标签，嵌进拒绝话术，如 "上下文摘要子任务"。 */
+  taskLabel: string;
+  /** 提交指引（不含句号），如 `invoke(tool="finalize_summary", summary=...) 提交最终摘要`。 */
+  submitHint: string;
+}): ToolExecutor {
+  return createMirroredTaskAgentTools({
+    mainTopLevelTools,
+    invokeTool: new InvokeTool({
+      owners: [createUnguardedSubtoolOwner({ tools: [terminalTool] })],
+    }),
+    overrideReasons: {
+      [SWITCH_TOOL_NAME]: `在${taskLabel}中不可调用 switch。请用 ${submitHint}。`,
+    },
+    defaultReason: toolName => `在${taskLabel}中不可调用 ${toolName}。`,
+  });
+}
+
 export async function buildAgentRuntime({
   config,
   database,
@@ -328,64 +362,38 @@ export async function buildAgentRuntime({
   const toolCatalog = new ToolCatalog(mainTopLevelTools);
   const rootAgentTools = toolCatalog.pick(mainTopLevelTools.map(tool => tool.name));
 
-  // 两个 fork 型 task agent（summary / todo）共用同一套镜像装配，从主 Agent 的
-  // 同一份有序顶层工具清单派生（见 createMirroredTaskAgentTools），主 Agent 加/删/
-  // 重排工具时镜像自动跟随，不会漂移出字节不等的 tools 前缀。
-  // SummaryTaskAgent：同一套镜像装配，invoke 只挂 finalize_summary 终止子工具。
-  const summaryInvokeTool = new InvokeTool({
-    owners: [createUnguardedSubtoolOwner({ tools: [new FinalizeSummaryTool()] })],
-  });
-  const summaryAgentTools = createMirroredTaskAgentTools({
-    mainTopLevelTools,
-    invokeTool: summaryInvokeTool,
-    overrideReasons: {
-      [SWITCH_TOOL_NAME]:
-        '在上下文摘要子任务中不可调用 switch。请用 invoke(tool="finalize_summary", summary=...) 提交最终摘要。',
-    },
-    defaultReason: toolName => `在上下文摘要子任务中不可调用 ${toolName}。`,
-  });
+  // 三个 fork 型 task agent（summary / todo / inner-voice）共用同一套镜像装配，从主 Agent
+  // 的同一份有序顶层工具清单派生（见 buildForkTaskAgentTools），主 Agent 加/删/重排工具时
+  // 镜像自动跟随，不会漂移出字节不等的 tools 前缀；请求前缀与主 Agent 字节相等，命中
+  // Anthropic prompt cache（issue #265 / #410）。
   const summaryTaskAgent = new SummaryTaskAgent({
     llmClient,
-    taskTools: summaryAgentTools,
+    taskTools: buildForkTaskAgentTools({
+      mainTopLevelTools,
+      terminalTool: new FinalizeSummaryTool(),
+      taskLabel: "上下文摘要子任务",
+      submitHint: 'invoke(tool="finalize_summary", summary=...) 提交最终摘要',
+    }),
     reminderMessageFactory: createRootContextSummaryReminderMessage,
-  });
-  // TodoSuggestionTaskAgent：同一套镜像装配，invoke 只挂 propose_todos 终止子工具。
-  const todoInvokeTool = new InvokeTool({
-    owners: [createUnguardedSubtoolOwner({ tools: [new ProposeTodosTool()] })],
-  });
-  const todoAgentTools = createMirroredTaskAgentTools({
-    mainTopLevelTools,
-    invokeTool: todoInvokeTool,
-    overrideReasons: {
-      [SWITCH_TOOL_NAME]:
-        '在「发现待办」子任务中不可调用 switch。请用 invoke(tool="propose_todos", suggestions=[...]) 提交候选待办。',
-    },
-    defaultReason: toolName => `在「发现待办」子任务中不可调用 ${toolName}。`,
   });
   const todoSuggestionTaskAgent = new TodoSuggestionTaskAgent({
     llmClient,
-    taskTools: todoAgentTools,
+    taskTools: buildForkTaskAgentTools({
+      mainTopLevelTools,
+      terminalTool: new ProposeTodosTool(),
+      taskLabel: "「发现待办」子任务",
+      submitHint: 'invoke(tool="propose_todos", suggestions=[...]) 提交候选待办',
+    }),
   });
-  // 内心独白（issue #265 / #410）：摸鱼判定 tracker + 镜像装配 TaskAgent + loop
-  // extension。与 summary / todo 同一套镜像装配，invoke 只挂
-  // emit_inner_thought 终止子工具，其余顶层工具 OutOfScope 软拒绝——请求前缀与主
-  // Agent 字节相等，命中 Anthropic prompt cache。
   const innerVoiceIdleTracker = new InnerVoiceIdleTracker();
-  const innerVoiceInvokeTool = new InvokeTool({
-    owners: [createUnguardedSubtoolOwner({ tools: [new EmitInnerThoughtTool()] })],
-  });
-  const innerVoiceAgentTools = createMirroredTaskAgentTools({
-    mainTopLevelTools,
-    invokeTool: innerVoiceInvokeTool,
-    overrideReasons: {
-      [SWITCH_TOOL_NAME]:
-        '在内心独白子任务中不可调用 switch。请用 invoke(tool="emit_inner_thought", thought=...) 提交念头。',
-    },
-    defaultReason: toolName => `在内心独白子任务中不可调用 ${toolName}。`,
-  });
   const innerVoiceTaskAgent = new InnerVoiceTaskAgent({
     llmClient,
-    taskTools: innerVoiceAgentTools,
+    taskTools: buildForkTaskAgentTools({
+      mainTopLevelTools,
+      terminalTool: new EmitInnerThoughtTool(),
+      taskLabel: "内心独白子任务",
+      submitHint: 'invoke(tool="emit_inner_thought", thought=...) 提交念头',
+    }),
   });
   const innerVoiceExtension = new InnerVoiceExtension({
     tracker: innerVoiceIdleTracker,

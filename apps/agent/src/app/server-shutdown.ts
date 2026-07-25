@@ -23,11 +23,9 @@ type ShutdownServerResourcesOptions = {
   /** 反序关停所有 App（含 QQ App 停 napcat 网关）。取代旧的 napcatGatewayService.stop。 */
   shutdownApps: (() => Promise<void>) | null;
   schedulerClient: SchedulerClient | null;
-  callbackServers: Array<{ stop(): Promise<void> }>;
   rootAgentRuntime: AgentRuntimeController | null;
   /** 状态心跳采样器：关停时停掉定时器，stop 后不再打点。同步、幂等。缺省/ null 视为无采样器。 */
   stateSampler?: { stop(): void } | null;
-  closeLlmProviders: (() => Promise<void>) | null;
   logger?: ShutdownLogger;
   closeLoggerRuntime?: () => Promise<void>;
   closeDatabase?: (database: Database) => Promise<void>;
@@ -46,10 +44,8 @@ export async function shutdownServerResources({
   database,
   shutdownApps,
   schedulerClient,
-  callbackServers,
   rootAgentRuntime,
   stateSampler,
-  closeLlmProviders,
   logger: shutdownLogger = logger,
   closeLoggerRuntime = async () => {
     await getLoggerRuntime().close();
@@ -116,18 +112,10 @@ export async function shutdownServerResources({
       schedulerClient.stop(),
     );
   }
-  for (const callbackServer of callbackServers) {
-    await step("Callback server closed", "server.shutdown.callback_server_closed", () =>
-      callbackServer.stop(),
-    );
-  }
   if (rootAgentRuntime) {
     await step("Root agent runtime closed", "server.shutdown.root_agent_runtime_closed", () =>
       rootAgentRuntime.stop(),
     );
-  }
-  if (closeLlmProviders) {
-    await step("LLM providers closed", "server.shutdown.llm_providers_closed", closeLlmProviders);
   }
   // logger runtime 与 DB 放最后关：前面各步都可能还要写日志。DB 关闭无条件执行（在 errors 里也照关）。
   await step("Logger runtime closed", "server.shutdown.logger_closed", closeLoggerRuntime);

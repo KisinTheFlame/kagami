@@ -46,15 +46,7 @@ describe("shutdownServerResources", () => {
         order.push("schedulerClient.stop");
       }),
     };
-    const callbackServer = {
-      stop: vi.fn(async () => {
-        order.push("callbackServer.stop");
-      }),
-    };
     const rootAgentRuntime = createAgentRuntimeStub(order, "rootAgentRuntime.stop");
-    const closeLlmProviders = vi.fn(async () => {
-      order.push("closeLlmProviders");
-    });
     const closeLoggerRuntime = vi.fn(async () => {
       order.push("closeLoggerRuntime");
     });
@@ -73,9 +65,7 @@ describe("shutdownServerResources", () => {
       database: {} as never,
       shutdownApps,
       schedulerClient: schedulerClient as never,
-      callbackServers: [callbackServer],
       rootAgentRuntime,
-      closeLlmProviders,
       logger,
       closeLoggerRuntime,
       closeDatabase,
@@ -88,9 +78,7 @@ describe("shutdownServerResources", () => {
       "app.close",
       "shutdownApps",
       "schedulerClient.stop",
-      "callbackServer.stop",
       "rootAgentRuntime.stop",
-      "closeLlmProviders",
       "closeLoggerRuntime",
       "closeDb",
       "exit(0)",
@@ -121,10 +109,8 @@ describe("shutdownServerResources", () => {
       database: {} as never,
       shutdownApps: null,
       schedulerClient: null,
-      callbackServers: [],
       rootAgentRuntime,
       stateSampler,
-      closeLlmProviders: null,
       logger,
       closeLoggerRuntime: vi.fn(async () => {}),
       closeDatabase: vi.fn(async () => {}),
@@ -153,9 +139,7 @@ describe("shutdownServerResources", () => {
       database: {} as never,
       shutdownApps: null,
       schedulerClient: null,
-      callbackServers: [],
       rootAgentRuntime: null,
-      closeLlmProviders: null,
       logger,
       closeLoggerRuntime,
       closeDatabase,
@@ -183,9 +167,7 @@ describe("shutdownServerResources", () => {
       database: null,
       shutdownApps: null,
       schedulerClient: null,
-      callbackServers: [],
       rootAgentRuntime,
-      closeLlmProviders: null,
       logger,
       closeLoggerRuntime: async () => {},
       closeDatabase: async () => {},
@@ -206,7 +188,6 @@ describe("shutdownServerResources", () => {
         throw rootStopError;
       }),
     };
-    const closeLlmProviders = vi.fn(async () => {});
     const closeLoggerRuntime = vi.fn(async () => {});
     const closeDatabase = vi.fn(async () => {});
     const exit = vi.fn();
@@ -219,9 +200,7 @@ describe("shutdownServerResources", () => {
       database: {} as never,
       shutdownApps: null,
       schedulerClient: null,
-      callbackServers: [],
       rootAgentRuntime,
-      closeLlmProviders,
       logger,
       closeLoggerRuntime,
       closeDatabase,
@@ -231,8 +210,7 @@ describe("shutdownServerResources", () => {
     });
 
     expect(rootAgentRuntime.stop).toHaveBeenCalledTimes(1);
-    // 单步失败不再阻断后续：LLM providers / logger / DB 都仍被关闭（尤其 DB 必须关，防连接泄漏）。
-    expect(closeLlmProviders).toHaveBeenCalledTimes(1);
+    // 单步失败不再阻断后续：logger / DB 都仍被关闭（尤其 DB 必须关，防连接泄漏）。
     expect(closeLoggerRuntime).toHaveBeenCalledTimes(1);
     expect(closeDatabase).toHaveBeenCalledTimes(1);
     expect(logger.errorWithCause).toHaveBeenCalledWith(
@@ -260,9 +238,7 @@ describe("shutdownServerResources", () => {
       database: {} as never,
       shutdownApps: null,
       schedulerClient: null,
-      callbackServers: [],
       rootAgentRuntime: null,
-      closeLlmProviders: null,
       logger,
       closeLoggerRuntime: async () => {},
       closeDatabase,

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { assertNever } from "../src/utils/assert.js";
-import { stripLoneSurrogates, truncateWithEllipsis } from "../src/utils/text.js";
+import {
+  stripLoneSurrogates,
+  truncateWithEllipsis,
+  truncateWithEllipsisDetailed,
+} from "../src/utils/text.js";
 
 describe("stripLoneSurrogates — 剥除落单代理项（事故：半个 emoji 打挂会话）", () => {
   it("完整代理对（emoji）成对保留", () => {
@@ -50,6 +54,52 @@ describe("truncateWithEllipsis — 按码点截断，绝不劈代理对", () => 
   it("输入自带落单代理时先清理再计数", () => {
     const dirty = "ab" + "\uD83D" + "cd";
     expect(truncateWithEllipsis(dirty, 10)).toBe("abcd");
+  });
+});
+
+describe("truncateWithEllipsisDetailed — 全仓截断唯一实现，附是否截断标记", () => {
+  it("不超限时 truncated=false 且不加省略号", () => {
+    expect(truncateWithEllipsisDetailed("hello", 10)).toEqual({ text: "hello", truncated: false });
+  });
+
+  it("超限时 truncated=true 并追加省略号", () => {
+    expect(truncateWithEllipsisDetailed("abcdef", 3)).toEqual({ text: "abc…", truncated: true });
+  });
+
+  it("emoji 记 1 个码点，截断落在 emoji 边界（产物无落单代理）", () => {
+    const result = truncateWithEllipsisDetailed("😀😁😂🤣😃", 3);
+    expect(result).toEqual({ text: "😀😁😂…", truncated: true });
+    expect(stripLoneSurrogates(result.text)).toBe(result.text);
+  });
+
+  it("trimEnd 只作用于截断分支的正文尾部空白（ithome 正文排版依赖）", () => {
+    expect(truncateWithEllipsisDetailed("ab   cd", 5, { ellipsis: "……", trimEnd: true })).toEqual({
+      text: "ab……",
+      truncated: true,
+    });
+  });
+
+  it("不开 trimEnd 时保留正文尾部空白", () => {
+    expect(truncateWithEllipsisDetailed("ab   cd", 5, { ellipsis: "……" })).toEqual({
+      text: "ab   ……",
+      truncated: true,
+    });
+  });
+
+  it("不超限时即使开了 trimEnd 也原样返回（只剥落单代理）", () => {
+    expect(truncateWithEllipsisDetailed("ab  ", 10, { trimEnd: true })).toEqual({
+      text: "ab  ",
+      truncated: false,
+    });
+  });
+
+  it("maxCodePoints 为 0 / 负数时正文为空，不越界取值", () => {
+    expect(truncateWithEllipsisDetailed("abc", 0)).toEqual({ text: "…", truncated: true });
+    expect(truncateWithEllipsisDetailed("abc", -1)).toEqual({ text: "…", truncated: true });
+  });
+
+  it("truncateWithEllipsis 与本函数同源（便捷封装只取 text）", () => {
+    expect(truncateWithEllipsis("abcdef", 3)).toBe(truncateWithEllipsisDetailed("abcdef", 3).text);
   });
 });
 
