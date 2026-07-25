@@ -120,6 +120,7 @@ server:
       claudeCode:
         baseUrl: https://api.anthropic.com
         models:
+          - claude-opus-5
           - claude-opus-4-8
           - claude-opus-4-6
           - claude-sonnet-5
@@ -141,7 +142,7 @@ server:
       agent:
         attempts:
           - provider: claude-code
-            model: claude-opus-4-6
+            model: claude-opus-5
             times: 3
         # adaptive thinking effort（#573）。usage=agent 覆盖主 Agent 与镜像 fork task agent
         # （它们字节级复用主 Agent 前缀，必须同 lineage）。删掉此行即整体关回 disabled。
