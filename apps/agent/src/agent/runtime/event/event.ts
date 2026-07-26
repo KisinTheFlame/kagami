@@ -55,8 +55,8 @@ type ForegroundInputEvent = {
 type InnerThoughtEvent = {
   type: "inner_thought";
   data: {
-    /** 已经以小镜口吻写好的第一人称念头，2~4 条（issue #592 起多候选）。 */
-    thoughts: string[];
+    /** 已经以小镜口吻写好的第一人称念头：一行里 2~4 个短句，空格隔开。 */
+    thought: string;
   };
 };
 

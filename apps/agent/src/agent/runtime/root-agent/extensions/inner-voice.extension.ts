@@ -12,6 +12,7 @@ import type {
   InnerThoughtDao,
   InnerThoughtOutcome,
 } from "@kagami/persistence/dao/inner-thought.dao";
+import type { AppCatalogEntryView } from "../app-catalog-view.js";
 import type {
   RootAgentCompletion,
   RootAgentToolExecutionData,
@@ -28,6 +29,9 @@ export const INNER_VOICE_METRIC_EMPTY = "agent.inner_voice.empty";
 export const INNER_VOICE_METRIC_FAILED = "agent.inner_voice.failed";
 
 const logger = new AppLogger({ source: "agent.inner-voice-extension" });
+
+/** 给 R1 展示多少条近期念头（issue #596）。 */
+const RECENT_THOUGHT_LIMIT = 5;
 
 type InnerVoiceTaskAgentLike = Pick<InnerVoiceTaskAgent, "invoke">;
 
@@ -52,7 +56,8 @@ export class InnerVoiceExtension implements LoopAgentExtension<
   private readonly taskAgent: InnerVoiceTaskAgentLike;
   private readonly eventQueue: AgentEventQueue;
   private readonly metricService: MetricClient;
-  private readonly innerThoughtDao: Pick<InnerThoughtDao, "insert">;
+  private readonly innerThoughtDao: Pick<InnerThoughtDao, "insert" | "listRecentInjected">;
+  private readonly appCatalogProvider: () => ReadonlyArray<AppCatalogEntryView>;
   private readonly runtimeKey: string;
   private readonly now: () => Date;
 
@@ -62,6 +67,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     eventQueue,
     metricService,
     innerThoughtDao,
+    appCatalogProvider,
     runtimeKey,
     now,
   }: {
@@ -69,7 +75,9 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     taskAgent: InnerVoiceTaskAgentLike;
     eventQueue: AgentEventQueue;
     metricService?: MetricClient;
-    innerThoughtDao: Pick<InnerThoughtDao, "insert">;
+    innerThoughtDao: Pick<InnerThoughtDao, "insert" | "listRecentInjected">;
+    /** App 名单提供者：与 system prompt 共用同一份映射，绝不维护第二份目录（issue #596）。 */
+    appCatalogProvider?: () => ReadonlyArray<AppCatalogEntryView>;
     runtimeKey: string;
     now?: () => Date;
   }) {
@@ -78,6 +86,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     this.eventQueue = eventQueue;
     this.metricService = metricService ?? NOOP_METRIC_CLIENT;
     this.innerThoughtDao = innerThoughtDao;
+    this.appCatalogProvider = appCatalogProvider ?? (() => []);
     this.runtimeKey = runtimeKey;
     this.now = now ?? (() => new Date());
   }
@@ -111,14 +120,17 @@ export class InnerVoiceExtension implements LoopAgentExtension<
     this.tracker.recordAttempt(committedAt);
 
     let outcome: InnerThoughtOutcome;
-    let thoughts: string[] = [];
+    let thought = "";
     try {
       const snapshot = await input.context.host.getContextSnapshot();
       // 复用主 Agent 完整 system / 消息前缀（字节相等命中 KV cache）——不再切片；
       // 隔离由 task agent 的镜像工具集（invoke 只挂 emit_inner_thought）保证。
+      // apps / recentThoughts 只进 R1（尾部，用完即弃），不动前缀。
       const invocation: InnerVoiceTaskInput = {
         systemPrompt: snapshot.systemPrompt,
         messages: snapshot.messages,
+        apps: this.appCatalogProvider(),
+        recentThoughts: await this.loadRecentThoughts(),
       };
       const result = await this.taskAgent.invoke(invocation);
       if (result.length === 0) {
@@ -128,13 +140,13 @@ export class InnerVoiceExtension implements LoopAgentExtension<
           event: "agent.inner_voice.empty_thought",
         });
       } else {
-        thoughts = result;
+        thought = result;
         outcome = "injected";
-        this.eventQueue.enqueue({ type: "inner_thought", data: { thoughts } });
+        this.eventQueue.enqueue({ type: "inner_thought", data: { thought } });
         this.recordMetric(INNER_VOICE_METRIC_INJECTED);
         logger.info("Inner thought enqueued", {
           event: "agent.inner_voice.thought_enqueued",
-          thoughtCount: thoughts.length,
+          thoughtLength: thought.length,
         });
       }
     } catch (error) {
@@ -145,7 +157,7 @@ export class InnerVoiceExtension implements LoopAgentExtension<
       });
     }
 
-    await this.persistThought({ triggeredAt: committedAt, outcome, thoughts });
+    await this.persistThought({ triggeredAt: committedAt, outcome, thought });
   }
 
   /**
@@ -155,14 +167,13 @@ export class InnerVoiceExtension implements LoopAgentExtension<
   private async persistThought(input: {
     triggeredAt: Date;
     outcome: InnerThoughtOutcome;
-    thoughts: readonly string[];
+    thought: string;
   }): Promise<void> {
     try {
       await this.innerThoughtDao.insert({
         triggeredAt: input.triggeredAt,
         outcome: input.outcome,
-        // `thought` 列仍是单 TEXT（无迁移）：多候选按空格拼成一串存，与注入侧读到的一致。
-        thought: input.thoughts.join(" "),
+        thought: input.thought,
         runtimeKey: this.runtimeKey,
       });
     } catch (error) {
@@ -170,6 +181,28 @@ export class InnerVoiceExtension implements LoopAgentExtension<
         event: "agent.inner_voice.persist_failed",
         outcome: input.outcome,
       });
+    }
+  }
+
+  /**
+   * 取最近几条已注入的念头给 R1 展示（issue #596）。**读库失败必须降级**：这只是给她看个
+   * 惯性的锦上添花，绝不能让它把一次内心独白拖成 failed，所以异常就地吞掉、返回空。
+   */
+  private async loadRecentThoughts(): Promise<readonly string[]> {
+    try {
+      return await this.innerThoughtDao.listRecentInjected({
+        runtimeKey: this.runtimeKey,
+        limit: RECENT_THOUGHT_LIMIT,
+      });
+    } catch (error) {
+      logger.errorWithCause(
+        "Failed to load recent inner thoughts; continuing without them",
+        error,
+        {
+          event: "agent.inner_voice.recent_load_failed",
+        },
+      );
+      return [];
     }
   }
 

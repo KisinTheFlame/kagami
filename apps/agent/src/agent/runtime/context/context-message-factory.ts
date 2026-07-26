@@ -2,6 +2,8 @@ import type { AsyncTaskCompletion } from "@kagami/agent-runtime";
 import type { LlmContentPart, LlmMessage } from "@kagami/llm-client";
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
 import { BEIJING_TIME_ZONE } from "@kagami/kernel/utils/time";
+import { truncateWithEllipsis } from "@kagami/kernel/utils/text";
+import type { AppCatalogEntryView } from "../root-agent/app-catalog-view.js";
 
 type UserMessage = Extract<LlmMessage, { role: "user" }>;
 
@@ -157,14 +159,10 @@ export function createTodoSuggestionInstructionMessage(
  * `<inner_impulse>` user message 追加到尾部——在小镜看来这是她自己冒出来的念头，
  * 不是任务也不是要求（issue #265）。
  */
-export function createInnerThoughtMessage(thoughts: readonly string[]): UserMessage {
-  const trimmed = thoughts.map(thought => thought.trim()).filter(thought => thought.length > 0);
+export function createInnerThoughtMessage(thought: string): UserMessage {
   return createUserMessage(
     renderServerStaticTemplate(import.meta.url, "context/inner-thought.hbs", {
-      // 模板 view-model 固定两个字段：thought（候选按空格拼成的单串意识流）与 thoughts（数组）。
-      // 现行模板用前者——多候选是生成侧的装置，注入侧读起来仍是一行自言自语，不是清单。
-      thought: trimmed.join(" "),
-      thoughts: trimmed,
+      thought: thought.trim(),
     }),
   );
 }
@@ -173,8 +171,41 @@ export function createInnerThoughtMessage(thoughts: readonly string[]): UserMess
  * inner-voice TaskAgent 的指令消息：追加到主上下文尾部切片之后，让隔离子调用以小镜
  * 口吻产出（或放弃产出）几个锚定近期真实经历的念头，经 emit_inner_thought 提交。
  */
-export function createInnerVoiceInstructionMessage(): UserMessage {
+export function createInnerVoiceInstructionMessage({
+  apps = [],
+  recentThoughts = [],
+}: {
+  apps?: ReadonlyArray<AppCatalogEntryView>;
+  recentThoughts?: readonly string[];
+} = {}): UserMessage {
+  const sanitized = sanitizeRecentThoughts(recentThoughts);
   return createUserMessage(
-    renderServerStaticTemplate(import.meta.url, "context/inner-voice-instruction.hbs"),
+    renderServerStaticTemplate(import.meta.url, "context/inner-voice-instruction.hbs", {
+      apps,
+      hasApps: apps.length > 0,
+      recentThoughts: sanitized,
+      hasRecentThoughts: sanitized.length > 0,
+    }),
   );
+}
+
+/** 近期念头单条进指令的码点上限：只是给她看个惯性，不需要全文。 */
+const RECENT_THOUGHT_MAX_CODE_POINTS = 60;
+
+/**
+ * 近期念头是**从上下文里长出来的历史文本**，可能夹带外部内容继承来的伪标签、引号或指令样
+ * 文字。而 `renderServerStaticTemplate` 用 `noEscape: true`——`{{}}` 不会自动转义——所以必须
+ * 在这里清理，否则等于把历史内容当指令重新喂给子 agent（issue #596）。
+ * 清理 = 去掉尖括号与换行、按码点限长、丢空条。
+ */
+function sanitizeRecentThoughts(thoughts: readonly string[]): string[] {
+  return thoughts
+    .map(thought =>
+      truncateWithEllipsis(
+        thought.replace(/[<>]/g, "").replace(/\s+/g, " ").trim(),
+        RECENT_THOUGHT_MAX_CODE_POINTS,
+        "",
+      ),
+    )
+    .filter(thought => thought.length > 0);
 }
