@@ -1,6 +1,6 @@
 import type { LlmClient, LlmContentPart } from "@kagami/llm-client";
 import { BizError } from "@kagami/kernel/errors/biz-error";
-import { createVisionSystemPrompt } from "./system-prompt.js";
+import { createVisionSystemPrompt, createVisionTileNote } from "./system-prompt.js";
 
 type VisionAgentDeps = {
   llmClient: LlmClient;
@@ -42,9 +42,9 @@ export class VisionAgent {
   public async analyzeImage(input: AnalyzeImageInput): Promise<AnalyzeImageResult> {
     validateAnalyzeImageInput(input);
 
-    const prompt = input.prompt?.trim().length
+    const systemPrompt = input.prompt?.trim().length
       ? input.prompt.trim()
-      : createVisionSystemPrompt({ tileCount: input.images.length });
+      : createVisionSystemPrompt();
     const imageParts: LlmContentPart[] = input.images.map(image => ({
       type: "image",
       // LlmImageContentPart.content 现为 base64 字符串（JSON 安全）；
@@ -53,18 +53,24 @@ export class VisionAgent {
       mimeType: image.mimeType,
       filename: image.filename,
     }));
+    // 切片场景（同一超长图切成多片，#556）：分片说明放进 user turn、图片之前。它带每次会变的
+    // tileCount，绝不进被缓存的 system 前缀（KV 缓存红线，#594）。
+    const userContent: LlmContentPart[] =
+      input.images.length > 1
+        ? [
+            { type: "text", text: createVisionTileNote({ tileCount: input.images.length }) },
+            ...imageParts,
+          ]
+        : imageParts;
     const response = await this.llmClient.chat(
       {
+        // 稳定指令走 system 字段：与 billing+sdk 一起被缓存断点覆盖，跨 vision 调用命中
+        // prompt cache（#594）；图片留在 user turn、断点之后，不进缓存。
+        system: systemPrompt,
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt,
-              },
-              ...imageParts,
-            ],
+            content: userContent,
           },
         ],
         tools: [],

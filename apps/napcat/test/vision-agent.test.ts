@@ -11,7 +11,7 @@ function createLlmClientMock(): LlmClient {
 }
 
 describe("VisionAgent", () => {
-  it("should use the default prompt and vision usage", async () => {
+  it("should put the default prompt in the system field and images in the user turn", async () => {
     const llmClient = createLlmClientMock();
     vi.mocked(llmClient.chat).mockResolvedValue({
       provider: "openai",
@@ -34,15 +34,14 @@ describe("VisionAgent", () => {
       description: "图片里有一只猫。",
     });
 
+    // 稳定指令进 system 字段（#594）；单图场景 user turn 只有图片、无文本块。
     expect(llmClient.chat).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
+        system: expect.stringContaining("只输出最终描述本身"),
         messages: [
           {
             role: "user",
             content: [
-              expect.objectContaining({
-                type: "text",
-              }),
               {
                 type: "image",
                 content: Buffer.from("image").toString("base64"),
@@ -54,26 +53,15 @@ describe("VisionAgent", () => {
         ],
         tools: [],
         toolChoice: "none",
-      },
+      }),
       {
         usage: "vision",
         scene: "vision",
       },
     );
-    const firstMessage = vi.mocked(llmClient.chat).mock.calls[0]?.[0]?.messages[0];
-    expect(firstMessage?.role).toBe("user");
-    if (firstMessage?.role !== "user" || !Array.isArray(firstMessage.content)) {
-      throw new Error("expected first message to be a multimodal user message");
-    }
-    const [promptPart] = firstMessage.content;
-    expect(promptPart?.type).toBe("text");
-    if (!promptPart || promptPart.type !== "text") {
-      throw new Error("expected first content part to be text");
-    }
-    expect(promptPart.text).toContain("请把这张图片转成适合聊天上下文的一小段中文文本。");
   });
 
-  it("should forward a custom prompt after trimming", async () => {
+  it("should forward a custom prompt to the system field after trimming", async () => {
     const llmClient = createLlmClientMock();
     vi.mocked(llmClient.chat).mockResolvedValue({
       provider: "openai",
@@ -93,14 +81,11 @@ describe("VisionAgent", () => {
 
     expect(llmClient.chat).toHaveBeenCalledWith(
       expect.objectContaining({
+        system: "只提取文字",
         messages: [
           {
             role: "user",
             content: [
-              {
-                type: "text",
-                text: "只提取文字",
-              },
               {
                 type: "image",
                 content: Buffer.from("image").toString("base64"),
@@ -116,6 +101,45 @@ describe("VisionAgent", () => {
         scene: "vision",
       },
     );
+  });
+
+  it("should keep the sliced-image tile note in the user turn, not the cached system prefix", async () => {
+    const llmClient = createLlmClientMock();
+    vi.mocked(llmClient.chat).mockResolvedValue({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      message: {
+        role: "assistant",
+        content: "一张长截图。",
+        toolCalls: [],
+      },
+    });
+    const agent = new VisionAgent({ llmClient });
+
+    await agent.analyzeImage({
+      images: [
+        { content: Buffer.from("a"), mimeType: "image/png" },
+        { content: Buffer.from("b"), mimeType: "image/png" },
+      ],
+    });
+
+    const request = vi.mocked(llmClient.chat).mock.calls[0]?.[0];
+    // tileCount 是每次会变的运行时值，绝不进被缓存的 system 前缀（KV 红线，#594）。
+    expect(request?.system).toEqual(expect.any(String));
+    expect(request?.system).not.toContain("分片");
+    // 分片说明在 user turn 首块、图片之前。
+    const content = request?.messages[0]?.content;
+    if (!Array.isArray(content)) {
+      throw new Error("expected multimodal user content");
+    }
+    const [note, first, second] = content;
+    expect(note).toMatchObject({ type: "text" });
+    if (!note || note.type !== "text") {
+      throw new Error("expected first content part to be the tile note text");
+    }
+    expect(note.text).toContain("2 张图");
+    expect(first).toMatchObject({ type: "image" });
+    expect(second).toMatchObject({ type: "image" });
   });
 
   it("should reject empty assistant content", async () => {
