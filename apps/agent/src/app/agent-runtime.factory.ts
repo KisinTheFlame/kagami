@@ -27,6 +27,7 @@ import { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js
 import { PrismaRootAgentRuntimeSnapshotRepository } from "../agent/runtime/root-agent/persistence/prisma-root-agent-runtime-snapshot.repository.js";
 import { ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY } from "../agent/runtime/root-agent/persistence/root-agent-runtime-snapshot.repository.js";
 import { createAgentSystemPrompt } from "../agent/runtime/root-agent/system-prompt.js";
+import { toAppCatalogView } from "../agent/runtime/root-agent/app-catalog-view.js";
 import { RootAgentSession } from "../agent/runtime/root-agent/session/root-agent-session.js";
 import { StateSampler } from "../agent/runtime/root-agent/state-sampler.js";
 import { FOREGROUND_METRIC_KNOCK } from "../agent/runtime/root-agent/foreground-input.js";
@@ -296,12 +297,13 @@ export async function buildAgentRuntime({
   appManager.register(qqApp);
   await appManager.startupAll(config.server.apps);
 
+  // App 名单的唯一来源：system prompt（稳定前缀）与 inner-voice 的 R1 都从这里取，
+  // 同一份映射、同一个顺序，绝不维护第二份目录（issue #596）。
+  const appCatalogProvider = () => toAppCatalogView(appManager.getAllApps());
   const agentSystemPromptFactory = async () => {
     return createAgentSystemPrompt({
       creatorName: config.server.bot.creator.name,
-      apps: appManager
-        .getAllApps()
-        .map(app => ({ id: app.id, displayName: app.displayName, description: app.description })),
+      apps: appCatalogProvider(),
     });
   };
   // root agent 每条进上下文的消息追加到 ledger（physical table `ledger`），只写不读，
@@ -392,7 +394,7 @@ export async function buildAgentRuntime({
       mainTopLevelTools,
       terminalTool: new EmitInnerThoughtTool(),
       taskLabel: "内心独白子任务",
-      submitHint: 'invoke(tool="emit_inner_thought", thoughts=[...]) 提交念头',
+      submitHint: 'invoke(tool="emit_inner_thought", thought=...) 提交念头',
     }),
   });
   const innerVoiceExtension = new InnerVoiceExtension({
@@ -401,6 +403,7 @@ export async function buildAgentRuntime({
     eventQueue,
     metricService,
     innerThoughtDao: new PrismaInnerThoughtDao({ database }),
+    appCatalogProvider,
     runtimeKey: ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY,
   });
   const rootAgentRuntime = new RootLoopAgent({

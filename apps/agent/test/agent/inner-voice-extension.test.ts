@@ -39,24 +39,31 @@ const RUNTIME_KEY = "root-agent";
 function createHarness(input: {
   tracker: InnerVoiceIdleTracker;
   /** null = 空念头（task agent 返回 ""，判 empty 不注入）。 */
-  thoughts: string[] | null;
+  thought: string | null;
   invokeError?: Error;
   daoError?: Error;
+  /** 近期念头读库抛错：必须降级为「无近期念头」，不得把 outcome 变成 failed。 */
+  recentError?: Error;
+  recentThoughts?: string[];
 }): {
   extension: InnerVoiceExtension;
   enqueue: ReturnType<typeof vi.fn>;
   invoke: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
+  listRecentInjected: ReturnType<typeof vi.fn>;
   metrics: string[];
   context: RootLoopExtensionContext;
 } {
   const enqueue = vi.fn();
   const invoke = input.invokeError
     ? vi.fn().mockRejectedValue(input.invokeError)
-    : vi.fn().mockResolvedValue(input.thoughts ?? []);
+    : vi.fn().mockResolvedValue(input.thought ?? "");
   const insert = input.daoError
     ? vi.fn().mockRejectedValue(input.daoError)
     : vi.fn().mockResolvedValue(undefined);
+  const listRecentInjected = input.recentError
+    ? vi.fn().mockRejectedValue(input.recentError)
+    : vi.fn().mockResolvedValue(input.recentThoughts ?? []);
   const metrics: string[] = [];
   const metricService: MetricClient = {
     record: async ({ metricName }) => {
@@ -68,7 +75,8 @@ function createHarness(input: {
     taskAgent: { invoke },
     eventQueue: { enqueue } as unknown as AgentEventQueue,
     metricService,
-    innerThoughtDao: { insert },
+    innerThoughtDao: { insert, listRecentInjected },
+    appCatalogProvider: () => [{ id: "gba", displayName: "掌机", description: "玩 GBA 游戏" }],
     runtimeKey: RUNTIME_KEY,
     now: () => NOW,
   });
@@ -79,7 +87,7 @@ function createHarness(input: {
         .mockResolvedValue({ systemPrompt: "persona", messages: [{ role: "user", content: "m" }] }),
     },
   } as unknown as RootLoopExtensionContext;
-  return { extension, enqueue, invoke, insert, metrics, context };
+  return { extension, enqueue, invoke, insert, listRecentInjected, metrics, context };
 }
 
 type OnAfterCommitInput = Parameters<InnerVoiceExtension["onAfterCommit"]>[0];
@@ -101,7 +109,7 @@ describe("InnerVoiceExtension", () => {
   it("摸鱼成立且产出念头 → enqueue inner_thought 事件 + triggered/injected metric + 落 injected 行", async () => {
     const { extension, enqueue, invoke, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thoughts: ["想翻翻那篇文章", "去看看她回没回"],
+      thought: "想翻翻那篇文章 去看看她回没回",
     });
 
     await extension.onAfterCommit({ context, result: waitRound() });
@@ -109,7 +117,7 @@ describe("InnerVoiceExtension", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith({
       type: "inner_thought",
-      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
+      data: { thought: "想翻翻那篇文章 去看看她回没回" },
     });
     expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_INJECTED]);
     expect(insert).toHaveBeenCalledTimes(1);
@@ -126,7 +134,7 @@ describe("InnerVoiceExtension", () => {
     const tracker = trackerAboutToTrigger();
     const { extension, enqueue, insert, metrics, context } = createHarness({
       tracker,
-      thoughts: null,
+      thought: null,
     });
 
     await extension.onAfterCommit({ context, result: waitRound() });
@@ -145,7 +153,7 @@ describe("InnerVoiceExtension", () => {
   it("摸鱼不成立 → 完全不跑 task agent、不打 metric、不落行", async () => {
     const { extension, invoke, insert, metrics, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
-      thoughts: ["x"],
+      thought: "x",
     });
     await extension.onAfterCommit({ context, result: waitRound() });
     expect(invoke).not.toHaveBeenCalled();
@@ -156,7 +164,7 @@ describe("InnerVoiceExtension", () => {
   it("非 wait 调用不推进摸鱼判定（wait 才计数）", async () => {
     const { extension, invoke, context } = createHarness({
       tracker: new InnerVoiceIdleTracker(),
-      thoughts: ["x"],
+      thought: "x",
     });
     // 一轮 3 个 invoke 不等于 3 个 wait —— 判定不成立。
     await extension.onAfterCommit({
@@ -173,7 +181,7 @@ describe("InnerVoiceExtension", () => {
   it("task agent 抛错被吞掉，不拖垮主循环，打 triggered/failed metric + 落 failed 空行", async () => {
     const { extension, enqueue, insert, metrics, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thoughts: null,
+      thought: null,
       invokeError: new Error("boom"),
     });
     await expect(
@@ -192,7 +200,7 @@ describe("InnerVoiceExtension", () => {
   it("落库抛错被吞掉，不拖垮主循环，念头仍照常注入", async () => {
     const { extension, enqueue, insert, context } = createHarness({
       tracker: trackerAboutToTrigger(),
-      thoughts: ["想翻翻那篇文章", "去看看她回没回"],
+      thought: "想翻翻那篇文章 去看看她回没回",
       daoError: new Error("db down"),
     });
     await expect(
@@ -201,9 +209,34 @@ describe("InnerVoiceExtension", () => {
     // 落库失败不影响念头进上下文（enqueue 在 insert 之前，且 insert 异常被 best-effort 吞掉）。
     expect(enqueue).toHaveBeenCalledWith({
       type: "inner_thought",
-      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
+      data: { thought: "想翻翻那篇文章 去看看她回没回" },
     });
     expect(insert).toHaveBeenCalledTimes(1);
+  });
+  it("近期念头读库抛错 → 降级为无近期念头，念头仍照常注入（不得判 failed）", async () => {
+    const { extension, enqueue, insert, context, metrics } = createHarness({
+      tracker: trackerAboutToTrigger(),
+      thought: "想翻翻那篇文章 去看看她回没回",
+      recentError: new Error("db down"),
+    });
+    await expect(
+      extension.onAfterCommit({ context, result: waitRound() }),
+    ).resolves.toBeUndefined();
+    expect(enqueue).toHaveBeenCalledWith({
+      type: "inner_thought",
+      data: { thought: "想翻翻那篇文章 去看看她回没回" },
+    });
+    expect(metrics).toEqual([INNER_VOICE_METRIC_TRIGGERED, INNER_VOICE_METRIC_INJECTED]);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ outcome: "injected" }));
+  });
+
+  it("按 runtimeKey 取近期念头，条数为 5", async () => {
+    const { extension, listRecentInjected, context } = createHarness({
+      tracker: trackerAboutToTrigger(),
+      thought: "x",
+    });
+    await extension.onAfterCommit({ context, result: waitRound() });
+    expect(listRecentInjected).toHaveBeenCalledWith({ runtimeKey: RUNTIME_KEY, limit: 5 });
   });
 });
 
@@ -219,16 +252,14 @@ describe("inner_thought 事件的 session 路由", () => {
 
     const routed = await session.consumeIncomingEvent({
       type: "inner_thought",
-      data: { thoughts: ["想翻翻那篇文章", "去看看她回没回"] },
+      data: { thought: "想翻翻那篇文章 去看看她回没回" },
     });
     expect(routed.shouldTriggerRound).toBe(true);
 
     const flushed = await session.flushPendingIncomingEffects();
     expect(flushed.shouldTriggerRound).toBe(true);
     // initializeContext 会先追加 portal reminder，inner_thought 在其后。
-    expect(appended.at(-1)).toEqual(
-      createInnerThoughtMessage(["想翻翻那篇文章", "去看看她回没回"]),
-    );
+    expect(appended.at(-1)).toEqual(createInnerThoughtMessage("想翻翻那篇文章 去看看她回没回"));
   });
 });
 
@@ -257,7 +288,7 @@ describe("inner-voice 进上下文文案的义务口吻禁令（issue #265 验�
    * 第一人称框定。故本条改钉新的不变量：仍是第一人称、仍不是任务/工具结果，但不再是裸壳。
    */
   it("inner_impulse 消息带第一人称框定，且候选拼成一行意识流（不是清单）", () => {
-    const { content } = createInnerThoughtMessage([" 想翻翻那篇文章 ", " 去看看她回没回 "]);
+    const { content } = createInnerThoughtMessage(" 想翻翻那篇文章 去看看她回没回 ");
     const text = String(content);
     expect(text.startsWith("<inner_impulse>")).toBe(true);
     expect(text.trimEnd().endsWith("</inner_impulse>")).toBe(true);
@@ -268,8 +299,8 @@ describe("inner-voice 进上下文文案的义务口吻禁令（issue #265 验�
     expect(text).toContain("我");
   });
 
-  it("空白候选被剔除，全空白 → 只剩空壳", () => {
-    const { content } = createInnerThoughtMessage(["  ", ""]);
+  it("全空白念头 → 只剩空壳", () => {
+    const { content } = createInnerThoughtMessage("   ");
     expect(String(content)).toContain("<inner_impulse>");
   });
 });

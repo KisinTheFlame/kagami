@@ -5,6 +5,7 @@ import type {
   InnerThoughtOutcome,
   InnerThoughtSummary,
   InsertInnerThoughtInput,
+  ListRecentInjectedInput,
   QueryInnerThoughtListInput,
 } from "../inner-thought.dao.js";
 
@@ -34,6 +35,17 @@ export class PrismaInnerThoughtDao implements InnerThoughtDao {
     return this.database.innerThought.count({
       where: toWhereInput(input),
     });
+  }
+
+  public async listRecentInjected(input: ListRecentInjectedInput): Promise<string[]> {
+    const rows = await this.database.innerThought.findMany({
+      where: { runtimeKey: input.runtimeKey, outcome: "injected", NOT: { thought: "" } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: input.limit,
+      select: { thought: true },
+    });
+
+    return rows.map(row => row.thought);
   }
 
   public async listPage(input: QueryInnerThoughtListInput): Promise<InnerThoughtSummary[]> {

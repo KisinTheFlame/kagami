@@ -1,11 +1,12 @@
 import { renderServerStaticTemplate } from "@kagami/kernel/runtime/read-static-text";
+import type { AppCatalogEntryView } from "./app-catalog-view.js";
 
 export function createAgentSystemPrompt({
   creatorName,
   apps,
 }: {
   creatorName: string;
-  apps: ReadonlyArray<{ id: string; displayName: string; description: string }>;
+  apps: ReadonlyArray<AppCatalogEntryView>;
 }): string {
   // QQ 相关（botQQ / creatorQQ / 群聊场景与行为）已全部下沉到 QQ App 的 help，主 system prompt
   // 只保留与平台无关的身份与手机 OS 说明。App 名单（id + 名称 + 功能）每轮由主循环重新渲染进 prompt，
