@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { MetricClient } from "@kagami/metric-client/client";
 import type { RaiseAlertRequest } from "@kagami/observatory-api/alert";
 import { AlertService } from "../src/application/alert.service.js";
 import { AlertThrottle } from "../src/application/alert-throttle.js";
@@ -29,7 +30,7 @@ describe("AlertService", () => {
   ) {
     let nowMs = 1_000_000;
     const deliver = vi.fn<(message: string) => Promise<void>>(options.deliver ?? (async () => {}));
-    const record = vi.fn(options.metricRecord ?? (async () => {}));
+    const record = vi.fn<MetricClient["record"]>(options.metricRecord ?? (async () => {}));
     const service = new AlertService({
       channel: { deliver },
       throttle: new AlertThrottle({ now: () => new Date(nowMs) }),
@@ -109,6 +110,32 @@ describe("AlertService", () => {
 
     await expect(service.raise(ALERT)).resolves.toEqual({ delivered: true, suppressed: false });
     expect(deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it("三种结局各打一次点，outcome tag 如实反映结局（否则监控会把 napcat 故障显示成成功）", async () => {
+    const { service, record } = makeService();
+    await service.raise(ALERT);
+    expect(record.mock.calls[0]?.[0]).toMatchObject({
+      metricName: "observatory.alert.raised",
+      value: 1,
+      tags: {
+        source: "agent",
+        event: "react.empty_stall",
+        severity: "error",
+        outcome: "delivered",
+      },
+    });
+
+    await service.raise(ALERT);
+    expect(record.mock.calls[1]?.[0]).toMatchObject({ tags: { outcome: "suppressed" } });
+
+    const failing = makeService({
+      deliver: async () => {
+        throw new Error("napcat down");
+      },
+    });
+    await failing.service.raise(ALERT);
+    expect(failing.record.mock.calls[0]?.[0]).toMatchObject({ tags: { outcome: "failed" } });
   });
 
   it("metric 同步抛错（坏 client）也不影响主路径", async () => {
