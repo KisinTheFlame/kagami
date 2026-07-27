@@ -236,7 +236,7 @@ describe("InnerVoiceExtension", () => {
       thought: "x",
     });
     await extension.onAfterCommit({ context, result: waitRound() });
-    expect(listRecentInjected).toHaveBeenCalledWith({ runtimeKey: RUNTIME_KEY, limit: 5 });
+    expect(listRecentInjected).toHaveBeenCalledWith({ runtimeKey: RUNTIME_KEY, limit: 3 });
   });
 });
 
@@ -276,9 +276,18 @@ describe("inner-voice 进上下文文案的义务口吻禁令（issue #265 验�
     });
   }
 
-  it("指令模板保留「不行动合法」的台阶", () => {
+  /**
+   * issue #601 反转了这条判据。原判据是「指令模板保留『不行动合法』的台阶」（断言模板里有
+   * 「这很正常，闲着也是过日子」）。生产数据显示这条台阶从没人走——近 3 天 121 次触发 0 次
+   * empty——却把整篇指令的立场拉软：她交出的是「够得着的东西清单」而不是要动手的那一下。
+   * 经项目所有者裁决撤除：立场改为「能动的东西一直都在，没什么可做只是还没挑」。
+   * 运行时兜底（空串 → outcome=empty、不注入）保留，见 emit-inner-thought.tool.ts。
+   */
+  it("指令模板不再提供「不行动」的台阶（issue #601）", () => {
     const content = readFileSync(join(staticDir, "context/inner-voice-instruction.hbs"), "utf8");
-    expect(content).toContain("这很正常，闲着也是过日子");
+    expect(content).not.toContain("闲着也是过日子");
+    expect(content).not.toContain("空字符串");
+    expect(content).toContain("「没什么可做的」不成立");
   });
 
   /**

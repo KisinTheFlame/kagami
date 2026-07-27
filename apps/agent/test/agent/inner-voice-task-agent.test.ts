@@ -81,16 +81,16 @@ describe("InnerVoiceTaskAgent", () => {
     await expect(blank.invoke({ systemPrompt: "p", messages: [] })).resolves.toBe("");
   });
 
-  it("超长念头按码点截断到 140", async () => {
-    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("啊".repeat(300))));
+  it("超长念头按码点截断到 300", async () => {
+    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("啊".repeat(500))));
     const result = await agent.invoke({ systemPrompt: "p", messages: [] });
-    expect(result).toHaveLength(140);
+    expect(result).toHaveLength(300);
   });
 
   it("超长 emoji 念头按码点截断且不劈代理对（issue #187 教训）", async () => {
-    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("🀄".repeat(200))));
+    const agent = createAgent(vi.fn().mockResolvedValueOnce(emitThought("🀄".repeat(400))));
     const result = await agent.invoke({ systemPrompt: "p", messages: [] });
-    expect([...result]).toHaveLength(140);
+    expect([...result]).toHaveLength(300);
     const lastCodeUnit = result.charCodeAt(result.length - 1);
     expect(lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff).toBe(false);
   });
@@ -113,7 +113,7 @@ describe("InnerVoiceTaskAgent", () => {
   it("R1 指令渲染：App 名单与近期念头各自可有可无", () => {
     const bare = createInnerVoiceInstructionMessage().content as string;
     expect(bare).not.toContain("你手机上装着这些 App");
-    expect(bare).not.toContain("你最近几次冒出来的念头");
+    expect(bare).not.toContain("你最近几次已经想过的");
 
     const full = createInnerVoiceInstructionMessage({
       apps: [{ id: "gba", displayName: "掌机", description: "玩 GBA 游戏" }],
@@ -121,7 +121,19 @@ describe("InnerVoiceTaskAgent", () => {
     }).content as string;
     expect(full).toContain("- gba：掌机——玩 GBA 游戏");
     expect(full).toContain("- 想翻那篇文章");
-    expect(full).toContain("这次想点不一样的");
+    expect(full).toContain("这次绕开它们去动别的");
+  });
+
+  it("R1 不给形式规定、不给空串退路（issue #601）", () => {
+    const rendered = createInnerVoiceInstructionMessage().content as string;
+    // 形式约束整组撤除：句数 / 长度 / 人称 / 排版 / 排序都不再规定。
+    for (const removed of ["2~4 个短句", "二十来个字", "第一人称", "不编号", "放最前面"]) {
+      expect(rendered).not.toContain(removed);
+    }
+    // 空串退路只留运行时兜底，指令层不再提供。
+    expect(rendered).not.toContain("空字符串");
+    expect(rendered).toContain("怎么说、说多长，你自己定");
+    expect(rendered).toContain("「没什么可做的」不成立");
   });
 
   it("近期念头注入前清理：去尖括号、压空白、限长、丢空条（issue #596 防提示注入）", () => {
@@ -140,10 +152,10 @@ describe("InnerVoiceTaskAgent", () => {
     expect(rendered).toContain("- 换行 压成空格");
     // 只数近期念头那一段的条目：空条被剔除，4 条入参剩 3 条。
     const block = rendered.slice(
-      rendered.indexOf("你最近几次冒出来的念头是这些："),
-      rendered.indexOf("这次想点不一样的。"),
+      rendered.indexOf("不是给你参照写法。"),
+      rendered.indexOf("怎么说、说多长"),
     );
-    expect(block.match(/^- /gm)).toHaveLength(3);
+    expect(block.match(/^ {2}- /gm)).toHaveLength(3);
     // 单条限长 60 码点。
     expect(rendered).toContain(`- ${"啊".repeat(60)}`);
   });

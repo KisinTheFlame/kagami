@@ -5,10 +5,15 @@ import { createInnerVoiceInstructionMessage } from "../../../runtime/context/con
 import type { AppCatalogEntryView } from "../../../runtime/root-agent/app-catalog-view.js";
 
 /**
- * 念头文本的码点上限。一行里 2~4 个短句，生产实测最长 92 码点，140 留足余量；超长通常意味着
- * 跑题成小作文。按码点截断绝不劈 UTF-16 代理对（教训见 issue #187）。
+ * 念头文本的码点上限，纯安全网：只拦「跑题成小作文」，不替她决定说多长。
+ *
+ * 原值 140 的依据是「生产实测最长 92 码点」，而那 92 是在 R1 规定「2~4 个短句、每句二十来个字」
+ * 时测出来的。issue #601 撤掉全部形式约束（怎么说、说多长由她自己定）后，140 会从安全网变成隐形
+ * 的塑形器——超了就无省略号硬切，半句话进她的上下文。故放宽到 300。
+ *
+ * 按码点截断绝不劈 UTF-16 代理对（教训见 issue #187）。
  */
-const MAX_THOUGHT_CODE_POINTS = 140;
+const MAX_THOUGHT_CODE_POINTS = 300;
 
 export type InnerVoiceTaskInput = {
   /** 小镜的真实 system prompt（人格底座），与主 Agent 同一份。 */
@@ -25,8 +30,9 @@ export type InnerVoiceTaskInput = {
  * 内心独白 task agent（issue #265 / #410）。
  *
  * 输入：主 Agent system prompt + 完整消息历史。
- * 输出：一行里 2~4 个第一人称短句（空格隔开的单串）；空字符串 = 此刻没什么真想做的（调用方
- * 不注入）。多候选的理由与「为何不用数组」见 emit-inner-thought.tool.ts。
+ * 输出：她此刻要去动的那几样，单串；形状（几句、多长、怎么断）由她自己定，R1 不再规定
+ * （issue #601）。空字符串仍被接受为「这次没念头」、调用方不注入，但指令层已不再提供这条退路。
+ * 「为何不用数组」见 emit-inner-thought.tool.ts。
  *
  * 关键设计：与 SummaryTaskAgent / TodoSuggestionTaskAgent 同构——复用主 Agent 的
  * tools / system / 消息前缀（字节相等），命中 Anthropic prompt cache。隔离手段是
