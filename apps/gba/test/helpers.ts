@@ -1,5 +1,10 @@
-import type { GbaButton } from "@kagami/gba-api/contract";
-import type { EmulatorCore, GbaFrameRgba } from "../src/emulator/emulator-core.js";
+import {
+  GBA_MEMORY_EWRAM_SIZE,
+  GBA_MEMORY_IWRAM_SIZE,
+  GBA_MEMORY_VRAM_SIZE,
+  type GbaButton,
+} from "@kagami/gba-api/contract";
+import type { EmulatorCore, GbaFrameRgba, GbaMemoryDump } from "../src/emulator/emulator-core.js";
 import type { OssClient, OssObject } from "../src/acl/oss-client.js";
 import type { GbaStore, ResumeStateRow, RomRow } from "../src/persistence/gba-store.js";
 import { BizError } from "@kagami/kernel/errors/biz-error";
@@ -21,6 +26,8 @@ export class FakeEmulatorCore implements EmulatorCore {
   public readonly setStateCalls: Buffer[] = [];
   /** 置 true 让 setState 返回 false（核心校验不通过）。 */
   public failSetState = false;
+  /** 置 true 让 readMemory 返回 null（核心不支持 savestate / 布局自校验失败）。 */
+  public failReadMemory = false;
 
   public async loadRom(rom: Buffer): Promise<void> {
     if (this.failLoad) {
@@ -58,6 +65,21 @@ export class FakeEmulatorCore implements EmulatorCore {
   public setState(bytes: Buffer): boolean {
     this.setStateCalls.push(Buffer.from(bytes));
     return !this.failSetState;
+  }
+
+  /**
+   * 三大 RAM 区快照。默认按真实长度填可辨识的常量（各段填不同字节值，便于断言拼接顺序）；
+   * failReadMemory 置 true 模拟「核心不支持 / 布局校验失败」。
+   */
+  public readMemory(): GbaMemoryDump | null {
+    if (this.failReadMemory) {
+      return null;
+    }
+    return {
+      ewram: Buffer.alloc(GBA_MEMORY_EWRAM_SIZE, 0xe0),
+      iwram: Buffer.alloc(GBA_MEMORY_IWRAM_SIZE, 0x11),
+      vram: Buffer.alloc(GBA_MEMORY_VRAM_SIZE, 0x77),
+    };
   }
 
   public getFps(): number {

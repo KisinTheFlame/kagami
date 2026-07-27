@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GBA_MEMORY_EWRAM_SIZE,
+  GBA_MEMORY_IWRAM_SIZE,
+  GBA_MEMORY_VRAM_SIZE,
+} from "@kagami/gba-api/contract";
 import { GbaService } from "../src/application/gba.service.js";
 import { FakeEmulatorCore, FakeOssClient, createMemoryStore, fakeRomBytes } from "./helpers.js";
 import { initTestLoggerRuntime } from "./helpers/logger.js";
@@ -658,6 +663,74 @@ describe("GbaService", () => {
       await vi.advanceTimersByTimeAsync(1000);
       expect(watchService.state().foreground).toBe(false); // 照常在原始期限转后台
       await watchService.shutdown();
+    });
+  });
+
+  describe("内存 dump（#599）", () => {
+    it("未加载 ROM 时返回 null", () => {
+      expect(service.dumpMemory()).toBeNull();
+    });
+
+    it("已加载时返回三段 + 采样帧计数（帧计数与 state().frame 同源）", async () => {
+      await uploadAndLoad("dump");
+      const dump = service.dumpMemory();
+      expect(dump).not.toBeNull();
+      expect(dump?.memory.ewram.length).toBe(GBA_MEMORY_EWRAM_SIZE);
+      expect(dump?.memory.iwram.length).toBe(GBA_MEMORY_IWRAM_SIZE);
+      expect(dump?.memory.vram.length).toBe(GBA_MEMORY_VRAM_SIZE);
+      expect(dump?.frame).toBe(service.state().frame);
+    });
+
+    it("核心拿不出一致快照（不支持 savestate / 布局校验失败）时返回 null，不抛", async () => {
+      await uploadAndLoad("dump-fail");
+      cores[cores.length - 1]!.failReadMemory = true;
+      expect(service.dumpMemory()).toBeNull();
+    });
+
+    it("同一帧连读两次逐字节相同：读取无副作用、不推进帧", async () => {
+      await uploadAndLoad("dump-stable");
+      const frameBefore = service.state().frame;
+      const first = service.dumpMemory();
+      const second = service.dumpMemory();
+      expect(first?.memory.ewram.equals(second!.memory.ewram)).toBe(true);
+      expect(first?.memory.iwram.equals(second!.memory.iwram)).toBe(true);
+      expect(first?.memory.vram.equals(second!.memory.vram)).toBe(true);
+      expect(service.state().frame).toBe(frameBefore);
+    });
+
+    it("dump 是被动的：不刷新看门狗", async () => {
+      const watchService = new GbaService({
+        store,
+        ossClient: oss,
+        coreFactory: () => {
+          const core = new FakeEmulatorCore();
+          cores.push(core);
+          return core;
+        },
+        watchdogIdleMs: 2000,
+      });
+      const upload = await watchService.uploadRom({ name: "dump 观测", bytes: fakeRomBytes(31) });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+      await watchService.loadGame(upload.rom.id);
+      await watchService.setForeground(true);
+      // 临近超时前持续 dump——若 dump 刷新活动,看门狗永不触发。
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(watchService.dumpMemory()).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(watchService.state().foreground).toBe(false); // 照常在原始期限转后台
+      await watchService.shutdown();
+    });
+
+    it("后台冻结状态下照常可读（冻结帧的状态也是状态）", async () => {
+      await uploadAndLoad("dump-bg");
+      await service.setForeground(true);
+      await vi.advanceTimersByTimeAsync(100);
+      await service.setForeground(false);
+      const frozenFrame = service.state().frame;
+      const dump = service.dumpMemory();
+      expect(dump).not.toBeNull();
+      expect(dump?.frame).toBe(frozenFrame);
     });
   });
 

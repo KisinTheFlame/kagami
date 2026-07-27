@@ -5,15 +5,25 @@ import {
   registerBinaryRawRoute,
   registerJsonRoute,
 } from "@kagami/http/register";
-import { gbaApiContract, gbaConsoleContract, gbaRomsContract } from "@kagami/gba-api/contract";
+import {
+  GBA_MEMORY_DUMP_SIZE,
+  GBA_MEMORY_FRAME_HEADER,
+  GBA_MEMORY_LAYOUT,
+  GBA_MEMORY_LAYOUT_HEADER,
+  gbaApiContract,
+  gbaConsoleContract,
+  gbaMemoryContract,
+  gbaRomsContract,
+} from "@kagami/gba-api/contract";
 import type { GbaService } from "../application/gba.service.js";
 import { MAX_ROM_BYTES, toRomView } from "../application/rom-library.js";
 
 /**
- * kagami-gba 的 HTTP 面：游玩路由（agent 直连）+ ROM 管理路由（控制台经 gateway `/gba/roms`）。
- * 全量走 @kagami/gba-api 契约。上传是 binary-envelope（裸字节 + header 带 encodeURIComponent
- * 过的 ROM 名）；JSON 与二进制路由共存于同一实例——不用全局 useRawBodyPassthrough（会弄坏
- * JSON 路由），只给 application/octet-stream 注册透传 parser（见 runtime configure）。
+ * kagami-gba 的 HTTP 面：游玩路由与内存 dump（agent 直连）+ ROM 管理路由（控制台经 gateway
+ * `/gba/roms`）+ 控制台实况面。全量走 @kagami/gba-api 契约。上传是 binary-envelope（裸字节 +
+ * header 带 encodeURIComponent 过的 ROM 名）；JSON 与二进制路由共存于同一实例——不用全局
+ * useRawBodyPassthrough（会弄坏 JSON 路由），只给 application/octet-stream 注册透传 parser
+ * （见 runtime configure）。
  */
 export class GbaHandler {
   private readonly service: GbaService;
@@ -82,6 +92,29 @@ export class GbaHandler {
     registerJsonRoute(app, gbaApiContract.importRom, async ({ input }) =>
       this.service.importRomFromOss(input),
     );
+
+    // === 内存 dump 面（#599,被动只读:不刷新看门狗）===
+
+    registerBinaryRawRoute(app, gbaMemoryContract.dump, async ({ raw }) => {
+      const dump = this.service.dumpMemory();
+      if (!dump) {
+        // 未加载 ROM / 核心拿不出一致快照——一律空体 404，绝不返回错位或半截字节。
+        raw.writeHead(404).end();
+        return;
+      }
+      const { memory, frame } = dump;
+      const body = Buffer.concat([memory.ewram, memory.iwram, memory.vram], GBA_MEMORY_DUMP_SIZE);
+      raw.writeHead(200, {
+        "content-type": "application/octet-stream",
+        "content-length": String(body.length),
+        // 内存每帧都在变,禁止任何缓存层介入(同实况帧)。
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        [GBA_MEMORY_FRAME_HEADER]: String(frame),
+        [GBA_MEMORY_LAYOUT_HEADER]: GBA_MEMORY_LAYOUT,
+      });
+      raw.end(body);
+    });
 
     // === 控制台实况面（#541 PR3,被动只读:不刷新看门狗）===
 

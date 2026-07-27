@@ -6,7 +6,13 @@ import {
   type RetroemuVideoOutput,
 } from "retroemu/src/core/LibretroHost.js";
 import type { GbaButton } from "@kagami/gba-api/contract";
-import { GBA_NOMINAL_FPS, type EmulatorCore, type GbaFrameRgba } from "./emulator-core.js";
+import { AppLogger } from "@kagami/kernel/logger/logger";
+import {
+  GBA_NOMINAL_FPS,
+  type EmulatorCore,
+  type GbaFrameRgba,
+  type GbaMemoryDump,
+} from "./emulator-core.js";
 
 /** libretro joypad 按键 id（RETRO_DEVICE_ID_JOYPAD_*）→ GBA 键位映射。 */
 const BUTTON_TO_JOYPAD_ID: Record<GbaButton, number> = {
@@ -27,6 +33,37 @@ const JOYPAD_MASK_ID = 256;
 
 /** RETRO_MEMORY_SAVE_RAM。 */
 const MEMORY_SAVE_RAM = 0;
+/**
+ * 布局校验用的两个 memory id（都不作为 dump 的数据源，只当锚点）。
+ * SYSTEM_RAM 在 mGBA 上指向 EWRAM 基址，但它声明的 size 是 IWRAM 的 32KiB——少报 8 倍，
+ * 故只用其指针、不信其尺寸（见 matchesLiveRegion）。
+ */
+const MEMORY_SYSTEM_RAM = 2;
+const MEMORY_VIDEO_RAM = 3;
+
+/**
+ * mGBA savestate（`retro_serialize` 输出）里三大 RAM 区的偏移（#599，实测逆向所得）。前
+ * `0x61000` 字节是定长结构，其后是 extdata（含 SRAM，长度随游戏变，本模块不用）。
+ *
+ * 这些偏移**不是 libretro 公开契约**，是对 mGBA 私有 `GBASerializedState` 布局的观测结果，
+ * 核心一升版就可能漂——所以 readMemory 每次都用 `retro_get_memory_data(VIDEO_RAM)` 交叉验
+ * 证 VRAM 段，对不上就整体拒绝（宁可 404，绝不返回错位字节）。
+ *
+ * 为什么不用 `retro_get_memory_data` 直接取三个区：IWRAM 根本没有对应的 memory id
+ *（retroemu 0.4.8 把 RETRO_ENVIRONMENT_SET_MEMORY_MAPS 直接忽略了，描述符全丢），而
+ * SYSTEM_RAM(id=2) 虽然指针是 EWRAM 基址、其声明尺寸却是 IWRAM 的 32 KiB（少报 8 倍）。
+ * savestate 是唯一能一次拿全三个区的通路。
+ */
+const STATE_OFF_VRAM = 0x1000;
+const STATE_SIZE_VRAM = 0x18000; // 96 KiB
+const STATE_OFF_IWRAM = STATE_OFF_VRAM + STATE_SIZE_VRAM; // 0x19000
+const STATE_SIZE_IWRAM = 0x8000; // 32 KiB
+const STATE_OFF_EWRAM = STATE_OFF_IWRAM + STATE_SIZE_IWRAM; // 0x21000
+const STATE_SIZE_EWRAM = 0x40000; // 256 KiB
+/** 定长前缀的总长；savestate 短于它说明布局假设已经失效。 */
+const STATE_FIXED_PREFIX_SIZE = STATE_OFF_EWRAM + STATE_SIZE_EWRAM; // 0x61000
+
+const logger = new AppLogger({ source: "gba-emulator" });
 
 type RawFrame = {
   bytes: Uint8Array;
@@ -207,6 +244,95 @@ export class RetroemuCore implements EmulatorCore {
     }
   }
 
+  /**
+   * 三大 RAM 区快照（#599）。复用 getState()——不另起一次 `_retro_serialize`，让「核心不支持
+   * savestate」这一分支与 getState 天然同语义，也少一次 512KB 级的序列化。
+   *
+   * 全程同步（无 await）：帧循环是 setTimeout 宏任务，JS 单线程下切不进本函数中间，故这份
+   * 快照天然是同一帧的一致视图，不会读到半推进的撕裂状态。
+   */
+  public readMemory(): GbaMemoryDump | null {
+    const state = this.getState();
+    if (!state) {
+      // 核心不支持 savestate / malloc 失败——是能力缺失而非布局失效，不记 error。
+      return null;
+    }
+    if (state.length < STATE_FIXED_PREFIX_SIZE) {
+      logger.error("GBA savestate 短于定长前缀，内存布局假设已失效，拒绝 dump", {
+        event: "gba.memory_layout_mismatch",
+        reason: "STATE_TOO_SHORT",
+        stateBytes: state.length,
+        expectedAtLeast: STATE_FIXED_PREFIX_SIZE,
+      });
+      return null;
+    }
+
+    // 交叉校验：**两头都钉**。VRAM 是三段里的第一段、EWRAM 是最后一段，两者都能经 memory id
+    // 独立取到（IWRAM 取不到）。只校验 VRAM 是不够的——它位于 IWRAM/EWRAM **之前**，核心若在
+    // 它之后插入或改动字段，VRAM 照样匹配而后两段已错位，会静默吐出错位字节。同时校验首尾两
+    // 段，则夹在中间的 IWRAM 被两侧锚点钉死：任何能让 IWRAM 起点漂移的改动，必然一并让 EWRAM
+    // 起点漂移，会被末段校验抓住。
+    const vramFromState = state.subarray(STATE_OFF_VRAM, STATE_OFF_VRAM + STATE_SIZE_VRAM);
+    if (!this.matchesLiveRegion(MEMORY_VIDEO_RAM, vramFromState, "VRAM", state.length)) {
+      return null;
+    }
+    const ewramFromState = state.subarray(STATE_OFF_EWRAM, STATE_OFF_EWRAM + STATE_SIZE_EWRAM);
+    if (!this.matchesLiveRegion(MEMORY_SYSTEM_RAM, ewramFromState, "EWRAM", state.length)) {
+      return null;
+    }
+
+    // subarray 而非拷贝：state 已是 getState 拷出的私有副本，三段视图共享它即可，
+    // 调用方紧接着就会拼成一个 body，没必要再复制 384KB。
+    return {
+      ewram: ewramFromState,
+      iwram: state.subarray(STATE_OFF_IWRAM, STATE_OFF_IWRAM + STATE_SIZE_IWRAM),
+      vram: vramFromState,
+    };
+  }
+
+  /**
+   * 把 savestate 切出的一段与核心经 memory id 直取的同一区逐字节比对，作为布局锚点。
+   *
+   * 刻意**不校验核心声明的 size**：mGBA 对 SYSTEM_RAM 报的是 IWRAM 的 32KiB（少报 8 倍），
+   * 指针却确为 EWRAM 基址——拿声明尺寸把关会永远拒绝。这里只要指针非空且落在 heap 内，就按
+   * 我们期望的长度比对内容；内容对得上即证明这段偏移仍然成立，内容不符即拒绝整次 dump。
+   */
+  private matchesLiveRegion(
+    memoryId: number,
+    fromState: Buffer,
+    regionName: string,
+    stateBytes: number,
+  ): boolean {
+    const host = this.requireHost();
+    const heap = host.core.HEAPU8;
+    const ptr = host.core._retro_get_memory_data(memoryId);
+    if (!ptr || ptr + fromState.length > heap.length) {
+      logger.error("GBA 核心的内存区指针异常，无法校验内存布局，拒绝 dump", {
+        event: "gba.memory_layout_mismatch",
+        reason: "REGION_POINTER_UNUSABLE",
+        regionName,
+        memoryId,
+        ptr,
+        expectedBytes: fromState.length,
+        heapBytes: heap.length,
+      });
+      return false;
+    }
+    const mismatchAt = firstMismatch(fromState, heap.subarray(ptr, ptr + fromState.length));
+    if (mismatchAt >= 0) {
+      logger.error("GBA savestate 的区段与核心实际内存不符，布局已漂移，拒绝 dump", {
+        event: "gba.memory_layout_mismatch",
+        reason: "REGION_CONTENT_MISMATCH",
+        regionName,
+        memoryId,
+        mismatchAt,
+        stateBytes,
+      });
+      return false;
+    }
+    return true;
+  }
+
   public getFps(): number {
     return this.host?.systemAVInfo?.timing.fps ?? GBA_NOMINAL_FPS;
   }
@@ -227,6 +353,19 @@ export class RetroemuCore implements EmulatorCore {
     }
     return this.host;
   }
+}
+
+/** 首个不等字节的下标；全等返回 -1。长度不等视作从较短长度处起不等。 */
+function firstMismatch(a: Uint8Array, b: Uint8Array): number {
+  if (a.length !== b.length) {
+    return Math.min(a.length, b.length);
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /** libretro 像素格式（SET_PIXEL_FORMAT）：0 = 0RGB1555，1 = XRGB8888，2 = RGB565。 */

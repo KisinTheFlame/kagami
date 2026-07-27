@@ -9,6 +9,17 @@ export type GbaFrameRgba = {
 };
 
 /**
+ * GBA 三大 RAM 区的即时快照（#599）。各段长度固定：EWRAM 256 KiB / IWRAM 32 KiB / VRAM 96 KiB。
+ * 调色板 RAM / OAM / IO 寄存器不在内——它们只存在于核心私有的序列化结构里，偏移未经验证，
+ * 硬猜会返回错位字节。
+ */
+export type GbaMemoryDump = {
+  ewram: Buffer;
+  iwram: Buffer;
+  vram: Buffer;
+};
+
+/**
  * 模拟器内核的窄接口：GbaService 只透过它驱动模拟——帧推进权唯一归属调用方（服务端帧循环），
  * 内核自身绝不自转。retroemu 是当前唯一实现（RetroemuCore）；将来换 mgba-wasm 自建 host
  * 只需要新增一个实现，服务层零改动（issue #541 设计决策）。测试用 FakeEmulatorCore。
@@ -28,6 +39,12 @@ export interface EmulatorCore {
   getState(): Buffer | null;
   /** 恢复快照；核心校验失败（版本/尺寸不匹配）返回 false，调用方降级冷启动。 */
   setState(bytes: Buffer): boolean;
+  /**
+   * 三大 RAM 区的即时快照（#599）。核心不支持 / 内部布局与预期不符时返回 null——调用方不需要
+   * 区分原因（诊断细节由实现层记日志），只需知道「这次拿不到」。必须同步完成、不得让出事件
+   * 循环，否则会与帧循环交错读到撕裂状态。
+   */
+  readMemory(): GbaMemoryDump | null;
   /** 核心标称帧率（mGBA = 59.7275）。loadRom 之前调用返回 GBA 标称值。 */
   getFps(): number;
   /** 卸载游戏并释放核心。之后本实例不可再用。 */
