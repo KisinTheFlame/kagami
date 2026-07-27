@@ -10,7 +10,11 @@ import type {
   GbaUploadResultSchema,
 } from "@kagami/gba-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
-import type { EmulatorCore, EmulatorCoreFactory } from "../emulator/emulator-core.js";
+import type {
+  EmulatorCore,
+  EmulatorCoreFactory,
+  GbaMemoryDump,
+} from "../emulator/emulator-core.js";
 import { encodeFramePng } from "../emulator/frame-png.js";
 import type { OssClient } from "../acl/oss-client.js";
 import type { GbaStore, ResumeStateRow, RomRow } from "../persistence/gba-store.js";
@@ -628,6 +632,22 @@ export class GbaService {
       return null;
     }
     return encodeFramePng(frame);
+  }
+
+  /**
+   * 全量内存 dump（#599）：三大 RAM 区的即时快照 + 采样时的帧计数。未加载 ROM、或核心拿不出
+   * 一致的快照时返回 null（HTTP 层 404）。
+   *
+   * **不 touchActivity**——内存观测是被动读取，不是游玩动作，不该让空闲掌机以为有人在玩
+   * （与 state() / peekFramePng() 同一取向）。将来接上工具后若发现分析会话被看门狗打断，
+   * 再回来调这条。
+   */
+  public dumpMemory(): { memory: GbaMemoryDump; frame: number } | null {
+    const memory = this.core?.readMemory();
+    if (!memory) {
+      return null;
+    }
+    return { memory, frame: this.frame };
   }
 
   /** 中止在途 press（切后台 / 换 ROM / 关停）：plan 置空 = 按键全松开，调用方拿到领域拒绝。 */

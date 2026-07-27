@@ -199,6 +199,55 @@ export const gbaRomsContract = {
   }),
 };
 
+// === 内存 dump 面（#599）===
+//
+// GBA 的三大 RAM 区。地址用 **GBA 真实地址**而非自定义编号：网上所有 RAM map / 金手指码 /
+// 攻略都是这套编号，消费方的先验知识能直接对上。
+export const GBA_MEMORY_EWRAM_BASE = 0x02000000;
+export const GBA_MEMORY_EWRAM_SIZE = 0x40000; // 256 KiB
+export const GBA_MEMORY_IWRAM_BASE = 0x03000000;
+export const GBA_MEMORY_IWRAM_SIZE = 0x8000; // 32 KiB
+export const GBA_MEMORY_VRAM_BASE = 0x06000000;
+export const GBA_MEMORY_VRAM_SIZE = 0x18000; // 96 KiB
+
+/** dump body 的固定总长（EWRAM ‖ IWRAM ‖ VRAM），393216 字节。 */
+export const GBA_MEMORY_DUMP_SIZE =
+  GBA_MEMORY_EWRAM_SIZE + GBA_MEMORY_IWRAM_SIZE + GBA_MEMORY_VRAM_SIZE;
+
+/** dump 响应头名：body 采样时的帧计数（与 `/gba/run/state` 的 frame 同一计数器）。 */
+export const GBA_MEMORY_FRAME_HEADER = "x-gba-frame";
+/** dump 响应头名：body 的自描述布局。 */
+export const GBA_MEMORY_LAYOUT_HEADER = "x-gba-layout";
+
+/**
+ * body 的自描述布局串：`区名@GBA真实地址+body内偏移:长度`，逗号分隔。由常量拼出而非写死
+ * 字面量——常量改了这里自动跟上，不会出现头部与实际切法漂移。
+ */
+export const GBA_MEMORY_LAYOUT = [
+  `ewram@0x${GBA_MEMORY_EWRAM_BASE.toString(16)}+0:${GBA_MEMORY_EWRAM_SIZE}`,
+  `iwram@0x${GBA_MEMORY_IWRAM_BASE.toString(16)}+${GBA_MEMORY_EWRAM_SIZE}:${GBA_MEMORY_IWRAM_SIZE}`,
+  `vram@0x${GBA_MEMORY_VRAM_BASE.toString(16)}+${GBA_MEMORY_EWRAM_SIZE + GBA_MEMORY_IWRAM_SIZE}:${GBA_MEMORY_VRAM_SIZE}`,
+].join(",");
+
+/**
+ * 全量内存 dump（#599）：一次拿走 EWRAM ‖ IWRAM ‖ VRAM 共 393216 字节裸二进制。**被动只读**
+ * ——与 console 实况面同理不刷新看门狗（内存观测不是游玩动作，不该让空闲掌机以为有人在玩）。
+ *
+ * 单开一个 map 而非并进 `gbaApiContract`：后者是 `JsonContractMap`（`HttpGbaClient` 用
+ * `createClient` 消费），塞不进 binary-raw 路由。路径仍在 `/gba/run/*` 下，故 gateway 的
+ * `GBA_PATH_PREFIXES`（只有 `/gba/roms` 与 `/gba/console`）天然够不到，浏览器无法触达。
+ *
+ * 未加载 ROM / 核心不支持 savestate / 布局自校验失败一律 404（空体）——绝不返回错位的字节。
+ */
+export const gbaMemoryContract = {
+  dump: defineBinaryRawRoute({
+    method: "GET",
+    path: "/gba/run/memory",
+    params: z.object({}),
+    bytesIn: false,
+  }),
+};
+
 /**
  * 控制台实况面（#541 PR3）：管理台展示当前 GBA 画面，页面聚焦时每秒轮询。**被动只读**——
  * 不刷新看门狗、不算游玩活动（观战不该让掌机以为有人在玩）；screen 是 binary-raw PNG
