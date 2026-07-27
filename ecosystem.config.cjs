@@ -171,5 +171,19 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // 告警能力服务：任何服务经 POST /observatory/alert 上报，observatory 渲染 + 按 (source, event)
+      // 去重限流后投递到 QQ 告警群（issue #602）。零 DB（去重窗口纯内存）、仅绑 127.0.0.1、不过
+      // gateway。独立 PM2 生命周期：agent 重启不影响告警通道，反之亦然。
+      name: "kagami-observatory",
+      cwd: __dirname,
+      script: "apps/observatory/dist/index.js",
+      interpreter: "node",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
