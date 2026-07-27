@@ -56,6 +56,7 @@ import type { SpireClient } from "../acl/spire-client.js";
 import type { GbaClient } from "../acl/gba-client.js";
 import { PixelApp } from "../agent/apps/pixel/pixel.app.js";
 import type { PixelClient } from "../acl/pixel-client.js";
+import type { AlertNotifier } from "../agent/runtime/root-agent/alert-notifier.js";
 import { TodoApp } from "../agent/apps/todo/todo.app.js";
 import type { TodoService } from "../agent/capabilities/todo/application/todo.service.js";
 import { PrismaLinearMessageLedgerDao } from "../agent/capabilities/ledger/infra/impl/prisma-linear-message-ledger.impl.dao.js";
@@ -99,6 +100,8 @@ type BuildAgentRuntimeInput = {
   pixelClient: PixelClient;
   /** 生图客户端：打到 kagami-llm 的生图端点（走 codex 订阅额度，issue #508）。 */
   imageClient: ImageClient;
+  /** stall 告警上报端口：打到独立的 kagami-observatory 进程（issue #602）。 */
+  alertNotifier: AlertNotifier;
 };
 
 export type AgentRuntimeBundle = {
@@ -206,6 +209,7 @@ export async function buildAgentRuntime({
   gbaClient,
   pixelClient,
   imageClient,
+  alertNotifier,
 }: BuildAgentRuntimeInput): Promise<AgentRuntimeBundle> {
   const rootAgentRuntimeSnapshotRepository = new PrismaRootAgentRuntimeSnapshotRepository({
     database,
@@ -421,6 +425,7 @@ export async function buildAgentRuntime({
     // 纯文本轮挂起的自唤醒兜底与 wait 工具共用同一个上限，语义一致：Agent 最多
     // 安静这么久就会自己醒来一轮。
     idleWakeMaxWaitMs: config.server.agent.waitToolMaxWaitMs,
+    alertNotifier,
     loopExtensions: [
       new AppEntryResetExtension({ session: rootAgentSession }),
       innerVoiceExtension,

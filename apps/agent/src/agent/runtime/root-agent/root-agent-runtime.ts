@@ -52,6 +52,16 @@ import { RootToolCallMetricExtension } from "./extensions/tool-call-metric.exten
 import { SnapshotPersistenceExtension } from "./extensions/snapshot-persistence.extension.js";
 import { RootToolFallbackExtension } from "./extensions/tool-fallback.extension.js";
 import { WakeReminderExtension } from "./extensions/wake-reminder.extension.js";
+import { NOOP_ALERT_NOTIFIER, type AlertNotifier } from "./alert-notifier.js";
+import {
+  StallGuard,
+  classifyRoundShape,
+  createStallAlert,
+  type StallAlertInput,
+} from "./stall-guard.js";
+
+/** 「她卡住了」的时间序列。tag `reason` 区分「什么都没输出」与「只说话不动手」。 */
+const AGENT_REACT_STALL_SUSPENDED_METRIC = "agent.react.stall_suspended";
 
 /**
  * 上下文摘要器的结构类型（SummaryTaskAgent 的 invoke 面）。runtime 只依赖
@@ -82,8 +92,12 @@ type RootAgentRuntimeDeps = {
   metricService?: MetricClient;
   llmRetryBackoffMs?: number;
   loopExtensions?: RootLoopExtension[];
-  /** 纯文本轮挂起的自唤醒上限；与 wait 工具的 maxWaitMs 同源（waitToolMaxWaitMs）。 */
+  /** 无动作轮挂起的自唤醒上限；与 wait 工具的 maxWaitMs 同源（waitToolMaxWaitMs）。 */
   idleWakeMaxWaitMs?: number;
+  /** stall 告警上报端口（issue #602）。缺省 = NOOP，测试与未配置 observatory 时不必注入。 */
+  alertNotifier?: AlertNotifier;
+  /** 连续多少轮无动作才判卡住。缺省 4（代码常量），仅测试注入以缩短用例。 */
+  stallThreshold?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -645,9 +659,14 @@ export class RootLoopAgent extends BaseLoopAgent<
   private readonly host: RootAgentHost;
   private readonly tools: ToolExecutor;
   private readonly eventQueue: AgentEventQueue;
-  /** 纯文本轮隐式挂起路径要置位状态供采样归 "wait" 桶（显式 wait 工具路径走 interpreter）。 */
+  /** 无动作轮隐式挂起路径要置位状态供采样归 "wait" 桶（显式 wait 工具路径走 interpreter）。 */
   private readonly session: Pick<RootAgentSessionController, "setSuspended">;
   private readonly idleWakeMaxWaitMs: number;
+  /** ReAct 空转分级检测（issue #602）。纯内存、不进快照：重启即新的活性窗口。 */
+  private readonly stallGuard: StallGuard;
+  private readonly alertNotifier: AlertNotifier;
+  private readonly metricService: MetricClient;
+  private readonly runtimeKey: string;
   private pendingResetPromise: Promise<{ resetAt: Date }> | null = null;
   private pendingCompactionPromise: Promise<ContextCompactionReport> | null = null;
 
@@ -661,6 +680,8 @@ export class RootLoopAgent extends BaseLoopAgent<
     session,
     context,
     idleWakeMaxWaitMs,
+    alertNotifier,
+    stallThreshold,
     ...rest
   }: RootAgentRuntimeDeps) {
     const resolvedSleep = sleep ?? createSleep;
@@ -716,6 +737,12 @@ export class RootLoopAgent extends BaseLoopAgent<
     this.eventQueue = eventQueue;
     this.session = session;
     this.idleWakeMaxWaitMs = idleWakeMaxWaitMs ?? DEFAULT_IDLE_WAKE_MAX_WAIT_MS;
+    this.stallGuard = new StallGuard(
+      stallThreshold !== undefined ? { threshold: stallThreshold } : {},
+    );
+    this.alertNotifier = alertNotifier ?? NOOP_ALERT_NOTIFIER;
+    this.metricService = rest.metricService ?? NOOP_METRIC_CLIENT;
+    this.runtimeKey = rest.runtimeKey ?? ROOT_AGENT_RUNTIME_SNAPSHOT_RUNTIME_KEY;
   }
 
   public async run(): Promise<void> {
@@ -744,6 +771,8 @@ export class RootLoopAgent extends BaseLoopAgent<
       await this.waitForActiveRunOnce();
 
       const result = await this.host.resetContext();
+      // 计划性重建后重开活性窗口：旧上下文里累起来的无动作连击不该算在新上下文头上。
+      this.stallGuard.reset();
       await this.notifyAfterReset();
       return result;
     })();
@@ -838,21 +867,91 @@ export class RootLoopAgent extends BaseLoopAgent<
     // until a producer (real event or timer-enqueued wake) resolves them.
     const roundResult = await this.runReactRound();
 
-    // toolChoice auto 下模型可以一个工具都不调（纯文本轮）。此时 text 照常随 assistant 消息
-    // 进上下文（见 toPersistableAssistantMessage / commitRoundResult 门控），但本轮无工具动作、
-    // 视为自然结束，挂起到事件队列非空才进下一轮——否则外层 while 会立即用几乎相同的上下文再
-    // 起一轮 LLM 调用空转。
-    if (roundResult?.shouldCommit && roundResult.assistantMessage.toolCalls.length === 0) {
+    // toolChoice auto 下模型可以一个工具都不调。此前这种轮次**一律立刻挂起**（#268 为
+    // 2026-05-30 用量暴涨事故加的闸），粒度太粗：她吐一个空 content 就睡 idleWakeMaxWaitMs，
+    // 外面看就是「卡死」，而且没有任何人被通知。现在交给 StallGuard 分级——空轮 / 纯文本轮各自
+    // 允许连续跑，到阈值才挂起并告警（issue #602）。
+    //
+    // 空轮那条路上下文一条不动（见 commitRoundResult 门控），所以重跑的请求逐字节相同、KV 全
+    // 命中；纯文本轮把 text 留尾部，下一轮起轮前 appendWakeReminderIfNeeded 会因「尾部是
+    // assistant」补一条 user 角色 wake-reminder，角色交替不变量已替我们兜住 provider 400。
+    if (!roundResult?.shouldCommit) {
+      // 模型报错已被重试扩展吃掉，本轮没有 completion——不是 stall，不动计数器。
+      return;
+    }
+
+    const shape = classifyRoundShape(roundResult.assistantMessage);
+    const decision = this.stallGuard.observe(shape);
+    if (shape !== "acted") {
       try {
-        // 可观测性：纯文本轮意味着模型「看到但选择不行动」（含对通知不回应）。
-        // text 已进上下文（完整原文亦在 llm_chat_call 可查），这里只留一条轻量事件供时间序列归因。
-        logger.info("Root agent idle round (zero tool calls); suspending until next event", {
-          event: "agent.root_agent_runtime.idle_round_suspended",
+        // 可观测性：无动作轮意味着模型「看到但没动手」（含对通知不回应）。text 已进上下文
+        //（完整原文亦在 llm_chat_call 可查），这里只留一条轻量事件供时间序列归因。
+        logger.info("Root agent produced no tool call this round", {
+          event: "agent.root_agent_runtime.idle_round_observed",
+          shape,
+          suspending: decision.suspend,
         });
       } catch {
         // Ignore logger runtime setup gaps in tests and early boot.
       }
+    }
+
+    if (decision.alert) {
+      this.reportStall(decision.alert);
+    }
+
+    if (decision.suspend) {
       await this.suspendUntilNextEvent();
+    }
+  }
+
+  /**
+   * stall 上报。**本地日志无条件先打**——observatory 或 napcat 挂掉时告警只是「没推送」，不是
+   * 「消失了」，PM2 日志里一定有痕。随后 fire-and-forget 推给 observatory：不 await（不阻塞主
+   * 循环）、不重试（重试只会加重下游压力）、`.catch` 兜住一切异常（reject 会变成
+   * unhandledRejection 把进程拉挂——告警绝不能反过来杀掉被告警的东西）。
+   */
+  private reportStall(alert: StallAlertInput): void {
+    try {
+      logger.error("Root agent stalled; suspending and raising alert", {
+        event: "agent.root_agent_runtime.stall_detected",
+        reason: alert.reason,
+        emptyStreak: alert.emptyStreak,
+        noToolStreak: alert.noToolStreak,
+      });
+    } catch {
+      // Ignore logger runtime setup gaps in tests and early boot.
+    }
+
+    void this.metricService
+      .record({
+        metricName: AGENT_REACT_STALL_SUSPENDED_METRIC,
+        value: 1,
+        tags: { runtime: "agent", reason: alert.reason },
+      })
+      .catch(() => undefined);
+
+    try {
+      void this.alertNotifier
+        .raise(createStallAlert({ ...alert, runtimeKey: this.runtimeKey }))
+        .catch(error => {
+          try {
+            logger.errorWithCause("Stall alert delivery failed", error, {
+              event: "agent.root_agent_runtime.stall_alert_failed",
+            });
+          } catch {
+            // Ignore logger runtime setup gaps in tests and early boot.
+          }
+        });
+    } catch (error) {
+      // 同步抛错（坏 notifier 实现）也不许拖垮主循环。
+      try {
+        logger.errorWithCause("Stall alert notifier threw synchronously", error, {
+          event: "agent.root_agent_runtime.stall_alert_failed",
+        });
+      } catch {
+        // Ignore logger runtime setup gaps in tests and early boot.
+      }
     }
   }
 

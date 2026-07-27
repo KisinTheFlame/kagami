@@ -34,6 +34,7 @@ import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
 import { HttpSpireClient } from "../acl/spire-client.js";
 import { HttpGbaClient } from "../acl/gba-client.js";
+import { HttpObservatoryClient } from "../acl/observatory-client.js";
 import { HttpPixelClient } from "../acl/pixel-client.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -144,6 +145,12 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   const gbaClient = new HttpGbaClient({
     baseUrl: `http://${config.services.gba.host}:${config.services.gba.port}`,
   });
+  // 告警上报拆成独立 kagami-observatory 进程（issue #602）：agent 经 HTTP client 上报，地址从
+  // 顶层 services.observatory 派生。服务未起时 client 吞掉异常只记日志——告警绝不能反过来拖垮
+  // 被告警的 agent；本地 error 日志已在 reportStall 里无条件留痕，告警不会丢。
+  const observatoryClient = new HttpObservatoryClient({
+    baseUrl: `http://${config.services.observatory.host}:${config.services.observatory.port}`,
+  });
   const eventQueue = new InMemoryQueue<Event>();
   // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
   // 聚合后把一条 notification 事件塞进事件队列——既投递内容也唤醒 Agent。
@@ -186,6 +193,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
     spireClient,
     gbaClient,
     pixelClient,
+    alertNotifier: observatoryClient,
     imageClient,
   });
 
