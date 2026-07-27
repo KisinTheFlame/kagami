@@ -30,8 +30,11 @@ export const INNER_VOICE_METRIC_FAILED = "agent.inner_voice.failed";
 
 const logger = new AppLogger({ source: "agent.inner-voice-extension" });
 
-/** 给 R1 展示多少条近期念头（issue #596）。 */
-const RECENT_THOUGHT_LIMIT = 5;
+/**
+ * 给 R1 展示多少条近期念头（issue #596）。5→3（issue #601）：这几条原文紧贴指令，条数越多
+ * few-shot 引力越强、越容易被当写作范例照抄，而它的用途只是「这些已经想过，绕开」。
+ */
+const RECENT_THOUGHT_LIMIT = 3;
 
 type InnerVoiceTaskAgentLike = Pick<InnerVoiceTaskAgent, "invoke">;
 

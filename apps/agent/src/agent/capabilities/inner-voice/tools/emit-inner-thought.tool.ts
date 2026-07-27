@@ -60,7 +60,11 @@ function normalizeThoughtInput(raw: string): string {
 /**
  * InnerVoiceTaskAgent 的终止子工具（对称 propose_todos / finalize_summary）：产
  * `terminate` Effect 让 BaseTaskAgent 退出 invoke 循环；content 是归一化 + trim 后的念头，
- * buildResult 再做码点截断。空字符串即「此刻没什么真想做的」，调用方据此跳过注入。
+ * buildResult 再做码点截断。
+ *
+ * 空字符串仍被接受、仍代表「这次没念头」（调用方据此跳过注入），但**指令层不再提供这条退路**：
+ * R1 与本工具的描述都不再告诉她「没有就传空串」。立场是「能动的东西一直都在，没什么可做只是
+ * 还没挑」（issue #601）。保留运行时兜底只为她真交空串时不炸，不是一个鼓励使用的出口。
  * 经主 Agent 镜像工具集的 invoke 挂载，绝不新增顶层工具（子工具 description / parameters
  * 不进 tools 前缀，改这里零 KV 缓存代价）。
  *
@@ -71,15 +75,14 @@ function normalizeThoughtInput(raw: string): string {
  */
 export class EmitInnerThoughtTool extends ZodToolComponent<typeof EmitInnerThoughtArgumentsSchema> {
   public readonly name = EMIT_INNER_THOUGHT_TOOL_NAME;
-  public readonly description =
-    "提交此刻脑子里同时飘着的那几个念头并结束本次内心独白。真的连一件够得着的都没有，就提交空字符串，表示这次什么念头也没有。";
+  public readonly description = "提交此刻你要去动的那几样并结束本次内心独白。";
   public readonly parameters = {
     type: "object",
     properties: {
       thought: {
         type: "string",
         description:
-          "一行里 2~4 个短句，空格隔开，第一人称，锚定最近真实经历里的具体人 / 事 / 文章 / App，落在此刻就够得着的事上；几句要落在不同的东西上，别是同一件事的几种说法。一件都没有就传空字符串。",
+          "一个字符串，不要传数组。锚定最近真实经历里的具体人 / 事 / 文章 / App，落在你此刻就要去动的事上；别只盯着一样，几处要落在不同的东西上。怎么说、说多长自己定。",
       },
     },
   } as const;
@@ -92,7 +95,7 @@ export class EmitInnerThoughtTool extends ZodToolComponent<typeof EmitInnerThoug
    * 接连产出空轮直到跑满 maxRounds——生产实测过这条放大路径（issue #592 / #596）。
    */
   protected override formatInvalidArguments(): string {
-    return "thought 必须是一个字符串：一行里 2~4 个短句、空格隔开，不要传数组。没有念头就传空字符串。请立刻重新调用，不要输出别的文本。";
+    return "thought 必须是一个字符串，不要传数组。请立刻重新调用，不要输出别的文本。";
   }
 
   protected async executeTyped(
