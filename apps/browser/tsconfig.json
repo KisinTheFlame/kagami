@@ -8,9 +8,11 @@
     "strict": true,
     "noEmit": true,
     "paths": {
-      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
+      "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"]
+      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"]
     }
   },
   "include": ["src", "test"]

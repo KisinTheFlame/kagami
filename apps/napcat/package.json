@@ -23,6 +23,7 @@
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
     "@kagami/napcat-api": "workspace:*",
+    "@kagami/observatory-client": "workspace:*",
     "@kagami/oss-api": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
     "@prisma/adapter-better-sqlite3": "7.6.0",

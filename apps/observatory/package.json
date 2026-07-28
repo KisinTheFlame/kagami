@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm db:generate && tsc -p tsconfig.build.json",
     "pretest": "pnpm --filter \"@kagami/observatory^...\" build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js"
+    "typecheck": "pnpm db:generate && tsc --noEmit",
+    "start": "node dist/index.js",
+    "db:generate": "PRISMA_PACKAGE_DIR=apps/observatory PRISMA_CONFIG_KEY=services.observatory.databaseUrl bash ../../scripts/prisma.sh generate",
+    "db:migrate:dev": "PRISMA_PACKAGE_DIR=apps/observatory PRISMA_CONFIG_KEY=services.observatory.databaseUrl bash ../../scripts/prisma.sh migrate dev",
+    "db:migrate:deploy": "PRISMA_PACKAGE_DIR=apps/observatory PRISMA_CONFIG_KEY=services.observatory.databaseUrl bash ../../scripts/prisma.sh migrate deploy",
+    "db:migrate:status": "PRISMA_PACKAGE_DIR=apps/observatory PRISMA_CONFIG_KEY=services.observatory.databaseUrl bash ../../scripts/prisma.sh migrate status"
   },
   "dependencies": {
     "@kagami/http": "workspace:*",
@@ -18,7 +22,11 @@
     "@kagami/napcat-api": "workspace:*",
     "@kagami/observatory-api": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
-    "fastify": "^5.6.2"
+    "@prisma/adapter-better-sqlite3": "7.6.0",
+    "@prisma/client": "7.6.0",
+    "better-sqlite3": "^12.11.1",
+    "fastify": "^5.6.2",
+    "prisma": "7.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

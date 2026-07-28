@@ -28,6 +28,7 @@ Kagami 的配置读取、配置分区、SQLite 存储布局与 Prisma 迁移流�
 - `server.llm.providers.{deepseek,openai,openaiCodex,claudeCode}`
 - `server.llm.usages.{agent,vision}`（usage = KV 缓存身份，可配的仅这两个。fork 型 task agent `contextSummarizer` / `todoSuggestionAgent` / `innerVoice` 在调用点用 `usage=agent` 复用主 Agent 前缀命中 prompt cache，不单独配置；调用归因走 `scene` 自由字段，见 #555。每个 usage 可选 `thinking: low|medium|high` 开启 adaptive thinking（#573，现 `agent` 配 `low`）——thinking 参数分割 prompt cache lineage，属 KV 缓存身份的一部分，故收口在 usage 级；删掉该行即关回 disabled）
 - 顶层 `services`（与 `server` 平级）：各服务监听端口与地址的唯一事实来源，`services.{agent,console,gateway,web,oss,browser,llm,metric,spire,pixel,napcat,gba,scheduler,observatory}.{host,port}`，所有进程读它寻址；`services.{web,oss,browser,llm,metric,spire,pixel,napcat,gba,scheduler,observatory}` 仅 localhost（`web` 自 #578 起是管理台前端的独立进程，只由 gateway 反代，不对外）。
+- `services.observatory.databaseUrl`（observatory 独占 SQLite 库，非隐私 → `config.yaml`；#608）：全服务 `app_log` 的落库位置，schema 在 `apps/observatory/prisma/`。
 - `services.observatory.alertGroupId`（QQ 告警群号，**PII → `config.secret.yaml`**；#602）。**它必须同时出现在 `server.napcat.blockedGroupIds` 里，否则启动直接失败**——这条不变量由 `config.loader.ts` 的**根级 `superRefine`** 强制（跨 `services.*` 与 `server.*` 两支，所以挂在根 schema 上），存在的理由是：不屏蔽的话小镜会在告警群里读到关于自己的告警。谓词抽成 `isObservatoryAlertGroupVisibleToAgent` 以便单测覆盖。
 - `server.oss.enabled`（对象存储启用开关；地址来自 `services.oss`，整段省略 = 禁用、优雅降级）
 - `server.apps.*`（App 级配置，如 `calc.precision`、`terminal.*`、`hn.*`、`amap.*`；`amap.apiKey` 为凭据，走 `config.secret.yaml`）
@@ -37,7 +38,7 @@ Kagami 的配置读取、配置分区、SQLite 存储布局与 Prisma 迁移流�
 
 - 数据库为**进程内 SQLite 文件**，不依赖外部 PostgreSQL；ORM 仍是 Prisma，driver adapter 为 `@prisma/adapter-better-sqlite3`。
 - 直接查库用 `sqlite3` CLI；库文件路径以 `config.yaml` 的 `server.databaseUrl`（`file:` 路径，运行时解析为绝对路径）为准。
-- **`data/` 按服务分目录**（epic #539「每个持库服务独立数据库」，统一 `data/<服务>/<服务>.db` 范式）：agent 独占 `data/agent/agent.db`（`server.databaseUrl`，原主库 kagami.db 更名）；napcat 独占 `data/napcat/napcat.db`、llm 独占 `data/llm/llm.db`、scheduler 独占 `data/scheduler/scheduler.db`、oss 独占 `data/oss/oss.db`（对象元数据；blob 字节在 `data/oss/blobs/`）、gba 独占 `data/gba/gba.db`（各自 `services.<svc>.databaseUrl`，schema 在各 `apps/<svc>/prisma/`）；metric 独占 `data/metric/metric.duckdb`（#475，唯一非 SQLite，走裸 DuckDB 驱动）。console 零 DB（#539，经各服务查询路由聚合）。所有用 SQLite 的服务一律经 Prisma（`@prisma/adapter-better-sqlite3`）接入，不再有裸 better-sqlite3。
+- **`data/` 按服务分目录**（epic #539「每个持库服务独立数据库」，统一 `data/<服务>/<服务>.db` 范式）：agent 独占 `data/agent/agent.db`（`server.databaseUrl`，原主库 kagami.db 更名）；napcat 独占 `data/napcat/napcat.db`、llm 独占 `data/llm/llm.db`、scheduler 独占 `data/scheduler/scheduler.db`、oss 独占 `data/oss/oss.db`（对象元数据；blob 字节在 `data/oss/blobs/`）、gba 独占 `data/gba/gba.db`、observatory 独占 `data/observatory/observatory.db`（全服务 `app_log`，#608）（各自 `services.<svc>.databaseUrl`，schema 在各 `apps/<svc>/prisma/`）；metric 独占 `data/metric/metric.duckdb`（#475，唯一非 SQLite，走裸 DuckDB 驱动）。console 零 DB（#539，经各服务查询路由聚合）。所有用 SQLite 的服务一律经 Prisma（`@prisma/adapter-better-sqlite3`）接入，不再有裸 better-sqlite3。
 - 所有持久化数据放在仓库根 `data/` 下按服务分子目录；整个 `data/` 已在 `.gitignore` 中。
 
 ## Prisma 迁移

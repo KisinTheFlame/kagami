@@ -6,7 +6,11 @@
     "target": "ES2022",
     "types": ["node"],
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"]
+    }
   },
   "include": ["src"]
 }

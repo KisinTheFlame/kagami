@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  mapAppLogItem,
-  mapInnerThoughtItem,
-  mapTodoItem,
-} from "../../src/ops/http/ops-query.handler.js";
+import { mapInnerThoughtItem, mapTodoItem } from "../../src/ops/http/ops-query.handler.js";
 import type { TodoItemRow } from "@kagami/persistence/dao/todo-item.dao";
 
 // 序列化/归一是 console 脱库（#539 子 issue 4）后从 console mapper 迁来的纯逻辑，
@@ -49,7 +45,7 @@ describe("ops-query mappers", () => {
     expect(item.completedAt).toBeNull();
   });
 
-  it("mapInnerThoughtItem / mapAppLogItem 序列化 Date 并透传其余字段", () => {
+  it("mapInnerThoughtItem 序列化 Date 并透传其余字段", () => {
     expect(
       mapInnerThoughtItem({
         id: 7,
@@ -66,25 +62,6 @@ describe("ops-query mappers", () => {
       thought: "想翻翻那篇文章",
       runtimeKey: "root-agent",
       createdAt: "2026-07-04T06:00:01.000Z",
-    });
-
-    expect(
-      mapAppLogItem({
-        id: 3,
-        traceId: "trace-3",
-        level: "warn",
-        message: "boom",
-        metadata: { source: "agent" },
-        createdAt: new Date("2026-07-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-07-01T00:00:00.000Z"),
-      }),
-    ).toEqual({
-      id: 3,
-      traceId: "trace-3",
-      level: "warn",
-      message: "boom",
-      metadata: { source: "agent" },
-      createdAt: "2026-07-01T00:00:00.000Z",
     });
   });
 });

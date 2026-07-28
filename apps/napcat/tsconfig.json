@@ -8,11 +8,13 @@
     "strict": true,
     "noEmit": true,
     "paths": {
-      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
+      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
       "@kagami/llm-client": ["./../../packages/llm-client/src/index.ts"],
+      "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"],
       "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"]
     }

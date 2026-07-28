@@ -36,6 +36,7 @@ const APP_LOG_LEVELS: AppLogLevel[] = ["debug", "info", "warn", "error", "fatal"
 const ALL_LEVEL_VALUE = "__all__";
 
 type FilterFormState = {
+  service: string;
   level: "" | AppLogLevel;
   traceId: string;
   message: string;
@@ -90,6 +91,16 @@ export function AppLogHistoryPage() {
           className={cn("rounded-none border p-4", showMobileDetail && "hidden")}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">进程</span>
+              <input
+                value={formState.service}
+                onChange={event => setFormState(prev => ({ ...prev, service: event.target.value }))}
+                placeholder="agent / console / napcat…"
+                className="min-w-0 flex-1 rounded-none border bg-background px-3 py-2 font-mono text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </label>
+
             <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
               <span className="text-muted-foreground sm:w-24 sm:shrink-0 sm:text-right">级别</span>
               <Select
@@ -192,11 +203,12 @@ export function AppLogHistoryPage() {
       }
       desktopList={
         <div className="min-h-0 flex-1 overflow-hidden rounded-none border">
-          <Table className="min-w-[760px] table-fixed">
+          <Table className="min-w-[870px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[160px]">时间</TableHead>
                 <TableHead className="w-[80px]">级别</TableHead>
+                <TableHead className="w-[110px]">进程</TableHead>
                 <TableHead className="w-[220px]">Trace ID</TableHead>
                 <TableHead className="w-[160px]">Source</TableHead>
                 <TableHead>Message</TableHead>
@@ -205,13 +217,13 @@ export function AppLogHistoryPage() {
             <TableBody>
               {isInitialLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     加载中…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -228,6 +240,11 @@ export function AppLogHistoryPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="font-mono">
+                        {item.service}
+                      </Badge>
                     </TableCell>
                     <TableCell className="truncate font-mono text-xs text-muted-foreground">
                       {item.traceId}
@@ -285,6 +302,7 @@ export function AppLogHistoryPage() {
 
 function parseFilters(params: URLSearchParams) {
   return {
+    service: normalizeOptionalText(params.get("service")),
     level: parseLevel(params.get("level")),
     traceId: normalizeOptionalText(params.get("traceId")),
     message: normalizeOptionalText(params.get("message")),
@@ -296,6 +314,7 @@ function parseFilters(params: URLSearchParams) {
 
 function toFormState(params: URLSearchParams): FilterFormState {
   return {
+    service: params.get("service") ?? "",
     level: parseLevel(params.get("level")) ?? "",
     traceId: params.get("traceId") ?? "",
     message: params.get("message") ?? "",
@@ -312,6 +331,7 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
     nextParams.set("level", formState.level);
   }
 
+  setIfNonEmpty(nextParams, "service", formState.service);
   setIfNonEmpty(nextParams, "traceId", formState.traceId);
   setIfNonEmpty(nextParams, "message", formState.message);
   setIfNonEmpty(nextParams, "source", formState.source);
@@ -330,6 +350,7 @@ function buildSearchParams(formState: FilterFormState): URLSearchParams {
 
 function createEmptyFormState(): FilterFormState {
   return {
+    service: "",
     level: "",
     traceId: "",
     message: "",
@@ -368,12 +389,14 @@ function getSource(metadata: Record<string, unknown>): string {
   return typeof source === "string" && source.length > 0 ? source : "—";
 }
 
-function getDetailTitle(item: { level: AppLogLevel; traceId: string } | null): string {
+function getDetailTitle(
+  item: { level: AppLogLevel; service: string; traceId: string } | null,
+): string {
   if (item === null) {
     return "应用日志详情";
   }
 
-  return `${item.level.toUpperCase()} · ${item.traceId}`;
+  return `${item.level.toUpperCase()} · ${item.service} · ${item.traceId}`;
 }
 
 function AppLogMobileCard({
@@ -392,7 +415,12 @@ function AppLogMobileCard({
           <p className="truncate font-mono text-xs text-muted-foreground">{item.traceId}</p>
           <p className="mt-2 text-sm font-medium">{truncateText(item.message, 140)}</p>
         </div>
-        <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge variant={toBadgeVariant(item.level)}>{item.level}</Badge>
+          <Badge variant="secondary" className="font-mono">
+            {item.service}
+          </Badge>
+        </div>
       </div>
 
       <div className="mt-3 space-y-1 text-xs text-muted-foreground">

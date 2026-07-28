@@ -255,11 +255,13 @@ const ServicesSchema = z
       historyRetentionCount: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_COUNT),
       historyRetentionDays: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_DAYS),
     }),
-    // observatory 除 host/port 外还持有告警投递目标群号（issue #602）。零 DB——去重窗口纯内存。
+    // observatory 除 host/port 外还持有告警投递目标群号（issue #602）与独占 SQLite 库（#608，
+    // 全服务的 app_log，与主库 server.databaseUrl 物理分离）。
     // alertGroupId 是 PII，落 config.secret.yaml；它与 server.napcat.blockedGroupIds 的一致性
-    // 由根级 superRefine 强制（见 ConfigSchema）。
+    // 由根级 superRefine 强制（见 ConfigSchema）。databaseUrl 非隐私，进 config.yaml。
     observatory: ServiceEndpointSchema.extend({
       alertGroupId: StringLikeSchema,
+      databaseUrl: DatabaseUrlSchema,
     }),
   })
   .strict();
@@ -607,6 +609,11 @@ export async function loadStaticConfig(options: LoadStaticConfigOptions = {}): P
       gba: {
         ...data.services.gba,
         databaseUrl: resolveSqliteFileUrl(configDir, data.services.gba.databaseUrl),
+      },
+      // observatory 独立 SQLite 库（#608，全服务 app_log）：同上。
+      observatory: {
+        ...data.services.observatory,
+        databaseUrl: resolveSqliteFileUrl(configDir, data.services.observatory.databaseUrl),
       },
       // metric 独占 DuckDB 单文件（#475）：同上把相对 file: 路径锚定到仓库根（resolveSqliteFileUrl
       // 只做 file: 绝对化，对 .duckdb 同样适用），杜绝按进程 cwd 静默解析。

@@ -4,7 +4,7 @@ import {
 } from "@kagami/console-api/inner-thought";
 import type { InnerThoughtQueryService } from "./inner-thought-query.service.js";
 import { mapInnerThoughtList } from "../mappers/inner-thought.mapper.js";
-import type { AgentOpsQueryClient } from "./app-log-query.impl.service.js";
+import type { AgentOpsQueryClient } from "./agent-ops-query.client.js";
 
 type DefaultInnerThoughtQueryServiceDeps = {
   agentOpsQueryClient: AgentOpsQueryClient;

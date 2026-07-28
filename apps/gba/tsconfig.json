@@ -9,6 +9,8 @@
     "noEmit": true,
     "paths": {
       "@kagami/gba-api/*": ["./../../packages/gba-api/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"],
       "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"]
     }
   },

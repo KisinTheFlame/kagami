@@ -96,6 +96,9 @@ importers:
       '@kagami/observatory-api':
         specifier: workspace:*
         version: link:../../packages/observatory-api
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -154,6 +157,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       cloakbrowser:
         specifier: ^0.4.3
         version: 0.4.3(playwright-core@1.61.1)
@@ -197,6 +203,12 @@ importers:
       '@kagami/napcat-api':
         specifier: workspace:*
         version: link:../../packages/napcat-api
+      '@kagami/observatory-api':
+        specifier: workspace:*
+        version: link:../../packages/observatory-api
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
@@ -250,6 +262,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -320,6 +335,9 @@ importers:
       '@kagami/metric-client':
         specifier: workspace:*
         version: link:../../packages/metric-client
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/scheduler-client':
         specifier: workspace:*
         version: link:../../packages/scheduler-client
@@ -363,6 +381,9 @@ importers:
       '@kagami/metric-api':
         specifier: workspace:*
         version: link:../../packages/metric-api
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
@@ -400,6 +421,9 @@ importers:
       '@kagami/napcat-api':
         specifier: workspace:*
         version: link:../../packages/napcat-api
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -452,9 +476,21 @@ importers:
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
+      '@prisma/adapter-better-sqlite3':
+        specifier: 7.6.0
+        version: 7.6.0
+      '@prisma/client':
+        specifier: 7.6.0
+        version: 7.6.0(prisma@7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
       fastify:
         specifier: ^5.6.2
         version: 5.7.4
+      prisma:
+        specifier: 7.6.0
+        version: 7.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(better-sqlite3@12.11.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -477,6 +513,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/oss-api':
         specifier: workspace:*
         version: link:../../packages/oss-api
@@ -517,6 +556,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/pixel-api':
         specifier: workspace:*
         version: link:../../packages/pixel-api
@@ -548,6 +590,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/rpc-client':
         specifier: workspace:*
         version: link:../../packages/rpc-client
@@ -591,6 +636,9 @@ importers:
       '@kagami/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@kagami/observatory-client':
+        specifier: workspace:*
+        version: link:../../packages/observatory-client
       '@kagami/spire-api':
         specifier: workspace:*
         version: link:../../packages/spire-api
@@ -1041,6 +1089,28 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/observatory-client:
+    dependencies:
+      '@kagami/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@kagami/observatory-api':
+        specifier: workspace:*
+        version: link:../observatory-api
+      '@kagami/rpc-client':
+        specifier: workspace:*
+        version: link:../rpc-client
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.11.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/oss-api:
     dependencies:

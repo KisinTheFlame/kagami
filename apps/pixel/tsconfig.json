@@ -8,6 +8,8 @@
     "strict": true,
     "noEmit": true,
     "paths": {
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"],
       "@kagami/pixel-api/*": ["./../../packages/pixel-api/src/*"]
     }
   },

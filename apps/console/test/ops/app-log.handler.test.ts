@@ -24,6 +24,7 @@ describe("AppLogHandler", () => {
       items: [
         {
           id: 1,
+          service: "agent",
           traceId: "trace-1",
           level: "info",
           message: "hello",

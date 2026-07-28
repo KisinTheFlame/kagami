@@ -19,6 +19,7 @@
   "dependencies": {
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
+    "@kagami/observatory-client": "workspace:*",
     "@kagami/rpc-client": "workspace:*",
     "@kagami/scheduler-api": "workspace:*",
     "@prisma/adapter-better-sqlite3": "7.6.0",

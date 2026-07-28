@@ -9,21 +9,6 @@ datasource db {
   provider = "sqlite"
 }
 
-model AppLog {
-  id        Int      @id @default(autoincrement())
-  traceId   String   @map("trace_id")
-  level     String
-  message   String
-  metadata  Json
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
-
-  @@index([traceId, createdAt], map: "app_log_trace_id_created_at_idx")
-  @@index([level, createdAt], map: "app_log_level_created_at_idx")
-  @@index([createdAt], map: "app_log_created_at_idx")
-  @@map("app_log")
-}
-
 model RootAgentRuntimeSnapshot {
   id                 Int       @id @default(autoincrement())
   runtimeKey         String    @unique(map: "root_agent_runtime_snapshot_runtime_key_uq") @map("runtime_key")

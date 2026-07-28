@@ -1,0 +1,33 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// 全服务应用日志（issue #608）。此表原属 agent 主库、只有 agent 一个进程写；迁到 observatory
+// 后由各服务经 `POST /observatory/logs` 批量上报，observatory 自己的日志走本地 DbLogSink 直写。
+//
+// 与旧表两处有意的差异：
+// - 新增 `service`（产出日志的**进程**）。`metadata.source` 是进程内的**模块**名，两个维度，
+//   挤一个字段就会复现 #602 那个「告警的 source 覆盖模块名」缺陷（commit d973d250）。
+// - 删掉 `updated_at`。日志 append-only，那列从来没被更新过，也从没进过 wire。
+model AppLog {
+  id        Int      @id @default(autoincrement())
+  service   String
+  traceId   String   @map("trace_id")
+  level     String
+  message   String
+  metadata  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "app_log_created_at_idx")
+  @@index([service, createdAt], map: "app_log_service_created_at_idx")
+  @@index([level, createdAt], map: "app_log_level_created_at_idx")
+  @@index([traceId, createdAt], map: "app_log_trace_id_created_at_idx")
+  @@map("app_log")
+}

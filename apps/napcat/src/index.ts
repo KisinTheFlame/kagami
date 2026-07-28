@@ -1,12 +1,16 @@
 import { closeDb } from "./infra/db/client.js";
 import { runService } from "@kagami/kernel/http/service-runner";
+import { createHttpLogSinks } from "@kagami/observatory-client/log-sink-factory";
 import { buildNapcatRuntime } from "./app/napcat-runtime.js";
 
 // napcat 进程（kagami-napcat，issue #347）：独立 PM2 进程持有到 NapCat 的 WS 长连接，agent 重启
-// 不打断它。日志只走 stdout（请求日志由 PM2 的 napcat-out.log 承载）。
+// 不打断它。
+// 日志双出口（#608）：stdout 交 PM2 的 napcat-out.log 承载，同时经 HttpLogSink 批量上报
+// kagami-observatory 落库，供管理台按 service 过滤查询。observatory 不可达时只丢上报那一路。
 runService({
   name: "napcat",
   source: "napcat-bootstrap",
+  logSinks: () => createHttpLogSinks({ service: "napcat" }),
   build: async () => {
     const runtime = await buildNapcatRuntime();
     return {

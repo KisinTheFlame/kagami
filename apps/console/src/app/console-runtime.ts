@@ -4,6 +4,7 @@ import { createClient } from "@kagami/rpc-client/client";
 import { napcatApiContract } from "@kagami/napcat-api/contract";
 import { llmApiContract } from "@kagami/llm-api/contract";
 import { agentApiContract } from "@kagami/agent-api/contract";
+import { observatoryApiContract } from "@kagami/observatory-api/contract";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { createServiceApp } from "@kagami/kernel/http/service-app";
 import { HealthHandler } from "@kagami/kernel/http/health.handler";
@@ -32,8 +33,9 @@ export type ConsoleRuntime = {
  * 不持有任何 Agent 活内存（事件队列 / HNSW / NapCat 网关都在 agent 进程）。
  *
  * epic #539 子 issue 4 起 console **零 DB 依赖**：napcat 数据经 `@kagami/napcat-api`、
- * llm_chat_call 经 `@kagami/llm-api`、agent 持有的 app_log / inner_thought / todo 经
- * `@kagami/agent-api` 的契约查询路由，各拨数据属主服务；console 本身不打开任何 SQLite。
+ * llm_chat_call 经 `@kagami/llm-api`、agent 持有的 inner_thought / todo 经
+ * `@kagami/agent-api`、全服务 app_log 经 `@kagami/observatory-api`（#608 起属主是
+ * kagami-observatory），各拨数据属主服务；console 本身不打开任何 SQLite。
  */
 export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const config = await loadStaticConfig();
@@ -47,8 +49,11 @@ export async function buildConsoleRuntime(): Promise<ConsoleRuntime> {
   const agentOpsQueryClient = createClient(agentApiContract, {
     baseUrl: `http://${config.services.agent.host}:${String(config.services.agent.port)}`,
   });
+  const observatoryLogQueryClient = createClient(observatoryApiContract, {
+    baseUrl: `http://${config.services.observatory.host}:${String(config.services.observatory.port)}`,
+  });
 
-  const appLogQueryService = new DefaultAppLogQueryService({ agentOpsQueryClient });
+  const appLogQueryService = new DefaultAppLogQueryService({ observatoryLogQueryClient });
   const llmChatCallQueryService = new DefaultLlmChatCallQueryService({
     llmQueryClient,
   });

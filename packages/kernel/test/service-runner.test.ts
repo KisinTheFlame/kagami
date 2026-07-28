@@ -99,16 +99,108 @@ describe("runService", () => {
     expect(order).toEqual(["cleanup-1", "cleanup-2"]);
   });
 
-  it("全局崩溃兜底已注册：uncaughtException/unhandledRejection → exit(1)", async () => {
+  it("logSinks：在 build 之前注入，产出的 sink 收得到后续日志，关停时被 close", async () => {
     const { handlers, exitSpy } = interceptProcess();
+    const order: string[] = [];
+    const events: string[] = [];
+    const close = vi.fn(async () => {
+      order.push("sink-close");
+    });
+    const handle: ServiceHandle = { app: fakeApp(order), bindHost: "127.0.0.1", port: 1 };
+
+    runService({
+      name: "svc",
+      source: "svc-test",
+      logSinks: () =>
+        Promise.resolve([
+          {
+            write: (event: { message: string }) => {
+              events.push(event.message);
+            },
+            close,
+          },
+        ]),
+      build: () => {
+        order.push("build");
+        return Promise.resolve(handle);
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(handle.app.listen).toHaveBeenCalled();
+    });
+    // sink 在 build 之前挂上，所以「Service started」这条也进得去。
+    expect(events).toContain("Service started");
+
+    handlers.get("SIGTERM")!("SIGTERM");
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+    // sink 收口排在服务 cleanup 之后：关停期间产生的日志仍进得了最后一次 flush。
+    expect(order).toEqual(["build", "close", "sink-close"]);
+  });
+
+  it("logSinks 抛错：只记 stderr，服务照常启动（日志上报不是功能依赖）", async () => {
+    interceptProcess();
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
     const order: string[] = [];
     const handle: ServiceHandle = { app: fakeApp(order), bindHost: "127.0.0.1", port: 1 };
 
-    runService({ name: "svc", source: "svc-test", build: () => Promise.resolve(handle) });
+    runService({
+      name: "svc",
+      source: "svc-test",
+      logSinks: () => Promise.reject(new Error("config unreadable")),
+      build: () => Promise.resolve(handle),
+    });
+
+    await vi.waitFor(() => {
+      expect(handle.app.listen).toHaveBeenCalled();
+    });
+    const line = stderr.mock.calls
+      .map(call => String(call[0]))
+      .find(text => text.includes("svc.log_sink_init_failed"));
+    expect(line).toBeDefined();
+    stderr.mockRestore();
+  });
+
+  it("全局崩溃兜底已注册：uncaughtException/unhandledRejection → 排空日志后 exit(1)", async () => {
+    const { handlers, exitSpy } = interceptProcess();
+    const order: string[] = [];
+    const handle: ServiceHandle = { app: fakeApp(order), bindHost: "127.0.0.1", port: 1 };
+    const events: string[] = [];
+    const close = vi.fn(async () => {
+      order.push("sink-close");
+    });
+
+    runService({
+      name: "svc",
+      source: "svc-test",
+      logSinks: () =>
+        Promise.resolve([
+          {
+            write: (event: { message: string }) => {
+              events.push(event.message);
+            },
+            close,
+          },
+        ]),
+      build: () => Promise.resolve(handle),
+    });
+    await vi.waitFor(() => {
+      expect(handle.app.listen).toHaveBeenCalled();
+    });
 
     handlers.get("uncaughtException")!(new Error("crash"));
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    // 崩溃日志必须先进 sink，再等 sink 排空，最后才 exit——直接 exit 会让它永远到不了 observatory。
+    expect(events).toContain("Uncaught exception, exiting");
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+    expect(close).toHaveBeenCalled();
+
     handlers.get("unhandledRejection")!("reason");
-    expect(exitSpy).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledTimes(2);
+    });
   });
 });

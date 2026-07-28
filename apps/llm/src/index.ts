@@ -1,12 +1,16 @@
 import { closeDb } from "./infra/db/client.js";
 import { runService } from "@kagami/kernel/http/service-runner";
+import { createHttpLogSinks } from "@kagami/observatory-client/log-sink-factory";
 import { buildLlmServiceRuntime } from "./app/llm-service-runtime.js";
 
-// kagami-llm 进程：日志只走 stdout（同 browser/oss 卫星进程），请求日志由 PM2 的
-// llm-out.log 承载。对 DB 的写只有 llm_chat_call / auth 表 / embedding_cache（数据，非日志）。
+// kagami-llm 进程。
+// 日志双出口（#608）：stdout 交 PM2 的 llm-out.log 承载，同时经 HttpLogSink 批量上报
+// kagami-observatory 落库，供管理台按 service 过滤查询。observatory 不可达时只丢上报那一路。
+// 对本进程独占库的写只有 llm_chat_call / auth 表 / embedding_cache（数据，非日志）。
 runService({
   name: "llm_service",
   source: "llm-service-bootstrap",
+  logSinks: () => createHttpLogSinks({ service: "llm" }),
   build: async () => {
     const runtime = await buildLlmServiceRuntime();
     // 后台注册 + 订阅 kagami-scheduler tick（每日 Claude Files 缓存 GC，#433）。非阻塞：

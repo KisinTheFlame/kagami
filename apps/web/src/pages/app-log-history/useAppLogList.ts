@@ -9,6 +9,7 @@ export function useAppLogList(page: number, pageSize: number, filters: AppLogLis
   const params = {
     page,
     pageSize,
+    service: filters.service,
     level: filters.level,
     traceId: filters.traceId,
     message: filters.message,

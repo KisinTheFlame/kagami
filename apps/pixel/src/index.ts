@@ -1,10 +1,14 @@
 import { runService } from "@kagami/kernel/http/service-runner";
+import { createHttpLogSinks } from "@kagami/observatory-client/log-sink-factory";
 import { buildPixelServiceRuntime } from "./app/pixel-service-runtime.js";
 
-// kagami-pixel 进程：日志只走 stdout（同 spire/browser 卫星进程），由 PM2 的 pixel-out.log 承载。
+// kagami-pixel 进程。
+// 日志双出口（#608）：stdout 交 PM2 的 pixel-out.log 承载，同时经 HttpLogSink 批量上报
+// kagami-observatory 落库，供管理台按 service 过滤查询。observatory 不可达时只丢上报那一路。
 runService({
   name: "pixel_service",
   source: "pixel-service-bootstrap",
+  logSinks: () => createHttpLogSinks({ service: "pixel" }),
   build: async () => {
     const runtime = await buildPixelServiceRuntime();
     return {

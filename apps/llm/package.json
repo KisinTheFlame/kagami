@@ -23,6 +23,7 @@
     "@kagami/llm-api": "workspace:*",
     "@kagami/llm-client": "workspace:*",
     "@kagami/metric-client": "workspace:*",
+    "@kagami/observatory-client": "workspace:*",
     "@kagami/scheduler-client": "workspace:*",
     "@prisma/adapter-better-sqlite3": "7.6.0",
     "@prisma/client": "7.6.0",

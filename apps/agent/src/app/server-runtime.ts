@@ -5,7 +5,6 @@ import { InMemoryQueue } from "@kagami/agent-runtime";
 import { DefaultConfigManager } from "@kagami/kernel/config/config.impl.manager";
 import { loadStaticConfig } from "@kagami/kernel/config/config.loader";
 import { configureSqlite, createDbClient, type Database } from "@kagami/persistence/db/client";
-import { PrismaLogDao } from "@kagami/persistence/logger/dao/impl/log.impl.dao";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toHttpErrorResponse } from "@kagami/kernel/errors/http-error";
 import { MainAgentContextHandler } from "../ops/http/main-agent-context.handler.js";
@@ -21,7 +20,6 @@ import { PrismaAppStateStore } from "../agent/runtime/app-state/prisma-app-state
 import type { LlmProviderOption } from "@kagami/llm-api/llm-chat";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { initLoggerRuntime, withTraceContext } from "@kagami/kernel/logger/runtime";
-import { DbLogSink } from "@kagami/kernel/logger/sinks/db-sink";
 import { StdoutLogSink } from "@kagami/kernel/logger/sinks/stdout-sink";
 import type { Event } from "../agent/runtime/event/event.js";
 import type { RootLoopAgent } from "../agent/runtime/root-agent/root-agent-runtime.js";
@@ -34,7 +32,8 @@ import { HttpOssClient } from "../acl/oss-client.js";
 import { HttpBrowserClient } from "../acl/browser-client.js";
 import { HttpSpireClient } from "../acl/spire-client.js";
 import { HttpGbaClient } from "../acl/gba-client.js";
-import { HttpObservatoryClient } from "../acl/observatory-client.js";
+import { HttpObservatoryClient } from "@kagami/observatory-client/alert-client";
+import { HttpLogSink } from "@kagami/observatory-client/log-sink";
 import { HttpPixelClient } from "../acl/pixel-client.js";
 import { PrismaIthomeArticleDao } from "../agent/capabilities/ithome/infra/prisma-ithome-article.dao.js";
 import { PrismaIthomeFeedCursorDao } from "../agent/capabilities/ithome/infra/prisma-ithome-feed-cursor.dao.js";
@@ -89,13 +88,16 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 与 console 进程并发读写同一 SQLite 文件：开 WAL（库文件级持久设置，设一次长期生效）。
   await configureSqlite(database);
 
-  const logDao = new PrismaLogDao({ database });
   // metric 打点改走独立 metric 服务（@kagami/metric）的 HTTP 摄取端点；地址取自 services.metric。
   const metricService = new HttpMetricClient({
     baseUrl: `http://${config.services.metric.host}:${config.services.metric.port}`,
   });
+  // app_log 自 #608 起归 kagami-observatory 独占：agent 不再直写主库，改批量上报。
+  // stdout 那一路保留——observatory 不可达时 PM2 的 agent-out.log 是兜底副本。
+  const observatoryBaseUrl = `http://${config.services.observatory.host}:${config.services.observatory.port}`;
+  const logSink = new HttpLogSink({ baseUrl: observatoryBaseUrl, service: "agent" });
   initLoggerRuntime({
-    sinks: [new StdoutLogSink(), new DbLogSink({ logDao })],
+    sinks: [new StdoutLogSink(), logSink],
   });
 
   const ithomeArticleDao = new PrismaIthomeArticleDao({ database });
@@ -148,9 +150,7 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
   // 告警上报拆成独立 kagami-observatory 进程（issue #602）：agent 经 HTTP client 上报，地址从
   // 顶层 services.observatory 派生。服务未起时 client 吞掉异常只记日志——告警绝不能反过来拖垮
   // 被告警的 agent；本地 error 日志已在 reportStall 里无条件留痕，告警不会丢。
-  const observatoryClient = new HttpObservatoryClient({
-    baseUrl: `http://${config.services.observatory.host}:${config.services.observatory.port}`,
-  });
+  const observatoryClient = new HttpObservatoryClient({ baseUrl: observatoryBaseUrl });
   const eventQueue = new InMemoryQueue<Event>();
   // 手机 OS 模型：被动通知中心。各源（这里是 ithome poller）向它 push draft，它窗口
   // 聚合后把一条 notification 事件塞进事件队列——既投递内容也唤醒 Agent。
@@ -271,9 +271,9 @@ export async function buildServerRuntime(): Promise<ServerRuntime> {
       new MainAgentContextHandler({
         mainAgentContextQueryService: agentRuntime.mainAgentContextQueryService,
       }),
-      // console 只读查询（epic #539 子 issue 4）：console 脱库后经这三条路由查 agent 持有的表。
+      // console 只读查询（epic #539 子 issue 4）：console 脱库后经这两条路由查 agent 持有的表。
+      // app_log 已随 #608 迁出到 observatory，不在此列。
       new OpsQueryHandler({
-        logDao,
         innerThoughtDao: new PrismaInnerThoughtDao({ database }),
         todoItemDao: new PrismaTodoItemDao({ database }),
       }),
