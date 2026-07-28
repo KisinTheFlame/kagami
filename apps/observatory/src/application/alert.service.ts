@@ -47,7 +47,7 @@ export class AlertService {
     if (!decision.admit) {
       logger.info("Alert suppressed by dedupe window", {
         event: "observatory.alert.suppressed",
-        source: alert.source,
+        alertSource: alert.source,
         alertEvent: alert.event,
         severity: alert.severity,
       });
@@ -68,7 +68,7 @@ export class AlertService {
       // 告警仍被压制——见 AlertThrottle 的「以尝试为界」取舍。
       logger.errorWithCause("Alert delivery failed", error, {
         event: "observatory.alert.delivery_failed",
-        source: alert.source,
+        alertSource: alert.source,
         alertEvent: alert.event,
         severity: alert.severity,
       });
@@ -78,7 +78,7 @@ export class AlertService {
 
     logger.info("Alert delivered", {
       event: "observatory.alert.delivered",
-      source: alert.source,
+      alertSource: alert.source,
       alertEvent: alert.event,
       severity: alert.severity,
       suppressedSinceLast: decision.suppressedSinceLast,
@@ -97,6 +97,8 @@ export class AlertService {
           metricName: OBSERVATORY_ALERT_RAISED_METRIC,
           value: 1,
           tags: {
+            // metric tag 是独立命名空间，这里的 source / event 就是 PR 里定的 tag 名，
+            // 不受下面 logger metadata 那套改名影响。
             source: alert.source,
             event: alert.event,
             severity: alert.severity,
