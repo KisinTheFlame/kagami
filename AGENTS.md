@@ -137,10 +137,10 @@ pnpm knip         # 死代码/僵尸依赖审计。CI 门禁分级：孤儿文�
 pnpm --filter @kagami/agent <script>   # 单包命令，如 test / test:watch / db:*
 
 pnpm app:deploy                        # 全量部署：build → prisma migrate deploy → PM2 reload(全部) → pm2 save
-pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
+pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler|observatory>  # 单服务：只重建重载该服务，不跑迁移、不动其它进程
 
 pnpm app:stop                          # 停掉 ecosystem 里全部进程
-pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>    # 只停该服务（与 app:deploy 共用同一套短名别名）
+pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler|observatory>    # 只停该服务（与 app:deploy 共用同一套短名别名）
 ```
 
 - 仓库当前**没有**统一的根 `pnpm dev`。前后端联调需按实际分别启动，不要假设有一键 dev。
@@ -174,7 +174,7 @@ pnpm app:stop <agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|
 进程拓扑与端口见 [ARCHITECTURE.md](./ARCHITECTURE.md)「部署」。操作层面：
 
 - `pnpm app:deploy`（无参）= 全量：build → Prisma 迁移 → PM2 reload/startOrReload → `pm2 save`。**涉及 DB schema 变更必须走这个**（会跑 `prisma migrate deploy`）。
-- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `web` / `browser` / `llm` / `metric` / `spire` / `pixel` / `gba` / `napcat` / `scheduler` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。
+- `pnpm app:deploy <服务名>` = 单服务：只重建重载该服务。改单个服务时优先用它——重载 `console` / `gateway` / `web` / `browser` / `llm` / `metric` / `spire` / `pixel` / `gba` / `napcat` / `scheduler` / `observatory` 不会打断 `kagami-agent` 的热状态（KV 缓存前缀、HNSW 索引、活内存），符合 KV 缓存优先。
 - `web` 自 #578 起是**真服务**（`kagami-web`，管理台前端独立进程，自持静态托管），不再是 `gateway` 的弃用别名。改前端用 `pnpm app:deploy web`，它不动网关；改网关用 `pnpm app:deploy gateway`，它不重建前端。
 - `kagami-browser` / `kagami-llm` / `kagami-metric` 是独立进程，`app:deploy agent` 不触及它们，让「agent 重启不杀浏览器 / 不打断 LLM 服务与登录态 / 不丢 metric 通道」。metric 摄取是 fire-and-forget，服务挂掉只丢点、不影响 agent。
 

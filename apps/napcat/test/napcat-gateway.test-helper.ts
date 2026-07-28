@@ -112,6 +112,7 @@ export function createConfigManager(): ConfigManager {
         historyRetentionCount: 200,
         historyRetentionDays: 90,
       },
+      observatory: { host: "127.0.0.1", port: 20017, alertGroupId: "10086" },
     },
     server: {
       databaseUrl: "file::memory:",

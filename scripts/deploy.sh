@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 SERVICE="${1:-}"
 
-# ── 单服务模式：pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat|pixel|gba|scheduler> ─────
+# ── 单服务模式：pnpm app:deploy <agent|console|gateway|web|oss|browser|llm|metric|spire|napcat|pixel|gba|scheduler|observatory> ─────
 # 只重建并重载指定服务（含其依赖包），不跑迁移、不动其它进程。改了某个服务时用它即可——
 # 尤其重载 console / gateway 不会打断 kagami-agent 的热状态（KV 缓存前缀、HNSW 索引、活内存
 # 上下文），符合「KV 缓存命中率优先」原则。涉及 DB schema 变更请用无参 `pnpm app:deploy`
@@ -27,8 +27,9 @@ if [ -n "$SERVICE" ]; then
     pixel) PKG="@kagami/pixel-service"; PM2_NAME="kagami-pixel" ;;
     gba) PKG="@kagami/gba-service"; PM2_NAME="kagami-gba" ;;
     scheduler) PKG="@kagami/scheduler-service"; PM2_NAME="kagami-scheduler" ;;
+    observatory) PKG="@kagami/observatory"; PM2_NAME="kagami-observatory" ;;
     *)
-      echo "用法: pnpm app:deploy [<agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler>]" >&2
+      echo "用法: pnpm app:deploy [<agent|console|gateway|web|oss|browser|llm|metric|spire|pixel|gba|napcat|scheduler|observatory>]" >&2
       echo "  无参：全量构建 + Prisma 迁移 + 重载所有进程。" >&2
       echo "  带服务名：只重建并重载该服务，不跑迁移、不动其它进程。" >&2
       exit 1

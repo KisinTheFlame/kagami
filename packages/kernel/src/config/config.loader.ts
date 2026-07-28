@@ -255,222 +255,272 @@ const ServicesSchema = z
       historyRetentionCount: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_COUNT),
       historyRetentionDays: PositiveIntSchema.default(DEFAULT_SCHEDULER_HISTORY_RETENTION_DAYS),
     }),
+    // observatory 除 host/port 外还持有告警投递目标群号（issue #602）。零 DB——去重窗口纯内存。
+    // alertGroupId 是 PII，落 config.secret.yaml；它与 server.napcat.blockedGroupIds 的一致性
+    // 由根级 superRefine 强制（见 ConfigSchema）。
+    observatory: ServiceEndpointSchema.extend({
+      alertGroupId: StringLikeSchema,
+    }),
   })
   .strict();
 
-const ConfigSchema = z.object({
-  services: ServicesSchema,
-  server: z.object({
-    databaseUrl: DatabaseUrlSchema,
-    agent: z.preprocess(
-      value => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          return value;
-        }
-
-        const record = value as Record<string, unknown>;
-        if (!("contextCompactionThreshold" in record)) {
-          return value;
-        }
-
-        return {
-          ...record,
-          __legacyContextCompactionThreshold__: record.contextCompactionThreshold,
-        };
-      },
-      z
-        .object({
-          contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
-            DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
-          ),
-          contextCompactionImageCountThreshold: PositiveIntSchema.default(
-            DEFAULT_AGENT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD,
-          ),
-          llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
-          waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
-          stateSampleIntervalMs: PositiveIntSchema.default(DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS),
-          notificationLeadingWindowMs: PositiveIntSchema.default(
-            DEFAULT_AGENT_NOTIFICATION_LEADING_WINDOW_MS,
-          ),
-          notificationBatchWindowMs: PositiveIntSchema.default(
-            DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS,
-          ),
-          messaging: z
-            .object({
-              aiTone: z
-                .object({
-                  enabled: z.boolean().default(DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED),
-                  blockThreshold: z
-                    .number()
-                    .min(0)
-                    .max(1)
-                    .default(DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD),
-                })
-                .default({}),
-            })
-            .default({}),
-          asyncTask: z
-            .object({
-              maxTaskDurationMs: PositiveIntSchema.default(
-                DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS,
-              ),
-            })
-            .default({}),
-          resource: z
-            .object({
-              maxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_MAX_BYTES),
-              fileRoot: NonEmptyStringSchema.default(DEFAULT_AGENT_RESOURCE_FILE_ROOT),
-              fileMaxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES),
-            })
-            .default({}),
-          __legacyContextCompactionThreshold__: z.unknown().optional(),
-        })
-        .superRefine((value, ctx) => {
-          if (value.__legacyContextCompactionThreshold__ !== undefined) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["contextCompactionThreshold"],
-              message:
-                "contextCompactionThreshold 已废弃，请改用 contextCompactionTotalTokenThreshold",
-            });
+const ConfigSchema = z
+  .object({
+    services: ServicesSchema,
+    server: z.object({
+      databaseUrl: DatabaseUrlSchema,
+      agent: z.preprocess(
+        value => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) {
+            return value;
           }
-        })
-        .transform(value => ({
-          contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
-          contextCompactionImageCountThreshold: value.contextCompactionImageCountThreshold,
-          llmRetryBackoffMs: value.llmRetryBackoffMs,
-          waitToolMaxWaitMs: value.waitToolMaxWaitMs,
-          stateSampleIntervalMs: value.stateSampleIntervalMs,
-          notificationLeadingWindowMs: value.notificationLeadingWindowMs,
-          notificationBatchWindowMs: value.notificationBatchWindowMs,
-          messaging: value.messaging,
-          asyncTask: value.asyncTask,
-          resource: value.resource,
-        })),
-    ),
-    ithome: z
-      .object({
-        pollIntervalMs: PositiveIntSchema.default(DEFAULT_ITHOME_POLL_INTERVAL_MS),
-        recentArticleLimit: PositiveIntSchema.default(DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT),
-        articleMaxChars: PositiveIntSchema.default(DEFAULT_ITHOME_ARTICLE_MAX_CHARS),
-      })
-      .default({}),
-    napcat: NapcatConfigSchema,
-    llm: z.object({
-      timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
-      authUsageRefreshIntervalMs: PositiveIntSchema.default(DEFAULT_AUTH_USAGE_REFRESH_INTERVAL_MS),
-      // 文本向量化配置：LLM 网关（apps/llm）持有 embedding client，agent 经 HTTP 调用。
-      // 与任何具体上层能力（记忆等）解耦，是网关的通用能力配置。
-      embedding: EmbeddingConfigSchema,
-      // 生图配置：LLM 网关持有 image client，走 openai-codex OAuth（ChatGPT 订阅额度），agent 经 HTTP 调用。
-      // 给 openai-codex 默认（内层字段各有默认），省略整段也能起——不给新必填字段炸掉既有 config。
-      image: ImageConfigSchema.default({ provider: "openai-codex" }),
-      codexAuth: z
-        .object({
-          enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),
-          // 缺省时在 loadStaticConfig 里派生为 http://localhost:${services.gateway.port}
-          // （host 固定 localhost：浏览器回调 origin 不等于 reachable host）。可显式覆盖。
-          publicBaseUrl: UrlSchema.optional(),
-          oauthRedirectPath: z.string().trim().min(1).default(DEFAULT_CODEX_AUTH_REDIRECT_PATH),
-          oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CODEX_AUTH_STATE_TTL_MS),
-          refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
-          refreshCheckIntervalMs: PositiveIntSchema.default(
-            DEFAULT_OPENAI_CODEX_REFRESH_CHECK_INTERVAL_MS,
-          ),
-          binaryPath: NonEmptyStringSchema.default(DEFAULT_CODEX_AUTH_BINARY_PATH),
-        })
-        .default({}),
-      claudeCodeAuth: z
-        .object({
-          enabled: z.boolean().default(DEFAULT_CLAUDE_CODE_AUTH_ENABLED),
-          // 同 codexAuth：缺省派生 http://localhost:${services.gateway.port}，可显式覆盖。
-          publicBaseUrl: UrlSchema.optional(),
-          oauthRedirectPath: z
-            .string()
-            .trim()
-            .min(1)
-            .default(DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH),
-          oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS),
-          refreshLeewayMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS),
-          refreshCheckIntervalMs: PositiveIntSchema.default(
-            DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS,
-          ),
-        })
-        .default({}),
-      providers: z.object({
-        deepseek: z.object({
-          apiKey: OptionalNonEmptyStringSchema,
-          baseUrl: UrlSchema.default(DEFAULT_DEEPSEEK_BASE_URL),
-          models: NonEmptyStringArraySchema,
-        }),
-        openai: z.object({
-          apiKey: OptionalNonEmptyStringSchema,
-          baseUrl: OpenAiDefaultableStringSchema.default(DEFAULT_OPENAI_BASE_URL),
-          models: NonEmptyStringArraySchema,
-        }),
-        openaiCodex: z.object({
-          baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
-          models: NonEmptyStringArraySchema,
-        }),
-        claudeCode: z
+
+          const record = value as Record<string, unknown>;
+          if (!("contextCompactionThreshold" in record)) {
+            return value;
+          }
+
+          return {
+            ...record,
+            __legacyContextCompactionThreshold__: record.contextCompactionThreshold,
+          };
+        },
+        z
           .object({
-            baseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_BASE_URL),
-            models: NonEmptyStringArraySchema,
-            keepAliveReplayIntervalMinutes: PositiveIntSchema.default(
-              DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
+            contextCompactionTotalTokenThreshold: PositiveIntSchema.default(
+              DEFAULT_AGENT_CONTEXT_COMPACTION_TOTAL_TOKEN_THRESHOLD,
             ),
-            // 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
-            // 关掉即回退全 base64（rollback 无需回滚代码）。依赖 OAuth scope 含 user:file_upload。
-            useFileApi: z.boolean().default(true),
-            // File API 缓存的按最近使用时间 GC（#433）。File 文件 persist-until-deleted，不清理会撞组织存储配额。
-            // kill-switch：false 则 kagami-llm 不注册每日 GC task（急停用，不影响上传/推理主路径）。
-            fileCacheGcEnabled: z.boolean().default(true),
-            // 连续多少天未被使用即回收（idle）。取保守值避 KV 红线：只删早已出活上下文的图。
-            fileCacheGcMaxIdleDays: PositiveIntSchema.default(3),
-            // 单轮 GC 最多删多少个：防首轮积压一次性猛敲 API；超出的下一天续删。
-            fileCacheGcMaxDeletionsPerRun: PositiveIntSchema.default(2000),
+            contextCompactionImageCountThreshold: PositiveIntSchema.default(
+              DEFAULT_AGENT_CONTEXT_COMPACTION_IMAGE_COUNT_THRESHOLD,
+            ),
+            llmRetryBackoffMs: PositiveIntSchema.default(DEFAULT_AGENT_LLM_RETRY_BACKOFF_MS),
+            waitToolMaxWaitMs: PositiveIntSchema.default(DEFAULT_AGENT_WAIT_TOOL_MAX_WAIT_MS),
+            stateSampleIntervalMs: PositiveIntSchema.default(
+              DEFAULT_AGENT_STATE_SAMPLE_INTERVAL_MS,
+            ),
+            notificationLeadingWindowMs: PositiveIntSchema.default(
+              DEFAULT_AGENT_NOTIFICATION_LEADING_WINDOW_MS,
+            ),
+            notificationBatchWindowMs: PositiveIntSchema.default(
+              DEFAULT_AGENT_NOTIFICATION_BATCH_WINDOW_MS,
+            ),
+            messaging: z
+              .object({
+                aiTone: z
+                  .object({
+                    enabled: z.boolean().default(DEFAULT_AGENT_MESSAGING_AI_TONE_ENABLED),
+                    blockThreshold: z
+                      .number()
+                      .min(0)
+                      .max(1)
+                      .default(DEFAULT_AGENT_MESSAGING_AI_TONE_BLOCK_THRESHOLD),
+                  })
+                  .default({}),
+              })
+              .default({}),
+            asyncTask: z
+              .object({
+                maxTaskDurationMs: PositiveIntSchema.default(
+                  DEFAULT_AGENT_ASYNC_TASK_MAX_DURATION_MS,
+                ),
+              })
+              .default({}),
+            resource: z
+              .object({
+                maxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_MAX_BYTES),
+                fileRoot: NonEmptyStringSchema.default(DEFAULT_AGENT_RESOURCE_FILE_ROOT),
+                fileMaxBytes: PositiveIntSchema.default(DEFAULT_AGENT_RESOURCE_FILE_MAX_BYTES),
+              })
+              .default({}),
+            __legacyContextCompactionThreshold__: z.unknown().optional(),
           })
-          .default({
-            models: [DEFAULT_CLAUDE_CODE_MODEL],
-            keepAliveReplayIntervalMinutes: DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
-          }),
-      }),
-      // usage = KV 缓存身份，只有 agent / vision 两个。fork 型 task agent
-      // （contextSummarizer / todoSuggestionAgent / innerVoice）复用主 Agent 前缀命中
-      // prompt cache，直接用 usage=agent 走同一份配置，不单独配置。调用归因走 scene
-      // 字段（见 @kagami/kernel/contracts/llm 与 issue #555）。
-      usages: z
+          .superRefine((value, ctx) => {
+            if (value.__legacyContextCompactionThreshold__ !== undefined) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["contextCompactionThreshold"],
+                message:
+                  "contextCompactionThreshold 已废弃，请改用 contextCompactionTotalTokenThreshold",
+              });
+            }
+          })
+          .transform(value => ({
+            contextCompactionTotalTokenThreshold: value.contextCompactionTotalTokenThreshold,
+            contextCompactionImageCountThreshold: value.contextCompactionImageCountThreshold,
+            llmRetryBackoffMs: value.llmRetryBackoffMs,
+            waitToolMaxWaitMs: value.waitToolMaxWaitMs,
+            stateSampleIntervalMs: value.stateSampleIntervalMs,
+            notificationLeadingWindowMs: value.notificationLeadingWindowMs,
+            notificationBatchWindowMs: value.notificationBatchWindowMs,
+            messaging: value.messaging,
+            asyncTask: value.asyncTask,
+            resource: value.resource,
+          })),
+      ),
+      ithome: z
         .object({
-          agent: LlmUsageConfigSchema,
-          vision: LlmUsageConfigSchema,
+          pollIntervalMs: PositiveIntSchema.default(DEFAULT_ITHOME_POLL_INTERVAL_MS),
+          recentArticleLimit: PositiveIntSchema.default(DEFAULT_ITHOME_RECENT_ARTICLE_LIMIT),
+          articleMaxChars: PositiveIntSchema.default(DEFAULT_ITHOME_ARTICLE_MAX_CHARS),
         })
-        .strict(),
-    }),
-    bot: z.object({
-      qq: StringLikeSchema,
-      creator: z.object({
-        name: NonEmptyStringSchema,
-        qq: StringLikeSchema,
+        .default({}),
+      napcat: NapcatConfigSchema,
+      llm: z.object({
+        timeoutMs: PositiveIntSchema.default(DEFAULT_LLM_TIMEOUT_MS),
+        authUsageRefreshIntervalMs: PositiveIntSchema.default(
+          DEFAULT_AUTH_USAGE_REFRESH_INTERVAL_MS,
+        ),
+        // 文本向量化配置：LLM 网关（apps/llm）持有 embedding client，agent 经 HTTP 调用。
+        // 与任何具体上层能力（记忆等）解耦，是网关的通用能力配置。
+        embedding: EmbeddingConfigSchema,
+        // 生图配置：LLM 网关持有 image client，走 openai-codex OAuth（ChatGPT 订阅额度），agent 经 HTTP 调用。
+        // 给 openai-codex 默认（内层字段各有默认），省略整段也能起——不给新必填字段炸掉既有 config。
+        image: ImageConfigSchema.default({ provider: "openai-codex" }),
+        codexAuth: z
+          .object({
+            enabled: z.boolean().default(DEFAULT_CODEX_AUTH_ENABLED),
+            // 缺省时在 loadStaticConfig 里派生为 http://localhost:${services.gateway.port}
+            // （host 固定 localhost：浏览器回调 origin 不等于 reachable host）。可显式覆盖。
+            publicBaseUrl: UrlSchema.optional(),
+            oauthRedirectPath: z.string().trim().min(1).default(DEFAULT_CODEX_AUTH_REDIRECT_PATH),
+            oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CODEX_AUTH_STATE_TTL_MS),
+            refreshLeewayMs: PositiveIntSchema.default(DEFAULT_OPENAI_CODEX_REFRESH_LEEWAY_MS),
+            refreshCheckIntervalMs: PositiveIntSchema.default(
+              DEFAULT_OPENAI_CODEX_REFRESH_CHECK_INTERVAL_MS,
+            ),
+            binaryPath: NonEmptyStringSchema.default(DEFAULT_CODEX_AUTH_BINARY_PATH),
+          })
+          .default({}),
+        claudeCodeAuth: z
+          .object({
+            enabled: z.boolean().default(DEFAULT_CLAUDE_CODE_AUTH_ENABLED),
+            // 同 codexAuth：缺省派生 http://localhost:${services.gateway.port}，可显式覆盖。
+            publicBaseUrl: UrlSchema.optional(),
+            oauthRedirectPath: z
+              .string()
+              .trim()
+              .min(1)
+              .default(DEFAULT_CLAUDE_CODE_AUTH_REDIRECT_PATH),
+            oauthStateTtlMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_AUTH_STATE_TTL_MS),
+            refreshLeewayMs: PositiveIntSchema.default(DEFAULT_CLAUDE_CODE_REFRESH_LEEWAY_MS),
+            refreshCheckIntervalMs: PositiveIntSchema.default(
+              DEFAULT_CLAUDE_CODE_REFRESH_CHECK_INTERVAL_MS,
+            ),
+          })
+          .default({}),
+        providers: z.object({
+          deepseek: z.object({
+            apiKey: OptionalNonEmptyStringSchema,
+            baseUrl: UrlSchema.default(DEFAULT_DEEPSEEK_BASE_URL),
+            models: NonEmptyStringArraySchema,
+          }),
+          openai: z.object({
+            apiKey: OptionalNonEmptyStringSchema,
+            baseUrl: OpenAiDefaultableStringSchema.default(DEFAULT_OPENAI_BASE_URL),
+            models: NonEmptyStringArraySchema,
+          }),
+          openaiCodex: z.object({
+            baseUrl: UrlSchema.default(DEFAULT_OPENAI_CODEX_BASE_URL),
+            models: NonEmptyStringArraySchema,
+          }),
+          claudeCode: z
+            .object({
+              baseUrl: UrlSchema.default(DEFAULT_CLAUDE_CODE_BASE_URL),
+              models: NonEmptyStringArraySchema,
+              keepAliveReplayIntervalMinutes: PositiveIntSchema.default(
+                DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
+              ),
+              // 图片走 Anthropic Files API（上传拿 file_id，请求体不再随 base64 膨胀撞 ~32MB 上限）。
+              // 关掉即回退全 base64（rollback 无需回滚代码）。依赖 OAuth scope 含 user:file_upload。
+              useFileApi: z.boolean().default(true),
+              // File API 缓存的按最近使用时间 GC（#433）。File 文件 persist-until-deleted，不清理会撞组织存储配额。
+              // kill-switch：false 则 kagami-llm 不注册每日 GC task（急停用，不影响上传/推理主路径）。
+              fileCacheGcEnabled: z.boolean().default(true),
+              // 连续多少天未被使用即回收（idle）。取保守值避 KV 红线：只删早已出活上下文的图。
+              fileCacheGcMaxIdleDays: PositiveIntSchema.default(3),
+              // 单轮 GC 最多删多少个：防首轮积压一次性猛敲 API；超出的下一天续删。
+              fileCacheGcMaxDeletionsPerRun: PositiveIntSchema.default(2000),
+            })
+            .default({
+              models: [DEFAULT_CLAUDE_CODE_MODEL],
+              keepAliveReplayIntervalMinutes:
+                DEFAULT_CLAUDE_CODE_KEEP_ALIVE_REPLAY_INTERVAL_MINUTES,
+            }),
+        }),
+        // usage = KV 缓存身份，只有 agent / vision 两个。fork 型 task agent
+        // （contextSummarizer / todoSuggestionAgent / innerVoice）复用主 Agent 前缀命中
+        // prompt cache，直接用 usage=agent 走同一份配置，不单独配置。调用归因走 scene
+        // 字段（见 @kagami/kernel/contracts/llm 与 issue #555）。
+        usages: z
+          .object({
+            agent: LlmUsageConfigSchema,
+            vision: LlmUsageConfigSchema,
+          })
+          .strict(),
       }),
+      bot: z.object({
+        qq: StringLikeSchema,
+        creator: z.object({
+          name: NonEmptyStringSchema,
+          qq: StringLikeSchema,
+        }),
+      }),
+      /**
+       * 自建对象存储（@kagami/oss）的启用开关。地址不在这里——统一来自顶层 `services.oss`，
+       * agent 把 QQ 图片原图 PUT 进去用。整段可省略（=禁用，resid 恒为 null，只走 vision
+       * 文字描述，优雅降级）；写出该块即启用，`enabled: false` 可显式关闭。
+       */
+      oss: z
+        .object({
+          enabled: z.boolean().default(true),
+        })
+        .strict()
+        .optional(),
+      /**
+       * 每个 App 的配置切片，key 是 App.id。结构由各 App 自己的 configSchema 在
+       * AppManager.startupAll 阶段校验，loader 这一层不解读。
+       */
+      apps: z.record(z.string(), z.unknown()).default({}),
     }),
-    /**
-     * 自建对象存储（@kagami/oss）的启用开关。地址不在这里——统一来自顶层 `services.oss`，
-     * agent 把 QQ 图片原图 PUT 进去用。整段可省略（=禁用，resid 恒为 null，只走 vision
-     * 文字描述，优雅降级）；写出该块即启用，`enabled: false` 可显式关闭。
-     */
-    oss: z
-      .object({
-        enabled: z.boolean().default(true),
+  })
+  .superRefine((value, ctx) => {
+    // 跨 services.* 与 server.* 两个顶层分支，所以必须挂在根 schema 上，不能挂进
+    // NapcatConfigSchema（那里只看得到 napcat 一支）。
+    if (
+      isObservatoryAlertGroupVisibleToAgent({
+        alertGroupId: value.services.observatory.alertGroupId,
+        blockedGroupIds: value.server.napcat.blockedGroupIds,
       })
-      .strict()
-      .optional(),
-    /**
-     * 每个 App 的配置切片，key 是 App.id。结构由各 App 自己的 configSchema 在
-     * AppManager.startupAll 阶段校验，loader 这一层不解读。
-     */
-    apps: z.record(z.string(), z.unknown()).default({}),
-  }),
-});
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["server", "napcat", "blockedGroupIds"],
+        message: OBSERVATORY_ALERT_GROUP_LEAK_MESSAGE,
+      });
+    }
+  });
+
+export const OBSERVATORY_ALERT_GROUP_LEAK_MESSAGE =
+  "services.observatory.alertGroupId 指向的告警群必须同时出现在 server.napcat.blockedGroupIds 里，否则小镜会在群里读到关于自己的告警。请在 config.secret.yaml 把该群号补进 blockedGroupIds 后重启。";
+
+/**
+ * 告警群是否对小镜可见——**可见即配置错误**（issue #602）。
+ *
+ * kagami-observatory 把所有服务的告警投递到一个专用 QQ 群；那个群必须同时在
+ * `server.napcat.blockedGroupIds` 里，否则小镜会在群里读到关于自己的告警，然后大概会去研究
+ * 自己为什么卡住。这条不变量原本只是一句部署检查项，做成启动强校验后配错就起不来——比
+ * 「悄悄让她看见」好得多。
+ *
+ * 抽成具名纯谓词而非内联进 superRefine：给不变量一个名字，也让它能被单测直接覆盖
+ *（否则只能靠写临时 config yaml 走文件 IO 才测得到）。两个入参都已经过 StringLikeSchema
+ * 归一成字符串，可直接比较。
+ */
+export function isObservatoryAlertGroupVisibleToAgent(input: {
+  alertGroupId: string;
+  blockedGroupIds: readonly string[];
+}): boolean {
+  return !input.blockedGroupIds.includes(input.alertGroupId);
+}
 
 type LlmUsageAttemptConfig = {
   provider: LlmProviderId;
