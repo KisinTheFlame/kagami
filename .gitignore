@@ -4,6 +4,10 @@ node_modules
 .env.*
 !.env.example
 config.secret.yaml
+# 备份 / 临时副本也必须挡住：只写死文件名时，`config.secret.yaml.bak-<ts>` 这类副本会被
+# `git add -A` 一并提交（2026-07-28 真的发生过，凭据推上了公开仓库）。
+config.secret.yaml.*
+!config.secret.yaml.example
 data
 dist
 build
