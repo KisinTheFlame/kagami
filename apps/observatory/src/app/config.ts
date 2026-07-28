@@ -9,6 +9,8 @@ export type ObservatoryServiceConfig = {
   napcatBaseUrl: string;
   /** kagami-metric 的基址（打点，fire-and-forget）。 */
   metricBaseUrl: string;
+  /** observatory 独占 SQLite 库（全服务 app_log，#608）。 */
+  databaseUrl: string;
 };
 
 /**
@@ -30,5 +32,6 @@ export async function loadObservatoryServiceConfig(): Promise<ObservatoryService
     alertGroupId: config.services.observatory.alertGroupId,
     napcatBaseUrl: `http://${napcat.host}:${napcat.port}`,
     metricBaseUrl: `http://${metric.host}:${metric.port}`,
+    databaseUrl: config.services.observatory.databaseUrl,
   };
 }

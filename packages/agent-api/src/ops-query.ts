@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { JsonRecordSchema } from "@kagami/http/wire";
 
 /**
  * console 只读查询的 wire schema（epic #539 子 issue 4：console 脱库，agent 持有的
- * app_log / inner_thought / todo_item 经本契约查询）。
+ * inner_thought / todo_item 经本契约查询）。app_log 自 #608 起归 kagami-observatory，
+ * 查询路由随表迁到 `@kagami/observatory-api`，不在本文件。
  *
  * 形状与 @kagami/console-api 的对应 response item 逐字段逐约束对齐（ISO 字符串时间），
  * 让 console 侧成为纯转发聚合层：DB Date → ISO 的序列化与 legacy 值归一（如 todo 的
@@ -15,40 +15,6 @@ const QueryPaginationSchema = {
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1).max(100),
 };
-
-// —— app_log ——
-
-export const AgentAppLogLevelSchema = z.enum(["debug", "info", "warn", "error", "fatal"]);
-
-export const AgentQueryAppLogsRequestSchema = z.object({
-  level: AgentAppLogLevelSchema.optional(),
-  traceId: z.string().min(1).optional(),
-  message: z.string().min(1).optional(),
-  source: z.string().min(1).optional(),
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
-  ...QueryPaginationSchema,
-});
-
-export type AgentQueryAppLogsRequest = z.infer<typeof AgentQueryAppLogsRequestSchema>;
-
-export const AgentAppLogWireItemSchema = z.object({
-  id: z.number().int().positive(),
-  traceId: z.string().min(1),
-  level: AgentAppLogLevelSchema,
-  message: z.string().min(1),
-  metadata: JsonRecordSchema,
-  createdAt: z.string().datetime(),
-});
-
-export type AgentAppLogWireItem = z.infer<typeof AgentAppLogWireItemSchema>;
-
-export const AgentQueryAppLogsResponseSchema = z.object({
-  total: z.number().int().min(0),
-  items: z.array(AgentAppLogWireItemSchema),
-});
-
-export type AgentQueryAppLogsResponse = z.infer<typeof AgentQueryAppLogsResponseSchema>;
 
 // —— inner_thought ——
 

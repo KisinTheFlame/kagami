@@ -20,6 +20,7 @@ apps/napcat/src/generated/prisma
 apps/llm/src/generated/prisma
 apps/oss/src/generated/prisma
 apps/gba/src/generated/prisma
+apps/observatory/src/generated/prisma
 .claude/worktrees
 .gstack
 .context/

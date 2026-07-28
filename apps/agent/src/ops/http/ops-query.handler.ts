@@ -1,12 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { registerJsonRoute } from "@kagami/http/register";
 import { agentApiContract } from "@kagami/agent-api/contract";
-import type {
-  AgentAppLogWireItem,
-  AgentInnerThoughtWireItem,
-  AgentTodoWireItem,
-} from "@kagami/agent-api/ops-query";
-import type { LogDao, AppLogItem } from "@kagami/kernel/logger/dao/log.dao";
+import type { AgentInnerThoughtWireItem, AgentTodoWireItem } from "@kagami/agent-api/ops-query";
 import type {
   InnerThoughtDao,
   InnerThoughtSummary,
@@ -14,38 +9,28 @@ import type {
 import type { TodoItemQueryDao, TodoItemRow } from "@kagami/persistence/dao/todo-item.dao";
 
 type OpsQueryHandlerDeps = {
-  logDao: LogDao;
   innerThoughtDao: InnerThoughtDao;
   todoItemDao: TodoItemQueryDao;
 };
 
 /**
  * console 只读查询端点（epic #539 子 issue 4）：console 脱库后不再直读主库，agent 持有的
- * app_log / inner_thought / todo_item 改经这三条契约路由查询。DB Date → ISO 序列化与
+ * inner_thought / todo_item 改经这两条契约路由查询。DB Date → ISO 序列化与
  * legacy 值归一（todo 的 repeatEveryMs<=0 → null）都在数据属主侧完成，console 拿到的
  * 就是 wire 形状、做纯转发聚合。
+ *
+ * app_log 曾是这里的第三条路由，自 #608 起随表迁到 kagami-observatory。
  */
 export class OpsQueryHandler {
-  private readonly logDao: LogDao;
   private readonly innerThoughtDao: InnerThoughtDao;
   private readonly todoItemDao: TodoItemQueryDao;
 
-  public constructor({ logDao, innerThoughtDao, todoItemDao }: OpsQueryHandlerDeps) {
-    this.logDao = logDao;
+  public constructor({ innerThoughtDao, todoItemDao }: OpsQueryHandlerDeps) {
     this.innerThoughtDao = innerThoughtDao;
     this.todoItemDao = todoItemDao;
   }
 
   public register(app: FastifyInstance): void {
-    registerJsonRoute(app, agentApiContract.queryAppLogs, async ({ input }) => {
-      const { page, pageSize, ...filters } = input;
-      const [total, items] = await Promise.all([
-        this.logDao.countByQuery(filters),
-        this.logDao.listByQueryPage({ ...filters, page, pageSize }),
-      ]);
-      return { total, items: items.map(mapAppLogItem) };
-    });
-
     registerJsonRoute(app, agentApiContract.queryInnerThoughts, async ({ input }) => {
       const [total, items] = await Promise.all([
         this.innerThoughtDao.countByQuery(input),
@@ -62,17 +47,6 @@ export class OpsQueryHandler {
       return { total, items: items.map(mapTodoItem) };
     });
   }
-}
-
-export function mapAppLogItem(item: AppLogItem): AgentAppLogWireItem {
-  return {
-    id: item.id,
-    traceId: item.traceId,
-    level: item.level,
-    message: item.message,
-    metadata: item.metadata,
-    createdAt: item.createdAt.toISOString(),
-  };
 }
 
 export function mapInnerThoughtItem(item: InnerThoughtSummary): AgentInnerThoughtWireItem {

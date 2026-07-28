@@ -8,13 +8,15 @@
     "strict": true,
     "noEmit": true,
     "paths": {
+      "@kagami/http/*": ["./../../packages/http/src/*"],
+      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
+      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"],
+      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
       "@kagami/persistence/prisma": [
         "./../../packages/persistence/src/generated/prisma/internal/prismaNamespace.ts"
-      ],
-      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
-      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
-      "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"]
+      ]
     }
   },
   "include": ["src", "test"]

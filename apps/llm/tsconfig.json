@@ -9,7 +9,9 @@
     "noEmit": true,
     "paths": {
       "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"]
+      "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"]
     }
   },
   "include": ["src", "test"]

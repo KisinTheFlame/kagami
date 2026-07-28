@@ -20,6 +20,7 @@
     "@kagami/config": "workspace:*",
     "@kagami/http": "workspace:*",
     "@kagami/kernel": "workspace:*",
+    "@kagami/observatory-client": "workspace:*",
     "@kagami/oss-api": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.6.0",

@@ -163,6 +163,24 @@ else
   fi
 fi
 
+echo "[app:deploy] Step 2g/4: Applying observatory Prisma migrations..."
+# observatory 有独立 SQLite 库（全服务 app_log，#608），只被 kagami-observatory 单进程持有——
+# 迁移只需暂停这一个进程腾出独占锁。无待应用迁移时（status 只读）跳过。
+# 首次上线时本库还不存在，migrate deploy 会直接建库建表，无需 baseline。
+if pnpm --filter @kagami/observatory db:migrate:status >/dev/null 2>&1; then
+  echo "[app:deploy]   observatory schema 已最新，跳过迁移。"
+else
+  echo "[app:deploy]   检测到 observatory 待应用迁移，暂停 kagami-observatory 后迁移..."
+  pnpm exec pm2 stop kagami-observatory >/dev/null 2>&1 || true
+  if pnpm --filter @kagami/observatory db:migrate:deploy; then
+    echo "[app:deploy]   observatory 迁移完成，进程将在 Step 3 重新拉起。"
+  else
+    echo "[app:deploy]   observatory 迁移失败！立即拉回全部已停进程避免停机，然后中止部署。" >&2
+    pnpm exec pm2 start kagami-agent kagami-napcat kagami-llm kagami-scheduler kagami-oss kagami-gba kagami-observatory >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
 echo "[app:deploy] Step 3/4: Reloading PM2 apps..."
 pnpm exec pm2 startOrReload ecosystem.config.cjs --update-env
 

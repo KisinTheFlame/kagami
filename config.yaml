@@ -40,9 +40,10 @@ services:
     databaseUrl: file:./data/scheduler/scheduler.db # scheduler 独占 SQLite 库（TaskRun 执行历史，#493）
     historyRetentionCount: 200 # 历史 GC：每 (owner, task) 分组保留最近多少条（#493 P2）
     historyRetentionDays: 90 # 历史 GC：删除早于多少天的行（与 count 取交集=更严；running 行永不删）
-  observatory: # kagami-observatory（告警能力，仅 localhost：任何服务经 HttpObservatoryClient 上报 → QQ 告警群；#602。零 DB。20016 web 已占）
+  observatory: # kagami-observatory（可观测性：告警 #602 + 全服务日志汇聚 #608，仅 localhost。20016 web 已占）
     host: 127.0.0.1
     port: 20017
+    databaseUrl: file:./data/observatory/observatory.db # observatory 独占 SQLite 库（全服务 app_log，#608；表自 agent 主库迁出）
     # alertGroupId（QQ 告警群号）是 PII，放 config.secret.yaml；它必须同时出现在
     # server.napcat.blockedGroupIds，否则启动即失败（根级校验，防小镜读到关于自己的告警）
 

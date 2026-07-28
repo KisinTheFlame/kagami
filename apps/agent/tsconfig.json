@@ -8,28 +8,29 @@
     "strict": true,
     "noEmit": true,
     "paths": {
+      "@kagami/agent-api/*": ["./../../packages/agent-api/src/*"],
       "@kagami/agent-runtime": ["./../../packages/agent-runtime/src/index.ts"],
       "@kagami/agent-runtime/*": ["./../../packages/agent-runtime/src/*"],
+      "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
+      "@kagami/gba-api/*": ["./../../packages/gba-api/src/*"],
+      "@kagami/http/*": ["./../../packages/http/src/*"],
+      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
       "@kagami/llm": ["./../../packages/llm/src/index.ts"],
+      "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
       "@kagami/llm-client": ["./../../packages/llm-client/src/index.ts"],
       "@kagami/llm-client/embedding": ["./../../packages/llm-client/src/embedding/index.ts"],
+      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
+      "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
+      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
+      "@kagami/observatory-client/*": ["./../../packages/observatory-client/src/*"],
+      "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
+      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
       "@kagami/persistence/prisma": [
         "./../../packages/persistence/src/generated/prisma/internal/prismaNamespace.ts"
       ],
-      "@kagami/persistence/*": ["./../../packages/persistence/src/*"],
-      "@kagami/kernel/*": ["./../../packages/kernel/src/*"],
-      "@kagami/http/*": ["./../../packages/http/src/*"],
-      "@kagami/llm-api/*": ["./../../packages/llm-api/src/*"],
-      "@kagami/browser-api/*": ["./../../packages/browser-api/src/*"],
-      "@kagami/oss-api/*": ["./../../packages/oss-api/src/*"],
-      "@kagami/gba-api/*": ["./../../packages/gba-api/src/*"],
-      "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"],
-      "@kagami/observatory-api/*": ["./../../packages/observatory-api/src/*"],
       "@kagami/pixel-api/*": ["./../../packages/pixel-api/src/*"],
       "@kagami/rpc-client/*": ["./../../packages/rpc-client/src/*"],
-      "@kagami/metric-api/*": ["./../../packages/metric-api/src/*"],
-      "@kagami/napcat-api/*": ["./../../packages/napcat-api/src/*"],
-      "@kagami/agent-api/*": ["./../../packages/agent-api/src/*"]
+      "@kagami/spire-api/*": ["./../../packages/spire-api/src/*"]
     }
   },
   "include": ["src", "test"]

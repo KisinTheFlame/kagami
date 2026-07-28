@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentTodoWireItem } from "@kagami/agent-api/ops-query";
 import { DefaultTodoQueryService } from "../../src/ops/application/todo-query.impl.service.js";
-import type { AgentOpsQueryClient } from "../../src/ops/application/app-log-query.impl.service.js";
+import type { AgentOpsQueryClient } from "../../src/ops/application/agent-ops-query.client.js";
 
 function makeClient(overrides: Partial<AgentOpsQueryClient>): AgentOpsQueryClient {
   return {
-    queryAppLogs: vi.fn(),
     queryInnerThoughts: vi.fn(),
     queryTodos: vi.fn(),
     ...overrides,
