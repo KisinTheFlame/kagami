@@ -62,7 +62,6 @@ function recordObservationToDao(
         latencyMs: observation.latencyMs,
         request: observation.request,
         response: observation.response,
-        nativeRequestPayload: observation.nativeRequestPayload,
         nativeResponsePayload: observation.nativeResponsePayload,
       });
       return;
@@ -77,7 +76,6 @@ function recordObservationToDao(
       latencyMs: observation.latencyMs,
       request: observation.request,
       ...(observation.response ? { response: observation.response } : {}),
-      nativeRequestPayload: observation.nativeRequestPayload,
       nativeResponsePayload: observation.nativeResponsePayload,
       nativeError: observation.nativeError,
       error: observation.error,
@@ -335,15 +333,15 @@ describe("createLlmClient", () => {
             actualModel: "gpt-4o-mini",
           },
         },
-        nativeRequestPayload: {
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: "ping" }],
-        },
         nativeResponsePayload: {
           id: "chatcmpl_test",
           model: "gpt-4o-mini",
         },
       }),
+    );
+    // native 请求体只出现在 chatDirect 的返回值里（上面已断言），绝不进 observation → 绝不落库（#612）。
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0]).not.toHaveProperty(
+      "nativeRequestPayload",
     );
   });
 
@@ -389,10 +387,6 @@ describe("createLlmClient", () => {
     expect(llmChatCallDao.recordError).toHaveBeenCalledWith(
       expect.objectContaining({
         extension: null,
-        nativeRequestPayload: {
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: "ping" }],
-        },
         nativeResponsePayload: {
           id: "response_partial",
         },
@@ -543,11 +537,9 @@ describe("createLlmClient", () => {
     expect(errorRequestId).toBe(successRequestId);
     expect(vi.mocked(llmChatCallDao.recordError).mock.calls[0]?.[0].seq).toBe(1);
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].seq).toBe(2);
-    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].nativeRequestPayload).toEqual(
-      {
-        model: "deepseek-chat",
-        messages: [],
-      },
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].model).toBe("deepseek-chat");
+    expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0]).not.toHaveProperty(
+      "nativeRequestPayload",
     );
     expect(vi.mocked(llmChatCallDao.recordSuccess).mock.calls[0]?.[0].extension).toEqual({
       metadata: {

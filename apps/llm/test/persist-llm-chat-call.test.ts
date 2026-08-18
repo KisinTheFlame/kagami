@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LlmChatCallObservation } from "@kagami/llm-client";
-import type { LlmChatCallDao } from "../src/infra/llm-chat-call.dao.js";
+import type { LlmChatCallDao, LlmChatCallWriteStats } from "../src/infra/llm-chat-call.dao.js";
 import { persistLlmChatCall } from "../src/app/persist-llm-chat-call.js";
+
+const NO_BLOBS: LlmChatCallWriteStats = {
+  referenceCount: 0,
+  insertedBlobCount: 0,
+  insertedStoredBytes: 0,
+};
 
 function createDao(): LlmChatCallDao & {
   recordSuccess: ReturnType<typeof vi.fn>;
@@ -11,8 +17,9 @@ function createDao(): LlmChatCallDao & {
     countByQuery: vi.fn(),
     listPage: vi.fn(),
     findById: vi.fn(),
-    recordSuccess: vi.fn().mockResolvedValue(undefined),
-    recordError: vi.fn().mockResolvedValue(undefined),
+    listRefPage: vi.fn(),
+    recordSuccess: vi.fn().mockResolvedValue(NO_BLOBS),
+    recordError: vi.fn().mockResolvedValue(NO_BLOBS),
   };
 }
 
@@ -28,7 +35,6 @@ const successObservation: LlmChatCallObservation = {
   latencyMs: 42,
   request: { messages: ["history"] },
   response: { message: "ok" },
-  nativeRequestPayload: { anthropic: "wire body" },
   nativeResponsePayload: { anthropic: "wire resp" },
 };
 
@@ -43,24 +49,22 @@ const errorObservation: LlmChatCallObservation = {
   seq: 1,
   latencyMs: 7,
   request: { messages: ["history"] },
-  nativeRequestPayload: { anthropic: "wire body" },
   nativeResponsePayload: null,
   nativeError: { message: "boom" },
   error: new Error("boom"),
 };
 
-describe("persistLlmChatCall — 成功轮不落 native_request_payload", () => {
-  it("成功轮：recordSuccess 的 nativeRequestPayload 置 null，其余字段透传", async () => {
+describe("persistLlmChatCall — native 请求体不再落库（#612）", () => {
+  it("成功轮：透传 request / response / native 响应体，且入参里没有 nativeRequestPayload", async () => {
     const dao = createDao();
 
     await persistLlmChatCall(dao, successObservation);
 
     expect(dao.recordError).not.toHaveBeenCalled();
     expect(dao.recordSuccess).toHaveBeenCalledTimes(1);
-    const input = dao.recordSuccess.mock.calls[0]![0];
-    // 核心：native 请求体不落库。
-    expect(input.nativeRequestPayload).toBeNull();
-    // 其余照常透传（含 request 全量、native 响应体、response）。
+    const input = dao.recordSuccess.mock.calls[0]![0] as Record<string, unknown>;
+    // 核心：native 请求体这个键根本不出现（不是置 null，是彻底不传）。
+    expect("nativeRequestPayload" in input).toBe(false);
     expect(input.request).toEqual({ messages: ["history"] });
     expect(input.response).toEqual({ message: "ok" });
     expect(input.nativeResponsePayload).toEqual({ anthropic: "wire resp" });
@@ -69,19 +73,34 @@ describe("persistLlmChatCall — 成功轮不落 native_request_payload", () => 
     expect(input.scene).toBe("agent");
   });
 
-  it("失败轮：recordError 完整保留 native_request_payload（诊断需要）", async () => {
+  it("失败轮：native_error / native 响应体仍完整保留（4xx 真因的唯一落点）", async () => {
     const dao = createDao();
 
     await persistLlmChatCall(dao, errorObservation);
 
     expect(dao.recordSuccess).not.toHaveBeenCalled();
     expect(dao.recordError).toHaveBeenCalledTimes(1);
-    const input = dao.recordError.mock.calls[0]![0];
-    // 失败轮 native 请求体必须留存。
-    expect(input.nativeRequestPayload).toEqual({ anthropic: "wire body" });
+    const input = dao.recordError.mock.calls[0]![0] as Record<string, unknown>;
+    expect("nativeRequestPayload" in input).toBe(false);
+    // 删的只有 native 请求体；诊断真因这两项一个都不能少。
     expect(input.nativeError).toEqual({ message: "boom" });
     expect(input.error).toBeInstanceOf(Error);
     // chatDirect 无归因：scene 落 null。
     expect(input.scene).toBeNull();
+  });
+
+  it("把 DAO 的写入统计原样返回，供调用方打点", async () => {
+    const dao = createDao();
+    dao.recordSuccess.mockResolvedValue({
+      referenceCount: 10,
+      insertedBlobCount: 1,
+      insertedStoredBytes: 128,
+    });
+
+    await expect(persistLlmChatCall(dao, successObservation)).resolves.toEqual({
+      referenceCount: 10,
+      insertedBlobCount: 1,
+      insertedStoredBytes: 128,
+    });
   });
 });

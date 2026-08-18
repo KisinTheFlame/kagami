@@ -15,6 +15,13 @@ datasource db {
 
 // LLM 请求审计：一行 = 一次 provider 调用（console 查询用；agent 的 tool_result 只留摘要，
 // 完整原文在此可查）。
+//
+// **请求体不再行内存储（#612）**：ReAct 每轮重发全部历史，逐轮存完整副本让单会话累计写入
+// 呈 O(轮数²)；实测 23104 条 message 引用里只有 11% 是唯一的。故 `messages` 逐条进内容寻址的
+// `llm_blob`，行内只留 `messageRefs`（有序 blob id）与 `requestSkeleton`（非 messages 字段 +
+// system/tools 的 blob 引用），写入降到 O(轮数)。`native_request_payload` 是 request 的另一份
+// provider wire 序列化、占了改动前一半空间，直接删列不再落库；**`native_error` /
+// `native_response_payload` 保留**——它们 O(1)/行，且是 provider 侧 4xx 真因的唯一落点。
 model LlmChatCall {
   id                    Int      @id @default(autoincrement())
   requestId             String   @map("request_id")
@@ -25,9 +32,12 @@ model LlmChatCall {
   scene                 String?
   extension             Json?
   status                String
-  requestPayload        Json     @map("request_payload")
+  // request 去掉 messages / system / tools 后原样保留的字段，外加 systemBlobId / toolsBlobId。
+  // 刻意不是白名单：将来 request 加字段会自动无损带上，不必回来改 schema。
+  requestSkeleton       Json     @map("request_skeleton")
+  // big-endian packed Uint32：messages 的有序 blob id，长度必然是 4 的倍数。
+  messageRefs           Bytes    @map("message_refs")
   responsePayload       Json?    @map("response_payload")
-  nativeRequestPayload  Json?    @map("native_request_payload")
   nativeResponsePayload Json?    @map("native_response_payload")
   error                 Json?
   nativeError           Json?    @map("native_error")
@@ -39,6 +49,34 @@ model LlmChatCall {
   @@index([createdAt], map: "llm_chat_call_created_at_idx")
   @@index([scene, createdAt], map: "llm_chat_call_scene_created_at_idx")
   @@map("llm_chat_call")
+}
+
+// 内容寻址的 payload 分片存储（#612）：一行 = 一段唯一内容（一条 message / 一份 system /
+// 一份 tools）。`hash` 是**未压缩原始字节**的 sha256，`bytes` 按 `codec` 存（zstd 压缩结果
+// 不小于原始时退回 raw），故 hash 与实存字节的对应关系恒定、不随压缩策略变化。
+//
+// 回收走每日 mark-sweep（`llm-blob-gc-task.ts`），不做 refcount：refcount 要与 retention 的
+// 分块删耦合且漂移后不自愈，mark-sweep 每天从事实重算。
+//
+// `lastUsedAt` 是 mark-sweep 的安全带，不是统计字段：被 retention 清空引用的 blob（复用率最高的
+// system prompt 首当其冲）可能在 mark 之后、sweep 之前被新调用重新引用，只看 live 集合会把它扫掉，
+// 留下永远 500 的详情页。GC 因此只回收「至少一个宽限窗口没被引用过」的 blob，命中即续期。
+// 与同库 claude_file_cache 的 lastUsedAt 回收是同一套路数。
+model LlmBlob {
+  id        Int      @id @default(autoincrement())
+  hash      Bytes    @unique(map: "llm_blob_hash_uq")
+  codec     String
+  // 未压缩原始字节数；与 storedBytes 之比即压缩率，是这张表唯一的容量观测口径。
+  sizeBytes   Int    @map("size_bytes")
+  // 实际入库字节数（= LENGTH(bytes)）。冗余一列换 GC 回收量统计走 Prisma 类型化查询，
+  // 不必为一个 LENGTH() 掉进 $queryRaw。
+  storedBytes Int    @map("stored_bytes")
+  bytes       Bytes
+  createdAt   DateTime @default(now()) @map("created_at")
+  lastUsedAt  DateTime @default(now()) @map("last_used_at")
+
+  @@index([lastUsedAt], map: "llm_blob_last_used_at_idx")
+  @@map("llm_blob")
 }
 
 model OauthSession {

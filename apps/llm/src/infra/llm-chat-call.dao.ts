@@ -17,12 +17,29 @@ export type LlmChatCallSummary = {
 };
 
 export type LlmChatCallItem = LlmChatCallSummary & {
+  /** 由 `request_skeleton` + `message_refs` 指向的 blob 重组还原，与写入时逐字段深度相等。 */
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown> | null;
-  nativeRequestPayload: Record<string, unknown> | null;
   nativeResponsePayload: Record<string, unknown> | null;
   error: Record<string, unknown> | null;
   nativeError: Record<string, unknown> | null;
+};
+
+/** GC mark 阶段用：一行的全部 blob 引用来源。 */
+export type LlmChatCallRefRow = {
+  id: number;
+  messageRefs: Uint8Array;
+  requestSkeleton: unknown;
+};
+
+/** 一次落库实际产生的 blob 写入量（喂 metric，不参与控制流）。 */
+export type LlmChatCallWriteStats = {
+  /** 本次调用的 blob 引用总数（messages + system + tools）。 */
+  referenceCount: number;
+  /** 其中真正新插入的 blob 行数。 */
+  insertedBlobCount: number;
+  /** 新插入 blob 的入库字节之和（压缩后口径）。 */
+  insertedStoredBytes: number;
 };
 
 export type QueryLlmChatCallListInput = {
@@ -44,7 +61,6 @@ type LlmChatCallBaseInput = {
   extension?: Record<string, unknown> | null;
   latencyMs: number;
   request: Record<string, unknown>;
-  nativeRequestPayload?: Record<string, unknown> | null;
   nativeResponsePayload?: Record<string, unknown> | null;
   nativeError?: Record<string, unknown> | null;
 };
@@ -62,6 +78,8 @@ export interface LlmChatCallDao {
   countByQuery(input: QueryLlmChatCallListInput): Promise<number>;
   listPage(input: QueryLlmChatCallListInput): Promise<LlmChatCallSummary[]>;
   findById(id: number): Promise<LlmChatCallItem | null>;
-  recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<void>;
-  recordError(input: RecordLlmChatCallErrorInput): Promise<void>;
+  recordSuccess(input: RecordLlmChatCallSuccessInput): Promise<LlmChatCallWriteStats>;
+  recordError(input: RecordLlmChatCallErrorInput): Promise<LlmChatCallWriteStats>;
+  /** GC mark 阶段：按 id 升序游标翻页读出全部存活行的 blob 引用。 */
+  listRefPage(input: { afterId: number; limit: number }): Promise<LlmChatCallRefRow[]>;
 }

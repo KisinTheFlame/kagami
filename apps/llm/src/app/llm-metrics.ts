@@ -4,6 +4,7 @@ import {
   type LlmChatCallObservation,
 } from "@kagami/llm-client";
 import type { MetricClient } from "@kagami/metric-client/client";
+import type { LlmChatCallWriteStats } from "../infra/llm-chat-call.dao.js";
 
 // LLM 调用打点（fire-and-forget）：在 kagami-llm 的观测点把每次 attempt 记成 metric，喂给独占 DuckDB
 // 的查询/派生层（P1-P4）。三个 metric（tags 均带 usage[KV 缓存身份] + scene[调用归因] 双维度）：
@@ -14,6 +15,8 @@ import type { MetricClient } from "@kagami/metric-client/client";
 // record 永不 reject（HttpMetricClient 咽下失败），故一律 `void`，绝不影响 LLM 结果。
 
 const METRIC_CALL = "llm.call";
+const METRIC_BLOB_STORED_BYTES = "llm.blob.stored_bytes";
+const METRIC_BLOB_DEDUP_RATIO = "llm.blob.dedup_ratio";
 const METRIC_LATENCY = "llm.call.latency";
 const METRIC_TOKENS = "llm.call.tokens";
 
@@ -24,6 +27,31 @@ const TOKEN_KINDS: ReadonlyArray<readonly [kind: string, field: string]> = [
   ["input_cache_miss", "cacheMissTokens"],
   ["output", "completionTokens"],
 ];
+
+/**
+ * 内容寻址落库的写入量打点（issue #612）。两个 metric：
+ * - llm.blob.stored_bytes 本次**实际新插入**的 blob 压缩后字节（复用的不计）→ 真实磁盘增量
+ * - llm.blob.dedup_ratio  复用引用数 ÷ 总引用数 → 去重效果；总引用为 0 时**不打点**，
+ *   打 0 会把「这次调用没有请求体」和「去重全没命中」混成一条线，污染均值。
+ */
+export function recordLlmBlobMetrics(
+  metricService: MetricClient,
+  stats: LlmChatCallWriteStats,
+): void {
+  void metricService.record({
+    metricName: METRIC_BLOB_STORED_BYTES,
+    value: stats.insertedStoredBytes,
+  });
+
+  if (stats.referenceCount === 0) {
+    return;
+  }
+
+  void metricService.record({
+    metricName: METRIC_BLOB_DEDUP_RATIO,
+    value: (stats.referenceCount - stats.insertedBlobCount) / stats.referenceCount,
+  });
+}
 
 export function recordLlmCallMetrics(
   metricService: MetricClient,
