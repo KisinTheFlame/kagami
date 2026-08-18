@@ -107,11 +107,6 @@ export function LlmChatCallDetailPanel({ id, summary }: LlmChatCallDetailPanelPr
       item
         ? [
             {
-              key: "nativeRequestPayload",
-              title: "nativeRequestPayload",
-              value: item.nativeRequestPayload,
-            },
-            {
               key: "nativeResponsePayload",
               title: "nativeResponsePayload",
               value: item.nativeResponsePayload,

@@ -46,7 +46,6 @@ describe("DefaultLlmChatCallQueryService", () => {
       status: "success",
       requestPayload: { messages: [] },
       responsePayload: { ok: true },
-      nativeRequestPayload: { native: "req" },
       nativeResponsePayload: { native: "resp" },
       error: null,
       nativeError: null,

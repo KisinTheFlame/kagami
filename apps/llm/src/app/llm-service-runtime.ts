@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { configureSqlite, createDbClient, type Database } from "../infra/db/client.js";
 import { PrismaLlmChatCallDao } from "../infra/impl/llm-chat-call.impl.dao.js";
+import { PrismaLlmBlobDao } from "../infra/impl/llm-blob.impl.dao.js";
 import { AppLogger } from "@kagami/kernel/logger/logger";
 import { BizError } from "@kagami/kernel/errors/biz-error";
 import { toBizErrorWire } from "@kagami/kernel/errors/biz-error-wire";
@@ -25,7 +26,7 @@ import { createEmbeddingClient, type EmbeddingClient } from "@kagami/llm-client/
 import { createImageClient, type ImageClient } from "@kagami/llm-client/image";
 import { HttpMetricClient } from "@kagami/metric-client/client";
 import { SchedulerClient } from "@kagami/scheduler-client/scheduler-client";
-import { recordLlmCallMetrics } from "./llm-metrics.js";
+import { recordLlmBlobMetrics, recordLlmCallMetrics } from "./llm-metrics.js";
 import { MetricAuthUsageSnapshotSink } from "./metric-auth-usage-snapshot-sink.js";
 import { PrismaEmbeddingCacheDao } from "../infra/prisma-embedding-cache.dao.js";
 import { PrismaClaudeFileCacheDao } from "../infra/prisma-claude-file-cache.dao.js";
@@ -35,6 +36,7 @@ import { LlmQueryHandler } from "../http/llm-query.handler.js";
 import { loadLlmServiceConfig } from "./config.js";
 import { startAuthRefreshTimers, type AuthRefreshTimers } from "./auth-refresh-timers.js";
 import { buildClaudeFileGcTask } from "./claude-file-gc-task.js";
+import { buildLlmBlobGcTask } from "./llm-blob-gc-task.js";
 import { buildLlmDataRetentionTasks } from "./data-retention-tasks.js";
 import { persistLlmChatCall } from "./persist-llm-chat-call.js";
 
@@ -74,7 +76,8 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     configManager,
     authUsageSnapshotSink: new MetricAuthUsageSnapshotSink({ metricClient: metricService }),
   });
-  const llmChatCallDao = new PrismaLlmChatCallDao({ database });
+  const llmBlobDao = new PrismaLlmBlobDao({ database });
+  const llmChatCallDao = new PrismaLlmChatCallDao({ database, blobDao: llmBlobDao });
   const embeddingCacheDao = new PrismaEmbeddingCacheDao({ database });
   const claudeFileCacheDao = new PrismaClaudeFileCacheDao({ database });
 
@@ -109,13 +112,14 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
     }),
   };
 
-  // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call（策略见 persistLlmChatCall，
-  // 成功轮不落 native_request_payload 以控库体积）。返回 DAO 的 Promise，让 client 内部
-  // emitObservation 统一 catch（写库失败不影响 LLM 结果）。
-  const recordLlmChatObservation = (observation: LlmChatCallObservation): Promise<void> => {
+  // 落库在服务内：llm-client 只发 observation，这里订阅后写 llm_chat_call（策略见 persistLlmChatCall：
+  // 请求体逐条 message 进内容寻址的 llm_blob，native_request_payload 不再落库）。返回 DAO 的
+  // Promise，让 client 内部 emitObservation 统一 catch（写库失败不影响 LLM 结果）。
+  const recordLlmChatObservation = async (observation: LlmChatCallObservation): Promise<void> => {
     // 每次 attempt 顺手打点（provider/model/status/latency/usage来处/token/失败原因），与落库解耦。
     recordLlmCallMetrics(metricService, observation);
-    return persistLlmChatCall(llmChatCallDao, observation);
+    const stats = await persistLlmChatCall(llmChatCallDao, observation);
+    recordLlmBlobMetrics(metricService, stats);
   };
 
   const llmClient: LlmClient = createLlmClient({
@@ -176,6 +180,11 @@ export async function buildLlmServiceRuntime(): Promise<LlmServiceRuntime> {
   for (const registration of buildLlmDataRetentionTasks({ db: database, metricService })) {
     schedulerClient.register(registration);
   }
+  // llm_blob 的孤儿回收（#612）。排在 data-retention:llm_chat_call（00:05）之后：先删行，
+  // 再回收随之失去引用的 blob。
+  schedulerClient.register(
+    buildLlmBlobGcTask({ chatCallDao: llmChatCallDao, blobDao: llmBlobDao, metricService }),
+  );
 
   const app = createLlmServiceApp({
     handlers: [

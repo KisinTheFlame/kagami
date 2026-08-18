@@ -64,7 +64,6 @@ function mapDetail(item: LlmChatCallItem): LlmChatCallWireDetail {
     ...mapSummary(item),
     requestPayload: item.requestPayload,
     responsePayload: item.responsePayload,
-    nativeRequestPayload: item.nativeRequestPayload,
     nativeResponsePayload: item.nativeResponsePayload,
     error: item.error,
     nativeError: item.nativeError,

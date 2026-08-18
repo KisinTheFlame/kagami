@@ -30,7 +30,6 @@ function buildItem(requestPayload: Record<string, unknown>): LlmChatCallItem {
         thinkingBlocks: [{ type: "thinking", thinking: "推理过程", signature: "sig-2" }],
       },
     },
-    nativeRequestPayload: null,
     nativeResponsePayload: null,
     error: null,
     nativeError: null,

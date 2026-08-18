@@ -55,7 +55,6 @@ export type LlmGetChatCallRequest = z.infer<typeof LlmGetChatCallRequestSchema>;
 export const LlmChatCallWireDetailSchema = LlmChatCallWireSummarySchema.extend({
   requestPayload: JsonRecordSchema,
   responsePayload: JsonRecordSchema.nullable(),
-  nativeRequestPayload: JsonRecordSchema.nullable(),
   nativeResponsePayload: JsonRecordSchema.nullable(),
   error: JsonRecordSchema.nullable(),
   nativeError: JsonRecordSchema.nullable(),

@@ -1,7 +1,7 @@
 import type { LlmChatCallObservation } from "@kagami/llm-client";
 import type { MetricClient, RecordMetricInput } from "@kagami/metric-client/client";
 import { describe, expect, it } from "vitest";
-import { recordLlmCallMetrics } from "../src/app/llm-metrics.js";
+import { recordLlmBlobMetrics, recordLlmCallMetrics } from "../src/app/llm-metrics.js";
 
 function capturing(): { client: MetricClient; calls: RecordMetricInput[] } {
   const calls: RecordMetricInput[] = [];
@@ -36,7 +36,6 @@ function successObservation(
         completionTokens: 50,
       },
     },
-    nativeRequestPayload: null,
     nativeResponsePayload: null,
     ...over,
   };
@@ -56,7 +55,6 @@ function failedObservation(
     seq: 1,
     latencyMs: 500,
     request: {},
-    nativeRequestPayload: null,
     nativeResponsePayload: null,
     nativeError: null,
     error: new Error("boom"),
@@ -164,5 +162,48 @@ describe("recordLlmCallMetrics", () => {
     recordLlmCallMetrics(client, successObservation({ usage: null, scene: null }));
     expect(calls.every(c => c.tags?.usage === "direct")).toBe(true);
     expect(calls.every(c => c.tags?.scene === "direct")).toBe(true);
+  });
+});
+
+describe("recordLlmBlobMetrics — 内容寻址写入量打点（#612）", () => {
+  it("stored_bytes 只算真正新插入的，dedup_ratio 算复用比例", () => {
+    const { client, calls } = capturing();
+
+    recordLlmBlobMetrics(client, {
+      referenceCount: 10,
+      insertedBlobCount: 2,
+      insertedStoredBytes: 512,
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({ metricName: "llm.blob.stored_bytes", value: 512 }),
+      expect.objectContaining({ metricName: "llm.blob.dedup_ratio", value: 0.8 }),
+    ]);
+  });
+
+  it("全部复用时 dedup_ratio = 1（重试 seq 的稳态）", () => {
+    const { client, calls } = capturing();
+
+    recordLlmBlobMetrics(client, {
+      referenceCount: 2566,
+      insertedBlobCount: 0,
+      insertedStoredBytes: 0,
+    });
+
+    expect(calls.find(call => call.metricName === "llm.blob.dedup_ratio")?.value).toBe(1);
+  });
+
+  it("零引用时不打 dedup_ratio：打 0 会把「没有请求体」混进「去重全没命中」", () => {
+    const { client, calls } = capturing();
+
+    recordLlmBlobMetrics(client, {
+      referenceCount: 0,
+      insertedBlobCount: 0,
+      insertedStoredBytes: 0,
+    });
+
+    const names = calls.map(call => call.metricName);
+    expect(names).toContain("llm.blob.stored_bytes");
+    expect(names).not.toContain("llm.blob.dedup_ratio");
   });
 });
